@@ -58,14 +58,12 @@ update_flag = 0
 freshen_flag = 0
 erase_flag = 0
 
-tags = [ "name", "epoch", "version", "release", "arch", \
-         "providename", "provideflags", "provideversion", \
-         "requirename", "requireflags", "requireversion", \
-         "obsoletename", "obsoleteflags", "obsoleteversion", \
-         "conflictname", "conflictflags", "conflictversion", \
-         "filesizes", "filemodes", "filemd5s", "dirindexes", \
-         "basenames", "dirnames", "fileinodes", "filemtimes", \
-         "filedevices", "filerdevs", "fileflags" ]
+tags = [ "name", "epoch", "version", "release", "arch",
+         "providename", "provideflags", "provideversion", "requirename",
+         "requireflags", "requireversion", "obsoletename", "obsoleteflags",
+         "obsoleteversion", "conflictname", "conflictflags",
+         "conflictversion", "filesizes", "filemodes", "filemd5s",
+         "dirindexes", "basenames", "dirnames" ]
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
@@ -107,10 +105,36 @@ if __name__ == '__main__':
         sys.exit(0)
 
     pyrpm.rpmconfig.debug_level = verbose
+    pyrpm.rpmconfig.warning_level = verbose
+    pyrpm.rpmconfig.verbose_level = verbose
 
     if len(pargs) == 0:
         usage()
         sys.exit(0)        
+
+    # -- load install/update/erase
+
+    i = 1
+    for f in pargs:
+        if verbose > 0:
+            progress_write("Reading %d/%d " % (i, len(pargs)))
+        r = pyrpm.RpmPackage("file:/"+f)
+        try:
+            r.read(tags=[ "name", "epoch", "version", "release", "arch" ])
+        except:
+            print "Loading of %s failed, exiting." % f
+            sys.exit(-1)
+        r.close()
+        rpms.append(r)
+        i += 1
+    if verbose > 0 and len(pargs) > 0:
+        print
+
+    del pargs
+    
+    # preorder multiple packages for update and freshen
+    if update_flag or freshen_flag:
+        pyrpm.filterArchList(rpms)
 
     # -- load installed
 
@@ -127,31 +151,12 @@ if __name__ == '__main__':
             except:
                 print "Loading of %s%s failed, ignoring." % (installed_dir, f)
                 continue
+            r.close()
             installed.append(r)
+
         if verbose > 0 and len(list) > 0:
             print
             del list    
-
-    # -- load install/update/erase
-
-    i = 1
-    for f in pargs:
-        if verbose > 0:
-            progress_write("Reading %d/%d " % (i, len(pargs)))
-        r = pyrpm.RpmPackage("file:/"+f)
-        try:
-            r.read(tags=tags)
-        except:
-            print "Loading of %s failed, exiting." % f
-            sys.exit(-1)
-        rpms.append(r)
-        i += 1
-    if verbose > 0 and len(pargs) > 0:
-        print
-
-    del pargs
-    
-    # -----------------------------------------------------------------------
 
     if install_flag == 1:
         operation = pyrpm.RpmResolver.OP_INSTALL
@@ -162,36 +167,38 @@ if __name__ == '__main__':
     else: # erase_flag
         operation = pyrpm.RpmResolver.OP_ERASE
 
-    # preorder multiple packages for update and freshen
-    if update_flag or freshen_flag:
-        pyrpm.filterArchList(rpms)
-
-    # resolve
     resolver = pyrpm.RpmResolver(installed, operation)
-    for r in rpms:
-        ret = resolver.append(r)
-        
-#        if ret == pyrpm.RpmResolver.ALREADY_ADDED:
-#            pyrpm.printInfo(0, "Package %s was already added\n" % r.getNEVRA())
-#        elif ret == pyrpm.RpmResolver.ALREADY_INSTALLED:
-#            pyrpm.printError("Package %s is already installed" % \
-#                             r.getNEVRA())
-#        elif ret == pyrpm.RpmResolver.OLD_PACKAGE:
-#            pyrpm.printInfo(0, "%s: A newer package is already installed\n" % \
-#                            r.getNEVRA())
-#        elif ret == pyrpm.RpmResolver.NOT_INSTALLED:
-#            pyrpm.printError("Package %s is not installed" % r.getNEVRA())
-#        elif ret == pyrpm.RpmResolver.UPDATE_FAILED:
-#            pyrpm.printError("Update of %s failed" % r.getNEVRA())
-#            sys.exit(ret)
-#        elif ret == pyrpm.RpmResolver.OBSOLETE_FAILED:
-#            pyrpm.printError("%s: Uninstall of obsolete failed" % r.getNEVRA())
-#            sys.exit(ret)
 
+    i = 0
+    l = len(rpms)
+    while len(rpms) > 0:
+        if verbose > 0:
+            progress_write("Appending %d/%d " % (i, l))
+        r = rpms.pop(0)
+        try:
+            r.read(tags=tags)
+        except:
+            print "Loading of %s failed, exiting." % f
+            sys.exit(-1)
+        r.close()
+
+        # append
+        resolver.append(r)
+        i += 1
+    del rpms
+
+    if len(resolver.appended) == 0:
+        print "Nothing to do."
+        sys.exit(0)
+
+    print "len=%d" % len(resolver.appended)
+
+    # -----------------------------------------------------------------------
+        
     if resolver.resolve() != 1:
         sys.exit(-1)
 
-    orderer = pyrpm.RpmOrderer(resolver.appended, resolver.obsoletes, operation)
+    orderer = pyrpm.RpmOrderer(resolver.appended, resolver.updates, resolver.obsoletes, operation)
     operations = orderer.order()
 
     if operations == None:
