@@ -51,8 +51,8 @@ class FastRpmData(DictType):
     __getitem__ = DictType.get
     def __init__(self):
         DictType.__init__(self)
-        self.hash = int(string.atoi(str(weakref.ref(self)).split()[6][3:-1],
-                                    16))
+        self.hash \
+            = int(string.atoi(str(weakref.ref(self)).split()[6][3:-1], 16))
 
     def __repr__(self):
         return "FastRpmData: <0x" + str(self.hash) + ">"
@@ -64,9 +64,11 @@ class FastRpmData(DictType):
 RpmData = FastRpmData
 
 class RpmUserCache:
+    """If glibc is not yet installed (/sbin/ldconfig is missing), we parse
+    /etc/passwd and /etc/group with our own routines."""
     def __init__(self):
-        self.uid = {}
-        self.gid = {}
+        self.uid = {"root": 0}
+        self.gid = {"root": 0}
 
     def __parseFile(self, ugfile):
         rethash = {}
@@ -82,8 +84,6 @@ class RpmUserCache:
         return rethash
 
     def getUID(self, username):
-        if username == "root":
-            return 0
         if not self.uid.has_key(username):
             if os.path.isfile("/etc/passwd"):
                 if os.path.isfile("/sbin/ldconfig"):
@@ -91,18 +91,20 @@ class RpmUserCache:
                         pw = pwd.getpwnam(username)
                         self.uid[username] = pw[2]
                     except:
+                        # XXX: print warning
                         self.uid[username] = 0
                 else:
                     r = self.__parseFile("/etc/passwd")
                     if r.has_key(username):
                         self.uid[username] = r[username]
                     else:
+                        # XXX: print warning
                         self.uid[username] = 0
+            else:
+                return 0
         return self.uid[username]
 
     def getGID(self, groupname):
-        if groupname == "root":
-            return 0
         if not self.gid.has_key(groupname):
             if os.path.isfile("/etc/group"):
                 if os.path.isfile("/sbin/ldconfig"):
@@ -110,13 +112,17 @@ class RpmUserCache:
                         gr = grp.getgrnam(groupname)
                         self.gid[groupname] = gr[2]
                     except:
+                        # XXX: print warning
                         self.gid[groupname] = 0
                 else:
                     r = self.__parseFile("/etc/group")
                     if r.has_key(groupname):
                         self.gid[groupname] = r[groupname]
                     else:
+                        # XXX: print warning
                         self.gid[groupname] = 0
+            else:
+                return 0
         return self.gid[groupname]
 
 
