@@ -18,7 +18,11 @@
 #
 
 
-from pyrpm import *
+from functions import *
+from io import *
+from resolver import RpmResolver
+from control import RpmController
+from package import RpmPackage
 
 
 class RpmYum:
@@ -95,7 +99,7 @@ class RpmYum:
                 name = pkg["name"]
                 for ipkg in self.installed:
                     if ipkg["name"] == name:
-                        ret = self.opresolver.append(pkg)
+                        self.opresolver.append(pkg)
                         break
             else:
                 self.opresolver.append(pkg)
@@ -107,17 +111,17 @@ class RpmYum:
                 for u in pkg["obsoletes"]:
                     s = self.opresolver.searchDependency(u)
                     if len(s) > 0:
-                        ret = self.opresolver.append(pkg)
+                        self.opresolver.append(pkg)
         self.__runDepResolution()
 
     def __runDepResolution(self):
         # Special erase list for unresolvable package dependancies or conflicts
         self.erase_list = []
         unresolved = self.opresolver.getUnresolvedDependencies()
-        iter = 1
+        iteration = 1
         while len(unresolved) > 0:
-            printInfo(1, "Dependency iteration " + str(iter) + "\n")
-            iter += 1
+            printInfo(1, "Dependency iteration " + str(iteration) + "\n")
+            iteration += 1
             unresolved_deps = 1
             for pkg in unresolved.keys():
                 printInfo(1, "Resolving dependencies for %s\n" % pkg.getNEVRA())
@@ -225,10 +229,8 @@ class RpmYum:
             if not f.endswith(".rpm") or not os.path.isfile(fn):
                 continue
             pkg_list.append(self.__readRpmPackage(fn))
-        ex_list = string.split(excludes)
-        for ex in ex_list:
-            excludes = findPkgByName(ex, pkg_list)
-            for pkg in excludes:
+        for ex in excludes.split():
+            for pkg in findPkgByName(ex, pkg_list):
                 pkg_list.remove(pkg)
         filterArchCompat(pkg_list, rpmconfig.machine)
         for pkg in pkg_list:

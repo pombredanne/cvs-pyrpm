@@ -17,7 +17,7 @@
 #
 
 
-import types, bsddb, libxml2, urlgrabber.grabber, zlib, gzip
+import types, bsddb, libxml2, urlgrabber.grabber, zlib
 from struct import pack, unpack
 
 from functions import *
@@ -41,7 +41,7 @@ class PyGZIP:
         magic = self.fd.read(2)
         if magic != '\037\213':
             printError("Not a gzipped file")
-            v1 = unpack("!H", magic)
+            #v1 = unpack("!H", magic)
             sys.exit(0)
         if ord(self.fd.read(1)) != 8:
             printError("Unknown compression method")
@@ -707,7 +707,7 @@ class RpmFtpIO(RpmStreamIO):
         RpmStreamIO.__init__(self, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
-        RpmStreamIO.open(self)
+        RpmStreamIO.open(self, mode)
         urlg = urlgrabber.grabber.URLGrabberFileObject(self.source)
         self.fd  = urlg.fo
         return self.fd != None
@@ -724,7 +724,7 @@ class RpmHttpIO(RpmStreamIO):
         RpmStreamIO.__init__(self, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
-        RpmStreamIO.open(self)
+        RpmStreamIO.open(self, mode)
         opts = urlgrabber.grabber.URLGrabberOptions()
         self.urlg = urlgrabber.grabber.URLGrabberFileObject(self.source, None, opts)
         self.fd = self.urlg.fo
@@ -956,7 +956,7 @@ class RpmRepoIO(RpmFileIO):
 
 
 class RpmCompsXMLIO:
-    def __init__(self, source, verify=None):
+    def __init__(self, source):
         self.source = source
         self.grouphash = {}
         self.grouphierarchyhash = {}
