@@ -189,7 +189,7 @@ class RpmResolver(RpmList):
     def _pkgUpdate(self, pkg, update_pkg):
         if self.isInstalled(update_pkg):
             if not pkg in self.updates:
-                self.updates[pkg] = [ ]    
+                self.updates[pkg] = [ ]
             self.updates[pkg].append(update_pkg)
         elif update_pkg in self.updates:
             if pkg in self.updates:

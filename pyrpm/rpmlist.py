@@ -19,7 +19,8 @@
 
 from hashlist import HashList
 from config import rpmconfig
-from functions import buildarchtranslate, printWarning, pkgCompare
+from functions import buildarchtranslate, printWarning, pkgCompare, \
+     archCompat, archDuplicate
 from base import OP_INSTALL, OP_UPDATE, OP_ERASE, OP_FRESHEN
 
 class RpmList:
@@ -29,6 +30,7 @@ class RpmList:
     NOT_INSTALLED = -3
     UPDATE_FAILED = -4
     ALREADY_ADDED = -5
+    ARCH_INCOMPAT = -6
     # ----
 
     def __init__(self, installed, operation):
@@ -94,12 +96,12 @@ class RpmList:
                     printWarning(1, "%s: %s is already installed" % \
                                  (pkg.getNEVRA(), r.getNEVRA()))
                     return self.ALREADY_INSTALLED
-        if not self.list.has_key(key):
-            self.list[key] = [ ]
-        else:
+        if self.list.has_key(key):
             if pkg in self.list[key]:
                 printWarning(1, "%s was already added" % pkg.getNEVRA())
                 return self.ALREADY_ADDED
+        else:
+            self.list[key] = [ ]
         self.list[key].append(pkg)
 
         return self.OK
@@ -108,46 +110,64 @@ class RpmList:
     def _update(self, pkg):
         key = pkg["name"]
 
-        # old package test
-        if rpmconfig.oldpackage == 0:
-            rpms = [ ]
-            if self.list.has_key(key):
-                rpms = self.list[pkg["name"]]
-            else:
-                if self.installed.has_key(key):
-                    rpms = self.installed[pkg["name"]]
-            if len(rpms) > 0:
-                newer = 1
-                for r in rpms:
-                    if pkgCompare(pkg, r) < 0:
-                        newer = 0
-                if newer == 0:
-                    if self.list.has_key(key):
-                        msg = "%s: A newer package is already added"
+        updates = [ ]
+        if self.list.has_key(key):
+            rpms = self.list[pkg["name"]]
+            
+            for r in rpms:
+                ret = pkgCompare(r, pkg)
+                if ret > 0:
+                    if rpmconfig.oldpackage == 0:
+                        if self.isInstalled(r):
+                            msg = "%s: A newer package is already installed"
+                        else:
+                            msg = "%s: A newer package was already added"
+                        printWarning(1, msg % pkg.getNEVRA())
+                        return self.OLD_PACKAGE
                     else:
-                        msg = "%s: A newer package is already installed"
-                    printWarning(1, msg % pkg.getNEVRA())
-                    return self.OLD_PACKAGE
+                        # old package: simulate a new package
+                        ret = -1
+                if ret < 0: # old_ver < new_ver
+                    if rpmconfig.exactarch == 1 and \
+                           pkg["arch"] != r["arch"] and \
+                           archDuplicate(pkg["arch"], r["arch"]):
+                        printWarning(1, "%s does not match arch %s." % \
+                                     (pkg.getNEVRA(), r["arch"]))
+                        return self.ARCH_INCOMPAT
+                    if archDuplicate(pkg["arch"], r["arch"]):
+                        updates.append(r)
+                elif ret == 0: # old_ver == new_ver
+                    if rpmconfig.exactarch == 1 and \
+                           pkg["arch"] != r["arch"] and \
+                           archDuplicate(pkg["arch"], r["arch"]):
+                        printWarning(1, "%s does not match arch %s." % \
+                                     (pkg.getNEVRA(), r["arch"]))
+                        return self.ARCH_INCOMPAT
+
+                    if archCompat(pkg["arch"], r["arch"]):
+                        if self.isInstalled(r):
+                            printWarning(1, "%s is already installed" % \
+                                         pkg.getNEVRA())
+                            return self.ALREADY_INSTALLED
+                        else:
+                            printWarning(1, "%s was already added" % \
+                                         pkg.getNEVRA())
+                            return self.ALREADY_ADDED
+                    else:
+                        if archDuplicate(pkg["arch"], r["arch"]):
+                            updates.append(r)
 
         ret = self._install(pkg)
         if ret != self.OK:  return ret
 
-        if self.list.has_key(key):
-            i = 0
-            while self.list[key] != None and i < len(self.list[key]):
-                r = self.list[key][i]
-                if r != pkg and (pkg["arch"] == r["arch"] or \
-                                 (rpmconfig.exactarch == 0 and \
-                                  buildarchtranslate[pkg["arch"]] == \
-                                  buildarchtranslate[r["arch"]]) or \
-                                 pkg["arch"] == "noarch" or \
-                                 r["arch"] == "noarch"):
-                    printWarning(1, "Replacing installed %s with %s" % \
-                                 (r.getNEVRA(), pkg.getNEVRA()))
-                    if self._pkgUpdate(pkg, r) != self.OK:
-                        return self.UPDATE_FAILED
-                else:
-                    i += 1
+        for r in updates:
+            if self.isInstalled(r):
+                msg = "%s was already installed, replacing with %s"
+            else:
+                msg = "%s was already added, replacing with %s"
+            printWarning(1, msg % (r.getNEVRA(), pkg.getNEVRA()))
+            if self._pkgUpdate(pkg, r) != self.OK:
+                return self.UPDATE_FAILED
 
         return self.OK
     # ----
