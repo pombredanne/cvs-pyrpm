@@ -482,7 +482,7 @@ class RpmPackage(RpmData):
     def read(self, tags=None, ntags=None):
         if not self.open():
             return 0
-        if not self.readHeader(self.io, tags, ntags):
+        if not self.readHeader(tags, ntags):
             return 0
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
