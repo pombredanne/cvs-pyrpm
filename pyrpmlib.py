@@ -457,6 +457,8 @@ class RpmPackage(RpmData):
     def install(self, io, files=None):
         if not self.readHeader(io):
             return 0
+        # Set umask to 022, especially important for scripts
+        os.umask(022)
         if self["preinprog"] != None:
             if not runScript(self["preinprog"], self["prein"], "1"):
                 return 0
@@ -483,6 +485,8 @@ class RpmPackage(RpmData):
     def extract(self, io, files=None):
         if files == None:
             files = self["filenames"]
+        # We don't need those lists earlier, so we create them "on-the-fly"
+        # before we actually start extracting files.
         self.generateFileInfoList()
         self.generateHardLinkList()
         (filename, filerawdata) = io.read()
@@ -496,10 +500,10 @@ class RpmPackage(RpmData):
                     if len(filerawdata) > 0:
                         if not installFile(rfi, filerawdata):
                             return 0
-                        self.handleHardlinks(rfi)
+                        if not self.handleHardlinks(rfi):
+                            return 0
             (filename, filerawdata) = io.read()
         return self.handleRemainingHardlinks()
-        return 1
 
     def generateFileNames(self):
         self["filenames"] = []
@@ -530,8 +534,10 @@ class RpmPackage(RpmData):
         key = str(rfi.inode)+":"+str(rfi.dev)
         self.hardlinks[key].remove(rfi)
         for hrfi in self.hardlinks[key]:
-             createLink(rfi.filename, hrfi.filename)
+             if not createLink(rfi.filename, hrfi.filename):
+                return 0
         del self.hardlinks[key]
+        return 1
 
     def handleRemainingHardlinks(self):
         keys = self.hardlinks.keys()
@@ -539,7 +545,8 @@ class RpmPackage(RpmData):
             rfi = self.hardlinks[key][0]
             if not installFile(rfi, ""):
                 return 0
-            self.handleHardlinks(rfi)
+            if not self.handleHardlinks(rfi):
+                return 0
         return 1
 
     def getRpmFileInfo(self, filename):
@@ -614,13 +621,14 @@ class RpmFileInfo:
 
 # Collection of class indepedant helper functions
 def runScript(prog=None, script=None, arg1=None, arg2=None):
-    tmpfilename = tempfile.mktemp(dir="/var/tmp/", prefix="rpm-tmp-")
-    fd = open(tmpfilename, "w")
+    (fd, tmpfilename) = tempfile.mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
+    if fd == None:
+        return 0
     if script != None:
-        fd.write(script)
-    fd.close()
-    cmd = ""
-    cmd = cmd+prog
+        os.write(fd, script)
+    os.close(fd)
+    fd = None
+    cmd = prog
     if prog != "/sbin/ldconfig":
         cmd = cmd+" "+tmpfilename
         if arg1 != None:
@@ -645,75 +653,52 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
     return 1
 
 def installFile(rfi, data):
-    rfi.filetype = rfi.mode & cpio.CP_IFMT
-    if  rfi.filetype == cpio.CP_IFREG:
+    filetype = rfi.mode & cpio.CP_IFMT
+    if  filetype == cpio.CP_IFREG:
         makeDirs(rfi.filename)
-        # CPIO archives are sick: Hardlinks are stored as 0 byte long
-        # regular files.
-        # The last hardlinked file in the archive contains the data, so
-        # we have to defere creating any 0 byte file until either:
-        #  - We create a file with data and the inode/devmajor/devminor are
-        #    identical
-        #  - We have processed all files and can check the defered list for
-        #    any more identical files (in which case they are hardlinked
-        #    again)
-        #  - For the rest in the end create 0 byte files as they were in
-        #    fact really 0 byte files, not hardlinks.
-        if len(data) == 0:
-            #self.addToDefered(filename)
-            return 1
-        tmpfilename = tempfile.mktemp(dir=os.path.dirname(rfi.filename), prefix=rfi.filename+".")
-        fd = open(tmpfilename, "w")
+        (fd, tmpfilename) = tempfile.mkstemp(dir=os.path.dirname(rfi.filename), prefix=rfi.filename+".")
         if not fd:
             return 0
-        if not fd.write(data) < 0:
-            fd.close()
+        if os.write(fd, data) < 0:
+            os.close(fd)
             os.unlink(tmpfilename)
             return 0
-        fd.close()
+        os.close(fd)
         if not setFileMods(tmpfilename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
             os.unlink(tmpfilename)
             return 0
-        try:
-            os.unlink(rfi.filename)
-        except:
-            pass
         if os.rename(tmpfilename, rfi.filename) != None:
             return 0
-        #self.handleCurrentDefered(filename)
-    elif rfi.filetype == cpio.CP_IFDIR:
+    elif filetype == cpio.CP_IFDIR:
         if os.path.isdir(rfi.filename):
             return 1
         os.makedirs(rfi.filename)
         if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
             return 0
-    elif rfi.filetype == cpio.CP_IFLNK:
+    elif filetype == cpio.CP_IFLNK:
         symlinkfile = data.rstrip("\x00")
         if os.path.islink(rfi.filename) and os.readlink(rfi.filename) == symlinkfile:
             return 1
         makeDirs(rfi.filename)
+        try:
+            os.unlink(rfi.filename)
+        except:
+            pass
         os.symlink(symlinkfile, rfi.filename)
-    elif rfi.filetype == cpio.CP_IFCHR or \
-         rfi.filetype == cpio.CP_IFBLK or \
-         rfi.filetype == cpio.CP_IFSO or \
-         rfi.filetype == cpio.CP_IFIFO:
-        if rfi.filetype == cpio.CP_IFCHR:
-            devtype = "c"
-        elif rfi.filetype == cpio.CP_IFBLK:
-            devtype = "b"
-        else:
-            return 0
+    elif filetype == cpio.CP_IFIFO:
         makeDirs(rfi.filename)
-        devmajor = int(rfi.rdev)/256
-        devminor = int(rfi.rdev)%256
-        ret = commands.getoutput("/bin/mknod "+rfi.filename+" "+devtype+" "+str(devmajor)+" "+str(devminor))
-        if ret != "":
-            print "Error creating device: "+ret
+        if os.mkfifo(rfi.filename) != None:
             return 0
-        else:
-            if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
-                os.unlink(rfi.filename)
-                return 0
+        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
+            os.unlink(rfi.filename)
+            return 0
+    elif filetype == cpio.CP_IFCHR or \
+         filetype == cpio.CP_IFBLK:
+        makeDirs(rfi.filename)
+        try:
+            os.mknod(rfi.filename, rfi.mode, rfi.rdev)
+        except:
+            pass
     else:
         raise ValueError, "%s: not a valid filetype" % (oct(rfi.filetype))
     return 1
@@ -740,6 +725,8 @@ def createLink(src, dst):
         pass
     # Behave exactly like cpio: If the hardlink fails (because of different
     # partitions), then it has to fail
-    os.link(src, dst)
+    if os.link(src, dst) != None:
+        return 0
+    return 1
 
 # vim:ts=4:sw=4:showmatch:expandtab
