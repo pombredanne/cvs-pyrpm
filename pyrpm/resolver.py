@@ -193,7 +193,7 @@ class RpmResolver(RpmList):
 
     def _pkgErase(self, pkg):
         self.erased[pkg] = 1
-        return RpmList._pkgErase(pkg)
+        return RpmList._pkgErase(self, pkg)
     # ----
 
     def searchDependency(self, dep, arch=None):
@@ -371,7 +371,7 @@ class RpmResolver(RpmList):
 
         conflicts = [ ]
         for file in self.filenames.multi:
-            printDebug(1, "Checking for file conflicts for '%s'" % f)
+            printDebug(1, "Checking for file conflicts for '%s'" % file)
             s = self.filenames.search(file)
             for j in xrange(len(s)):
                 fi1 = s[j].getRpmFileInfo(file)

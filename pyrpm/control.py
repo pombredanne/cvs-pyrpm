@@ -218,7 +218,7 @@ class RpmController:
             nevra = pkg.getNEVRA()
             if pkg["name"] == n:
                 printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.erase.append(pkg)
+                self.rpms.append(pkg)
                 return 1
         # Next check is against nvr as name, a as arch
         n = name
@@ -233,7 +233,7 @@ class RpmController:
             nevra = pkg.getNEVRA()
             if pkg["name"] == n and pkg["arch"] == arch:
                 printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.erase.append(pkg)
+                self.rpms.append(pkg)
                 return 1
         # Next check is against nv as name, ra as version
         n = name
@@ -251,7 +251,7 @@ class RpmController:
             nevra = pkg.getNEVRA()
             if pkg["name"] == n and pkg["version"] == v:
                 printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.erase.append(pkg)
+                self.rpms.append(pkg)
                 return 1
         # Next check is against nv as name, r as version, a as arch
         n = name
@@ -264,7 +264,7 @@ class RpmController:
             nevra = pkg.getNEVRA()
             if pkg["name"] == n and pkg["version"] == release and pkg["arch"] == arch:
                 printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.erase.append(pkg)
+                self.rpms.append(pkg)
                 return 1
         # Next check is against n as name, v as version, ra as release
         r = ""
@@ -279,7 +279,7 @@ class RpmController:
             nevra = pkg.getNEVRA()
             if pkg["name"] == name and pkg["version"] == version and pkg["release"] == r:
                 printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.erase.append(pkg)
+                self.rpms.append(pkg)
                 return 1
         # Next check is against n as name, v as version, r as release, a as arch
         for pkg in self.installed:
@@ -289,7 +289,7 @@ class RpmController:
             nevra = pkg.getNEVRA()
             if pkg["name"] == name and pkg["version"] == version and pkg["release"] == release and pkg["arch"] == arch:
                 printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.erase.append(pkg)
+                self.rpms.append(pkg)
                 return 1
         # No matching package found
         return 0
