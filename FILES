@@ -1,0 +1,11 @@
+classes.fig:	xfig of our class structure in UML
+cpio.py:	Python CPIO implementation, used by pyrpmlib classes
+depresolver.py:	First test of a depresolver, abandoned for rpmdeps
+INFO:		File with various internal and extern info for this project
+pyrpmdeps:	twoerner's depresolver using pyrpmlib
+pyrpmlib.py:	Main file containing implementation of all classes
+pyrpm.py:	Original rpm header read from laroche, not maintained anymore
+README:		Text description of class structure
+test*:		Various testscripts, might or might not work :)
+TODO:		Very brief collection of tasks to be done
+ugid.py:	password and group parser/classes, soon obsolete

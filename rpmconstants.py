@@ -369,10 +369,13 @@ rpmtag = {
     "triggerun": (RPMTAG_TRIGGERUN, RPM_STRING, None, 5),
     "triggerpostun": (RPMTAG_TRIGGERPOSTUN, RPM_STRING, None, 5)
 }
-# Add a reverse mapping for all tags.
+rpmtagname = {}
+# Add a reverse mapping for all tags and a new tag -> name mapping
 for key in rpmtag.keys():
     v = rpmtag[key]
     rpmtag[v[0]] = v
+    rpmtagname[v[0]] = key
+
 # Required tags in a header.
 rpmtagrequired = []
 for key in ["name", "version", "release", "arch"]:
@@ -393,10 +396,12 @@ rpmsigtag = {
     "badsha1_1": (RPMTAG_BADSHA1_1, RPM_STRING, None, 1),
     "badsha1_2": (RPMTAG_BADSHA1_2, RPM_STRING, None, 1)
 }
-# Add a reverse mapping for all tags.
+# Add a reverse mapping for all tags and a new tag -> name mapping
 for key in rpmsigtag.keys():
     v = rpmsigtag[key]
     rpmsigtag[v[0]] = v
+    rpmtagname[v[0]] = key
+
 # Required tags in a signature header.
 rpmsigtagrequired = []
 #for key in ["header_signatures", "payloadsize", "size_in_sig", \

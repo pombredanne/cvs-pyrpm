@@ -15,17 +15,15 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004 Red Hat, Inc.
 #
-# Author: Phil Knirsch, Thomas Woerner
+# Author: Phil Knirsch, Thomas Woerner, Florian LaRoche
 #
 
-#import profile
 import rpmconstants, cpio, ugid
 import os.path, popen2, tempfile, sys, gzip
 from types import StringType, IntType, ListType
 from struct import unpack
 rpmtag = rpmconstants.rpmtag
 rpmsigtag = rpmconstants.rpmsigtag
-#import ugid
 
 RPM_CHAR = rpmconstants.RPM_CHAR
 RPM_INT8 = rpmconstants.RPM_INT8
@@ -53,81 +51,114 @@ class RpmIO(RpmError):
     """'Virtual' IO Class for RPM packages and data"""
     def __init__(self):
         RpmError.__init__(self)
-        self.source = None
 
-    def read(data):
+    def open(self):
         return 1
 
-    def write(data):
+    def read(self):
+        return 1
+
+    def write(self):
+        return 1
+
+    def close(self):
         return 1
 
 
-class RpmFile(RpmIO):
-    def __init__(self, filename=None, verify=None, verbose=None, legacy=None, payload=None, parsesig=None, hdronly=None, tags=None, ntags=None, keepdata=None):
-        RpmIO.__init__(self)
-        self.filename = filename
+class RpmStreamIO(RpmIO):
+    def __init__(self, verify=None, legacy=None, parsesig=None, hdronly=None, tags=None, ntags=None):
         self.fd = None
         self.verify = verify
-        self.verbose = verbose
         self.legacy = legacy
-        self.payload = payload
         self.parsesig = parsesig
         self.hdronly = hdronly
         self.tags = tags
         self.ntags = ntags
-        self.keepdata = keepdata
-        self.source = filename
         self.issrc = 0
-        self.data = None
-        if filename[-8:] == ".src.rpm" or filename[-10:] == ".nosrc.rpm":
-            self.issrc = 1
+        self.where = 0  # 0:lead 1:separator 2:sig 3:header 4:files
+        self.idx = 0 # Current index
+        self.hdr = {}
+        self.hdrtype = {}
 
-    def openFile(self, offset=None):
-        if not self.fd:
-            try:
-                self.fd = open(self.filename, "rw")
-            except:
-                self.raiseErr("could not open file")
-            if offset:
-                self.fd.seek(offset, 1)
+    def open(self):
+        return 1
 
-    def closeFile(self):
-        if self.fd != None:
-            self.fd.close()
-        self.fd = None
+    def close(self):
+        return 1
 
-    def read(self, data):
-        if self.filename == None:
-            return 1
-        self.openFile()
-        ret = self.readHeader(data)
-        if self.payload:
-            ret = ret & self.readData(data)
-        self.closeFile()
-        return ret
+    def read(self):
+        if self.fd == None:
+            self.open()
+        if self.fd == None:
+            return (None, None)
+        # Read/check leadata
+        if self.where == 0:
+            self.where = 1
+            return self.readLead()
+        # Separator
+        if self.where == 1:
+            self.readSig()
+            if (self.verify or self.parsesig) and not self.hdronly:
+                self.where = 2
+            else:
+                self.readHdr()
+                self.where = 3
+            return ("-", "")
+        # Read/parse signature
+        if self.where == 2:
+            # Last index of sig? Switch to from sig to hdr
+            if self.idx >= self.sigdata[0]:
+                self.readHdr()
+                self.idx = 0
+                self.where = 3
+                return ("-", "")
+            (key, value) = self.getNextHeader(self.idx, self.sigdata[3], self.sigdata[4])
+            self.idx += 1
+            return (key, value)
+        # Read/parse hdr
+        if self.where == 3:
+            # Last index of hdr? Switch to data files archive
+            if self.idx >= self.hdrdata[0]:
+                self.cpiofd = gzip.GzipFile(fileobj=self.fd)
+                self.cpio = cpio.CPIOFile(self.cpiofd)
+                self.where = 4
+                return ("-", "")
+            (key, value) =  self.getNextHeader(self.idx, self.hdrdata[3], self.hdrdata[4])
+            self.idx += 1
+            return (key, value)
+        # Read/parse data files archive
+        if self.where == 4:
+            (filename, filedata, filerawdata) = self.cpio.getNextEntry()
+            if filename != None:
+                return (filename, (filedata, filerawdata))
+        return  ("EOF", ("", ""))
 
-    def readHeader(self, data):
+    def readLead(self):
         leaddata = self.fd.read(96)
         if leaddata[:4] != '\xed\xab\xee\xdb':
             self.printErr("no rpm magic found")
-            return 1
+            return (None, None)
         if self.verify and self.verifyLead(leaddata):
-            return 1
-        sigdata = self.readIndex(8, 1)
-        hdrdata = self.readIndex(1)
-        self.parseHeader(data, sigdata, hdrdata)
-        for i in rpmconstants.rpmtag.keys():
-            if not isinstance(i, StringType):
-                continue
-            rpmtag = rpmconstants.rpmtag[i][0]
-            if rpmtag in self.hdr.keys():
-                data[i] = self.hdr[rpmtag]
-        self.parseFilelist(data)
-        if self.keepdata:
-            data.leaddata = leaddata
-            data.sigdata = sigdata
-            data.hdrdata = hdrdata
-        return 0
+            return (None, None)
+        return ("magic", leaddata[:4])
+
+    def readSig(self):
+        self.sigdata = self.readIndex(8, 1)
+
+    def readHdr(self):
+        self.hdrdata = self.readIndex(1)
+
+    def getNextHeader(self, idx, indexdata, storedata):
+        index = unpack("!4i", indexdata[idx*16:(idx+1)*16])
+        tag = index[0]
+        # ignore duplicate entries as long as they are identical
+        if self.hdr.has_key(tag):
+            if self.hdr[tag] != self.parseTag(index, storedata):
+                self.printErr("tag %d included twice" % tag)
+        else: 
+            self.hdr[tag] = self.parseTag(index, storedata)
+            self.hdrtype[tag] = index[1]
+        return (rpmconstants.rpmtagname[tag], self.hdr[tag])
 
     def verifyLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
@@ -316,37 +347,18 @@ class RpmFile(RpmIO):
         self.raiseErr("unknown tag header")
         return None
 
-    def parseFilelist(self, data):
-        data["filetree"] = []
-        if data["dirnames"] == None or data["dirindexes"] == None:
-            return data["filetree"]
-        for i in xrange (len(data["basenames"])):
-            if self.verify:
-                data["filetree"].append((data["dirnames"][data["dirindexes"][i]] + data["basenames"][i],
-                    data["fileflags"][i], data["fileinodes"][i],
-                    data["filemodes"][i], data["fileusername"][i],
-                    data["filegroupname"][i], data["filelinktos"][i],
-                    data["filemtimes"][i], data["filesizes"][i],
-                    data["filedevices"][i], data["filerdevs"][i],
-                    data["filelangs"][i], data["filemd5s"][i]))
-            else:
-                data["filetree"].append(data["dirnames"][data["dirindexes"][i]] + data["basenames"][i])
 
     def readData(self, data):
-        self.openFile(96 + data.sigdata[5] + data.hdrdata[5])
-        gz = gzip.GzipFile(fileobj=self.fd)
-        cpiodata = gz.read()
-        if self.verify and self.cpiosize != len(cpiodata):
-            self.raiseErr("cpiosize")
-        c = cpio.CPIOFile(cpiodata)
+        if self.headerlen == 0:
+            dummy = {}
+            self.readHeader(dummy)
+        self.openFile(96 + self.headerlen)
+        self.cpiofd = gzip.GzipFile(fileobj=self.fd)
+        c = cpio.CPIOFile(self.cpiofd)
         try:
             c.read()
         except IOError, e:
             print "Error reading CPIO payload: %s" % e
-        if self.verbose:
-            print c.namelist()
-        if self.keepdata:
-            data.cpiodata = cpiodata
         if self.verify:
             return self.verifyPayload(c.namelist())
         return 1
@@ -354,10 +366,10 @@ class RpmFile(RpmIO):
     def write(self, data):
         if self.filename == None:
             return 1
-        self.openFile()
+        self.open()
         ret = self.writeHeader(data)
         ret = ret & self.writeData(data)
-        self.closeFile()
+        self.close()
         return ret
 
     def writeHeader(self, data):
@@ -365,6 +377,44 @@ class RpmFile(RpmIO):
 
     def writeData(self, data):
             return 1
+
+
+class RpmFile(RpmStreamIO):
+    def __init__(self, filename, verify=None, legacy=None, parsesig=None, hdronly=None, tags=None, ntags=None):
+        RpmStreamIO.__init__(self, verify, legacy, parsesig, hdronly, tags, ntags)
+        self.filename = filename
+        self.fd = None
+        self.cpiofd = None
+        self.verify = verify
+        self.legacy = legacy
+        self.parsesig = parsesig
+        self.hdronly = hdronly
+        self.tags = tags
+        self.ntags = ntags
+        self.issrc = 0
+        self.headerlen = 0
+        if filename[-8:] == ".src.rpm" or filename[-10:] == ".nosrc.rpm":
+            self.issrc = 1
+
+    def openFile(self, offset=None):
+        if not self.fd:
+            try:
+                self.fd = open(self.filename, "r")
+            except:
+                self.raiseErr("could not open file")
+            if offset:
+                self.fd.seek(offset, 1)
+
+    def closeFile(self):
+        if self.fd != None:
+            self.fd.close()
+        self.fd = None
+
+    def open(self):
+        self.openFile()
+
+    def close(self):
+        self.closeFile()
 
 
 class RpmDB(RpmIO):
@@ -403,22 +453,11 @@ class RpmData(RpmError):
         self.cpiodata = None
 
     def __repr__(self):
-#        return self.hdr.__repr__()
         return self.data.__repr__()
 
     def __getitem__(self, key):
         try:
             return self.data[key]
-#            if isinstance(key, StringType):
-#                return self.hdr[rpmtag[key][0]]
-#            if isinstance(key, IntType):
-#                return self.hdr[key]
-            # trick to also look at the sig header
-#            if isinstance(key, ListType):
-#                if isinstance(key[0], StringType):
-#                    return self.sig[rpmsigtag[key[0]][0]]
-#                return self.sig[key[0]]
-#            self.raiseErr("wrong arg")
         except:
             # XXX: try to catch wrong/misspelled keys here?
             return None
@@ -434,11 +473,9 @@ class RpmData(RpmError):
 
 
 class RpmPackage(RpmData):
-    def __init__(self, io=None):
+    def __init__(self):
         RpmData.__init__(self)
         self.clear()
-        if io:
-            self.read(io)
 
     def clear(self):
         pass
@@ -459,78 +496,42 @@ class RpmPackage(RpmData):
         ret = RpmData.verify(self)
         return ret
 
-    def extract(self, instroot=None, files=None):
-        # We need the cpiodata to extrace it.
-        if self.cpiodata == None:
-            return 1
+    def extractold(self, io, files=None):
         if files == None:
             files = self["filetree"]
-        cfile = cpio.CPIOFile(self.cpiodata)
         [filename, filedata, filerawdata] = cfile.getNextEntry()
         while filename != None:
             if filename in files:
-                cfile.extractCurrentEntry(instroot)
+                cfile.extractCurrentEntry()
             [filename, filedata, filerawdata] = cfile.getNextEntry()
         # Needed for hardlinks... :(
         cfile.postExtract()
         return 0
 
-    def runScript(self, instroot=None, prog=None, script=None, arg1=None, arg2=None):
-        tmpfilename = tempfile.mktemp(dir="/var/tmp/", prefix="rpm-tmp-")
-        if instroot != None:
-            fd = open(instroot+tmpfilename, "w")
-        else:
-            fd = open(tmpfilename, "w")
-        if script != None:
-            fd.write(script)
-        fd.close()
-        cmd = ""
-        if instroot != None:
-            cmd = "/usr/sbin/chroot "+instroot+" "
-        cmd = cmd+prog
-        if prog != "/sbin/ldconfig":
-            cmd = cmd+" "+tmpfilename
-            if arg1 != None:
-                cmd = cmd+" "+arg1
-            if arg2 != None:
-                cmd = cmd+" "+arg2
-        p = popen2.Popen3(cmd, 1)
-        p.tochild.close()
-        rout = p.fromchild.read()
-        rerr = p.childerr.read()
-        p.fromchild.close()
-        p.childerr.close()
-        ret = p.wait()
-        if instroot != None:
-            os.unlink(instroot+tmpfilename)
-        else:
-            os.unlink(tmpfilename)
-        if ret != 0 or rout != "" or rerr != "":
-            print "Error in script:"
-            print script
-            print ret
-            print rout
-            print rerr
-            return 0
-        return 1
+    def extract(self, io, files=None):
+        if files == None:
+            files = self["filetree"]
+        (filename, (filedata, filerawdata)) = io.read()
+        while filename != None and filename != "EOF" :
+            if filename in files:
+                idx = files.index(filename)
+                print filename, \
+                      filedata[7], self["filesizes"][idx], \
+                      hex(filedata[8]*256+filedata[9]), hex(int(self["filedevices"][idx]))
+            (filename, (filedata, filerawdata)) = io.read()
+        return 0
 
-    def updateFilestats(self, instroot=None):
+    def updateFilestats(self):
         # No files -> No need to do anything.
         if not self["basenames"]:
             return
-        # Get our /etc/passwd and /etc/group classes, possibly from a instroot
-        if instroot != None:
-            pw = ugid.Passwd(instroot+"/etc/passwd")
-            grp = ugid.Group(instroot+"/etc/group")
-        else:
-            pw = ugid.Passwd()
-            grp = ugid.Group()
+        # Get our /etc/passwd and /etc/group classes
+        pw = ugid.Passwd()
+        grp = ugid.Group()
         # Check every file from the rpm headers and update the filemods
         # according to the info from the rpm headers.
         for i in xrange(len(self["basenames"])):
             fullname = self["dirnames"][self["dirindexes"][i]]+self["basenames"][i]
-            if instroot != None:
-                fullname = instroot+fullname
             if not (os.path.isfile(fullname) or os.path.isdir(fullname)) or os.path.islink(fullname):
                 continue
             uid = int(pw.getUID(self["fileusername"][i]))
@@ -540,13 +541,33 @@ class RpmPackage(RpmData):
             os.chmod(fullname, (~cpio.CP_IFMT) & self["filemodes"][i])
             os.utime(fullname, (self["filemtimes"][i], self["filemtimes"][i]))
 
-    def install(self, instroot=None, files=None):
+    def readHeader(self, io):
+        (key, value) = io.read()
+        # Read over lead
+        while key != None and key != "-":
+            (key, value) = io.read()
+        # Read header
+        (key, value) = io.read()
+        while key != None and key != "-":
+            (key, value) = io.read()
+            self[key] = value
+        self.parseFilelist()
+
+    def parseFilelist(self):
+        self["filetree"] = []
+        if self["dirnames"] == None or self["dirindexes"] == None:
+            return
+        for i in xrange (len(self["basenames"])):
+            self["filetree"].append(self["dirnames"][self["dirindexes"][i]] + self["basenames"][i])
+
+    def install(self, io, files=None):
+        self.readHeader(io)
         if self["preinprog"] != None:
-            self.runScript(instroot, self["preinprog"], self["prein"], "1")
-        self.extract(instroot, self["filetree"])
-        self.updateFilestats(instroot)
+            runScript(self["preinprog"], self["prein"], "1")
+        self.extract(io, self["filetree"])
+        self.updateFilestats()
         if self["postinprog"] != None:
-            self.runScript(instroot, self["postinprog"], self["postin"], "1")
+            runScript(self["postinprog"], self["postin"], "1")
 
     def getDeps(self, name, flags, version):
         n = self[name]
@@ -579,5 +600,38 @@ class RpmPackage(RpmData):
 
     def getTriggers(self):
         return self.getDeps("triggername", "triggerflags", "triggerversion")
+
+
+# Collection of class indepedant helper functions
+def runScript(prog=None, script=None, arg1=None, arg2=None):
+    tmpfilename = tempfile.mktemp(dir="/var/tmp/", prefix="rpm-tmp-")
+    fd = open(tmpfilename, "w")
+    if script != None:
+        fd.write(script)
+    fd.close()
+    cmd = ""
+    cmd = cmd+prog
+    if prog != "/sbin/ldconfig":
+        cmd = cmd+" "+tmpfilename
+        if arg1 != None:
+            cmd = cmd+" "+arg1
+        if arg2 != None:
+            cmd = cmd+" "+arg2
+    p = popen2.Popen3(cmd, 1)
+    p.tochild.close()
+    rout = p.fromchild.read()
+    rerr = p.childerr.read()
+    p.fromchild.close()
+    p.childerr.close()
+    ret = p.wait()
+    os.unlink(tmpfilename)
+    if ret != 0 or rout != "" or rerr != "":
+        print "Error in script:"
+        print script
+        print ret
+        print rout
+        print rerr
+        return 0
+    return 1
 
 # vim:ts=4:sw=4:showmatch:expandtab

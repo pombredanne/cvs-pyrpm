@@ -1,22 +1,30 @@
 RpmIO
 -----
-  read(data, name) : fail
-  write(data) : fail
+  open() : fail
+  close() : fail
+  read() : fail
+  write() : fail
 
-RpmFile(RpmIO)
+RpmStreamIO(RpmIO)
+  open() : fail
+  close() : fail
+  read()
+  write()
+
+RpmFile(RpmStreamIO)
 --------------
-  read(data, filename)
-  write(data, filename)
+  open()
+  close()
 
 RpmDBEntry(RpmIO)
 -----------------
-  read(data, envra)
-  write(data)
+  read()
+  write()
 
 RpmRepoEntry(RpmIO)
 -----------------
-  read(data, filename)
-  write(data, filename)
+  read()
+  write()
 
 RpmList
 -------
@@ -41,12 +49,11 @@ RpmPackage(RpmData)
   getProvides()
   getObsoletes()
   getConflicts()
-  read(io):
-    self.io = io; io.read(self.data)
+  read(io)
   write(io)
-    self.io = io; io.write(self.data)
   verify()
   extract()
+  install()
   compose(envra)
 
 

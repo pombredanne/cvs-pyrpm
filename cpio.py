@@ -33,18 +33,16 @@ CP_IFSOCK = 0140000
 class CPIOFile:
     """ Read ASCII CPIO files. """
 
-    def __init__(self, data):
+    def __init__(self, fd):
         self.filelist = {}              # hash of CPIO headers and stat data
-        self.cpiodata = data            # complete uncompressed cipo data
-        self.pos = 0                    # current position in cpio data
+        self.fd = fd                    # file descript from which we read
         self.defered = []               # list of defered files for extract
         self.filename = None            # current filename
         self.filedata = None            # current file stat data
         self.filerawdata = None         # raw data of current file
 
-    def getNextHeader(self, pos):
-        data = self.cpiodata[pos:pos+110]
-        pos = pos + 110
+    def getNextHeader(self):
+        data = self.fd.read(110)
 
         # CPIO ASCII hex, expanded device numbers (070702 with CRC)
         if data[0:6] not in ["070701", "070702"]:
@@ -61,30 +59,29 @@ class CPIOFile:
             int(data[94:102], 16), data[102:110]]
 
         size = filedata[12]
-        filename = "/"+os.path.normpath("./"+self.cpiodata[pos:pos+size].rstrip("\x00"))
-        pos = pos + size
+        filename = self.fd.read(size)
+        filename = "/"+os.path.normpath("./"+filename.rstrip("\x00"))
         fsize = 110 + size
-        pos = pos + ((4 - (fsize % 4)) % 4)
+        self.fd.read((4 - (fsize % 4)) % 4)
 
         # Detect if we're at the end of the archive
         if filename == "/TRAILER!!!":
-            return [0, None, None]
+            return [None, None]
 
         # Contents
         filesize = filedata[7]
-        return [pos, filename, filedata]
+        return [filename, filedata]
         
 
     def _read_cpio_headers(self):
-        pos = 0
         while 1:
-            [pos, filename, filedata] = self.getNextHeader(pos)
+            [filename, filedata] = self.getNextHeader()
             if filename == None:
                 break
             # Contents
             filesize = filedata[7]
-            pos = pos + filesize
-            pos = pos + ((4 - (filesize % 4)) % 4)
+            self.fd.read(filesize)
+            self.fd.read((4 - (filesize % 4)) % 4)
             self.filelist[filename] = filedata
 
     def createLink(self, src, dst):
@@ -204,22 +201,21 @@ class CPIOFile:
         return [self.filename, self.filedata, self.filerawdata]
 
     def getNextEntry(self):
-        [self.pos, filename, filedata] = self.getNextHeader(self.pos)
+        [filename, filedata] = self.getNextHeader()
         if filename == None:
             return [None, None, None]
 
         # Contents
         filesize = filedata[7]
-        filerawdata = self.cpiodata[self.pos:self.pos+filesize]
-        self.pos = self.pos + filesize
-        self.pos = self.pos + ((4 - (filesize % 4)) % 4)
+        filerawdata = self.fd.read(filesize)
+        self.fd.read((4 - (filesize % 4)) % 4)
         self.filename = filename
         self.filedata = filedata
         self.filerawdata = filerawdata
         return self.getCurrentEntry()
 
     def resetEntry(self):
-        self.pos = 0
+        self.fd.seek(0)
         self.filename = None
         self.filedata = None
         self.filerawdata = None
