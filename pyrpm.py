@@ -194,8 +194,9 @@ class ReadRpm:
             if tags and tag not in tags:
                 continue
             # ignore duplicate entries as long as they are identical
-            if hdr.has_key(tag) and hdr[tag] != self.parseTag(index, fmt2):
-                print "%s included tag %d twice" % (self.filename, tag)
+            if strict == 0 and hdr.has_key(tag):
+                if hdr[tag] != self.parseTag(index, fmt2):
+                    print "%s included tag %d twice" % (self.filename, tag)
             else:
                 hdr[tag] = self.parseTag(index, fmt2)
         return hdr
