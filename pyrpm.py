@@ -18,7 +18,6 @@
 # Author: Paul Nasrat, Florian La Roche
 #
 
-#import profile
 import rpmconstants, cpio, os.path
 import sys, getopt, gzip, cStringIO
 from types import StringType, IntType, ListType
@@ -511,7 +510,7 @@ class RRpm:
         self.triggerun = rpm["triggerun"]
         self.triggerpostun = rpm["triggerpostun"]
 
-    def verify(self):
+    def verifyIt(self, rpm):
         if self.trigger != None:
             if len(self.trigger) != len(self.triggerprog):
                 raise ValueError, "wrong trigger lengths"
@@ -564,7 +563,9 @@ def verifyRpm(filename, payload=None):
     """Read in a complete rpm and verify its integrity."""
     rpm = ReadRpm(filename, 1, legacy=1)
     #nochangelog = [rpmconstants.RPMTAG_CHANGELOGTIME,
-    #    rpmconstants.RPMTAG_CHANGELOGNAME, rpmconstants.RPMTAG_CHANGELOGTEXT]
+    #    rpmconstants.RPMTAG_CHANGELOGNAME, rpmconstants.RPMTAG_CHANGELOGTEXT,
+    #    rpmconstants.RPMTAG_SUMMARY, rpmconstants.RPMTAG_DESCRIPTION]
+    #if rpm.readHeader(nochangelog):
     if rpm.readHeader():
         return None
     if payload:
@@ -631,19 +632,20 @@ def main(args):
         sys.stdout.write(queryformat % rpm)
 
 def verifyAllRpms():
-    import time
-    repo = []
+    #import time
+    #repo = []
     for a in sys.argv[1:]:
         rpm = verifyRpm(a)
         if rpm != None:
-            f = rpm["dirnamesxxx"]
-            if f:
-                print rpm.getFilename()
-                print f
+            #f = rpm["dirnamesxxx"]
+            #if f:
+            #    print rpm.getFilename()
+            #    print f
             rrpm = RRpm(rpm)
-            repo.append(rrpm)
-    print "ready"
-    time.sleep(30)
+            rrpm.verifyIt(rpm)
+            #repo.append(rrpm)
+    #print "ready"
+    #time.sleep(30)
 
 if __name__ == "__main__":
     if None:
@@ -653,7 +655,6 @@ if __name__ == "__main__":
         rpms = readHdlist("/home/fedora/i386/Fedora/base/hdlist2", 1)
         sys.exit(0)
     if 1:
-        #profile.run("verifyAllRpms()")
         verifyAllRpms()
         sys.exit(0)
     main(sys.argv[1:])
