@@ -20,7 +20,7 @@
 
 #import profile
 import rpmconstants, cpio, os.path
-import sys, getopt, gzip, cStringIO, time
+import sys, getopt, gzip, cStringIO
 from types import StringType, IntType, ListType
 from struct import unpack
 rpmtag = rpmconstants.rpmtag
@@ -52,7 +52,6 @@ class ReadRpm:
         # 1 == check if legacy tags are included, 0 allows more old tags
         # 1 is good for Fedora Core development trees
         self.legacy = legacy
-        self.hdrfiletree = {}   # filetree hash with stat data from rpm header
 
     def printErr(self, err):
         print "%s: %s" % (self.filename, err)
@@ -70,8 +69,6 @@ class ReadRpm:
                 self.fd.seek(offset, 1)
 
     def closeFd(self):
-        if self.fd != None:
-            self.fd.close()
         self.fd = None
 
     def __repr__(self):
@@ -285,7 +282,6 @@ class ReadRpm:
             self.hdrdata
         (self.hdr, self.hdrtype) = self.parseIndex(hdrindexNo, hdrfmt, \
             hdrfmt2, tags)
-        self.parseFilelist()
         
         if self.verify:
             for i in rpmconstants.rpmtagrequired:
@@ -293,16 +289,11 @@ class ReadRpm:
                     self.printErr("hdr is missing: %d" % i)
             self.verifyHeader()
 
-    def parseFilelist(self):
-        for perm in self._buildFileNames():
-            self.hdrfiletree[perm[0]+perm[1]] = perm[2:]
-
     def readHeader(self, parse=1, tags=None, keepdata=None):
         self.openFd()
         leaddata = self.fd.read(96)
         if leaddata[:4] != '\xed\xab\xee\xdb':
             self.printErr("no rpm magic found")
-            self.closeFd()
             return 1
         if self.verify:
             self.parseLead(leaddata)
@@ -312,7 +303,6 @@ class ReadRpm:
             self.leaddata = leaddata
         if parse:
             self.parseHeader(tags)
-        self.closeFd()
         return None
 
     def readHdlist(self, parse=1, tags=None):
@@ -333,7 +323,7 @@ class ReadRpm:
             if payload[:9] != '\037\213\010\000\000\000\000\000\000':
                 self.raiseErr("not gzipped data")
             #cpiodata = zlib.decompress(payload)
-            return
+            return None
         else:
             gz = gzip.GzipFile(fileobj=self.fd)
             cpiodata = gz.read()
@@ -356,16 +346,18 @@ class ReadRpm:
             self.cpiodata = cpiodata
         if self.verify:
             return self.verifyPayload(c.namelist())
+        return None
 
     def verifyPayload(self, cpiofiletree=None):
+        hdrfiletree = self.parseFilelist()
         if cpiofiletree == None:
             return 0
         for filename in cpiofiletree.keys():
             cpiostat = cpiofiletree[filename]
-            if filename not in self.hdrfiletree.keys():
+            if filename not in hdrfiletree.keys():
                 print "Error "+filename+" not in header tags"
                 return 1
-            hdrstat = self.hdrfiletree[filename]
+            hdrstat = hdrfiletree[filename]
             if cpiostat[1] != hdrstat[1]:
                 print "Error inode is different for file "+filename
                 print cpiostat[1]+" != "+hdrstat[1]
@@ -455,7 +447,7 @@ class ReadRpm:
     def getTriggers(self):
         return self.getDeps("triggername", "triggerflags", "triggerversion")
 
-    def _buildFileNames(self):
+    def buildFileNames(self):
         """Returns (dir, filename, linksto, flags)."""
         if self["dirnames"] == None or self["dirindexes"] == None:
             return []
@@ -471,6 +463,13 @@ class ReadRpm:
                     self["filemd5s"]
                 )
 
+    def parseFilelist(self):
+        fl = {}
+        for perm in self.buildFileNames():
+            fl[perm[0] + perm[1]] = perm[2:]
+        return fl
+
+
 class RRpm:
     def __init__(self, rpm):
         self.filename = rpm.filename
@@ -485,6 +484,11 @@ class RRpm:
             evr = self.version + "-" + self.release
         self.dep = (self.name, rpmconstants.RPMSENSE_EQUAL, evr)
         self.arch = rpm["arch"]
+
+        #self.hdrfiletree = rpm.parseFilelist()
+        #self.filetree = rpm.buildFileNames()
+        self.basenames = rpm["basenames"]
+        self.dirnames = rpm["dirnames"]
 
         self.provides = rpm.getProvides()
         self.requires = rpm.getRequires()
@@ -561,12 +565,13 @@ class RRpm:
 def verifyRpm(filename, payload=None):
     """Read in a complete rpm and verify its integrity."""
     rpm = ReadRpm(filename, 1, legacy=1)
-    #[rpmconstants.RPMTAG_CHANGELOGTIME, rpmconstants.RPMTAG_CHANGELOGNAME,
-    # rpmconstants.RPMTAG_CHANGELOGTEXT]
+    #nochangelog = [rpmconstants.RPMTAG_CHANGELOGTIME,
+    #    rpmconstants.RPMTAG_CHANGELOGNAME, rpmconstants.RPMTAG_CHANGELOGTEXT]
     if rpm.readHeader():
         return None
     if payload:
         rpm.readPayload()
+    rpm.closeFd()
     return rpm
 
 def readHdlist(filename, verify=None):
@@ -628,15 +633,18 @@ def main(args):
         sys.stdout.write(queryformat % rpm)
 
 def verifyAllRpms():
+    import time
     repo = []
     for a in sys.argv[1:]:
-        rpm = verifyRpm(a,1)
-        repo.append(rpm)
+        rpm = verifyRpm(a)
         if rpm != None:
-            f = rpm["disturlxxx"]
+            f = rpm["dirnamesxxx"]
             if f:
                 print rpm.getFilename()
                 print f
+            rrpm = RRpm(rpm)
+            repo.append(rrpm)
+    print "ready"
     time.sleep(30)
 
 if __name__ == "__main__":
