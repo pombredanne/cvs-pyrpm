@@ -114,27 +114,29 @@ class RpmList:
     def __getitem__(self, i):
         return self.list[i][1] # return rpm list
     def install(self, pkg):
-        if not self.list.has_key(pkg["name"]):
-            self.list[pkg["name"]] = [ ]
-        for r in self.list[pkg["name"]]:
+        key = "%s.%s" % (pkg["name"], pkg["arch"])
+        if not self.list.has_key(key):
+            self.list[key] = [ ]
+        for r in self.list[key]:
             if str(pkg) == str(r):
                 printDebug(1, "Package %s is already in list" % \
                            r.getNEVRA())
                 return 0
-        self.list[pkg["name"]].append(pkg)
+        self.list[key].append(pkg)
         self.provides.add_rpm(pkg)
         self.filenames.add_rpm(pkg)
         return 1
     def update(self, pkg):
-        if self.list.has_key(pkg["name"]):
-            rpms = self.list[pkg["name"]]
+        key = "%s.%s" % (pkg["name"], pkg["arch"])
+        if self.list.has_key(key):
+            rpms = self.list[key]
             newer = 1
             for r in rpms:
                 if str(pkg) == str(r):
                     printDebug(1, "Package %s is already in list" % \
                                r.getNEVRA())
                     return 0
-                # TODO: disable this for old-package
+                # TODO: disable this for old packages (AS 2.1)
                 if labelCompare((pkg["epoch"], pkg["version"], pkg["release"]),
                                 (r["epoch"], r["version"], r["release"])) \
                                 < 0:
@@ -152,7 +154,8 @@ class RpmList:
             for u in pkg["obsoletes"]:
                 s = self.searchDependency(u)
                 for r2 in s:
-                    if str(r2) != str(pkg):
+                    if r2 != pkg and r2.getNEVR() != pkg.getNEVR():
+                        # package is not the same and 
                         printDebug(1, "%s obsoletes %s, removing %s" % \
                                    (pkg.getNEVRA(), r2.getNEVRA(), \
                                     r2.getNEVRA()))
@@ -160,9 +163,10 @@ class RpmList:
             return 1
         return 0
     def erase(self, pkg):
-        if self.list.has_key(pkg["name"]):
+        key = "%s.%s" % (pkg["name"], pkg["arch"])
+        if self.list.has_key(key):
             found = 0
-            for r in self.list[pkg["name"]]:
+            for r in self.list[key]:
                 if str(r) == str(pkg):
                     pkg = r
                     found = 1
@@ -172,9 +176,9 @@ class RpmList:
                 return 0
             self.provides.remove_rpm(pkg)
             self.filenames.remove_rpm(pkg)
-            self.list[pkg["name"]].remove(pkg)
-            if len(self.list[pkg["name"]]) == 0:
-                del self.list[pkg["name"]]
+            self.list[key].remove(pkg)
+            if len(self.list[key]) == 0:
+                del self.list[key]
             return 1
         printDebug(1, "%s: Package is not in list." % pkg.getNEVRA())
         return 0
@@ -186,6 +190,7 @@ class RpmList:
     def searchDependency(self, dep):
         (name, flag, version) = dep
         s = self.provides.search(name, flag, version)
+        
         if name[0] == '/': # all filenames are beginning with a '/'
             s += self.filenames.search(name)
         return s
