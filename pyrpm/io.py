@@ -39,24 +39,27 @@ class CPIOFile:
         if data[0:6] not in ["070701", "070702"]:
             raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
 
-        size = int(data[94:102], 16)
-        filename = self.fd.read(size).rstrip("\x00")
-        self.fd.read((4 - ((110 + size) % 4)) % 4)
-        # Detect if we're at the end of the archive
-        if filename == "TRAILER!!!":
+        # Read filename and padding.
+        filenamesize = int(data[94:102], 16)
+        filename = self.fd.read(filenamesize).rstrip("\x00")
+        self.fd.read((4 - ((110 + filenamesize) % 4)) % 4)
+        if filename == "TRAILER!!!": # end of archive detection
             return (None, None)
+        # Adjust filename, so that it matches the way the rpm header has
+        # filenames stored. This code used to be:
+        # 'filename = "/" + os.path.normpath("./" + filename)'
         if filename.startswith("./"):
             filename = filename[1:]
         if not filename.startswith("/"):
             filename = "%s%s" % ("/", filename)
         if filename.endswith("/") and len(filename) > 1:
             filename = filename[:-1]
-        #filename = "/" + os.path.normpath("./" + filename)
 
-        # Contents
+        # Read file contents.
         filesize = int(data[54:62], 16)
         filerawdata = self.fd.read(filesize)
         self.fd.read((4 - (filesize % 4)) % 4)
+
         return (filename, filerawdata)
 
 
