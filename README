@@ -54,6 +54,6 @@ RpmPackage(RpmData)
 USAGE
 =====
 
-rpm = RPM(ReadFile("foo-1.2.rpm"))
+rpm = RpmPackage(RpmFile("foo-1.2.rpm"))
 
 envra: [e:]n[-v[-r]][.arch]

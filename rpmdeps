@@ -8,7 +8,7 @@
 #
 # version 2005-01-13-01
 
-import sys, os, rpm, types
+import sys, os, rpm
 
 # ----------------------------------------------------------------------------
 
@@ -114,13 +114,13 @@ def evr_compare(evr1, comp, evr2):
 #                                                  rpm.labelCompare(e1, e2))
 
     if r == -1:
-        if comp == "<" or comp == "<=":
+        if comp & rpm.RPMSENSE_LESS:
             res = 1
     elif r == 0:
-        if comp == "<=" or comp == "=" or comp == ">=":
+        if comp & rpm.RPMSENSE_EQUAL:
             res = 1
     else: # res == 1
-        if comp == ">=" or comp == ">":
+        if comp & rpm.RPMSENSE_GREATER:
             res = 1
 
     return res
@@ -217,16 +217,14 @@ class RPM:
         self.p_filenames = hdr[rpm.RPMTAG_FILENAMES]
 
         for i in xrange(len(hdr[rpm.RPMTAG_PROVIDES])):
-            p = hdr[rpm.RPMTAG_PROVIDES][i]
-            flag = gen_operator(hdr[rpm.RPMTAG_PROVIDEFLAGS][i])
-            version = hdr[rpm.RPMTAG_PROVIDEVERSION][i]
-            self.p_provides.append((p, flag, version))
+            self.p_provides.append((hdr[rpm.RPMTAG_PROVIDES][i],
+                                    hdr[rpm.RPMTAG_PROVIDEFLAGS][i],
+                                    hdr[rpm.RPMTAG_PROVIDEVERSION][i]))
             
         for i in xrange(len(hdr[rpm.RPMTAG_REQUIRES])):
-            flag = gen_operator(hdr[rpm.RPMTAG_REQUIREFLAGS][i])
-            version = hdr[rpm.RPMTAG_REQUIREVERSION][i]
-
-            p = (hdr[rpm.RPMTAG_REQUIRES][i], flag, version)
+            p = (hdr[rpm.RPMTAG_REQUIRES][i],
+                 hdr[rpm.RPMTAG_REQUIREFLAGS][i],
+                 hdr[rpm.RPMTAG_REQUIREVERSION][i])
 
             try:
                 self.p_requires.index(p)
@@ -490,21 +488,22 @@ if __name__ == '__main__':
             # resolved dependencies
             list = [ ]
             for j in xrange(len(r.p_resolved)):
-                r2 = r.p_resolved[j]
-                dep = r2[0][0]
+                res = r.p_resolved[j]
+                dep = res[0][0]
                 pkgs = ""
                 if verbose > 2:
                     list = [ ]
-                for rpm in r2[1]:
-                    p = "%s-%s-%s.%s" % (rpm.p_name, rpm.p_version,
-                                         rpm.p_release, rpm.p_arch)
+                for r2 in res[1]:
+                    p = "%s-%s-%s.%s" % (r2.p_name, r2.p_version,
+                                         r2.p_release, r2.p_arch)
                     if p not in list:
                         list.append(p)
                         if pkgs != "": pkgs += ", "
                         pkgs += p
                 if verbose > 2:
-                    if r2[0][2] != "":
-                        dep = "%s %s %s" % (r2[0][0], r2[0][1], r2[0][2])
+                    if res[0][2] != "":
+                        dep = "%s %s %s" % (res[0][0], gen_operator(res[0][1]),
+                                            res[0][2])
                     print "\t%s --> %s" % (dep, pkgs)
             if verbose == 2:
                 list.sort()
