@@ -92,7 +92,7 @@ class RpmPackage(RpmData):
     def read(self, tags=None, ntags=None):
         if not self.open():
             return 0
-        if not self.readHeader(tags, ntags):
+        if not self.__readHeader(tags, ntags):
             return 0
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
@@ -115,7 +115,7 @@ class RpmPackage(RpmData):
     def install(self, db=None, tags=None, ntags=None):
         if not self.open():
             return 0
-        if not self.readHeader(tags, ntags):
+        if not self.__readHeader(tags, ntags):
             return 0
         # Set umask to 022, especially important for scripts
         os.umask(022)
@@ -132,7 +132,7 @@ class RpmPackage(RpmData):
     def erase(self, db=None):
         if not self.open():
             return 0
-        if not self.readHeader():
+        if not self.__readHeader():
             return 0
         files = self["filenames"]
         # Set umask to 022, especially important for scripts
@@ -160,7 +160,7 @@ class RpmPackage(RpmData):
             runScript(self["postunprog"], self["postun"], "1")
         return 1
 
-    def readHeader(self, tags=None, ntags=None):
+    def __readHeader(self, tags=None, ntags=None):
         if self.header_read:
             return 1
         (key, value) = self.io.read()

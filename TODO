@@ -1,12 +1,12 @@
-Allow streaming of rpms (header and cpio data)
+X Allow streaming of rpms (header and cpio data)
 Signature checking
 Verify correct file and script handling
 Implement file checkes (md5 checks, %config, %ghost, etc)
 Write reader/writer for rpmdb
 Analyze current rpmdb and maybe design new one
-Integrate Thomas' depresolver into current class structure and design
+X Integrate Thomas' depresolver into current class structure and design
 Merge rpmdb/bsddb functionality 
 Ensure all RPM_TYPEs implemented
 Analyze smart and see what we can reuse
-Check rpm headers and compare cpio file data with the file data in the rpm headers
+X Check rpm headers and compare cpio file data with the file data in the rpm headers
 grep XXX *.py

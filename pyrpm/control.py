@@ -174,7 +174,6 @@ class RpmController:
             if not self.readDB():
                 return 0
         (epoch, name, version, release, arch) = envraSplit(file)
-        print epoch, name, version, release, arch
         # First check is against nvra as name
         n = name
         if version != None:
