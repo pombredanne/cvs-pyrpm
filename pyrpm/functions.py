@@ -503,23 +503,35 @@ def depString((name, flag, version)):
         return name
     return "%s %s %s" % (name, depOperatorString(flag), version)
 
+def archCompat(parch, arch):
+    if parch == "noarch" or arch == "noarch" or \
+           parch == arch or \
+           (arch_compats.has_key(arch) and parch in arch_compats[arch]):
+        return 1
+    return 0
+
+def archDuplicate(parch, arch):
+    if parch == arch or \
+           buildarchtranslate[parch] == buildarchtranslate[arch]:
+        return 1
+    return 0
+
 def filterArchCompat(list, arch):
+    raise Exception, "deprecated"
+
     # stage 1: filter packages which are not in compat arch
     i = 0
     while i < len(list):
-        pkg = list[i]
-        parch = pkg["arch"]
-        if parch == arch or parch == "noarch":
+        if archCompat(list[i]["arch"], arch):
             i += 1
-            continue
-        if arch_compats.has_key(arch) and parch in arch_compats[arch]:
-            i += 1
-            continue
-        printWarning(1, "%s: Architecture not compatible with machine %s" % \
-            (pkg.source, arch))
-        list.pop(i)
+        else:
+            printWarning(1, "%s: Architecture not compatible with %s" % \
+                         (list[i].source, arch))
+            list.pop(i)
 
 def filterArchDuplicates(list):
+    raise Exception, "deprecated"
+
     # stage 1: filter duplicates: order by name.arch
     myhash = {}
     i = 0
@@ -583,6 +595,8 @@ def filterArchDuplicates(list):
             i += 1
 
 def filterArchList(list, arch=None):
+    raise Exception, "deprecated"
+
     if arch != None:
         filterArchCompat(list, arch)
     filterArchDuplicates(list)
