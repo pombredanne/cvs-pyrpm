@@ -231,6 +231,10 @@ class RpmController:
                         self.__erasePkgFromDB(pkg)
                     pkg.close()
                     del pkg
+                if rpmconfig.delayldconfig:
+                    rpmconfig.delayldconfig = 0
+                    runScript("/sbin/ldconfig", force=1)
+                printInfo(2, "number of /sbin/ldconfig calls optimized away: %d" % rpmconfig.ldconfig)
                 sys.exit(0)
         return 1
 

@@ -54,6 +54,8 @@ class RpmConfig:
             "dirindexes", "basenames", "dirnames")
         self.ignore_epoch = 0
         self.timer = 0
+        self.ldconfig = 0
+        self.delayldconfig = 0
 
 # Automatically create a global rpmconfig variable.
 rpmconfig = RpmConfig()
