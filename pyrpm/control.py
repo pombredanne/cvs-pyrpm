@@ -188,7 +188,7 @@ class RpmController:
                    operations[i][1] == operations[j][1]:
                     operations.pop(i)
                     break
-        self.triggerlist = Triggers()
+        self.triggerlist = _Triggers()
         for (op, pkg) in operations:
             if op == RpmResolver.OP_UPDATE or op == RpmResolver.OP_INSTALL:
                 self.triggerlist.addPkg(pkg)
@@ -384,6 +384,8 @@ class RpmController:
 
     def __preprocess(self):
         if not self.ignorearch:
+            if rpmconfig.machine not in possible_archs:
+                raiseFatal("Unknow rpmconfig.machine architecture %s" % rpmconfig.machine)
             self.__filterArch()
         if self.operation == RpmResolver.OP_INSTALL:
             if not self.__checkInstall():
@@ -409,8 +411,6 @@ class RpmController:
             arch = pkg["arch"]
             if arch not in possible_archs:
                 raiseFatal("%s: Unknow rpm package architecture %s" % (pkg.source, arch))
-            if rpmconfig.machine not in possible_archs:
-                raiseFatal("%s: Unknow rpmconfig.machine architecture %s" % (pkg.source, rpmconfig.machine))
             if arch != rpmconfig.machine and arch not in arch_compats[rpmconfig.machine]:
                 raiseFatal("%s: Architecture not compatible with rpmconfig.machine %s" % (pkg.source, rpmconfig.machine))
             if duplicates.has_key(name):

@@ -1,4 +1,3 @@
-Extend test9 script to support all "common" command line options of rpminstall
 Make a specfile and package out of all stuff
 Convert oldfilenames to basenames/dirnames/dirindexs if available
 support bzip2 for payload data
@@ -10,14 +9,15 @@ Signature checking
 Do we need anything for SELinux support?
 warn about exclude flag if shipped in binary rpm packages
 change filenames to be split for dirname/basename to reduce memory allocations
-Verify correct file and script handling
 Implement file checkes (md5 checks, %config, %ghost, etc)
 Write reader/writer for rpmdb, rebuilddb/verify support
 support writing sparse files for ELF files
-Analyze current rpmdb and maybe design new one
-X Integrate Thomas' depresolver into current class structure and design
 Merge rpmdb/bsddb functionality 
 Ensure all RPM_TYPEs implemented
 Analyze smart and see what we can reuse
+X Extend test9 script to support all "common" command line options of rpminstall
+X Verify correct file and script handling
+X Analyze current rpmdb and maybe design new one
+X Integrate Thomas' depresolver into current class structure and design
 X Check rpm headers and compare cpio file data with the file data in the rpm headers
 grep XXX *.py

@@ -256,11 +256,12 @@ class RpmPackage(RpmData):
         nfiles = len(files)
         n = 0
         pos = 0
-        printInfo(0, "\r\t\t\t\t ")
+        if rpmconfig.hash:
+            printInfo(0, "\r\t\t\t\t ")
         while filename != None and filename != "EOF" :
             n += 1
             npos = int(n*45/nfiles)
-            if pos < npos:
+            if pos < npos and rpmconfig.hash:
                 printInfo(0, "#"*(npos-pos))
             pos = npos
             sys.stdout.flush()
@@ -284,7 +285,8 @@ class RpmPackage(RpmData):
             (filename, filerawdata) = self.io.read()
         if nfiles == 0:
             nfiles = 1
-        printInfo(0, "#"*(45-int(45*n/nfiles)))
+        if rpmconfig.hash:
+            printInfo(0, "#"*(45-int(45*n/nfiles)))
         return self.__handleRemainingHardlinks()
 
     def __verifyFileInstall(self, rfi, db):

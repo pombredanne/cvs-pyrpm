@@ -1,0 +1,149 @@
+#!/usr/bin/python
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2004 Red Hat, Inc.
+#
+# Author: Phil Knirsch
+#
+
+import sys, os, getopt
+from pyrpmlib import *
+
+def usage():
+    print "INSTALLING, UPGRADING, AND REMOVING PACKAGES:"
+    print "    pyrpminstall {-i|--install} [install-options] PACKAGE_FILE ..."
+    print "    pyrpminstall {-U|--upgrade} [install-options] PACKAGE_FILE ..."
+    print "    pyrpminstall {-F|--freshen} [install-options] PACKAGE_FILE ..."
+    print "    pyrpminstall {-e|--erase} [install-options] PACKAGE_FILE ..."
+    print
+    print "general options:"
+    print "    [-?, --help] [--version]"
+    print "    [--quiet] [-v, --verbose] [-w, warning] [-d, --debug]"
+    print "    [--dbpath DIRECTORY] [-r, --root DIRECTORY]"
+    print
+    print "install-options:"
+    print "    [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]"
+    print "    [--ignoresize] [--ignorearch]"
+    print "    [--nodeps] [--nodigest] [--nosignature]"
+    print "    [--noorder] [--noscripts] [--notriggers]"
+
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:", ["install", "upgrade", "freshen", "erase", "help", "verbose", "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=", "force", "ignoresize", "ignorearch", "justdb", "nodeps", "nodigest", "nosignature", "noorder", "noscripts", "notriggers", "oldpackage", "test"])
+except getopt.error, e:
+    print "Error parsing command list arguments: %s" % e
+    usage()
+    sys.exit(1)
+
+buildroot = "/"
+operation = None
+verbose = 0
+warning = 0
+debug = 0
+
+for (opt, val) in opts:
+    if opt in ["-i", "--install"]:
+        operation = "install"
+    elif opt in ["-U", "--upgrade"]:
+        if operation != None:
+            print "Only one operation at a time is allow."
+            usage()
+            sys.exit(1)
+        operation = "upgrade"
+    elif opt in ["-F", "--upgrade"]:
+        if operation != None:
+            print "Only one operation at a time is allow."
+            usage()
+            sys.exit(1)
+        operation = "freshen"
+    elif opt in ["-e", "--erase"]:
+        if operation != None:
+            print "Only one operation at a time is allow."
+            usage()
+            sys.exit(1)
+        operation = "erase"
+    elif opt in ['-?', "--help"]:
+        usage()
+        sys.exit(0)
+    elif opt in ["-v", "--verbose"]:
+        verbose += 1
+    elif opt in ["-w", "--warning"]:
+        warning += 1
+    elif opt in ["-d", "--debug"]:
+        debug += 1
+    elif opt in ["-r", "--root"]:
+        rpmconfig.buildroot = val
+    elif opt == "--quiet":
+        rpmconfig.debug_level = 0
+        rpmconfig.warning_level = 0
+        rpmconfig.verbose_level = 0
+        rpmconfig.hash = 0
+    elif opt == "--version":
+        print "pyrpminstall 0.1.0"
+        sys.exit(0)
+    elif opt == "--dbpath":
+        rpmconfig.dbpath = val
+    elif opt == "--force":
+        rpmconfig.force = 1
+    elif opt in ["-h", "--hash"]:
+        rpmconfig.hash = 1
+    elif opt == "--oldpackage":
+        rpmconfig.oldpackage = 1
+    elif opt == "--justdb":
+        rpmconfig.justdb = 1
+        rpmconfig.noscripts = 1
+        rpmconfig.notriggers = 1
+    elif opt == "--test":
+        rpmconfig.test = 1
+        rpmconfig.noscripts = 1
+        rpmconfig.notriggers = 1
+    elif opt == "--ignoresize":
+        rpmconfig.ignoresize = 1
+    elif opt == "--ignorearch":
+        rpmconfig.ignorearch = 1
+    elif opt == "--nodeps":
+        rpmconfig.nodeps = 1
+    elif opt == "--nodigest":
+        rpmconfig.nodigest = 1
+    elif opt == "--nosignature":
+        rpmconfig.nosignature = 1
+    elif opt == "--noorder":
+        rpmconfig.noorder = 1
+    elif opt == "--noscripts":
+        rpmconfig.noscripts = 1
+    elif opt == "--notriggers":
+        rpmconfig.notriggers = 1
+
+rpmconfig.verbose_level = verbose
+rpmconfig.warning_level = warning
+rpmconfig.debug_level = debug
+
+if not args:
+    print "Error no packages to install"
+    usage()
+    sys.exit(1)
+
+control = RpmController()
+
+if   operation == "install":
+    control.installPkgs(args, rpmconfig.dbpath, rpmconfig.buildroot)
+elif operation == "upgrade":
+    control.updatePkgs(args, rpmconfig.dbpath, rpmconfig.buildroot)
+elif operation == "freshen":
+    control.freshenPkgs(args, rpmconfig.dbpath, rpmconfig.buildroot)
+elif operation == "erase":
+    control.erasePkgs(args, rpmconfig.dbpath, rpmconfig.buildroot)
+else:
+    usage()
+
+# vim:ts=4:sw=4:showmatch:expandtab
