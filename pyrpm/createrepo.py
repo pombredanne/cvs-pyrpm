@@ -67,14 +67,6 @@ def _textChildFromTag(parent, ns, tag, value):
     parent.newTextChild(ns, tag, value)
 
 
-def _stringVal(val):
-    """Return val[0] if val is a tuple or a list, val otherwise"""
-    if type(val) in [list, tuple]:
-        return val[0]
-    else:
-        return val
-
-
 def _archOrSrc(pkg):
     if pkg.isSourceRPM():
         return 'src'

@@ -1,5 +1,11 @@
 #!/usr/bin/python -t
+#
 # Generating the repository metadata
+#
+# Copyright 2004 Duke University
+# Copyright (C) 2005 Red Hat, Inc.
+# Author: Miloslav Trmac
+# Based on createrepo 0.4.2
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,23 +21,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
-# Copyright 2004 Duke University
-# Copyright (C) 2005 Red Hat, Inc.
-#
-# Author: Miloslav Trmac
-# Based on createrepo 0.4.2
 
-import fnmatch
-import getopt
-import gzip
-import md5
-import os
-import sha
-import stat
-import sys
-
-import libxml2
-
+import fnmatch, getopt, gzip, md5, os, sha, stat, sys, libxml2
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
@@ -557,7 +548,6 @@ def main(args):
 
     # take us home mr. data
     os.chdir(curdir)
-
 
 
 if __name__ == "__main__":
