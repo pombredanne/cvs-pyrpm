@@ -6,7 +6,7 @@
 #
 # (c) 2004 Thomas Woerner <twoerner@redhat.com>
 #
-# version 2005-01-12-03
+# version 2005-01-12-04
 
 import sys, os, rpm, types
 
@@ -85,9 +85,8 @@ def gen_operator(flag):
 def hdr_str(hdr):
     epoch = "0"
     if ignore_epoch != 1:
-        epoch = hdr[rpm.RPMTAG_EPOCH]
-        if epoch == None:
-            epoch = "0"
+        if hdr[rpm.RPMTAG_EPOCH] != None:
+            epoch = hdr[rpm.RPMTAG_EPOCH]
 
     return "%s:%s-%s-%s.%s" % (epoch, hdr[rpm.RPMTAG_NAME],
                                hdr[rpm.RPMTAG_VERSION],
@@ -314,7 +313,7 @@ if __name__ == '__main__':
         usage()
         sys.exit(0)
 
-    list = [ ]
+    list = { }
     for i in xrange(1, len(sys.argv)):
         if sys.argv[i] == "-h" or sys.argv[i] == "--help":
             usage()
@@ -334,13 +333,13 @@ if __name__ == '__main__':
             hdr = get_hdr(sys.argv[i])
             for j in xrange(len(hdr)):
                 s = hdr_str(hdr[j])
-                if not s in list:
-                    list.append(s)
+                if not list.has_key(s):
+                    list[s] = 1
                     if verbose > 0:
                         sys.stdout.write("\rReading %d" % (len(rpms)+1))
                         sys.stdout.flush()
                     rpms.append(RPM(sys.argv[i], hdr[j]))
-    list = [ ]
+    list = { }
     if verbose > 0 and len(rpms) > 0:
         print
 
@@ -353,14 +352,13 @@ if __name__ == '__main__':
     filenames = Filenames()
 
     for i in xrange(len(rpms)):
-        r = rpms[i]
         if verbose > 0:
             sys.stdout.write("\rProcessing [%d/%d]" % (i+1, len(rpms)))
             sys.stdout.flush()
-        for p in r.p_provides:
-            provides.append(p[0], p[1], p[2], r)
-        for f in r.p_filenames:
-            filenames.append(f, r)
+        for p in rpms[i].p_provides:
+            provides.append(p[0], p[1], p[2], rpms[i])
+        for f in rpms[i].p_filenames:
+            filenames.append(f, rpms[i])
     if verbose > 0 and len(rpms) > 0:
         print
 
