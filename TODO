@@ -11,6 +11,7 @@ change filenames to be split for dirname/basename to reduce memory allocations
 Verify correct file and script handling
 Implement file checkes (md5 checks, %config, %ghost, etc)
 Write reader/writer for rpmdb, rebuilddb/verify support
+support writing sparse files for ELF files
 Analyze current rpmdb and maybe design new one
 X Integrate Thomas' depresolver into current class structure and design
 Merge rpmdb/bsddb functionality 
