@@ -52,15 +52,17 @@ def compare(str1, str2):
         if j1 > i1 or j2 > i1:
             if j1 == i1: return -1
             if j2 == i2: return 1
-            if j1-i1 > j2-i2: return 1
             if j1-i1 < j2-i2: return -1
+            if j1-i1 > j2-i2: return 1
             while i1 < j1 and i2 < j2:
-                if int(str1[i1]) > int(str2[i2]): return 1
                 if int(str1[i1]) < int(str2[i2]): return -1
+                if int(str1[i1]) > int(str2[i2]): return 1
                 i1 += 1
                 i2 += 1
             # found right side 
-            if i2 == len(str2): return 0
+            if i1 == len(str1): return -1
+            if i2 == len(str2): return 1
+        if i2 == len(str2): return -1
 
         # search for alphas and compare them
         while j1 < len(str1) and str1[j1].isalpha(): j1 += 1
@@ -68,10 +70,9 @@ def compare(str1, str2):
         if j1 > i1 or j2 > i1:
             if j1 == i1: return -1
             if j2 == i2: return 1
-            if str1[i1:j1] > str2[i2:j2]: return 1
             if str1[i1:j1] < str2[i2:j2]: return -1
+            if str1[i1:j1] > str2[i2:j2]: return 1
             # found right side 
-            if j2 == len(str2): return 0
             i1 = j1
             i2 = j2
 
@@ -84,6 +85,20 @@ def compare(str1, str2):
         else:
             return 1
 
+# ----------------------------------------------------------------------------
+
+def labelCompare(e1, e2):
+    r = compare(e1[0], e2[0])
+    if r == 0: r = compare(e1[1], e2[1])
+    if r == 0: r = compare(e1[2], e2[2])
+    elif ignore_epoch == 1:
+        if compare(e1[1], e2[1]) == 0:
+            if compare(e1[2], e2[2]) == 0:
+                r = 0
+    return r
+
+# ----------------------------------------------------------------------------
+
 def evr_compare(evr1, comp, evr2):
     res = -1
 
@@ -92,14 +107,12 @@ def evr_compare(evr1, comp, evr2):
     if e2[2] == "": # no release
         e1 = (e1[0], e1[1], "")
 
-    r = compare(e1[0], e2[0])
-    if r == 0: r = compare(e1[1], e2[1])
-    if r == 0: r = compare(e1[2], e2[2])
-    elif ignore_epoch == 1:
-        if compare(e1[1], e2[1]) == 0:
-            if compare(e1[2], e2[2]) == 0:
-                r = 0
-    
+    r = labelCompare(e1, e2)
+#    if r != rpm.labelCompare(e1, e2):
+#        print "ERROR compare '%s','%s': %d,%d" % (e1, e2,
+#                                                  labelCompare(e1, e2),
+#                                                  rpm.labelCompare(e1, e2))
+
     if r == -1:
         if comp == "<" or comp == "<=":
             res = 1
@@ -396,7 +409,7 @@ if __name__ == '__main__':
                     if verbose > 0:
                         sys.stdout.write("\rReading %d" % (len(rpms)+1))
                         sys.stdout.flush()
-                    rpms.append(RPM(sys.argv[i], hdr[j]))
+                    rpms.append(RPM(sys.argv[i], hdr[j]))    
     list = { }
     if verbose > 0 and len(rpms) > 0:
         print
