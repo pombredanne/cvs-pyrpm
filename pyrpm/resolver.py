@@ -224,9 +224,8 @@ class RpmResolver:
             for r in rlist:
                 printDebug(1, "Generating Relations for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.checkPkgDependencies(r, rpmlist)
-                if len(unresolved) > 0:
-                    printError("Found unresolved symbols in genRelations")
-                    return None
+                # ignore unresolved, we are only looking at the changes,
+                # therefore not all symbols are resolvable in these changes
                 for (u,s) in resolved:
                     (name, flag, version) = u
                     if name[0:7] == "config(": # drop config requirements
@@ -436,6 +435,8 @@ class RpmResolver:
 
         # resolving requires
         relations = self.genRelations(todo, self.operation)
+        if relations == None:
+            return None
 
         # save packages which have no relations
         no_relations = [ ]
