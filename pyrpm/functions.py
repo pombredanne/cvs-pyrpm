@@ -44,6 +44,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         (fd, tmpfilename) = mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
         if fd == None:
             return 0
+        # test for open fds
         # script = "ls -l /proc/$$/fd >> /$$.out\n" + script
         os.write(fd, script)
         os.close(fd)
@@ -152,13 +153,7 @@ def installFile(rfi, data):
 def setFileMods(filename, uid, gid, mode, mtime):
     try:
         os.chown(filename, uid, gid)
-    except:
-        return 0
-    try:
         os.chmod(filename, S_IMODE(mode))
-    except:
-        return 0
-    try:
         os.utime(filename, (mtime, mtime))
     except:
         return 0
