@@ -46,14 +46,13 @@ RPM_STRING = 6
 RPM_BIN = 7
 RPM_STRING_ARRAY = 8
 RPM_I18NSTRING = 9
-
 # new type internal to this tool:
-# STRING_ARRAY for app + params or STRING otherwise
+# RPM_STRING_ARRAY for app + params, otherwise a single RPM_STRING
 RPM_ARGSTRING = 12
 
 # RPMSENSEFLAGS
 RPMSENSE_ANY        = 0
-RPMSENSE_SERIAL     = (1 << 0)     # @todo Legacy.
+RPMSENSE_SERIAL     = (1 << 0)     # legacy
 RPMSENSE_LESS       = (1 << 1)
 RPMSENSE_GREATER    = (1 << 2)
 RPMSENSE_EQUAL      = (1 << 3)
@@ -103,7 +102,7 @@ def isErasePreReq(x):
     return (x & _ERASE_ONLY_MASK)
 
 # RPM file attributes
-RPMFILE_NONE        = 0,
+RPMFILE_NONE        = 0
 RPMFILE_CONFIG      = (1 <<  0)    # from %%config
 RPMFILE_DOC         = (1 <<  1)    # from %%doc
 RPMFILE_ICON        = (1 <<  2)    # from %%donotuse.
