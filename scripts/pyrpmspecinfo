@@ -24,15 +24,11 @@
 Usage: rpmspecfile.py [-v --verbose] [-l --sections] [-s --section=sectionname] [-n --name] [-p --packages] specfile ...
 """
 
-import sys
+import sys, string
 
-PYRPMDIR = "/usr/local/share/pyrpm"
-
+PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
-
-import string
-
 from pyrpm.specfile import RpmSpecFile
 
 def Usage():

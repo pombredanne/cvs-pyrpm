@@ -1,4 +1,5 @@
 #!/usr/bin/python
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
@@ -18,12 +19,9 @@
 
 import sys, os, getopt
 
-PYRPMDIR = "/usr/local/share/pyrpm"
-
+PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
-
-
 from pyrpm import *
 
 def usage():
@@ -44,21 +42,21 @@ def usage():
     print "    [--nodeps] [--nodigest] [--nosignature]"
     print "    [--noorder] [--noscripts] [--notriggers]"
 
-
-try:
+if __name__=='__main__':
+  try:
     opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:", ["install", "upgrade", "freshen", "erase", "help", "verbose", "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=", "force", "ignoresize", "ignorearch", "justdb", "nodeps", "nodigest", "nosignature", "noorder", "noscripts", "notriggers", "oldpackage", "test"])
-except getopt.error, e:
+  except getopt.error, e:
     print "Error parsing command list arguments: %s" % e
     usage()
     sys.exit(1)
 
-rpmconfig.buildroot = "/"
-rpmconfig.operation = None
-rpmconfig.verbose_level = 0
-rpmconfig.warning_level = 0
-rpmconfig.debug_level = 0
+  rpmconfig.buildroot = "/"
+  rpmconfig.operation = None
+  rpmconfig.verbose_level = 0
+  rpmconfig.warning_level = 0
+  rpmconfig.debug_level = 0
 
-for (opt, val) in opts:
+  for (opt, val) in opts:
     if opt in ["-i", "--install"]:
         if rpmconfig.operation != None:
             print "Only one operation at a time is allow."
@@ -135,12 +133,13 @@ for (opt, val) in opts:
     elif opt == "--notriggers":
         rpmconfig.notriggers = 1
 
-if not args:
+  if not args:
     print "Error no packages to install"
     usage()
     sys.exit(1)
 
-control = RpmController()
-control.handleFiles(args, rpmconfig.operation, rpmconfig.dbpath, rpmconfig.buildroot)
+  control = RpmController()
+  control.handleFiles(args, rpmconfig.operation, rpmconfig.dbpath,
+    rpmconfig.buildroot)
 
 # vim:ts=4:sw=4:showmatch:expandtab

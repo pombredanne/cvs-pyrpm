@@ -1,4 +1,1 @@
-docdir     = $(datadir)/doc/pyrpm-@VERSION@
-doc_DATA   = $(notdir $(wildcard *.fig))
-
-EXTRA_DIST = $(doc_DATA) FILES INFO TODO pycheckrc
+EXTRA_DIST = FILES INFO TODO classes.fig pycheckrc

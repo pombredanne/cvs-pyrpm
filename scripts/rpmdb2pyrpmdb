@@ -1,27 +1,33 @@
 #!/usr/bin/python
-import os, os.path
-import sys
-PYRPMDIR = "/usr/local/share/pyrpm"
+#
+# Best run this as non-root:
+# - "mkdir /var/lib/pyrpm"
+# - "chown test.test /var/lib/pyrpm"
 
+import os, os.path, sys
+
+PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
+from pyrpm import *
 
-from pyrpmlib import *
+chrootdir = "/mnt/build/pyrpm-fc3-i386"
+#chrootdir = ""
+pyrpmhdrdir = "%s/var/lib/pyrpm/headers/" % chrootdir
+rpmdir = "%s/var/lib/rpm" % chrootdir
 
-if not os.path.isdir("/mnt/build/pyrpm-fc3-i386/var/lib/pyrpm/headers/"):
-    os.mkdirs("/mnt/build/pyrpm-fc3-i386/var/lib/pyrpm/headers/")
+if not os.path.isdir(pyrpmhdrdir):
+    os.mkdir(pyrpmhdrdir)
 
-rpmdb = RpmDB("/mnt/build/rpm-fc3-i386/var/lib/rpm")
+rpmdb = RpmDB(rpmdir)
 rpmdb.read()
 
 l = rpmdb.getPkgList().values()
 for pkg in l:
     nevra = pkg.getNEVRA()
-    src = "pydb://mnt/build/pyrpm-fc3-i386/var/lib/pyrpm/headers/"+nevra
-    pyrpmio = getRpmIOFactory(src)
-    print "Writing %s pyrpm header." % nevra
+    pyrpmio = getRpmIOFactory("pydb:/%s%s" % (pyrpmhdrdir, nevra))
     if not pyrpmio.write(pkg):
-        print "Couldn't write package header! Aborting!"
+        print "Couldn't write package header %s! Aborting!" % nevra
         sys.exit(1)
 
 # vim:ts=4:sw=4:showmatch:expandtab

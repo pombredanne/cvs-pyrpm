@@ -29,9 +29,9 @@ make DESTDIR=${RPM_BUILD_ROOT} install
 rm -rf ${RPM_BUILD_ROOT}
 
 %files
-%{_docdir}/pyrpm-%{version}/
-%{_datadir}/pyrpm/
+%doc doc/FILES doc/INFO doc/TODO doc/classes.fig
 %{_bindir}/*
+%{_datadir}/pyrpm/
 
 %changelog
 * Wed Mar 09 2005 Phil Knirsch <pknirsch@redhat.com>
