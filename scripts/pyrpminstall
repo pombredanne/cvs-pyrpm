@@ -160,6 +160,5 @@ if __name__ == '__main__':
         os.unlink(filename)
     else:
         main()
-    
 
 # vim:ts=4:sw=4:showmatch:expandtab

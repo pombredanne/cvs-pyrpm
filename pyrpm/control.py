@@ -94,6 +94,8 @@ class RpmController:
         return 1
 
     def handleFiles(self, filelist, operation, db="/var/lib/pyrpm", buildroot=None):
+        if rpmconfig.timer:
+            time1 = clock()
         self.operation = operation
         self.db = db
         self.buildroot = buildroot
@@ -108,6 +110,8 @@ class RpmController:
         if len(self.rpms) == 0:
             printInfo(0, "Nothing to do.\n")
             sys.exit(0)
+        if rpmconfig.timer:
+            print "handleFiles() took %s seconds" % (clock() - time1)
         if not self.run():
             return 0
         return 1
@@ -131,7 +135,12 @@ class RpmController:
             time1 = clock()
         orderer = RpmOrderer(a, u, o, self.operation)
         operations = orderer.order()
-        getFreeDiskspace(a)
+        if rpmconfig.checkdiskspace:
+            if rpmconfig.timer:
+                time9 = clock()
+            getFreeDiskspace(a)
+            if rpmconfig.timer:
+                print "getFreeDiskspace took %s seconds" % (clock() - time9)
         del orderer
         del a
         del o

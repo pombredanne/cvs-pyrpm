@@ -66,11 +66,11 @@ def errorprint(stuff):
 def _(args):
     """Stub function for translation"""
     return args
-    
+
 def usage(retval=1):
     print _("""
     createrepo [options] directory-of-packages
-    
+
     Options:
      -u, --baseurl = optional base url location for all files
      -x, --exclude = files globs to exclude, can be specified multiple times
@@ -81,7 +81,7 @@ def usage(retval=1):
      -h, --help = show this help
      -V, --version = output version
      -p, --pretty = output xml files in pretty format.
-    """) 
+    """)
 
     sys.exit(retval)
 
@@ -89,14 +89,14 @@ def usage(retval=1):
 def getFileList(path, ext, filelist):
     """Return all files in path matching ext, store them in filelist, recurse dirs
        return list object"""
-    
+
     extlen = len(ext)
     try:
         dir_list = os.listdir(path)
     except OSError, e:
         errorprint(_('Error accessing directory %s, %s') % (path, e))
         sys.exit(1)
-        
+
     for d in dir_list:
         if os.path.isdir(path + '/' + d):
             filelist = getFileList(path + '/' + d, ext, filelist)
@@ -104,7 +104,7 @@ def getFileList(path, ext, filelist):
             if d[-extlen:].lower() == ext:
                newpath = os.path.normpath(path + '/' + d)
                filelist.append(newpath)
-                    
+
     return filelist
 
 
@@ -167,7 +167,7 @@ def parseArgs(args):
     cmds['dir-pattern-match'] = ['.*bin\/.*', '^\/etc\/.*']
 
     try:
-        gopts, argsleft = getopt.getopt(args, 'phqVvg:s:x:u:', ['help', 'exclude=', 
+        gopts, argsleft = getopt.getopt(args, 'phqVvg:s:x:u:', ['help', 'exclude=',
                                             'quiet', 'verbose',
                                             'baseurl=', 'groupfile=', 'checksum=',
                                             'version', 'pretty'])
@@ -175,7 +175,7 @@ def parseArgs(args):
         errorprint(_('Options Error: %s.') % e)
         usage()
 
-    try: 
+    try:
         for arg,a in gopts:
             if arg in ['-h','--help']:
                 usage(retval=0)
@@ -185,7 +185,7 @@ def parseArgs(args):
     except ValueError, e:
         errorprint(_('Options Error: %s') % e)
         usage()
-    
+
 
     # make sure our dir makes sense before we continue
     if len(argsleft) > 1:
@@ -196,8 +196,8 @@ def parseArgs(args):
         usage()
     else:
         directory = argsleft[0]
-   
-    try: 
+
+    try:
         for arg,a in gopts:
             if arg == '-v':
                 cmds['verbose'] = 1
@@ -231,12 +231,12 @@ def parseArgs(args):
                     usage()
                 else:
                     cmds['sumtype'] = a
-    
+
     except ValueError, e:
         errorprint(_('Options Error: %s') % e)
         usage()
 
-        
+
     return cmds, directory
 
 
@@ -251,7 +251,7 @@ def getChecksum(sumtype, file, CHUNK=2**16):
        sumtype = md5 or sha
        filename = /path/to/file
        CHUNK=65536 by default"""
-       
+
     # chunking brazenly lifted from Ryan Tomayko
     opened_here = 0
     try:
@@ -260,7 +260,7 @@ def getChecksum(sumtype, file, CHUNK=2**16):
         else:
             opened_here = 1
             fo = open(file, 'r', CHUNK)
-            
+
         if sumtype == 'md5':
             sum_ = md5.new()
         elif sumtype == 'sha':
@@ -268,14 +268,14 @@ def getChecksum(sumtype, file, CHUNK=2**16):
         else:
             raise MDError, 'Error Checksumming file, wrong checksum type %s' % sumtype
         chunk = fo.read
-        while chunk: 
+        while chunk:
             chunk = fo.read(CHUNK)
             sum_.update(chunk)
 
         if opened_here:
             fo.close()
             del fo
-            
+
         return sum_.hexdigest()
     except:
         raise MDError, 'Error opening file for checksum: %s' % file
@@ -292,13 +292,13 @@ class OutputFile:
         path = os.path.join(cmds['tempdir'], cmds[cmdstag])
         self.file = _gzipOpen(path, 'w')
         self.file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-        self.file.write('<%s xmlns="%s"%s packages="%s">\n' % 
+        self.file.write('<%s xmlns="%s"%s packages="%s">\n' %
                         (self.roottag, ns, otherattrs, pkgcount))
         self.pretty = cmds['pretty']
-        
+
     def outputSubtree(self, node):
         """Output node attached to self.root and delete it from self.root"""
-        
+
         output = node.serialize('UTF-8', self.pretty)
         self.file.write(output)
         self.file.write('\n')
@@ -320,7 +320,7 @@ def doPkgMetadata(cmds):
     files = getFileList('./', '.rpm', files)
     files = trimRpms(files, cmds['excludes'])
     pkgcount = len(files)
-    
+
     # setup the base metadata doc
     primary = OutputFile(cmds, 'primaryfile', 'metadata',
                          'http://linux.duke.edu/metadata/common', pkgcount,
@@ -331,11 +331,11 @@ def doPkgMetadata(cmds):
     filelists = OutputFile(cmds, 'filelistsfile', 'filelists',
                            'http://linux.duke.edu/metadata/filelists',
                            pkgcount)
-    
+
     # setup the other doc
     other = OutputFile(cmds, 'otherfile', 'otherdata',
                        'http://linux.duke.edu/metadata/other', pkgcount)
-    
+
     current = 0
     for filename in files:
         current+=1
@@ -357,25 +357,25 @@ def doPkgMetadata(cmds):
                                          cmds['sumtype'], filename,
                                          cmds['baseurl'])
         primary.outputSubtree(node)
-        
+
         node = pyrpm.metadataFilelistsNode(filelists.root, hdr, pkgid)
         filelists.outputSubtree(node)
 
         node = pyrpm.metadataOtherNode(other.root, hdr, pkgid)
         other.outputSubtree(node)
-        
+
     if not cmds['quiet']:
         print ''
-        
+
     # save them up to the tmp locations:
     if not cmds['quiet']:
         print _('Saving Primary metadata')
     primary.finish()
-    
+
     if not cmds['quiet']:
         print _('Saving file lists metadata')
     filelists.finish()
-    
+
     if not cmds['quiet']:
         print _('Saving other metadata')
     other.finish()
@@ -387,8 +387,8 @@ def repoXML(node, cmds):
     workfiles = [(cmds['otherfile'], 'other',),
                  (cmds['filelistsfile'], 'filelists'),
                  (cmds['primaryfile'], 'primary')]
-    
-    
+
+
     for (filename, ftype) in workfiles:
         zfo = _gzipOpen(os.path.join(cmds['tempdir'], filename))
         uncsum = getChecksum(sumtype, zfo)
@@ -406,7 +406,7 @@ def repoXML(node, cmds):
         data.newChild(None, 'timestamp', str(timestamp))
         unchecksum = data.newChild(None, 'open-checksum', uncsum)
         unchecksum.newProp('type', sumtype)
-    
+
     # if we've got a group file then checksum it once and be done
     if cmds['groupfile'] is not None:
         grpfile = cmds['groupfile']
@@ -438,22 +438,22 @@ def doRepoMetadata(cmds):
     repons = reporoot.newNs('http://linux.duke.edu/metadata/repo', None)
     reporoot.setNs(repons)
     repofilepath = os.path.join(cmds['tempdir'], cmds['repomdfile'])
-    
+
     repoXML(reporoot, cmds)
 
-    try:        
+    try:
         repodoc.saveFormatFileEnc(repofilepath, 'UTF-8', 1)
     except:
         errorprint(_('Error saving temp file for rep xml: %s') % repofilepath)
         sys.exit(1)
-        
+
     del repodoc
 
 
 
 def main(args):
     cmds, directory = parseArgs(args)
-    
+
     #setup some defaults
     cmds['primaryfile'] = 'primary.xml.gz'
     cmds['filelistsfile'] = 'filelists.xml.gz'
@@ -462,33 +462,33 @@ def main(args):
     cmds['tempdir'] = '.repodata'
     cmds['finaldir'] = 'repodata'
     cmds['olddir'] = '.olddata'
-    
+
     # save where we are right now
     curdir = os.getcwd()
     # start the sanity/stupidity checks
     if not os.path.exists(directory):
         errorprint(_('Directory must exist'))
         sys.exit(1)
-        
+
     if not os.path.isdir(directory):
         errorprint(_('Directory of packages must be a directory.'))
         sys.exit(1)
-        
+
     if not os.access(directory, os.W_OK):
         errorprint(_('Directory must be writable.'))
         sys.exit(1)
 
- 
+
     if not checkAndMakeDir(os.path.join(directory, cmds['tempdir'])):
         sys.exit(1)
-        
+
     if not checkAndMakeDir(os.path.join(directory, cmds['finaldir'])):
         sys.exit(1)
-        
+
     if os.path.exists(os.path.join(directory, cmds['olddir'])):
         errorprint(_('Old data directory exists, please remove: %s') % cmds['olddir'])
         sys.exit(1)
-        
+
     # change to the basedir to work from w/i the path - for relative url paths
     os.chdir(directory)
 
@@ -501,20 +501,20 @@ def main(args):
                     errorprint(_('error in must be able to write to metadata files:\n  -> %s') % filepath)
                     os.chdir(curdir)
                     usage()
-                    
+
     try:
         doPkgMetadata(cmds)
     except:
         # always clean up your messes
         os.chdir(curdir)
         raise
-    
+
     try:
         doRepoMetadata(cmds)
     except:
         os.chdir(curdir)
         raise
-        
+
     if os.path.exists(cmds['finaldir']):
         try:
             os.rename(cmds['finaldir'], cmds['olddir'])
@@ -522,7 +522,7 @@ def main(args):
             errorprint(_('Error moving final to old dir'))
             os.chdir(curdir)
             sys.exit(1)
-        
+
     try:
         os.rename(cmds['tempdir'], cmds['finaldir'])
     except:
@@ -531,7 +531,7 @@ def main(args):
         os.rename(cmds['olddir'], cmds['finaldir'])
         os.chdir(curdir)
         sys.exit(1)
-        
+
     for key in ['primaryfile', 'filelistsfile', 'otherfile', 'repomdfile', 'groupfile']:
         if cmds[key]:
             fn = os.path.basename(cmds[key])
@@ -546,7 +546,7 @@ def main(args):
                 errorprint(_('Error was %s') % e)
                 os.chdir(curdir)
                 sys.exit(1)
-            
+
     try:
         os.rmdir(cmds['olddir'])
     except OSError, e:
@@ -554,12 +554,12 @@ def main(args):
         errorprint(_('Error was %s') % e)
         errorprint(_('Please clean up this directory manually.'))
         os.chdir(curdir)
-        
+
     # take us home mr. data
     os.chdir(curdir)
-        
 
-        
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         if sys.argv[1] == 'profile':
@@ -571,3 +571,5 @@ if __name__ == "__main__":
             main(sys.argv[1:])
     else:
         main(sys.argv[1:])
+
+# vim:ts=4:sw=4:showmatch:expandtab

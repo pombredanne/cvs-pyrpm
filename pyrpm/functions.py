@@ -208,9 +208,11 @@ def closeAllFDs():
             pass
 
 # TODO:
-# - use blocksize instad of hardcoded 4096 blocksize
-# - also calculate removals and package updates for disk usage
-# - Can the check about regular files be removed again?
+# - Also calculate removals and package updates for disk usage.
+# - This routine takes a lot of time. Maybe for new installs try to detect
+#   cases where the installation goes into one partition only and then only
+#   sum together the payload cpio size. Another possibility would be to check
+#   if the update would fit into the smallest device.
 # Things not done for disksize calculation, might stay this way:
 # - no hardlink detection
 # - no information about not-installed files like multilib files, left out
@@ -223,27 +225,39 @@ def getFreeDiskspace(pkglist):
     else:
         br = "/"
     for pkg in pkglist:
-        if not pkg.has_key("dirnames"):
-            continue
-        for dirname in pkg["dirnames"]:
-            if not dirhash.has_key(dirname):
-                devdir = br + dirname
-                while not os.path.exists(devdir):
-                    devdir = os.path.dirname(devdir)
-                dev = os.stat(devdir)[2]
-                dirhash[dirname] = dev
-                if not freehash.has_key(dev):
-                    statvfs = os.statvfs(devdir)
-                    freehash[dev] = statvfs[0] * statvfs[4]
         dirnames = pkg["dirnames"]
+        if dirnames == None:
+            continue
+        for dirname in dirnames:
+            if dirhash.has_key(dirname):
+                continue
+            dnames = []
+            devname = br + dirname
+            while 1:
+                dnames.append(dirname)
+                try:
+                    dev = os.stat(devname)[2]
+                    break
+                except:
+                    dirname = os.path.dirname(dirname)
+                    devname = os.path.dirname(devname)
+                    if dirhash.has_key(dirname):
+                        dev = dirhash[dirname]
+                        break
+            for d in dnames:
+                dirhash[d] = dev
+            if not freehash.has_key(dev):
+                statvfs = os.statvfs(devname)
+                freehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
         dirindexes = pkg["dirindexes"]
         filesizes = pkg["filesizes"]
         filemodes = pkg["filemodes"]
-        for i in xrange(len(pkg["filenames"])):
+        for i in xrange(len(dirindexes)):
             if not S_ISREG(filemodes[i]): continue
             dirname = dirnames[dirindexes[i]]
-            filesize = ((filesizes[i] + 4095) / 4096) * 4096
-            freehash[dirhash[dirname]] -= filesize
+            dev = freehash[dirhash[dirname]]
+            filesize = ((filesizes[i] / dev[1]) + 1) * dev[1]
+            dev[0] -= filesize
     return freehash
 
 def parseBoolean(str):
