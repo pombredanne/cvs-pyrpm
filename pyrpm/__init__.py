@@ -27,5 +27,6 @@ from package import *
 from resolver import *
 from hashlist import *
 from rpmlist import *
+from orderer import *
 
 # vim:ts=4:sw=4:showmatch:expandtab
