@@ -536,7 +536,9 @@ class RpmFileIO(RpmStreamIO):
     def __openFile(self, mode="r"):
         if not self.fd:
             try:
+                import fcntl
                 self.fd = open(self.source, mode)
+                fcntl.fcntl(self.fd.fileno(), fcntl.F_SETFD, 1)
             except:
                 raiseFatal("%s: could not open file" % self.source)
 
