@@ -522,9 +522,7 @@ class RpmPackage(RpmData):
     def install(self, instroot=None, files=None):
         if self["preinprog"] != None:
             self.runScript(instroot, self["preinprog"], self["prein"], "1")
-
         self.extract(instroot, files)
-
         if self["postinprog"] != None:
             self.runScript(instroot, self["postinprog"], self["postin"], "1")
 

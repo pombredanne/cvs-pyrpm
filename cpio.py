@@ -94,6 +94,22 @@ class CPIOFile:
             pos = pos + ((4 - (filesize % 4)) % 4)
             self.filelist[filename[1:]] = filedata
 
+    def createLink(self, src, dst):
+        try:
+            # First try to unlink the defered file
+            os.unlink(dst)
+        except:
+            pass
+        try:
+            os.link(src, dst)
+        except:
+            # If a hardlink failes we still can try to copy the
+            # data to the defered file. This may be the case if
+            # hardlinks were done for files in different dirs
+            # and during the installation now those dirs are
+            # mounted on different filesystems
+            shutil.copy(src, dst)
+ 
     def addToDefered(self, filename):
         self.defered.append((filename, self.filedata))
 
@@ -104,14 +120,7 @@ class CPIOFile:
             if self.defered[i][1][1] == self.filedata[1] and \
                self.defered[i][1][8] == self.filedata[8] and \
                self.defered[i][1][9] == self.filedata[9]:
-                try:
-                    os.unlink(self.defered[i][0])
-                    os.link(filename, self.defered[i][0])
-                except:
-                    try:
-                        shutil.copy(filename, self.defered[i][0])
-                    except:
-                        print "FOO"
+                self.createLink(filename, self.defered[i][0])
                 self.defered.pop(i)
 
     def postExtract(self):
@@ -133,14 +142,7 @@ class CPIOFile:
                 if self.defered[i][1][1] == self.defered[j][1][1] and \
                    self.defered[i][1][8] == self.defered[j][1][8] and \
                    self.defered[i][1][9] == self.defered[j][1][9]:
-                    try:
-                        os.unlink(self.defered[j][0])
-                        os.link(self.defered[i][0], self.defered[j][0])
-                    except:
-                        try:
-                            shutil.copy(filename, self.defered[j][0])
-                        except:
-                            print "FOO BAR"
+                    self.createLink(filename, self.defered[i][0])
 
     def makeDirs(self, fullname):
         dirname = fullname[:fullname.rfind("/")]
@@ -176,16 +178,16 @@ class CPIOFile:
             fd = open(fullname, "w")
             fd.write(self.filerawdata)
             fd.close()
-            os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
             os.chown(fullname, self.filedata[3], self.filedata[4])
+            os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
             os.utime(fullname, (self.filedata[6], self.filedata[6]))
             self.handleCurrentDefered(fullname)
         elif filetype == CP_IFDIR:
             if os.path.isdir(fullname):
                 return 1
             os.makedirs(fullname)
-            os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
             os.chown(fullname, self.filedata[3], self.filedata[4])
+            os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
             os.utime(fullname, (self.filedata[6], self.filedata[6]))
         elif filetype == CP_IFLNK:
             symlinkfile = self.filerawdata.rstrip("\x00")
@@ -204,11 +206,11 @@ class CPIOFile:
             ret = commands.getoutput("/bin/mknod "+fullname+" "+devtype+" "+str(self.filedata[10])+" "+str(self.filedata[11]))
             if ret != "":
                 print "Error creating device: "+ret
-            os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
             os.chown(fullname, self.filedata[3], self.filedata[4])
+            os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
             os.utime(fullname, (self.filedata[6], self.filedata[6]))
         else:
-            raise ValueErrorm, "%s: not a valid CPIO filetype" % (oct(filetype))
+            raise ValueError, "%s: not a valid CPIO filetype" % (oct(filetype))
 
     def getCurrentEntry(self):
         return [self.filename, self.filedata, self.filerawdata]
