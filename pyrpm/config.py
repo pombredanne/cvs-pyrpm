@@ -22,10 +22,25 @@ import os
 
 class RpmConfig:
     def __init__(self):
+        (self.sysname, self.nodename, self.release, self.version, self.machine) = os.uname()
         self.debug_level = 0
         self.warning_level = 0
         self.verbose_level = 0
-        (self.sysname, self.nodename, self.release, self.version, self.machine) = os.uname()
+        self.hash = 0
+        self.buildroot = None
+        self.dbpath = "/var/lib/pyrpm/"
+        self.force = 0
+        self.oldpackage = 0
+        self.justdb = 0
+        self.test = 0
+        self.ignoresize = 0
+        self.ignorearch = 0
+        self.nodeps = 0
+        self.nodigest = 0
+        self.nosignature = 0
+        self.noorder = 0
+        self.noscripts = 0
+        self.notriggers = 0
 
 # Automatically create a global rpmconfig variable
 rpmconfig = RpmConfig()
