@@ -133,17 +133,22 @@ class RpmResolver(RpmList):
 
     def __init__(self, installed, operation, check_installed=0):
         RpmList.__init__(self, installed, operation)
-        self.installed_unresolved = self.getUnresolvedDependencies()
+        print "HERE"
         self.check_installed = check_installed
+        self.installed_unresolved = self.getUnresolvedDependencies()
+        print self.installed_unresolved
     # ----
 
     def clear(self):
         RpmList.clear(self)
+        print "FOO"
         self.provides = ProvidesList()
         self.filenames = FilenamesList()
         self.obsoletes = { }
         self.updates = { }
         self.erased = { }
+        self.check_installed = 0
+        self.installed_unresolved = HashList()
     # ----
 
     def _install(self, pkg):
