@@ -309,6 +309,7 @@ class RpmOrderer:
         Returns ordered list of packages. """
         order = [ ]
         idx = 1
+        last = [ ]
         while len(relations) > 0:
             # remove and save all packages without a post relation in reverse
             # order 
