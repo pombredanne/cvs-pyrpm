@@ -1,17 +1,5 @@
 # RPM Constants - based from rpmlib.h and elsewhere
 
-# types
-RPM_NULL = 0
-RPM_CHAR = 1
-RPM_INT8 = 2
-RPM_INT16 = 3
-RPM_INT32 = 4
-RPM_INT64 = 5 # Unused currently
-RPM_STRING = 6
-RPM_BIN = 7
-RPM_STRING_ARRAY = 8
-RPM_I18NSTRING = 9
-
 # header private tags
 HEADER_IMAGE = 61
 HEADER_SIGNATURES = 62 # starts a header with signatures

@@ -1,6 +1,6 @@
-"Read and write CPIO files.  ASCII support only at this time"
+"Read and write CPIO files. ASCII support only at this time."
 
-import struct, os, time
+import struct
 
 def is_cpio(file):
     """See if file is a CPIO file by checking the magic number."""
@@ -27,7 +27,7 @@ class CPIOFile:
     def __init__(self, file, mode="r"):
         """Open the ZIP file with mode read "r", write "w" or append "a"."""
         self.filelist = []      # List of CPIO Header dicts
-        self.mode = mode[0] # we don't support rw
+        self.mode = mode[0]     # we don't support rw
 
         # Check if we were passed a file-like object
         if isinstance(file, basestring):
@@ -95,7 +95,7 @@ class CPIOFile:
             if cpio_headers["filename"] == "TRAILER!!!":
                 break
 
-            #contents
+            # Contents
             filesize = cpio_headers['filesize']
             pad = ( 4 - ( filesize %4 )) % 4 
             self.fp.seek(filesize,1)
