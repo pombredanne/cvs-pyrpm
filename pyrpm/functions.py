@@ -133,13 +133,16 @@ def installFile(rfi, data):
 
 def setFileMods(filename, uid, gid, mode, mtime):
     try:
-        if os.chown(filename, uid, gid) != None:
-            return 0
+        os.chown(filename, uid, gid)
     except:
         return 0
-    if os.chmod(filename, S_IMODE(mode)) != None:
+    try:
+        os.chmod(filename, S_IMODE(mode))
+    except:
         return 0
-    if os.utime(filename, (mtime, mtime)) != None:
+    try:
+        os.utime(filename, (mtime, mtime))
+    except:
         return 0
     return 1
 

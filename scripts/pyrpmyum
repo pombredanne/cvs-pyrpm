@@ -57,20 +57,22 @@ def runDepResolution(resolver, unresolved):
                 for repo in repos:
                     res = repo.searchDependency(dep)
                     for upkg in res:
-                        if resolver.append(upkg) > 0:
+                        ret = resolver.append(upkg)
+                        if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
                             found = 1
-                        respkglist.append(upkg)
+                            respkglist.append(upkg)
             if found == 0:
                 tmplist = []
                 for repo in repos:
                     tmplist.extend(findPkgByName(pkg["name"], repo.appended))
                 filterArchList(tmplist, rpmconfig.machine)
+                while len(tmplist) > 0 and tmplist[0]["arch"] != pkg["arch"]:
+                    tmplist.pop(0)
                 if len(tmplist) == 0 or tmplist[0].getNEVRA() == pkg.getNEVRA():
                     printError("Couldn't find update for package %s" % pkg.getNEVRA())
                     sys.exit(1)
-                else:
-                    resolver.append(tmplist[0])
-                    respkglist.append(tmplist[0])
+                resolver.append(tmplist[0])
+                respkglist.append(tmplist[0])
         normalizeList(respkglist)
         filterArchList(respkglist)
         if len(respkglist) == 0:

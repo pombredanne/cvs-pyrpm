@@ -103,8 +103,8 @@ class RpmList:
         if not self.list.has_key(key):
             self.list[key] = [ ]
         else:
-            if pkg in self.list[key]:
-                printWarning(0, "%s was already added" % pkg.getNEVRA())
+            if pkg in self.list[key]: 
+                printWarning(1, "%s was already added" % pkg.getNEVRA())
                 return self.ALREADY_ADDED
         self.list[key].append(pkg)
 

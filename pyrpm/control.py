@@ -143,8 +143,9 @@ class RpmController:
         i = 1
         gc.collect()
         numops = len(operations)
-        for i in xrange(0, numops, 100):
-            subop = operations[:100]
+        pkgsperfork = 100
+        for i in xrange(0, numops, pkgsperfork):
+            subop = operations[:pkgsperfork]
             for (op, pkg) in subop:
                 pkg.open()
             pid = os.fork()
@@ -154,8 +155,8 @@ class RpmController:
                     sys.exit(1)
                 for (op, pkg) in subop:
                     pkg.close()
-                operations = operations[100:]
-                subop = operations[:100]
+                operations = operations[pkgsperfork:]
+                subop = operations[:pkgsperfork]
             else:
                 del operations
                 if self.buildroot:

@@ -53,18 +53,36 @@ class RpmUserCache:
         self.uid = {}
         self.gid = {}
 
+    def __parseFile(self, ugfile):
+        rethash = {}
+        try:
+            fp = open(ugfile, "r")
+        except:
+            return rethash
+        lines = fp.readlines()
+        fp.close()
+        for l in lines:
+            tmp = string.split(l, ":")
+            rethash[tmp[0]] = int(tmp[2])
+        return rethash
+
     def getUID(self, username):
         if username == "root":
             return 0
         if not self.uid.has_key(username):
             if os.path.isfile("/etc/passwd"):
-                try:
-                    pw = pwd.getpwnam(username)
-                    self.uid[username] = pw[2]
-                except:
-                    pass
-        if not self.uid.has_key(username):
-            self.uid[username] = 0
+                if os.path.isfile("/sbin/ldconfig"):
+                    try:
+                        pw = pwd.getpwnam(username)
+                        self.uid[username] = pw[2]
+                    except:
+                        self.uid[username] = 0
+                else:
+                    r = self.__parseFile("/etc/passwd")
+                    if r.has_key(username):
+                        self.uid[username] = r[username]
+                    else:
+                        self.uid[username] = 0
         return self.uid[username]
 
     def getGID(self, groupname):
@@ -72,13 +90,18 @@ class RpmUserCache:
             return 0
         if not self.gid.has_key(groupname):
             if os.path.isfile("/etc/group"):
-                try:
-                    gr = grp.getgrnam(groupname)
-                    self.gid[groupname] = gr[2]
-                except:
-                    pass
-        if not self.gid.has_key(groupname):
-            self.gid[groupname] = 0
+                if os.path.isfile("/sbin/ldconfig"):
+                    try:
+                        gr = grp.getgrnam(groupname)
+                        self.gid[groupname] = gr[2]
+                    except:
+                        self.gid[groupname] = 0
+                else:
+                    r = self.__parseFile("/etc/group")
+                    if r.has_key(groupname):
+                        self.gid[groupname] = r[groupname]
+                    else:
+                        self.gid[groupname] = 0
         return self.gid[groupname]
 
 
@@ -138,10 +161,6 @@ class RpmPackage(RpmData):
             return 0
         if not self.__readHeader(tags, ntags):
             return 0
-        # We don't need those lists earlier, so we create them "on-the-fly"
-        # before we actually start extracting files.
-        self.__generateFileInfoList()
-        self.__generateHardLinkList()
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preinprog"] != None or self["postinprog"] != None:
@@ -245,6 +264,10 @@ class RpmPackage(RpmData):
 
     def __extract(self, db=None):
         files = self["filenames"]
+        # We don't need those lists earlier, so we create them "on-the-fly"
+        # before we actually start extracting files.
+        self.__generateFileInfoList()
+        self.__generateHardLinkList()
         (filename, filerawdata) = self.io.read()
         nfiles = len(files)
         n = 0
@@ -258,15 +281,14 @@ class RpmPackage(RpmData):
                 printInfo(0, "#"*(npos-pos))
             pos = npos
             sys.stdout.flush()
-            if not self.rfilist.has_key(filename):
+            if self.isSourceRPM() and os.path.dirname(filename)=='/':
                 # src.rpm has empty tag "dirnames", but we use absolut paths in
                 # io.read(), so at least the directory '/' is there ...
-                if os.path.dirname(filename)=='/' and self.isSourceRPM():
-                    filename = filename[1:]
+                filename = filename[1:]
             if self.rfilist.has_key(filename):
                 rfi = self.rfilist[filename]
                 if self.__verifyFileInstall(rfi, db):
-                    if not str(rfi.inode)+":"+str(rfi.dev) in self.hardlinks.keys():
+                    if not (rfi.inode*65536+rfi.dev) in self.hardlinks.keys():
                         if not installFile(rfi, filerawdata):
                             return 0
                     else:
@@ -295,6 +317,9 @@ class RpmPackage(RpmData):
         # Don't install ghost files ;)
         if rfi.flags & RPMFILE_GHOST:
             return 0
+        # Check if we are on a multiarch system and if we should overwrite the
+        # file with a 64bit version
+        pass
         # Not a config file -> always overwrite it, resolver didn't say we
         # had any conflicts ;)
         if rfi.flags & RPMFILE_CONFIG == 0:
@@ -352,7 +377,7 @@ class RpmPackage(RpmData):
         self.hardlinks = {}
         for filename in self.rfilist.keys():
             rfi = self.rfilist[filename]
-            key = str(rfi.inode)+":"+str(rfi.dev)
+            key = rfi.inode*65536 + rfi.dev
             if key not in self.hardlinks.keys():
                 self.hardlinks[key] = []
             self.hardlinks[key].append(rfi)
@@ -361,7 +386,7 @@ class RpmPackage(RpmData):
                 del self.hardlinks[key]
 
     def __handleHardlinks(self, rfi):
-        key = str(rfi.inode)+":"+str(rfi.dev)
+        key = rfi.inode*65536 + rfi.dev
         self.hardlinks[key].remove(rfi)
         for hrfi in self.hardlinks[key]:
             makeDirs(hrfi.filename)
@@ -417,7 +442,7 @@ class RpmPackage(RpmData):
         if self.has_key("fileflags"):
             rpmflags = self["fileflags"][i]
         if self.has_key("filecolors"):
-            rpmflags = self["filecolors"][i]
+            rpmfilecolor = self["filecolors"][i]
         rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum, rpmflags, rpmfilecolor)
         return rfi
 
