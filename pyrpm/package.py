@@ -62,13 +62,14 @@ class RpmPackage(RpmData):
         self.io = None
         self.header_read = 0
 
-    def open(self):
+    def open(self, mode="r"):
+        self.header_read = 0
         if self.io != None:
             return 1
         self.io = getRpmIOFactory(self.source, self.verify, self.legacy, self.parsesig, self.hdronly)
         if not self.io:
             return 0
-        if not self.io.open():
+        if not self.io.open(mode):
             return 0
         return 1
 
@@ -91,7 +92,7 @@ class RpmPackage(RpmData):
         return 1
 
     def write(self):
-        if not self.open():
+        if not self.open("w"):
             return 0
         ret = self.io.write(self)
         self.close()
@@ -101,10 +102,10 @@ class RpmPackage(RpmData):
         ret = RpmData.verify(self)
         return ret
 
-    def install(self, files=None):
+    def install(self, files=None, tags=None, ntags=None):
         if not self.open():
             return 0
-        if not self.readHeader():
+        if not self.readHeader(tags, ntags):
             return 0
         if not files:
             files = self["filenames"]
@@ -159,12 +160,14 @@ class RpmPackage(RpmData):
         # Read sig
         (key, value) = self.io.read()
         while key != None and key != "-":
+            if not self.data.has_key("signature"):
+                self["signature"] = {}
             if tags and key in tags:
-                self[key] = value
+                self["signature"][key] = value
             elif ntags and not key in ntags:
-                self[key] = value
+                self["signature"][key] = value
             elif not tags and not ntags:
-                self[key] = value
+                self["signature"][key] = value
             (key, value) = self.io.read()
         # Read header
         (key, value) = self.io.read()
@@ -285,12 +288,15 @@ class RpmPackage(RpmData):
         rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum)
         return rfi
 
-    def getNEVRA(self):
+    def getNEVR(self):
         if self["epoch"] != None:
             e = str(self["epoch"][0])+":"
         else:
             e = ""
-        return "%s-%s%s-%s.%s" % (self["name"], e, self["version"], self["release"], self["arch"])
+        return "%s-%s%s-%s" % (self["name"], e, self["version"], self["release"])
+
+    def getNEVRA(self):
+        return "%s.%s" % (self.NEVR(), self["arch"])
 
     def getDeps(self, name, flags, version):
         n = self[name]

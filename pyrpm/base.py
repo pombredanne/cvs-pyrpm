@@ -16,6 +16,7 @@
 # Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
+from config import *
 
 class RpmFileInfo:
     def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, md5sum):
@@ -486,5 +487,147 @@ possible_archs = ['noarch', 'i386', 'i486', 'i586', 'i686', 'athlon',
     'arm', 'armv4l', 'mips', 'mipseb', 'hppa', 'mipsel', 'sh', 'axp',
     # these are in old rpms:
     'i786', 'i886', 'i986', 's390xc']
+
+arch_compats = {
+"alphaev67" : ("alphaev6", "alphapca56", "alphaev56", "alphaev5", "alpha", "axp", "noarch"),
+"alphaev6" : ("alphapca56", "alphaev56", "alphaev5", "alpha", "axp", "noarch"),
+"alphapca56" : ("alphaev56", "alphaev5", "alpha", "axp", "noarch"),
+"alphaev56" : ("alphaev5", "alpha", "axp", "noarch"),
+"alphaev5" : ("alpha", "axp", "noarch"),
+"alpha" : ("axp", "noarch"),
+
+"athlon" : ("i686", "i586", "i486", "i386", "noarch"),
+"i686" : ("i586", "i486", "i386", "noarch"),
+"i586" : ("i486", "i386", "noarch"),
+"i486" : ("i386", "noarch"),
+"i386" : ("noarch"),
+
+"osfmach3_i686": ("i686", "osfmach3_i586", "i586", "osfmach3_i486", "i486", "osfmach3_i386", "i486", "i386", "noarch"),
+"osfmach3_i586": ("i586", "osfmach3_i486", "i486", "osfmach3_i386", "i486", "i386", "noarch"),
+"osfmach3_i486": ("i486", "osfmach3_i386", "i486", "i386", "noarch"),
+"osfmach3_i386": ("i486", "i386", "noarch"),
+
+"osfmach3_ppc" : ("ppc", "rs6000", "noarch"),
+"powerpc" : ("ppc", "rs6000", "noarch"),
+"powerppc" : ("ppc", "rs6000", "noarch"),
+"ppc8260" : ("ppc", "rs6000", "noarch"),
+"ppc8560" : ("ppc", "rs6000", "noarch"),
+"ppc32dy4" : ("ppc", "rs6000", "noarch"),
+"ppciseries" : ("ppc", "rs6000", "noarch"),
+"ppcpseries" : ("ppc", "rs6000", "noarch"),
+"ppc64" : ("ppc", "rs6000", "noarch"),
+"ppc" : ("rs6000", "noarch"),
+"rs6000" : ("noarch"),
+"ppc64pseries" : ("ppc64", "ppc", "rs6000", "noarch"),
+"ppc64iseries" : ("ppc64", "ppc", "rs6000", "noarch"),
+
+"sun4c" : ("sparc", "noarch"),
+"sun4d" : ("sparc", "noarch"),
+"sun4m" : ("sparc", "noarch"),
+"sun4u" : ("sparc64", "sparcv9", "sparc", "noarch"),
+"sparc64" : ("sparcv9", "sparc", "noarch"),
+"sparcv9" : ("sparc", "noarch"),
+"sparcv8" : ("sparc", "noarch"),
+"sparc" : ("noarch"),
+
+"mips" : ("noarch"),
+"mipsel" : ("noarch"),
+
+"hppa2.0" : ("hppa1.2", "hppa1.1", "hppa1.0", "parisc", "noarch"),
+"hppa1.2" : ("hppa1.1", "hppa1.0", "parisc", "noarch"),
+"hppa1.1" : ("hppa1.0", "parisc", "noarch"),
+"hppa1.0" : ("parisc", "noarch"),
+"parisc" : ("noarch"),
+
+"armv4b" : ("noarch"),
+"armv4l" : ("armv3l", "noarch"),
+"armv3l" : ("noarch"),
+
+"atarist" : ("m68kmint", "noarch"),
+"atariste" : ("m68kmint", "noarch"),
+"ataritt" : ("m68kmint", "noarch"),
+"falcon" : ("m68kmint", "noarch"),
+"atariclone" : ("m68kmint", "noarch"),
+"milan" : ("m68kmint", "noarch"),
+"hades" : ("m68kmint", "noarch"),
+
+"i370" : ("noarch"),
+"s390" : ("noarch"),
+"s390x" : ("s390", "noarch"),
+
+"ia64" : ("noarch"),
+
+"x86_64" : ("amd64", "athlon", "i686", "i586", "i486", "i386", "noarch"),
+"amd64" : ("x86_64", "athlon", "i686", "i586", "i486", "i386", "noarch"),
+"ia32e" : ("x86_64", "athlon", "i686", "i586", "i486", "i386", "noarch")
+}
+
+# Some special magics for binary rpms
+RPM_HEADER_LEAD_MAGIC = '\xed\xab\xee\xdb'
+RPM_HEADER_INDEX_MAGIC = "\x8e\xad\xe8\x01\x00\x00\x00\x00"
+
+# rpm binary lead arch values
+rpm_lead_arch = {
+"alphaev67" : 2,
+"alphaev6" : 2,
+"alphapca56" : 2,
+"alphaev56" : 2,
+"alphaev5" : 2,
+"alpha" : 2,
+"athlon" : 1,
+"i686" : 1,
+"i586" : 1,
+"i486" : 1,
+"i386" : 1,
+"osfmach3_i686": 1,
+"osfmach3_i586": 1,
+"osfmach3_i486": 1,
+"osfmach3_i386": 1,
+"osfmach3_ppc" : 5,
+"powerpc" : 5,
+"powerppc" : 5,
+"ppc8260" : 5,
+"ppc8560" : 5,
+"ppc32dy4" : 5,
+"ppciseries" : 5,
+"ppcpseries" : 5,
+"ppc64" : 5,
+"ppc" : 5,
+"rs6000" : 5,
+"ppc64pseries" : 5,
+"ppc64iseries" : 5,
+"sun4c" : 3,
+"sun4d" : 3,
+"sun4m" : 3,
+"sun4u" : 3,
+"sparc64" : 3,
+"sparcv9" : 3,
+"sparcv8" : 3,
+"sparc" : 3,
+"mips" : 4,
+"mipsel" : 4,
+"hppa2.0" : 0,
+"hppa1.2" : 0,
+"hppa1.1" : 0,
+"hppa1.0" : 0,
+"parisc" : 0,
+"armv4b" : 0,
+"armv4l" : 0,
+"armv3l" : 0,
+"atarist" : 6,
+"atariste" : 6,
+"ataritt" : 6,
+"falcon" : 6,
+"atariclone" : 6,
+"milan" : 6,
+"hades" : 6,
+"i370" : 0,
+"s390" : 0,
+"s390x" : 0,
+"ia64" : 1,
+"x86_64" : 1,
+"amd64" : 1,
+"ia32e" : 1
+}
 
 # vim:ts=4:sw=4:showmatch:expandtab

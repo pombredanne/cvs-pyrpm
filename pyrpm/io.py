@@ -17,16 +17,17 @@
 #
 
 
-import gzip
-from struct import unpack
+import gzip, types
+from struct import pack,unpack
 from base import *
+from functions import *
 from cpio import *
 
 
 class RpmIO:
     """'Virtual' IO Class for RPM packages and data"""
-    def __init__(self):
-        pass
+    def __init__(self, source):
+        self.source = source
 
     def open(self):
         return 0
@@ -42,8 +43,11 @@ class RpmIO:
 
 
 class RpmStreamIO(RpmIO):
-    def __init__(self, verify=None, legacy=None, parsesig=None, hdronly=None):
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+        RpmIO.__init__(self, source)
         self.fd = None
+        self.cpiofd = None
+        self.cpio = None
         self.verify = verify
         self.legacy = legacy
         self.parsesig = parsesig
@@ -58,7 +62,11 @@ class RpmStreamIO(RpmIO):
         return 0
 
     def close(self):
-        return 0
+        if self.cpiofd:
+            self.cpiofd = None
+        if self.cpio:
+            self.cpio = None
+        return 1
 
     def read(self):
         if self.fd == None:
@@ -89,7 +97,7 @@ class RpmStreamIO(RpmIO):
                 return ("-", "")
             v = self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
-            return (rpmconstants.rpmsigtagname[v[0]], v[1])
+            return (rpmsigtagname[v[0]], v[1])
         # Read/parse hdr
         if self.where == 3:
             # Last index of hdr? Switch to data files archive
@@ -113,7 +121,7 @@ class RpmStreamIO(RpmIO):
 
     def readLead(self):
         leaddata = self.fd.read(96)
-        if leaddata[:4] != '\xed\xab\xee\xdb':
+        if leaddata[:4] != RPM_HEADER_LEAD_MAGIC:
             printError("%s: no rpm magic found" % self.source)
             return (None, None)
         if self.verify and not self.verifyLead(leaddata):
@@ -153,7 +161,7 @@ class RpmStreamIO(RpmIO):
             ret = 0
         name = name.rstrip('\x00')
         if self.legacy:
-            if os.path.basename(self.filename)[:len(name)] != name:
+            if os.path.basename(self.source)[:len(name)] != name:
                 ret = 0
         if not ret:
             printError("%s: wrong data in rpm lead" % self.source)
@@ -290,17 +298,183 @@ class RpmStreamIO(RpmIO):
             return unpack("!%dQ" % count, fmt[offset:offset + count * 8])
         elif ttype == RPM_BIN:
             return fmt[offset:offset + count]
-        raiseFatal("%s: unknown tag header" % self.source)
+        raiseFatal("%s: unknown tag type: %d" % (self.source, ttype))
         return None
 
+    def generateTag(self, tag, ttype, value):
+        # Decided if we have to write out a list or a single element
+        if isinstance(value, types.TupleType) or isinstance(value, types.ListType):
+            count = len(value)
+        else:
+            count = 0
+        # Normally we don't have strings. And strings always need to be '\x0'
+        # terminated.
+        isstring = 0
+        if ttype == RPM_STRING or \
+           ttype == RPM_STRING_ARRAY or\
+           ttype == RPM_I18NSTRING: 
+            format = "s"
+            isstring = 1
+        elif ttype == RPM_BIN:
+            format = "s"
+        elif ttype == RPM_CHAR:
+            format = "c"
+        elif ttype == RPM_INT8:
+            format = "B"
+        elif ttype == RPM_INT16:
+            format = "H"
+        elif ttype == RPM_INT32:
+            format = "I"
+        elif ttype == RPM_INT64:
+            format = "Q"
+        else:
+            raiseFatal("%s: unknown tag header" % self.source)
+        if count == 0:
+            if format == "s":
+                data = pack("!"+str(len(value)+isstring)+format, value)
+            else:
+                data = pack("!"+format, value)
+        else:
+            data = ""
+            for i in xrange(0,count):
+                if format == "s":
+                    data += pack("!"+str(len(value[i])+isstring)+format, value[i])
+                else:
+                    data += pack("!"+format, value[i])
+        # Fix counter. If it was a list, keep the counter.
+        # If it was a single element, use 1 or if it is a RPM_BIN type the
+        # length of the binary data.
+        if count == 0:
+            if ttype == RPM_BIN:
+                count = len(value)
+            else:
+                count = 1
+        return (count, data)
+
+    def generateIndex(self, indexlist, store, pad):
+        index = RPM_HEADER_INDEX_MAGIC
+        index += pack("!ii", len(indexlist), len(store))
+        (tag, ttype, offset, count) = indexlist.pop()
+        index += pack("!iiii", tag, ttype, offset, count)
+        for (tag, ttype, offset, count) in indexlist:
+            index += pack("!iiii", tag, ttype, offset, count)
+        align = (pad - (len(store) % pad)) % pad
+        return (index, pack("%ds" % align, '\x00'))
+            
+    def alignTag(self, ttype, offset):
+        if ttype == RPM_INT16:
+            align = (2 - (offset % 2)) % 2
+        elif ttype == RPM_INT32:
+            align = (4 - (offset % 4)) % 4
+        elif ttype == RPM_INT64:
+            align = (8 - (offset % 8)) % 8
+        else:
+            align = 0
+        return pack("%ds" % align, '\x00')
+
+    def generateSig(self, header):
+        store = ""
+        offset = 0
+        indexlist = []
+        keys = rpmsigtag.keys()
+        keys.sort()
+        for tag in keys:
+            if not isinstance(tag, types.IntType):
+                continue
+            # We need to handle tag 62 at the very end...
+            if tag == 62:
+                continue
+            key = rpmsigtagname[tag]
+            # Skip keys we don't have
+            if not header.has_key(key):
+                continue
+            value = header[key]
+            ttype = rpmsigtag[tag][1]
+            # Convert back the RPM_ARGSTRING to RPM_STRING
+            if ttype == RPM_ARGSTRING:
+                ttype = RPM_STRING
+            (count, data) = self.generateTag(tag, ttype, value)
+            pad = self.alignTag(ttype, offset)
+            offset += len(pad)
+            indexlist.append((tag, ttype, offset, count))
+            store += pad + data
+            offset += len(data)
+        # Handle tag 62 if we have it.
+        tag = 62
+        key = rpmsigtagname[tag]
+        if header.has_key(key):
+            value = header[key]
+            ttype = rpmsigtag[tag][1]
+            # Convert back the RPM_ARGSTRING to RPM_STRING
+            if ttype == RPM_ARGSTRING:
+                ttype = RPM_STRING
+            (count, data) = self.generateTag(tag, ttype, value)
+            pad = self.alignTag(ttype, offset)
+            offset += len(pad)
+            indexlist.append((tag, ttype, offset, count))
+            store += pad + data
+            offset += len(data)
+        (index, pad) = self.generateIndex(indexlist, store, 8)
+        return (index, store+pad)
+
+    def generateHeader(self, header):
+        store = ""
+        indexlist = []
+        offset = 0
+        keys = rpmtag.keys()
+        keys.sort()
+        for tag in keys:
+            if not isinstance(tag, types.IntType):
+                continue
+            # We need to handle tag 63 at the very end...
+            if tag == 63:
+                continue
+            key = rpmtagname[tag]
+            if not header.has_key(key):
+                continue
+            value = header[key]
+            ttype = rpmtag[tag][1]
+            # Convert back the RPM_ARGSTRING to RPM_STRING
+            if ttype == RPM_ARGSTRING:
+                ttype = RPM_STRING
+            (count, data) = self.generateTag(tag, ttype, value)
+            pad = self.alignTag(ttype, offset)
+            offset += len(pad)
+            indexlist.append((tag, ttype, offset, count))
+            store += pad + data
+            offset += len(data)
+        # Handle tag 63 if we have it.
+        tag = 63
+        key = rpmtagname[tag]
+        if header.has_key(key):
+            value = header[key]
+            ttype = rpmtag[tag][1]
+            # Convert back the RPM_ARGSTRING to RPM_STRING
+            if ttype == RPM_ARGSTRING:
+                ttype = RPM_STRING
+            (count, data) = self.generateTag(tag, ttype, value)
+            pad = self.alignTag(ttype, offset)
+            offset += len(pad)
+            indexlist.append((tag, ttype, offset, count))
+            store += pad + data
+            offset += len(data)
+        (index, pad) = self.generateIndex(indexlist, store, 1)
+        return (index, store+pad)
+
     def write(self, data):
-        if self.filename == None:
+        if self.fd == None:
+            self.open("w")
+        if self.fd == None:
             return 0
-        self.open()
-        ret = self.writeHeader(data)
-        ret = ret & self.writeData(data)
-        self.close()
-        return ret
+        lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, data.getNEVR()[0:66], rpm_lead_arch[data["arch"]], 5)
+        (sigindex, sigdata) = self.generateSig(data["signature"])
+        (headerindex, headerdata) = self.generateHeader(data.data)
+        self.fd.write(lead)
+        self.fd.write(sigindex)
+        self.fd.write(sigdata)
+        self.fd.write(headerindex)
+        self.fd.write(headerdata)
+        return 1
 
     def writeHeader(self, data):
             return 0
@@ -321,39 +495,39 @@ class RpmFtpIO(RpmIO):
 
 class RpmFileIO(RpmStreamIO):
     def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
-        RpmStreamIO.__init__(self, verify, legacy, parsesig, hdronly)
-        self.filename = source
+        RpmStreamIO.__init__(self, source, verify, legacy, parsesig, hdronly)
         self.issrc = 0
-        if self.filename[-8:] == ".src.rpm" or self.filename[-10:] == ".nosrc.rpm":
+        if source[-8:] == ".src.rpm" or source[-10:] == ".nosrc.rpm":
             self.issrc = 1
 
-    def openFile(self, offset=None):
+    def openFile(self, mode="r"):
         if not self.fd:
             try:
-                self.fd = open(self.filename, "r")
+                self.fd = open(self.source, mode)
             except:
                 raiseFatal("%s: could not open file" % self.source)
-            if offset:
-                self.fd.seek(offset, 1)
+#            if offset:
+#                self.fd.seek(offset, 1)
 
     def closeFile(self):
         if self.fd != None:
             self.fd.close()
         self.fd = None
 
-    def open(self):
-        self.openFile()
+    def open(self, mode="r"):
+        RpmStreamIO.open(self)
+        self.openFile(mode)
         return 1
 
     def close(self):
+        RpmStreamIO.close(self)
         self.closeFile()
         return 1
 
 
 class RpmHttpIO(RpmIO):
     def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
-        RpmStreamIO.__init__(self, verify, legacy, parsesig, hdronly)
-        self.url = source
+        RpmStreamIO.__init__(self, source, verify, legacy, parsesig, hdronly)
 
     def open(self):
         pass
@@ -370,14 +544,16 @@ class RpmRepoIO(RpmIO):
 def getRpmIOFactory(source, verify=None, legacy=None, parsesig=None, hdronly=None):
     if source[:4] == 'db:/':
         return RpmDBIO(source[4:], verify, legacy, parsesig, hdronly)
-    if source[:5] == 'ftp:/':
+    elif source[:5] == 'ftp:/':
         return RpmFtpIO(source[5:], verify, legacy, parsesig, hdronly)
-    if source[:6] == 'file:/':
+    elif source[:6] == 'file:/':
         return RpmFileIO(source[6:], verify, legacy, parsesig, hdronly)
-    if source[:6] == 'http:/':
+    elif source[:6] == 'http:/':
         return RpmHttpIO(source[6:], verify, legacy, parsesig, hdronly)
-    if source[:6] == 'repo:/':
+    elif source[:6] == 'repo:/':
         return RpmRepoIO(source[6:], verify, legacy, parsesig, hdronly)
+    else:
+        return RpmFileIO(source, verify, legacy, parsesig, hdronly)
     return None
 
 # vim:ts=4:sw=4:showmatch:expandtab
