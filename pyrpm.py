@@ -99,7 +99,8 @@ class ReadRpm:
             if major not in ('\x03', '\x04') or minor != '\x00' or \
                 sigtype != 5 or rpmtype not in (0, 1):
                 failed = 1
-            if osnum not in (1, 255, 256):
+            # 21== darwin
+            if osnum not in (1, 21, 255, 256):
                 failed = 1
             name = name.rstrip('\x00')
             if self.legacy:
@@ -540,7 +541,9 @@ class RRpm:
         if rpm.legacy:
           if rpm["payloadflags"] not in ["9"]:
             self.printErr("no payload flags: %s" % rpm["payloadflags"])
-        if rpm["os"] not in ["Linux", "linux"]:
+        if rpm.legacy and rpm["os"] not in ["Linux", "linux"]:
+            self.printErr("bad os: %s" % rpm["os"])
+        elif rpm["os"] not in ["Linux", "linux", "darwin"]:
             self.printErr("bad os: %s" % rpm["os"])
         if rpm.legacy:
           if rpm["packager"] not in (None, \
@@ -630,7 +633,7 @@ def main(args):
     for (opt, val) in opts:
         if opt in ["-h", "--help"]:
             showHelp()
-            sys.exit(1)
+            sys.exit(0)
         if opt in ['-c', "--queryformat"]:
             queryformat = val 
 
@@ -650,7 +653,7 @@ def verifyAllRpms():
     #repo = []
     args = sys.argv[1:]
     legacy = 0
-    if args[0] == "--strict":
+    if args and args[0] == "--strict":
         legacy = 1
         args = args[1:]
     for a in args:
