@@ -25,11 +25,11 @@ import getopt
 #import zlib
 import gzip
 
-def parseLead(f, fname=None, verify=1):
+def parseLead(leaddata, fname=None, verify=1):
     """ Takes a python file object at the start of an RPM file and
         reads the lead. """
     (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
-        struct.unpack("!4scchh66shh16x", f.read(96))
+        struct.unpack("!4scchh66shh16x", leaddata)
     failed = None
     if magic != '\xed\xab\xee\xdb':
         failed = 1
@@ -123,7 +123,8 @@ def readTag(index, fmt):
     return data
 
 def readIndex(filename, f, pad, verify=0, skip=0, tags=None):
-    (magic, indexNo, storeSize) = struct.unpack("!8sii", f.read(16))
+    data = f.read(16)
+    (magic, indexNo, storeSize) = struct.unpack("!8sii", data)
     if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
         raise ValueError, "bad magic"
     fmt = f.read(16 * indexNo)
@@ -143,7 +144,7 @@ def readIndex(filename, f, pad, verify=0, skip=0, tags=None):
                 print "%s included tag %d twice" % (filename, tag)
         else:
             hdr[tag] = readTag(index, fmt2)
-    return (hdr, len(fmt) + len(fmt2))
+    return (hdr, len(fmt) + len(fmt2), data + fmt + fmt2)
 
 sigkeys = [
     rpmconstants.RPMSIGTAG_SIZE,
@@ -186,10 +187,11 @@ def verifyHeader(sigindex, hdr, hdrsize, payloadsize, cpiosize):
         gpg = sigindex[rpmconstants.RPMSIGTAG_GPG] # header + payload
 
 def parseHeader(f, filename, verify=0, tags=None):
-    lead = parseLead(f, filename)
+    leaddata = f.read(96)
+    lead = parseLead(leaddata, filename, verify)
     skip = 0
-    sigindex = readIndex(filename, f, 8, verify, skip, tags)[0]
-    (hdr, hdrsize) = readIndex(filename, f, 1, verify, skip, tags)
+    (sigindex, dummy, sigdata) = readIndex(filename, f, 8, verify, skip, tags)
+    (hdr, hdrsize, hdrdata) = readIndex(filename, f, 1, verify, skip, tags)
     #payload = f.read()
     #if payload[:9] != '\037\213\010\000\000\000\000\000\000':
     #    raise ValueError, "nnot gzipped data"
