@@ -95,7 +95,7 @@ class YumConf(Conf):
 
     Variables = ( "releasever", "arch", "basearch" )
     
-    def __init__(self, releasever, arch, basearch):
+    def __init__(self, releasever, arch, basearch, filename = '/etc/yum.conf'):
         """releasever - version of release (e.g. 3 for Fedora Core 3)
         arch - architecure (e.g. i686)
         basearch - base architecture (e.g. i386)
@@ -103,7 +103,8 @@ class YumConf(Conf):
         self.releasever = releasever
         self.arch = arch
         self.basearch = basearch
-
+        self.myfilename = filename
+        
         self.stanza_re = re.compile('^\s*\[(?P<stanza>[^\]]*)]\s*(?:;.*)?$', re.I)
         Conf.__init__(self, "/etc/yum.conf", '#;', '=', '=',
                       merge=1, create_if_missing = 0)
@@ -128,7 +129,7 @@ class YumConf(Conf):
     def read(self):
         """read all config files"""
         self.vars = {}
-        self.filename = '/etc/yum.conf'
+        self.filename = self.myfilename
         Conf.read(self)
         self.parseFile()
         repodir = '/etc/yum.repos.d'
