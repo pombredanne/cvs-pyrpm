@@ -17,9 +17,8 @@
 #
 
 
-import os.path, tempfile, sys, gzip, pwd, grp, md5
+import os.path, tempfile, sys, pwd, grp, md5
 from struct import unpack
-from base import *
 from functions import *
 from io import *
 

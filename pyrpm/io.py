@@ -20,10 +20,8 @@
 import gzip, types, string, bsddb
 from struct import pack, unpack
 
-import package
-from base import *
 from functions import *
-from cpio import *
+import package
 
 
 class RpmIO:

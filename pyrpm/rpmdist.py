@@ -37,8 +37,8 @@
 #
 
 import ConfigParser, os, string
-from package import *
 from functions import *
+from package import *
 
 class RpmDistribution:
 

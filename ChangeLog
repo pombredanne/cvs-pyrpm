@@ -32,7 +32,11 @@
 	- remove clear()
 	* pyrpm/orderer.py: - fix calling RpmResolver()
 	* pyrpm/__init__.py: - set __version__ and __doc__
+	- do not "import sys"
 	* pyrpm/hashlist.py: - do not define clear()
+	* doc/pycheckrc: - add first version of a suitable ~/.pycheckrc
+	* pyrpm/*.py: try to reduce "from <file> import *" mess to
+	  see if we have a good structure
 
 2005-03-10  Phil Knirsch  <pknirsch@redhat.com>
 

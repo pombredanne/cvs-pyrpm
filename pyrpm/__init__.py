@@ -19,7 +19,7 @@
 __version__ = "0.01"
 __doc__ = """Read and manage RPM packages."""
 
-import sys, os, locale
+import os, locale
 
 _files = map(lambda v: v[:-3], filter(lambda v: v[-3:] == ".py" and \
                                       v != "__init__.py" and \

@@ -21,8 +21,9 @@
 ...
 """
 
-import string
-from rpmlist import *
+from hashlist import HashList
+from rpmlist import RpmList
+from functions import *
 
 
 # ----------------------------------------------------------------------------
@@ -427,3 +428,4 @@ class RpmResolver(RpmList):
             return -3
 
         return 1
+

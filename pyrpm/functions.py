@@ -19,8 +19,8 @@
 
 import os, os.path, tempfile, sys, string, types
 from config import rpmconfig
-from cpio import *
 from base import *
+from cpio import *
 
 
 # Collection of class indepedant helper functions

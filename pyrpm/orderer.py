@@ -21,9 +21,8 @@
 ...
 """
 
-import string
 from hashlist import HashList
-from rpmlist import *
+from rpmlist import RpmList
 from resolver import *
 
 class _Relation:

@@ -1,0 +1,10 @@
+# Sample ~/.pycheckrc for newest pychecker from Fedora Core devel tree.
+
+# maximum returns in a function
+maxReturns = 40
+
+# maximum # of arguments to a function
+maxArgs = 15
+
+# check if using implict and explicit return values
+checkImplicitReturns = False

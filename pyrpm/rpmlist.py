@@ -18,7 +18,7 @@
 #
 
 from hashlist import HashList
-from functions import *
+from functions import buildarchtranslate, printWarning
 
 class RpmList:
     OP_INSTALL = "install"
