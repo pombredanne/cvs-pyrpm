@@ -50,15 +50,16 @@ def usage():
     print
     print "Warning: Some of the install-options are not evaluated yet"
     print "Warning: -c isn't working yet properly, use --repo for now"
-    print "Warning: [group]remove doesn't work yet either, use pyrpminstall -e"
+    print "Warning: [group]remove doesn't work yet either, use pyrpmyum -e"
 
-def runDepResolution(resolver, unresolved):
+def runDepResolution(resolver):
+    unresolved = resolver.getUnresolvedDependencies()
     iter = 1
     while len(unresolved) > 0:
-        printInfo(1, "Dependency iteration " + str(iter) + "\n")
+        printInfo(2, "Dependency iteration " + str(iter) + "\n")
         iter += 1
         respkglist = []
-        for pkg, deplist in unresolved:
+        for (pkg, deplist) in unresolved:
             printInfo(2, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
             found = 0
             for dep in deplist:
@@ -78,29 +79,33 @@ def runDepResolution(resolver, unresolved):
                 while len(tmplist) > 0 and tmplist[0]["arch"] != pkg["arch"]:
                     tmplist.pop(0)
                 if len(tmplist) == 0 or tmplist[0].getNEVRA() == pkg.getNEVRA():
-                    printError("Couldn't find update for package %s" % pkg.getNEVRA())
+                    printError("Couldn't find update for package %s" \
+                        % pkg.getNEVRA())
                     sys.exit(1)
                 resolver.append(tmplist[0])
                 respkglist.append(tmplist[0])
         filterArchList(respkglist)
         if len(respkglist) == 0:
-            for pkg, deplist in unresolved:
+            for (pkg, deplist) in unresolved:
                 printInfo(1, "Unresolved dependencies for "+pkg.getNEVRA()+"\n")
                 for dep in deplist:
                     printInfo(1, "\t" + depString(dep)+"\n")
             sys.exit(1)
         unresolved = resolver.getUnresolvedDependencies()
 
+def readRpmPackage(filename):
+    pkg = RpmPackage(filename)
+    pkg.open()
+    pkg.read(tags=rpmconfig.resolvertags)
+    pkg.close()
+    return pkg
+
 def addDirToRepo(dirname, resolver):
     for f in os.listdir(dirname):
         fn = "%s/%s" % (dirname, f)
         if not f.endswith(".rpm") or not os.path.isfile(fn):
             continue
-        pkg = RpmPackage(fn)
-        pkg.open()
-        pkg.read(tags=rpmconfig.resolvertags)
-        pkg.close()
-        ret = resolver.append(pkg)
+        resolver.append(readRpmPackage(fn))
 
 #
 # Main program
@@ -151,7 +156,7 @@ for (opt, val) in opts:
         rpmconfig.verbose_level = 0
         rpmconfig.printhash = 0
     elif opt == "--version":
-        print "pyrpminstall", __version__
+        print "pyrpmyum", __version__
         sys.exit(0)
     elif opt == "--dbpath":
         rpmconfig.dbpath = val
@@ -206,12 +211,24 @@ if command.startswith("group"):
     for grp in args:
         pkgs.extend(comps.getPackageNames(grp))
     args = pkgs
+    del comps
 
-if   command == "install" or command == "groupinstall":
-    rpmconfig.operation = OP_INSTALL
-elif command == "update" or command == "upgrade" or \
-     command == "groupupdate" or command == "groupupgrade":
-    rpmconfig.operation = OP_FRESHEN
+pkgs = []
+for f in args:
+    if os.path.isfile(f) and f.endswith(".rpm"):
+        pkgs.append(readRpmPackage(f))
+    elif os.path.isdir(f):
+        for g in os.listdir(f):
+            fn = "%s/%s" % (f, g)
+            if not g.endswith(".rpm") or not os.path.isfile(fn):
+                continue
+            pkgs.append(readRpmPackage(fn))
+    else:
+        for repo in repos:
+            pkgs.extend(findPkgByName(f, repo.appended))
+        filterArchList(pkgs, rpmconfig.machine)
+        if len(pkgs) == 0:
+            printError("Couldn't find package %s, skipping" % f)
 
 if rpmconfig.buildroot:
     pydb = RpmPyDB(rpmconfig.buildroot + rpmconfig.dbpath)
@@ -220,34 +237,9 @@ else:
 installed = pydb.getPkgList().values()
 del pydb
 
-pkgs = []
-for f in args:
-    if os.path.isfile(f) and f.endswith(".rpm"):
-        pkg = RpmPackage(f)
-        pkg.open()
-        pkg.read(tags=rpmconfig.resolvertags)
-        pkg.close()
-        pkgs.append(pkg)
-    elif os.path.isdir(f):
-        for g in os.listdir(f):
-            fn = "%s/%s" % (f, g)
-            if not g.endswith(".rpm") or not os.path.isfile(fn):
-                continue
-            pkg = RpmPackage(fn)
-            pkg.open()
-            pkg.read(tags=rpmconfig.resolvertags)
-            pkg.close()
-            pkgs.append(pkg)
-    else:
-        for repo in repos:
-            pkgs.extend(findPkgByName(f, repo.appended))
-        filterArchList(pkgs, rpmconfig.machine)
-        if len(pkgs) == 0:
-            printError("Couldn't find package %s, skipping" % f)
-
 opresolver = RpmResolver(installed, OP_UPDATE)
 for pkg in pkgs:
-    if rpmconfig.operation == OP_UPDATE or rpmconfig.operation == OP_FRESHEN:
+    if command in ("update", "upgrade", "groupupdate", "groupupgrade"):
         name = pkg["name"]
         for ipkg in installed:
             if ipkg["name"] == name:
@@ -255,15 +247,14 @@ for pkg in pkgs:
                 break
     else:
         opresolver.append(pkg)
+del pkgs
 
-unresolved = opresolver.getUnresolvedDependencies()
-runDepResolution(opresolver, unresolved)
+runDepResolution(opresolver)
 appended = opresolver.appended
 del opresolver
 del repos
 
 control = RpmController()
-control.handlePkgs(appended, OP_UPDATE, rpmconfig.dbpath,
-    rpmconfig.buildroot)
+control.handlePkgs(appended, OP_UPDATE, rpmconfig.dbpath, rpmconfig.buildroot)
 
 # vim:ts=4:sw=4:showmatch:expandtab

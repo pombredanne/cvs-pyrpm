@@ -43,14 +43,13 @@ class ProvidesList:
 
     def removePkg(self, rpm):
         for (name, flag, version) in rpm["provides"]:
-            if not self.provide.has_key(name):
-                continue
             provide = self.provide[name]
             i = 0
             while i < len(provide):
                 p = provide[i]
                 if p[0] == flag and p[1] == version and p[2] == rpm:
                     provide.pop(i)
+                    break
                 else:
                     i += 1
             if len(provide) == 0:
@@ -114,18 +113,17 @@ class FilenamesList:
 
     def removePkg(self, rpm):
         for name in rpm["filenames"]:
-            if not self.filename.has_key(name):
-                continue
             f = self.filename[name]
             if len(f) == 2:
                 del self.multi[name]
-            if rpm in f:
-                f.remove(rpm)
+            f.remove(rpm)
             if len(f) == 0:
                 del self.filename[name]
 
-    def search(self, name):
-        return self.filename.get(name, [])
+    def search(self, name, l):
+        for r in self.filename.get(name, []):
+            if r not in l:
+                l.append(r)
 
 # ----------------------------------------------------------------------------
 
@@ -198,8 +196,7 @@ class RpmResolver(RpmList):
         (name, flag, version) = dep
         s = self.provides.search(name, flag, version, arch)
         if name[0] == '/': # all filenames are beginning with a '/'
-            s += self.filenames.search(name)
-        normalizeList(s)
+            self.filenames.search(name, s)
         return s
     # ----
 
@@ -207,8 +204,7 @@ class RpmResolver(RpmList):
         (name, flag, version) = dep
         s = self.lost_provides.search(name, flag, version, arch)
         if name[0] == '/': # all filenames are beginning with a '/'
-            s += self.lost_filenames.search(name)
-        normalizeList(s)
+            self.lost_filenames.search(name, s)
         return s
     # ----
 
@@ -368,15 +364,13 @@ class RpmResolver(RpmList):
 
     def getFileConflicts(self):
         """ Check for file conflicts """
-
         if self.operation == OP_ERASE:
-            # no conflicts for erase
-            return None
-
-        conflicts = [ ]
+            return []       # no conflicts for erase
+        conflicts = []
         for filename in self.filenames.multi.keys():
             printDebug(1, "Checking for file conflicts for '%s'" % filename)
-            s = self.filenames.search(filename)
+            s = []
+            self.filenames.search(filename, s)
             for j in xrange(len(s)):
                 fi1 = s[j].getRpmFileInfo(filename)
                 for k in xrange(j+1, len(s)):
@@ -405,7 +399,7 @@ class RpmResolver(RpmList):
 
     def checkFileConflicts(self):
         conflicts = self.getFileConflicts()
-        if conflicts == None or len(conflicts) == 0:
+        if len(conflicts) == 0:
             return self.OK
 
         for c in conflicts:

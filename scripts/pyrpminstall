@@ -23,6 +23,7 @@ PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import *
+from pyrpm import __version__
 
 def usage():
     print "INSTALLING, UPGRADING, AND REMOVING PACKAGES:"
@@ -51,31 +52,32 @@ def main():
     usage()
     sys.exit(1)
 
+  operation = None
   for (opt, val) in opts:
     if opt in ["-i", "--install"]:
-        if rpmconfig.operation != None:
+        if operation != None:
             print "Only one operation at a time is allow."
             usage()
             sys.exit(1)
-        rpmconfig.operation = OP_INSTALL
+        operation = OP_INSTALL
     elif opt in ["-U", "--upgrade"]:
-        if rpmconfig.operation != None:
+        if operation != None:
             print "Only one operation at a time is allow."
             usage()
             sys.exit(1)
-        rpmconfig.operation = OP_UPDATE
+        operation = OP_UPDATE
     elif opt in ["-F", "--freshen"]:
-        if rpmconfig.operation != None:
+        if operation != None:
             print "Only one operation at a time is allow."
             usage()
             sys.exit(1)
-        rpmconfig.operation = OP_FRESHEN
+        operation = OP_FRESHEN
     elif opt in ["-e", "--erase"]:
-        if rpmconfig.operation != None:
+        if operation != None:
             print "Only one operation at a time is allow."
             usage()
             sys.exit(1)
-        rpmconfig.operation = OP_ERASE
+        operation = OP_ERASE
     elif opt in ['-?', "--help"]:
         usage()
         sys.exit(0)
@@ -93,7 +95,7 @@ def main():
         rpmconfig.verbose_level = 0
         rpmconfig.printhash = 0
     elif opt == "--version":
-        print "pyrpminstall 0.1.0"
+        print "pyrpminstall", __version__
         sys.exit(0)
     elif opt == "--dbpath":
         rpmconfig.dbpath = val
@@ -135,8 +137,7 @@ def main():
     sys.exit(1)
 
   control = RpmController()
-  control.handleFiles(args, rpmconfig.operation, rpmconfig.dbpath,
-    rpmconfig.buildroot)
+  control.handleFiles(args, operation, rpmconfig.dbpath, rpmconfig.buildroot)
 
 if __name__ == '__main__':
     hotshot = 0

@@ -51,11 +51,11 @@ doinstall() {
     cleanchroot $2
     preparechroot $nodev $2
     if test x$3 = xrpm ; then
-        time rpm -U --nodigest --nosignature --root=$2 $1/*.rpm 2>&1 \
+        { time rpm -U --nodigest --nosignature --root=$2 $1/*.rpm; } 2>&1 \
             | tee $2.LOG.install
     else
         #time ./pyrpminstall -U -r $2 $1/*.rpm 2>&1 | tee $2/LOG.install
-        { time ./pyrpmyum -r $2 --repo $1 install '*'; } 2>&1 \
+        { time ./pyrpmyum -r $2 install $1; } 2>&1 \
 	    | tee $2.LOG.install
     fi
 }
@@ -76,16 +76,17 @@ RPMS=RedHat/RPMS
 #doinstall --nodev $RELEASED/RHL-5.2/GOLD/i386/$RPMS $DATA/5.2
 #doinstall --nodev $RELEASED/RHL-6.2/GOLD/i386/$RPMS $DATA/6.2
 #doinstall --nodev $RELEASED/RHEL-2.1/U6/AS/i386/tree/$RPMS $DATA/2.1-U6-i386
-doinstall --nodev $RELEASED/RHEL-3/U3/AS/i386/tree/$RPMS $DATA/3-U3-i386
+#doinstall --nodev $RELEASED/RHEL-3/U3/AS/i386/tree/$RPMS $DATA/3-U3-i386
 #doinstall --nodev $RELEASED/RHEL-3/U4/AS/i386/tree/$RPMS $DATA/3-U4-i386
 #doinstall --nodev /mnt/raid/trees/RHEL3U5/i386/$RPMS $DATA/3-U5-i386
 #doinstall $RELEASED/RHEL-4/Beta2/AS/i386/tree/$RPMS $DATA/4-Beta2-i386
-doinstall /mnt/raid/trees/RHEL4/i386/$RPMS $DATA/4-trees-i386
-doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
+#doinstall /mnt/raid/trees/RHEL4/i386/$RPMS $DATA/4-trees-i386
+#doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
 
-doinstall --nodev $FEDORA/1/i386/os/Fedora/RPMS $DATA/FC1-i386
+#doinstall --nodev $FEDORA/1/i386/os/Fedora/RPMS $DATA/FC1-i386
 doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $DATA/FC2-i386
 doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386
+#doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386-rpm rpm
 
 exit 0
 
