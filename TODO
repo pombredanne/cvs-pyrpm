@@ -1,4 +1,10 @@
-Expose cpio
+Allow streaming of rpms (header and cpio data)
+Signature checking
+Verify correct file and script handling
+Implement file checkes (md5 checks, %config, %ghost, etc)
+Write reader/writer for rpmdb
+Analyze current rpmdb and maybe design new one
+Integrate Thomas' depresolver into current class structure and design
 Merge rpmdb/bsddb functionality 
 Ensure all RPM_TYPEs implemented
 grep XXX *.py

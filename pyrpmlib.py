@@ -329,16 +329,8 @@ class RpmFile(RpmIO):
                     data["filemtimes"][i], data["filesizes"][i],
                     data["filedevices"][i], data["filerdevs"][i],
                     data["filelangs"][i], data["filemd5s"][i]))
-
-#                data["filetree"][data["dirnames"][data["dirindexes"][i]] + data["basenames"][i]] = (data["fileflags"][i], data["fileinodes"][i],
-#                    data["filemodes"][i], data["fileusername"][i],
-#                    data["filegroupname"][i], data["filelinktos"][i],
-#                    data["filemtimes"][i], data["filesizes"][i],
-#                    data["filedevices"][i], data["filerdevs"][i],
-#                    data["filelangs"][i], data["filemd5s"][i])
             else:
                 data["filetree"].append(data["dirnames"][data["dirindexes"][i]] + data["basenames"][i])
-#                data.["filetree"][data["dirnames"][data["dirindexes"][i]] + data["basenames"][i]] = 1
 
     def readData(self, data):
         self.openFile(96 + data.sigdata[5] + data.hdrdata[5])
@@ -523,14 +515,18 @@ class RpmPackage(RpmData):
         return 1
 
     def updateFilestats(self, instroot=None):
+        # No files -> No need to do anything.
         if not self["basenames"]:
             return
+        # Get our /etc/passwd and /etc/group classes, possibly from a instroot
         if instroot != None:
             pw = ugid.Passwd(instroot+"/etc/passwd")
             grp = ugid.Group(instroot+"/etc/group")
         else:
             pw = ugid.Passwd()
             grp = ugid.Group()
+        # Check every file from the rpm headers and update the filemods
+        # according to the info from the rpm headers.
         for i in xrange(len(self["basenames"])):
             fullname = self["dirnames"][self["dirindexes"][i]]+self["basenames"][i]
             if instroot != None:

@@ -93,15 +93,9 @@ class CPIOFile:
             os.unlink(dst)
         except:
             pass
-        try:
-            os.link(src, dst)
-        except:
-            # If a hardlink failes we still can try to copy the
-            # data to the defered file. This may be the case if
-            # hardlinks were done for files in different dirs
-            # and during the installation now those dirs are
-            # mounted on different filesystems
-            shutil.copy(src, dst)
+        # Behave exactly like cpio: If the hardlink fails (because of different
+        # partitions), then it has to fail
+        os.link(src, dst)
  
     def addToDefered(self, filename):
         self.defered.append((filename, self.filedata))
