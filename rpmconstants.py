@@ -193,6 +193,16 @@ RPMTAG_DELTARAWPAYLOADXDELTA = 20005 # BIN
 RPMTAG_DELTAORIGPAYLOADFORMAT = 20006 # RPMTAG_PAYLOADFORMAT
 RPMTAG_DELTAFILEFLAGS = 20007 # INT16 array
 
+rpmtagname = {
+    "name": RPMTAG_NAME,
+    "version": RPMTAG_VERSION,
+    "release": RPMTAG_RELEASE,
+    "epoch": RPMTAG_EPOCH,
+    "summary": RPMTAG_SUMMARY,
+    "description": RPMTAG_DESCRIPTION,
+    "license": RPMTAG_LICENSE
+}
+
 # These tags make up the huge paralell arrays that have file details
 filetags = [
 	RPMTAG_FILESIZES, 
@@ -219,3 +229,5 @@ filetags = [
 	RPMTAG_BASENAMES, 
 	RPMTAG_DIRNAMES # SPECIAL: not paralell, but used with DIRINDEXES
 ]
+
+# vim:ts=4:sw=4:showmatch:expandtab

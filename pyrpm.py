@@ -287,7 +287,8 @@ class ReadRpm:
             if key[:3] == "RPM":
                 return self.hdr[eval("rpmconstants.%s" % key)]
             else:
-                # XXX make this a list of supported strings, no eval
+                if rpmconstants.rpmtagname.has_key(key):
+                    return self.hdr[rpmconstants.rpmtagname[key]]
                 keybyname = eval("rpmconstants.RPMTAG_%s" % key.upper())
                 return self.hdr[keybyname]
         return None
@@ -357,6 +358,7 @@ def verifyRpm(filename):
 
 def uncompressRpm(filename):
     """Read in a complete rpm and uncompress its payload."""
+    return # below we write out a new rpm, so keep this only as disabled example
     rpm = ReadRpm(filename)
     rpm.readHeader(0, None, 1)
     rpm.closeFd()
@@ -414,10 +416,11 @@ def main(args):
         sys.stdout.write(queryformat % rpm)
 
 if __name__ == "__main__":
-    for a in sys.argv[1:]:
-        if os.path.basename(a) == "reiserfs-utils-3.x.0f-1.src.rpm":
-            continue
-        rpm = verifyRpm(a)
-    #main(sys.argv[1:])
+    if None:
+        for a in sys.argv[1:]:
+            if os.path.basename(a) == "reiserfs-utils-3.x.0f-1.src.rpm":
+                continue
+            rpm = verifyRpm(a)
+    main(sys.argv[1:])
 
 # vim:ts=4:sw=4:showmatch:expandtab
