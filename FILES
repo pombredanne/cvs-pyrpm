@@ -1,11 +1,28 @@
 classes.fig:	xfig of our class structure in UML
-cpio.py:	Python CPIO implementation, used by pyrpmlib classes
-depresolver.py:	First test of a depresolver, abandoned for rpmdeps
+cpio.py:	Obsolete
+depresolver.py:	Obsolete
 INFO:		File with various internal and extern info for this project
+pyrpm:		Package with current implementation divided in separate files
+  |- base.py:	Global definitions of all RPM tags & variables and RpmFileInfo
+  |             class
+  +- config.py:	RpmConfig class: Stores our complete configuration
+  +- control.py:RpmControl class: Main interface for software management
+  +- cpio.py:   CPIOFile class: Used for interating over a cpio archive for
+  |             file extraction
+  +- functions.py: Contains all global functions that are used in various places
+  +- hashlist.py: Combination of hash and list for easy interation over a hash
+  +- io.py:	All IO related classes are in here
+  +- package.py: RpmPackage class: Representation of rpm package, used
+  |             everywhere
+  +- resolver.py: RpmReslover class: Main class for depresolving and ordering
+  +- rpmlist.py: RpmList class: Main class for package storage
+pyrpmdb2rpmdb:	Script to convert a PyRPM DB to a RpmDB using rpm
 pyrpmdeps:	twoerner's depresolver using pyrpmlib
-pyrpmlib.py:	Main file containing implementation of all classes
+pyrpmlib.py:	Main file importing everything in pyrpm package
 pyrpm.py:	Original rpm header read from laroche, not maintained anymore
+rpmdb2pyrpmdb:	Script to convert a RpmDB to a PyRPM DB using our pyrpm
 README:		Text description of class structure
 test*:		Various testscripts, might or might not work :)
+tests:		Subdir with various /var/lib/rpm/ testscripts
 TODO:		Very brief collection of tasks to be done
-ugid.py:	password and group parser/classes, soon obsolete
+ugid.py:	Obsolete

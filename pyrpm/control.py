@@ -17,18 +17,64 @@
 #
 
 
-import os, re
+import os, re, time, gc
 import package, io
 from resolver import *
+
+class _Triggers:
+    """ enable search of triggers """
+    """ triggers of packages can be added and removed by package """
+    def __init__(self):
+        self.clear()
+
+    def clear(self):
+        self.triggers = { }
+
+    def append(self, name, flag, version, tprog, tscript, rpm):
+        if not self.triggers.has_key(name):
+            self.triggers[name] = [ ]
+        self.triggers[name].append((flag, version, tprog, tscript, rpm))
+
+    def remove(self, name, flag, version, tprog, tscript, rpm):
+        if not self.triggers.has_key(name):
+            return
+        for t in self.triggers[name]:
+            if t[0] == flag and t[1] == version and t[2] == tprog and t[3] == tscript and t[4] == rpm:
+                self.triggers[name].remove(t)
+        if len(self.triggers[name]) == 0:
+            del self.triggers[name]
+
+    def add_rpm(self, rpm):
+        for t in rpm["triggers"]:
+            self.append(t[0], t[1], t[2], t[3], t[4], rpm)
+
+    def remove_rpm(self, rpm):
+        for t in rpm["triggers"]:
+            self.remove(t[0], t[1], t[2], t[3], t[4], rpm)
+
+    def search(self, name, flag, version):
+        if not self.triggers.has_key(name):
+            return [ ]
+        ret = [ ]
+        for t in self.triggers[name]:
+            if (t[0] & RPMSENSE_TRIGGER) != (flag & RPMSENSE_TRIGGER):
+                continue
+            if t[1] == "":
+                ret.append((t[2], t[3], t[4]))
+            else:
+                if evrCompare(version, flag, t[1]) == 1 and \
+                       evrCompare(version, t[0], t[1]) == 1:
+                    ret.append((t[2], t[3], t[4]))
+        return ret
 
 
 class RpmController:
     def __init__(self):
         self.db = None
         self.pydb = None
-        self.buildroot = None
         self.ignorearch = None
         self.operation = None
+        self.buildroot = None
         self.new = []
         self.update = []
         self.erase = []
@@ -37,8 +83,9 @@ class RpmController:
         self.oldpackages = []
 
     def installPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        self.buildroot = buildroot
         self.operation = RpmResolver.OP_INSTALL
+        self.db = db 
+        self.buildroot = buildroot
         for filename in pkglist:
             self.newPkg(filename)
         if not self.__readDB(db):
@@ -48,8 +95,9 @@ class RpmController:
         return 1
 
     def updatePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        self.buildroot = buildroot
         self.operation = RpmResolver.OP_UPDATE
+        self.db = db 
+        self.buildroot = buildroot
         for filename in pkglist:
             self.updatePkg(filename)
         if not self.__readDB(db):
@@ -59,8 +107,9 @@ class RpmController:
         return 1
 
     def freshenPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        self.buildroot = buildroot
         self.operation = RpmResolver.OP_UPDATE
+        self.db = db 
+        self.buildroot = buildroot
         for filename in pkglist:
             self.updatePkg(filename)
         if not self.__readDB(db):
@@ -91,8 +140,9 @@ class RpmController:
         return 1
 
     def erasePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        self.buildroot = buildroot
         self.operation = RpmResolver.OP_ERASE
+        self.db = db 
+        self.buildroot = buildroot
         if not self.__readDB(db):
             return 0
         for filename in pkglist:
@@ -138,6 +188,12 @@ class RpmController:
                    operations[i][1] == operations[j][1]:
                     operations.pop(i)
                     break
+        self.triggerlist = Triggers()
+        for (op, pkg) in operations:
+            if op == RpmResolver.OP_UPDATE or op == RpmResolver.OP_INSTALL:
+                self.triggerlist.add_rpm(pkg)
+        for pkg in self.installed:
+            self.triggerlist.add_rpm(pkg)
         del self.new
         del self.update
         del self.erase
@@ -145,55 +201,62 @@ class RpmController:
         del self.available
         del self.oldpackages
         i = 1
-        for (op, pkg) in operations:
-            progress = "[%d/%d]" % (i, len(operations))
-            i += 1
-            if   op == RpmResolver.OP_INSTALL:
-                printInfo(0, "%s %s" % (progress, pkg.getNEVR()))
-            elif op == RpmResolver.OP_UPDATE:
-                printInfo(0, "%s %s" % (progress, pkg.getNEVR()))
-            elif op == RpmResolver.OP_ERASE:
-                printInfo(0, "%s %s" % (progress, pkg.getNEVR()))
-            pkg.open()
+        gc.collect()
+        numops = len(operations)
+        for i in xrange(0, numops, 100):
+            subop = operations[:100]
+            for (op, pkg) in subop:
+                pkg.open()
             pid = os.fork()
             if pid != 0:
-                (cpid, status) = os.waitpid(pid, 0)
+                (rpid, status) = os.waitpid(pid, 0)
                 if status != 0:
-                    printError("Errors during package installation.")
                     sys.exit(1)
-                if   op == RpmResolver.OP_INSTALL:
-                    self.__addPkgToDB(pkg)
-                elif op == RpmResolver.OP_UPDATE:
-                    self.__addPkgToDB(pkg)
-                elif op == RpmResolver.OP_ERASE:
-                    self.__erasePkgFromDB(pkg)
-                pkg.close()
+                operations = operations[100:]
+                continue
             else:
+                del operations
                 if self.buildroot:
                     os.chroot(self.buildroot)
-                if   op == RpmResolver.OP_INSTALL:
-                    if not pkg.install(self.pydb):
-                        sys.exit(1)
-                elif op == RpmResolver.OP_UPDATE:
-                    if not pkg.install(self.pydb):
-                        sys.exit(1)
-                elif op == RpmResolver.OP_ERASE:
-                    if not pkg.erase(self.pydb):
-                        sys.exit(1)
-                sys.exit(0)
-            printInfo(0, "\n")
-        return 1
+                while len(subop) > 0:
+                    (op, pkg) = subop.pop(0)
+                    i += 1
+                    progress = "[%d/%d]" % (i, numops)
+                    if   op == RpmResolver.OP_INSTALL:
+                        printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
+                        if not pkg.install(self.pydb):
+                            sys.exit(1)
+                        self.__runTriggerIn(pkg)
+                        self.__addPkgToDB(pkg)
+                    elif op == RpmResolver.OP_UPDATE:
+                        printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
+                        if not pkg.install(self.pydb):
+                            sys.exit(1)
+                        self.__runTriggerIn(pkg)
+                        self.__addPkgToDB(pkg)
+                    elif op == RpmResolver.OP_ERASE:
+                        printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
+                        self.__runTriggerUn(pkg)
+                        if not pkg.erase(self.pydb):
+                            sys.exit(1)
+                        self.__runTriggerPostUn(pkg)
+                        self.__erasePkgFromDB(pkg)
+                    pkg.close()
+                    del pkg
+                    gc.collect()
+                    printInfo(0, "\n")
+            return 1
 
     def newPkg(self, file):
         pkg = package.RpmPackage(file)
-        pkg.read()
-        pkg.close()
+        pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
         self.new.append(pkg)
+        pkg.close()
         return 1
 
     def updatePkg(self, file):
         pkg = package.RpmPackage(file)
-        pkg.read()
+        pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
         pkg.close()
         for i in xrange(len(self.update)):
             if not pkg["name"] == self.update[i]["name"]:
@@ -341,16 +404,15 @@ class RpmController:
     def __filterArchList(self, flist):
         duplicates = {}
         rmlist = []
-        (sysname, nodename, release, version, machine) = os.uname()
         for pkg in flist:
             name = pkg.getNEVR()
             arch = pkg["arch"]
             if arch not in possible_archs:
                 raiseFatal("%s: Unknow rpm package architecture %s" % (pkg.source, arch))
-            if machine not in possible_archs:
-                raiseFatal("%s: Unknow machine architecture %s" % (pkg.source, machine))
-            if arch != machine and arch not in arch_compats[machine]:
-                raiseFatal("%s: Architecture not compatible with machine %s" % (pkg.source, machine))
+            if rpmconfig.machine not in possible_archs:
+                raiseFatal("%s: Unknow rpmconfig.machine architecture %s" % (pkg.source, rpmconfig.machine))
+            if arch != rpmconfig.machine and arch not in arch_compats[rpmconfig.machine]:
+                raiseFatal("%s: Architecture not compatible with rpmconfig.machine %s" % (pkg.source, rpmconfig.machine))
             if duplicates.has_key(name):
                 if arch in arch_compats[duplicates[name][0]]:
                     printInfo(2, "%s: removing due to arch_compat\n" % pkg.source)
@@ -396,11 +458,78 @@ class RpmController:
     def __addPkgToDB(self, pkg):
         if self.pydb == None:
             return 0
+        self.pydb.setSource(self.db)
         return self.pydb.addPkg(pkg)
 
     def __erasePkgFromDB(self, pkg):
         if self.pydb == None:
             return 0
+        self.pydb.setSource(self.db)
         return self.pydb.erasePkg(pkg)
+
+    def __runTriggerIn(self, pkg):
+        tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERIN, pkg.getEVR())
+        # Set umask to 022, especially important for scripts
+        os.umask(022)
+        tnumPkgs = str(self.pydb.getNumPkgs(pkg["name"])+1)
+        # any-%triggerin
+        for (prog, script, spkg) in tlist:
+            if spkg == pkg:
+                continue
+            snumPkgs = str(self.pydb.getNumPkgs(spkg["name"]))
+            if not runScript(prog, script, snumPkgs, tnumPkgs):
+                printError("%s: Error running any trigger in script." % spkg.getNEVRA())
+                return 0
+        # new-%triggerin
+        for (prog, script, spkg) in tlist:
+            if spkg != pkg:
+                continue
+            if not runScript(prog, script, tnumPkgs, tnumPkgs):
+                printError("%s: Error running new trigger in script." % spkg.getNEVRA())
+                return 0
+        return 1
+
+    def __runTriggerUn(self, pkg):
+        tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERUN, pkg.getEVR())
+        # Set umask to 022, especially important for scripts
+        os.umask(022)
+        tnumPkgs = str(self.pydb.getNumPkgs(pkg["name"])-1)
+        # old-%triggerun
+        for (prog, script, spkg) in tlist:
+            if spkg != pkg:
+                continue
+            if not runScript(prog, script, tnumPkgs, tnumPkgs):
+                printError("%s: Error running old trigger un script." % spkg.getNEVRA())
+                return 0
+        # any-%triggerun
+        for (prog, script, spkg) in tlist:
+            if spkg == pkg:
+                continue
+            snumPkgs = str(self.pydb.getNumPkgs(spkg["name"]))
+            if not runScript(prog, script, snumPkgs, tnumPkgs):
+                printError("%s: Error running any trigger un script." % spkg.getNEVRA())
+                return 0
+        return 1
+
+    def __runTriggerPostUn(self, pkg):
+        tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERPOSTUN, pkg.getEVR())
+        # Set umask to 022, especially important for scripts
+        os.umask(022)
+        tnumPkgs = str(self.pydb.getNumPkgs(pkg["name"])-1)
+        # old-%triggerpostun
+        for (prog, script, spkg) in tlist:
+            if spkg != pkg:
+                continue
+            if not runScript(prog, script, tnumPkgs, tnumPkgs):
+                printError("%s: Error running old trigger postun script." % spkg.getNEVRA())
+        # any-%triggerpostun
+        for (prog, script, spkg) in tlist:
+            if spkg == pkg:
+                continue
+            snumPkgs = str(self.pydb.getNumPkgs(spkg["name"]))
+            if not runScript(prog, script, snumPkgs, tnumPkgs):
+                printError("%s: Error running any trigger postun script." % spkg.getNEVRA())
+                return 0
+        return 1
 
 # vim:ts=4:sw=4:showmatch:expandtab

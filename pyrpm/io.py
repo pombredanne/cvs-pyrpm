@@ -540,8 +540,8 @@ class RpmDB:
 
     def read(self):
         db = bsddb.hashopen(self.source+"/Packages", "r")
-        rpmio = RpmFileIO("dummy")
         for key in db.keys():
+            rpmio = RpmFileIO("dummy")
             pkg = package.RpmPackage("dummy")
             data = db[key]
             val = unpack("i", key)[0]
@@ -549,10 +549,25 @@ class RpmDB:
                 (indexNo, storeSize) = unpack("!ii", data[0:8])
                 indexdata = data[8:indexNo*16+8]
                 storedata = data[indexNo*16+8:]
+                pkg["signature"] = {}
                 for idx in xrange(0, indexNo):
                     (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata, storedata)
-                    pkg[tag] = tagval
-                pkg.__generateFileNames()
+                    if   tag == 257:
+                        pkg["signature"]["size_in_sig"] = tagval
+                    elif tag == 261:
+                        pkg["signature"]["md5"] = tagval
+                    elif tag == 269:
+                        pkg["signature"]["sha1header"] =tagval
+                    elif rpmtag.has_key(tag):
+                        if rpmtagname[tag] == "archivesize":
+                            pkg["signature"]["payloadsize"] = tagval
+                        else:
+                            pkg[rpmtagname[tag]] = tagval
+                if not pkg.has_key("arch"):
+                    continue
+                if pkg["name"].startswith("gpg-pubkey"):
+                    continue
+                pkg.generateFileNames()
                 nevra = pkg.getNEVRA()
                 pkg.source = "db:/"+self.source+"/"+nevra
                 for filename in pkg["filenames"]:
@@ -598,6 +613,9 @@ class RpmPyDB:
         self.filenames = {}
         self.pkglist = {}
 
+    def setSource(self, source):
+        self.source = source
+
     def read(self):
         if not self.__mkDBDirs():
             return 0
@@ -605,7 +623,7 @@ class RpmPyDB:
         for nevra in namelist:
             src = "pydb:/"+self.source+"/headers/"+nevra
             pkg = package.RpmPackage(src)
-            pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "dirindexes", "basenames", "dirnames", "preunprog", "preun", "postunprog", "postun"))
+            pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "dirindexes", "basenames", "dirnames", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
             for filename in pkg["filenames"]:
                 if not self.filenames.has_key(filename):
                     self.filenames[filename] = []
@@ -681,6 +699,16 @@ class RpmPyDB:
         if self.filenames.has_key(file) and len(self.filenames[file]) > 1:
             return 1
         return 0
+
+    def getNumPkgs(self, name):
+        if not self.pkglist:
+            if not self.read():
+                return 0
+        count = 0
+        for pkg in self.pkglist.values():
+            if pkg["name"] == name:
+                count += 1
+        return count
 
     def __mkDBDirs(self):
         if not os.path.isdir(self.source):

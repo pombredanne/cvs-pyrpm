@@ -16,11 +16,16 @@
 # Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
+
+import os
+
+
 class RpmConfig:
     def __init__(self):
         self.debug_level = 0
         self.warning_level = 0
         self.verbose_level = 0
+        (self.sysname, self.nodename, self.release, self.version, self.machine) = os.uname()
 
 # Automatically create a global rpmconfig variable
 rpmconfig = RpmConfig()

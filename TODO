@@ -1,4 +1,6 @@
-X Allow streaming of rpms (header and cpio data)
+Extend test9 script to support all "common" command line options of rpminstall
+Make a specfile and package out of all stuff
+Convert oldfilenames to basenames/dirnames/dirindexs if available
 support bzip2 for payload data
 what are the following rpm tags exactly:
   - "sourcepkgid": (RPMTAG_SOURCEPKGID, RPM_BIN, 16, 4)

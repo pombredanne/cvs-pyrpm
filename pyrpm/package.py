@@ -72,7 +72,9 @@ class RpmUserCache:
                     pw = pwd.getpwnam(username)
                     self.uid[username] = pw[2]
                 except:
-                    self.uid[username] = 0
+                    pass
+        if not self.uid.has_key(username):
+            self.uid[username] = 0
         return self.uid[username]
 
     def getGID(self, groupname):
@@ -84,7 +86,9 @@ class RpmUserCache:
                     gr = grp.getgrnam(groupname)
                     self.gid[groupname] = gr[2]
                 except:
-                    self.gid[groupname] = 0
+                    pass
+        if not self.gid.has_key(groupname):
+            self.gid[groupname] = 0
         return self.gid[groupname]
 
 
@@ -115,7 +119,7 @@ class RpmPackage(RpmData):
     def close(self):
         if self.io != None:
             self.io.close()
-        self.io = None
+        self.clear()
         return 1
 
     def read(self, tags=None, ntags=None):
@@ -127,14 +131,17 @@ class RpmPackage(RpmData):
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
         self["conflicts"] = self.getConflicts()
-        self.close()
+        self["triggers"] = self.getTriggers()
         return 1
 
-    def write(self):
+    def write(self, source=None):
+        if source != None:
+            origsource = self.source
+            self.source = source
+            self.close()
         if not self.open("w"):
             return 0
         ret = self.io.write(self)
-        self.close()
         return ret
 
     def verify(self):
@@ -148,15 +155,17 @@ class RpmPackage(RpmData):
             return 0
         # Set umask to 022, especially important for scripts
         os.umask(022)
+        if self["preinprog"] != None or self["postinprog"] != None:
+            numPkgs = str(db.getNumPkgs(self["name"])+1)
         if self["preinprog"] != None:
-            if not runScript(self["preinprog"], self["prein"], "1"):
+            if not runScript(self["preinprog"], self["prein"], numPkgs):
                 printError("%s: Error running pre install script." % self.getNEVRA())
                 return 0
         if not self.__extract(db):
             return 0
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None:
-            if not runScript(self["postinprog"], self["postin"], "1"):
+            if not runScript(self["postinprog"], self["postin"], numPkgs):
                 printError("%s: Error running post install script." % self.getNEVRA())
         self.rfilist = None
         return 1
@@ -169,8 +178,10 @@ class RpmPackage(RpmData):
         files = self["filenames"]
         # Set umask to 022, especially important for scripts
         os.umask(022)
+        if self["preunprog"] != None or self["postunprog"] != None:
+            numPkgs = str(db.getNumPkgs(self["name"])-1)
         if self["preunprog"] != None:
-            if not runScript(self["preunprog"], self["preun"], "1"):
+            if not runScript(self["preunprog"], self["preun"], numPkgs):
                 printError("%s: Error running pre uninstall script." % self.getNEVRA())
                 return 0
         # Remove files starting from the end (reverse process to install)
@@ -191,7 +202,7 @@ class RpmPackage(RpmData):
                     printWarning(1, "Couldn't remove file %s from pkg %s" % (f, self.source))
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None:
-            if not runScript(self["postunprog"], self["postun"], "1"):
+            if not runScript(self["postunprog"], self["postun"], numPkgs):
                 printError("%s: Error running post uninstall script." % self.getNEVRA())
         return 1
 
@@ -203,7 +214,7 @@ class RpmPackage(RpmData):
 
     def __readHeader(self, tags=None, ntags=None):
         if self.header_read:
-            self.io.read(skip=1)      # Skip over complete header
+#            self.io.read(skip=1)      # Skip over complete header
             return 1
         (key, value) = self.io.read()
         # Read over lead
@@ -231,7 +242,7 @@ class RpmPackage(RpmData):
             elif not tags and not ntags:
                 self[key] = value
             (key, value) = self.io.read()
-        self.__generateFileNames()
+        self.generateFileNames()
         self.header_read = 1
         return 1
 
@@ -244,9 +255,14 @@ class RpmPackage(RpmData):
         (filename, filerawdata) = self.io.read()
         nfiles = len(files)
         n = 0
+        pos = 0
+        printInfo(0, "\r\t\t\t\t ")
         while filename != None and filename != "EOF" :
             n += 1
-            printInfo(0, "\r\t\t\t\t%s" % (int(n*45/nfiles)*"#"))
+            npos = int(n*45/nfiles)
+            if pos < npos:
+                printInfo(0, "#"*(npos-pos))
+            pos = npos
             sys.stdout.flush()
             if not self.rfilist.has_key(filename):
                 # src.rpm has empty tag "dirnames", but we use absolut paths in io.read(),
@@ -266,6 +282,9 @@ class RpmPackage(RpmData):
                             if not self.__handleHardlinks(rfi):
                                 return 0
             (filename, filerawdata) = self.io.read()
+        if nfiles == 0:
+            nfiles = 1
+        printInfo(0, "#"*(45-int(45*n/nfiles)))
         return self.__handleRemainingHardlinks()
 
     def __verifyFileInstall(self, rfi, db):
@@ -317,8 +336,11 @@ class RpmPackage(RpmData):
             break
         return 1
 
-    def __generateFileNames(self):
+    def generateFileNames(self):
         self["filenames"] = []
+        if self["oldfilenames"] != None:
+            self["filenames"] = self["oldfilenames"]
+            return
         if self["dirnames"] == None or self["dirindexes"] == None:
             return
         for i in xrange (len(self["basenames"])):
@@ -381,46 +403,68 @@ class RpmPackage(RpmData):
         rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum, rpmflags)
         return rfi
 
-    def getNEVR(self):
+    def getEVR(self):
         if self["epoch"] != None:
             e = str(self["epoch"][0])+":"
         else:
             e = ""
-        return "%s-%s%s-%s" % (self["name"], e, self["version"], self["release"])
+        return "%s%s-%s" % (e, self["version"], self["release"])
+
+    def getNEVR(self):
+        return "%s-%s" % (self["name"], self.getEVR())
 
     def getNEVRA(self):
         return "%s.%s" % (self.getNEVR(), self["arch"])
 
     def getProvides(self):
-        return self.__getDeps("providename", "provideflags", "provideversion")
+        return self.__getDeps(("providename", "provideflags", "provideversion"))
 
     def getRequires(self):
-        return self.__getDeps("requirename", "requireflags", "requireversion")
+        return self.__getDeps(("requirename", "requireflags", "requireversion"))
 
     def getObsoletes(self):
-        return self.__getDeps("obsoletename", "obsoleteflags", "obsoleteversion")
+        return self.__getDeps(("obsoletename", "obsoleteflags", "obsoleteversion"))
 
     def getConflicts(self):
-        return self.__getDeps("conflictname", "conflictflags", "conflictversion")
+        return self.__getDeps(("conflictname", "conflictflags", "conflictversion"))
 
     def getTriggers(self):
-        return self.__getDeps("triggername", "triggerflags", "triggerversion")
+        if self["triggerindex"] == None:
+            return self.__getDeps(("triggername", "triggerflags", "triggerversion", "triggerscriptprog", "triggerscripts"))
+        deps =  self.__getDeps(("triggername", "triggerflags", "triggerversion"))
+        numdeps = len(deps)
+        if len(self["triggerscriptprog"]) != len(self["triggerscripts"]):
+            raiseFatal("%s: wrong length of triggerscripts/prog" % self.source)
+        if numdeps != len(self["triggerindex"]):
+            raiseFatal("%s: wrong length of triggerindex" % self.source)
+        for i in xrange(numdeps):
+            ti = self["triggerindex"][i]
+            if ti > len(self["triggerscriptprog"]):
+                raiseFatal("%s: wrong index in triggerindex" % self.source)
+            deps[i].append(self["triggerscriptprog"][ti])
+            deps[i].append(self["triggerscripts"][ti])
+        return deps
 
-    def __getDeps(self, name, flags, version):
-        n = self[name]
-        if not n:
+    def __getDeps(self, depnames):
+        if self[depnames[0]] == None:
             return []
-        f = self[flags]
-        v = self[version]
-        if f == None or v == None or len(n) != len(f) or len(f) != len(v):
-            if f != None or v != None:
+        for dep in depnames:
+            if dep == depnames[0] or self[dep] == None:
+                continue
+            if len(self[dep]) != len(self[depnames[0]]):
+                print self["triggerindex"]
+                print dep, depnames[0]
+                print self[dep], self[depnames[0]]
                 raiseFatal("%s: wrong length of deps" % self.source)
         deps = []
-        for i in xrange(0, len(n)):
-            if f != None:
-                deps.append( (n[i], f[i], v[i]) )
-            else:
-                deps.append( (n[i], None, None) )
+        for i in xrange(0, len(self[depnames[0]])):
+            l = []
+            for j in xrange(0, len(depnames)):
+                if self[depnames[j]] != None:
+                    l.append(self[depnames[j]][i])
+                else:
+                    l.append(None)
+            deps.append(l)
         return deps
 
 # vim:ts=4:sw=4:showmatch:expandtab

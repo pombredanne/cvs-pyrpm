@@ -44,16 +44,18 @@ RpmData
 
 RpmPackage(RpmData)
 -------------------
-  clear(): self.io = RpmIO()
+  RpmPackage(source)
   getRequires()
   getProvides()
   getObsoletes()
   getConflicts()
-  read(io)
-  write(io)
-  verify()
-  extract()
+  open()
+  read()
+  write([source])
+  close()
   install()
+  erase()
+  verify()
   compose(envra)
 
 
