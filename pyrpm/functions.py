@@ -17,7 +17,7 @@
 #
 
 
-import os.path, tempfile, sys, string
+import os.path, tempfile, sys, string, types
 from config import *
 from cpio import *
 from base import *
@@ -329,7 +329,11 @@ def evrString(epoch, version, release):
     if epoch == None or epoch == "":
         return "%s-%s" % (version, release)
     else:
-        return "%s:%s-%s" % (epoch, version, release)
+        if isinstance(epoch, types.TupleType) or \
+               isinstance(epoch, types.ListType):
+            return "%s:%s-%s" % (epoch[0], version, release)
+        else:
+            return "%s:%s-%s" % (epoch, version, release)
 
 # Compare two packages by evr
 def pkgCompare(p1, p2):
@@ -342,5 +346,116 @@ def pkgCompare(p1, p2):
     else:
         e2 = str(p2["epoch"][0])
     return labelCompare((e1, p1["version"], p1["release"]), (e2, p2["version"], p2["release"]))
+
+def depOperatorString(flag):
+    """ generate readable operator """
+    op = ""
+    if flag & RPMSENSE_LESS:
+        op = "<"
+    if flag & RPMSENSE_GREATER:
+        op += ">"
+    if flag & RPMSENSE_EQUAL:
+        op += "="
+    return op
+
+def depString((name, flag, version)):
+    if version == "":
+        return name
+    return "%s %s %s" % (name, depOperatorString(flag), version)
+
+def filterArchList(list, arch=None):
+    # stage 1: filter packages which are not in compat arch
+    if arch != None and arch != "noarch":
+        error = 0
+        for pkg in list:
+            pkg = list[i]
+            if pkg["arch"] not in possible_archs:
+                error = 1
+                pyrpm.printError(0, "%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
+            if pkg["arch"] != arch and pkg["arch"] not in arch_compats[arch]:
+                error = 1
+                pyrpm.printError(0, "%s: Architecture not compatible with machine %s" % (pkg.source, arch))
+        if error != 0:
+            return -1
+
+    # stage 2: filert duplicates: order by name.arch
+    hash = { }
+    i = 0
+    while i < len(list):
+        pkg = list[i]
+        key = "%s.%s" % (pkg["name"], pkg["arch"])
+        if not hash.has_key(key):
+            hash[key] = pkg
+            i += 1
+        else:
+            r = hash[key]
+            ret = pyrpm.pkgCompare(r, pkg)
+            if ret < 0:
+                pyrpm.printWarning(0, "%s was already added, replacing with %s" % \
+                                   (r.getNEVRA(), pkg.getNEVRA()))
+                hash[key] = pkg
+                list.remove(r)
+            elif ret == 0:
+                pyrpm.printWarning(0, "%s was already added" % \
+                                   pkg.getNEVRA())
+                list.remove(pkg)
+            else:
+                i += 1
+    del hash
+
+    # stage 3: filter duplicates: order by name
+    hash = { }
+    i = 0
+    while i < len(list):
+        pkg = list[i]
+        removed = 0
+        if not hash.has_key(pkg["name"]):
+            hash[pkg["name"]] = [ ]
+            hash[pkg["name"]].append(pkg)
+        else:
+            j = 0
+            while hash[pkg["name"]] and j < len(hash[pkg["name"]]) and \
+                      removed == 0:
+                r = hash[pkg["name"]][j]
+                if pkg["arch"] != r["arch"] and \
+                       pyrpm.buildarchtranslate[pkg["arch"]] != \
+                       pyrpm.buildarchtranslate[r["arch"]]:
+                    j += 1
+                elif r["arch"] in pyrpm.arch_compats[pkg["arch"]]:
+                    pyrpm.printWarning(0, "%s was already added, replacing with %s" % \
+                                       (r.getNEVRA(), pkg.getNEVRA()))
+                    hash[pkg["name"]].remove(r)
+                    hash[pkg["name"]].append(pkg)
+                    list.remove(r)
+                    removed = 1
+                elif pkg["arch"] == r["arch"]:
+                    pyrpm.printWarning(0, "%s was already added" % \
+                                       pkg.getNEVRA())
+                    list.remove(pkg)
+                    removed = 1
+                else:
+                    j += 1
+            if removed == 0:
+                hash[pkg["name"]].append(pkg)
+        if removed == 0:
+            i += 1
+    del hash
+
+    return 1
+
+def normalizeList(list):
+    """ normalize list """
+    if len(list) < 2:
+        return
+    hash = { }
+    i = 0
+    while i < len(list):
+        item = list[i]
+        if hash.has_key(item):
+            list.pop(i)
+        else:
+            hash[item] = 1
+        i += 1
+    return
 
 # vim:ts=4:sw=4:showmatch:expandtab
