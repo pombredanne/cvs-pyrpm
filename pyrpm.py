@@ -25,11 +25,12 @@ strict = 1
 
 # optional keys in the sig header
 sigkeys = [
-#   rpmconstants.RPMSIGTAG_PGP,
-#   rpmconstants.RPMTAG_BADSHA1_2,
     rpmconstants.RPMTAG_DSAHEADER,
     rpmconstants.RPMSIGTAG_GPG
 ]
+if not strict:
+    sigkeys.append(rpmconstants.RPMSIGTAG_PGP)
+    sigkeys.append(rpmconstants.RPMTAG_BADSHA1_2)
 # required keys in the sig header
 reqsig = [
     rpmconstants.HEADER_SIGNATURES,
@@ -199,11 +200,11 @@ class ReadRpm:
         return hdr
 
     def verifyHeader(self):
-        if not strict:
-            return
         for i in self.sig.keys():
             if i not in sigkeys and i not in reqsig:
                 self.raiseErr("new item in sigindex: %d" % i)
+        if not strict:
+            return
         for i in reqsig:
             if i not in self.sig.keys():
                 self.raiseErr("key not present in sig: %d" % i)
