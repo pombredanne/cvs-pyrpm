@@ -163,7 +163,9 @@ class YumConf(Conf):
                     break
 
                 if self.checkVar(stanza, vars[0]):
-                    raise Exception, "Bad variable %s" % vars[0]
+                    sys.stderr.write("Bad variable %s in %s\n" \
+                                     % (vars[0], self.filename))
+                    continue
                 
                 name = vars[0]
                 value = self.extendValue(vars[1])
