@@ -41,10 +41,10 @@ class _Relations:
     """ relations list for packages """
     def __init__(self):
         self.list = HashList()
-    def __len__(self):
-        return len(self.list)
-    def __getitem__(self, key):
-        return self.list[key]
+        self.__len__ = self.list.__len__
+        self.__getitem__ = self.list.__getitem__
+        self.has_key = self.list.has_key
+
     def append(self, pkg, pre, flag):
         if pre == pkg:
             return
@@ -67,6 +67,7 @@ class _Relations:
             else:
                 self.list[p] = _Relation()
                 self.list[p]._post[pkg] = 1
+
     def remove(self, pkg):
         rel = self.list[pkg]
         # remove all post relations for the matching pre relation packages 
@@ -76,8 +77,6 @@ class _Relations:
         for (r, f) in rel._post:
             del self.list[r].pre[pkg]
         del self.list[pkg]
-    def has_key(self, key):
-        return self.list.has_key(key)
 
 # ----------------------------------------------------------------------------
 
