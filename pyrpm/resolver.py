@@ -57,19 +57,16 @@ class ProvidesList:
 
     def search(self, name, flag, version, arch=None):
         if not self.provide.has_key(name):
-            return []
-        evr = None
-        ret = []
+            return [ ]
+        evr = evrSplit(version)
+        ret = [ ]
         for (f, v, rpm) in self.provide[name]:
             if rpm in ret:
                 continue
             if version == "":
                 ret.append(rpm)
                 continue
-            if evr == None:
-                evr = evrSplit(version)
-            if evrCompare(v, flag, evr) == 1 and \
-                evrCompare(v, f, evr) == 1:
+            if rangeCompare(flag, evr, f, evrSplit(v)):
                 ret.append(rpm)
                 continue
             evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
