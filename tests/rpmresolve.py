@@ -65,7 +65,13 @@ tags = [ "name", "epoch", "version", "release", "arch",
          "conflictversion", "filesizes", "filemodes", "filemd5s",
          "dirindexes", "basenames", "dirnames" ]
 
-if __name__ == '__main__':
+
+def main():
+    global update_flag, ignore_epoch, tags
+    global verbose, installed_dir, installed, install_flag
+    global update_flag, freshen_flag, erase_flag
+    global rpms
+    
     if len(sys.argv) == 1:
         usage()
         sys.exit(0)
@@ -121,7 +127,8 @@ if __name__ == '__main__':
         r = pyrpm.RpmPackage("file:/"+f)
         try:
             r.read(tags=[ "name", "epoch", "version", "release", "arch" ])
-        except:
+        except Exception, msg:
+            print msg
             print "Loading of %s failed, exiting." % f
             sys.exit(-1)
         r.close()
@@ -148,7 +155,8 @@ if __name__ == '__main__':
             r = pyrpm.RpmPackage("file:/%s%s" % (installed_dir, f))
             try:
                 r.read(tags=tags)
-            except:
+            except Exception, msg:
+                print msg
                 print "Loading of %s%s failed, ignoring." % (installed_dir, f)
                 continue
             r.close()
@@ -177,7 +185,8 @@ if __name__ == '__main__':
         r = rpms.pop(0)
         try:
             r.read(tags=tags)
-        except:
+        except Exception, msg:
+            print msg
             print "Loading of %s failed, exiting." % f
             sys.exit(-1)
         r.close()
@@ -208,3 +217,23 @@ if __name__ == '__main__':
 
     sys.exit(0)
 
+if __name__ == '__main__':
+    hotshot = 0
+    if hotshot:
+        import tempfile
+        from hotshot import Profile
+        import hotshot.stats
+        filename = tempfile.mktemp()
+        prof = Profile(filename)
+        try:
+            prof = prof.runcall(main)
+        except SystemExit:
+            pass
+        prof.close()
+        del prof
+        s = hotshot.stats.load(filename)
+        s.strip_dirs().sort_stats('time').print_stats(20)
+        s.strip_dirs().sort_stats('cumulative').print_stats(20)
+        os.unlink(filename)
+    else:
+        main()

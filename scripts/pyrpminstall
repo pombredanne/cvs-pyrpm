@@ -42,7 +42,8 @@ def usage():
     print "    [--nodeps] [--nodigest] [--nosignature]"
     print "    [--noorder] [--noscripts] [--notriggers]"
 
-if __name__ == '__main__':
+
+def main():
   try:
     opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:", ["install", "upgrade", "freshen", "erase", "help", "verbose", "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=", "force", "ignoresize", "ignorearch", "justdb", "nodeps", "nodigest", "nosignature", "noorder", "noscripts", "notriggers", "oldpackage", "test"])
   except getopt.error, e:
@@ -138,5 +139,27 @@ if __name__ == '__main__':
   control = RpmController()
   control.handleFiles(args, rpmconfig.operation, rpmconfig.dbpath,
     rpmconfig.buildroot)
+
+if __name__ == '__main__':
+    hotshot = 0
+    if hotshot:
+        import tempfile
+        from hotshot import Profile
+        import hotshot.stats
+        filename = tempfile.mktemp()
+        prof = Profile(filename)
+        try:
+            prof = prof.runcall(main)
+        except SystemExit:
+            pass
+        prof.close()
+        del prof
+        s = hotshot.stats.load(filename)
+        s.strip_dirs().sort_stats('time').print_stats(20)
+        s.strip_dirs().sort_stats('cumulative').print_stats(20)
+        os.unlink(filename)
+    else:
+        main()
+    
 
 # vim:ts=4:sw=4:showmatch:expandtab
