@@ -159,13 +159,13 @@ if __name__ == '__main__':
             del list    
 
     if install_flag == 1:
-        operation = pyrpm.RpmResolver.OP_INSTALL
+        operation = pyrpm.OP_INSTALL
     elif update_flag == 1:
-        operation = pyrpm.RpmResolver.OP_UPDATE
+        operation = pyrpm.OP_UPDATE
     elif freshen_flag == 1:
-        operation = pyrpm.RpmResolver.OP_FRESHEN
+        operation = pyrpm.OP_FRESHEN
     else: # erase_flag
-        operation = pyrpm.RpmResolver.OP_ERASE
+        operation = pyrpm.OP_ERASE
 
     resolver = pyrpm.RpmResolver(installed, operation)
 
@@ -198,7 +198,8 @@ if __name__ == '__main__':
     if resolver.resolve() != 1:
         sys.exit(-1)
 
-    orderer = pyrpm.RpmOrderer(resolver.appended, resolver.updates, resolver.obsoletes, operation)
+    orderer = pyrpm.RpmOrderer(resolver.appended, resolver.updates,
+                               resolver.obsoletes, operation)
     operations = orderer.order()
 
     if operations == None:
