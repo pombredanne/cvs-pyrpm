@@ -200,9 +200,15 @@ class RpmYum:
                     sys.exit(0)
         control = RpmController()
         control.handlePkgs(appended, OP_UPDATE, rpmconfig.dbpath, rpmconfig.buildroot)
-
-    def __doAutoErase(self):
-        pass
+        ops = control.getOperations()
+        i = 0
+        while i < len(ops):
+            (op, pkg) = ops[i]
+            if pkg.has_key("thisisaobsoletespackage"):
+                ops.pop(i)
+                continue
+            i += 1
+        control.runOperations(ops)
 
     def __readRpmPackage(self, filename):
         pkg = RpmPackage(filename)

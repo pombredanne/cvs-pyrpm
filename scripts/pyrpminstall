@@ -138,6 +138,8 @@ def main():
 
   control = RpmController()
   control.handleFiles(args, operation, rpmconfig.dbpath, rpmconfig.buildroot)
+  ops = control.getOperations()
+  control.runOperations(ops)
 
 if __name__ == '__main__':
     hotshot = 0

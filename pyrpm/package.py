@@ -210,7 +210,7 @@ class RpmPackage(RpmData):
         self.rfilist = None
         return 1
 
-    def erase(self, db=None, doprint=1):
+    def erase(self, db=None):
         if not self.open():
             return 0
         if not self.__readHeader():
@@ -228,12 +228,12 @@ class RpmPackage(RpmData):
         nfiles = len(files)
         n = 0
         pos = 0
-        if rpmconfig.printhash and doprint:
-            printInfo(0, "\r\t\t\t\t ")
+        if rpmconfig.printhash:
+            printInfo(0, "\r\t\t\t\t\t\t\t ")
         for i in xrange(len(files)-1, -1, -1):
             n += 1
-            npos = int(n*45/nfiles)
-            if pos < npos and rpmconfig.printhash and doprint:
+            npos = int(n*22/nfiles)
+            if pos < npos and rpmconfig.printhash:
                 printInfo(0, "#"*(npos-pos))
             pos = npos
             f = files[i]
@@ -253,11 +253,10 @@ class RpmPackage(RpmData):
                 except:
                     printWarning(1, "Couldn't remove file %s from pkg %s" \
                         % (f, self.source))
-        if doprint:
-            if rpmconfig.printhash:
-                printInfo(0, "\n")
-            else:
-                printInfo(1, "\n")
+        if rpmconfig.printhash:
+            printInfo(0, "\n")
+        else:
+            printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None and not rpmconfig.noscripts:
             if not runScript(self["postunprog"], self["postun"], numPkgs):
@@ -318,10 +317,10 @@ class RpmPackage(RpmData):
         n = 0
         pos = 0
         if rpmconfig.printhash:
-            printInfo(0, "\r\t\t\t\t ")
+            printInfo(0, "\r\t\t\t\t\t\t\t ")
         while filename != None and filename != "EOF" :
             n += 1
-            npos = int(n*45/nfiles)
+            npos = int(n*22/nfiles)
             if pos < npos and rpmconfig.printhash:
                 printInfo(0, "#"*(npos-pos))
             pos = npos
@@ -348,7 +347,7 @@ class RpmPackage(RpmData):
         if nfiles == 0:
             nfiles = 1
         if rpmconfig.printhash:
-            printInfo(0, "#"*(45-int(45*n/nfiles)))
+            printInfo(0, "#"*(22-int(22*n/nfiles)))
         return self.__handleRemainingHardlinks()
 
     def __verifyFileInstall(self, rfi, db):

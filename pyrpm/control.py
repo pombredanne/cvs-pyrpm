@@ -89,8 +89,6 @@ class RpmController:
         if len(self.rpms) == 0:
             printInfo(2, "Nothing to do.\n")
             return 1
-        if not self.run():
-            return 0
         return 1
 
     def handleFiles(self, filelist, operation, db="/var/lib/pyrpm", buildroot=None):
@@ -112,11 +110,9 @@ class RpmController:
             sys.exit(0)
         if rpmconfig.timer:
             printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
-        if not self.run():
-            return 0
         return 1
 
-    def run(self):
+    def getOperations(self):
         if not self.__preprocess():
             return 0
         if rpmconfig.timer:
@@ -148,6 +144,9 @@ class RpmController:
         del u
         if rpmconfig.timer:
             printInfo(0, "orderer took %s seconds\n" % (clock() - time1))
+        return operations
+
+    def runOperations(self, operations):
         if not operations:
             if operations == []:
                 printError("No updates are necessary.")
@@ -158,25 +157,15 @@ class RpmController:
             printError("test run stopped")
             sys.exit(0)
         self.triggerlist = _Triggers()
-        numops = 0
         i = 0
-        while i < len(operations):
-            (op, pkg) = operations[i]
-            # TODO XXX: Temporary fix, will be moved to pyrpmyum REAL SOON. ;)
-            if pkg.has_key("thisisaobsoletespackage"):
-                operations.pop(i)
-                continue
-            if op != OP_ERASE or \
-               (self.operation == OP_ERASE and op == OP_ERASE):
-                numops += 1
+        for (op, pkg) in operations:
             if op == OP_UPDATE or op == OP_INSTALL:
                 self.triggerlist.addPkg(pkg)
-            i += 1
         for pkg in self.installed:
             self.triggerlist.addPkg(pkg)
         del self.rpms
         del self.installed
-        i = 1
+        numops = len(operations)
         gc.collect()
         pkgsperfork = 100
         setCloseOnExec()
@@ -205,17 +194,22 @@ class RpmController:
                     os.chroot(self.buildroot)
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
-                    if op != OP_ERASE or \
-                       (self.operation == OP_ERASE and op == OP_ERASE):
-                        i += 1
-                        progress = "[%d/%d] %s" % (i, numops, pkg.getNEVRA())
-                        doprint = 1
-                        if rpmconfig.printhash:
-                            printInfo(0, progress)
-                        else:
-                            printInfo(1, progress)
+                    if op == OP_INSTALL or \
+                       op == OP_UPDATE or \
+                       op == OP_FRESHEN:
+                        opstring = "Update:  "
                     else:
-                        doprint = 0
+                        if self.operation != OP_ERASE:
+                            opstring = "Cleanup: "
+                        else:
+                            opstring = "Erase:   "
+
+                    progress = "%s[%d/%d] %s" % (opstring, i, numops, pkg.getNEVRA())
+                    i += 1
+                    if rpmconfig.printhash:
+                        printInfo(0, progress)
+                    else:
+                        printInfo(1, progress)
                     if   op == OP_INSTALL or \
                          op == OP_UPDATE or \
                          op == OP_FRESHEN:
@@ -225,7 +219,7 @@ class RpmController:
                         self.__addPkgToDB(pkg)
                     elif op == OP_ERASE:
                         self.__runTriggerUn(pkg)
-                        if not pkg.erase(self.pydb, doprint):
+                        if not pkg.erase(self.pydb):
                             sys.exit(1)
                         self.__runTriggerPostUn(pkg)
                         self.__erasePkgFromDB(pkg)
