@@ -195,7 +195,7 @@ class RpmOrderer:
         node = relations[0]
         node_pre_len = len(node[1].pre)
         for (pkg, rel) in relations:
-            if len(rel.pre) == 0 and len(rel.pre) < node_pre_len:
+            if len(rel.pre) < node_pre_len:
                 node = (pkg, rel)
                 node_pre_len = len(rel.pre)
 

@@ -406,10 +406,8 @@ class RpmResolver(RpmList):
 
     def resolve(self):
         """ Start the resolving process
-        Returns ordered list of operations on success, with tupels of the
-        form (operation, package). The operation is one of OP_INSTALL,
-        OP_UPDATE or OP_ERASE per package.
-        If an error occurs, None is returned. """
+        Handle obsoletes, check dependencies and conflicts.
+        Return 1 if everything is OK, a negative number if not. """
 
         # checking obsoletes for new packages
         if self.doObsoletes() != 1:
