@@ -6,7 +6,7 @@ from rpmconstants import *
 
 for i in sys.argv[1:]:
     rpm = RpmPackage("file:/"+i)
-    rpm.read()
+    rpm.read(tags="version", ntags="name")
 #    if type(rpm["epoch"]) != type(None) and type(rpm["epoch"]) != type(()):
 #        print type(rpm["epoch"])
     print rpm.getNEVRA()

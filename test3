@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import sys
-import pyrpmlib
+from pyrpmlib import *
 from rpmconstants import *
 
 files = [ "/mnt/raid/fedora/3/i386/os/Fedora/RPMS/gcc-3.4.2-6.fc3.i386.rpm",
@@ -75,11 +75,12 @@ files = [ "/mnt/raid/fedora/3/i386/os/Fedora/RPMS/gcc-3.4.2-6.fc3.i386.rpm",
 
 files.reverse()
 for i in files:
+    print i
     rpm = RpmPackage("file:/"+i)
     rpm.open()
     pid = os.fork()
     if pid != 0:
-        os.wait()
+        os.waitpid(pid, 0)
         rpm.close()
         continue
     else:

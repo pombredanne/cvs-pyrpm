@@ -101,8 +101,8 @@ class RpmStreamIO(RpmIO):
             if (self.verify or self.parsesig) and not self.hdronly:
                 self.where = 2
             else:
-                self.readHdr()
-                self.where = 3
+                self.idx = self.hdrdata[0]+1
+                self.where = 2
             return ("-", "")
         # Read/parse signature
         if self.where == 2:
@@ -351,12 +351,22 @@ class RpmStreamIO(RpmIO):
             return 0
 
 
+class RpmDBIO(RpmIO):
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+        RpmIO.__init__(self)
+
+
+class RpmFtpIO(RpmIO):
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+        RpmIO.__init__(self)
+
+
 class RpmFileIO(RpmStreamIO):
-    def __init__(self, filename, verify=None, legacy=None, parsesig=None, hdronly=None):
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
         RpmStreamIO.__init__(self, verify, legacy, parsesig, hdronly)
-        self.filename = filename
+        self.filename = source
         self.issrc = 0
-        if filename[-8:] == ".src.rpm" or filename[-10:] == ".nosrc.rpm":
+        if self.filename[-8:] == ".src.rpm" or self.filename[-10:] == ".nosrc.rpm":
             self.issrc = 1
 
     def openFile(self, offset=None):
@@ -382,26 +392,21 @@ class RpmFileIO(RpmStreamIO):
         return 1
 
 
-class RpmDBIO(RpmIO):
-    def __init__(self):
-        RpmIO.__init__(self)
+class RpmHttpIO(RpmIO):
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+        RpmStreamIO.__init__(self, verify, legacy, parsesig, hdronly)
+        self.url = source
 
-    def read(self):
-        return 0
+    def open(self):
+        pass
 
-    def write(self):
-        return 0
+    def open(self):
+        pass
 
 
 class RpmRepoIO(RpmIO):
-    def __init__(self):
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
         RpmIO.__init__(self)
-
-    def read(self):
-        return 0
-
-    def write(self):
-        return 0
 
 
 def getRpmIOFactory(source, verify=None, legacy=None, parsesig=None, hdronly=None):
@@ -456,11 +461,12 @@ class RpmPackage(RpmData):
 
     def clear(self):
         self.io = None
+        self.header_read = 0
 
     def open(self):
         if self.io != None:
             return 1
-        self.io = getRpmIOFactory(self.source)
+        self.io = getRpmIOFactory(self.source, self.verify, self.legacy, self.parsesig, self.hdronly)
         if not self.io:
             return 0
         if not self.io.open():
@@ -476,7 +482,7 @@ class RpmPackage(RpmData):
     def read(self, tags=None, ntags=None):
         if not self.open():
             return 0
-        if not self.readHeader(self.io):
+        if not self.readHeader(self.io, tags, ntags):
             return 0
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
@@ -499,7 +505,7 @@ class RpmPackage(RpmData):
     def install(self, files=None):
         if not self.open():
             return 0
-        if not self.readHeader(self.io):
+        if not self.readHeader():
             return 0
         if not files:
             files = self["filenames"]
@@ -508,40 +514,81 @@ class RpmPackage(RpmData):
         if self["preinprog"] != None:
             if not runScript(self["preinprog"], self["prein"], "1"):
                 return 0
-        if not self.extract(self.io, files):
+        if not self.extract(files):
             return 0
         if self["postinprog"] != None:
             if not runScript(self["postinprog"], self["postin"], "1"):
                 return 0
         return 1
 
-    def readHeader(self, io, tags=None, ntags=None):
-        (key, value) = io.read()
+    def remove(self, files=None):
+        if not self.open():
+            return 0
+        if not self.readHeader():
+            return 0
+        if not files:
+            files = self["filenames"]
+        # Set umask to 022, especially important for scripts
+        os.umask(022)
+        if self["preunprog"] != None:
+            if not runScript(self["preunprog"], self["preun"], "1"):
+                return 0
+        # Remove files starting from the end (reverse process to install)
+        files.reverse()
+        for f in files:
+            if os.path.isdir(f):
+                try:
+                    os.rmdir(f)
+                except:
+                    print "Error removing dir %s from pkg %s" % (f, self.source)
+            else:
+                try:
+                    os.unlink(f)
+                except:
+                    print "Error removing file %s from pkg %s" % (f, self.source)
+        if self["postunprog"] != None:
+            if not runScript(self["postunprog"], self["postun"], "1"):
+                return 0
+
+    def readHeader(self, tags=None, ntags=None):
+        if self.header_read:
+            return 1
+        (key, value) = self.io.read()
         # Read over lead
         while key != None and key != "-":
-            (key, value) = io.read()
-        # Read header
-        (key, value) = io.read()
+            (key, value) = self.io.read()
+        # Read sig
+        (key, value) = self.io.read()
         while key != None and key != "-":
-            (key, value) = io.read()
             if tags and key in tags:
                 self[key] = value
             elif ntags and not key in ntags:
                 self[key] = value
-            else:
+            elif not tags and not ntags:
                 self[key] = value
+            (key, value) = self.io.read()
+        # Read header
+        (key, value) = self.io.read()
+        while key != None and key != "-":
+            if tags and key in tags:
+                self[key] = value
+            elif ntags and not key in ntags:
+                self[key] = value
+            elif not tags and not ntags:
+                self[key] = value
+            (key, value) = self.io.read()
         self.generateFileNames()
         self.header_read = 1
         return 1
 
-    def extract(self, io, files=None):
+    def extract(self, files=None):
         if files == None:
             files = self["filenames"]
         # We don't need those lists earlier, so we create them "on-the-fly"
         # before we actually start extracting files.
         self.generateFileInfoList()
         self.generateHardLinkList()
-        (filename, filerawdata) = io.read()
+        (filename, filerawdata) = self.io.read()
         while filename != None and filename != "EOF" :
             rfi = self.rfilist[filename]
             if rfi != None:
@@ -554,7 +601,7 @@ class RpmPackage(RpmData):
                             return 0
                         if not self.handleHardlinks(rfi):
                             return 0
-            (filename, filerawdata) = io.read()
+            (filename, filerawdata) = self.io.read()
         return self.handleRemainingHardlinks()
 
     def generateFileNames(self):
@@ -586,7 +633,8 @@ class RpmPackage(RpmData):
         key = str(rfi.inode)+":"+str(rfi.dev)
         self.hardlinks[key].remove(rfi)
         for hrfi in self.hardlinks[key]:
-             if not createLink(rfi.filename, hrfi.filename):
+            makeDirs(hrfi.filename)
+            if not createLink(rfi.filename, hrfi.filename):
                 return 0
         del self.hardlinks[key]
         return 1
@@ -608,12 +656,24 @@ class RpmPackage(RpmData):
             return None
         rpminode = self["fileinodes"][i]
         rpmmode = self["filemodes"][i]
-        pw = pwd.getpwnam(self["fileusername"][i])
+        if os.path.isfile("/etc/passwd"):
+            try:
+                pw = pwd.getpwnam(self["fileusername"][i])
+            except:
+                pw = None
+        else:
+            pw = None
         if pw != None:
             rpmuid = pw[2]
         else:
             rpmuid = 0      # default to root as uid if not found
-        gr = grp.getgrnam(self["filegroupname"][i])
+        if os.path.isfile("/etc/group"):
+            try:
+                gr = grp.getgrnam(self["filegroupname"][i])
+            except:
+                gr = None
+        else:
+            gr = None
         if gr != None:
             rpmgid = gr[2]
         else:
@@ -630,7 +690,7 @@ class RpmPackage(RpmData):
             e = str(self["epoch"][0])+":"
         else:
             e = ""
-        return self["name"]+"-"+e+self["version"]+"-"+self["release"]+"."+self["arch"]
+        return "%s-%s%s-%s.%s" % (self["name"], e, self["version"], self["release"], self["arch"])
 
     def getDeps(self, name, flags, version):
         n = self[name]
@@ -680,6 +740,8 @@ class RpmFileInfo:
 
 # Collection of class indepedant helper functions
 def runScript(prog=None, script=None, arg1=None, arg2=None):
+    if prog == None:
+        prog = "/bin/sh"
     (fd, tmpfilename) = tempfile.mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
     if fd == None:
         return 0
@@ -687,27 +749,25 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         os.write(fd, script)
     os.close(fd)
     fd = None
-    cmd = prog
+    args = [prog]
     if prog != "/sbin/ldconfig":
-        cmd = cmd+" "+tmpfilename
+        args.append(tmpfilename)
         if arg1 != None:
-            cmd = cmd+" "+arg1
+            args.append(arg1)
         if arg2 != None:
-            cmd = cmd+" "+arg2
-    p = popen2.Popen3(cmd, 1)
-    p.tochild.close()
-    rout = p.fromchild.read()
-    rerr = p.childerr.read()
-    p.fromchild.close()
-    p.childerr.close()
-    ret = p.wait()
+            args.append(arg2)
+    pid = os.fork()
+    if pid != 0:
+        (cpid, status) = os.waitpid(pid, 0)
+    else:
+        os.close(0)
+        os.execv(prog, args)
+        sys.exit()
     os.unlink(tmpfilename)
-    if ret != 0 or rout != "" or rerr != "":
-        print "Error in script:"
-        print script
-        print ret
-        print rout
-        print rerr
+    if status != 0:
+        print "Error in running script:"
+        print prog
+        print args
         return 0
     return 1
 
@@ -746,7 +806,7 @@ def installFile(rfi, data):
         os.symlink(symlinkfile, rfi.filename)
     elif filetype == cpio.CP_IFIFO:
         makeDirs(rfi.filename)
-        if os.mkfifo(rfi.filename) != None:
+        if not os.path.exists(rfi.filename) and os.mkfifo(rfi.filename) != None:
             return 0
         if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
             os.unlink(rfi.filename)

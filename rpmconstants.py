@@ -232,6 +232,58 @@ RPMTAG_DELTARAWPAYLOADXDELTA = 20005 # BIN
 RPMTAG_DELTAORIGPAYLOADFORMAT = 20006 # RPMTAG_PAYLOADFORMAT
 RPMTAG_DELTAFILEFLAGS = 20007 # INT16 array
 
+# RPMSENSEFLAGS
+RPMSENSE_ANY        = 0
+RPMSENSE_SERIAL     = (1 << 0)     # @todo Legacy.
+RPMSENSE_LESS       = (1 << 1)
+RPMSENSE_GREATER    = (1 << 2)
+RPMSENSE_EQUAL      = (1 << 3)
+RPMSENSE_PROVIDES   = (1 << 4) # only used internally by builds
+RPMSENSE_CONFLICTS  = (1 << 5) # only used internally by builds
+RPMSENSE_PREREQ     = (1 << 6)     # @todo Legacy.
+RPMSENSE_OBSOLETES  = (1 << 7) # only used internally by builds
+RPMSENSE_INTERP     = (1 << 8)     # Interpreter used by scriptlet.
+RPMSENSE_SCRIPT_PRE = ((1 << 9)|RPMSENSE_PREREQ) # %pre dependency.
+RPMSENSE_SCRIPT_POST = ((1 << 10)|RPMSENSE_PREREQ) # %post dependency.
+RPMSENSE_SCRIPT_PREUN = ((1 << 11)|RPMSENSE_PREREQ) # %preun dependency.
+RPMSENSE_SCRIPT_POSTUN = ((1 << 12)|RPMSENSE_PREREQ) # %postun dependency.
+RPMSENSE_SCRIPT_VERIFY = (1 << 13) # %verify dependency.
+RPMSENSE_FIND_REQUIRES = (1 << 14) # find-requires generated dependency.
+RPMSENSE_FIND_PROVIDES = (1 << 15) # find-provides generated dependency.
+RPMSENSE_TRIGGERIN  = (1 << 16)    # %triggerin dependency.
+RPMSENSE_TRIGGERUN  = (1 << 17)    # %triggerun dependency.
+RPMSENSE_TRIGGERPOSTUN = (1 << 18) # %triggerpostun dependency.
+RPMSENSE_MISSINGOK  = (1 << 19)    # suggests/enhances/recommends hint.
+RPMSENSE_SCRIPT_PREP = (1 << 20)   # %prep build dependency.
+RPMSENSE_SCRIPT_BUILD = (1 << 21)  # %build build dependency.
+RPMSENSE_SCRIPT_INSTALL = (1 << 22)# %install build dependency.
+RPMSENSE_SCRIPT_CLEAN = (1 << 23)  # %clean build dependency.
+RPMSENSE_RPMLIB     = ((1 << 24) | RPMSENSE_PREREQ) # rpmlib(feature) dependency.
+RPMSENSE_TRIGGERPREIN = (1 << 25)  # @todo Implement %triggerprein.
+RPMSENSE_KEYRING    = (1 << 26)
+RPMSENSE_PATCHES    = (1 << 27)
+RPMSENSE_CONFIG     = (1 << 28)
+
+RPMSENSE_SENSEMASK  = 15       # Mask to get senses, ie serial,
+                               # less, greater, equal.
+
+RPMSENSE_TRIGGER    = (RPMSENSE_TRIGGERIN | RPMSENSE_TRIGGERUN | RPMSENSE_TRIGGERPOSTUN)
+
+_ALL_REQUIRES_MASK  = (RPMSENSE_INTERP | RPMSENSE_SCRIPT_PRE | RPMSENSE_SCRIPT_POST | RPMSENSE_SCRIPT_PREUN | RPMSENSE_SCRIPT_POSTUN | RPMSENSE_SCRIPT_VERIFY | RPMSENSE_FIND_REQUIRES | RPMSENSE_SCRIPT_PREP | RPMSENSE_SCRIPT_BUILD | RPMSENSE_SCRIPT_INSTALL | RPMSENSE_SCRIPT_CLEAN | RPMSENSE_RPMLIB | RPMSENSE_KEYRING)
+
+def _notpre(x):
+    return (x & ~RPMSENSE_PREREQ)
+
+_INSTALL_ONLY_MASK = _notpre(RPMSENSE_SCRIPT_PRE|RPMSENSE_SCRIPT_POST|RPMSENSE_RPMLIB|RPMSENSE_KEYRING)
+_ERASE_ONLY_MASK   = _notpre(RPMSENSE_SCRIPT_PREUN|RPMSENSE_SCRIPT_POSTUN)
+
+def isLegacyPreReq(x):
+    return (x & _ALL_REQUIRES_MASK) == RPMSENSE_PREREQ
+def isInstallPreReq(x):
+    return (x & _INSTALL_ONLY_MASK)
+def isErasePreReq(x):
+    return (x & _ERASE_ONLY_MASK)
+
 # XXX: TODO for possible rpm changes:
 # - arch should not be needed for src.rpms
 # - deps could be left away from src.rpms
