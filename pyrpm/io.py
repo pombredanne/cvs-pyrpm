@@ -119,17 +119,19 @@ class RpmStreamIO(RpmIO):
             return self.__readLead()
         # Separator
         if self.where == 1:
+            pos = self._tell()
             self.__readSig()
             self.where = 2
-            return ("-", "")
+            return ("-", (pos, self.hdrdata[5]))
         # Read/parse signature
         if self.where == 2:
             # Last index of sig? Switch to from sig to hdr
             if self.idx >= self.hdrdata[0]:
+                pos = self._tell()
                 self.__readHdr()
                 self.idx = 0
                 self.where = 3
-                return ("-", "")
+                return ("-", (pos, self.hdrdata[5]))
             v = self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
             return (rpmsigtagname[v[0]], v[1])
@@ -138,13 +140,15 @@ class RpmStreamIO(RpmIO):
             # Shall we skip header parsing?
             # Last index of hdr? Switch to data files archive
             if self.idx >= self.hdrdata[0] or skip:
+                pos = self._tell()
                 self.hdrdata = None
                 self.hdr = {}
                 self.hdrtype = {}
                 cpiofd = gzip.GzipFile(fileobj=self.fd)
                 self.cpio = CPIOFile(cpiofd)
                 self.where = 4
-                return ("-", "")
+                # Nobody cares about gzipped payload length so far
+                return ("-", (pos, None))
             v =  self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
             return (rpmtagname[v[0]], v[1])
@@ -169,6 +173,12 @@ class RpmStreamIO(RpmIO):
         self.fd.write(headerindex)
         self.fd.write(headerdata)
         return 1
+
+    def _tell(self):
+        try:
+            return self.fd.tell()
+        except IOError:
+            return None
 
     def __readLead(self):
         leaddata = self.fd.read(96)
@@ -227,13 +237,11 @@ class RpmStreamIO(RpmIO):
             raiseFatal("%s: bad index magic" % self.source)
         fmt = self.fd.read(16 * indexNo)
         fmt2 = self.fd.read(storeSize)
-        padfmt = ""
         if pad != 1:
-            padfmt = self.fd.read((pad - (storeSize % pad)) % pad)
+            self.fd.read((pad - (storeSize % pad)) % pad)
         if self.verify: 
             self.__verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
-        return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + \
-            len(fmt2) + len(padfmt))
+        return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + len(fmt2))
 
     def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, issig):
         checkSize = 0

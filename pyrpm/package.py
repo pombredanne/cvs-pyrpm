@@ -113,6 +113,9 @@ class RpmPackage(RpmData):
         self.verify = verify
         self.strict = strict
         self.hdronly = hdronly
+        self.range_signature = (None, None)
+        self.range_header = (None, None)
+        self.range_payload = (None, None)
 
     def clear(self):
         self.io = None
@@ -236,6 +239,7 @@ class RpmPackage(RpmData):
         # Read over lead
         while key != None and key != "-":
             (key, value) = self.io.read()
+        self.range_signature = value
         # Read sig
         (key, value) = self.io.read()
         while key != None and key != "-":
@@ -248,6 +252,7 @@ class RpmPackage(RpmData):
             elif not tags and not ntags:
                 self["signature"][key] = value
             (key, value) = self.io.read()
+        self.range_header = value
         # Read header
         (key, value) = self.io.read()
         while key != None and key != "-":
@@ -258,6 +263,7 @@ class RpmPackage(RpmData):
             elif not tags and not ntags:
                 self[key] = value
             (key, value) = self.io.read()
+        self.range_payload = value
         self.generateFileNames()
         self.header_read = 1
         return 1
