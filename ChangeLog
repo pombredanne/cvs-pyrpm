@@ -20,13 +20,19 @@
 	* pyrpm/functions.ps: - filterArchDuplicates() doesn't use "arch"
 	- do not use "hash" as var name
 	* pyrpm/package.py: - write(): remove "origsource", it is unused
+	- RpmData(): remove "modified", it is not tracked anyway
+	- remove verify(), dummy function
 	* pyrpm/resolver.py: - removed unused var
 	- do not use "str" or "file" as var
+	- remove clear()
 	* pyrpm/rpmlist.py: - NOT_INSTALLED -> self.NOT_INSTALLED
 	- _update() doesn't use "oldpackages", remove it
 	- getList() can use ".extend()", do not use "list" as var
 	* pyrpm/control.py: - do not import re, time
+	- remove clear()
 	* pyrpm/orderer.py: - fix calling RpmResolver()
+	* pyrpm/__init__.py: - set __version__ and __doc__
+	* pyrpm/hashlist.py: - do not define clear()
 
 2005-03-10  Phil Knirsch  <pknirsch@redhat.com>
 

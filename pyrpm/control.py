@@ -26,10 +26,7 @@ class _Triggers:
     """ enable search of triggers """
     """ triggers of packages can be added and removed by package """
     def __init__(self):
-        self.clear()
-
-    def clear(self):
-        self.triggers = { }
+        self.triggers = {}
 
     def append(self, name, flag, version, tprog, tscript, rpm):
         if not self.triggers.has_key(name):

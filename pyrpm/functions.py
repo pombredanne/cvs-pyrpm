@@ -18,7 +18,7 @@
 
 
 import os, os.path, tempfile, sys, string, types
-from config import *
+from config import rpmconfig
 from cpio import *
 from base import *
 
@@ -62,7 +62,7 @@ def installFile(rfi, data):
     filetype = rfi.mode & CP_IFMT
     if  filetype == CP_IFREG:
         makeDirs(rfi.filename)
-        (fd, tmpfilename) = tempfile.mkstemp(dir=os.path.dirname(rfi.filename), prefix=rfi.filename+".")
+        (fd, tmpfilename) = tempfile.mkstemp(dir=os.path.dirname(rfi.filename), prefix=rfi.filename + ".")
         if not fd:
             return 0
         if os.write(fd, data) < 0:
@@ -146,7 +146,7 @@ def createLink(src, dst):
 # Error handling functions
 def printDebug(level, msg):
     if level <= rpmconfig.debug_level:
-        sys.stdout.write("Debug: "+msg+"\n")
+        sys.stdout.write("Debug: %s\n" % msg)
         sys.stdout.flush()
     return 0
 
@@ -158,17 +158,17 @@ def printInfo(level, msg):
 
 def printWarning(level, msg):
     if level <= rpmconfig.warning_level:
-        sys.stdout.write("Warning: "+msg+"\n")
+        sys.stdout.write("Warning: %s\n" % msg)
         sys.stdout.flush()
     return 0
 
 def printError(msg):
-    sys.stderr.write("Error: "+msg+"\n")
+    sys.stderr.write("Error: %s\n" % msg)
     sys.stderr.flush()
     return 0
 
 def raiseFatal(msg):
-    raise ValueError, "Fatal: "+msg+"\n"
+    raise ValueError, "Fatal: %s\n" % msg
 
 # ----------------------------------------------------------------------------
 
@@ -178,7 +178,7 @@ def evrSplit(evr):
     p = evr.find(":") # epoch
     if p != -1:
         epoch = evr[:p]
-        i = p+1
+        i = p + 1
     else:
         epoch = "0"
     p = evr.find("-", i) # version
@@ -493,11 +493,11 @@ best match."""
     # First check is against nvra as name
     n = name
     if version != None:
-        n += "-"+version
+        n += "-" + version
     if release != None:
-        n += "-"+release
+        n += "-" + release
     if arch != None:
-        n += "."+arch
+        n += "." + arch
     # First check is complete nvra as name
     for pkg in list: 
         # If we have an epoch we need to check it
@@ -510,9 +510,9 @@ best match."""
     # Next check is against nvr as name, a as arch
     n = name
     if version != None:
-        n += "-"+version
+        n += "-" + version
     if release != None:
-        n += "-"+release
+        n += "-" + release
     for pkg in list:
         # If we have an epoch we need to check it
         if epoch != None and pkg["epoch"][0] != epoch:
@@ -524,12 +524,12 @@ best match."""
     # Next check is against nv as name, ra as version
     n = name
     if version != None:
-        n += "-"+version
+        n += "-" + version
     v = ""
     if release != None:
         v += release
     if arch != None:
-        v += "."+arch
+        v += "." + arch
     for pkg in list:
         # If we have an epoch we need to check it
         if epoch != None and pkg["epoch"][0] != epoch:
@@ -541,7 +541,7 @@ best match."""
     # Next check is against nv as name, r as version, a as arch
     n = name
     if version != None:
-        n += "-"+version
+        n += "-" + version
     for pkg in list:
         # If we have an epoch we need to check it
         if epoch != None and pkg["epoch"][0] != epoch:
@@ -555,7 +555,7 @@ best match."""
     if release != None:
         r = release
     if arch != None:
-        r += "."+arch
+        r += "." + arch
     for pkg in list:
         # If we have an epoch we need to check it
         if epoch != None and pkg["epoch"][0] != epoch:

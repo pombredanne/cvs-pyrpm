@@ -22,7 +22,7 @@
 """
 
 import string
-from hashlist import *
+from hashlist import HashList
 from rpmlist import *
 from resolver import *
 

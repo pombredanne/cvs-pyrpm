@@ -18,7 +18,7 @@
 
 
 import gzip, types, string, bsddb
-from struct import pack,unpack
+from struct import pack, unpack
 
 import package
 from base import *

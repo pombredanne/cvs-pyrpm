@@ -1,4 +1,3 @@
-#!/usr/bin/python
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
@@ -23,23 +22,20 @@ class HashList:
     """ hash list """
 
     def __init__(self):
-        self.clear()
-
-    def clear(self):
-        self.list = [ ]
-        self.hash = { }
+        self.list = []
+        self.hash = {}
 
     def __len__(self):
         return len(self.list)
 
     def __repr__(self):
         return self.list.__repr__()
-    
+
     def __getitem__(self, key):
         if isinstance(key, types.IntType):
             return (self.list[key], self.hash[self.list[key]])
         return self.hash.get(key) # return value only
-        
+
     def __setitem__(self, key, value):
         if not self.hash.has_key(key):
             self.hash[key] = value
@@ -60,7 +56,7 @@ class HashList:
 
     def has_key(self, key):
         return (self[key] != None)
-        
+
     def pop(self, idx):
         key = self.list[idx]
         self.list.pop(idx)

@@ -17,7 +17,7 @@
 # Author: Thomas Woerner, Karel Zak
 #
 
-from hashlist import *
+from hashlist import HashList
 from functions import *
 
 class RpmList:
@@ -47,7 +47,7 @@ class RpmList:
     def clear(self):
         self.list = HashList()
         self.installed = HashList()
-        self.appended = [ ]
+        self.appended = []
     # ----
 
     def __len__(self):

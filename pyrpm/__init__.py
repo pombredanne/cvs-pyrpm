@@ -16,21 +16,22 @@
 # Author: Harald Hoyer <harald@redhat.com>
 #
 
-import sys
-import os
+__version__ = "0.01"
+__doc__ = """Read and manage RPM packages."""
+
+import sys, os, locale
 
 _files = map(lambda v: v[:-3], filter(lambda v: v[-3:] == ".py" and \
                                       v != "__init__.py" and \
                                       v[0] != '.', \
                                       os.listdir(__path__[0])))
 
-import locale
 locale.setlocale(locale.LC_ALL, "C")
 _files.sort()
 locale.setlocale(locale.LC_ALL, "")
 
 for _i in _files:
-    _cmd = "from " + _i + " import *"
+    _cmd = "from %s import *" % _i
     exec _cmd
 
 del _i

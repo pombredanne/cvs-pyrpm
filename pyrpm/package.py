@@ -27,25 +27,18 @@ from io import *
 class RpmData:
     def __init__(self):
         self.data = {}
-        self.modified = None
 
     def __repr__(self):
         return self.data.__repr__()
 
     def __getitem__(self, key):
-        try:
-            return self.data[key]
-        except:
-            # XXX: try to catch wrong/misspelled keys here?
-            return None
+        return self.data.get(key)
 
     def __setitem__(self, key, value):
-        self.modified = 1
         self.data[key] = value
-        return self.data[key]
+        return value
 
     def __delitem__(self, key):
-        self.modified = 1
         del self.data[key]
 
     def has_key(self, key):
@@ -53,10 +46,6 @@ class RpmData:
 
     def keys(self):
         return self.data.keys()
-
-    def verify(self):
-        ret = 0
-        return ret
 
 
 class RpmUserCache:
@@ -142,12 +131,7 @@ class RpmPackage(RpmData):
             self.close()
         if not self.open("w"):
             return 0
-        ret = self.io.write(self)
-        return ret
-
-    def verify(self):
-        ret = RpmData.verify(self)
-        return ret
+        return self.io.write(self)
 
     def install(self, db=None, tags=None, ntags=None):
         if not self.open():

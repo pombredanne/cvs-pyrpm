@@ -83,8 +83,7 @@ RPMSENSE_KEYRING    = (1 << 26)
 RPMSENSE_PATCHES    = (1 << 27)
 RPMSENSE_CONFIG     = (1 << 28)
 
-RPMSENSE_SENSEMASK  = 15       # Mask to get senses, ie serial,
-                               # less, greater, equal.
+RPMSENSE_SENSEMASK  = 15 # Mask to get senses: serial, less, greater, equal.
 
 RPMSENSE_TRIGGER    = (RPMSENSE_TRIGGERIN | RPMSENSE_TRIGGERUN | RPMSENSE_TRIGGERPOSTUN)
 
