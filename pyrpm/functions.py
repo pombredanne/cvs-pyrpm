@@ -21,7 +21,6 @@ import os, os.path, tempfile, sys, string, types, resource
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE
 from config import rpmconfig
 from base import *
-from cpio import *
 
 
 # Collection of class indepedant helper functions

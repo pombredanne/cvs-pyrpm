@@ -21,6 +21,7 @@ import gzip, types, string, bsddb
 from struct import pack, unpack
 
 from functions import *
+from cpio import *
 import package
 
 
