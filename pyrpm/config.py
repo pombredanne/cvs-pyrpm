@@ -53,7 +53,6 @@ class RpmConfig:
             "conflictversion", "filesizes", "filemodes", "filemd5s",
             "dirindexes", "basenames", "dirnames")
         self.ignore_epoch = 0
-        self.fileconflicts = 1
         self.timer = 0
 
 # Automatically create a global rpmconfig variable.
