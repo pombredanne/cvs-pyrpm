@@ -231,7 +231,7 @@ class RpmController:
 
     def __preprocess(self):
         if not self.ignorearch:
-            if rpmconfig.machine not in possible_archs:
+            if not possible_archs.has_key(rpmconfig.machine):
                 raiseFatal("Unknow rpmconfig.machine architecture %s" % rpmconfig.machine)
             if self.operation == RpmResolver.OP_UPDATE or self.operation == RpmResolver.OP_FRESHEN:
                 filterArchList(self.rpms)

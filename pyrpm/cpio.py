@@ -17,7 +17,7 @@
 # Author: Phil Knirsch, Paul Nasrat, Florian La Roche, Karel Zak
 #
 
-import os.path
+#import os.path
 
 # We have started building our own macros, but could also change over to
 # use the ones provided from "import stat" instead:
@@ -87,16 +87,19 @@ class CPIOFile:
             int(data[94:102], 16), data[102:110]]
 
         size = filedata[CP_FDNAMESIZE]
-        filename = self.fd.read(size)
-        filename = "/" + os.path.normpath("./" + filename.rstrip("\x00"))
-        fsize = 110 + size
-        self.fd.read((4 - (fsize % 4)) % 4)
-
+        filename = self.fd.read(size).rstrip("\x00")
+        self.fd.read((4 - ((110 + size) % 4)) % 4)
         # Detect if we're at the end of the archive
-        if filename == "/TRAILER!!!":
+        if filename == "TRAILER!!!":
             return [None, None]
+        if filename.startswith("./"):
+            filename = filename[1:]
+        if not filename.startswith("/"):
+            filename = "%s%s" % ("/", filename)
+        if filename.endswith("/") and len(filename) > 1:
+            filename = filename[:-1]
+        #filename = "/" + os.path.normpath("./" + filename)
         return [filename, filedata]
-        
 
     def _read_cpio_headers(self):
         while 1:

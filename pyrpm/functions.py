@@ -393,7 +393,7 @@ def filterArchCompat(list, arch=None):
         i = 0
         while i < len(list):
             pkg = list[i]
-            if pkg["arch"] not in possible_archs:
+            if not possible_archs.has_key(pkg["arch"]):
                 printWarning(0, "%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
                 list.pop(i)
                 continue

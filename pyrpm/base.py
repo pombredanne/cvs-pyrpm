@@ -52,7 +52,7 @@ RPM_ARGSTRING = 12
 
 # RPMSENSEFLAGS
 RPMSENSE_ANY        = 0
-RPMSENSE_SERIAL     = (1 << 0)     # legacy
+RPMSENSE_SERIAL     = (1 << 0)  # legacy
 RPMSENSE_LESS       = (1 << 1)
 RPMSENSE_GREATER    = (1 << 2)
 RPMSENSE_EQUAL      = (1 << 3)
@@ -108,7 +108,7 @@ RPMFILE_DOC         = (1 <<  1)    # from %%doc
 RPMFILE_ICON        = (1 <<  2)    # from %%donotuse.
 RPMFILE_MISSINGOK   = (1 <<  3)    # from %%config(missingok)
 RPMFILE_NOREPLACE   = (1 <<  4)    # from %%config(noreplace)
-RPMFILE_SPECFILE    = (1 <<  5)    # @todo (unnecessary) marks 1st file in srpm.
+RPMFILE_SPECFILE    = (1 <<  5)    # .spec file in source rpm
 RPMFILE_GHOST       = (1 <<  6)    # from %%ghost
 RPMFILE_LICENSE     = (1 <<  7)    # from %%license
 RPMFILE_README      = (1 <<  8)    # from %%readme
@@ -194,18 +194,17 @@ rpmtag = {
     "optflags": (1122, RPM_STRING, None, 4),
     # %pubkey in .spec files
     "pubkeys": (266, RPM_STRING_ARRAY, None, 4),
-    # signature.md5 of the SRPM when building both the SRPM and binary rpms
-    "sourcepkgid": (1146, RPM_BIN, 16, 4),
-    "immutable": (63, RPM_BIN, 16, 0),  # XXX
+    "sourcepkgid": (1146, RPM_BIN, 16, 4), # md5 from srpm (header+payload)
+    "immutable": (63, RPM_BIN, 16, 0),
     # less important information:
     # time of rpm build
     "buildtime": (1006, RPM_INT32, 1, 0),
     # hostname where rpm was built
     "buildhost": (1007, RPM_STRING, None, 0),
     "cookie": (1094, RPM_STRING, None, 0), # build host and time
-    # ignored now, succ is comps.xml
-    # XXX code allows hardcoded exception to also have type RPM_STRING
-    #     for RPMTAG_GROUP
+    # ignored now, successor is comps.xml
+    # Code allows hardcoded exception to also have type RPM_STRING
+    # for RPMTAG_GROUP==1016.
     "group": (1016, RPM_I18NSTRING, None, 0),
     "size": (1009, RPM_INT32, 1, 0),                # sum of all file sizes
     "distribution": (1010, RPM_STRING, None, 0),
@@ -213,7 +212,7 @@ rpmtag = {
     "packager": (1015, RPM_STRING, None, 0),
     "os": (1021, RPM_STRING, None, 0),              # always "linux"
     "payloadformat": (1124, RPM_STRING, None, 0),   # "cpio"
-    "payloadcompressor": (1125, RPM_STRING, None, 0), # "gzip" or "bzip2"
+    "payloadcompressor": (1125, RPM_STRING, None, 0),# "gzip" or "bzip2"
     "payloadflags": (1126, RPM_STRING, None, 0),    # "9"
     "rhnplatform": (1131, RPM_STRING, None, 4),     # == arch
     "platform": (1132, RPM_STRING, None, 0),
@@ -227,27 +226,27 @@ rpmtag = {
     "exclusiveos": (1062, RPM_STRING_ARRAY, None, 2), # ['Linux'] or ['linux']
 
     # information about files
-    "filesizes": (1028, RPM_INT32, None, 0),
-    "filemodes": (1030, RPM_INT16, None, 0),
-    "filerdevs": (1033, RPM_INT16, None, 0),
-    "filemtimes": (1034, RPM_INT32, None, 0),
-    "filemd5s": (1035, RPM_STRING_ARRAY, None, 0),
-    "filelinktos": (1036, RPM_STRING_ARRAY, None, 0),
-    "fileflags": (1037, RPM_INT32, None, 0),
+    "dirindexes": (1116, RPM_INT32, None, 0),
+    "dirnames": (1118, RPM_STRING_ARRAY, None, 0),
+    "basenames": (1117, RPM_STRING_ARRAY, None, 0),
     "fileusername": (1039, RPM_STRING_ARRAY, None, 0),
     "filegroupname": (1040, RPM_STRING_ARRAY, None, 0),
-    "fileverifyflags": (1045, RPM_INT32, None, 0),
+    "filemodes": (1030, RPM_INT16, None, 0),
+    "filemtimes": (1034, RPM_INT32, None, 0),
     "filedevices": (1095, RPM_INT32, None, 0),
     "fileinodes": (1096, RPM_INT32, None, 0),
-    "filelangs": (1097, RPM_STRING_ARRAY, None, 0),
-    "dirindexes": (1116, RPM_INT32, None, 0),
-    "basenames": (1117, RPM_STRING_ARRAY, None, 0),
-    "dirnames": (1118, RPM_STRING_ARRAY, None, 0),
-    "filecolors": (1140, RPM_INT32, None, 0),
+    "filesizes": (1028, RPM_INT32, None, 0),
+    "filemd5s": (1035, RPM_STRING_ARRAY, None, 0),
+    "filerdevs": (1033, RPM_INT16, None, 0),
+    "filelinktos": (1036, RPM_STRING_ARRAY, None, 0),
+    "fileflags": (1037, RPM_INT32, None, 0),
+    "fileverifyflags": (1045, RPM_INT32, None, 0),
     "fileclass": (1141, RPM_INT32, None, 0),
-    "classdict": (1142, RPM_STRING_ARRAY, None, 0),
+    "filelangs": (1097, RPM_STRING_ARRAY, None, 0),
+    "filecolors": (1140, RPM_INT32, None, 0),
     "filedependsx": (1143, RPM_INT32, None, 0),
     "filedependsn": (1144, RPM_INT32, None, 0),
+    "classdict": (1142, RPM_STRING_ARRAY, None, 0),
     "dependsdict": (1145, RPM_INT32, None, 0),
 
     # tags not in Fedora Core development trees anymore:
@@ -263,8 +262,7 @@ rpmtag = {
     "triggerin": (1100, RPM_STRING, None, 5),
     "triggerun": (1101, RPM_STRING, None, 5),
     "triggerpostun": (1102, RPM_STRING, None, 5),
-    # Stored only in /var/lib/rpm/Packages
-    "archivesize": (1046, RPM_INT32, 1, 1)
+    "archivesize": (1046, RPM_INT32, 1, 1) # only in /var/lib/rpm/Packages
 }
 rpmtagname = {}
 # Add a reverse mapping for all tags and a new tag -> name mapping
@@ -286,7 +284,7 @@ rpmsigtag = {
     # size of gpg/dsaheader sums differ between 64/65(contains '\n')
     "dsaheader": (267, RPM_BIN, None, 0),
     "gpg": (1005, RPM_BIN, None, 0),
-    "header_signatures": (62, RPM_BIN, 16, 0),   # XXX
+    "header_signatures": (62, RPM_BIN, 16, 0),
     "payloadsize": (1007, RPM_INT32, 1, 0),
     "size_in_sig": (1000, RPM_INT32, 1, 0),
     "sha1header": (269, RPM_STRING, None, 0),
@@ -312,13 +310,13 @@ for key in ["md5"]:
 del key
 
 # check arch names against this list
-# XXX: make this a hash?
-possible_archs = ['noarch', 'i386', 'i486', 'i586', 'i686', 'athlon',
-    'pentium3', 'pentium4', 'x86_64', 'ia32e', 'ia64', 'alpha', 'axp',
-    'sparc', 'sparc64', 's390', 's390x', 'ia64',
-    'ppc', 'ppc64', 'ppc64iseries', 'ppc64pseries', 'ppcpseries', 'ppciseries',
-    'ppcmac', 'ppc8260', 'm68k',
-    'arm', 'armv4l', 'mips', 'mipseb', 'mipsel', 'hppa', 'sh']
+possible_archs = {'noarch':1, 'i386':1, 'i486':1, 'i586':1, 'i686':1,
+    'athlon':1, 'pentium3':1, 'pentium4':1, 'x86_64':1, 'ia32e':1, 'ia64':1,
+    'alpha':1, 'axp':1, 'sparc':1, 'sparc64':1, 's390':1, 's390x':1, 'ia64':1,
+    'ppc':1, 'ppc64':1, 'ppc64iseries':1, 'ppc64pseries':1, 'ppcpseries':1,
+    'ppciseries':1, 'ppcmac':1, 'ppc8260':1, 'm68k':1,
+    'arm':1, 'armv4l':1, 'mips':1, 'mipseb':1, 'mipsel':1, 'hppa':1, 'sh':1 }
+
 
 arch_compats = {
 "alphaev67" : ("alphaev6", "alphapca56", "alphaev56", "alphaev5", "alpha",
