@@ -363,25 +363,26 @@ def depString((name, flag, version)):
         return name
     return "%s %s %s" % (name, depOperatorString(flag), version)
 
-def filterArchList(list, arch=None):
+
+def filterArchCompat(list, arch=None):
     # stage 1: filter packages which are not in compat arch
     if arch != None and arch != "noarch":
-        error = 0
         i = 0
         while i < len(list):
             pkg = list[i]
             if pkg["arch"] not in possible_archs:
-                error = 1
-                printError("%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
+                printWarning(0, "%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
+                list.pop(i)
+                continue
             if pkg["arch"] != arch and pkg["arch"] not in arch_compats[arch]:
                 printWarning(0, "%s: Architecture not compatible with machine %s" % (pkg.source, arch))
                 list.pop(i)
                 continue
             i += 1
-        if error != 0:
-            return -1
+    return 1
 
-    # stage 2: filert duplicates: order by name.arch
+def filterArchDuplicates(list, arch=None):
+    # stage 1: filert duplicates: order by name.arch
     hash = { }
     i = 0
     while i < len(list):
@@ -406,7 +407,7 @@ def filterArchList(list, arch=None):
                 i += 1
     del hash
 
-    # stage 3: filter duplicates: order by name
+    # stage 2: filter duplicates: order by name
     hash = { }
     i = 0
     while i < len(list):
@@ -446,6 +447,10 @@ def filterArchList(list, arch=None):
 
     return 1
 
+def filterArchList(list, arch=None):
+    filterArchCompat(list, arch)
+    filterArchDuplicates(list, arch)
+
 def normalizeList(list):
     """ normalize list """
     if len(list) < 2:
@@ -483,7 +488,9 @@ def listRpmDir(dirname):
 
 def findPkgByName(pkgname, list):
     """Find a package by name in a given list. Name can contain version,
-release and arch"""
+release and arch. Returns a list of all matching packages, starting with
+best match."""
+    pkglist = []
     (epoch, name, version, release, arch) = envraSplit(pkgname)
     # First check is against nvra as name
     n = name
@@ -493,6 +500,7 @@ release and arch"""
         n += "-"+release
     if arch != None:
         n += "."+arch
+    # First check is complete nvra as name
     for pkg in list: 
         # If we have an epoch we need to check it
         if epoch != None and pkg["epoch"][0] != epoch:
@@ -500,7 +508,7 @@ release and arch"""
         nevra = pkg.getNEVRA()
         if pkg["name"] == n:
             printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            return pkg
+            pkglist.append(pkg)
     # Next check is against nvr as name, a as arch
     n = name
     if version != None:
@@ -514,7 +522,7 @@ release and arch"""
         nevra = pkg.getNEVRA()
         if pkg["name"] == n and pkg["arch"] == arch:
             printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            return pkg
+            pkglist.append(pkg)
     # Next check is against nv as name, ra as version
     n = name
     if version != None:
@@ -531,7 +539,7 @@ release and arch"""
         nevra = pkg.getNEVRA()
         if pkg["name"] == n and pkg["version"] == v:
             printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            return pkg
+            pkglist.append(pkg)
     # Next check is against nv as name, r as version, a as arch
     n = name
     if version != None:
@@ -543,13 +551,13 @@ release and arch"""
         nevra = pkg.getNEVRA()
         if pkg["name"] == n and pkg["version"] == release and pkg["arch"] == arch:
             printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            return pkg
+            pkglist.append(pkg)
     # Next check is against n as name, v as version, ra as release
     r = ""
     if release != None:
         r = release
     if arch != None:
-        r += "-"+arch
+        r += "."+arch
     for pkg in list:
         # If we have an epoch we need to check it
         if epoch != None and pkg["epoch"][0] != epoch:
@@ -557,7 +565,7 @@ release and arch"""
         nevra = pkg.getNEVRA()
         if pkg["name"] == name and pkg["version"] == version and pkg["release"] == r:
             printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            return pkg
+            pkglist.append(pkg)
     # Next check is against n as name, v as version, r as release, a as arch
     for pkg in list:
         # If we have an epoch we need to check it
@@ -566,8 +574,8 @@ release and arch"""
         nevra = pkg.getNEVRA()
         if pkg["name"] == name and pkg["version"] == version and pkg["release"] == release and pkg["arch"] == arch:
             printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            return pkg
+            pkglist.append(pkg)
     # No matching package found
-    return None
+    return pkglist
 
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -19,7 +19,7 @@
 from config import *
 
 class RpmFileInfo:
-    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, md5sum, flags):
+    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, md5sum, flags, filecolor):
         self.filename = filename
         self.inode = inode
         self.mode = mode
@@ -31,6 +31,7 @@ class RpmFileInfo:
         self.rdev = rdev
         self.md5sum = md5sum
         self.flags = flags
+        self.filecolor = filecolor
 
 # RPM Constants - based from rpmlib.h and elsewhere
 

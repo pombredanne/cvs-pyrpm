@@ -41,6 +41,7 @@ class RpmConfig:
         self.noorder = 0
         self.noscripts = 0
         self.notriggers = 0
+        self.resolvertags = ("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filemd5s", "dirindexes", "basenames", "dirnames")
 
 # Automatically create a global rpmconfig variable
 rpmconfig = RpmConfig()

@@ -392,17 +392,40 @@ class RpmPackage(RpmData):
             i = self["filenames"].index(filename)
         except:
             return None
-        rpminode = self["fileinodes"][i]
-        rpmmode = self["filemodes"][i]
-        rpmuid = self.rpmusercache.getUID(self["fileusername"][i])
-        rpmgid = self.rpmusercache.getGID(self["filegroupname"][i])
-        rpmmtime = self["filemtimes"][i]
-        rpmfilesize = self["filesizes"][i]
-        rpmdev = self["filedevices"][i]
-        rpmrdev = self["filerdevs"][i]
-        rpmmd5sum = self["filemd5s"][i]
-        rpmflags = self["fileflags"][i]
-        rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum, rpmflags)
+        rpminode = None
+        rpmmode = None
+        rpmuid = None
+        rpmgid = None
+        rpmmtime = None
+        rpmfilesize = None
+        rpmdev = None
+        rpmrdev = None
+        rpmmd5sum = None
+        rpmflags = None
+        rpmfilecolor = None
+        if self.has_key("fileinodes"):
+            rpminode = self["fileinodes"][i]
+        if self.has_key("filemodes"):
+            rpmmode = self["filemodes"][i]
+        if self.has_key("fileusername"):
+            rpmuid = self.rpmusercache.getUID(self["fileusername"][i])
+        if self.has_key("filegroupname"):
+            rpmgid = self.rpmusercache.getGID(self["filegroupname"][i])
+        if self.has_key("filemtimes"):
+            rpmmtime = self["filemtimes"][i]
+        if self.has_key("filesizes"):
+            rpmfilesize = self["filesizes"][i]
+        if self.has_key("filedevices"):
+            rpmdev = self["filedevices"][i]
+        if self.has_key("filerdevs"):
+            rpmrdev = self["filerdevs"][i]
+        if self.has_key("filemd5s"):
+            rpmmd5sum = self["filemd5s"][i]
+        if self.has_key("fileflags"):
+            rpmflags = self["fileflags"][i]
+        if self.has_key("filecolors"):
+            rpmflags = self["filecolors"][i]
+        rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum, rpmflags, rpmfilecolor)
         return rfi
 
     def getEVR(self):

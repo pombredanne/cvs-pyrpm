@@ -45,7 +45,37 @@ def usage():
     print "    [--nodeps] [--nodigest] [--nosignature]"
     print "    [--noorder] [--noscripts] [--notriggers]"
 
+def runDepResolution(resolver, unresolved, skiplist):
+    iter = 1
+    while len(unresolved) > 0:
+        print "Dependency iteration "+str(iter)
+        iter += 1
+        respkglist = []
+        for pkg, deplist in unresolved:
+            printInfo(1, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
+            for dep in deplist:
+                print "\t"+depString(dep)
+                for repo in repos:
+                    res = repo.searchDependency(dep)
+                    for pkg in res:
+                        respkglist.append(pkg)
+        normalizeList(respkglist)
+        filterArchList(respkglist)
+        if len(respkglist) == 0:
+            for pkg, deplist in unresolved:
+                printInfo(1, "Unresolved dependencies for "+pkg.getNEVRA()+"\n")
+                for dep in deplist:
+                    printInfo(1, "\t" + depString(dep)+"\n")
+            sys.exit(1)
+        for pkg in respkglist:
+            if not pkg in skiplist:
+                resolver.append(pkg)
+        unresolved = resolver.getUnresolvedDependencies()
 
+
+#
+# Main program
+#
 try:
     opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:", ["install", "upgrade", "freshen", "erase", "help", "verbose", "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=", "repo=", "force", "ignoresize", "ignorearch", "justdb", "nodeps", "nodigest", "nosignature", "noorder", "noscripts", "notriggers", "oldpackage", "test"])
 except getopt.error, e:
@@ -100,9 +130,11 @@ for (opt, val) in opts:
         resolver = RpmResolver([], RpmResolver.OP_INSTALL)
         filenames = os.listdir(val)
         for f in filenames:
+            if not f.endswith(".rpm") or not os.path.isfile(val+"/"+f):
+                continue
             pkg = RpmPackage(val+"/"+f)
             pkg.open()
-            pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
+            pkg.read(tags=rpmconfig.resolvertags)
             pkg.close()
             ret = resolver.append(pkg)
         repos.append(resolver)
@@ -158,58 +190,45 @@ if rpmconfig.buildroot != None:
     pydb = RpmPyDB(rpmconfig.buildroot+rpmconfig.dbpath)
 else:
     pydb = RpmPyDB(rpmconfig.dbpath)
-installed = pydb.getPkgList().values()
+installed = pydb.getPkgList()
 if installed == None:
     installed = []
-
+else:
+    installed = installed.values()
 del pydb
-opresolver = RpmResolver(installed, rpmconfig.operation)
 
+opresolver = RpmResolver(installed, rpmconfig.operation)
 for f in args:
     if os.path.isfile(f) and f.endswith(".rpm"):
         pkg = RpmPackage(f)
         pkg.open()
-        pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
+        pkg.read(tags=rpmconfig.resolvertags)
         pkg.close()
     else:
+        pkgs = []
         for repo in repos:
-            pkg = findPkgByName(f, repo.appended)
-            if pkg != None:
-                break
-        if pkg == None:
+            pkgs.extend(findPkgByName(f, repo.appended))
+        filterArchList(pkgs, rpmconfig.machine)
+        if len(pkgs) == 0:
             printError("Couldn't find package %s" % f)
             sys.exit(1)
-    ret = opresolver.append(pkg)
+        pkg = pkgs[0]
+    if rpmconfig.operation == RpmResolver.OP_UPDATE or rpmconfig.operation == RpmResolver.OP_FRESHEN:
+        name = pkg["name"]
+        for ipkg in installed:
+            if ipkg["name"] == name:
+                ret = opresolver.append(pkg)
+                break
+    else:
+        ret = opresolver.append(pkg)
 
 unresolved = opresolver.getUnresolvedDependencies()
-iter = 1
-while len(unresolved) > 0:
-    print "Dependency iteration "+str(iter)
-    iter += 1
-    respkglist = []
-    for pkg, deplist in unresolved:
-        printInfo(1, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
-        for dep in deplist:
-            for repo in repos:
-                res = repo.searchDependency(dep)
-                for pkg in res:
-                    respkglist.append(pkg)
-    normalizeList(respkglist)
-    filterArchList(respkglist)
-    if len(respkglist) == 0:
-        for pkg, deplist in unresolved:
-            printInfo(1, "Unresolved dependencies for "+pkg.getNEVRA()+"\n")
-            for dep in deplist:
-                printInfo(1, "\t" + depString(dep)+"\n")
-        sys.exit(1)
-    for pkg in respkglist:
-        opresolver.append(pkg)
-    unresolved = opresolver.getUnresolvedDependencies()
-
+runDepResolution(opresolver, unresolved, [])
 appended = opresolver.appended
 del opresolver
 del repos
+
 control = RpmController()
-control.handlePkgs(appended, rpmconfig.operation, rpmconfig.dbpath, rpmconfig.buildroot)
+control.handlePkgs(appended, RpmResolver.OP_UPDATE, rpmconfig.dbpath, rpmconfig.buildroot)
 
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -88,8 +88,8 @@ class RpmController:
         for pkg in pkglist:
             self.rpms.append(pkg)
         if len(self.rpms) == 0:
-            printInfo(0, "Nothing to do.\n")
-            sys.exit(0)
+            printInfo(2, "Nothing to do.\n")
+            return 1
         if not self.run():
             return 0
         return 1
@@ -152,8 +152,10 @@ class RpmController:
                 (rpid, status) = os.waitpid(pid, 0)
                 if status != 0:
                     sys.exit(1)
+                for (op, pkg) in subop:
+                    pkg.close()
                 operations = operations[100:]
-                continue
+                subop = operations[:100]
             else:
                 del operations
                 if self.buildroot:
@@ -191,11 +193,12 @@ class RpmController:
                     pkg.close()
                     del pkg
                     printInfo(0, "\n")
-            return 1
+                sys.exit(0)
+        return 1
 
     def appendFile(self, file):
         pkg = package.RpmPackage(file)
-        pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
+        pkg.read(tags=rpmconfig.resolvertags)
         self.rpms.append(pkg)
         pkg.close()
         return 1
@@ -204,10 +207,10 @@ class RpmController:
         if self.pydb == None:
             if not self.__readDB():
                 return 0
-        pkg = findPkgByName(file, self.installed)
-        if pkg == None:
+        pkgs = findPkgByName(file, self.installed)
+        if len(pkgs) == 0:
             return 0
-        self.rpms.append(pkg)
+        self.rpms.append(pkgs[0])
         return 1
 
     def __readDB(self, db="/var/lib/pyrpm"):
@@ -220,19 +223,28 @@ class RpmController:
             self.pydb = io.RpmPyDB(self.buildroot+self.db)
         else:
             self.pydb = io.RpmPyDB(self.db)
-        self.installed = self.pydb.getPkgList().values()
+        if self.pydb == None:
+            return 0
+        self.installed = self.pydb.getPkgList()
         if self.installed == None:
             self.installed = []
-            return 0
+        else:
+           self.installed = self.installed.values()
         return 1
 
     def __preprocess(self):
         if not self.ignorearch:
             if rpmconfig.machine not in possible_archs:
                 raiseFatal("Unknow rpmconfig.machine architecture %s" % rpmconfig.machine)
-            filterArchList(self.rpms)
+            if self.operation == RpmResolver.OP_UPDATE or self.operation == RpmResolver.OP_FRESHEN:
+                filterArchList(self.rpms)
+            else:
+                filterArchCompat(self.rpms)
         else:
-            filterArchList(self.rpms, rpmconfig.machine)
+            if self.operation == RpmResolver.OP_UPDATE or self.operation == RpmResolver.OP_FRESHEN:
+                filterArchList(self.rpms, rpmconfig.machine)
+            else:
+                filterArchCompat(self.rpms, rpmconfig.machine)
         return 1
 
     def __addPkgToDB(self, pkg):

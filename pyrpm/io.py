@@ -723,10 +723,6 @@ class RpmPyDB:
             except:
                 printError("%s: Couldn't open PyRPM headers" % self.source)
                 return 0
-        if not os.path.isfile(self.source+"/filenames"):
-            fd = open(self.source+"/filenames", "w+")
-            fd.write("")
-            fd.close()
         return 1
 
 
