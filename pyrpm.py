@@ -87,6 +87,24 @@ class ReadRpm:
         self.strict = 1 # XXX find some way to switch back to non-strict mode
         # for older rpm packages
 
+    def _buildFileNames(self):
+        """Returns (dir, filename, linksto, flags)"""
+        if not self.hdr:
+                return None
+        hdr = self.hdr
+        dirnames = [ hdr[getTag("dirnames")][index] 
+                     for index in hdr[getTag("dirindexes")]
+                   ]
+        return zip (dirnames,
+                    hdr[getTag("basenames")], 
+                    hdr[getTag("filelinktos")],
+                    hdr[getTag("filemodes")],
+                    hdr[getTag("fileusername")],
+                    hdr[getTag("filegroupname")],
+                    hdr[getTag("filemtimes")],
+                    hdr[getTag("fileflags")]
+                )
+
     def raiseErr(self, err):
         raise ValueError, "%s: %s" % (self.filename, err)
 
@@ -357,6 +375,9 @@ class ReadRpm:
         return self.hdr.__repr__()
 
     def __getitem__(self, key):
+        if key == "RPMTAG_FILENAMES" or key == "filenames":
+            fi = self._buildFileNames()
+            return [ "%s%s" % (file[0],file[1]) for file in fi]
         return self.hdr[getTag(key)]
 
     def getItem(self, tag):
