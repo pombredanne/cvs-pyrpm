@@ -150,8 +150,10 @@ class CPIOFile:
     def __init__(self, fd):
         self.fd = fd                    # filedescriptor
         self.lastfilesize = 0
+        self.readsize = 0
 
     def getNextEntry(self):
+        self.readsize = 0
         # Do padding if necessary for nexty entry
         self.fd.read((4 - (self.lastfilesize % 4)) % 4)
         # The cpio header contains 8 byte hex numbers with the following
@@ -181,8 +183,20 @@ class CPIOFile:
         return (filename, self.lastfilesize)
 
     def read(self, size):
+        if size > self.lastfilesize - self.readsize:
+            size = self.lastfilesize - self.readsize
+        self.readsize += size
         return self.fd.read(size)
 
+    def skipToNextFile(self):
+        size = self.lastfilesize - self.readsize
+        data = "1"
+        while size > 0 and data:
+            data = self.read(65536)
+            if data:
+                size -= len(data)
+        if size > 0:
+            raiseFatal("Unable to read from CPIO archive.")
 
 class RpmIO:
     """'Virtual' IO Class for RPM packages and data"""

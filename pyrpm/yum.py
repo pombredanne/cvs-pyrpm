@@ -93,7 +93,7 @@ class RpmYum:
         for pkg in self.pkgs:
             if self.command in ("update", "upgrade", "groupupdate", "groupupgrade"):
                 name = pkg["name"]
-                for ipkg in installed:
+                for ipkg in self.installed:
                     if ipkg["name"] == name:
                         ret = self.opresolver.append(pkg)
                         break
@@ -108,8 +108,6 @@ class RpmYum:
                     s = self.opresolver.searchDependency(u)
                     if len(s) > 0:
                         ret = self.opresolver.append(pkg)
-                        if ret > 0:
-                            self.opresolver.doObsoletes()
         self.__runDepResolution()
 
     def __runDepResolution(self):
@@ -120,7 +118,7 @@ class RpmYum:
         while len(unresolved) > 0:
             printInfo(1, "Dependency iteration " + str(iter) + "\n")
             iter += 1
-            respkglist = [ ]
+            unresolved_deps = 1
             for pkg in unresolved.keys():
                 printInfo(1, "Resolving dependencies for %s\n" % pkg.getNEVRA())
                 found = 0
@@ -131,45 +129,34 @@ class RpmYum:
                             if upkg in self.erase_list:
                                 continue
                             ret = self.opresolver.append(upkg)
-                            self.opresolver.doObsoletes()
                             if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
                                 found = 1
-                                respkglist.append(upkg)
-                                break
-                        if found != 0:
-                            break
+                                unresolved_deps = 0
                 if found == 0:
                     tmplist = []
                     for repo in self.repos:
                         tmplist.extend(findPkgByName(pkg["name"], repo.appended))
-                    while len(tmplist) > 0 and tmplist[0]["arch"] != pkg["arch"]:
-                        tmplist.pop(0)
-                    while len(tmplist) > 0 and tmplist[0].getNEVRA() == pkg.getNEVRA():
-                        tmplist.pop(0)
-                    while len(tmplist) > 0 and tmplist[0] in self.erase_list:
-                        tmplist.pop(0)
-                    if len(tmplist) == 0:
+                    for upkg in tmplist:
+                        res = self.opresolver.append(upkg)
+                        if res > 0:
+                            found = 1
+                            unresolved_deps = 0
+                    if found == 0:
                         if self.autoerase:
                             printWarning(1, "Autoerasing package %s due to missing update package." % pkg.getNEVRA())
-                            ret = self.opresolver.append(genObsoletePkg(pkg))
+                            ret = self.opresolver.append(self.__genObsoletePkg(pkg))
                             if ret > 0:
-                                self.opresolver.doObsoletes()
                                 self.erase_list.append(pkg)
                         else:
                             printWarning(0, "Couldn't find update for package %s" \
                                 % pkg.getNEVRA())
                             sys.exit(1)
-                    else:
-                        self.opresolver.append(tmplist[0])
-                        self.opresolver.doObsoletes()
-                        respkglist.append(tmplist[0])
-            if len(respkglist) == 0:
+            if unresolved_deps:
                 for (pkg, deplist) in unresolved:
                     if self.autoerase:
                         printWarning(1, "Autoerasing package %s due to unresolved symbols." % pkg.getNEVRA())
-                        ret = self.opresolver.append(genObsoletePkg(pkg))
+                        ret = self.opresolver.append(self.__genObsoletePkg(pkg))
                         if ret > 0:
-                            self.opresolver.doObsoletes()
                             self.erase_list.append(pkg)
                     else:
                         printInfo(1, "Unresolved dependencies for "+pkg.getNEVRA()+"\n")
@@ -181,16 +168,15 @@ class RpmYum:
             if not self.autoerase:
                 continue
             conflicts = self.opresolver.getConflicts()
-            for pkg1 in conflicts:
+            for pkg1 in conflicts.keys():
                 for (c, pkg2) in conflicts[pkg1]:
                     printInfo(1, "Resolving conflicts for %s:%s\n" % (pkg1.getNEVRA(), pkg2.getNEVRA()))
-                    if pkg1 in installed:
+                    if pkg1 in self.installed:
                         pkg = pkg1
                     else:
                         pkg = pkg2
-                    ret = self.opresolver.append(genObsoletePkg(pkg))
+                    ret = self.opresolver.append(self.__genObsoletePkg(pkg))
                     if ret > 0:
-                        self.opresolver.doObsoletes()
                         self.erase_list.append(pkg)
             unresolved = self.opresolver.getUnresolvedDependencies()
 

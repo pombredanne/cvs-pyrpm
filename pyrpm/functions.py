@@ -39,7 +39,6 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
         args = prog
     else:
         args = [prog]
-
     if not force and args == ["/sbin/ldconfig"] and script == None:
         if rpmconfig.delayldconfig == 1:
             rpmconfig.ldconfig += 1
@@ -48,7 +47,6 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
     elif rpmconfig.delayldconfig:
         rpmconfig.delayldconfig = 0
         runScript("/sbin/ldconfig", force=1)
-
     if script != None:
         (fd, tmpfilename) = mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
         if fd == None:
@@ -64,7 +62,6 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
             args.append(arg1)
         if arg2 != None:
             args.append(arg2)
-
     (rfd, wfd) = os.pipe()
     pid = os.fork()
     if pid == 0:
@@ -117,11 +114,7 @@ def installFile(rfi, infd, size):
             return 0
         data = "1"
         while size > 0 and data:
-            if size > 65536:
-                readlen = 65536
-            else:
-                readlen = size
-            data = infd.read(readlen)
+            data = infd.read(65536)
             if data:
                 size -= len(data)
                 if os.write(fd, data) < 0:

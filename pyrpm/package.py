@@ -342,6 +342,7 @@ class RpmPackage(RpmData):
                             if not self.__handleHardlinks(rfi):
                                 return 0
                 else:
+                    cpio.skipToNextFile()
                     self.__removeHardlinks(rfi)
             (filename, cpio, filesize) = self.io.read()
         if nfiles == 0:
