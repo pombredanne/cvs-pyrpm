@@ -245,7 +245,7 @@ def stringCompare(str1, str2):
 
 # internal EVR compare, uses stringCompare to compare epochs, versions and
 # release versions
-def _evrCompare(e1, e2):
+def labelCompare(e1, e2):
     if e2[2] == "": # no release
         e1 = (e1[0], e1[1], "")
 
@@ -264,7 +264,7 @@ def evrCompare(evr1, comp, evr2):
     res = -1
     e1 = evrSplit(evr1)
     e2 = evrSplit(evr2)
-    r = _evrCompare(e1, e2)
+    r = labelCompare(e1, e2)
     if r == -1:
         if comp & RPMSENSE_LESS:
             res = 1
