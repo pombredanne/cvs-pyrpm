@@ -18,7 +18,8 @@
 
 class RpmConfig:
     def __init__(self):
-        pass
+        self.debug_level = 0
+        self.verbose_level = 0
 
 # Automatically create a global rpmconfig variable
 rpmconfig = RpmConfig()

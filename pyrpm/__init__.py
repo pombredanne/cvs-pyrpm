@@ -24,5 +24,8 @@ from config import *
 from control import *
 from io import *
 from package import *
+from resolver import *
+from hashlist import *
+from rpmlist import *
 
 # vim:ts=4:sw=4:showmatch:expandtab
