@@ -416,10 +416,13 @@ def stringCompare(str1, str2):
 def labelCompare(e1, e2):
     if e2[2] == "": # no release
         e1 = (e1[0], e1[1], "")
-
+    elif e1[2] == "": # no release
+        e2 = (e2[0], e2[1], "")
     r = stringCompare(e1[0], e2[0])
-    if r == 0: r = stringCompare(e1[1], e2[1])
-    if r == 0: r = stringCompare(e1[2], e2[2])
+    if r == 0:
+        r = stringCompare(e1[1], e2[1])
+    if r == 0:
+        r = stringCompare(e1[2], e2[2])
     return r
 
 # compares two EVR's with comparator
@@ -452,6 +455,22 @@ def evrCompare(evr1, comp, evr2):
 def pkgCompare(p1, p2):
     return labelCompare((p1.getEpoch(), p1["version"], p1["release"]),
                         (p2.getEpoch(), p2["version"], p2["release"]))
+
+def rangeCompare(flag1, evr1, flag2, evr2):
+    sense = labelCompare(evr1, evr2)
+    result = 0
+    if sense < 0 and  \
+           (flag1 & RPMSENSE_GREATER or flag2 & RPMSENSE_LESS):
+        result = 1
+    elif sense > 0 and \
+             (flag1 & RPMSENSE_LESS or flag2 & RPMSENSE_GREATER):
+        result = 1
+    elif sense == 0 and \
+             ((flag1 & RPMSENSE_EQUAL and flag2 & RPMSENSE_EQUAL) or \
+              (flag1 & RPMSENSE_LESS and flag2 & RPMSENSE_LESS) or \
+              (flag1 & RPMSENSE_GREATER and flag2 & RPMSENSE_GREATER)):
+        result = 1
+    return result
 
 def depOperatorString(flag):
     """ generate readable operator """
