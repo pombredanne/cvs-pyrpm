@@ -474,11 +474,10 @@ class RpmPackage(RpmData):
         # Read header
         (key, value) = io.read()
         while key != None and key != "-":
-            print key
             (key, value) = io.read()
             self[key] = value
         self.parseFilelist()
-        #self.generateHardLinkList()
+        self.generateHardLinkList()
         return 1
 
     def parseFilelist(self):
