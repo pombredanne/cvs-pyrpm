@@ -1,0 +1,30 @@
+#!/bin/sh
+
+exit 1
+
+TREE=/var/www/html/mirror/fedora/3/i386/os/Fedora/RPMS
+TREE=n
+
+test -d $TREE || exit 1
+
+umask 022
+
+for p in n1 n2 ; do
+    r=/home/$p
+    umount $r/dev
+    umount $r/proc
+    mkdir -p $r/{dev,etc,tmp,proc,var/tmp}
+    chmod 1777 $r/tmp
+    touch $r/etc/fstab
+    mount --bind /dev $r/dev
+    mount -t proc proc $r/proc
+done
+time ./pyrpminstall -U -r /home/n1 $TREE/*.rpm 2>&1 \
+	| tee /home/n1/LOG
+time rpm -U --nodigest --nosignature --root=/home/n2 $TREE/*.rpm 2>&1 \
+	| tee /home/n2/LOG
+
+#./pyrpminstall -U -r /home/n1 --test n/*.rpm
+#./pyrpmyum -h -r /home/n1/ --repo n update
+#./pyrpminstall -h -r /home/n1/ -F /var/www/html/mirror/fedora/updates/3/i386/*.rpm
+
