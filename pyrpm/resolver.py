@@ -133,17 +133,17 @@ class RpmResolver(RpmList):
 
     def __init__(self, installed, operation, check_installed=0):
         RpmList.__init__(self, installed, operation)
+        self.installed_unresolved = self.getUnresolvedDependencies()
         self.check_installed = check_installed
+    # ----
 
     def clear(self):
         RpmList.clear(self)
         self.provides = ProvidesList()
         self.filenames = FilenamesList()
-        self.lost_provides = ProvidesList()
-        self.lost_filenames = FilenamesList()
-        self.obsoletes = {}
-        self.updates = {}
-        self.erased = {}
+        self.obsoletes = { }
+        self.updates = { }
+        self.erased = { }
     # ----
 
     def _install(self, pkg):
@@ -161,9 +161,6 @@ class RpmResolver(RpmList):
 
         self.provides.removePkg(pkg)
         self.filenames.removePkg(pkg)
-        if self.isInstalled(pkg):
-            self.lost_provides.addPkg(pkg)
-            self.lost_filenames.addPkg(pkg)
         return self.OK
     # ----
 
@@ -197,14 +194,6 @@ class RpmResolver(RpmList):
         s = self.provides.search(name, flag, version, arch)
         if name[0] == '/': # all filenames are beginning with a '/'
             self.filenames.search(name, s)
-        return s
-    # ----
-
-    def searchLostDependency(self, dep, arch=None):
-        (name, flag, version) = dep
-        s = self.lost_provides.search(name, flag, version, arch)
-        if name[0] == '/': # all filenames are beginning with a '/'
-            self.lost_filenames.search(name, s)
         return s
     # ----
 
@@ -249,19 +238,20 @@ class RpmResolver(RpmList):
         """ Check dependencies for a rpm package """
         unresolved = [ ]
         resolved = [ ]
+
         for u in pkg["requires"]:
             if u[0].startswith("rpmlib("): # drop rpmlib requirements
                 continue
-            #if u[0].startswith("config("): # drop config requirements
-            #    continue
             s = self.searchDependency(u, pkg["arch"])
             if len(s) > 1 and pkg in s:
                 # prefer self dependencies if there are others, too
                 s = [pkg]
             if len(s) == 0: # found nothing
-                if self.check_installed == 1 or \
-                       len(self.searchLostDependency(u)) == 0:
-                    unresolved.append(u)
+                if self.check_installed == 0 and \
+                       pkg in self.installed_unresolved and \
+                       u in self.installed_unresolved[pkg]:
+                    continue
+                unresolved.append(u)
             else: # resolved
                 resolved.append((u, s))
         return (unresolved, resolved)
@@ -298,27 +288,31 @@ class RpmResolver(RpmList):
 
     def getResolvedDependencies(self):
         """ Get all resolved dependencies """
-        all_resolved = [ ]
+        all_resolved = HashList()
         for i in xrange(len(self)):
             rlist = self[i]
             for r in rlist:
                 printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(resolved) > 0:
-                    all_resolved.append((r, resolved))
+                    if r not in all_resolved:
+                        all_resolved[r] = [ ]
+                    all_resolved[r].append(resolved)
         return all_resolved
     # ----
 
     def getUnresolvedDependencies(self):
         """ Get all unresolved dependencies """
-        all_unresolved = [ ]
+        all_unresolved = HashList()
         for i in xrange(len(self)):
             rlist = self[i]
             for r in rlist:
                 printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(unresolved) > 0:
-                    all_unresolved.append((r, unresolved))
+                    if r not in all_unresolved:
+                        all_unresolved[r] = [ ]
+                    all_unresolved[r].append(unresolved)
         return all_unresolved
     # ----
 
@@ -377,7 +371,9 @@ class RpmResolver(RpmList):
                     fi2 = s[k].getRpmFileInfo(filename)
                     if s[j].getNEVR() == s[k].getNEVR() and \
                            buildarchtranslate[s[j]["arch"]] != \
-                           buildarchtranslate[s[k]["arch"]]:
+                           buildarchtranslate[s[k]["arch"]] and \
+                           s[j]["arch"] != "noarch" and \
+                           s[k]["arch"] != "noarch":
                         # do not check packages with the same NEVR which are
                         # not buildarchtranslate same
                         continue
@@ -421,12 +417,13 @@ class RpmResolver(RpmList):
         if self.checkDependencies() != 1:
             return -1
 
-        # check for conflicts
-        if self.checkConflicts() != 1:
-            return -2
+        if rpmconfig.noconflictcheck == 0:
+            # check for conflicts
+            if self.checkConflicts() != 1:
+                return -2
 
-        # check for file conflicts
-        if rpmconfig.fileconflicts:
+        if rpmconfig.nofileconflictcheck == 0:
+            # check for file conflicts
             if self.checkFileConflicts() != 1:
                 return -3
 
