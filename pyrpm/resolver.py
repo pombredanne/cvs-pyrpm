@@ -323,9 +323,8 @@ class RpmResolver:
             printDebug(2, "===== packages without relations ====")
         for r in no_relations:
             order.append(r)
-            if verbose > 0:
-                printDebug(2, "%d: %s" % (idx, r.getNEVRA()))
-                idx += 1
+            printDebug(2, "%d: %s" % (idx, r.getNEVRA()))
+            idx += 1
 
         return order
 
