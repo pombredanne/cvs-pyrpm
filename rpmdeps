@@ -193,52 +193,25 @@ class Provides:
     def __init__(self):
         self.clear()
     def clear(self):
-        self.p_name = [ ]
-        self.p_flag = [ ]
-        self.p_version = [ ]
-        self.p_evr = [ ]
-        self.p_rpm = [ ]
+        self.p_provide = { }
     def append(self, name, flag, version, rpm):
-        try:
-            i = self.p_name.index(name)
-        except:
-            # new entry
-            self.p_name.append(name)
-            self.p_flag.append([flag])
-            self.p_version.append([version])
-            self.p_evr.append([gen_evr(rpm.p_epoch, rpm.p_version,
-                                       rpm.p_release)])
-            self.p_rpm.append([rpm])
-            return
-        # append
-        self.p_flag[i].append(flag)
-        self.p_version[i].append(version)
-        self.p_evr[i].append(gen_evr(rpm.p_epoch, rpm.p_version,
-                                     rpm.p_release))
-        self.p_rpm[i].append(rpm)
+        if not self.p_provide.has_key(name):
+            self.p_provide[name] = [ ]
+        self.p_provide[name].append((version, rpm))
     def search(self, name, flag, version):
-        try:
-            i = self.p_name.index(name)
-        except:
+        if not self.p_provide.has_key(name):
             return None
 
         if version == "":
-            return self.p_rpm[i][0]
-        
-        for j in xrange(len(self.p_version[i])):
-            if evr_compare(self.p_version[i][j], flag, version) == 1:
-                return self.p_rpm[i][j]
-            if evr_compare(self.p_evr[i][j], flag, version) == 1:
-                return self.p_rpm[i][j]
-        return None
+            return self.p_provide[name][0][1]
 
-    def pr(self):
-        for i in xrange(len(self.p_name)):
-            print "%s:" % self.p_name[i]
-            for j in xrange(len(self.p_version[i])):
-                print "\t'%s' '%s' --> '%s'" % (self.p_flag[i][j],
-                                                self.p_version[i][j],
-                                                str(self.p_rpm[i][j]))
+        for p in self.p_provide[name]:
+            if evr_compare(p[0], flag, version) == 1:
+                return p[1]
+            if evr_compare(gen_evr(p[1].p_epoch, p[1].p_version,
+                                   p[1].p_release), flag, version) == 1:
+                return p[1]
+        return None
 
 # ----------------------------------------------------------------------------
 
@@ -246,18 +219,15 @@ class Filenames:
     def __init__(self):
         self.clear()
     def clear(self):
-        self.p_name = [ ]
-        self.p_rpm = [ ]
+        self.p_provide = { }
     def append(self, name, rpm):
-        i = len(self.p_name)
-        self.p_name.insert(i, name)
-        self.p_rpm.insert(i, rpm)
-    def search(self, name, flag, version):
-        try:
-            i = self.p_name.index(name)
-        except:
+        if not self.p_provide.has_key(name):
+            self.p_provide[name] = [ ]
+        self.p_provide[name].append(rpm)
+    def search(self, name):
+        if not self.p_provide.has_key(name):
             return None
-        return self.p_rpm[i]
+        return self.p_provide[name][0]
 
 # ----------------------------------------------------------------------------
 
@@ -410,7 +380,7 @@ if __name__ == '__main__':
             u = r.p_unresolved[j]
             s = provides.search(u[0], u[1], u[2])
             if s == None:
-                s = filenames.search(u[0], u[1], u[2])
+                s = filenames.search(u[0])
             if s == None and no_installed == 0:
                 s = search_installed(u[0], u[1], u[2])
             if s != None:
@@ -441,7 +411,8 @@ if __name__ == '__main__':
         print
     for r in rpms:
         if verbose > 1 and len(r.p_resolved) > 0:
-            name = "%s-%s-%s" % (r.p_name, r.p_version, r.p_release)
+            name = "%s-%s-%s.%s" % (r.p_name, r.p_version, r.p_release,
+                                    r.p_arch)
             if r.p_installed == 0 and verbose > 1:
                 name += ": %s" % r.p_file
             print "%s" % name
@@ -452,8 +423,8 @@ if __name__ == '__main__':
             for j in xrange(len(r.p_resolved)):
                 r2 = r.p_resolved[j]
                 dep = r2[0][0]
-                pkg = "%s-%s-%s" % (r2[1].p_name, r2[1].p_version,
-                                    r2[1].p_release)
+                pkg = "%s-%s-%s.%s" % (r2[1].p_name, r2[1].p_version,
+                                       r2[1].p_release, r2[1].p_arch)
                 if verbose > 2:
                     if r2[0][2] != "":
                         dep = "%s %s %s" % (r2[0][0], r2[0][1], r2[0][2])
