@@ -308,7 +308,7 @@ class RpmPackage(RpmData):
         return "%s-%s%s-%s" % (self["name"], e, self["version"], self["release"])
 
     def getNEVRA(self):
-        return "%s.%s" % (self.NEVR(), self["arch"])
+        return "%s.%s" % (self.getNEVR(), self["arch"])
 
     def getDeps(self, name, flags, version):
         n = self[name]
