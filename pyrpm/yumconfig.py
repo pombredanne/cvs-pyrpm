@@ -165,6 +165,7 @@ class YumConf(Conf):
                 if self.checkVar(stanza, vars[0]):
                     sys.stderr.write("Bad variable %s in %s\n" \
                                      % (vars[0], self.filename))
+                    self.nextline()
                     continue
                 
                 name = vars[0]
