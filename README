@@ -1,4 +1,3 @@
-
 RpmIO
 -----
   read(data, name) : fail
