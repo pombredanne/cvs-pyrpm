@@ -168,6 +168,21 @@ class RpmResolver:
         self.operation = operation
         self.installed = installed
 
+        # generate instlist
+        self.instlist = RpmList()
+
+        # install installed pacakges
+        for r in self.installed:
+            self.instlist.install(r)
+        # install/update/erase rpms
+        for r in self.rpms:
+            if self.operation == self.OP_ERASE:
+                self.instlist.erase(r)
+            elif self.operation == self.OP_UPDATE:
+                self.instlist.update(r)
+            else:
+                self.instlist.install(r)
+
     # ----
 
     def checkPkgDependencies(self, rpm, rpmlist):
@@ -192,13 +207,13 @@ class RpmResolver:
                         if not (r["arch"] == rpm["arch"] or \
                                 rpm["arch"] == "noarch" or \
                                 r["arch"] == "noarch"):
-                            print "%s -> %s" % (rpm.getNEVRA(), r.getNEVRA())
+#                            print "%s -> %s" % (rpm.getNEVRA(), r.getNEVRA())
                             # is rpm in arch compat list of r?
                             # if buildarchtranslate[r["arch"]] != buildarchtranslate[rpm["arch"]]:
                             if rpm["arch"] not in arch_compats[r["arch"]]:
                                 if buildarchtranslate[r["arch"]] != \
                                        buildarchtranslate[rpm["arch"]]:
-                                    print "\t removing"
+#                                    print "\t removing"
                                     s.pop(i)
                                     continue
                         i += 1
@@ -210,14 +225,18 @@ class RpmResolver:
 
     # ----
 
-    def checkDependencies(self, rpmlist):
+    def checkDependencies(self):
         """ Check dependencies for a list of rpm packages """
         no_unresolved = 1
-        for i in xrange(len(rpmlist)):
-            rlist = rpmlist[i]
+        for i in xrange(len(self.instlist)):
+            rlist = self.instlist[i]
             for r in rlist:
+                if r in self.installed:
+                    # do not check installed packages
+                    continue
                 printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
-                (unresolved, resolved) = self.checkPkgDependencies(r, rpmlist)
+                (unresolved, resolved) = \
+                             self.checkPkgDependencies(r, self.instlist)
                 if len(resolved) > 0 and rpmconfig.debug_level > 1:
                     # do this only in debug level > 1
                     printDebug(2, "%s: resolved dependencies:" % r.getNEVRA())
@@ -235,15 +254,18 @@ class RpmResolver:
 
     # ----
 
-    def checkConflicts(self, rpmlist):
+    def checkConflicts(self):
         """ Check for conflicts in RpmList (conflicts and obsoletes) """
         no_conflicts = 1
-        for i in xrange(len(rpmlist)):
-            rlist = rpmlist[i]
+        for i in xrange(len(self.instlist)):
+            rlist = self.instlist[i]
             for r in rlist:
+                if r in self.installed:
+                    # do not check installed packages
+                    continue
                 printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
                 for c in r["conflicts"] + r["obsoletes"]:
-                    s = rpmlist.searchDependency(c)
+                    s = self.instlist.searchDependency(c)
                     if len(s) > 0:
                         _normalize(s)
                         # the package does not conflict with itself
@@ -259,12 +281,12 @@ class RpmResolver:
 
     # ----
 
-    def checkFileConflicts(self, rpmlist):
+    def checkFileConflicts(self):
         """ Check for file conflicts """
         no_conflicts = 1
-        for f in rpmlist.filenames.multi:
+        for f in self.instlist.filenames.multi:
             printDebug(1, "Checking for file conflicts for '%s'" % f)
-            s = rpmlist.filenames.search(f)
+            s = self.instlist.filenames.search(f)
             for j in xrange(len(s)):
                 fi1 = s[j].getRpmFileInfo(f)
                 for k in xrange(j+1, len(s)):
@@ -285,9 +307,9 @@ class RpmResolver:
 
     # ----
 
-    def _operationFlag(self, flag, operation):
+    def _operationFlag(self, flag):
         """ Return operation flag or requirement """
-        if operation == "erase":
+        if self.operation == "erase":
             if not (isInstallPreReq(flag) or \
                     not (isErasePreReq(flag) or isLegacyPreReq(flag))):
                 return 2  # hard requirement
@@ -305,9 +327,18 @@ class RpmResolver:
     
     # ----
 
-    def genRelations(self, rpmlist, operation):
+    def genRelations(self):
         """ Generate relations from RpmList """
         relations = _Relations()
+
+        # generate todo list
+        rpmlist = RpmList()
+        for r in self.rpms:
+            printDebug(1, "Adding %s to todo list." % r.getNEVRA())
+            if self.operation == self.OP_UPDATE:
+                rpmlist.update(r)
+            else:
+                rpmlist.install(r)
 
         for rlist in rpmlist:
             for r in rlist:
@@ -323,7 +354,7 @@ class RpmResolver:
                         continue
                         # drop requirements which are resolved by the package
                         # itself
-                    f = self._operationFlag(flag, operation)
+                    f = self._operationFlag(flag)
                     if f == 0:
                         # no hard or soft requirement
                         continue
@@ -359,26 +390,7 @@ class RpmResolver:
     
     # ----
 
-    def _genInstList(self):
-        """ Generate instlist """
-        instlist = RpmList()
-
-        for r in self.installed:
-            instlist.install(r)
-
-        for r in self.rpms:
-            if self.operation == self.OP_ERASE:
-                instlist.erase(r)
-            elif self.operation == self.OP_UPDATE:
-                instlist.update(r)
-            else:
-                instlist.install(r)
-
-        return instlist
-
-    # ----
-
-    def _genOperations(self, order, obsoletes):
+    def _genOperations(self, order):
         """ Generate operations list """
         operations = [ ]
         if self.operation == self.OP_ERASE:
@@ -389,25 +401,19 @@ class RpmResolver:
         else:
             for r in order:
                 operations.append((self.operation, r))
-                if r in obsoletes:
-                    if len(obsoletes[r]) == 1:
-                        operations.append((self.OP_ERASE, obsoletes[r][0]))
+                if r in self.instlist.obsoletes:
+                    if len(self.instlist.obsoletes[r]) == 1:
+                        operations.append((self.OP_ERASE,
+                                           self.instlist.obsoletes[r][0]))
                     else:
                         # more than one obsolete: generate order
-                        todo = RpmList()
-                        for r2 in obsoletes[r]:
-                            todo.install(r2)
-                        relations = self.genRelations(todo, self.OP_ERASE)
-                        if relations == None:                        
-                            return None
-                        order2 = self.orderRpms(relations)
-                        del relations
-                        del todo
-                        if order2 == None:
-                            return None
-                        for i in xrange(len(order2)-1, -1, -1):
-                            operations.append((self.OP_ERASE, order2[i]))
-                        del order2
+                        resolver = RpmResolver(self.instlist.obsoletes[r],
+                                               self.instlist.obsoletes[r],
+                                               self.OP_ERASE)
+                        ops = resolver.resolve()
+                        for i in xrange(len(ops)-1, -1, -1):
+                            operations.append((self.OP_ERASE, ops[i]))
+                        del resolver
         return operations
 
     # ----
@@ -561,45 +567,32 @@ class RpmResolver:
         OP_UPDATE or OP_ERASE per package.
         If an error occurs, None is returned. """
 
-        # generate instlist
-        instlist = self._genInstList()
-
         # checking dependencies
-        if self.checkDependencies(instlist) != 1:
+        if self.checkDependencies() != 1:
             return None
 
         # check for conflicts
-        if self.checkConflicts(instlist) != 1:
+        if self.checkConflicts() != 1:
             return None
 
         # check for file conflicts
-        if self.checkFileConflicts(instlist) != 1:
+        if self.checkFileConflicts() != 1:
             return None
 
-        # save obsolete list before freeing instlist
-        obsoletes = instlist.obsoletes
-
-        # generate 
-        todo = RpmList()
-        for r in self.rpms:
-            printDebug(1, "Adding %s to todo list." % r.getNEVRA())
-            if self.operation == self.OP_UPDATE:
-                todo.update(r)
-            else:
-                todo.install(r)
-
-        # resolving requires
-        relations = self.genRelations(todo, self.operation)
-        del todo
+        # generate relations
+        relations = self.genRelations()
 
         # order package list
         order = self.orderRpms(relations)
-        if order == None:
-            return None
+        # cleanup relations
         del relations
 
+        # error in orderRpms
+        if order == None:
+            return None
+
         # generate operations
-        operations = self._genOperations(order, obsoletes)
+        operations = self._genOperations(order)
         # cleanup order list
         del order
         
