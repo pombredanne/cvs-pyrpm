@@ -368,7 +368,7 @@ class RpmResolver(RpmList):
         if len(conflicts) == 0:
             return self.OK
 
-        for pkg in conflicts:
+        for pkg in conflicts.keys():
             printError("%s conflicts with:" % pkg.getNEVRA())
             for c,r in conflicts[pkg]:
                 printError("\t'%s' <=> %s" % (depString(c), r.getNEVRA()))
