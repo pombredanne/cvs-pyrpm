@@ -67,7 +67,6 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         os.dup2(1, 2)
         closeAllFDs()
         os.chdir("/")
-        #os.putenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin")
         e = {"HOME": "/", "USER": "root", "LOGNAME": "root",
             "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin"}
         if isinstance(prog, TupleType):
@@ -164,9 +163,8 @@ def makeDirs(fullname):
 
 def listRpmDir(dirname):
     """List directory like standard or.listdir, but returns only .rpm files"""
-    fls = os.listdir(dirname)
     files = [] 
-    for f in fls:
+    for f in os.listdir(dirname):
         if f.endswith('.rpm'):
             files.append(f)
     return files
@@ -208,8 +206,8 @@ def getFreeDiskspace(pkglist):
                 dev = os.stat(devdir)[2]
                 dirhash[dirname] = dev
                 if not freehash.has_key(dev):
-                    (f_bsize, f_frsize, f_blocks, f_bfree, f_bavail, f_files, f_ffree, f_favail, f_flag, f_namemax) = os.statvfs(devdir)
-                    freehash[dev] = f_bsize * f_bavail
+                    statvfs = os.statvfs(devdir)
+                    freehash[dev] = statvfs[0] * statvfs[4]
         filenames = pkg["filenames"]
         for i in xrange(len(filenames)):
             dirname = pkg["dirnames"][pkg["dirindexes"][i]]
@@ -218,7 +216,7 @@ def getFreeDiskspace(pkglist):
 
 def parseBoolean(str):
     lower = str.lower()
-    if lower == "yes" or lower == "true" or lower == "1" or lower == "on":
+    if lower in ("yes", "true", "1", "on"):
         return 1
     return 0
 
@@ -364,11 +362,9 @@ def stringCompare(str1, str2):
     # still no difference
     if i2 == len(str2):
         return 0
-    else:
-        if i1 == len(str1):
-            return -1
-        else:
-            return 1
+    if i1 == len(str1):
+        return -1
+    return 1
 
 # internal EVR compare, uses stringCompare to compare epochs, versions and
 # release versions
@@ -442,7 +438,7 @@ def filterArchCompat(list, arch=None):
     return 1
 
 def filterArchDuplicates(list):
-    # stage 1: filert duplicates: order by name.arch
+    # stage 1: filter duplicates: order by name.arch
     myhash = {}
     i = 0
     while i < len(list):
@@ -474,26 +470,25 @@ def filterArchDuplicates(list):
     while i < len(list):
         pkg = list[i]
         removed = 0
-        if not myhash.has_key(pkg["name"]):
-            myhash[pkg["name"]] = [ ]
-            myhash[pkg["name"]].append(pkg)
+        name = pkg["name"]
+        arch = pkg["arch"]
+        if not myhash.has_key(name):
+            myhash[name] = [pkg]
         else:
             j = 0
-            while myhash[pkg["name"]] and j < len(myhash[pkg["name"]]) and \
-                      removed == 0:
-                r = myhash[pkg["name"]][j]
-                if pkg["arch"] != r["arch"] and \
-                       buildarchtranslate[pkg["arch"]] != \
-                       buildarchtranslate[r["arch"]]:
+            while myhash[name] and j < len(myhash[name]) and removed == 0:
+                r = myhash[name][j]
+                if arch != r["arch"] and \
+                    buildarchtranslate[arch] != buildarchtranslate[r["arch"]]:
                     j += 1
-                elif r["arch"] in arch_compats[pkg["arch"]]:
+                elif r["arch"] in arch_compats[arch]:
                     printWarning(2, "%s was already added, replacing with %s" % \
                                        (r.getNEVRA(), pkg.getNEVRA()))
-                    myhash[pkg["name"]].remove(r)
-                    myhash[pkg["name"]].append(pkg)
+                    myhash[name].remove(r)
+                    myhash[name].append(pkg)
                     list.remove(r)
                     removed = 1
-                elif pkg["arch"] == r["arch"]:
+                elif arch == r["arch"]:
                     printWarning(2, "%s was already added" % \
                                        pkg.getNEVRA())
                     list.pop(i) # remove 'pkg'
@@ -501,7 +496,7 @@ def filterArchDuplicates(list):
                 else:
                     j += 1
             if removed == 0:
-                myhash[pkg["name"]].append(pkg)
+                myhash[name].append(pkg)
         if removed == 0:
             i += 1
     del myhash
