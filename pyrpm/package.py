@@ -18,6 +18,7 @@
 
 
 import os.path, tempfile, sys, pwd, grp, md5
+from stat import S_ISREG
 from struct import unpack
 from functions import *
 from io import *
@@ -283,7 +284,7 @@ class RpmPackage(RpmData):
         if not db:
             return 1
         # File is not a regular file -> just do it
-        if not CP_ISREG(rfi.mode):
+        if not S_ISREG(rfi.mode):
             return 1
         # File not already in db -> write it
         if not db.filenames.has_key(rfi.filename):

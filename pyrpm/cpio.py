@@ -17,29 +17,6 @@
 # Author: Phil Knirsch, Paul Nasrat, Florian La Roche, Karel Zak
 #
 
-#import os.path
-
-# We have started building our own macros, but could also change over to
-# use the ones provided from "import stat" instead:
-CP_IFMT  =  0170000
-CP_IFIFO =  0010000
-CP_IFCHR =  0020000
-CP_IFDIR =  0040000
-CP_IFBLK =  0060000
-CP_IFREG =  0100000
-CP_IFNWK =  0110000
-CP_IFLNK =  0120000
-CP_IFSOCK = 0140000
-
-def CP_ISDIR(mode):
-    return (mode & CP_IFMT) == CP_IFDIR
-
-def CP_ISLNK(mode):
-    return (mode & CP_IFMT) == CP_IFLNK
-
-def CP_ISREG(mode):
-    return (mode & CP_IFMT) == CP_IFREG
-
 
 # file data indexes
 CP_FDMAGIC = 0

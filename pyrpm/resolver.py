@@ -21,6 +21,7 @@
 ...
 """
 
+from stat import S_ISLNK, S_ISDIR
 from hashlist import HashList
 from rpmlist import RpmList
 from functions import *
@@ -381,10 +382,10 @@ class RpmResolver(RpmList):
                         # not buildarchtranslate same
                         continue
                     # ignore directories
-                    if CP_ISDIR(fi1.mode) and CP_ISDIR(fi2.mode):
+                    if S_ISDIR(fi1.mode) and S_ISDIR(fi2.mode):
                         continue
                     # ignore links
-                    if CP_ISLNK(fi1.mode) and CP_ISLNK(fi2.mode):
+                    if S_ISLNK(fi1.mode) and S_ISLNK(fi2.mode):
                         continue
                     if fi1.mode != fi2.mode or \
                            fi1.filesize != fi2.filesize or \

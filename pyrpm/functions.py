@@ -18,6 +18,7 @@
 
 
 import os, os.path, tempfile, sys, string, types, resource
+from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE
 from config import rpmconfig
 from base import *
 from cpio import *
@@ -76,8 +77,8 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
     return 1
 
 def installFile(rfi, data):
-    filetype = rfi.mode & CP_IFMT
-    if  filetype == CP_IFREG:
+    mode = rfi.mode
+    if S_ISREG(mode):
         makeDirs(rfi.filename)
         (fd, tmpfilename) = tempfile.mkstemp(dir=os.path.dirname(rfi.filename), prefix=rfi.filename + ".")
         if not fd:
@@ -87,20 +88,20 @@ def installFile(rfi, data):
             os.unlink(tmpfilename)
             return 0
         os.close(fd)
-        if not setFileMods(tmpfilename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
+        if not setFileMods(tmpfilename, rfi.uid, rfi.gid, mode, rfi.mtime):
             os.unlink(tmpfilename)
             return 0
         if os.rename(tmpfilename, rfi.filename) != None:
             return 0
-    elif filetype == CP_IFDIR:
+    elif S_ISDIR(mode):
         if os.path.isdir(rfi.filename):
-            if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
+            if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
                 return 0
             return 1
         os.makedirs(rfi.filename)
-        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
+        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
             return 0
-    elif filetype == CP_IFLNK:
+    elif S_ISLNK(mode):
         symlinkfile = data.rstrip("\x00")
         if os.path.islink(rfi.filename) and os.readlink(rfi.filename) == symlinkfile:
             return 1
@@ -112,21 +113,21 @@ def installFile(rfi, data):
         os.symlink(symlinkfile, rfi.filename)
         if os.lchown(rfi.filename, rfi.uid, rfi.gid) != None:
             return 0
-    elif filetype == CP_IFIFO:
+    elif S_ISFIFO(mode):
         makeDirs(rfi.filename)
         if not os.path.exists(rfi.filename) and os.mkfifo(rfi.filename) != None:
             return 0
-        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
+        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
             os.unlink(rfi.filename)
             return 0
-    elif filetype == CP_IFCHR or filetype == CP_IFBLK:
+    elif S_ISCHR(mode) or S_ISBLK(mode):
         makeDirs(rfi.filename)
         try:
-            os.mknod(rfi.filename, rfi.mode, rfi.rdev)
+            os.mknod(rfi.filename, mode, rfi.rdev)
         except:
             pass
     else:
-        raise ValueError, "%s: not a valid filetype" % (oct(rfi.filetype))
+        raise ValueError, "%s: not a valid filetype" % (oct(mode))
     return 1
 
 def setFileMods(filename, uid, gid, mode, mtime):
@@ -135,7 +136,7 @@ def setFileMods(filename, uid, gid, mode, mtime):
             return 0
     except:
         return 0
-    if os.chmod(filename, (~CP_IFMT) & mode) != None:
+    if os.chmod(filename, S_IMODE(mode)) != None:
         return 0
     if os.utime(filename, (mtime, mtime)) != None:
         return 0
