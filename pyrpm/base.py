@@ -259,10 +259,10 @@ rpmtag = {
     "nopatch": (1052, RPM_INT32, None, 1),
     "disturl": (1123, RPM_STRING, None, 1),
     "oldfilenames": (1027, RPM_STRING_ARRAY, None, 1),
-    "archivesize": (1046, RPM_INT32, 1, 1) # only in /var/lib/rpm/Packages
+    "archivesize": (1046, RPM_INT32, 1, 1), # only in /var/lib/rpm/Packages
     "triggerin": (1100, RPM_STRING, None, 5),
     "triggerun": (1101, RPM_STRING, None, 5),
-    "triggerpostun": (1102, RPM_STRING, None, 5),
+    "triggerpostun": (1102, RPM_STRING, None, 5)
 }
 rpmtagname = {}
 # Add a reverse mapping for all tags and a new tag -> name mapping.
