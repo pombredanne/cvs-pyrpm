@@ -40,7 +40,7 @@ class RpmController:
         self.operation = "install"
         for file in pkglist:
             self.newPkg(file)
-        if not self.readDB(db):
+        if not self.__readDB(db):
             return 0
         if not self.run():
             return 0
@@ -51,7 +51,7 @@ class RpmController:
         self.operation = "update"
         for file in pkglist:
             self.updatePkg(file)
-        if not self.readDB(db):
+        if not self.__readDB(db):
             return 0
         if not self.run():
             return 0
@@ -62,7 +62,7 @@ class RpmController:
         self.operation = "update"
         for file in pkglist:
             self.updatePkg(file)
-        if not self.readDB(db):
+        if not self.__readDB(db):
             return 0
         instlist = []
         rmlist = []
@@ -80,7 +80,7 @@ class RpmController:
     def erasePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
         self.buildroot = buildroot
         self.operation = "erase"
-        if not self.readDB(db):
+        if not self.__readDB(db):
             return 0
         for file in pkglist:
             if not self.erasePkg(file):
@@ -93,7 +93,7 @@ class RpmController:
         return 1
 
     def run(self):
-        if not self.preprocess():
+        if not self.__preprocess():
             return 0
         if self.operation == "install":
             rpms = self.new
@@ -124,15 +124,15 @@ class RpmController:
                     printError("Errors during package installation.")
                     sys.exit(1)
                 if op == "install":
-                    self.addPkgToDB(pkg)
+                    self.__addPkgToDB(pkg)
                 if op == "update":
-                    self.addPkgToDB(pkg)
+                    self.__addPkgToDB(pkg)
                     if self.oldpackages.has_key(pkg["name"]):
                         for upkg in self.oldpackages[pkg["name"]]:
                             printInfo(2, "Removing package %s because of update.\n" % upkg.getNEVR())
-                            self.erasePkgFromDB(upkg)
+                            self.__erasePkgFromDB(upkg)
                 if op == "erase":
-                    self.erasePkgFromDB(pkg)
+                    self.__erasePkgFromDB(pkg)
                 pkg.close()
                 continue
             else:
@@ -171,7 +171,7 @@ class RpmController:
 
     def erasePkg(self, file):
         if self.pydb == None:
-            if not self.readDB():
+            if not self.__readDB():
                 return 0
         (epoch, name, version, release, arch) = envraSplit(file)
         # First check is against nvra as name
@@ -265,7 +265,7 @@ class RpmController:
         # No matching package found
         return 0
 
-    def readDB(self, db="/var/lib/pyrpm"):
+    def __readDB(self, db="/var/lib/pyrpm"):
         if self.db == None:
             self.db = db
         if self.pydb != None:
@@ -281,21 +281,26 @@ class RpmController:
             return 0
         return 1
 
-    def preprocess(self):
+    def __preprocess(self):
         if not self.ignorearch:
-            self.filterArch()
+            self.__filterArch()
         if self.operation == "install":
-            if not self.checkInstall():
+            if not self.__checkInstall():
                 printError("Can't install older or same packages.")
                 return 0
         if self.operation == "update":
-            self.oldpackages = self.findUpdatePkgs()
+            self.oldpackages = self.__findUpdatePkgs()
             if self.oldpackages == None:
                 printError("Can't update to older or same packages.")
                 return 0
         return 1
 
-    def filterArchList(self, list):
+    def __filterArch(self):
+        self.__filterArchList(self.new)
+        self.__filterArchList(self.update)
+        self.__filterArchList(self.available)
+
+    def __filterArchList(self, list):
         duplicates = {}
         rmlist = []
         (sysname, nodename, release, version, machine) = os.uname()
@@ -316,13 +321,8 @@ class RpmController:
                 duplicates[name] = [arch, pkg]
         for i in rmlist:
             list.remove(i)
-        
-    def filterArch(self):
-        self.filterArchList(self.new)
-        self.filterArchList(self.update)
-        self.filterArchList(self.available)
 
-    def checkInstall(self):
+    def __checkInstall(self):
         list = {}
         for pkg in self.installed:
             if not list.has_key(pkg["name"]):
@@ -336,7 +336,7 @@ class RpmController:
                     return 0
         return 1
 
-    def findUpdatePkgs(self):
+    def __findUpdatePkgs(self):
         hash = {}
         for pkg in self.update:
             name = pkg["name"]
@@ -351,12 +351,12 @@ class RpmController:
                     return None
         return hash
 
-    def addPkgToDB(self, pkg):
+    def __addPkgToDB(self, pkg):
         if self.pydb == None:
             return 0
         return self.pydb.addPkg(pkg)
 
-    def erasePkgFromDB(self, pkg):
+    def __erasePkgFromDB(self, pkg):
         if self.pydb == None:
             return 0
         return self.pydb.erasePkg(pkg)

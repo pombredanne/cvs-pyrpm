@@ -78,10 +78,10 @@ class RpmStreamIO(RpmIO):
         # Read/check leadata
         if self.where == 0:
             self.where = 1
-            return self.readLead()
+            return self.__readLead()
         # Separator
         if self.where == 1:
-            self.readSig()
+            self.__readSig()
             # Shall we skip signature parsing/reading?
             if not self.skipsig:
                 self.where = 2
@@ -93,7 +93,7 @@ class RpmStreamIO(RpmIO):
         if self.where == 2:
             # Last index of sig? Switch to from sig to hdr
             if self.idx >= self.hdrdata[0]:
-                self.readHdr()
+                self.__readHdr()
                 self.idx = 0
                 self.where = 3
                 return ("-", "")
@@ -121,38 +121,53 @@ class RpmStreamIO(RpmIO):
                 return (filename, filerawdata)
         return  ("EOF", "")
 
-    def readLead(self):
+    def write(self, pkg):
+        if self.fd == None:
+            self.open("w+")
+        if self.fd == None:
+            return 0
+        lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, pkg.getNEVR()[0:66], rpm_lead_arch[pkg["arch"]], 5)
+        (sigindex, sigdata) = self.__generateSig(pkg["signature"])
+        (headerindex, headerdata) = self.__generateHeader(pkg)
+        self.fd.write(lead)
+        self.fd.write(sigindex)
+        self.fd.write(sigdata)
+        self.fd.write(headerindex)
+        self.fd.write(headerdata)
+        return 1
+
+    def __readLead(self):
         leaddata = self.fd.read(96)
         if leaddata[:4] != RPM_HEADER_LEAD_MAGIC:
             printError("%s: no rpm magic found" % self.source)
             return (None, None)
-        if self.verify and not self.verifyLead(leaddata):
+        if self.verify and not self.__verifyLead(leaddata):
             return (None, None)
         return ("magic", leaddata[:4])
 
-    def readSig(self):
+    def __readSig(self):
         self.hdr = {}
         self.hdrtype = {}
-        self.hdrdata = self.readIndex(8, 1)
+        self.hdrdata = self.__readIndex(8, 1)
 
-    def readHdr(self):
+    def __readHdr(self):
         self.hdr = {}
         self.hdrtype = {}
-        self.hdrdata = self.readIndex(1)
+        self.hdrdata = self.__readIndex(1)
 
     def getHeaderByIndex(self, idx, indexdata, storedata):
         index = unpack("!4i", indexdata[idx*16:(idx+1)*16])
         tag = index[0]
         # ignore duplicate entries as long as they are identical
         if self.hdr.has_key(tag):
-            if self.hdr[tag] != self.parseTag(index, storedata):
+            if self.hdr[tag] != self.__parseTag(index, storedata):
                 printError("%s: tag %d included twice" % (self.source, tag))
         else: 
-            self.hdr[tag] = self.parseTag(index, storedata)
+            self.hdr[tag] = self.__parseTag(index, storedata)
             self.hdrtype[tag] = index[1]
         return (tag, self.hdr[tag])
 
-    def verifyLead(self, leaddata):
+    def __verifyLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
             unpack("!4scchh66shh16x", leaddata)
         ret = 1
@@ -169,7 +184,7 @@ class RpmStreamIO(RpmIO):
             printError("%s: wrong data in rpm lead" % self.source)
         return ret
 
-    def readIndex(self, pad, issig=None):
+    def __readIndex(self, pad, issig=None):
         data = self.fd.read(16)
         if not len(data):
             return None
@@ -182,11 +197,11 @@ class RpmStreamIO(RpmIO):
         if pad != 1:
             padfmt = self.fd.read((pad - (storeSize % pad)) % pad)
         if self.verify: 
-            self.verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
+            self.__verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + \
             len(fmt2) + len(padfmt))
 
-    def verifyIndex(self, fmt, fmt2, indexNo, storeSize, issig):
+    def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, issig):
         checkSize = 0
         for i in xrange(0, indexNo * 16, 16):
             index = unpack("!iiii", fmt[i:i + 16])
@@ -198,13 +213,13 @@ class RpmStreamIO(RpmIO):
                 checkSize += (4 - (checkSize % 4)) % 4
             elif ttype == RPM_INT64:
                 checkSize += (8 - (checkSize % 8)) % 8
-            checkSize += self.verifyTag(index, fmt2, issig)
+            checkSize += self.__verifyTag(index, fmt2, issig)
         if checkSize != storeSize:
             # XXX: add a check for very old rpm versions here, seems this
             # is triggered for a few RHL5.x rpm packages
             printError("%s: storeSize/checkSize is %d/%d" % (self.source, storeSize, checkSize))
 
-    def verifyTag(self, index, fmt, issig):
+    def __verifyTag(self, index, fmt, issig):
         (tag, ttype, offset, count) = index
         if issig:
             if not rpmsigtag.has_key(tag):
@@ -277,7 +292,7 @@ class RpmStreamIO(RpmIO):
             raiseFatal("%s: unknown tag header" % self.source)
         return count
 
-    def parseTag(self, index, fmt):
+    def __parseTag(self, index, fmt):
         (tag, ttype, offset, count) = index
         if ttype == RPM_INT32:
             return unpack("!%dI" % count, fmt[offset:offset + count * 4])
@@ -303,7 +318,7 @@ class RpmStreamIO(RpmIO):
         raiseFatal("%s: unknown tag type: %d" % (self.source, ttype))
         return None
 
-    def generateTag(self, tag, ttype, value):
+    def __generateTag(self, tag, ttype, value):
         # Decided if we have to write out a list or a single element
         if isinstance(value, types.TupleType) or isinstance(value, types.ListType):
             count = len(value)
@@ -353,7 +368,7 @@ class RpmStreamIO(RpmIO):
                 count = 1
         return (count, data)
 
-    def generateIndex(self, indexlist, store, pad):
+    def __generateIndex(self, indexlist, store, pad):
         index = RPM_HEADER_INDEX_MAGIC
         index += pack("!ii", len(indexlist), len(store))
         (tag, ttype, offset, count) = indexlist.pop()
@@ -363,7 +378,7 @@ class RpmStreamIO(RpmIO):
         align = (pad - (len(store) % pad)) % pad
         return (index, pack("%ds" % align, '\x00'))
             
-    def alignTag(self, ttype, offset):
+    def __alignTag(self, ttype, offset):
         if ttype == RPM_INT16:
             align = (2 - (offset % 2)) % 2
         elif ttype == RPM_INT32:
@@ -374,7 +389,7 @@ class RpmStreamIO(RpmIO):
             align = 0
         return pack("%ds" % align, '\x00')
 
-    def generateSig(self, header):
+    def __generateSig(self, header):
         store = ""
         offset = 0
         indexlist = []
@@ -395,8 +410,8 @@ class RpmStreamIO(RpmIO):
             # Convert back the RPM_ARGSTRING to RPM_STRING
             if ttype == RPM_ARGSTRING:
                 ttype = RPM_STRING
-            (count, data) = self.generateTag(tag, ttype, value)
-            pad = self.alignTag(ttype, offset)
+            (count, data) = self.__generateTag(tag, ttype, value)
+            pad = self.__alignTag(ttype, offset)
             offset += len(pad)
             indexlist.append((tag, ttype, offset, count))
             store += pad + data
@@ -410,16 +425,16 @@ class RpmStreamIO(RpmIO):
             # Convert back the RPM_ARGSTRING to RPM_STRING
             if ttype == RPM_ARGSTRING:
                 ttype = RPM_STRING
-            (count, data) = self.generateTag(tag, ttype, value)
-            pad = self.alignTag(ttype, offset)
+            (count, data) = self.__generateTag(tag, ttype, value)
+            pad = self.__alignTag(ttype, offset)
             offset += len(pad)
             indexlist.append((tag, ttype, offset, count))
             store += pad + data
             offset += len(data)
-        (index, pad) = self.generateIndex(indexlist, store, 8)
+        (index, pad) = self.__generateIndex(indexlist, store, 8)
         return (index, store+pad)
 
-    def generateHeader(self, header):
+    def __generateHeader(self, header):
         store = ""
         indexlist = []
         offset = 0
@@ -439,8 +454,8 @@ class RpmStreamIO(RpmIO):
             # Convert back the RPM_ARGSTRING to RPM_STRING
             if ttype == RPM_ARGSTRING:
                 ttype = RPM_STRING
-            (count, data) = self.generateTag(tag, ttype, value)
-            pad = self.alignTag(ttype, offset)
+            (count, data) = self.__generateTag(tag, ttype, value)
+            pad = self.__alignTag(ttype, offset)
             offset += len(pad)
             indexlist.append((tag, ttype, offset, count))
             store += pad + data
@@ -454,29 +469,14 @@ class RpmStreamIO(RpmIO):
             # Convert back the RPM_ARGSTRING to RPM_STRING
             if ttype == RPM_ARGSTRING:
                 ttype = RPM_STRING
-            (count, data) = self.generateTag(tag, ttype, value)
-            pad = self.alignTag(ttype, offset)
+            (count, data) = self.__generateTag(tag, ttype, value)
+            pad = self.__alignTag(ttype, offset)
             offset += len(pad)
             indexlist.append((tag, ttype, offset, count))
             store += pad + data
             offset += len(data)
-        (index, pad) = self.generateIndex(indexlist, store, 1)
+        (index, pad) = self.__generateIndex(indexlist, store, 1)
         return (index, store+pad)
-
-    def write(self, pkg):
-        if self.fd == None:
-            self.open("w+")
-        if self.fd == None:
-            return 0
-        lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, pkg.getNEVR()[0:66], rpm_lead_arch[pkg["arch"]], 5)
-        (sigindex, sigdata) = self.generateSig(pkg["signature"])
-        (headerindex, headerdata) = self.generateHeader(pkg)
-        self.fd.write(lead)
-        self.fd.write(sigindex)
-        self.fd.write(sigdata)
-        self.fd.write(headerindex)
-        self.fd.write(headerdata)
-        return 1
 
 
 class RpmDBIO(RpmIO):
@@ -496,7 +496,7 @@ class RpmFileIO(RpmStreamIO):
         if source[-8:] == ".src.rpm" or source[-10:] == ".nosrc.rpm":
             self.issrc = 1
 
-    def openFile(self, mode="r"):
+    def __openFile(self, mode="r"):
         if not self.fd:
             try:
                 self.fd = open(self.source, mode)
@@ -505,19 +505,19 @@ class RpmFileIO(RpmStreamIO):
 #            if offset:
 #                self.fd.seek(offset, 1)
 
-    def closeFile(self):
+    def __closeFile(self):
         if self.fd != None:
             self.fd.close()
         self.fd = None
 
     def open(self, mode="r"):
         RpmStreamIO.open(self)
-        self.openFile(mode)
+        self.__openFile(mode)
         return 1
 
     def close(self):
         RpmStreamIO.close(self)
-        self.closeFile()
+        self.__closeFile()
         return 1
 
 
@@ -542,27 +542,8 @@ class RpmPyDB:
         self.filenames = {}
         self.pkglist = []
 
-    def mkDBDirs(self):
-        if not os.path.isdir(self.source):
-            try:
-                os.makedirs(self.source)
-            except:
-                printError("%s: Couldn't open PyRPM database" % self.source)
-                return 0
-        if not os.path.isdir(self.source+"/headers"):
-            try:
-                os.makedirs(self.source+"/headers")
-            except:
-                printError("%s: Couldn't open PyRPM headers" % self.source)
-                return 0
-        if not os.path.isfile(self.source+"/filenames"):
-            fd = open(self.source+"/filenames", "w+")
-            fd.write("")
-            fd.close()
-        return 1
-
     def read(self):
-        if not self.mkDBDirs():
+        if not self.__mkDBDirs():
             return 0
         fd = open(self.source+"/filenames", "r+")
         key = fd.readline()
@@ -579,7 +560,7 @@ class RpmPyDB:
         return 1
 
     def write(self):
-        if not self.mkDBDirs():
+        if not self.__mkDBDirs():
             return 0
         fd = open(self.source+"/filenames", "w+")
         for key in self.filenames.keys():
@@ -594,7 +575,7 @@ class RpmPyDB:
         return 1
 
     def addPkg(self, pkg):
-        if not self.mkDBDirs():
+        if not self.__mkDBDirs():
             return 0
         nevra = pkg.getNEVRA()
         src = "pydb:/"+self.source+"/headers/"+nevra
@@ -613,7 +594,7 @@ class RpmPyDB:
         return 1
 
     def erasePkg(self, pkg):
-        if not self.mkDBDirs():
+        if not self.__mkDBDirs():
             return 0
         nevra = pkg.getNEVRA()
         headerfile = self.source+"/headers/"+nevra
@@ -638,7 +619,7 @@ class RpmPyDB:
             if not self.read():
                 return None
         for nevra in self.pkglist:
-            if nevra.startswith(name):
+            if nevra == name:
                 src = "pydb:/"+self.source+"/headers/"+nevra
                 pkg = package.RpmPackage(src)
                 pkg.read()
@@ -657,6 +638,25 @@ class RpmPyDB:
             pkg.read()
             list.append(pkg)
         return list
+
+    def __mkDBDirs(self):
+        if not os.path.isdir(self.source):
+            try:
+                os.makedirs(self.source)
+            except:
+                printError("%s: Couldn't open PyRPM database" % self.source)
+                return 0
+        if not os.path.isdir(self.source+"/headers"):
+            try:
+                os.makedirs(self.source+"/headers")
+            except:
+                printError("%s: Couldn't open PyRPM headers" % self.source)
+                return 0
+        if not os.path.isfile(self.source+"/filenames"):
+            fd = open(self.source+"/filenames", "w+")
+            fd.write("")
+            fd.close()
+        return 1
 
 
 class RpmRepoIO(RpmIO):

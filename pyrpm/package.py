@@ -122,7 +122,7 @@ class RpmPackage(RpmData):
         if self["preinprog"] != None:
             if not runScript(self["preinprog"], self["prein"], "1"):
                 return 0
-        if not self.extract():
+        if not self.__extract(db):
             return 0
         if self["postinprog"] != None:
             if not runScript(self["postinprog"], self["postin"], "1"):
@@ -189,7 +189,7 @@ class RpmPackage(RpmData):
             elif not tags and not ntags:
                 self[key] = value
             (key, value) = self.io.read()
-        self.generateFileNames()
+        self.__generateFileNames()
         self.header_read = 1
         return 1
 
@@ -199,12 +199,12 @@ class RpmPackage(RpmData):
             return 1
         return 0
         
-    def extract(self):
+    def __extract(self, db=None):
         files = self["filenames"]
         # We don't need those lists earlier, so we create them "on-the-fly"
         # before we actually start extracting files.
-        self.generateFileInfoList()
-        self.generateHardLinkList()
+        self.__generateFileInfoList()
+        self.__generateHardLinkList()
         (filename, filerawdata) = self.io.read()
         while filename != None and filename != "EOF" :
             if not self.rfilist.has_key(filename):
@@ -222,12 +222,12 @@ class RpmPackage(RpmData):
                         if len(filerawdata) > 0:
                             if not installFile(rfi, filerawdata):
                                 return 0
-                            if not self.handleHardlinks(rfi):
+                            if not self.__handleHardlinks(rfi):
                                 return 0
             (filename, filerawdata) = self.io.read()
-        return self.handleRemainingHardlinks()
+        return self.__handleRemainingHardlinks()
 
-    def generateFileNames(self):
+    def __generateFileNames(self):
         self["filenames"] = []
         if self["dirnames"] == None or self["dirindexes"] == None:
             return
@@ -235,12 +235,12 @@ class RpmPackage(RpmData):
             filename = self["dirnames"][self["dirindexes"][i]] + self["basenames"][i]
             self["filenames"].append(filename)
 
-    def generateFileInfoList(self):
+    def __generateFileInfoList(self):
         self.rfilist = {}
         for filename in self["filenames"]:
             self.rfilist[filename] = self.getRpmFileInfo(filename)
 
-    def generateHardLinkList(self):
+    def __generateHardLinkList(self):
         self.hardlinks = {}
         for filename in self.rfilist.keys():
             rfi = self.rfilist[filename]
@@ -252,7 +252,7 @@ class RpmPackage(RpmData):
             if len(self.hardlinks[key]) == 1:
                 del self.hardlinks[key]
 
-    def handleHardlinks(self, rfi):
+    def __handleHardlinks(self, rfi):
         key = str(rfi.inode)+":"+str(rfi.dev)
         self.hardlinks[key].remove(rfi)
         for hrfi in self.hardlinks[key]:
@@ -262,7 +262,7 @@ class RpmPackage(RpmData):
         del self.hardlinks[key]
         return 1
 
-    def handleRemainingHardlinks(self):
+    def __handleRemainingHardlinks(self):
         keys = self.hardlinks.keys()
         for key in keys:
             rfi = self.hardlinks[key][0]
@@ -319,7 +319,22 @@ class RpmPackage(RpmData):
     def getNEVRA(self):
         return "%s.%s" % (self.getNEVR(), self["arch"])
 
-    def getDeps(self, name, flags, version):
+    def getProvides(self):
+        return self.__getDeps("providename", "provideflags", "provideversion")
+
+    def getRequires(self):
+        return self.__getDeps("requirename", "requireflags", "requireversion")
+
+    def getObsoletes(self):
+        return self.__getDeps("obsoletename", "obsoleteflags", "obsoleteversion")
+
+    def getConflicts(self):
+        return self.__getDeps("conflictname", "conflictflags", "conflictversion")
+
+    def getTriggers(self):
+        return self.__getDeps("triggername", "triggerflags", "triggerversion")
+
+    def __getDeps(self, name, flags, version):
         n = self[name]
         if not n:
             return []
@@ -335,20 +350,5 @@ class RpmPackage(RpmData):
             else:
                 deps.append( (n[i], None, None) )
         return deps
-
-    def getProvides(self):
-        return self.getDeps("providename", "provideflags", "provideversion")
-
-    def getRequires(self):
-        return self.getDeps("requirename", "requireflags", "requireversion")
-
-    def getObsoletes(self):
-        return self.getDeps("obsoletename", "obsoleteflags", "obsoleteversion")
-
-    def getConflicts(self):
-        return self.getDeps("conflictname", "conflictflags", "conflictversion")
-
-    def getTriggers(self):
-        return self.getDeps("triggername", "triggerflags", "triggerversion")
 
 # vim:ts=4:sw=4:showmatch:expandtab
