@@ -115,7 +115,6 @@ class RpmResolver:
     def checkPkgDependencies(self, rpm, rpmlist):
         unresolved = [ ]
         resolved = [ ]
-        printDebug(1, "Checking dependencies for %s" % rpm.getNEVRA())
         j = 0
         for u in rpm["requires"]:
             if u[0][0:7] == "rpmlib(": # drop rpmlib requirements
@@ -134,6 +133,7 @@ class RpmResolver:
         for i in xrange(len(rpmlist)):
             rlist = rpmlist[i]
             for r in rlist:
+                printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.checkPkgDependencies(r, rpmlist)
                 if len(resolved) > 0 and rpmconfig.debug_level > 1:
                     # do this only in debug level > 1
