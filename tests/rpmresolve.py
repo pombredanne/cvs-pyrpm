@@ -191,8 +191,6 @@ if __name__ == '__main__':
         print "Nothing to do."
         sys.exit(0)
 
-    print "len=%d" % len(resolver.appended)
-
     # -----------------------------------------------------------------------
         
     if resolver.resolve() != 1:
