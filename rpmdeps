@@ -60,8 +60,7 @@ def compare(str1, str2):
                 i1 += 1
                 i2 += 1
             # found right side 
-            if i2 == len(str2):
-                return 0
+            if i2 == len(str2): return 0
 
         # search for alphas and compare them
         while j1 < len(str1) and str1[j1].isalpha(): j1 += 1
@@ -71,11 +70,10 @@ def compare(str1, str2):
             if j2 == i2: return 1
             if str1[i1:j1] > str2[i2:j2]: return 1
             if str1[i1:j1] < str2[i2:j2]: return -1
+            # found right side 
+            if j2 == len(str2): return 0
             i1 = j1
             i2 = j2
-            # found right side 
-            if i2 == len(str2):
-                return 0
 
     # still no difference
     if i2 == len(str2):
@@ -258,15 +256,18 @@ class Provides:
         if not self.p_provide.has_key(name):
             return None
 
-        if version == "":
-            return self.p_provide[name][0][1]
-
+        ret = [ ]
         for p in self.p_provide[name]:
-            if evr_compare(p[0], flag, version) == 1:
-                return p[1]
-            if evr_compare(gen_evr(p[1].p_epoch, p[1].p_version,
-                                   p[1].p_release), flag, version) == 1:
-                return p[1]
+            if version == "":
+                ret.append(p[1])
+            else:
+                if evr_compare(p[0], flag, version) == 1:
+                    ret.append(p[1])
+                if evr_compare(gen_evr(p[1].p_epoch, p[1].p_version,
+                                       p[1].p_release), flag, version) == 1:
+                    ret.append(p[1])
+        if len(ret) > 0:
+            return ret
         return None
 
 # ----------------------------------------------------------------------------
@@ -283,12 +284,12 @@ class Filenames:
     def search(self, name):
         if not self.p_provide.has_key(name):
             return None
-        return self.p_provide[name][0]
+        return self.p_provide[name]
 
 # ----------------------------------------------------------------------------
 
 def search_installed(name, flag, version):
-    ret = None
+    ret = [ ]
 
     mi = ts.dbMatch(rpm.RPMTAG_PROVIDES, name)
     for h in mi:
@@ -306,16 +307,15 @@ def search_installed(name, flag, version):
                                           h[rpm.RPMTAG_RELEASE]),
                                   flag, version)
         if res == 1:
-            r2 = RPM(h[rpm.RPMTAG_NAME], h)
-            rpms.append(r2)
-            for p in r2.p_provides:
-                provides.append(p[0], p[1], p[2], r2)
-            for f in r2.p_filenames:
-                filenames.append(f, r2)
-            if ret == None:
-                ret = r2
+            r = RPM(h[rpm.RPMTAG_NAME], h)
+            rpms.append(r)
+            for p in r.p_provides:
+                provides.append(p[0], p[1], p[2], r)
+            for f in r.p_filenames:
+                filenames.append(f, r)
+            ret.append(r)
 
-    if ret == None:
+    if len(ret) == 0:
         mi = ts.dbMatch(rpm.RPMTAG_BASENAMES, name)
         for h in mi:
             res = 1
@@ -325,16 +325,17 @@ def search_installed(name, flag, version):
                                           h[rpm.RPMTAG_RELEASE]),
                                   flag, version)
             if res == 1:
-                r2 = RPM(h[rpm.RPMTAG_NAME], h)
-                rpms.append(r2)
-                for p in r2.p_provides:
-                    provides.append(p[0], p[1], p[2], r2)
-                for f in r2.p_filenames:
-                    filenames.append(f, r2)
-                if ret == None:
-                    ret = r2
+                r = RPM(h[rpm.RPMTAG_NAME], h)
+                rpms.append(r)
+                for p in r.p_provides:
+                    provides.append(p[0], p[1], p[2], r)
+                for f in r.p_filenames:
+                    filenames.append(f, r)
+                ret.append(r)
 
-    return ret
+    if len(ret) > 0:
+        return ret
+    return None
 
 # ----------------------------------------------------------------------------
 
@@ -470,7 +471,7 @@ if __name__ == '__main__':
                                     r.p_arch)
             if r.p_installed == 0 and verbose > 1:
                 name += ": %s" % r.p_file
-            print "%s" % name
+            print "\n%s" % name
 
         if verbose > 1:
             # resolved dependencies
@@ -478,15 +479,20 @@ if __name__ == '__main__':
             for j in xrange(len(r.p_resolved)):
                 r2 = r.p_resolved[j]
                 dep = r2[0][0]
-                pkg = "%s-%s-%s.%s" % (r2[1].p_name, r2[1].p_version,
-                                       r2[1].p_release, r2[1].p_arch)
+                pkgs = ""
+                if verbose > 2:
+                    list = [ ]
+                for rpm in r2[1]:
+                    p = "%s-%s-%s.%s" % (rpm.p_name, rpm.p_version,
+                                         rpm.p_release, rpm.p_arch)
+                    if p not in list:
+                        list.append(p)
+                        if pkgs != "": pkgs += ", "
+                        pkgs += p
                 if verbose > 2:
                     if r2[0][2] != "":
                         dep = "%s %s %s" % (r2[0][0], r2[0][1], r2[0][2])
-                    print "\t%s --> %s" % (dep, pkg)
-                else:
-                    if pkg not in list:
-                        list.append(pkg)
+                    print "\t%s --> %s" % (dep, pkgs)
             if verbose == 2:
                 list.sort()
                 for pkg in list:
