@@ -195,11 +195,16 @@ class RpmController:
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
                     i += 1
-                    progress = "[%d/%d]" % (i, numops)
-                    if rpmconfig.printhash:
-                        printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
+                    progress = "[%d/%d] %s %s" % (i, numops, progress, \
+                                                  pkg.getNEVRA())
+                    if op != OP_ERASE and self.operation != OP_ERASE:
+                        doprint = 1
+                        if rpmconfig.printhash:
+                            printInfo(0, progress)
+                        else:
+                            printInfo(1, progress)
                     else:
-                        printInfo(1, "%s %s" % (progress, pkg.getNEVRA()))
+                        doprint = 0
                     if   op == OP_INSTALL or \
                          op == OP_UPDATE or \
                          op == OP_FRESHEN:
@@ -209,7 +214,7 @@ class RpmController:
                         self.__addPkgToDB(pkg)
                     elif op == OP_ERASE:
                         self.__runTriggerUn(pkg)
-                        if not pkg.erase(self.pydb):
+                        if not pkg.erase(self.pydb, doprint):
                             sys.exit(1)
                         self.__runTriggerPostUn(pkg)
                         self.__erasePkgFromDB(pkg)

@@ -17,11 +17,133 @@
 #
 
 
-import gzip, types, bsddb, libxml2
+import types, bsddb, libxml2, urlgrabber.grabber, zlib, gzip
 from struct import pack, unpack
 
 from functions import *
 import package
+
+
+FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
+class PyGZIP:
+    def __init__(self, fd):
+        self.fd = fd
+        self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
+        self.crcval = zlib.crc32("")
+        self.length = 0
+        self.buffer = []
+        self.bufferlen = 0
+        self.pos = 0
+        self.enddata = ""
+        self.header_read = 0
+
+    def __readHeader(self):
+        magic = self.fd.read(2)
+        if magic != '\037\213':
+            printError("Not a gzipped file")
+            v1 = unpack("!H", magic)
+            print oct(v1[0])
+            sys.exit(0)
+        if ord(self.fd.read(1)) != 8:
+            printError("Unknown compression method")
+            sys.exit(0)
+        flag = ord(self.fd.read(1))
+        self.fd.read(4+1+1) # Discard modification time, extra flags, OS byte
+        if flag & FEXTRA:
+            # Read & discard the extra field, if present
+            xlen=ord(self.fd.read(1))
+            xlen=xlen+256*ord(self.fd.read(1))
+            self.fd.read(xlen)
+        if flag & FNAME:
+            # Read and discard a null-terminated string containing the filename
+            while (1):
+                s=self.fd.read(1)
+                if s=='\000':
+                    break
+        if flag & FCOMMENT:
+            # Read and discard a null-terminated string containing a comment
+            while (1):
+                s=self.fd.read(1)
+                if s=='\000':
+                    break
+        if flag & FHCRC:
+            self.fd.read(2)      # Read & discard the 16-bit header CRC
+        self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
+        self.crcval = zlib.crc32("")
+        self.header_read = 1
+
+    def read(self, bytes=None):
+        if not self.header_read:
+            self.__readHeader()
+        data = ""
+        size = 2048
+        while bytes == None or self.bufferlen <  bytes:
+            if len(data) >= 8:
+                self.enddata = data[-8:]
+            else:
+                self.enddata = self.enddata[:8-len(data)] + data
+            size = bytes - self.bufferlen
+            if size > 65536:
+                size = 32768
+            elif size > 32768:
+                size = 16384
+            elif size > 16384:
+                size = 8192
+            elif size > 8192:
+                size = 4096
+            elif size > 4096:
+                size = 2048
+            else:
+                size = 1024
+            data = self.fd.read(size)
+            if data == "":
+            # We've read to the end of the file, so we have to rewind in order
+            # to reread the 8 bytes containing the CRC and the file size.  The
+            # decompressor is smart and knows when to stop, so feeding it
+            # extra data is harmless.
+                crc32 = unpack("!I", self.enddata[0:4])
+                isize = unpack("!I", self.enddata[4:8])
+                if crc32 != self.crcval:
+                    printError("CRC check failed.")
+                if isize != self.length:
+                    printError("Incorrect length of data produced")
+                break
+            decompdata = self.decompobj.decompress(data)
+            decomplen = len(decompdata)
+            self.buffer.append(decompdata)
+            self.bufferlen += decomplen
+            self.length += decomplen
+            self.crcval = zlib.crc32(decompdata, self.crcval)
+        if bytes == None or self.bufferlen <  bytes:
+            decompdata = self.decompobj.flush()
+            decomplen = len(decompdata)
+            self.buffer.append(decompdata)
+            self.bufferlen += decomplen
+            self.length = self.length + decomplen
+            self.crcval = zlib.crc32(decompdata, self.crcval)
+        if bytes == None:
+            bytes = self.length
+        retdata = ""
+        while bytes > 0:
+            decompdata = self.buffer[0]
+            decomplen = len(decompdata)
+            if bytes+self.pos <= decomplen:
+                tmpdata = decompdata[self.pos:bytes+self.pos]
+                retdata += tmpdata
+                #self.buffer[0] = decompdata[bytes:]
+                self.bufferlen -= bytes
+                self.pos += bytes
+                break
+            decomplen -= self.pos
+            bytes -= decomplen
+            self.bufferlen -= decomplen
+            if self.pos != 0:
+                retdata += decompdata[self.pos:]
+            else:
+                retdata += decompdata
+            self.pos = 0
+            self.buffer.pop(0)
+        return retdata
 
 
 class CPIOFile:
@@ -144,7 +266,8 @@ class RpmStreamIO(RpmIO):
                 self.hdrdata = None
                 self.hdr = {}
                 self.hdrtype = {}
-                cpiofd = gzip.GzipFile(fileobj=self.fd)
+#                cpiofd = gzip.GzipFile(fileobj=self.fd)
+                cpiofd = PyGZIP(self.fd)
                 self.cpio = CPIOFile(cpiofd)
                 self.where = 4
                 # Nobody cares about gzipped payload length so far
@@ -167,12 +290,26 @@ class RpmStreamIO(RpmIO):
         lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, pkg.getNEVR()[0:66], rpm_lead_arch[pkg["arch"]], 5)
         (sigindex, sigdata) = self.__generateSig(pkg["signature"])
         (headerindex, headerdata) = self.__generateHeader(pkg)
-        self.fd.write(lead)
-        self.fd.write(sigindex)
-        self.fd.write(sigdata)
-        self.fd.write(headerindex)
-        self.fd.write(headerdata)
+        self._write(lead)
+        self._write(sigindex)
+        self._write(sigdata)
+        self._write(headerindex)
+        self._write(headerdata)
         return 1
+
+    def _read(self, nbytes=None):
+        if self.fd == None:
+            self.open()
+        if self.fd == None:
+            return None
+        return self.fd.read(nbytes)
+
+    def _write(self, data):
+        if self.fd == None:
+            self.open("w+")
+        if self.fd == None:
+            return 0
+        return self.fd.write(data)
 
     def _tell(self):
         try:
@@ -181,7 +318,7 @@ class RpmStreamIO(RpmIO):
             return None
 
     def __readLead(self):
-        leaddata = self.fd.read(96)
+        leaddata = self._read(96)
         if leaddata[:4] != RPM_HEADER_LEAD_MAGIC:
             printError("%s: no rpm magic found" % self.source)
             return (None, None)
@@ -229,16 +366,16 @@ class RpmStreamIO(RpmIO):
         return ret
 
     def __readIndex(self, pad, issig=None):
-        data = self.fd.read(16)
+        data = self._read(16)
         if not len(data):
             return None
         (magic, indexNo, storeSize) = unpack("!8sii", data)
         if magic != RPM_HEADER_INDEX_MAGIC or indexNo < 1:
             raiseFatal("%s: bad index magic" % self.source)
-        fmt = self.fd.read(16 * indexNo)
-        fmt2 = self.fd.read(storeSize)
+        fmt = self._read(16 * indexNo)
+        fmt2 = self._read(storeSize)
         if pad != 1:
-            self.fd.read((pad - (storeSize % pad)) % pad)
+            self._read((pad - (storeSize % pad)) % pad)
         if self.verify:
             self.__verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + len(fmt2))
@@ -521,11 +658,6 @@ class RpmStreamIO(RpmIO):
         return (index, store+pad)
 
 
-class RpmFtpIO(RpmStreamIO):
-    def __init__(self, source, verify=None, strict=None, hdronly=None):
-        RpmStreamIO.__init__(self, source, verify, strict, hdronly)
-
-
 class RpmFileIO(RpmStreamIO):
     def __init__(self, source, verify=None, strict=None, hdronly=None):
         RpmStreamIO.__init__(self, source, verify, strict, hdronly)
@@ -558,15 +690,47 @@ class RpmFileIO(RpmStreamIO):
         return 1
 
 
+class RpmFtpIO(RpmStreamIO):
+    def __init__(self, source, verify=None, strict=None, hdronly=None):
+        RpmStreamIO.__init__(self, source, verify, strict, hdronly)
+
+    def open(self, mode="r"):
+        RpmStreamIO.open(self)
+        urlg = urlgrabber.grabber.URLGrabberFileObject(self.source)
+        self.fd  = urlg.fo
+        return self.fd != None
+
+    def close(self):
+        RpmStreamIO.close(self)
+        self.fd.close()
+        self.fd = None
+        return 1
+
+
 class RpmHttpIO(RpmStreamIO):
     def __init__(self, source, verify=None, strict=None, hdronly=None):
         RpmStreamIO.__init__(self, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
-        return 0
+        RpmStreamIO.open(self)
+        opts = urlgrabber.grabber.URLGrabberOptions()
+        self.urlg = urlgrabber.grabber.URLGrabberFileObject(self.source, None, opts)
+        self.fd = self.urlg.fo
+        return 1
 
     def close(self):
+        RpmStreamIO.close(self)
+        self.urlg.close()
+        return 1
+
+    def _read(self, nbytes=None):
+        return self.urlg.read(nbytes)
+
+    def _write(self, nbytes=None):
         return 0
+
+    def _tell(self, nbytes=None):
+        return 1
 
 
 class RpmDBIO(RpmFileIO):
@@ -935,11 +1099,11 @@ def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
     if source[:4] == 'db:/':
         return RpmDBIO(source[4:], verify, strict, hdronly)
     elif source[:5] == 'ftp:/':
-        return RpmFtpIO(source[5:], verify, strict, hdronly)
+        return RpmFtpIO(source, verify, strict, hdronly)
     elif source[:6] == 'file:/':
         return RpmFileIO(source[6:], verify, strict, hdronly)
     elif source[:6] == 'http:/':
-        return RpmHttpIO(source[6:], verify, strict, hdronly)
+        return RpmHttpIO(source, verify, strict, hdronly)
     elif source[:6] == 'pydb:/':
         return RpmPyDBIO(source[6:], verify, strict, hdronly)
     elif source[:6] == 'repo:/':

@@ -56,21 +56,25 @@ def runDepResolution(resolver):
     unresolved = resolver.getUnresolvedDependencies()
     iter = 1
     while len(unresolved) > 0:
-        printInfo(2, "Dependency iteration " + str(iter) + "\n")
+        printInfo(1, "Dependency iteration " + str(iter) + "\n")
         iter += 1
         respkglist = []
-        for (pkg, deplist) in unresolved:
-            printInfo(2, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
+        for pkg in unresolved.keys():
+            printInfo(1, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
             found = 0
-            for dep in deplist:
+            for dep in unresolved[pkg]:
                 printInfo(2, "\t" + depString(dep) + "\n")
+                depfound = 0
                 for repo in repos:
                     for upkg in repo.searchDependency(dep):
                         ret = resolver.append(upkg)
-                        printInfo(2, "\t" + str(ret) + "\n")
                         if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
                             found = 1
+                            depfound = 1
                             respkglist.append(upkg)
+                            break
+                    if depfound:
+                        break
             if found == 0:
                 tmplist = []
                 for repo in repos:
@@ -100,12 +104,20 @@ def readRpmPackage(filename):
     pkg.close()
     return pkg
 
-def addDirToRepo(dirname, resolver):
+def addDirToRepo(dirname, resolver, excludes):
+    pkg_list = []
     for f in os.listdir(dirname):
         fn = "%s/%s" % (dirname, f)
         if not f.endswith(".rpm") or not os.path.isfile(fn):
             continue
-        resolver.append(readRpmPackage(fn))
+        pkg_list.append(readRpmPackage(fn))
+    ex_list = string.split(excludes)
+    for ex in ex_list:
+        excludes = findPkgByName(ex, pkg_list)
+        for pkg in excludes:
+            pkg_list.remove(pkg)
+    for pkg in pkg_list:
+        resolver.append(pkg)
 
 #
 # Main program
@@ -122,6 +134,7 @@ except getopt.error, e:
     usage()
     sys.exit(1)
 
+# Store for all our repositories
 repos = []
 
 for (opt, val) in opts:
@@ -136,20 +149,36 @@ for (opt, val) in opts:
         rpmconfig.debug_level += 1
     elif opt in ["-r", "--root"]:
         rpmconfig.buildroot = val
-    elif opt in ["-g", "--group"]:
-        rpmconfig.compsfile = val
-    elif opt == "--repo":
-        resolver = RpmResolver([], OP_INSTALL)
-        if os.path.isdir(val):
-            addDirToRepo(val, resolver)
-        if os.path.isdir(val+"/RedHat/RPMS"):
-            addDirToRepo(val+"/RedHat/RPMS", resolver)
-        if os.path.isdir(val+"/Fedora/RPMS"):
-            addDirToRepo(val+"/Fedora/RPMS", resolver)
-        if rpmconfig.compsfile == None and os.path.isfile(val+"/repodata/comps.xml"):
-            rpmconfig.compsfile = val+"/repodata/comps.xml"
-        repos.append(resolver)
-        del resolver
+    elif opt == "-c":
+        conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], val)
+        for key in conf.vars.keys():
+            if key == "main":
+                pass
+            else:
+                sec = conf[key]
+                if not sec.has_key("baseurl"):
+                    printError("%s: No baseurl for this section in conf file." % key)
+                    sys.exit(1)
+                baseurl = sec["baseurl"]
+                if not sec.has_key("exclude"):
+                    excludes = ""
+                else:
+                    excludes = sec["exclude"]
+                if not baseurl.startswith("file:/"):
+                    printInfo("%s: Only file:/ baseurls supported for now." % key)
+                    continue
+                val = baseurl[5:]
+                resolver = RpmResolver([], OP_INSTALL)
+                if os.path.isdir(val):
+                    addDirToRepo(val, resolver, excludes)
+                if os.path.isdir(val+"/RedHat/RPMS"):
+                    addDirToRepo(val+"/RedHat/RPMS", resolver, excludes)
+                if os.path.isdir(val+"/Fedora/RPMS"):
+                    addDirToRepo(val+"/Fedora/RPMS", resolver, excludes)
+                if rpmconfig.compsfile == None and \
+                   os.path.isfile(val+"/repodata/comps.xml"):
+                    rpmconfig.compsfile = val+"/repodata/comps.xml"
+                repos.append(resolver)
     elif opt == "--quiet":
         rpmconfig.debug_level = 0
         rpmconfig.warning_level = 0
@@ -200,6 +229,14 @@ if not args:
 command = args[0]
 args = args[1:]
 
+# Read in db and store packages in installed
+if rpmconfig.buildroot:
+    pydb = RpmPyDB(rpmconfig.buildroot + rpmconfig.dbpath)
+else:
+    pydb = RpmPyDB(rpmconfig.dbpath)
+installed = pydb.getPkgList().values()
+del pydb
+
 if command.startswith("group"):
     if rpmconfig.compsfile == None:
         printError("You need to specify a comps.xml file for group operations")
@@ -212,7 +249,13 @@ if command.startswith("group"):
         pkgs.extend(comps.getPackageNames(grp))
     args = pkgs
     del comps
+else:
+    if len(args) == 0:
+        for pkg in installed:
+            args.append(pkg["name"])
 
+# Look for packages we need/want to install. Arguments can either be direct
+# filenames or package nevra's with * wildcards
 pkgs = []
 for f in args:
     if os.path.isfile(f) and f.endswith(".rpm"):
@@ -230,13 +273,7 @@ for f in args:
         if len(pkgs) == 0:
             printError("Couldn't find package %s, skipping" % f)
 
-if rpmconfig.buildroot:
-    pydb = RpmPyDB(rpmconfig.buildroot + rpmconfig.dbpath)
-else:
-    pydb = RpmPyDB(rpmconfig.dbpath)
-installed = pydb.getPkgList().values()
-del pydb
-
+# Add packages to be updated to our operation resolver
 opresolver = RpmResolver(installed, OP_UPDATE)
 for pkg in pkgs:
     if command in ("update", "upgrade", "groupupdate", "groupupgrade"):
@@ -249,10 +286,26 @@ for pkg in pkgs:
         opresolver.append(pkg)
 del pkgs
 
+# Look for obsoletes and add them to our update packages
+changes = 1
+while changes:
+    changes = 0
+    for repo in repos:
+        for pkg in repo.appended:
+            for u in pkg["obsoletes"]:
+                s = opresolver.searchDependency(u)
+                if len(s) > 0:
+                    print pkg.getNEVRA()
+                    ret = opresolver.append(pkg)
+                    if ret > 0 and ret != RpmResolver.ALREADY_ADDED:
+                        changes = 1
+
+del repos
 runDepResolution(opresolver)
 appended = opresolver.appended
 del opresolver
-del repos
+
+rpmconfig.nofileconflictcheck =1
 
 control = RpmController()
 control.handlePkgs(appended, OP_UPDATE, rpmconfig.dbpath, rpmconfig.buildroot)

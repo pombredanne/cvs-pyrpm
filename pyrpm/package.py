@@ -210,7 +210,7 @@ class RpmPackage(RpmData):
         self.rfilist = None
         return 1
 
-    def erase(self, db=None):
+    def erase(self, db=None, doprint=1):
         if not self.open():
             return 0
         if not self.__readHeader():
@@ -228,12 +228,12 @@ class RpmPackage(RpmData):
         nfiles = len(files)
         n = 0
         pos = 0
-        if rpmconfig.printhash:
+        if rpmconfig.printhash and doprint:
             printInfo(0, "\r\t\t\t\t ")
         for i in xrange(len(files)-1, -1, -1):
             n += 1
             npos = int(n*45/nfiles)
-            if pos < npos and rpmconfig.printhash:
+            if pos < npos and rpmconfig.printhash and doprint:
                 printInfo(0, "#"*(npos-pos))
             pos = npos
             f = files[i]
@@ -253,10 +253,11 @@ class RpmPackage(RpmData):
                 except:
                     printWarning(1, "Couldn't remove file %s from pkg %s" \
                         % (f, self.source))
-        if rpmconfig.printhash:
-            printInfo(0, "\n")
-        else:
-            printInfo(1, "\n")
+        if doprint:
+            if rpmconfig.printhash:
+                printInfo(0, "\n")
+            else:
+                printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None:
             if not runScript(self["postunprog"], self["postun"], numPkgs):
