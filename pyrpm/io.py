@@ -17,8 +17,10 @@
 #
 
 
-import gzip, types
+import gzip, types, string
 from struct import pack,unpack
+
+import package
 from base import *
 from functions import *
 from cpio import *
@@ -43,14 +45,14 @@ class RpmIO:
 
 
 class RpmStreamIO(RpmIO):
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
         RpmIO.__init__(self, source)
         self.fd = None
         self.cpiofd = None
         self.cpio = None
         self.verify = verify
         self.legacy = legacy
-        self.parsesig = parsesig
+        self.skipsig = skipsig
         self.hdronly = hdronly
         self.issrc = 0
         self.where = 0  # 0:lead 1:separator 2:sig 3:header 4:files
@@ -81,7 +83,7 @@ class RpmStreamIO(RpmIO):
         if self.where == 1:
             self.readSig()
             # Shall we skip signature parsing/reading?
-            if (self.verify or self.parsesig) and not self.hdronly:
+            if not self.skipsig:
                 self.where = 2
             else:
                 self.idx = self.hdrdata[0]+1
@@ -113,7 +115,7 @@ class RpmStreamIO(RpmIO):
             self.idx += 1
             return (rpmtagname[v[0]], v[1])
         # Read/parse data files archive
-        if self.where == 4:
+        if self.where == 4 and not self.hdronly:
             (filename, filedata, filerawdata) = self.cpio.getNextEntry()
             if filename != None:
                 return (filename, filerawdata)
@@ -463,7 +465,7 @@ class RpmStreamIO(RpmIO):
 
     def write(self, data):
         if self.fd == None:
-            self.open("w")
+            self.open("w+")
         if self.fd == None:
             return 0
         lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, data.getNEVR()[0:66], rpm_lead_arch[data["arch"]], 5)
@@ -478,56 +480,18 @@ class RpmStreamIO(RpmIO):
 
 
 class RpmDBIO(RpmIO):
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
         RpmIO.__init__(self)
 
-
-class RpmPyDBIO(RpmIO):
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
-        RpmIO.__init__(self)
-
-class RpmPyDB:
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
-        self.source = source
-        self.filenames = {}
-        self.pkglist = []
-
-    def read(self):
-        if not os.path.isdir(self.source):
-            try:
-                os.makedirs(self.source)
-            except:
-                printError(1, "%s: Couldn't open PyRPM database" % self.source)
-                return 0
-        fd = open(self.source+"/filenames", "r+")
-        list = fd.read()
-        fd.close()
-        exec "self.filenames = %s" % list
-        if not os.path.isdir(self.source+"/headers"):
-            try:
-                os.makedirs(self.source+"/headers")
-            except:
-                printError(1, "%s: Couldn't open PyRPM headers" % self.source)
-                return 0
-        self.pkglist = os.listdir(self.source+"/headers")
-        print self.filenames, self.pkglist
-    def write(self):
-        pass
-
-    def newPkg(self, pkg):
-        pass
-
-    def erasePkg(self, pkg):
-        pass
 
 class RpmFtpIO(RpmIO):
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
         RpmIO.__init__(self)
 
 
 class RpmFileIO(RpmStreamIO):
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
-        RpmStreamIO.__init__(self, source, verify, legacy, parsesig, hdronly)
+    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
+        RpmStreamIO.__init__(self, source, verify, legacy, skipsig, hdronly)
         self.issrc = 0
         if source[-8:] == ".src.rpm" or source[-10:] == ".nosrc.rpm":
             self.issrc = 1
@@ -558,34 +522,150 @@ class RpmFileIO(RpmStreamIO):
 
 
 class RpmHttpIO(RpmIO):
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
-        RpmStreamIO.__init__(self, source, verify, legacy, parsesig, hdronly)
+    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
+        RpmStreamIO.__init__(self, source, verify, legacy, skipsig, hdronly)
 
     def open(self):
         pass
 
     def open(self):
         pass
+
+
+class RpmPyDBIO(RpmFileIO):
+    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
+        RpmFileIO.__init__(self, source, verify, legacy, skipsig, hdronly)
+
+class RpmPyDB:
+    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
+        self.source = source
+        self.filenames = {}
+        self.pkglist = []
+
+    def mkDBDirs(self):
+        if not os.path.isdir(self.source):
+            try:
+                os.makedirs(self.source)
+            except:
+                printError("%s: Couldn't open PyRPM database" % self.source)
+                return 0
+        if not os.path.isdir(self.source+"/headers"):
+            try:
+                os.makedirs(self.source+"/headers")
+            except:
+                printError("%s: Couldn't open PyRPM headers" % self.source)
+                return 0
+        if not os.path.isfile(self.source+"/filenames"):
+            fd = open(self.source+"/filenames", "w+")
+            fd.write("")
+            fd.close()
+        return 1
+
+    def read(self):
+        if not self.mkDBDirs():
+            return 0
+        fd = open(self.source+"/filenames", "r+")
+        key = fd.readline()
+        while key: 
+            value = fd.readline()
+            key = key[:-1]
+            values = string.split(value)
+            self.filenames[key] = []
+            for val in values:
+                self.filenames[key].append(val)
+            key = fd.readline()
+        fd.close()
+        self.pkglist = os.listdir(self.source+"/headers")
+        return 1
+
+    def write(self):
+        if not self.mkDBDirs():
+            return 0
+        fd = open(self.source+"/filenames", "w+")
+        for key in self.filenames.keys():
+            # Skip unreferenced files
+            if len(self.filenames[key]) == 0:
+                continue
+            fd.write(key+"\n")
+            for val in self.filenames[key]:
+                fd.write(val+" ")
+            fd.write("\n")
+        fd.close()
+        return 1
+
+    def addPkg(self, pkg):
+        if not self.mkDBDirs():
+            return 0
+        nevra = pkg.getNEVRA()
+        src = "pydb:/"+self.source+"/headers/"+nevra
+        pyrpmio = getRpmIOFactory(src)
+        if not pyrpmio.write(pkg):
+            return 0
+        for file in pkg["filenames"]:
+            if not self.filenames.has_key(file):
+                self.filenames[file] = []
+            if self.filenames[file].count(nevra) > 0:
+                printWarning(2, "%s: File '%s' was already in PyDB for package" % (nevra, file))
+                self.filenames[file].remove(nevra)
+            self.filenames[file].append(nevra)
+        if not self.write():
+            return 0
+        return 1
+
+    def erasePkg(self, pkg):
+        if not self.mkDBDirs():
+            return 0
+        nevra = pkg.getNEVRA()
+        headerfile = self.source+"/headers/"+nevra
+        try:
+            os.unlink(headerfile)
+        except:
+            printWarning(1, "%s: Package not found in PyDB" % nevra)
+        for file in pkg["filenames"]:
+            # Check if the filename is in the filenames list and was referenced
+            # by the package we want to remove
+            if not self.filenames.has_key(file) or \
+               not nevra in self.filenames[file]:
+                printWarning(1, "%s: File '%s' not found in PyDB during erase" % (nevra, file))
+                continue
+            self.filenames[file].remove(nevra)
+        if not self.write():
+            return 0
+        return 1
+
+    def getPkgList(self):
+        if not self.pkglist:
+            if not self.read():
+                return None
+        list = []
+        for nevra in self.pkglist:
+            src = "pydb:/"+self.source+"/headers/"+nevra
+            pkg = package.RpmPackage(src)
+            pkg.read()
+            list.append(pkg)
+        return list
 
 
 class RpmRepoIO(RpmIO):
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
         RpmIO.__init__(self)
 
 
-def getRpmIOFactory(source, verify=None, legacy=None, parsesig=None, hdronly=None):
+def getRpmIOFactory(source, verify=None, legacy=None, skipsig=None, hdronly=None):
     if source[:4] == 'db:/':
-        return RpmDBIO(source[4:], verify, legacy, parsesig, hdronly)
+        return RpmDBIO(source[4:], verify, legacy, skipsig, hdronly)
     elif source[:5] == 'ftp:/':
-        return RpmFtpIO(source[5:], verify, legacy, parsesig, hdronly)
+        return RpmFtpIO(source[5:], verify, legacy, skipsig, hdronly)
     elif source[:6] == 'file:/':
-        return RpmFileIO(source[6:], verify, legacy, parsesig, hdronly)
+        return RpmFileIO(source[6:], verify, legacy, skipsig, hdronly)
     elif source[:6] == 'http:/':
-        return RpmHttpIO(source[6:], verify, legacy, parsesig, hdronly)
+        return RpmHttpIO(source[6:], verify, legacy, skipsig, hdronly)
+    elif source[:6] == 'pydb:/':
+        return RpmPyDBIO(source[6:], verify, legacy, skipsig, hdronly)
     elif source[:6] == 'repo:/':
-        return RpmRepoIO(source[6:], verify, legacy, parsesig, hdronly)
+        return RpmRepoIO(source[6:], verify, legacy, skipsig, hdronly)
     else:
-        return RpmFileIO(source, verify, legacy, parsesig, hdronly)
+        return RpmFileIO(source, verify, legacy, skipsig, hdronly)
     return None
 
 # vim:ts=4:sw=4:showmatch:expandtab

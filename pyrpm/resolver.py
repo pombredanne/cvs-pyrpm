@@ -126,8 +126,8 @@ class RpmResolver:
                         unresolved.append(_gen_depstr(u))
                         no_unresolved = 0
                 if len(unresolved) > 0:
-                    printError("%s: unresolved dependencies:\n" % \
-                               r.getNEVRA(), string.join(unresolved, "\n\t"))
+                    printError("%s: unresolved dependencies: %s\n" % \
+                               (r.getNEVRA(), string.join(unresolved, "\n\t")))
         return no_unresolved
 
     # generate relations from RpmList

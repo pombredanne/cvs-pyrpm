@@ -627,7 +627,8 @@ rpm_lead_arch = {
 "ia64" : 1,
 "x86_64" : 1,
 "amd64" : 1,
-"ia32e" : 1
+"ia32e" : 1,
+"noarch" : 0
 }
 
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -121,7 +121,7 @@ class RpmPackage(RpmData):
                 return 0
         return 1
 
-    def remove(self, files=None):
+    def erase(self, files=None):
         if not self.open():
             return 0
         if not self.readHeader():
@@ -149,6 +149,7 @@ class RpmPackage(RpmData):
         if self["postunprog"] != None:
             if not runScript(self["postunprog"], self["postun"], "1"):
                 return 0
+        return 1
 
     def readHeader(self, tags=None, ntags=None):
         if self.header_read:

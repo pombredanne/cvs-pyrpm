@@ -18,13 +18,15 @@
 
 
 import os
-from package import *
+import package
+import io
 from resolver import *
 
 
 class RpmController:
     def __init__(self):
         self.db = None
+        self.pydb = None
         self.buildroot = None
         self.ignorearch = None
         self.operation = None
@@ -47,6 +49,7 @@ class RpmController:
         return 1
 
     def updatePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        self.setBuildroot(buildroot)
         self.operation = "update"
         for file in pkglist:
             self.updatePkg(file)
@@ -58,6 +61,7 @@ class RpmController:
         return 1
 
     def freshenPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        self.setBuildroot(buildroot)
         self.operation = "update"
         for file in pkglist:
             self.updatePkg(file)
@@ -79,6 +83,7 @@ class RpmController:
         return 1
 
     def erasePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        self.setBuildroot(buildroot)
         self.operation = "erase"
         for file in pkglist:
             self.erasePkg(file)
@@ -99,17 +104,28 @@ class RpmController:
     def readDB(self):
         if self.db == None:
             return 0
+        if self.pydb != None:
+            return 1
         self.installed = []
         if self.buildroot != None:
-            pydb = RpmPyDB(self.buildroot+self.db)
+            self.pydb = io.RpmPyDB(self.buildroot+self.db)
         else:
-            pydb = RpmPyDB(self.db)
-        pydb.read()
+            self.pydb = io.RpmPyDB(self.db)
+        self.installed = self.pydb.getPkgList()
+        if self.installed == None:
+            self.installed = []
+            return 0
         return 1
 
-    def updateDB(self, pkg):
-        self.installed.append(pkg)
+    def addPkgToDB(self, pkg):
+        if self.pydb == None:
+            return 0
+        return self.pydb.addPkg(pkg)
 
+    def erasePkgFromDB(self, pkg):
+        if self.pydb == None:
+            return 0
+        return self.pydb.erasePkg(pkg)
 
     # XXX: Write this. Or move out to meta layer for repo handling
     def addRepo(self, file):
@@ -120,21 +136,21 @@ class RpmController:
         return 1
 
     def newPkg(self, file):
-        pkg = RpmPackage(file)
+        pkg = package.RpmPackage(file)
         pkg.read()
         pkg.close()
         self.new.append(pkg)
         return 1
 
     def updatePkg(self, file):
-        pkg = RpmPackage(file)
+        pkg = package.RpmPackage(file)
         pkg.read()
         pkg.close()
         self.update.append(pkg)
         return 1
 
     def erasePkg(self, file):
-        pkg = RpmPackage(file)
+        pkg = package.RpmPackage(file)
         pkg.read()
         pkg.close()
         self.erase.append(pkg)
@@ -149,12 +165,11 @@ class RpmController:
             if arch not in possible_archs:
                 raiseFatal("%s: Unknow architecture %s" % (pkg.source, arch))
             if duplicates.has_key(name):
-                print name,arch
                 if arch in arch_compats[duplicates[name][0]]:
-                    printInfo("%s: removing due to arch_compat\n" % pkg.source)
+                    printInfo(2, "%s: removing due to arch_compat\n" % pkg.source)
                     rmlist.append(pkg)
                 else:
-                    printInfo("%s: removing due to arch_compat\n" % duplicates[name][1].source)
+                    printInfo(2, "%s: removing due to arch_compat\n" % duplicates[name][1].source)
                     rmlist.append(duplicates[name][1])
                     duplicates[name] = [arch, pkg]
             else:
@@ -168,9 +183,27 @@ class RpmController:
         self.filterArchList(self.update)
         self.filterArchList(self.available)
 
+    def checkInstall(self):
+        list = {}
+        for pkg in self.installed:
+            if not list.has_key(pkg["name"]):
+                list[pkg["name"]] = []
+            list[pkg["name"]].append(pkg)
+        for pkg in self.new:
+            if not list.has_key(pkg["name"]):
+                continue
+            for ipkg in list[pkg["name"]]:
+                if pkgCompare(pkg, ipkg) <= 0:
+                    return 0
+        return 1
+
     def preprocess(self):
         if not self.ignorearch:
             self.filterArch()
+        if self.operation == "install":
+            if not self.checkInstall():
+                printError("Can't install older or same packages.")
+                sys.exit(1)
         return 1
 
     def run(self):
@@ -183,29 +216,41 @@ class RpmController:
             rpms = self.erase
         resolver = RpmResolver(rpms, self.installed, self.operation)
         operations = resolver.resolve()
+        if not operations:
+            printError("Errors found during package dependancy checks and ordering.")
+            sys.exit(1)
         for (op, pkg) in operations:
-            print pkg.source
             pkg.open()
+            printInfo(0, "Installing package %s\n" % pkg.getNEVR())
             pid = os.fork()
             if pid != 0:
-                os.waitpid(pid, 0)
+                foo = os.waitpid(pid, 0)
+                if foo[1] != 0:
+                    printError("Errors during package installation.")
+                    sys.exit(1)
+                if op == "install":
+                    self.addPkgToDB(pkg)
+                if op == "update":
+                    self.addPkgToDB(pkg)
+#                    self.erasePkgFromDB(pkg)
+                if op == "erase":
+                    self.erasePkgFromDB(pkg)
                 pkg.close()
                 continue
             else:
                 if self.buildroot:
                     os.chroot(self.buildroot)
                 if op == "install":
-                    if pkg.install():
-                        self.updateDB(pkg)
+                    if not pkg.install():
+                        sys.exit(1)
                 # XXX: Handle correct removal of package that gets updated
                 if op == "update":
-                    if pkg.install():
-                        self.updateDB(pkg)
+                    if not pkg.install():
+                        sys.exit(1)
                 # XXX: Handle correct erase of files etc (duplicate files etc)
                 if op == "erase":
-                    if pkg.erase():
-                        self.updateDB(pkg)
-                pkg.close()
+                    if not pkg.erase():
+                        sys.exit(1)
                 sys.exit()
 
 # vim:ts=4:sw=4:showmatch:expandtab

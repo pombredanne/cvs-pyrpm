@@ -145,16 +145,18 @@ def printDebug(level, msg):
     return 0
 
 def printInfo(level, msg):
-    sys.stdout.write(msg)
-    sys.stdout.flush()
+    if level <= rpmconfig.debug_level:
+        sys.stdout.write(msg)
+        sys.stdout.flush()
     return 0
 
 def printWarning(level, msg):
-    sys.stdout.write("Warning: "+msg+"\n")
-    sys.stdout.flush()
+    if level <= rpmconfig.debug_level:
+        sys.stdout.write("Warning: "+msg+"\n")
+        sys.stdout.flush()
     return 0
 
-def printError(level, msg):
+def printError(msg):
     sys.stderr.write("Error: "+msg+"\n")
     sys.stderr.flush()
     return 0
@@ -282,5 +284,16 @@ def evrString(epoch, version, release):
     else:
         return "%s:%s-%s" % (epoch, version, release)
 
+# Compare two packages by evr
+def pkgCompare(p1, p2):
+   if p1["epoch"] == None:
+        e1 = "0"
+   else:
+        e1 = p1["epoch"][0]
+   if p2["epoch"] == None:
+        e2 = "0"
+   else:
+        e2 = p2["epoch"][0]
+   return labelCompare((e1, p1["version"], p1["release"]), (e2, p2["version"], p2["release"]))
 
 # vim:ts=4:sw=4:showmatch:expandtab
