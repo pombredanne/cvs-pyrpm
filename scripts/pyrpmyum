@@ -169,6 +169,7 @@ for (opt, val) in opts:
         rpmconfig.test = 1
         rpmconfig.noscripts = 1
         rpmconfig.notriggers = 1
+        rpmconfig.timer = 1
     elif opt == "--ignoresize":
         rpmconfig.ignoresize = 1
     elif opt == "--ignorearch":
@@ -219,7 +220,6 @@ else:
 installed = pydb.getPkgList().values()
 del pydb
 
-opresolver = RpmResolver(installed, OP_UPDATE)
 pkgs = []
 for f in args:
     if os.path.isfile(f) and f.endswith(".rpm"):
@@ -227,7 +227,17 @@ for f in args:
         pkg.open()
         pkg.read(tags=rpmconfig.resolvertags)
         pkg.close()
-        pkgs.append(pkgs)
+        pkgs.append(pkg)
+    elif os.path.isdir(f):
+        for g in os.listdir(f):
+            fn = "%s/%s" % (f, g)
+            if not g.endswith(".rpm") or not os.path.isfile(fn):
+                continue
+            pkg = RpmPackage(fn)
+            pkg.open()
+            pkg.read(tags=rpmconfig.resolvertags)
+            pkg.close()
+            pkgs.append(pkg)
     else:
         for repo in repos:
             pkgs.extend(findPkgByName(f, repo.appended))
@@ -235,6 +245,7 @@ for f in args:
         if len(pkgs) == 0:
             printError("Couldn't find package %s, skipping" % f)
 
+opresolver = RpmResolver(installed, OP_UPDATE)
 for pkg in pkgs:
     if rpmconfig.operation == OP_UPDATE or rpmconfig.operation == OP_FRESHEN:
         name = pkg["name"]
