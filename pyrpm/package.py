@@ -127,6 +127,7 @@ class RpmPackage(RpmData):
         if self["postinprog"] != None:
             if not runScript(self["postinprog"], self["postin"], "1"):
                 return 0
+        self.rfilist = None
         return 1
 
     def erase(self, db=None):
@@ -135,16 +136,22 @@ class RpmPackage(RpmData):
         if not self.__readHeader():
             return 0
         files = self["filenames"]
+        self.__generateFileInfoList()
+        self.__generateHardLinkList()
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preunprog"] != None:
-#            if not runScript(self["preunprog"], self["preun"], "1"):
-#                return 0
-            runScript(self["preunprog"], self["preun"], "1")
+            if not runScript(self["preunprog"], self["preun"], "1"):
+                printError("%s: Error running pre uninstall script." % self.getNEVRA())
         # Remove files starting from the end (reverse process to install)
-        files.reverse()
-        for f in files:
-            if os.path.isdir(f):
+        for i in xrange(len(files)-1, -1, -1):
+            f = files[i]
+            rfi = self.getRpmFileInfo(f)
+            print rfi.filename, hex(rfi.flags)
+            if db.isDuplicate(f):
+                printDebug(2, "File/Dir %s still in db, not removing..." % f)
+                continue
+            if os.path.isdir(f) and os.listdir(f) != []:
                 try:
                     os.rmdir(f)
                 except:
@@ -155,9 +162,8 @@ class RpmPackage(RpmData):
                 except:
                     printWarning(1, "Couldn't remove file %s from pkg %s" % (f, self.source))
         if self["postunprog"] != None:
-#            if not runScript(self["postunprog"], self["postun"], "1"):
-#                return 0
-            runScript(self["postunprog"], self["postun"], "1")
+            if not runScript(self["postunprog"], self["postun"], "1"):
+                printError("%s: Error running post uninstall script." % self.getNEVRA())
         return 1
 
     def __readHeader(self, tags=None, ntags=None):
@@ -214,6 +220,7 @@ class RpmPackage(RpmData):
                     filename = filename[1:]
             if filename in files:
                 rfi = self.rfilist[filename]
+                print rfi.filename, hex(rfi.flags)
                 if rfi != None:
                     if not str(rfi.inode)+":"+str(rfi.dev) in self.hardlinks.keys():
                         if not installFile(rfi, filerawdata):
@@ -306,7 +313,8 @@ class RpmPackage(RpmData):
         rpmdev = self["filedevices"][i]
         rpmrdev = self["filerdevs"][i]
         rpmmd5sum = self["filemd5s"][i]
-        rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum)
+        rpmflags = self["fileflags"][i]
+        rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum, rpmflags)
         return rfi
 
     def getNEVR(self):

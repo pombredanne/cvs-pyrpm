@@ -19,7 +19,7 @@
 from config import *
 
 class RpmFileInfo:
-    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, md5sum):
+    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, md5sum, flags):
         self.filename = filename
         self.inode = inode
         self.mode = mode
@@ -30,6 +30,7 @@ class RpmFileInfo:
         self.dev = dev
         self.rdev = rdev
         self.md5sum = md5sum
+        self.flags = flags
 
 
 # RPM Constants - based from rpmlib.h and elsewhere
@@ -312,6 +313,19 @@ RPMFILE_EXCLUDE     = (1 <<  9)    # from %%exclude, internal
 RPMFILE_UNPATCHED   = (1 << 10)    # placeholder (SuSE)
 RPMFILE_PUBKEY      = (1 << 11)    # from %%pubkey
 RPMFILE_POLICY      = (1 << 12)    # from %%policy
+
+
+# RPM file verify flags
+RPMVERIFY_NONE      = 0
+RPMVERIFY_MD5       = (1 << 0)     # from %verify(md5)
+RPMVERIFY_FILESIZE  = (1 << 1)     # from %verify(size)
+RPMVERIFY_LINKTO    = (1 << 2)     # from %verify(link)
+RPMVERIFY_USER      = (1 << 3)     # from %verify(user)
+RPMVERIFY_GROUP     = (1 << 4)     # from %verify(group)
+RPMVERIFY_MTIME     = (1 << 5)     # from %verify(mtime)
+RPMVERIFY_MODE      = (1 << 6)     # from %verify(mode)
+RPMVERIFY_RDEV      = (1 << 7)     # from %verify(rdev)
+
 
 # XXX: TODO for possible rpm changes:
 # - arch should not be needed for src.rpms

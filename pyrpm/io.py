@@ -639,6 +639,14 @@ class RpmPyDB:
             list.append(pkg)
         return list
 
+    def isDuplicate(self, file):
+        if not self.pkglist:
+            if not self.read():
+                return 1
+        if self.filenames.has_key(file) and len(self.filenames[file]) > 1:
+            return 1
+        return 0
+
     def __mkDBDirs(self):
         if not os.path.isdir(self.source):
             try:

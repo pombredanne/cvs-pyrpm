@@ -106,14 +106,22 @@ class RpmController:
         if not operations:
             printError("Errors found during package dependancy checks and ordering.")
             sys.exit(1)
+        # Handle updates by doing an install for the new package and adding
+        # operations to erase all all updated packages directly afterwards
+        for i in xrange(len(operations)-1, -1, -1):
+            (op, pkg) = operations[i]
+            print op, pkg.getNEVRA()
+            if op != "update":
+                continue
+            if not self.oldpackages.has_key(pkg["name"]):
+                continue
+            for upkg in self.oldpackages[pkg["name"]]:
+                operations.insert(i+1, ("erase", upkg))
         for (op, pkg) in operations:
             if op == "install":
                 printInfo(0, "Installing package %s\n" % pkg.getNEVR())
             if op == "update":
                 printInfo(0, "Updating package %s\n" % pkg.getNEVR())
-                if self.oldpackages.has_key(pkg["name"]):
-                    for upkg in self.oldpackages[pkg["name"]]:
-                        upkg.open()
             if op == "erase":
                 printInfo(0, "Removing package %s\n" % pkg.getNEVR())
             pkg.open()
@@ -127,10 +135,6 @@ class RpmController:
                     self.__addPkgToDB(pkg)
                 if op == "update":
                     self.__addPkgToDB(pkg)
-                    if self.oldpackages.has_key(pkg["name"]):
-                        for upkg in self.oldpackages[pkg["name"]]:
-                            printInfo(2, "Removing package %s because of update.\n" % upkg.getNEVR())
-                            self.__erasePkgFromDB(upkg)
                 if op == "erase":
                     self.__erasePkgFromDB(pkg)
                 pkg.close()
@@ -141,15 +145,9 @@ class RpmController:
                 if op == "install":
                     if not pkg.install(self.pydb):
                         sys.exit(1)
-                # XXX: Handle correct removal of package that gets updated
                 if op == "update":
                     if not pkg.install(self.pydb):
                         sys.exit(1)
-                    if self.oldpackages.has_key(pkg["name"]):
-                        for upkg in self.oldpackages[pkg["name"]]:
-                            if not upkg.erase(self.pydb):
-                                sys.exit(1)
-                # XXX: Handle correct erase of files etc (duplicate files etc)
                 if op == "erase":
                     if not pkg.erase(self.pydb):
                         sys.exit(1)
