@@ -204,8 +204,8 @@ class RpmController:
                         else:
                             opstring = "Erase:   "
 
-                    progress = "%s[%d/%d] %s" % (opstring, i, numops, pkg.getNEVRA())
                     i += 1
+                    progress = "%s[%d/%d] %s" % (opstring, i, numops, pkg.getNEVRA())
                     if rpmconfig.printhash:
                         printInfo(0, progress)
                     else:
