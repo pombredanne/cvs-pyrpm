@@ -1,0 +1,465 @@
+#!/usr/bin/python
+#
+# rpmtree.py
+#
+# list dependency tree
+#
+# (c) 2004 Thomas Woerner <twoerner@redhat.com>
+#
+# version 2005-01-12-01
+
+import sys, os, rpm, types
+
+# ----------------------------------------------------------------------------
+
+def evr_split(evr):
+    epoch = "0"
+    version = ""
+    release = ""
+
+    num = ""
+    has_epoch = 0
+    has_version = 0
+    for i in xrange(len(evr)):
+        if evr[i] == "-" and has_version == 0:
+            has_version = 1
+            version = num
+            num = ""
+        else:
+            if evr[i] == ":" and has_version == 0 and has_epoch == 0:
+                has_epoch = 1
+                if num != "(none)":
+                    epoch = num
+                num = ""
+            else:
+                num = num + evr[i]
+        if has_version:
+            release = num
+        else:
+            version = num
+
+    return (epoch, version, release)
+
+# ----------------------------------------------------------------------------
+
+def evr_compare(evr1, comp, evr2):
+    res = -1
+    e1 = evr_split(evr1)
+    e2 = evr_split(evr2)
+    if e2[2] == "": # fix epoch
+        e1 = (e1[0], e1[1], "")
+    r = rpm.labelCompare(e1, e2)
+    if r == -1:
+        if comp == "<" or comp == "<=":
+            res = 1
+    elif r == 0:
+        if comp == "<=" or comp == "=" or comp == ">=":
+            res = 1
+    else: # res == 1
+        if comp == ">=" or comp == ">":
+            res = 1
+    return res
+
+# ----------------------------------------------------------------------------
+
+def gen_evr(epoch, version, release):
+    if ignore_epoch == 1 or isinstance(epoch, types.NoneType) or epoch == "":
+        return "%s-%s" % (version, release)
+    else:
+        return "%s:%s-%s" % (epoch, version, release)
+
+# ----------------------------------------------------------------------------
+
+def gen_operator(flag):
+    op = ""
+    if flag & rpm.RPMSENSE_LESS:
+        op = "<"
+    if flag & rpm.RPMSENSE_GREATER:
+        op += ">"
+    if flag & rpm.RPMSENSE_EQUAL:
+        op += "="
+    return op
+
+# ----------------------------------------------------------------------------
+
+def get_hdr(name):
+    hdr = [ ]
+    if os.path.isfile(name):
+        fdno = os.open(name, os.O_RDONLY)
+        try:
+            h = ts.hdrFromFdno(fdno)
+        except rpm.error:
+            fdno = os.open(name, os.O_RDONLY)
+            ts.setVSFlags(rpm._RPMVSF_NOSIGNATURES)
+            try:
+                h = ts.hdrFromFdno(fdno)
+            except:
+                pass
+            else:
+                hdr.append(h)
+        else:
+            hdr.append(h)
+        os.close(fdno)
+    else:
+        if no_installed == 0:
+            mi = ts.dbMatch("name", name)
+            for h in mi:
+                hdr.append(h)
+    return hdr
+
+# ----------------------------------------------------------------------------
+
+class RPM:
+    def __init__(self, name, hdr):
+        self.clear()
+        self.set(name, hdr)
+    def clear(self):
+        self.p_file = ""
+        self.p_name = ""
+        self.p_epoch = ""
+        self.p_version = ""
+        self.p_release = ""
+        self.p_arch = ""
+        self.p_provides = [ ]
+        self.p_requires = [ ]
+        self.p_resolved = [ ]
+        self.p_unresolved = [ ]
+        self.p_filenames = [ ]
+        self.p_installed = 0
+    def set(self, name, hdr):
+        self.p_file = name
+        self.p_name = hdr[rpm.RPMTAG_NAME]
+        if ignore_epoch == 1:
+            self.p_epoch = ""
+        else:
+            self.p_epoch = hdr[rpm.RPMTAG_EPOCH]
+            if isinstance(self.p_epoch, types.NoneType):
+                self.p_epoch = "0"
+        self.p_version = hdr[rpm.RPMTAG_VERSION]
+        self.p_release = hdr[rpm.RPMTAG_RELEASE]
+        self.p_arch = hdr[rpm.RPMTAG_ARCH]
+        self.p_filenames = hdr[rpm.RPMTAG_FILENAMES]
+
+        for i in xrange(len(hdr[rpm.RPMTAG_PROVIDES])):
+            p = hdr[rpm.RPMTAG_PROVIDES][i]
+            flag = gen_operator(hdr[rpm.RPMTAG_PROVIDEFLAGS][i])
+            version = hdr[rpm.RPMTAG_PROVIDEVERSION][i]
+            self.p_provides.append((p, flag, version))
+            
+        for i in xrange(len(hdr[rpm.RPMTAG_REQUIRES])):
+            flag = gen_operator(hdr[rpm.RPMTAG_REQUIREFLAGS][i])
+            version = hdr[rpm.RPMTAG_REQUIREVERSION][i]
+
+            p = (hdr[rpm.RPMTAG_REQUIRES][i], flag, version)
+
+            if p in self.p_requires:
+                continue
+            self.p_requires.append(p)
+            if p[0][0:6] == "rpmlib":
+                continue
+            self.p_unresolved.append(p)
+
+        try:
+            self.p_installed = int(int(hdr[rpm.RPMTAG_INSTALLTID]) > 0)
+        except:
+            self.p_installed = 0
+
+    def __cmp__(self, r):
+        if isinstance(r, RPM):
+            if self.p_name == r.p_name and \
+                   self.p_arch == r.p_arch:
+                return 0
+        elif isinstance(r, rpm.hdr):
+            epoch = r[rpm.RPMTAG_EPOCH]
+            if isinstance(epoch, types.NoneType):
+                epoch = "0"
+            if self.p_name == r[rpm.RPMTAG_NAME] and \
+                   self.p_arch == r[rpm.RPMTAG_ARCH]:
+                return 0
+        return 1
+
+    def __str__(self):
+        return "%s-%s-%s.%s" % (self.p_name, self.p_version, self.p_release,
+                                self.p_arch)
+    
+# ----------------------------------------------------------------------------
+
+class Provides:
+    def __init__(self):
+        self.clear()
+    def clear(self):
+        self.p_name = [ ]
+        self.p_flag = [ ]
+        self.p_version = [ ]
+        self.p_evr = [ ]
+        self.p_rpm = [ ]
+    def append(self, name, flag, version, rpm):
+        try:
+            i = self.p_name.index(name)
+        except:
+            # new entry
+            self.p_name.append(name)
+            self.p_flag.append([flag])
+            self.p_version.append([version])
+            self.p_evr.append([gen_evr(rpm.p_epoch, rpm.p_version,
+                                       rpm.p_release)])
+            self.p_rpm.append([rpm])
+            return
+        # append
+        self.p_flag[i].append(flag)
+        self.p_version[i].append(version)
+        self.p_evr[i].append(gen_evr(rpm.p_epoch, rpm.p_version,
+                                     rpm.p_release))
+        self.p_rpm[i].append(rpm)
+    def search(self, name, flag, version):
+        try:
+            i = self.p_name.index(name)
+        except:
+            return None
+
+        if version == "":
+            return self.p_rpm[i][0]
+        
+        for j in xrange(len(self.p_version[i])):
+            if evr_compare(self.p_version[i][j], flag, version) == 1:
+                return self.p_rpm[i][j]
+            if evr_compare(self.p_evr[i][j], flag, version) == 1:
+                return self.p_rpm[i][j]
+        return None
+
+    def pr(self):
+        for i in xrange(len(self.p_name)):
+            print "%s:" % self.p_name[i]
+            for j in xrange(len(self.p_version[i])):
+                print "\t'%s' '%s' --> '%s'" % (self.p_flag[i][j],
+                                                self.p_version[i][j],
+                                                str(self.p_rpm[i][j]))
+
+# ----------------------------------------------------------------------------
+
+class Filenames:
+    def __init__(self):
+        self.clear()
+    def clear(self):
+        self.p_name = [ ]
+        self.p_rpm = [ ]
+    def append(self, name, rpm):
+        i = len(self.p_name)
+        self.p_name.insert(i, name)
+        self.p_rpm.insert(i, rpm)
+    def search(self, name, flag, version):
+        try:
+            i = self.p_name.index(name)
+        except:
+            return None
+        return self.p_rpm[i]
+
+# ----------------------------------------------------------------------------
+
+def search_installed(name, flag, version):
+    ret = None
+
+    mi = ts.dbMatch(rpm.RPMTAG_PROVIDES, name)
+    for h in mi:
+        res = 1
+        if version != "": # version requirement
+            for k in xrange(len(h[rpm.RPMTAG_PROVIDES])):
+                if h[rpm.RPMTAG_PROVIDES][k] != name:
+                    continue
+                res = evr_compare(h[rpm.RPMTAG_PROVIDEVERSION][k],
+                                  flag, version)
+
+            if res != 1:
+                res = evr_compare(gen_evr(h[rpm.RPMTAG_EPOCH],
+                                          h[rpm.RPMTAG_VERSION],
+                                          h[rpm.RPMTAG_RELEASE]),
+                                  flag, version)
+        if res == 1:
+            r2 = RPM(h[rpm.RPMTAG_NAME], h)
+            rpms.append(r2)
+            for p in r2.p_provides:
+                provides.append(p[0], p[1], p[2], r2)
+            for f in r2.p_filenames:
+                filenames.append(f, r2)
+            if ret == None:
+                ret = r2
+
+    if ret == None:
+        mi = ts.dbMatch(rpm.RPMTAG_BASENAMES, name)
+        for h in mi:
+            res = 1
+            if u[2] != "": # version requirement
+                res = evr_compare(gen_evr(h[rpm.RPMTAG_EPOCH],
+                                          h[rpm.RPMTAG_VERSION],
+                                          h[rpm.RPMTAG_RELEASE]),
+                                  flag, version)
+            if res == 1:
+                r2 = RPM(h[rpm.RPMTAG_NAME], h)
+                rpms.append(r2)
+                for p in r2.p_provides:
+                    provides.append(p[0], p[1], p[2], r2)
+                for f in r2.p_filenames:
+                    filenames.append(f, r2)
+                if ret == None:
+                    ret = r2
+
+    return ret
+
+# ----------------------------------------------------------------------------
+
+def usage():
+    print """Usage: %s [-v[v]] [-nr] [-sd] [<rpm name/package>...]
+
+  -h  | --help                print help
+  -v  | --verbose             be verbose, and more, ..
+  -ni | --no-installed        do not check against installed packages
+  -ie | --ignore-epoch        ignore epoch in provides and requires
+
+This program prints a treee for package dependencies.
+The asterisc in the listing is shown after dependencies, which are resolved in
+a tree before. 
+
+""" % sys.argv[0]
+
+# ----------------------------------------------------------------------------
+
+rpms = [ ]
+
+no_installed = 0
+ignore_epoch = 0
+verbose = 0
+
+#ts = rpm.ts()
+ts = ts = rpm.TransactionSet("", rpm._RPMVSF_NOSIGNATURES or \
+    rpm.RPMVSF_NOHDRCHK or rpm._RPMVSF_NODIGESTS or rpm.RPMVSF_NEEDPAYLOAD)
+ts.setVSFlags(-1)               # disable verify
+
+if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        usage()
+        sys.exit(0)
+
+    for i in xrange(1, len(sys.argv)):
+        if sys.argv[i] == "-h" or sys.argv[i] == "--help":
+            usage()
+            sys.exit(0)
+        elif sys.argv[i][:2] == "-v":
+            j = 1
+            while j < len(sys.argv[i]) and sys.argv[i][j] == "v":
+                verbose += 1
+                j += 1
+        elif sys.argv[i] == "--verbose":
+            verbose += 1
+        elif sys.argv[i] == "-ni"or sys.argv[i] == "--no-installed":
+            no_installed = 1
+        elif sys.argv[i] == "-ie"or sys.argv[i] == "--ignore-epoch":
+            ignore_epoch = 1
+        else:
+            name = sys.argv[i]
+            hdr = get_hdr(name)
+            for j in xrange(len(hdr)):
+                if hdr[j] not in rpms:
+                    if verbose > 0:
+                        sys.stdout.write("\rReading %d" % (len(rpms)+1))
+                        sys.stdout.flush()
+                    r = RPM(name, hdr[j])
+                    rpms.append(r)
+    if verbose > 0 and len(rpms) > 0:
+        print
+
+    # -- processing
+
+    if verbose == 0:
+        print "Processing"
+
+    provides = Provides()
+    filenames = Filenames()
+
+    for i in xrange(len(rpms)):
+        r = rpms[i]
+        if verbose > 0:
+            sys.stdout.write("\rProcessing [%d/%d]" % (i+1, len(rpms)))
+            sys.stdout.flush()
+        for p in r.p_provides:
+            provides.append(p[0], p[1], p[2], r)
+        for f in r.p_filenames:
+            filenames.append(f, r)
+    if verbose > 0 and len(rpms) > 0:
+        print
+
+    # -- resolving provides
+
+    if verbose == 0:
+        print "Resolving"
+
+    i = 0
+    while i < len(rpms):
+        r = rpms[i]
+        if verbose > 0:
+            sys.stdout.write("\rResolving [%d/%d]" % (i+1, len(rpms)))
+            sys.stdout.flush()
+        j = 0
+        while j < len(r.p_unresolved):
+            u = r.p_unresolved[j]
+            s = provides.search(u[0], u[1], u[2])
+            if s == None:
+                s = filenames.search(u[0], u[1], u[2])
+            if s == None and no_installed == 0:
+                s = search_installed(u[0], u[1], u[2])
+            if s != None:
+                r.p_unresolved.remove(u)
+                r.p_resolved.append((u, s))
+            else:
+                j += 1            
+        i += 1
+    if verbose > 0 and len(rpms) > 0:
+        print
+
+    # -- print unresolved
+
+    unresolved = 0
+    for r in rpms:
+        if len(r.p_unresolved) > 0:
+            print "\nERROR: %s unresolved dependencies:" % str(r)
+            for u in r.p_unresolved:
+                print "\t%s %s %s" % (u[0], u[1], u[2])
+            unresolved = 1
+
+    if unresolved == 1:
+        sys.exit(-1)
+
+    # -- print verbose output
+
+    if verbose > 1:
+        print
+    for r in rpms:
+        if verbose > 1 and len(r.p_resolved) > 0:
+            name = "%s-%s-%s" % (r.p_name, r.p_version, r.p_release)
+            if r.p_installed == 0 and verbose > 1:
+                name += ": %s" % r.p_file
+            print "%s" % name
+
+        if verbose > 1:
+            # resolved dependencies
+            list = [ ]
+            for j in xrange(len(r.p_resolved)):
+                r2 = r.p_resolved[j]
+                dep = r2[0][0]
+                pkg = "%s-%s-%s" % (r2[1].p_name, r2[1].p_version,
+                                    r2[1].p_release)
+                if verbose > 2:
+                    if r2[0][2] != "":
+                        dep = "%s %s %s" % (r2[0][0], r2[0][1], r2[0][2])
+                    print "\t%s --> %s" % (dep, pkg)
+                else:
+                    if pkg not in list:
+                        list.append(pkg)
+            if verbose == 2:
+                list.sort()
+                for pkg in list:
+                    print "\t%s" % pkg
+
+    if len(rpms) > 0:
+        print "\n-- DONE --"
+    
+    sys.exit(0)
