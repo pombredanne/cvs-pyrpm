@@ -114,7 +114,8 @@ class RpmList:
     def __getitem__(self, i):
         return self.list[i][1] # return rpm list
     def install(self, pkg):
-        key = "%s.%s" % (pkg["name"], pkg["arch"])
+#        key = "%s.%s" % (pkg["name"], pkg["arch"])
+        key = pkg["name"]
         if not self.list.has_key(key):
             self.list[key] = [ ]
         for r in self.list[key]:
@@ -127,7 +128,8 @@ class RpmList:
         self.filenames.add_rpm(pkg)
         return 1
     def update(self, pkg):
-        key = "%s.%s" % (pkg["name"], pkg["arch"])
+#        key = "%s.%s" % (pkg["name"], pkg["arch"])
+        key = pkg["name"]
         if self.list.has_key(key):
             rpms = self.list[key]
             newer = 1
@@ -163,7 +165,8 @@ class RpmList:
             return 1
         return 0
     def erase(self, pkg):
-        key = "%s.%s" % (pkg["name"], pkg["arch"])
+#        key = "%s.%s" % (pkg["name"], pkg["arch"])
+        key = pkg["name"]
         if self.list.has_key(key):
             found = 0
             for r in self.list[key]:
