@@ -154,26 +154,37 @@ class RpmResolver(RpmList):
         return self.OK
     # ----
 
+    def _update(self, pkg):
+        obsoletes = [ ]
+        for u in pkg["obsoletes"]:
+            s = self.searchDependency(u)
+            for r in s:
+                if r["name"] != pkg["name"]:
+                    obsoletes.append(r)
+
+        ret = RpmList._update(self, pkg)
+        if ret != self.OK:  return ret
+
+        normalizeList(obsoletes)
+        for r in obsoletes:
+            # package is not the same and has not the same name
+            if self.isInstalled(r):
+                fmt = "%s obsoletes installed %s, removing %s"
+            else:
+                fmt = "%s obsoletes added %s, removing %s"
+            printWarning(0, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()))
+            if self._pkgObsolete(pkg, r) != self.OK:
+                return self.OBSOLETE_FAILED
+
+        return self.OK
+    # ----
+
     def _erase(self, pkg):
         ret = RpmList._erase(self, pkg)
         if ret != self.OK:  return ret
 
         self.provides.removePkg(pkg)
         self.filenames.removePkg(pkg)
-
-        # replay obsoletes
-        if pkg in self.obsoletes:
-            for p in self.obsoletes[pkg]:
-                self.provides.addPkg(p)
-                self.filenames.addPkg(p)
-            del self.obsoletes[pkg]
-
-        # replay updates
-        if pkg in self.updates:
-            for p in self.updates[pkg]:
-                self.provides.addPkg(p)
-                self.filenames.addPkg(p)
-            del self.updates[pkg]
 
         return self.OK
     # ----
@@ -214,40 +225,7 @@ class RpmResolver(RpmList):
     # ----
 
     def doObsoletes(self):
-        """ Do obsoletes for new packages """
-
-        if self.operation == OP_INSTALL or \
-               self.operation == OP_ERASE:
-            # no obsoletes for install or erase
-            return self.OK
-
-        i = 0
-        while i < len(self):
-            rlist = self[i]
-            for pkg in rlist:
-                if self.isInstalled(pkg):
-                    # obsoletes only for new packages
-                    continue
-                # remove obsolete packages
-                for u in pkg["obsoletes"]:
-                    s = self.searchDependency(u)
-                    for r in s:
-                        if r != pkg and r["name"] != pkg["name"]:
-                            # package is not the same and has not the same name
-                            if self.isInstalled(r):
-                                fmt = "%s obsoletes installed %s, removing %s"
-                            else:
-                                fmt = "%s obsoletes added %s, removing %s"
-                            printWarning(0, fmt % (pkg.getNEVRA(),
-                                                   r.getNEVRA(),
-                                                   r.getNEVRA()))
-
-                            if self._pkgObsolete(pkg, r) != self.OK:
-                                return self.OBSOLETE_FAILED
-                            else:
-                                i -= 1
-            i += 1
-        return self.OK
+        raise Exception, "deprecated"
     # ----
 
     def getPkgDependencies(self, pkg):
@@ -425,12 +403,8 @@ class RpmResolver(RpmList):
 
     def resolve(self):
         """ Start the resolving process
-        Handle obsoletes, check dependencies and conflicts.
+        Check dependencies and conflicts.
         Return 1 if everything is OK, a negative number if not. """
-
-        # checking obsoletes for new packages
-        if self.doObsoletes() != 1:
-            return -1
 
         # checking dependencies
         if self.checkDependencies() != 1:
