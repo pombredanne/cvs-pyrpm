@@ -309,8 +309,9 @@ rpmtag = {
     "buildhost": (RPMTAG_BUILDHOST, RPM_STRING, None, 0),
     "cookie": (RPMTAG_COOKIE, RPM_STRING, None, 0), # build host and time
     # ignored now, succ is comps.xml
-    # group can be RPM_STRING or RPM_I18NSTRING
-    "group": (RPMTAG_GROUP, None, None, 0),
+    # XXX code allows hardcoded exception to also have type RPM_STRING
+    #     for RPMTAG_GROUP
+    "group": (RPMTAG_GROUP, RPM_I18NSTRING, None, 0),
     "size": (RPMTAG_SIZE, RPM_INT32, 1, 0),         # sum of all file sizes
     "distribution": (RPMTAG_DISTRIBUTION, RPM_STRING, None, 0),
     "vendor": (RPMTAG_VENDOR, RPM_STRING, None, 0),

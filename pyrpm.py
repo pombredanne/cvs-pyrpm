@@ -138,6 +138,9 @@ class ReadRpm:
                     if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or \
                         ttype == RPM_STRING_ARRAY):
                         pass    # special exception case
+                    elif t[0] == rpmconstants.RPMTAG_GROUP and \
+                        ttype == RPM_STRING: # XXX hardcoded exception
+                        pass
                     else:
                         self.printErr("tag %d has wrong type %d" % (tag, ttype))
                 if t[2] != None and t[2] != count:
