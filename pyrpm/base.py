@@ -195,7 +195,8 @@ rpmtag = {
     "optflags": (1122, RPM_STRING, None, 4),
     # %pubkey in .spec files
     "pubkeys": (266, RPM_STRING_ARRAY, None, 4),
-    "sourcepkgid": (1146, RPM_BIN, 16, 4),    # XXX
+    # signature.md5 of the SRPM when building both the SRPM and binary rpms
+    "sourcepkgid": (1146, RPM_BIN, 16, 4),
     "immutable": (63, RPM_BIN, 16, 0),  # XXX
     # less important information:
     # time of rpm build
