@@ -300,10 +300,10 @@ while changes:
                     if ret > 0 and ret != RpmResolver.ALREADY_ADDED:
                         changes = 1
 
-del repos
 runDepResolution(opresolver)
 appended = opresolver.appended
 del opresolver
+del repos
 
 rpmconfig.nofileconflictcheck =1
 

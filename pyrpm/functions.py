@@ -76,7 +76,6 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         else:
             os.execve(prog, args, e)
         sys.exit(255)
-    # XXX: pid == -1 error case???
     os.close(wfd)
     # no need to read in chunks if we don't pass on data to some output func
     cret = ""
