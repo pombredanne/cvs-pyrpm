@@ -114,9 +114,9 @@ class RpmStreamIO(RpmIO):
                 self.idx = 0
                 self.where = 3
                 return ("-", "")
-            v = self.getNextHeader(self.idx, self.hdrdata[3], self.hdrdata[4])
+            v = self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
-            return v
+            return (rpmconstants.rpmsigtagname[v[0]], v[1])
         # Read/parse hdr
         if self.where == 3:
             # Last index of hdr? Switch to data files archive
@@ -128,9 +128,9 @@ class RpmStreamIO(RpmIO):
                 self.cpio = cpio.CPIOFile(self.cpiofd)
                 self.where = 4
                 return ("-", "")
-            v =  self.getNextHeader(self.idx, self.hdrdata[3], self.hdrdata[4])
+            v =  self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
-            return v
+            return (rpmconstants.rpmtagname[v[0]], v[1])
         # Read/parse data files archive
         if self.where == 4:
             (filename, filedata, filerawdata) = self.cpio.getNextEntry()
@@ -157,7 +157,7 @@ class RpmStreamIO(RpmIO):
         self.hdrtype = {}
         self.hdrdata = self.readIndex(1)
 
-    def getNextHeader(self, idx, indexdata, storedata):
+    def getHeaderByIndex(self, idx, indexdata, storedata):
         index = unpack("!4i", indexdata[idx*16:(idx+1)*16])
         tag = index[0]
         # ignore duplicate entries as long as they are identical
@@ -167,7 +167,7 @@ class RpmStreamIO(RpmIO):
         else: 
             self.hdr[tag] = self.parseTag(index, storedata)
             self.hdrtype[tag] = index[1]
-        return (rpmconstants.rpmtagname[tag], self.hdr[tag])
+        return (tag, self.hdr[tag])
 
     def verifyLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
@@ -454,41 +454,13 @@ class RpmPackage(RpmData):
         ret = RpmData.verify(self)
         return ret
 
-    def extractold(self, io, files=None):
-        if files == None:
-            files = self["filetree"]
-        [filename, filedata, filerawdata] = cfile.getNextEntry()
-        while filename != None:
-            if filename in files:
-                cfile.extractCurrentEntry()
-            [filename, filedata, filerawdata] = cfile.getNextEntry()
-        # Needed for hardlinks... :(
-        cfile.postExtract()
-        return 0
-
     def extract(self, io, files=None):
         if files == None:
             files = self["filetree"]
         (filename, filerawdata) = io.read()
         while filename != None and filename != "EOF" :
-            if filename in files:
-                idx = files.index(filename)
-                rpminode = self["fileinodes"][idx]
-                rpmmode = self["filemodes"][idx]
-                pw = pwd.getpwnam(self["fileusername"][idx])
-                if pw != None:
-                    rpmuid = pw[2]
-                else:
-                    rpmuid = 0      # default to root as uid if not found
-                gr = grp.getgrnam(self["filegroupname"][idx])
-                if gr != None:
-                    rpmgid = gr[2]
-                else:
-                    rpmgid = 0      # default to root as gid if not found
-                rpmmtime = self["filemtimes"][idx]
-                rpmfilesize = self["filesizes"][idx]
-                rpmdev = self["filedevices"][idx]
-                rpmrdev = self["filerdevs"][idx]
+            rfi = files[filename]
+            if rfi != None:
                 if not installFile(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, filerawdata):
                     return 1
             (filename, filerawdata) = io.read()
@@ -502,17 +474,49 @@ class RpmPackage(RpmData):
         # Read header
         (key, value) = io.read()
         while key != None and key != "-":
+            print key
             (key, value) = io.read()
             self[key] = value
         self.parseFilelist()
+        #self.generateHardLinkList()
         return 1
 
     def parseFilelist(self):
-        self["filetree"] = []
+        self["filetree"] = {}
         if self["dirnames"] == None or self["dirindexes"] == None:
             return
         for i in xrange (len(self["basenames"])):
-            self["filetree"].append(self["dirnames"][self["dirindexes"][i]] + self["basenames"][i])
+            filename = self["dirnames"][self["dirindexes"][i]] + self["basenames"][i]
+            rpminode = self["fileinodes"][i]
+            rpmmode = self["filemodes"][i]
+            pw = pwd.getpwnam(self["fileusername"][i])
+            if pw != None:
+                rpmuid = pw[2]
+            else:
+                rpmuid = 0      # default to root as uid if not found
+            gr = grp.getgrnam(self["filegroupname"][i])
+            if gr != None:
+                rpmgid = gr[2]
+            else:
+                rpmgid = 0      # default to root as gid if not found
+            rpmmtime = self["filemtimes"][i]
+            rpmfilesize = self["filesizes"][i]
+            rpmdev = self["filedevices"][i]
+            rpmrdev = self["filerdevs"][i]
+            rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev)
+            self["filetree"][filename] = rfi
+
+    def generateHardLinkList(self):
+        self.hardlinks = {}
+        files = self["filetree"].keys()
+        for i in xrange(len(files)-1, -1, -1):
+            ri = self["filetree"][files[i]]
+            for j in xrange(i-1, -1, -1):
+                rj = self["filetree"][files[j]]
+                if ri.inode == rj.inode and ri.dev == rj.dev:
+                    if files[i] not in self.hardlinks.keys():
+                        self.hardlinks[files[i]] = []
+                    self.hardlinks[files[i]].append
 
     def install(self, io, files=None):
         if not self.readHeader(io):
@@ -559,9 +563,18 @@ class RpmPackage(RpmData):
     def getTriggers(self):
         return self.getDeps("triggername", "triggerflags", "triggerversion")
 
-class RpmFile:
-    def __init__(self):
-        pass
+
+class RpmFileInfo:
+    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev, rdev):
+        self.filename = filename
+        self.inode = inode
+        self.mode = mode
+        self.uid = uid
+        self.gid = gid
+        self.mtime = mtime
+        self.filesize = filesize
+        self.dev = dev
+        self.rdev = rdev
 
 
 # Collection of class indepedant helper functions
@@ -596,10 +609,10 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         return 0
     return 1
 
-def installFile(filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, data):
-    filetype = mode & cpio.CP_IFMT
-    if   filetype == cpio.CP_IFREG:
-        makeDirs(filename)
+def installFile(rfi, data):
+    rfi.filetype = mode & cpio.CP_IFMT
+    if  rfi.filetype == cpio.CP_IFREG:
+        makeDirs(rfi.filename)
         # CPIO archives are sick: Hardlinks are stored as 0 byte long
         # regular files.
         # The last hardlinked file in the archive contains the data, so
@@ -614,62 +627,60 @@ def installFile(filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, dat
         if len(data) == 0:
             #self.addToDefered(filename)
             return 1
-        tmpfilename = tempfile.mktemp(dir=os.path.dirname(filename), prefix=filename+".")
+        tmpfilename = tempfile.mktemp(dir=os.path.dirname(rfi.filename), prefix=rfi.filename+".")
         fd = open(tmpfilename, "w")
         if not fd:
-            print "FOO1"
             return 0
         if not fd.write(data) < 0:
-            print "FOO2"
             fd.close()
             os.unlink(tmpfilename)
             return 0
         fd.close()
-        if not setFileMods(tmpfilename, uid, gid, mode, mtime):
-            print "FOO4"
+        if not setFileMods(tmpfilename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
             os.unlink(tmpfilename)
             return 0
         try:
-            os.unlink(filename)
+            os.unlink(rfi.filename)
         except:
-            print "FOO5"
-        if os.rename(tmpfilename, filename) != None:
-            print "FOO6"
+            pass
+        if os.rename(tmpfilename, rfi.filename) != None:
             return 0
         #self.handleCurrentDefered(filename)
-    elif filetype == cpio.CP_IFDIR:
-        if os.path.isdir(filename):
+    elif rfi.filetype == cpio.CP_IFDIR:
+        if os.path.isdir(rfi.filename):
             return 0
-        os.makedirs(filename)
-        if not setFileMods(tmpfilename, uid, gid, mode, mtime):
-            os.unlink(tmpfilename)
+        os.makedirs(rfi.filename)
+        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
             return 0
-    elif filetype == cpio.CP_IFLNK:
+    elif rfi.filetype == cpio.CP_IFLNK:
         symlinkfile = data.rstrip("\x00")
-        if os.path.islink(filename) and os.readlink(filename) == symlinkfile:
+        if os.path.islink(rfi.filename) and os.readlink(rfi.filename) == symlinkfile:
             return 0
-        makeDirs(filename)
-        os.symlink(symlinkfile, filename)
-    elif filetype == cpio.CP_IFCHR or filetype == cpio.CP_IFBLK or filetype == cpio.CP_IFSO or filetype == cpio.CP_IFIFO:
-        if filetype == cpio.CP_IFCHR:
+        makeDirs(rfi.filename)
+        os.symlink(symlinkfile, rfi.filename)
+    elif rfi.filetype == cpio.CP_IFCHR or \
+         rfi.filetype == cpio.CP_IFBLK or \
+         rfi.filetype == cpio.CP_IFSO or \
+         rfi.filetype == cpio.CP_IFIFO:
+        if rfi.filetype == cpio.CP_IFCHR:
             devtype = "c"
-        elif filetype == cpio.CP_IFBLK:
+        elif rfi.filetype == cpio.CP_IFBLK:
             devtype = "b"
         else:
             return 0
-        makeDirs(filename)
-        devmajor = int(rdev)/256
-        devminor = int(rdev)%256
-        ret = commands.getoutput("/bin/mknod "+filename+" "+devtype+" "+str(devmajor)+" "+str(devminor))
+        makeDirs(rfi.filename)
+        devmajor = int(rfi.rdev)/256
+        devminor = int(rfi.rdev)%256
+        ret = commands.getoutput("/bin/mknod "+rfi.filename+" "+devtype+" "+str(devmajor)+" "+str(devminor))
         if ret != "":
             print "Error creating device: "+ret
             return 0
         else:
-            if not setFileMods(tmpfilename, uid, gid, mode, mtime):
-                os.unlink(tmpfilename)
+            if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
+                os.unlink(rfi.filename)
                 return 0
     else:
-        raise ValueError, "%s: not a valid CPIO filetype" % (oct(filetype))
+        raise ValueError, "%s: not a valid filetype" % (oct(rfi.filetype))
     return 1
 
 def setFileMods(filename, uid, gid, mode, mtime):

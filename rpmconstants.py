@@ -401,10 +401,11 @@ rpmsigtag = {
     "badsha1_2": (RPMTAG_BADSHA1_2, RPM_STRING, None, 1)
 }
 # Add a reverse mapping for all tags and a new tag -> name mapping
+rpmsigtagname = {}
 for key in rpmsigtag.keys():
     v = rpmsigtag[key]
     rpmsigtag[v[0]] = v
-    rpmtagname[v[0]] = key
+    rpmsigtagname[v[0]] = key
 
 # Required tags in a signature header.
 rpmsigtagrequired = []
