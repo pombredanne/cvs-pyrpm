@@ -25,11 +25,11 @@ class HashList:
         self.list = []
         self.hash = {}
 
-    def __len__(self):
-        return len(self.list)
-
-    def __repr__(self):
-        return self.list.__repr__()
+        self.__len__ = self.list.__len__
+        self.__repr__ = self.list.__repr__
+        self.has_key = self.hash.has_key
+        self.keys = self.hash.keys
+        self.__contains__ = self.__getitem__
 
     def __getitem__(self, key):
         if isinstance(key, IntType):
@@ -51,15 +51,6 @@ class HashList:
             self.list.remove(key)
             return key
         return None
-
-    def __contains__(self, key):
-        return self[key]
-
-    def has_key(self, key):
-        return self.hash.has_key(key)
-
-    def keys(self):
-        return self.hash.keys()
 
     def pop(self, idx):
         key = self.list.pop(idx)
