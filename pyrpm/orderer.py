@@ -22,7 +22,6 @@
 """
 
 from hashlist import HashList
-from time import clock
 from config import rpmconfig
 from functions import *
 from resolver import RpmResolver
@@ -114,23 +113,18 @@ class RpmOrderer:
 
     def genRelations(self):
         """ Generate relations from RpmList """
-        if rpmconfig.timer:
-            time1 = clock()
         relations = _Relations()
 
         # generate todo list
-        rpmlist = RpmResolver(self.rpms, self.operation)
-        if rpmconfig.timer:
-            print "orderer: genRelations(): RpmResolver() took %s seconds" % \
-                  (clock() - time1)
-            time1 = clock()
+        resolver = RpmResolver(self.rpms, self.operation)
 
-        for rlist in rpmlist:
+        for rlist in resolver:
             for r in rlist:
                 printDebug(1, "Generating relations for %s" % r.getNEVRA())
-                (unresolved, resolved) = rpmlist.getPkgDependencies(r)
+                (unresolved, resolved) = resolver.getPkgDependencies(r)
                 # ignore unresolved, we are only looking at the changes,
                 # therefore not all symbols are resolvable in these changes
+                empty = 1
                 for ((name, flag, version), s) in resolved:
                     if name.startswith("config("): # drop config requirements
                         continue
@@ -141,16 +135,15 @@ class RpmOrderer:
                     f = self._operationFlag(flag)
                     if f == 0: # no hard or soft requirement
                         continue
-                    for s2 in s:
-                        relations.append(r, s2, f)
-
-        # packages which have no relations
-        for rlist in rpmlist:
-            for r in rlist:
-                if not relations.has_key(r):
-                    printDebug(1, "No relations for %s found, generating empty relations" % \
+                    for r2 in s:
+                        relations.append(r, r2, f)
+                    if empty:
+                        empty = 0
+                if empty:
+                    printDebug(1, "No relations found for %s, generating empty relations" % \
                                r.getNEVRA())
                     relations.append(r, None, 0)
+        del resolver
 
         if rpmconfig.debug_level > 1:
             # print relations
@@ -312,11 +305,30 @@ class RpmOrderer:
     # ----
 
     def orderRpms(self, relations):
-        """ Order rpmlist.
+        """ Order rpms.
         Returns ordered list of packages. """
         order = [ ]
         idx = 1
         while len(relations) > 0:
+            # remove and save all packages without a post relation in reverse
+            # order 
+            # these packages will be appended later to the list
+            while len(relations) > 0:
+                i = 0
+                found = 0
+                while i < len(relations):
+                    (pkg, rel) = relations[i]
+                    if len(rel._post) == 0:
+                        last.insert(0, pkg)
+                        relations.remove(pkg)
+                        found = 1
+                    else:
+                        i += 1
+                if found == 0:
+                    break
+            if len(relations) == 0:
+                break
+
             next = None
             # we have to have at least one entry, so start with -1 for len
             next_post_len = -1
@@ -352,7 +364,12 @@ class RpmOrderer:
                     printError("Could not breakup loop")
                     return None
 
-        return order
+        if rpmconfig.debug_level > 1:
+            for r in last:
+                printDebug(2, "%d: %s" % (idx, r.getNEVRA()))
+                idx += 1
+
+        return (order + last)
 
     # ----
 
@@ -363,13 +380,9 @@ class RpmOrderer:
         OP_UPDATE or OP_ERASE per package.
         If an error occurs, None is returned. """
 
-        if rpmconfig.timer:
-            time1 = clock()
         # generate relations
         relations = self.genRelations()
-        if rpmconfig.timer:
-            print "orderer: genRelations() took %s seconds" % (clock() - time1)
-            time1 = clock()
+
         # order package list
         order = self.orderRpms(relations)
         if order == None:
@@ -377,8 +390,6 @@ class RpmOrderer:
 
         # cleanup relations
         del relations
-        if rpmconfig.timer:
-            print "orderer: orderRpms() took %s seconds" % (clock() - time1)
 
         # generate operations
         return self.genOperations(order)
