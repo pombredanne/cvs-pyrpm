@@ -353,11 +353,11 @@ class RpmFile(RpmIO):
             print "Error reading CPIO payload: %s" % e
         if self.verbose:
             print c.namelist()
-        return 1
-        if keepdata:
+        if self.keepdata:
             data.cpiodata = cpiodata
         if self.verify:
             return self.verifyPayload(c.namelist())
+        return 1
 
     def write(self, data):
         if self.filename == None:
@@ -408,6 +408,7 @@ class RpmData(RpmError):
         self.sig = {}
         self.sigtype = None
         self.modified = None
+        self.cpiodata = None
 
     def __repr__(self):
 #        return self.hdr.__repr__()
@@ -467,15 +468,18 @@ class RpmPackage(RpmData):
         ret = RpmData.verify(self)
         return ret
 
-    def extract(self, files=None, instroot=None):
+    def extract(self, instroot=None, files=None):
         # We need the cpiodata to extrace it.
         if self.cpiodata == None:
             return 1
-        cpio = CPIOFile()
-        cpio.setData(self.cpiodata)
-        file = cpio.getNextEntry()
-        while file != None:
-            file = cpio.getNextEntry()
+        cfile = cpio.CPIOFile(self.cpiodata)
+        [filename, filedata, filerawdata] = cfile.getNextEntry()
+        while filename != None:
+            cfile.extractCurrentEntry(instroot)
+#            if filedata[2] & cpio.CP_IFDIR:
+#                print filename, "ISDIR"
+#            print filename, oct(filedata[2]), oct(filedata[3]), oct(filedata[4]), oct(filedata[5]), oct(filedata[6]), oct(filedata[7]), oct(filedata[8]), oct(filedata[9]), oct(filedata[10]), oct(filedata[11]), oct(filedata[12])
+            [filename, filedata, filerawdata] = cfile.getNextEntry()
 
     def getDeps(self, name, flags, version):
         n = self[name]
