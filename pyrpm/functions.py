@@ -368,13 +368,12 @@ def filterArchList(list, arch=None):
     if arch != None and arch != "noarch":
         error = 0
         for pkg in list:
-            pkg = list[i]
             if pkg["arch"] not in possible_archs:
                 error = 1
-                printError(0, "%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
+                printError("%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
             if pkg["arch"] != arch and pkg["arch"] not in arch_compats[arch]:
                 error = 1
-                printError(0, "%s: Architecture not compatible with machine %s" % (pkg.source, arch))
+                printError("%s: Architecture not compatible with machine %s" % (pkg.source, arch))
         if error != 0:
             return -1
 
