@@ -535,7 +535,11 @@ class RpmPackage(RpmData):
         return "%s.%s" % (self.getNEVR(), self["arch"])
 
     def getProvides(self):
-        return self.__getDeps(("providename", "provideflags", "provideversion"))
+        r = self.__getDeps(("providename", "provideflags", "provideversion"))
+        r.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
+        #if rpmconfig.ignore_epoch and self["epoch"] != None:
+        #    r.append( (self["name"], RPMSENSE_EQUAL, "%s-%s" % (self["version"], self["release"])) )
+        return r
 
     def getRequires(self):
         return self.__getDeps(("requirename", "requireflags", "requireversion"))

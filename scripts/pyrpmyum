@@ -23,6 +23,7 @@ PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import *
+from pyrpm import __version__
 
 def usage():
     print "INSTALLING, UPGRADING, AND REMOVING PACKAGES using REPOS:"
@@ -58,7 +59,7 @@ def runDepResolution(resolver, unresolved):
         iter += 1
         respkglist = []
         for pkg, deplist in unresolved:
-            printInfo(1, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
+            printInfo(2, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
             found = 0
             for dep in deplist:
                 printInfo(2, "\t" + depString(dep) + "\n")
@@ -81,7 +82,6 @@ def runDepResolution(resolver, unresolved):
                     sys.exit(1)
                 resolver.append(tmplist[0])
                 respkglist.append(tmplist[0])
-        normalizeList(respkglist)
         filterArchList(respkglist)
         if len(respkglist) == 0:
             for pkg, deplist in unresolved:
@@ -92,11 +92,11 @@ def runDepResolution(resolver, unresolved):
         unresolved = resolver.getUnresolvedDependencies()
 
 def addDirToRepo(dirname, resolver):
-    filenames = os.listdir(dirname)
-    for f in filenames:
-        if not f.endswith(".rpm") or not os.path.isfile(dirname+"/"+f):
+    for f in os.listdir(dirname):
+        fn = "%s/%s" % (dirname, f)
+        if not f.endswith(".rpm") or not os.path.isfile(fn):
             continue
-        pkg = RpmPackage(dirname+"/"+f)
+        pkg = RpmPackage(fn)
         pkg.open()
         pkg.read(tags=rpmconfig.resolvertags)
         pkg.close()
@@ -117,7 +117,6 @@ except getopt.error, e:
     usage()
     sys.exit(1)
 
-rpmconfig.operation = None
 repos = []
 
 for (opt, val) in opts:
@@ -152,7 +151,7 @@ for (opt, val) in opts:
         rpmconfig.verbose_level = 0
         rpmconfig.printhash = 0
     elif opt == "--version":
-        print "pyrpminstall 0.1.0"
+        print "pyrpminstall", __version__
         sys.exit(0)
     elif opt == "--dbpath":
         rpmconfig.dbpath = val
@@ -213,16 +212,11 @@ elif command == "update" or command == "upgrade" or \
      command == "groupupdate" or command == "groupupgrade":
     rpmconfig.operation = OP_FRESHEN
 
-installed = []
 if rpmconfig.buildroot:
     pydb = RpmPyDB(rpmconfig.buildroot + rpmconfig.dbpath)
 else:
     pydb = RpmPyDB(rpmconfig.dbpath)
-installed = pydb.getPkgList()
-if installed == None:
-    installed = []
-else:
-    installed = installed.values()
+installed = pydb.getPkgList().values()
 del pydb
 
 opresolver = RpmResolver(installed, OP_UPDATE)

@@ -421,11 +421,6 @@ def labelCompare(e1, e2):
     r = stringCompare(e1[0], e2[0])
     if r == 0: r = stringCompare(e1[1], e2[1])
     if r == 0: r = stringCompare(e1[2], e2[2])
-# TODO: where is ignore_epoch from?
-#    elif ignore_epoch == 1:
-#        if stringCompare(e1[1], e2[1]) == 0:
-#            if stringCompare(e1[2], e2[2]) == 0:
-#                r = 0
     return r
 
 # compares two EVR's with comparator
@@ -439,6 +434,10 @@ def evrCompare(evr1, comp, evr2):
         e2 = evr2
     else:
         e2 = evrSplit(evr2)
+    #if rpmconfig.ignore_epoch:
+    #    if comp == RPMSENSE_EQUAL and e1[1] == e2[1]:
+    #        e1 = ("0", e1[1], e1[2])
+    #        e2 = ("0", e2[1], e2[2])
     r = labelCompare(e1, e2)
     if r == -1:
         if comp & RPMSENSE_LESS:
@@ -452,16 +451,8 @@ def evrCompare(evr1, comp, evr2):
     return res
 
 def pkgCompare(p1, p2):
-    if p1["epoch"] == None:
-        e1 = "0"
-    else:
-        e1 = "%s" % p1["epoch"][0]
-    if p2["epoch"] == None:
-        e2 = "0"
-    else:
-        e2 = "%s" % p2["epoch"][0]
-    return labelCompare((e1, p1["version"], p1["release"]),
-                        (e2, p2["version"], p2["release"]))
+    return labelCompare((p1.getEpoch(), p1["version"], p1["release"]),
+                        (p2.getEpoch(), p2["version"], p2["release"]))
 
 def depOperatorString(flag):
     """ generate readable operator """
@@ -507,8 +498,7 @@ def filterArchDuplicates(list):
             i += 1
         else:
             r = myhash[key]
-            ret = labelCompare((r.getEpoch(), r["version"], r["release"]),
-                (pkg.getEpoch(), pkg["version"], pkg["release"]))
+            ret = pkgCompare(r, pkg)
             if ret < 0:
                 printWarning(2, "%s was already added, replacing with %s" % \
                                    (r.getNEVRA(), pkg.getNEVRA()))

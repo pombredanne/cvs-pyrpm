@@ -432,8 +432,9 @@ class RpmResolver(RpmList):
             return -2
 
         # check for file conflicts
-        if self.checkFileConflicts() != 1:
-            return -3
+        if rpmconfig.fileconflicts:
+            if self.checkFileConflicts() != 1:
+                return -3
 
         return 1
 

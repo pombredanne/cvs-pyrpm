@@ -135,7 +135,7 @@ class RpmController:
             time1 = clock()
         orderer = RpmOrderer(a, u, o, self.operation)
         operations = orderer.order()
-        if rpmconfig.checkdiskspace:
+        if not rpmconfig.ignoresize:
             if rpmconfig.timer:
                 time9 = clock()
             getFreeDiskspace(a)
@@ -247,11 +247,7 @@ class RpmController:
             self.pydb = io.RpmPyDB(self.db)
         if self.pydb == None:
             return 0
-        self.installed = self.pydb.getPkgList()
-        if self.installed == None:
-            self.installed = []
-        else:
-           self.installed = self.installed.values()
+        self.installed = self.pydb.getPkgList().values()
         return 1
 
     def __preprocess(self):

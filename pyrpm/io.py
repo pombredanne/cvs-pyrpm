@@ -632,7 +632,7 @@ class RpmDB:
     def getPkgList(self):
         if not self.pkglist:
             if not self.read():
-                return None
+                return {}
         return self.pkglist
 
     def isDuplicate(self, file):
@@ -693,7 +693,8 @@ class RpmPyDB:
             if not self.filenames.has_key(filename):
                 self.filenames[filename] = []
             if pkg in self.filenames[filename]:
-                printWarning(2, "%s: File '%s' was already in PyDB for package" % (nevra, filename))
+                printWarning(2, "%s: File '%s' was already in PyDB for package"\
+                    % (nevra, filename))
                 self.filenames[filename].remove(pkg)
             self.filenames[filename].append(pkg)
         if not self.write():
@@ -716,7 +717,8 @@ class RpmPyDB:
             # by the package we want to remove
             if not self.filenames.has_key(filename) or \
                not pkg in self.filenames[filename]:
-                printWarning(1, "%s: File '%s' not found in PyDB during erase" % (nevra, filename))
+                printWarning(1, "%s: File '%s' not found in PyDB during erase"\
+                    % (nevra, filename))
                 continue
             self.filenames[filename].remove(pkg)
         if not self.write():
@@ -735,7 +737,7 @@ class RpmPyDB:
     def getPkgList(self):
         if not self.pkglist:
             if not self.read():
-                return None
+                return {}
         return self.pkglist
 
     def isDuplicate(self, file):

@@ -51,8 +51,6 @@ def main():
     usage()
     sys.exit(1)
 
-  rpmconfig.operation = None
-
   for (opt, val) in opts:
     if opt in ["-i", "--install"]:
         if rpmconfig.operation != None:
