@@ -21,8 +21,43 @@ import gzip, types, string, bsddb
 from struct import pack, unpack
 
 from functions import *
-from cpio import *
 import package
+
+
+class CPIOFile:
+    """ Read ASCII CPIO files. """
+    def __init__(self, fd):
+        self.fd = fd                    # filedescriptor
+
+    def getNextEntry(self):
+        # The cpio header contains 8 byte hex numbers with the following
+        # content: magic, inode, mode, uid, gid, nlink, mtime, filesize,
+        # devMajor, devMinor, rdevMajor, rdevMinor, namesize, checksum.
+        data = self.fd.read(110)
+
+        # CPIO ASCII hex, expanded device numbers (070702 with CRC)
+        if data[0:6] not in ["070701", "070702"]:
+            raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
+
+        size = int(data[94:102], 16)
+        filename = self.fd.read(size).rstrip("\x00")
+        self.fd.read((4 - ((110 + size) % 4)) % 4)
+        # Detect if we're at the end of the archive
+        if filename == "TRAILER!!!":
+            return (None, None)
+        if filename.startswith("./"):
+            filename = filename[1:]
+        if not filename.startswith("/"):
+            filename = "%s%s" % ("/", filename)
+        if filename.endswith("/") and len(filename) > 1:
+            filename = filename[:-1]
+        #filename = "/" + os.path.normpath("./" + filename)
+
+        # Contents
+        filesize = int(data[54:62], 16)
+        filerawdata = self.fd.read(filesize)
+        self.fd.read((4 - (filesize % 4)) % 4)
+        return (filename, filerawdata)
 
 
 class RpmIO:
@@ -47,7 +82,6 @@ class RpmStreamIO(RpmIO):
     def __init__(self, source, verify=None, strict=None, hdronly=None):
         RpmIO.__init__(self, source)
         self.fd = None
-        self.cpiofd = None
         self.cpio = None
         self.verify = verify
         self.strict = strict
@@ -62,8 +96,6 @@ class RpmStreamIO(RpmIO):
         return 0
 
     def close(self):
-        if self.cpiofd:
-            self.cpiofd = None
         if self.cpio:
             self.cpio = None
         return 1
@@ -106,8 +138,8 @@ class RpmStreamIO(RpmIO):
                 self.hdrdata = None
                 self.hdr = {}
                 self.hdrtype = {}
-                self.cpiofd = gzip.GzipFile(fileobj=self.fd)
-                self.cpio = CPIOFile(self.cpiofd)
+                cpiofd = gzip.GzipFile(fileobj=self.fd)
+                self.cpio = CPIOFile(cpiofd)
                 self.where = 4
                 return ("-", "")
             v =  self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
@@ -115,7 +147,7 @@ class RpmStreamIO(RpmIO):
             return (rpmtagname[v[0]], v[1])
         # Read/parse data files archive
         if self.where == 4 and not self.hdronly:
-            (filename, filedata, filerawdata) = self.cpio.getNextEntry()
+            (filename, filerawdata) = self.cpio.getNextEntry()
             if filename != None:
                 return (filename, filerawdata)
         return  ("EOF", "")
@@ -744,5 +776,24 @@ def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
     else:
         return RpmFileIO(source, verify, strict, hdronly)
     return None
+
+
+if __name__ == "__main__":
+    import sys
+    for f in sys.argv[1:]:
+        if f == "-":
+            c = CPIOFile(sys.stdin)
+        else:
+            c = CPIOFile(f)
+        try:
+            filelist = []
+            while 1:
+                (filename, filerawdata) = c.getNextEntry()
+                if filename == None:
+                    break
+                filelist.append(filename)
+        except IOError, e:
+            printError ("error reading cpio: %s" % e)
+        print filelist
 
 # vim:ts=4:sw=4:showmatch:expandtab
