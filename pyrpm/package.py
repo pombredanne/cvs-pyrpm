@@ -43,6 +43,16 @@ class RpmData:
         self.data[key] = value
         return self.data[key]
 
+    def __delitem__(self, key):
+        self.modified = 1
+        del self.data[key]
+
+    def has_key(self, key):
+        return self.data.has_key(key)
+
+    def keys(self):
+        return self.data.keys()
+
     def verify(self):
         ret = 0
         return ret
@@ -102,37 +112,35 @@ class RpmPackage(RpmData):
         ret = RpmData.verify(self)
         return ret
 
-    def install(self, files=None, tags=None, ntags=None):
+    def install(self, db=None, tags=None, ntags=None):
         if not self.open():
             return 0
         if not self.readHeader(tags, ntags):
             return 0
-        if not files:
-            files = self["filenames"]
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preinprog"] != None:
             if not runScript(self["preinprog"], self["prein"], "1"):
                 return 0
-        if not self.extract(files):
+        if not self.extract():
             return 0
         if self["postinprog"] != None:
             if not runScript(self["postinprog"], self["postin"], "1"):
                 return 0
         return 1
 
-    def erase(self, files=None):
+    def erase(self, db=None):
         if not self.open():
             return 0
         if not self.readHeader():
             return 0
-        if not files:
-            files = self["filenames"]
+        files = self["filenames"]
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preunprog"] != None:
-            if not runScript(self["preunprog"], self["preun"], "1"):
-                return 0
+#            if not runScript(self["preunprog"], self["preun"], "1"):
+#                return 0
+            runScript(self["preunprog"], self["preun"], "1")
         # Remove files starting from the end (reverse process to install)
         files.reverse()
         for f in files:
@@ -140,15 +148,16 @@ class RpmPackage(RpmData):
                 try:
                     os.rmdir(f)
                 except:
-                    print "Error removing dir %s from pkg %s" % (f, self.source)
+                    printWarning(1, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
                 try:
                     os.unlink(f)
                 except:
-                    print "Error removing file %s from pkg %s" % (f, self.source)
+                    printWarning(1, "Couldn't remove file %s from pkg %s" % (f, self.source))
         if self["postunprog"] != None:
-            if not runScript(self["postunprog"], self["postun"], "1"):
-                return 0
+#            if not runScript(self["postunprog"], self["postun"], "1"):
+#                return 0
+            runScript(self["postunprog"], self["postun"], "1")
         return 1
 
     def readHeader(self, tags=None, ntags=None):
@@ -161,7 +170,7 @@ class RpmPackage(RpmData):
         # Read sig
         (key, value) = self.io.read()
         while key != None and key != "-":
-            if not self.data.has_key("signature"):
+            if not self.has_key("signature"):
                 self["signature"] = {}
             if tags and key in tags:
                 self["signature"][key] = value
@@ -190,9 +199,8 @@ class RpmPackage(RpmData):
             return 1
         return 0
         
-    def extract(self, files=None):
-        if not files:
-            files = self["filenames"]
+    def extract(self):
+        files = self["filenames"]
         # We don't need those lists earlier, so we create them "on-the-fly"
         # before we actually start extracting files.
         self.generateFileInfoList()

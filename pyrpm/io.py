@@ -37,7 +37,7 @@ class RpmIO:
     def read(self):
         return 0
 
-    def write(self):
+    def write(self, pkg):
         return 0
 
     def close(self):
@@ -174,7 +174,7 @@ class RpmStreamIO(RpmIO):
         if not len(data):
             return None
         (magic, indexNo, storeSize) = unpack("!8sii", data)
-        if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
+        if magic != RPM_HEADER_INDEX_MAGIC or indexNo < 1:
             raiseFatal("%s: bad index magic" % self.source)
         fmt = self.fd.read(16 * indexNo)
         fmt2 = self.fd.read(storeSize)
@@ -463,14 +463,14 @@ class RpmStreamIO(RpmIO):
         (index, pad) = self.generateIndex(indexlist, store, 1)
         return (index, store+pad)
 
-    def write(self, data):
+    def write(self, pkg):
         if self.fd == None:
             self.open("w+")
         if self.fd == None:
             return 0
-        lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, data.getNEVR()[0:66], rpm_lead_arch[data["arch"]], 5)
-        (sigindex, sigdata) = self.generateSig(data["signature"])
-        (headerindex, headerdata) = self.generateHeader(data.data)
+        lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, pkg.getNEVR()[0:66], rpm_lead_arch[pkg["arch"]], 5)
+        (sigindex, sigdata) = self.generateSig(pkg["signature"])
+        (headerindex, headerdata) = self.generateHeader(pkg)
         self.fd.write(lead)
         self.fd.write(sigindex)
         self.fd.write(sigdata)
@@ -632,6 +632,19 @@ class RpmPyDB:
         if not self.write():
             return 0
         return 1
+
+    def getPackage(self, name):
+        if not self.pkglist:
+            if not self.read():
+                return None
+        for nevra in self.pkglist:
+            if nevra.startswith(name):
+                src = "pydb:/"+self.source+"/headers/"+nevra
+                pkg = package.RpmPackage(src)
+                pkg.read()
+                return pkg
+        # Not found
+        return None
 
     def getPkgList(self):
         if not self.pkglist:

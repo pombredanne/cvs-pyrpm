@@ -297,6 +297,22 @@ def isInstallPreReq(x):
 def isErasePreReq(x):
     return (x & _ERASE_ONLY_MASK)
 
+# RPM file attributes
+RPMFILE_NONE        = 0,
+RPMFILE_CONFIG      = (1 <<  0)    # from %%config
+RPMFILE_DOC         = (1 <<  1)    # from %%doc
+RPMFILE_ICON        = (1 <<  2)    # from %%donotuse.
+RPMFILE_MISSINGOK   = (1 <<  3)    # from %%config(missingok)
+RPMFILE_NOREPLACE   = (1 <<  4)    # from %%config(noreplace)
+RPMFILE_SPECFILE    = (1 <<  5)    # @todo (unnecessary) marks 1st file in srpm.
+RPMFILE_GHOST       = (1 <<  6)    # from %%ghost
+RPMFILE_LICENSE     = (1 <<  7)    # from %%license
+RPMFILE_README      = (1 <<  8)    # from %%readme
+RPMFILE_EXCLUDE     = (1 <<  9)    # from %%exclude, internal
+RPMFILE_UNPATCHED   = (1 << 10)    # placeholder (SuSE)
+RPMFILE_PUBKEY      = (1 << 11)    # from %%pubkey
+RPMFILE_POLICY      = (1 << 12)    # from %%policy
+
 # XXX: TODO for possible rpm changes:
 # - arch should not be needed for src.rpms
 # - deps could be left away from src.rpms

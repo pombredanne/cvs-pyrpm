@@ -17,7 +17,7 @@
 #
 
 
-import os.path, tempfile, sys
+import os.path, tempfile, sys, string
 from config import *
 from cpio import *
 from base import *
@@ -145,13 +145,13 @@ def printDebug(level, msg):
     return 0
 
 def printInfo(level, msg):
-    if level <= rpmconfig.debug_level:
+    if level <= rpmconfig.verbose_level:
         sys.stdout.write(msg)
         sys.stdout.flush()
     return 0
 
 def printWarning(level, msg):
-    if level <= rpmconfig.debug_level:
+    if level <= rpmconfig.warning_level:
         sys.stdout.write("Warning: "+msg+"\n")
         sys.stdout.flush()
     return 0
@@ -183,6 +183,46 @@ def evrSplit(evr):
         version = evr[i:]
         release = ""
     return (epoch, version, release)
+
+# split [e:]name-version-release.arch into the 4 possible subcomponents.
+def envraSplit(envra):
+    # Find the epoch separator
+    i = string.find(envra, ":")
+    if i >= 0:
+        epoch = envra[:i]
+        envra = envra[i+1:]
+    else:
+        epoch = None
+    # Search for last '.' and the last '-'
+    i = string.rfind(envra, ".")
+    j = string.rfind(envra, "-")
+    # Arch can't have a - in it, so we can only have an arch if the last '.'
+    # is found after the last '-'
+    if i >= 0 and j >= 0 and i>j:
+        arch = envra[i+1:]
+        envra = envra[:i]
+    else:
+        arch = None
+    # If we found a '-' we assume for now it's the release
+    if j >= 0:
+        release = envra[j+1:]
+        envra = envra[:j]
+    else:
+        release = None
+    # Look for second '-' and store in version
+    i = string.rfind(envra, "-")
+    if i >= 0:
+        version = envra[i+1:]
+        envra = envra[:i]
+    else:
+        version = None
+    # If we only found one '-' it has to be the version but was stored in
+    # release, so we need to swap them (version would be None in that case)
+    if version == None and release != None:
+        version = release
+        release = None
+    return (epoch, envra, version, release, arch)
+
 
 # locale independend string methods
 def _xislower(chr): return (chr >= 'a' and chr <= 'z')
