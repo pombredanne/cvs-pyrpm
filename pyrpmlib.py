@@ -18,8 +18,8 @@
 # Author: Phil Knirsch, Thomas Woerner, Florian LaRoche
 #
 
-import rpmconstants, cpio, ugid
-import os.path, popen2, tempfile, sys, gzip
+import rpmconstants, cpio
+import os.path, popen2, tempfile, sys, gzip, pwd, grp
 from types import StringType, IntType, ListType
 from struct import unpack
 rpmtag = rpmconstants.rpmtag
@@ -98,6 +98,7 @@ class RpmStreamIO(RpmIO):
         # Separator
         if self.where == 1:
             self.readSig()
+            # Shall we skip signature parsing/reading?
             if (self.verify or self.parsesig) and not self.hdronly:
                 self.where = 2
             else:
@@ -112,9 +113,9 @@ class RpmStreamIO(RpmIO):
                 self.idx = 0
                 self.where = 3
                 return ("-", "")
-            (key, value) = self.getNextHeader(self.idx, self.sigdata[3], self.sigdata[4])
+            v = self.getNextHeader(self.idx, self.sigdata[3], self.sigdata[4])
             self.idx += 1
-            return (key, value)
+            return v
         # Read/parse hdr
         if self.where == 3:
             # Last index of hdr? Switch to data files archive
@@ -123,15 +124,15 @@ class RpmStreamIO(RpmIO):
                 self.cpio = cpio.CPIOFile(self.cpiofd)
                 self.where = 4
                 return ("-", "")
-            (key, value) =  self.getNextHeader(self.idx, self.hdrdata[3], self.hdrdata[4])
+            v =  self.getNextHeader(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
-            return (key, value)
+            return v
         # Read/parse data files archive
         if self.where == 4:
-            (filename, filedata, filerawdata) = self.cpio.getNextEntry()
-            if filename != None:
-                return (filename, (filedata, filerawdata))
-        return  ("EOF", ("", ""))
+            v = self.cpio.getNextEntry()
+            if v[0] != None:
+                return v
+        return  ("EOF", "", "")
 
     def readLead(self):
         leaddata = self.fd.read(96)
@@ -511,31 +512,37 @@ class RpmPackage(RpmData):
     def extract(self, io, files=None):
         if files == None:
             files = self["filetree"]
-        (filename, (filedata, filerawdata)) = io.read()
+        (filename, filedata, filerawdata) = io.read()
         while filename != None and filename != "EOF" :
             if filename in files:
                 idx = files.index(filename)
                 print filename, \
                       filedata[7], self["filesizes"][idx], \
-                      hex(filedata[8]*256+filedata[9]), hex(int(self["filedevices"][idx]))
-            (filename, (filedata, filerawdata)) = io.read()
+                      hex(filedata[8]*256+filedata[9]), hex(int(self["filedevices"][idx])), \
+                      oct(filedata[2]), oct(int(self["filemodes"][idx]))
+            (filename, filedata, filerawdata) = io.read()
         return 0
 
     def updateFilestats(self):
         # No files -> No need to do anything.
         if not self["basenames"]:
             return
-        # Get our /etc/passwd and /etc/group classes
-        pw = ugid.Passwd()
-        grp = ugid.Group()
         # Check every file from the rpm headers and update the filemods
         # according to the info from the rpm headers.
         for i in xrange(len(self["basenames"])):
             fullname = self["dirnames"][self["dirindexes"][i]]+self["basenames"][i]
             if not (os.path.isfile(fullname) or os.path.isdir(fullname)) or os.path.islink(fullname):
                 continue
-            uid = int(pw.getUID(self["fileusername"][i]))
-            gid = int(grp.getGID(self["filegroupname"][i]))
+            pw = pwd.getpwnam(self["fileusername"][i])
+            if pw != None:
+                uid = pw[2]
+            else:
+                uid = -1
+            grp = grp.getgrnam(self["filegroupname"][i])
+            if grp != None:
+                gid = grp[2]
+            else:
+                gid = -1
             if uid != -1 and gid != -1:
                 os.chown(fullname, uid, gid)
             os.chmod(fullname, (~cpio.CP_IFMT) & self["filemodes"][i])
