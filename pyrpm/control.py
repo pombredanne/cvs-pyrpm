@@ -19,6 +19,7 @@
 
 import os
 from package import *
+from resolver import *
 
 
 class RpmController:
@@ -26,6 +27,7 @@ class RpmController:
         self.db = None
         self.buildroot = None
         self.ignorearch = None
+        self.operation = None
         self.new = []
         self.update = []
         self.erase = []
@@ -34,6 +36,7 @@ class RpmController:
 
     def installPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
         self.setBuildroot(buildroot)
+        self.operation = "install"
         for file in pkglist:
             self.newPkg(file)
         self.setDB(db)
@@ -44,6 +47,7 @@ class RpmController:
         return 1
 
     def updatePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        self.operation = "update"
         for file in pkglist:
             self.updatePkg(file)
         self.setDB(db)
@@ -54,9 +58,11 @@ class RpmController:
         return 1
 
     def freshenPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        self.operation = "update"
         for file in pkglist:
             self.updatePkg(file)
-        self.setDB(db)
+        if not self.setDB(db):
+            return 0
         if not self.readDB():
             return 0
         instlist = []
@@ -73,6 +79,7 @@ class RpmController:
         return 1
 
     def erasePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        self.operation = "erase"
         for file in pkglist:
             self.erasePkg(file)
         self.setDB(db)
@@ -82,20 +89,25 @@ class RpmController:
             return 0
         return 1
 
+    def setDB(self, db):
+        self.db = db
+        return 1
+
     def setBuildroot(self, br):
         self.buildroot = br
 
-    def setDB(self, db):
-        self.db = db
-        return self.readDB()
-
-    # XXX: Write this
     def readDB(self):
+        if self.db == None:
+            return 0
         self.installed = []
+        if self.buildroot != None:
+            pydb = RpmPyDB(self.buildroot+self.db)
+        else:
+            pydb = RpmPyDB(self.db)
+        pydb.read()
         return 1
 
     def updateDB(self, pkg):
-        
         self.installed.append(pkg)
 
 
@@ -163,20 +175,36 @@ class RpmController:
 
     def run(self):
         self.preprocess()
-#        depres = RpmResolver(new, update, erase, installed, available)
-#        pkglist = depres.resorder()
-        pkglist = self.new
-        for pkg in pkglist:
+        if self.operation == "install":
+            rpms = self.new
+        if self.operation == "update":
+            rpms = self.update
+        if self.operation == "erase":
+            rpms = self.erase
+        resolver = RpmResolver(rpms, self.installed, self.operation)
+        operations = resolver.resolve()
+        for (op, pkg) in operations:
+            print pkg.source
             pkg.open()
             pid = os.fork()
             if pid != 0:
                 os.waitpid(pid, 0)
+                pkg.close()
                 continue
             else:
                 if self.buildroot:
                     os.chroot(self.buildroot)
-                if pkg.install():
-                    self.updateDB(pkg)
+                if op == "install":
+                    if pkg.install():
+                        self.updateDB(pkg)
+                # XXX: Handle correct removal of package that gets updated
+                if op == "update":
+                    if pkg.install():
+                        self.updateDB(pkg)
+                # XXX: Handle correct erase of files etc (duplicate files etc)
+                if op == "erase":
+                    if pkg.erase():
+                        self.updateDB(pkg)
                 pkg.close()
                 sys.exit()
 

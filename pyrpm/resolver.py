@@ -17,6 +17,7 @@
 # Author: Thomas Woerner
 #
 
+import string
 from hashlist import *
 from rpmlist import *
 

@@ -13,7 +13,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004 Red Hat, Inc.
 #
-# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
+# Author: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak
 #
 
 
@@ -144,17 +144,17 @@ def printDebug(level, msg):
         sys.stdout.flush()
     return 0
 
-def printInfo(msg):
+def printInfo(level, msg):
     sys.stdout.write(msg)
     sys.stdout.flush()
     return 0
 
-def printWarning(msg):
+def printWarning(level, msg):
     sys.stdout.write("Warning: "+msg+"\n")
     sys.stdout.flush()
     return 0
 
-def printError(msg):
+def printError(level, msg):
     sys.stderr.write("Error: "+msg+"\n")
     sys.stderr.flush()
     return 0

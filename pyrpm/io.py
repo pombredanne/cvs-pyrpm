@@ -476,17 +476,49 @@ class RpmStreamIO(RpmIO):
         self.fd.write(headerdata)
         return 1
 
-    def writeHeader(self, data):
-            return 0
-
-    def writeData(self, data):
-            return 0
-
 
 class RpmDBIO(RpmIO):
     def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
         RpmIO.__init__(self)
 
+
+class RpmPyDBIO(RpmIO):
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+        RpmIO.__init__(self)
+
+class RpmPyDB:
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+        self.source = source
+        self.filenames = {}
+        self.pkglist = []
+
+    def read(self):
+        if not os.path.isdir(self.source):
+            try:
+                os.makedirs(self.source)
+            except:
+                printError(1, "%s: Couldn't open PyRPM database" % self.source)
+                return 0
+        fd = open(self.source+"/filenames", "r+")
+        list = fd.read()
+        fd.close()
+        exec "self.filenames = %s" % list
+        if not os.path.isdir(self.source+"/headers"):
+            try:
+                os.makedirs(self.source+"/headers")
+            except:
+                printError(1, "%s: Couldn't open PyRPM headers" % self.source)
+                return 0
+        self.pkglist = os.listdir(self.source+"/headers")
+        print self.filenames, self.pkglist
+    def write(self):
+        pass
+
+    def newPkg(self, pkg):
+        pass
+
+    def erasePkg(self, pkg):
+        pass
 
 class RpmFtpIO(RpmIO):
     def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):

@@ -13,7 +13,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004 Red Hat, Inc.
 #
-# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
+# Author: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak
 #
 
 import os.path, tempfile, sys, gzip, pwd, grp
