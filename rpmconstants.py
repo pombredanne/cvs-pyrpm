@@ -324,7 +324,7 @@ rpmtag = {
     "rhnplatform": (RPMTAG_RHNPLATFORM, RPM_STRING, None, 4),   # == arch
     "platform": (RPMTAG_PLATFORM, RPM_STRING, None, 0),
 
-    # source rpm packages:
+    # rpm source packages:
     "source": (RPMTAG_SOURCE, RPM_STRING_ARRAY, None, 2),
     "patch": (RPMTAG_PATCH, RPM_STRING_ARRAY, None, 2),
     "buildarchs": (RPMTAG_BUILDARCHS, RPM_STRING_ARRAY, None, 2),

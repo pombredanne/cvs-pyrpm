@@ -15,7 +15,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004 Red Hat, Inc.
 #
-# Author: Phil Knirsch, Thomas Woerner, Florian LaRoche
+# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
 import rpmconstants, cpio
