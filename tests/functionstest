@@ -22,7 +22,7 @@ class TestFunctions(unittest.TestCase):
         self.assertEqual(list, ['a', 'b'])
 
     def testConstructName(self):
-        """Testing functions.constructName() and function.envraSplit()
+        """Testing functions.constructName() and functions.envraSplit()
         """
         name = "0:test-1.2.3-4.i386"
         envra = functions.envraSplit(name)
