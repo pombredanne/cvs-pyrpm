@@ -1,0 +1,22 @@
+#!/usr/bin/python
+import os, os.path
+
+from pyrpmlib import *
+
+if not os.path.isdir("/mnt/build/pyrpm-fc3-i386/var/lib/pyrpm/headers/"):
+    os.mkdirs("/mnt/build/pyrpm-fc3-i386/var/lib/pyrpm/headers/")
+
+rpmdb = RpmDB("/mnt/build/rpm-fc3-i386/var/lib/rpm")
+rpmdb.read()
+
+l = rpmdb.getPkgList().values()
+for pkg in l:
+    nevra = pkg.getNEVRA()
+    src = "pydb://mnt/build/pyrpm-fc3-i386/var/lib/pyrpm/headers/"+nevra
+    pyrpmio = getRpmIOFactory(src)
+    print "Writing %s pyrpm header." % nevra
+    if not pyrpmio.write(pkg):
+        print "Couldn't write package header! Aborting!"
+        sys.exit(1)
+
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -1,0 +1,13 @@
+
+import bsddb, time
+from struct import unpack
+
+from pyrpm import *
+
+db = bsddb.btopen("/var/lib/rpm/Installtid", "r")
+
+for key in db.keys():
+	data = db[key]
+	print unpack("i", key)[0]
+	for i in xrange(0, len(data)/4):
+		print unpack("i", data[i*4:i*4+4])[0]

@@ -1,0 +1,13 @@
+import bsddb
+from struct import unpack
+
+from pyrpm import *
+
+db = bsddb.hashopen("/var/lib/rpm/Filemd5s", "r")
+
+for key in db.keys():
+	data = db[key]
+	(md1, md2, md3, md4) = unpack("!4I", key)
+	print hex(md1), hex(md2), hex(md3), hex(md4)
+	for i in xrange(0, len(data)/4):
+                print unpack("i", data[4*i:4*i+4])[0]

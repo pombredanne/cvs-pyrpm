@@ -1,0 +1,30 @@
+import bsddb
+from struct import unpack
+
+from pyrpm import *
+
+db = bsddb.hashopen("/var/lib/rpm/Packages", "r")
+
+rpmio = RpmFileIO("foo")
+
+for key in db.keys():
+	data = db[key]
+	val = unpack("i", key)[0]
+	if val != 0:
+		(indexNo, storeSize) = unpack("!ii", data[0:8])
+		indexdata = data[8:indexNo*16+8]
+		storedata = data[indexNo*16+8:]
+		print val, indexNo, storeSize, len(data)
+		for idx in xrange(0, indexNo):
+			(tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata, storedata)
+			if rpmtagname.has_key(tag):
+				if rpmtagname[tag] == "name":
+					print rpmtagname[tag], tagval
+				else:
+					print rpmtagname[tag]
+			else:
+				print tag, repr(tagval)
+		rpmio.hdr = {}
+		rpmio.hdrtype = {}
+	else:
+		print val, len(data)
