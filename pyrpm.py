@@ -24,7 +24,6 @@ from types import StringType, IntType, ListType
 from struct import unpack
 rpmtag = rpmconstants.rpmtag
 rpmsigtag = rpmconstants.rpmsigtag
-#import ugid
 
 RPM_CHAR = rpmconstants.RPM_CHAR
 RPM_INT8 = rpmconstants.RPM_INT8
@@ -63,9 +62,11 @@ class ReadRpm:
             try:
                 self.fd = open(self.filename, "ro")
             except:
-                self.raiseErr("could not open file")
+                self.printErr("could not open file")
+                return 1
             if offset:
                 self.fd.seek(offset, 1)
+        return None
 
     def closeFd(self):
         self.fd = None
@@ -289,7 +290,8 @@ class ReadRpm:
             self.verifyHeader()
 
     def readHeader(self, parse=1, tags=None, keepdata=None):
-        self.openFd()
+        if self.openFd():
+            return 1
         leaddata = self.fd.read(96)
         if leaddata[:4] != '\xed\xab\xee\xdb':
             self.printErr("no rpm magic found")
@@ -509,8 +511,10 @@ class RRpm:
         self.triggerin = rpm["triggerin"]
         self.triggerun = rpm["triggerun"]
         self.triggerpostun = rpm["triggerpostun"]
+        if rpm.verify:
+            self.doVerify(rpm)
 
-    def verifyIt(self, rpm):
+    def doVerify(self, rpm):
         if self.trigger != None:
             if len(self.trigger) != len(self.triggerprog):
                 raise ValueError, "wrong trigger lengths"
@@ -559,13 +563,9 @@ class RRpm:
         print "%s: %s" % (self.filename, err)
 
 
-def verifyRpm(filename, payload=None):
+def verifyRpm(filename, legacy=1, payload=None):
     """Read in a complete rpm and verify its integrity."""
-    rpm = ReadRpm(filename, 1, legacy=1)
-    #nochangelog = [rpmconstants.RPMTAG_CHANGELOGTIME,
-    #    rpmconstants.RPMTAG_CHANGELOGNAME, rpmconstants.RPMTAG_CHANGELOGTEXT,
-    #    rpmconstants.RPMTAG_SUMMARY, rpmconstants.RPMTAG_DESCRIPTION]
-    #if rpm.readHeader(nochangelog):
+    rpm = ReadRpm(filename, 1, legacy=legacy)
     if rpm.readHeader():
         return None
     if payload:
@@ -632,8 +632,8 @@ def main(args):
         sys.stdout.write(queryformat % rpm)
 
 def verifyAllRpms():
-    import time
-    repo = []
+    #import time
+    #repo = []
     for a in sys.argv[1:]:
         rpm = verifyRpm(a)
         if rpm != None:
@@ -642,10 +642,9 @@ def verifyAllRpms():
             #    print rpm.getFilename()
             #    print f
             rrpm = RRpm(rpm)
-            rrpm.verifyIt(rpm)
-            repo.append(rrpm)
-    print "ready"
-    time.sleep(30)
+            #repo.append(rrpm)
+    #print "ready"
+    #time.sleep(30)
 
 if __name__ == "__main__":
     if None:
