@@ -17,7 +17,7 @@
 # Copyright 2005 Red Hat, Inc.
 #
 
-__version__ = "0.11"
+__version__ = "0.12"
 __doc__ = """Read and manage RPM packages."""
 
 import os, locale
