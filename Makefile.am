@@ -1,4 +1,4 @@
-SUBDIRS = doc pyrpm scripts
+SUBDIRS = doc pyrpm scripts tests
 EXTRA_DIST = AUTHORS ChangeLog NEWS README build.sh pyrpm.spec
 
 .PHONY: changelog build
