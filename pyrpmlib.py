@@ -454,69 +454,6 @@ class RpmPackage(RpmData):
         ret = RpmData.verify(self)
         return ret
 
-    def extract(self, io, files=None):
-        if files == None:
-            files = self["filetree"]
-        (filename, filerawdata) = io.read()
-        while filename != None and filename != "EOF" :
-            rfi = files[filename]
-            if rfi != None:
-                if not installFile(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, filerawdata):
-                    return 1
-            (filename, filerawdata) = io.read()
-        return 0
-
-    def readHeader(self, io):
-        (key, value) = io.read()
-        # Read over lead
-        while key != None and key != "-":
-            (key, value) = io.read()
-        # Read header
-        (key, value) = io.read()
-        while key != None and key != "-":
-            (key, value) = io.read()
-            self[key] = value
-        self.parseFilelist()
-        self.generateHardLinkList()
-        return 1
-
-    def parseFilelist(self):
-        self["filetree"] = {}
-        if self["dirnames"] == None or self["dirindexes"] == None:
-            return
-        for i in xrange (len(self["basenames"])):
-            filename = self["dirnames"][self["dirindexes"][i]] + self["basenames"][i]
-            rpminode = self["fileinodes"][i]
-            rpmmode = self["filemodes"][i]
-            pw = pwd.getpwnam(self["fileusername"][i])
-            if pw != None:
-                rpmuid = pw[2]
-            else:
-                rpmuid = 0      # default to root as uid if not found
-            gr = grp.getgrnam(self["filegroupname"][i])
-            if gr != None:
-                rpmgid = gr[2]
-            else:
-                rpmgid = 0      # default to root as gid if not found
-            rpmmtime = self["filemtimes"][i]
-            rpmfilesize = self["filesizes"][i]
-            rpmdev = self["filedevices"][i]
-            rpmrdev = self["filerdevs"][i]
-            rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev)
-            self["filetree"][filename] = rfi
-
-    def generateHardLinkList(self):
-        self.hardlinks = {}
-        files = self["filetree"].keys()
-        for i in xrange(len(files)-1, -1, -1):
-            ri = self["filetree"][files[i]]
-            for j in xrange(i-1, -1, -1):
-                rj = self["filetree"][files[j]]
-                if ri.inode == rj.inode and ri.dev == rj.dev:
-                    if files[i] not in self.hardlinks.keys():
-                        self.hardlinks[files[i]] = []
-                    self.hardlinks[files[i]].append
-
     def install(self, io, files=None):
         if not self.readHeader(io):
             return 0
@@ -529,6 +466,105 @@ class RpmPackage(RpmData):
             if not runScript(self["postinprog"], self["postin"], "1"):
                 return 0
         return 1
+
+    def readHeader(self, io):
+        (key, value) = io.read()
+        # Read over lead
+        while key != None and key != "-":
+            (key, value) = io.read()
+        # Read header
+        (key, value) = io.read()
+        while key != None and key != "-":
+            (key, value) = io.read()
+            self[key] = value
+        self.generateFileNames()
+        return 1
+
+    def extract(self, io, files=None):
+        if files == None:
+            files = self["filenames"]
+        self.generateFileInfoList()
+        self.generateHardLinkList()
+        (filename, filerawdata) = io.read()
+        while filename != None and filename != "EOF" :
+            rfi = self.rfilist[filename]
+            if rfi != None:
+                if not str(rfi.inode)+":"+str(rfi.dev) in self.hardlinks.keys():
+                    if not installFile(rfi, filerawdata):
+                        return 0
+                else:
+                    if len(filerawdata) > 0:
+                        if not installFile(rfi, filerawdata):
+                            return 0
+                        self.handleHardlinks(rfi)
+            (filename, filerawdata) = io.read()
+        return self.handleRemainingHardlinks()
+        return 1
+
+    def generateFileNames(self):
+        self["filenames"] = []
+        if self["dirnames"] == None or self["dirindexes"] == None:
+            return
+        for i in xrange (len(self["basenames"])):
+            filename = self["dirnames"][self["dirindexes"][i]] + self["basenames"][i]
+            self["filenames"].append(filename)
+
+    def generateFileInfoList(self):
+        self.rfilist = {}
+        for filename in self["filenames"]:
+            self.rfilist[filename] = self.getRpmFileInfo(filename)
+
+    def generateHardLinkList(self):
+        self.hardlinks = {}
+        for filename in self.rfilist.keys():
+            rfi = self.rfilist[filename]
+            key = str(rfi.inode)+":"+str(rfi.dev)
+            if key not in self.hardlinks.keys():
+                self.hardlinks[key] = []
+            self.hardlinks[key].append(rfi)
+        for key in self.hardlinks.keys():
+            if len(self.hardlinks[key]) == 1:
+                del self.hardlinks[key]
+
+    def handleHardlinks(self, rfi):
+        key = str(rfi.inode)+":"+str(rfi.dev)
+        self.hardlinks[key].remove(rfi)
+        for hrfi in self.hardlinks[key]:
+             createLink(rfi.filename, hrfi.filename)
+        del self.hardlinks[key]
+
+    def handleRemainingHardlinks(self):
+        keys = self.hardlinks.keys()
+        for key in keys:
+            rfi = self.hardlinks[key][0]
+            if not installFile(rfi, ""):
+                return 0
+            self.handleHardlinks(rfi)
+        return 1
+
+    def getRpmFileInfo(self, filename):
+        try:
+            i = self["filenames"].index(filename)
+        except:
+            return None
+        rpminode = self["fileinodes"][i]
+        rpmmode = self["filemodes"][i]
+        pw = pwd.getpwnam(self["fileusername"][i])
+        if pw != None:
+            rpmuid = pw[2]
+        else:
+            rpmuid = 0      # default to root as uid if not found
+        gr = grp.getgrnam(self["filegroupname"][i])
+        if gr != None:
+            rpmgid = gr[2]
+        else:
+            rpmgid = 0      # default to root as gid if not found
+        rpmmtime = self["filemtimes"][i]
+        rpmfilesize = self["filesizes"][i]
+        rpmdev = self["filedevices"][i]
+        rpmrdev = self["filerdevs"][i]
+        rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev)
+        return rfi
 
     def getDeps(self, name, flags, version):
         n = self[name]
@@ -609,7 +645,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
     return 1
 
 def installFile(rfi, data):
-    rfi.filetype = mode & cpio.CP_IFMT
+    rfi.filetype = rfi.mode & cpio.CP_IFMT
     if  rfi.filetype == cpio.CP_IFREG:
         makeDirs(rfi.filename)
         # CPIO archives are sick: Hardlinks are stored as 0 byte long
@@ -647,14 +683,14 @@ def installFile(rfi, data):
         #self.handleCurrentDefered(filename)
     elif rfi.filetype == cpio.CP_IFDIR:
         if os.path.isdir(rfi.filename):
-            return 0
+            return 1
         os.makedirs(rfi.filename)
         if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
             return 0
     elif rfi.filetype == cpio.CP_IFLNK:
         symlinkfile = data.rstrip("\x00")
         if os.path.islink(rfi.filename) and os.readlink(rfi.filename) == symlinkfile:
-            return 0
+            return 1
         makeDirs(rfi.filename)
         os.symlink(symlinkfile, rfi.filename)
     elif rfi.filetype == cpio.CP_IFCHR or \
@@ -695,5 +731,15 @@ def makeDirs(fullname):
     dirname = fullname[:fullname.rfind("/")]
     if not os.path.isdir(dirname):
             os.makedirs(dirname)
+
+def createLink(src, dst):
+    try:
+        # First try to unlink the defered file
+        os.unlink(dst)
+    except:
+        pass
+    # Behave exactly like cpio: If the hardlink fails (because of different
+    # partitions), then it has to fail
+    os.link(src, dst)
 
 # vim:ts=4:sw=4:showmatch:expandtab
