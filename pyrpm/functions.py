@@ -240,11 +240,14 @@ def raiseFatal(msg):
 
 # split EVR in epoch, version and release
 def evrSplit(evr):
-    epoch = "0"
+    i = 0
     p = evr.find(":") # epoch
     if p != -1:
         epoch = evr[:p]
-    p = evr.find("-", p + 1) # version
+        i = p + 1
+    else:
+        epoch = "0"
+    p = evr.find("-", i) # version
     if p != -1:
         version = evr[i:p]
         release = evr[p+1:]
