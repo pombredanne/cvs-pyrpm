@@ -450,7 +450,14 @@ class RpmPackage(RpmData):
         pass
 
     def read(self, io):
-        return io.read(self)
+        if io.read(self):
+            return 1
+        
+        self["provides"] = self.getProvides()
+        self["requires"] = self.getRequires()
+        self["obsoletes"] = self.getObsoletes()
+        self["conflicts"] = self.getConflicts()
+        return 0
 
     def write(self, io):
         return io.write(self)
@@ -500,21 +507,5 @@ class RpmPackage(RpmData):
 
     def getTriggers(self):
         return self.getDeps("triggername", "triggerflags", "triggerversion")
-
-    def _buildFileNames(self):
-        """Returns (dir, filename, linksto, flags)."""
-        if self["dirnames"] == None or self["dirindexes"] == None:
-            return []
-        dirnames = [ self["dirnames"][index] 
-                     for index in self["dirindexes"]
-                   ]
-        return zip (dirnames, self["basenames"], self["fileflags"],
-                    self["fileinodes"], self["filemodes"],
-                    self["fileusername"], self["filegroupname"],
-                    self["filelinktos"], self["filemtimes"],
-                    self["filesizes"], self["filedevices"],
-                    self["filerdevs"], self["filelangs"],
-                    self["filemd5s"]
-                )
 
 # vim:ts=4:sw=4:showmatch:expandtab
