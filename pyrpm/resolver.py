@@ -262,13 +262,14 @@ class RpmResolver(RpmList):
         return (unresolved, resolved)
     # ----
 
-    def checkDependencies(self):
+    def checkDependencies(self, check_installed=0):
         """ Check dependencies """
         no_unresolved = 1
         for i in xrange(len(self)):
             rlist = self[i]
             for r in rlist:
-                if len(self.erased) == 0 and len(self.obsoletes) == 0 and \
+                if check_installed == 0 and \
+                       len(self.erased) == 0 and len(self.obsoletes) == 0 and \
                        self.isInstalled(r):
                     # do not check installed packages if no packages
                     # are getting removed by erase or obsolete
@@ -291,13 +292,14 @@ class RpmResolver(RpmList):
         return no_unresolved
     # ----
 
-    def getResolvedDependencies(self):
+    def getResolvedDependencies(self, check_installed=0):
         """ Get all resolved dependencies """
         all_resolved = [ ]
         for i in xrange(len(self)):
             rlist = self[i]
             for r in rlist:
-                if len(self.erased) == 0 and len(self.obsoletes) == 0 and \
+                if check_installed == 0 and \
+                       len(self.erased) == 0 and len(self.obsoletes) == 0 and \
                        self.isInstalled(r):
                     # do not check installed packages if no packages
                     # are getting removed by erase or obsolete
@@ -309,13 +311,14 @@ class RpmResolver(RpmList):
         return all_resolved
     # ----
 
-    def getUnresolvedDependencies(self):
+    def getUnresolvedDependencies(self, check_installed=0):
         """ Get all unresolved dependencies """
         all_unresolved = [ ]
         for i in xrange(len(self)):
             rlist = self[i]
             for r in rlist:
-                if len(self.erased) == 0 and len(self.obsoletes) == 0 and \
+                if check_installed == 0 and \
+                       len(self.erased) == 0 and len(self.obsoletes) == 0 and \
                        self.isInstalled(r):
                     # do not check installed packages if no packages
                     # are getting removed by erase or obsolete
