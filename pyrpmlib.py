@@ -19,7 +19,7 @@
 #
 
 #import profile
-import rpmconstants, cpio, os.path
+import rpmconstants, cpio, os.path, popen2, posix, tempfile
 import sys, getopt, gzip, cStringIO, time
 from types import StringType, IntType, ListType
 from struct import unpack
@@ -476,10 +476,57 @@ class RpmPackage(RpmData):
         [filename, filedata, filerawdata] = cfile.getNextEntry()
         while filename != None:
             cfile.extractCurrentEntry(instroot)
-#            if filedata[2] & cpio.CP_IFDIR:
-#                print filename, "ISDIR"
-#            print filename, oct(filedata[2]), oct(filedata[3]), oct(filedata[4]), oct(filedata[5]), oct(filedata[6]), oct(filedata[7]), oct(filedata[8]), oct(filedata[9]), oct(filedata[10]), oct(filedata[11]), oct(filedata[12])
             [filename, filedata, filerawdata] = cfile.getNextEntry()
+        # Needed for hardlinks... :(
+        cfile.postExtract()
+
+    def runScript(self, instroot=None, prog=None, script=None, arg1=None, arg2=None):
+        tmpfilename = tempfile.mktemp(dir="/var/tmp/", prefix="rpm-tmp-")
+        if instroot != None:
+            fd = open(instroot+tmpfilename, "w")
+        else:
+            fd = open(tmpfilename, "w")
+        if script != None:
+            fd.write(script)
+        fd.close()
+        cmd = ""
+        if instroot != None:
+            cmd = "/usr/sbin/chroot "+instroot+" "
+        cmd = cmd+prog
+        if prog != "/sbin/ldconfig":
+            cmd = cmd+" "+tmpfilename
+            if arg1 != None:
+                cmd = cmd+" "+arg1
+            if arg2 != None:
+                cmd = cmd+" "+arg2
+        p = popen2.Popen3(cmd, 1)
+        p.tochild.close()
+        rout = p.fromchild.read()
+        rerr = p.childerr.read()
+        p.fromchild.close()
+        p.childerr.close()
+        ret = p.wait()
+        if instroot != None:
+            os.unlink(instroot+tmpfilename)
+        else:
+            os.unlink(tmpfilename)
+        if ret != 0 or rout != "" or rerr != "":
+            print "Error in script:"
+            print script
+            print ret
+            print rout
+            print rerr
+            return 0
+        return 1
+
+    def install(self, instroot=None, files=None):
+        if self["preinprog"] != None:
+            self.runScript(instroot, self["preinprog"], self["prein"], "1")
+
+        self.extract(instroot, files)
+
+        if self["postinprog"] != None:
+            self.runScript(instroot, self["postinprog"], self["postin"], "1")
 
     def getDeps(self, name, flags, version):
         n = self[name]
