@@ -45,7 +45,7 @@ general options:
 install-options:
     [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]
     [--ignoresize] [--ignorearch]
-    [--nodeps] [--nodigest] [--nosignature]
+    [--nodeps] [--nodigest] [--nofileconflicts] [--nosignature]
     [--noorder] [--noscripts] [--notriggers]
     [--autoerase]
 
@@ -165,13 +165,15 @@ try:
         ["help", "verbose",
          "hash", "version", "quiet", "dbpath=", "root=",
          "force", "ignoresize", "ignorearch", "justdb",
-         "nodeps", "nodigest", "nosignature", "noorder", "noscripts",
+         "nodeps", "nodigest", "nofileconflicts", "nosignature",
+         "noorder", "noscripts",
          "notriggers", "oldpackage", "test", "autoerase"])
 except getopt.error, e:
     print "Error parsing command list arguments: %s" % e
     usage()
     sys.exit(1)
 
+repo = RpmResolver([], OP_INSTALL)
 for (opt, val) in opts:
     if   opt in ['-?', "--help"]:
         usage()
@@ -182,7 +184,6 @@ for (opt, val) in opts:
         rpmconfig.buildroot = val
     elif opt == "-c":
         conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], val)
-        repo = RpmResolver([], OP_INSTALL)
         for key in conf.vars.keys():
             if key == "main":
                 pass
@@ -246,6 +247,8 @@ for (opt, val) in opts:
         rpmconfig.nodeps = 1
     elif opt == "--nodigest":
         rpmconfig.nodigest = 1
+    elif opt == "--nofileconflicts":
+        rpmconfig.nofileconflicts = 1
     elif opt == "--nosignature":
         rpmconfig.nosignature = 1
     elif opt == "--noorder":
