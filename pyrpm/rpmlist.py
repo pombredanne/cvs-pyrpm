@@ -116,7 +116,7 @@ class RpmList:
             
             for r in rpms:
                 ret = pkgCompare(r, pkg)
-                if ret > 0:
+                if ret > 0: # old_ver > new_ver
                     if rpmconfig.oldpackage == 0:
                         if self.isInstalled(r):
                             msg = "%s: A newer package is already installed"
@@ -134,9 +134,10 @@ class RpmList:
                         printWarning(1, "%s does not match arch %s." % \
                                      (pkg.getNEVRA(), r["arch"]))
                         return self.ARCH_INCOMPAT
-                    if archDuplicate(pkg["arch"], r["arch"]):
+                    if archDuplicate(pkg["arch"], r["arch"]) or \
+                           pkg["arch"] == "noarch" or r["arch"] == "noarch":
                         updates.append(r)
-                elif ret == 0: # old_ver == new_ver
+                else: # ret == 0, old_ver == new_ver
                     if rpmconfig.exactarch == 1 and \
                            pkg["arch"] != r["arch"] and \
                            archDuplicate(pkg["arch"], r["arch"]):
