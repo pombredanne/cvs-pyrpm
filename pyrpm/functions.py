@@ -60,6 +60,8 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
     pid = os.fork()
     if pid == 0:
         os.close(rfd)
+        if not os.path.exists("/dev/null"):
+            os.mknod("/dev/null", 0666, 259)
         fd = os.open("/dev/null", os.O_RDONLY)
         if fd != 0:
             os.dup2(fd, 0)
@@ -516,6 +518,7 @@ def filterArchDuplicates(list):
             i += 1
         else:
             r = myhash[key]
+            print r.getNEVRA(), pkg.getNEVRA()
             ret = pkgCompare(r, pkg)
             if ret < 0:
                 printWarning(2, "%s was already added, replacing with %s" % \
@@ -526,7 +529,9 @@ def filterArchDuplicates(list):
                 printWarning(2, "%s was already added" % pkg.getNEVRA())
                 list.pop(i)
             else:
-                i += 1
+                printWarning(2, "%s a newer version was already added" % \
+                                    pkg.getNEVRA())
+                list.pop(i)
 
     # stage 2: filter duplicates: order by name
     myhash = {}
@@ -553,11 +558,12 @@ def filterArchDuplicates(list):
                     list.remove(r)
                     removed = 1
                 elif arch == r["arch"]:
-                    printWarning(2, "%s was already added" % \
-                                       pkg.getNEVRA())
+                    printWarning(2, "%s was already added" % pkg.getNEVRA())
                     list.pop(i) # remove 'pkg'
                     removed = 1
                 else:
+                    printWarning(2, "%s a higher arch was already added" % pkg.getNEVRA())
+                    list.pop(i)
                     j += 1
             if removed == 0:
                 myhash[name].append(pkg)
@@ -738,7 +744,6 @@ best match."""
             ("release", constructName([RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
     pkglist.extend(tagsearch(tags, list, regex))
-    filterArchList(pkglist)
     return pkglist
 
 def findPkgByName(pkgname, list):

@@ -192,7 +192,7 @@ class RpmPackage(RpmData):
         os.umask(022)
         if self["preinprog"] != None or self["postinprog"] != None:
             numPkgs = str(db.getNumPkgs(self["name"])+1)
-        if self["preinprog"] != None:
+        if self["preinprog"] != None and not rpmconfig.noscripts:
             if not runScript(self["preinprog"], self["prein"], numPkgs):
                 printError("%s: Error running pre install script." \
                     % self.getNEVRA())
@@ -203,7 +203,7 @@ class RpmPackage(RpmData):
         else:
             printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
-        if self["postinprog"] != None:
+        if self["postinprog"] != None and not rpmconfig.noscripts:
             if not runScript(self["postinprog"], self["postin"], numPkgs):
                 printError("%s: Error running post install script." \
                     % self.getNEVRA())
@@ -220,7 +220,7 @@ class RpmPackage(RpmData):
         os.umask(022)
         if self["preunprog"] != None or self["postunprog"] != None:
             numPkgs = str(db.getNumPkgs(self["name"])-1)
-        if self["preunprog"] != None:
+        if self["preunprog"] != None and not rpmconfig.noscripts:
             if not runScript(self["preunprog"], self["preun"], numPkgs):
                 printError("%s: Error running pre uninstall script." \
                     % self.getNEVRA())
@@ -259,7 +259,7 @@ class RpmPackage(RpmData):
             else:
                 printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
-        if self["postunprog"] != None:
+        if self["postunprog"] != None and not rpmconfig.noscripts:
             if not runScript(self["postunprog"], self["postun"], numPkgs):
                 printError("%s: Error running post uninstall script." \
                     % self.getNEVRA())
@@ -374,18 +374,22 @@ class RpmPackage(RpmData):
                 if self["arch"] in arch_compats[pkg["arch"]]:
                     return 0
             return 1
+        if not os.path.exists(rfi.filename):
+            printWarning(1, "%s: File doesn't exist" % rfi.filename)
+            return 1
         (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
             = os.stat(rfi.filename)
-
-        f = open(rfi.filename)
-        m = md5.new()
-        buf = "1"
-        while buf:
-            buf = f.read(65536)
-            if buf:
-                m.update(buf)
-        f.close()
-        md5sum = m.hexdigest()
+        # File on disc is not a regular file -> don't try to calc an md5sum
+        if S_ISREG(mode):
+            f = open(rfi.filename)
+            m = md5.new()
+            buf = "1"
+            while buf:
+                buf = f.read(65536)
+                if buf:
+                    m.update(buf)
+            f.close()
+            md5sum = m.hexdigest()
         # Same file in new rpm as on disk -> just write it.
         if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid \
             and rfi.filesize == filesize and rfi.md5sum == md5sum:

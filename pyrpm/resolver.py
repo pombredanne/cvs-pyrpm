@@ -416,12 +416,12 @@ class RpmResolver(RpmList):
         if self.checkDependencies() != 1:
             return -1
 
-        if rpmconfig.noconflictcheck == 0:
+        if rpmconfig.noconflicts == 0:
             # check for conflicts
             if self.checkConflicts() != 1:
                 return -2
 
-        if rpmconfig.nofileconflictcheck == 0:
+        if rpmconfig.nofileconflicts == 0:
             # check for file conflicts
             if self.checkFileConflicts() != 1:
                 return -3

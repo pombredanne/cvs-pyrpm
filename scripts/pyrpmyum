@@ -26,31 +26,49 @@ from pyrpm import *
 from pyrpm import __version__
 
 def usage():
-    print "INSTALLING, UPGRADING, AND REMOVING PACKAGES using REPOS:"
-    print "    pyrpmyum install [install-options] PACKAGE_FILE ..."
-    print "    pyrpmyum groupinstall [install-options] PACKAGE_FILE ..."
-    print "    pyrpmyum upgrade [install-options] PACKAGE_FILE ..."
-    print "    pyrpmyum groupupgrade [install-options] PACKAGE_FILE ..."
-    print "    pyrpmyum update [install-options] PACKAGE_FILE ..."
-    print "    pyrpmyum groupupdate [install-options] PACKAGE_FILE ..."
-    print "    pyrpmyum remove [install-options] PACKAGE_FILE ..."
-    print "    pyrpmyum groupremove [install-options] PACKAGE_FILE ..."
-    print
-    print "general options:"
-    print "    [-?, --help] [--version]"
-    print "    [--quiet] [-v, --verbose] [-w, warning] [-d, --debug]"
-    print "    [-c CONFIGFILE] [--dbpath DIRECTORY] [-r, --root DIRECTORY]"
-    print "    [-g, --group COMPSFILE] [--repo DIRECTORY]"
-    print
-    print "install-options:"
-    print "    [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]"
-    print "    [--ignoresize] [--ignorearch]"
-    print "    [--nodeps] [--nodigest] [--nosignature]"
-    print "    [--noorder] [--noscripts] [--notriggers]"
-    print
-    print "Warning: Some of the install-options are not evaluated yet"
-    print "Warning: -c isn't working yet properly, use --repo for now"
-    print "Warning: [group]remove doesn't work yet either, use pyrpmyum -e"
+    print """
+INSTALLING, UPGRADING, AND REMOVING PACKAGES using REPOS:
+    pyrpmyum install [install-options] PACKAGE_FILE ...
+    pyrpmyum groupinstall [install-options] PACKAGE_FILE ...
+    pyrpmyum upgrade [install-options] PACKAGE_FILE ...
+    pyrpmyum groupupgrade [install-options] PACKAGE_FILE ...
+    pyrpmyum update [install-options] PACKAGE_FILE ...
+    pyrpmyum groupupdate [install-options] PACKAGE_FILE ...
+    pyrpmyum remove [install-options] PACKAGE_FILE ...
+    pyrpmyum groupremove [install-options] PACKAGE_FILE ...
+
+general options:
+    [-?, --help] [--version]
+    [--quiet] [-v, --verbose] [-y]
+    [-c CONFIGFILE] [--dbpath DIRECTORY] [-r, --root DIRECTORY]
+
+install-options:
+    [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]
+    [--ignoresize] [--ignorearch]
+    [--nodeps] [--nodigest] [--nosignature]
+    [--noorder] [--noscripts] [--notriggers]
+    [--autoerase]
+
+Warning: Some of the install-options are not evaluated yet
+Warning: [group]remove doesn't work yet either, use pyrpminstall -e"""
+
+def genObsoletePkg(pkg):
+    dummy = RpmPackage("dummy")
+    dummy["name"] = "obsoletes-%s" % pkg.getNEVRA()
+    dummy["thisisaobsoletespackage"] = 1
+    dummy["version"] = "0"
+    dummy["release"] = "0"
+    dummy["arch"] = "noarch"
+    dummy["filenames"] = [ ]
+    dummy["obsoletename"] = [pkg["name"]]
+    dummy["obsoleteflags"] = [RPMSENSE_EQUAL]
+    dummy["obsoleteversion"] = [pkg.getEVR()]
+    dummy["provides"] = dummy.getProvides()
+    dummy["requires"] = dummy.getRequires()
+    dummy["obsoletes"] = dummy.getObsoletes()
+    dummy["conflicts"] = dummy.getConflicts()
+    dummy["triggers"] = dummy.getTriggers()
+    return dummy
 
 def runDepResolution(resolver):
     unresolved = resolver.getUnresolvedDependencies()
@@ -58,43 +76,55 @@ def runDepResolution(resolver):
     while len(unresolved) > 0:
         printInfo(1, "Dependency iteration " + str(iter) + "\n")
         iter += 1
-        respkglist = []
+        respkglist = [ ]
         for pkg in unresolved.keys():
             printInfo(1, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
             found = 0
             for dep in unresolved[pkg]:
                 printInfo(2, "\t" + depString(dep) + "\n")
-                depfound = 0
-                for repo in repos:
-                    for upkg in repo.searchDependency(dep):
-                        ret = resolver.append(upkg)
-                        if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
-                            found = 1
-                            depfound = 1
-                            respkglist.append(upkg)
-                            break
-                    if depfound:
+                for upkg in repo.searchDependency(dep):
+                    ret = resolver.append(upkg)
+                    resolver.doObsoletes()
+                    if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
+                        found = 1
+                        respkglist.append(upkg)
                         break
             if found == 0:
                 tmplist = []
-                for repo in repos:
-                    tmplist.extend(findPkgByName(pkg["name"], repo.appended))
+                tmplist.extend(findPkgByName(pkg["name"], repo.appended))
                 filterArchList(tmplist, rpmconfig.machine)
                 while len(tmplist) > 0 and tmplist[0]["arch"] != pkg["arch"]:
                     tmplist.pop(0)
                 if len(tmplist) == 0 or tmplist[0].getNEVRA() == pkg.getNEVRA():
-                    printError("Couldn't find update for package %s" \
-                        % pkg.getNEVRA())
-                    sys.exit(1)
-                resolver.append(tmplist[0])
-                respkglist.append(tmplist[0])
+                    if autoerase:
+                        printWarning(1, "Autoerasing package %s due to missing update package." % pkg.getNEVRA())
+                        ret = resolver.append(genObsoletePkg(pkg))
+                        if ret > 0:
+                            resolver.doObsoletes()
+                            erase_list.append(pkg)
+                    else:
+                        printWarning(0, "Couldn't find update for package %s" \
+                            % pkg.getNEVRA())
+                        sys.exit(1)
+                else:
+                    resolver.append(tmplist[0])
+                    resolver.doObsoletes()
+                    respkglist.append(tmplist[0])
         filterArchList(respkglist)
         if len(respkglist) == 0:
             for (pkg, deplist) in unresolved:
-                printInfo(1, "Unresolved dependencies for "+pkg.getNEVRA()+"\n")
-                for dep in deplist:
-                    printInfo(1, "\t" + depString(dep)+"\n")
-            sys.exit(1)
+                if autoerase:
+                    printWarning(1, "Autoerasing package %s due to unresolved symbols." % pkg.getNEVRA())
+                    ret = resolver.append(genObsoletePkg(pkg))
+                    if ret > 0:
+                        resolver.doObsoletes()
+                        erase_list.append(pkg)
+                else:
+                    printInfo(1, "Unresolved dependencies for "+pkg.getNEVRA()+"\n")
+                    for dep in deplist:
+                        printInfo(1, "\t" + depString(dep)+"\n")
+            if not autoerase:
+                sys.exit(1)
         unresolved = resolver.getUnresolvedDependencies()
 
 def readRpmPackage(filename):
@@ -122,20 +152,25 @@ def addDirToRepo(dirname, resolver, excludes):
 #
 # Main program
 #
+
+# Default: Don't autoerase packages that have unresolved symbols in install or
+# update
+autoerase = 0
+
+# Default: Ask use for confirmation of complete operation
+confirm = 1
+
 try:
-    opts, args = getopt.getopt(sys.argv[1:], "?vwdhc:r:g:",
+    opts, args = getopt.getopt(sys.argv[1:], "?vhc:r:y",
         ["help", "verbose",
-         "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=",
-         "group=", "repo=", "force", "ignoresize", "ignorearch", "justdb",
+         "hash", "version", "quiet", "dbpath=", "root=",
+         "force", "ignoresize", "ignorearch", "justdb",
          "nodeps", "nodigest", "nosignature", "noorder", "noscripts",
-         "notriggers", "oldpackage", "test"])
+         "notriggers", "oldpackage", "test", "autoerase"])
 except getopt.error, e:
     print "Error parsing command list arguments: %s" % e
     usage()
     sys.exit(1)
-
-# Store for all our repositories
-repos = []
 
 for (opt, val) in opts:
     if   opt in ['-?', "--help"]:
@@ -143,14 +178,11 @@ for (opt, val) in opts:
         sys.exit(0)
     elif opt in ["-v", "--verbose"]:
         rpmconfig.verbose_level += 1
-    elif opt in ["-w", "--warning"]:
-        rpmconfig.warning_level += 1
-    elif opt in ["-d", "--debug"]:
-        rpmconfig.debug_level += 1
     elif opt in ["-r", "--root"]:
         rpmconfig.buildroot = val
     elif opt == "-c":
         conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], val)
+        repo = RpmResolver([], OP_INSTALL)
         for key in conf.vars.keys():
             if key == "main":
                 pass
@@ -165,28 +197,30 @@ for (opt, val) in opts:
                 else:
                     excludes = sec["exclude"]
                 if not baseurl.startswith("file:/"):
-                    printInfo("%s: Only file:/ baseurls supported for now." % key)
+                    printWarning(0, "%s: Only file:/ baseurls supported for now." % key)
                     continue
                 val = baseurl[5:]
-                resolver = RpmResolver([], OP_INSTALL)
                 if os.path.isdir(val):
-                    addDirToRepo(val, resolver, excludes)
+                    addDirToRepo(val, repo, excludes)
                 if os.path.isdir(val+"/RedHat/RPMS"):
-                    addDirToRepo(val+"/RedHat/RPMS", resolver, excludes)
+                    addDirToRepo(val+"/RedHat/RPMS", repo, excludes)
                 if os.path.isdir(val+"/Fedora/RPMS"):
-                    addDirToRepo(val+"/Fedora/RPMS", resolver, excludes)
+                    addDirToRepo(val+"/Fedora/RPMS", repo, excludes)
                 if rpmconfig.compsfile == None and \
                    os.path.isfile(val+"/repodata/comps.xml"):
                     rpmconfig.compsfile = val+"/repodata/comps.xml"
-                repos.append(resolver)
     elif opt == "--quiet":
         rpmconfig.debug_level = 0
         rpmconfig.warning_level = 0
         rpmconfig.verbose_level = 0
         rpmconfig.printhash = 0
+    elif opt == "--autoerase":
+        autoerase = 1
     elif opt == "--version":
         print "pyrpmyum", __version__
         sys.exit(0)
+    elif opt == "-y":
+        confirm = 0
     elif opt == "--dbpath":
         rpmconfig.dbpath = val
     elif opt == "--force":
@@ -220,6 +254,11 @@ for (opt, val) in opts:
         rpmconfig.noscripts = 1
     elif opt == "--notriggers":
         rpmconfig.notriggers = 1
+
+if rpmconfig.verbose_level > 1:
+    rpmconfig.warning_level = rpmconfig.verbose_level - 1
+if rpmconfig.verbose_level > 2:
+    rpmconfig.warning_level = rpmconfig.verbose_level - 2
 
 if not args:
     printError("No command given")
@@ -267,8 +306,7 @@ for f in args:
                 continue
             pkgs.append(readRpmPackage(fn))
     else:
-        for repo in repos:
-            pkgs.extend(findPkgByName(f, repo.appended))
+        pkgs.extend(findPkgByName(f, repo.appended))
         filterArchList(pkgs, rpmconfig.machine)
         if len(pkgs) == 0:
             printError("Couldn't find package %s, skipping" % f)
@@ -287,25 +325,35 @@ for pkg in pkgs:
 del pkgs
 
 # Look for obsoletes and add them to our update packages
-changes = 1
-while changes:
-    changes = 0
-    for repo in repos:
-        for pkg in repo.appended:
-            for u in pkg["obsoletes"]:
-                s = opresolver.searchDependency(u)
-                if len(s) > 0:
-                    print pkg.getNEVRA()
-                    ret = opresolver.append(pkg)
-                    if ret > 0 and ret != RpmResolver.ALREADY_ADDED:
-                        changes = 1
+for pkg in repo.appended:
+    for u in pkg["obsoletes"]:
+        s = opresolver.searchDependency(u)
+        if len(s) > 0:
+            ret = opresolver.append(pkg)
+            if ret > 0:
+                opresolver.doObsoletes()
+
+# Special erase list for unresolvable package dependancies
+erase_list = []
 
 runDepResolution(opresolver)
 appended = opresolver.appended
+del repo
 del opresolver
-del repos
 
-rpmconfig.nofileconflictcheck =1
+
+if len(erase_list) > 0:
+    printInfo(0, "Warning: Following packages will be removed:\n")
+    for p in erase_list:
+        printInfo(0, "\t%s\n" % p.getNEVRA())
+
+if confirm:
+    choice = raw_input("Is this ok [y/N]: ")
+    if len(choice) == 0:
+        sys.exit(0)
+    else:
+        if choice[0] != "y" and choice[0] != "Y":
+            sys.exit(0)
 
 control = RpmController()
 control.handlePkgs(appended, OP_UPDATE, rpmconfig.dbpath, rpmconfig.buildroot)

@@ -157,16 +157,26 @@ class RpmController:
             printError("test run stopped")
             sys.exit(0)
         self.triggerlist = _Triggers()
-        for (op, pkg) in operations:
+        numops = 0
+        i = 0
+        while i < len(operations):
+            (op, pkg) = operations[i]
+            # TODO XXX: Temporary fix, will be moved to pyrpmyum REAL SOON. ;)
+            if pkg.has_key("thisisaobsoletespackage"):
+                operations.pop(i)
+                continue
+            if op != OP_ERASE or \
+               (self.operation == OP_ERASE and op == OP_ERASE):
+                numops += 1
             if op == OP_UPDATE or op == OP_INSTALL:
                 self.triggerlist.addPkg(pkg)
+            i += 1
         for pkg in self.installed:
             self.triggerlist.addPkg(pkg)
         del self.rpms
         del self.installed
         i = 1
         gc.collect()
-        numops = len(operations)
         pkgsperfork = 100
         setCloseOnExec()
         for i in xrange(0, numops, pkgsperfork):
@@ -194,9 +204,10 @@ class RpmController:
                     os.chroot(self.buildroot)
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
-                    i += 1
-                    progress = "[%d/%d] %s" % (i, numops, pkg.getNEVRA())
-                    if op != OP_ERASE and self.operation != OP_ERASE:
+                    if op != OP_ERASE or \
+                       (self.operation == OP_ERASE and op == OP_ERASE):
+                        i += 1
+                        progress = "[%d/%d] %s" % (i, numops, pkg.getNEVRA())
                         doprint = 1
                         if rpmconfig.printhash:
                             printInfo(0, progress)
@@ -277,6 +288,8 @@ class RpmController:
         return self.pydb.erasePkg(pkg, nowrite)
 
     def __runTriggerIn(self, pkg):
+        if rpmconfig.notriggers:
+            return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERIN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
         os.umask(022)
@@ -299,6 +312,8 @@ class RpmController:
         return 1
 
     def __runTriggerUn(self, pkg):
+        if rpmconfig.notriggers:
+            return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
         os.umask(022)
@@ -321,6 +336,8 @@ class RpmController:
         return 1
 
     def __runTriggerPostUn(self, pkg):
+        if rpmconfig.notriggers:
+            return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERPOSTUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
         os.umask(022)
