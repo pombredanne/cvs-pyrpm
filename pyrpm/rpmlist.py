@@ -121,7 +121,7 @@ class RpmList:
                     return 0
         # remove obsolete packages
         for u in pkg["obsoletes"]:
-            s = self.search_dep(u)
+            s = self.searchDependency(u)
             for r2 in s:
                 if str(r2) != str(pkg):
                     printDebug(1, "%s obsoletes %s, removing %s" % \
@@ -181,7 +181,7 @@ class RpmList:
             self.obsoletes[pkg] = [ ]
         self.obsoletes[pkg].append(obsolete_pkg)
         return self.erase(obsolete_pkg)
-    def search_dep(self, dep):
+    def searchDependency(self, dep):
         (name, flag, version) = dep
         s = self.provides.search(name, flag, version)
         if name[0] == '/': # all filenames are beginning with a '/'

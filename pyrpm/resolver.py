@@ -120,7 +120,7 @@ class RpmResolver:
                 for u in r["requires"]:
                     if u[0][0:7] == "rpmlib(": # drop rpmlib requirements
                         continue
-                    s = rpmlist.search_dep(u)
+                    s = rpmlist.searchDependency(u)
                     if len(s) == 0: # found nothing
                         unresolved.append(_gen_depstr(u))
                         no_unresolved = 0
@@ -156,7 +156,7 @@ class RpmResolver:
                             break
                     if drop == 1:
                         continue
-                    s = rpmlist.search_dep(u)
+                    s = rpmlist.searchDependency(u)
                     # found packages
                     if len(s) > 0:
                         _normalize(s)
@@ -202,7 +202,7 @@ class RpmResolver:
             for r in rlist:
                 printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
                 for c in r["conflicts"] + r["obsoletes"]:
-                    s = rpmlist.search_dep(c)
+                    s = rpmlist.searchDependency(c)
                     if len(s) > 0:
                         _normalize(s)
                         if r in s: s.remove(r)
