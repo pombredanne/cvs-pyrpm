@@ -22,6 +22,8 @@ import os.path
 import re
 import sys
 import getopt
+#import zlib
+#import gzip
 
 def parseLead(f, fname=None, verify=1):
     """ Takes a python file object at the start of an RPM file and
@@ -120,12 +122,12 @@ def readTag(index, fmt):
         raise ValueError, "unknown tag header"
     return data
 
-def readIndex(filename, f, verify=0, skip=0, tags=None):
+def readIndex(filename, f, pad, verify=0, skip=0, tags=None):
     (magic, indexNo, storeSize) = struct.unpack("!8sii", f.read(16))
     if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
         raise ValueError, "bad magic"
     fmt = f.read(16 * indexNo)
-    fmt2 = f.read(storeSize + (8 - (storeSize % 8)) % 8)
+    fmt2 = f.read(storeSize + (pad - (storeSize % pad)) % pad)
     if skip:
         return None
     if verify:
@@ -159,7 +161,7 @@ reqsig = [
     rpmconstants.RPMSIGTAG_MD5
 ]
 
-def verifyHeader(sigindex, hdr, hdrsize, payloadsize):
+def verifyHeader(sigindex, hdr, hdrsize, payloadsize, cpiosize):
     for i in sigindex.keys():
         if i not in sigkeys:
             raise ValueError, "new item in sigindex: %d" % i
@@ -173,7 +175,8 @@ def verifyHeader(sigindex, hdr, hdrsize, payloadsize):
         print size, hdrsize, payloadsize, hdrsize+payloadsize
         raise ValueError, "size"
     identifysig = sigindex[rpmconstants.HEADER_SIGNATURES] # what data is in here?
-    cpiosize = sigindex[rpmconstants.RPMSIGTAG_PAYLOADSIZE] # uncompressed payload
+    #if cpiosize != sigindex[rpmconstants.RPMSIGTAG_PAYLOADSIZE]: # uncompressed payload
+    #    raise ValueError, "cpio size"
     sha1 = sigindex[rpmconstants.RPMTAG_SHA1HEADER] # header
     md5sum = sigindex[rpmconstants.RPMSIGTAG_MD5] # header + payload
     if sigindex.has_key(rpmconstants.RPMTAG_DSAHEADER):
@@ -183,11 +186,21 @@ def verifyHeader(sigindex, hdr, hdrsize, payloadsize):
 def parseHeader(f, filename, verify=0, tags=None):
     lead = parseLead(f, filename)
     skip = 0
-    sigindex = readIndex(filename, f, verify, skip, tags)[0]
-    (hdr, hdrsize) = readIndex(filename, f, verify, skip, tags)
+    sigindex = readIndex(filename, f, 8, verify, skip, tags)[0]
+    (hdr, hdrsize) = readIndex(filename, f, 1, verify, skip, tags)
     payload = f.read()
+    if payload[:9] != '\037\213\010\000\000\000\000\000\000':
+        raise ValueError, "nnot gzipped data"
+    #cpiodata = zlib.decompress(payload)
+    #gz = gzip.GzipFile(fileobj=f)
+    #while 1:
+    #    buf = gz.read(4096)
+    #    if not buf:
+    #        break
+    #cpiodata = None
+    cpiodata = "x"
     if verify:
-        verifyHeader(sigindex, hdr, hdrsize, len(payload))
+        verifyHeader(sigindex, hdr, hdrsize, len(payload), len(cpiodata))
     return (lead, sigindex, hdr)
 
 class RpmHeader:
@@ -275,13 +288,12 @@ class RRpm:
         self.uids = uids
         self.gids = gids
 
-
 def showHelp():
     print "pyrpm [options] /path/to/foo.rpm"
     print
     print "options:"
     print "--help this message"
-    print "--queryformat [queryformat]  specifying a format to print the query as"
+    print "--queryformat [queryformat] specifying a format to print the query as"
     print "                   see python String Formatting Operations for details"
     print
 
@@ -295,7 +307,7 @@ def queryFormatUnescape(s):
     s = s.replace('\\v','\v')
     s = s.replace('\\r','\r')
     return s
-    
+
 def main(args):
     queryformat="%{name}-%{version}-%{release}"
     try:
@@ -324,6 +336,8 @@ def main(args):
         sys.stdout.write(queryformat % rpm)
 
 if __name__ == "__main__":
+    #for a in sys.argv[1:]:
+    #    rpm = RpmHeader(a)
     main(sys.argv[1:])
-    
+
 # vim:ts=4:sw=4:showmatch:expandtab
