@@ -9,4 +9,3 @@ configure
 *.gz
 *.bz2
 pyrpm.spec
-

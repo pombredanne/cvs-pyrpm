@@ -1,10 +1,10 @@
 SUBDIRS = doc pyrpm scripts
-EXTRA_DIST = pyrpm.spec build.sh README NEWS AUTHORS ChangeLog pyrpmlib.py
+EXTRA_DIST = pyrpm.spec build.sh README NEWS AUTHORS ChangeLog
 
 .PHONY: changelog build
 
 build: changelog dist-bzip2
-	rpmbuild -tb pyrpm-@VERSION@.tar.bz2
+	rpmbuild -ta pyrpm-@VERSION@.tar.bz2
 
 changelog:
 	rcs2log -v | sed -e 's|@.*\.redhat\.com|@redhat.com|g' > ChangeLog
