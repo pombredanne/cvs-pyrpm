@@ -1,5 +1,10 @@
 #!/usr/bin/python
 import os, os.path
+import sys
+PYRPMDIR = "/usr/local/share/pyrpm"
+
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
 
 from pyrpmlib import *
 

@@ -25,9 +25,15 @@ Usage: rpmspecfile.py [-v --verbose] [-l --sections] [-s --section=sectionname] 
 """
 
 import sys
+
+PYRPMDIR = "/usr/local/share/pyrpm"
+
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+
 import string
 
-from pyrpmlib.specfile import RpmSpecFile
+from pyrpm.specfile import RpmSpecFile
 
 def Usage():
     print """%s - Simple Specfile Parser
@@ -83,6 +89,11 @@ if __name__ == '__main__':
     except (getopt.error, BadUsage):
         Usage()
         sys.exit(1)
+
+    if len(args) == 0:
+	Usage()
+	sys.exit(1)
+
 
     for filename in args:           
         spec = RpmSpecFile(filename)
