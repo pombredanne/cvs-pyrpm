@@ -1,8 +1,8 @@
 #!/bin/sh
-rm -rf pyrpm-*.tar.bz
+rm -rf pyrpm-*.tar.bz2
 aclocal
 automake -a
 autoconf
 ./configure
 make tar
-rpm -tb pyrpm-*.tar.bz
+rpmbuild -tb pyrpm-*.tar.bz2
