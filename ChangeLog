@@ -18,14 +18,16 @@
 	- pyrpm/specfile.py: - do not "import sys"
 	* AUTHORS: - add email for myself
 	* pyrpm/functions.ps: - filterArchDuplicates() doesn't use "arch"
+	- do not use "hash" as var name
 	* pyrpm/package.py: - write(): remove "origsource", it is unused
 	* pyrpm/resolver.py: - removed unused var
 	- do not use "str" or "file" as var
 	* pyrpm/rpmlist.py: - NOT_INSTALLED -> self.NOT_INSTALLED
 	- _update() doesn't use "oldpackages", remove it
 	- getList() can use ".extend()", do not use "list" as var
+	* pyrpm/control.py: - do not import re, time
+	* pyrpm/orderer.py: - fix calling RpmResolver()
 
-	
 2005-03-10  Phil Knirsch  <pknirsch@redhat.com>
 
 	* scripts/pyrpmyum 1.2: - Added path stuff to pyrpmyum

@@ -382,21 +382,21 @@ def filterArchCompat(list, arch=None):
 
 def filterArchDuplicates(list):
     # stage 1: filert duplicates: order by name.arch
-    hash = { }
+    myhash = {}
     i = 0
     while i < len(list):
         pkg = list[i]
         key = "%s.%s" % (pkg["name"], pkg["arch"])
-        if not hash.has_key(key):
-            hash[key] = pkg
+        if not myhash.has_key(key):
+            myhash[key] = pkg
             i += 1
         else:
-            r = hash[key]
+            r = myhash[key]
             ret = pkgCompare(r, pkg)
             if ret < 0:
                 printWarning(0, "%s was already added, replacing with %s" % \
                                    (r.getNEVRA(), pkg.getNEVRA()))
-                hash[key] = pkg
+                myhash[key] = pkg
                 list.remove(r)
             elif ret == 0:
                 printWarning(0, "%s was already added" % \
@@ -404,22 +404,22 @@ def filterArchDuplicates(list):
                 list.pop(i)
             else:
                 i += 1
-    del hash
+    del myhash
 
     # stage 2: filter duplicates: order by name
-    hash = { }
+    myhash = {}
     i = 0
     while i < len(list):
         pkg = list[i]
         removed = 0
-        if not hash.has_key(pkg["name"]):
-            hash[pkg["name"]] = [ ]
-            hash[pkg["name"]].append(pkg)
+        if not myhash.has_key(pkg["name"]):
+            myhash[pkg["name"]] = [ ]
+            myhash[pkg["name"]].append(pkg)
         else:
             j = 0
-            while hash[pkg["name"]] and j < len(hash[pkg["name"]]) and \
+            while myhash[pkg["name"]] and j < len(myhash[pkg["name"]]) and \
                       removed == 0:
-                r = hash[pkg["name"]][j]
+                r = myhash[pkg["name"]][j]
                 if pkg["arch"] != r["arch"] and \
                        buildarchtranslate[pkg["arch"]] != \
                        buildarchtranslate[r["arch"]]:
@@ -427,8 +427,8 @@ def filterArchDuplicates(list):
                 elif r["arch"] in arch_compats[pkg["arch"]]:
                     printWarning(0, "%s was already added, replacing with %s" % \
                                        (r.getNEVRA(), pkg.getNEVRA()))
-                    hash[pkg["name"]].remove(r)
-                    hash[pkg["name"]].append(pkg)
+                    myhash[pkg["name"]].remove(r)
+                    myhash[pkg["name"]].append(pkg)
                     list.remove(r)
                     removed = 1
                 elif pkg["arch"] == r["arch"]:
@@ -439,10 +439,10 @@ def filterArchDuplicates(list):
                 else:
                     j += 1
             if removed == 0:
-                hash[pkg["name"]].append(pkg)
+                myhash[pkg["name"]].append(pkg)
         if removed == 0:
             i += 1
-    del hash
+    del myhash
 
     return 1
 
@@ -454,16 +454,15 @@ def normalizeList(list):
     """ normalize list """
     if len(list) < 2:
         return
-    hash = { }
+    h = {}
     i = 0
     while i < len(list):
         item = list[i]
-        if hash.has_key(item):
+        if h.has_key(item):
             list.pop(i)
         else:
-            hash[item] = 1
+            h[item] = 1
             i += 1
-    return
 
 def getBuildArchList(list):
     """Returns list of build architectures used in 'list' of packages"""

@@ -17,7 +17,7 @@
 #
 
 
-import os, re, time, gc
+import os, gc
 import package, io
 from resolver import *
 from orderer import *
@@ -118,7 +118,7 @@ class RpmController:
             return 0
         resolver = RpmResolver(self.installed, self.operation)
         for r in self.rpms:
-            ret = resolver.append(r)
+            resolver.append(r)
         if resolver.resolve() != 1:
             sys.exit(1)
         a = resolver.appended

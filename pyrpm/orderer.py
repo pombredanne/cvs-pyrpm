@@ -181,7 +181,6 @@ class RpmOrderer:
                     else:
                         # more than one obsolete: generate order
                         resolver = RpmResolver(self.obsoletes[r],
-                                               self.obsoletes[r],
                                                RpmList.OP_ERASE)
                         ops = resolver.resolve()
                         operations.extend(ops)
