@@ -17,8 +17,9 @@
 # Author: Phil Knirsch, Paul Nasrat, Florian La Roche, Karel Zak
 #
 
-import os, os.path, commands
+import os.path
 
+# the following could also come from "import stat"
 CP_IFMT  =  0170000
 CP_IFIFO =  0010000
 CP_IFCHR =  0020000
@@ -130,6 +131,7 @@ class CPIOFile:
 
 if __name__ == "__main__":
     import sys
+    from functions import printError
     for f in sys.argv[1:]:
         if f == "-":
             c = CPIOFile(sys.stdin)
