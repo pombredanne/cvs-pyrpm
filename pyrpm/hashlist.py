@@ -57,6 +57,9 @@ class HashList:
     def has_key(self, key):
         return (self[key] != None)
 
+    def keys(self):
+        return self.hash.keys()
+
     def pop(self, idx):
         key = self.list[idx]
         self.list.pop(idx)
