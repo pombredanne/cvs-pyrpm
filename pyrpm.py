@@ -268,6 +268,7 @@ class ReadRpm:
     def verifyHeader(self):
         if self.hdronly:
             return
+        self.doVerify()
         #self.cpiosize = self[["payloadsize"]][0]
         # header + payload size
         self.payloadsize = self[["size_in_sig"]][0] - self.hdrdata[5]
@@ -480,6 +481,60 @@ class ReadRpm:
             fl[perm[0] + perm[1]] = perm[2:]
         return fl
 
+    def doVerify(self):
+        if self["triggerscripts"] != None:
+            if len(self["triggerscripts"]) != len(self["triggerscriptprog"]):
+                self.printErr("wrong trigger lengths")
+        if "-" in self["version"]:
+            self.printErr("version contains wrong char")
+        if self["payloadformat"] not in [None, "cpio"]:
+            self.printErr("wrong payload format")
+        if self.legacy:
+          if self["payloadcompressor"] not in [None, "gzip"]:
+            self.printErr("no gzip compressor: %s" % self["payloadcompressor"])
+        else:
+          if self["payloadcompressor"] not in [None, "gzip", "bzip2"]:
+            self.printErr("no gzip/bzip2 compressor: %s" % self["payloadcompressor"])
+        if self.legacy:
+          if self["payloadflags"] not in ["9"]:
+            self.printErr("no payload flags: %s" % self["payloadflags"])
+        if self.legacy and self["os"] not in ["Linux", "linux"]:
+            self.printErr("bad os: %s" % self["os"])
+        elif self["os"] not in ["Linux", "linux", "darwin"]:
+            self.printErr("bad os: %s" % self["os"])
+        if self.legacy:
+          if self["packager"] not in (None, \
+            "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>"):
+            self.printErr("unknown packager: %s" % self["packager"])
+          if self["vendor"] not in (None, "Red Hat, Inc."):
+            self.printErr("unknown vendor: %s" % self["vendor"])
+          if self["distribution"] not in (None, "Red Hat Linux", "Red Hat FC-3",
+            "Red Hat (FC-3)", "Red Hat (RHEL-3)", "Red Hat (FC-4)"):
+            self.printErr("unknown distribution: %s" % self["distribution"])
+        arch = self["arch"]
+        if self["rhnplatform"] not in (None, arch):
+            self.printErr("unknown arch for rhnplatform")
+        if self.legacy:
+          if self["platform"] not in (None, arch + "-redhat-linux-gnu",
+            arch + "-redhat-linux", "--target=${target_platform}",
+            arch + "-unknown-linux",
+            "--target=${TARGET_PLATFORM}", "--target=$TARGET_PLATFORM", ""):
+            self.printErr("unknown arch %s" % self["platform"])
+        if self["exclusiveos"] not in (None, ['Linux'], ['linux']):
+            self.printErr("unknown os %s" % self["exclusiveos"])
+        if self.legacy:
+          if self["buildarchs"] not in (None, ['noarch']):
+            self.printErr("bad buildarch: %s" % self["buildarchs"])
+        if self["excludearch"] != None:
+            for i in self["excludearch"]:
+                if i not in rpmconstants.possible_archs:
+                    self.printErr("new possible arch %s" % i)
+        if self["exclusivearch"] != None:
+            for i in self["exclusivearch"]:
+                if i not in rpmconstants.possible_archs:
+                    self.printErr("new possible arch %s" % i)
+
+
 
 class RRpm:
     def __init__(self, rpm):
@@ -521,60 +576,6 @@ class RRpm:
         self.triggerin = rpm["triggerin"]
         self.triggerun = rpm["triggerun"]
         self.triggerpostun = rpm["triggerpostun"]
-        if rpm.verify:
-            self.doVerify(rpm)
-
-    def doVerify(self, rpm):
-        if self.trigger != None:
-            if len(self.trigger) != len(self.triggerprog):
-                raise ValueError, "wrong trigger lengths"
-        if "-" in self.version:
-            self.printErr("version contains wrong char")
-        if rpm["payloadformat"] not in [None, "cpio"]:
-            self.printErr("wrong payload format")
-        if rpm.legacy:
-          if rpm["payloadcompressor"] not in [None, "gzip"]:
-            self.printErr("no gzip compressor: %s" % rpm["payloadcompressor"])
-        else:
-          if rpm["payloadcompressor"] not in [None, "gzip", "bzip2"]:
-            self.printErr("no gzip/bzip2 compressor: %s" % rpm["payloadcompressor"])
-        if rpm.legacy:
-          if rpm["payloadflags"] not in ["9"]:
-            self.printErr("no payload flags: %s" % rpm["payloadflags"])
-        if rpm.legacy and rpm["os"] not in ["Linux", "linux"]:
-            self.printErr("bad os: %s" % rpm["os"])
-        elif rpm["os"] not in ["Linux", "linux", "darwin"]:
-            self.printErr("bad os: %s" % rpm["os"])
-        if rpm.legacy:
-          if rpm["packager"] not in (None, \
-            "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>"):
-            self.printErr("unknown packager: %s" % rpm["packager"])
-          if rpm["vendor"] not in (None, "Red Hat, Inc."):
-            self.printErr("unknown vendor: %s" % rpm["vendor"])
-          if rpm["distribution"] not in (None, "Red Hat Linux", "Red Hat FC-3",
-            "Red Hat (FC-3)", "Red Hat (RHEL-3)", "Red Hat (FC-4)"):
-            self.printErr("unknown distribution: %s" % rpm["distribution"])
-        if rpm["rhnplatform"] not in (None, self.arch):
-            self.printErr("unknown arch for rhnplatform")
-        if rpm.legacy:
-          if rpm["platform"] not in (None, self.arch + "-redhat-linux-gnu",
-            self.arch + "-redhat-linux", "--target=${target_platform}",
-            self.arch + "-unknown-linux",
-            "--target=${TARGET_PLATFORM}", "--target=$TARGET_PLATFORM", ""):
-            self.printErr("unknown arch %s" % rpm["platform"])
-        if rpm["exclusiveos"] not in (None, ['Linux'], ['linux']):
-            self.printErr("unknown os %s" % rpm["exclusiveos"])
-        if rpm.legacy:
-          if rpm["buildarchs"] not in (None, ['noarch']):
-            self.printErr("bad buildarch: %s" % rpm["buildarchs"])
-        if rpm["excludearch"] != None:
-            for i in rpm["excludearch"]:
-                if i not in rpmconstants.possible_archs:
-                    self.printErr("new possible arch %s" % i)
-        if rpm["exclusivearch"] != None:
-            for i in rpm["exclusivearch"]:
-                if i not in rpmconstants.possible_archs:
-                    self.printErr("new possible arch %s" % i)
 
     def printErr(self, err):
         print "%s: %s" % (self.filename, err)
