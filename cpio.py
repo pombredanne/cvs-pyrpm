@@ -22,18 +22,22 @@
 class CPIOFile:
     """ Read ASCII CPIO files. """
 
-    def __init__(self, file):
+    def __init__(self, data):
         self.filelist = {}              # hash of CPIO headers and stat data
-        if isinstance(file, basestring):
-            self.filename = file
-            self.fp = open(file, "rb")
-        else:
-            self.filename = getattr(file, 'name', None)
-            self.fp = file
+        self.cpiodata = data
+#        if isinstance(file, basestring):
+#            self.filename = file
+#            self.fp = open(file, "rb")
+#        else:
+#            self.filename = getattr(file, 'name', None)
+#            self.fp = file
+        self.pos = 0
 
     def _read_cpio_headers(self):
+        pos = 0
         while 1:
-            data = self.fp.read(110)
+            data = self.cpiodata[pos:pos+110]
+            pos = pos + 110
 
             # CPIO ASCII hex, expanded device numbers (070702 with CRC)
             if data[0:6] not in ["070701", "070702"]:
@@ -50,9 +54,10 @@ class CPIOFile:
                 int(data[94:102], 16), data[102:110]]
 
             size = filedata[12]
-            filename = self.fp.read(size).rstrip("\x00")
+            filename = self.cpiodata[pos:pos+size].rstrip("\x00")
+            pos = pos + size
             fsize = 110 + size
-            self.fp.read((4 - (fsize % 4)) % 4)
+            pos = pos + ((4 - (fsize % 4)) % 4)
 
             # Detect if we're at the end of the archive
             if filename == "TRAILER!!!":
@@ -60,16 +65,25 @@ class CPIOFile:
 
             # Contents
             filesize = filedata[7]
-            self.fp.read(filesize)
-            self.fp.read((4 - (filesize % 4)) % 4)
+            pos = pos + filesize
+            pos = pos + ((4 - (filesize % 4)) % 4)
             self.filelist[filename[1:]] = filedata
+
+    def setData(self, data):
+        self.cpiodata = data
+
+    def getNextEntry():
+        self.pos = 0
+
+    def resetEntry():
+        self.pos = 0
 
     def namelist(self):
         """Return a list of file names in the archive."""
         return self.filelist
 
     def read(self):
-        """Return file bytes."""
+        """Read an parse cpio archive."""
         self._read_cpio_headers()
 
 

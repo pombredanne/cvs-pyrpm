@@ -63,18 +63,21 @@ class RpmIO(RpmError):
 
 
 class RpmFile(RpmIO):
-    def __init__(self, filename=None, verify=None, legacy=None, payload=None, parsesig=None, tags=None, keepdata=None):
+    def __init__(self, filename=None, verify=None, verbose=None, legacy=None, payload=None, parsesig=None, tags=None, ntags=None, keepdata=None):
         RpmIO.__init__(self)
         self.filename = filename
         self.fd = None
         self.verify = verify
+        self.verbose = verbose
         self.legacy = legacy
         self.payload = payload
         self.parsesig = parsesig
         self.tags = tags
+        self.ntags = ntags
         self.keepdata = keepdata
         self.source = filename
         self.issrc = 0
+        self.data = None
         if filename[-8:] == ".src.rpm" or filename[-10:] == ".nosrc.rpm":
             self.issrc = 1
 
@@ -103,15 +106,26 @@ class RpmFile(RpmIO):
         return ret
 
     def readHeader(self, data):
-        data.leaddata = self.fd.read(96)
-        if data.leaddata[:4] != '\xed\xab\xee\xdb':
+        leaddata = self.fd.read(96)
+        if leaddata[:4] != '\xed\xab\xee\xdb':
             self.printErr("no rpm magic found")
             return 1
-        if self.verify and self.verifyLead(data.leaddata):
+        if self.verify and self.verifyLead(leaddata):
             return 1
-        data.sigdata = self.readIndex(8, 1)
-        data.hdrdata = self.readIndex(1)
-        self.parseHeader(data)
+        sigdata = self.readIndex(8, 1)
+        hdrdata = self.readIndex(1)
+        self.parseHeader(data, sigdata, hdrdata)
+        for i in rpmconstants.rpmtag.keys():
+            if not isinstance(i, StringType):
+                continue
+            rpmtag = rpmconstants.rpmtag[i][0]
+            if rpmtag in self.hdr.keys():
+                data[i] = self.hdr[rpmtag]
+        self.parseFilelist(data)
+        if self.keepdata:
+            data.leaddata = leaddata
+            data.sigdata = sigdata
+            data.hdrdata = hdrdata
         return 0
 
     def verifyLead(self, leaddata):
@@ -233,22 +247,20 @@ class RpmFile(RpmIO):
             self.raiseErr("unknown tag header")
         return count
 
-    def parseHeader(self, data):
+    def parseHeader(self, data, sigdata, hdrdata):
         if (self.verify or self.parsesig) and not self.hdronly:
             (sigindexNo, sigstoreSize, sigdata, sigfmt, sigfmt2, size) = \
-                self.sigdata
-            (data.sig, data.sigtype) = self.parseIndex(sigindexNo, sigfmt, \
+                sigdata
+            (self.sig, self.sigtype) = self.parseIndex(sigindexNo, sigfmt, \
                 sigfmt2)
             if self.verify:
                 for i in rpmconstants.rpmsigtagrequired:
                     if not self.sig.has_key(i):
                         self.printErr("sig header is missing: %d" % i)
         (hdrindexNo, hdrstoreSize, hdrdata, hdrfmt, hdrfmt2, size) = \
-            data.hdrdata
-        (data.hdr, data.hdrtype) = self.parseIndex(hdrindexNo, hdrfmt, \
+            hdrdata
+        (self.hdr, self.hdrtype) = self.parseIndex(hdrindexNo, hdrfmt, \
             hdrfmt2)
-        self.parseFilelist(data)
-
         if self.verify:
             for i in rpmconstants.rpmtagrequired:
                 if not self.hdr.has_key(i):
@@ -264,6 +276,9 @@ class RpmFile(RpmIO):
             tag = index[0]
             # support reading only some tags
             if self.tags and tag not in self.tags:
+                continue
+            # negative tag list
+            if self.ntags and tag in self.ntags:
                 continue
             # ignore duplicate entries as long as they are identical
             if hdr.has_key(tag):
@@ -303,29 +318,39 @@ class RpmFile(RpmIO):
     def parseFilelist(self, data):
         if data["dirnames"] == None or data["dirindexes"] == None:
             return
+        data["filetree"] = []
         for i in xrange (len(data["basenames"])):
             if self.verify:
-                self.hdrfiletree[data["dirnames"][data["dirindexes"][i]] + data["basenames"][i]] = (data["fileflags"][i], data["fileinodes"][i],
+                data["filetree"].append((data["dirnames"][data["dirindexes"][i]] + data["basenames"][i],
+                    data["fileflags"][i], data["fileinodes"][i],
                     data["filemodes"][i], data["fileusername"][i],
                     data["filegroupname"][i], data["filelinktos"][i],
                     data["filemtimes"][i], data["filesizes"][i],
                     data["filedevices"][i], data["filerdevs"][i],
-                    data["filelangs"][i], data["filemd5s"][i])
+                    data["filelangs"][i], data["filemd5s"][i]))
+
+#                data["filetree"][data["dirnames"][data["dirindexes"][i]] + data["basenames"][i]] = (data["fileflags"][i], data["fileinodes"][i],
+#                    data["filemodes"][i], data["fileusername"][i],
+#                    data["filegroupname"][i], data["filelinktos"][i],
+#                    data["filemtimes"][i], data["filesizes"][i],
+#                    data["filedevices"][i], data["filerdevs"][i],
+#                    data["filelangs"][i], data["filemd5s"][i])
             else:
-                data.hdrfiletree[data["dirnames"][data["dirindexes"][i]] + data["basenames"][i]] = 1
+                data["filetree"].append(data["dirnames"][data["dirindexes"][i]] + data["basenames"][i])
+#                data.["filetree"][data["dirnames"][data["dirindexes"][i]] + data["basenames"][i]] = 1
 
     def readData(self, data):
-        self.openFd(96 + self.sigdata[5] + self.hdrdata[5])
+        self.openFile(96 + data.sigdata[5] + data.hdrdata[5])
         gz = gzip.GzipFile(fileobj=self.fd)
         cpiodata = gz.read()
         if self.verify and self.cpiosize != len(cpiodata):
             self.raiseErr("cpiosize")
-        c = cpio.CPIOFile(cStringIO.StringIO(cpiodata))
+        c = cpio.CPIOFile(cpiodata)
         try:
             c.read()
         except IOError, e:
             print "Error reading CPIO payload: %s" % e
-        if verbose:
+        if self.verbose:
             print c.namelist()
         return 1
         if keepdata:
@@ -376,47 +401,38 @@ class RpmRepo(RpmIO):
 class RpmData(RpmError):
     def __init__(self):
         RpmError.__init__(self)
+        self.data = {}
         self.hdr = {}
         self.hdrtype = None
         self.sig = {}
         self.sigtype = None
-        self.hdrfiletree = {}
         self.modified = None
 
     def __repr__(self):
-        return self.hdr.__repr__()
+#        return self.hdr.__repr__()
+        return self.data.__repr__()
 
     def __getitem__(self, key):
         try:
-            if isinstance(key, StringType):
-                return self.hdr[rpmtag[key][0]]
-            if isinstance(key, IntType):
-                return self.hdr[key]
+            return self.data[key]
+#            if isinstance(key, StringType):
+#                return self.hdr[rpmtag[key][0]]
+#            if isinstance(key, IntType):
+#                return self.hdr[key]
             # trick to also look at the sig header
-            if isinstance(key, ListType):
-                if isinstance(key[0], StringType):
-                    return self.sig[rpmsigtag[key[0]][0]]
-                return self.sig[key[0]]
-            self.raiseErr("wrong arg")
+#            if isinstance(key, ListType):
+#                if isinstance(key[0], StringType):
+#                    return self.sig[rpmsigtag[key[0]][0]]
+#                return self.sig[key[0]]
+#            self.raiseErr("wrong arg")
         except:
             # XXX: try to catch wrong/misspelled keys here?
             return None
 
     def __setitem__(self, key, value):
         self.modified = 1
-        try:
-            if isinstance(key, StringType):
-                self.hdr[key] = value
-            if isinstance(key, IntType):
-                self.hdr[key] = value
-                return self.hdr[key]
-            if isinstance(key, ListType):
-                if isinstance(key[0], StringType):
-                    self.sig[rpmsigtag[key[0]][0]] = value
-                return self.sig[key[0]]
-            self.raiseErr("wrong arg")
-        except:
-            return None
+        self.data[key] = value
+        return self.data[key]
 
     def verify():
         ret = 1
@@ -428,24 +444,30 @@ class RpmPackage(RpmData):
         RpmData.__init__(self)
         self.clear()
         if io:
-            self.io = io
+            self.read(io)
 
     def clear(self):
-        self.io = None
+        pass
 
-    def read(self, io=None):
-        if io == None:
-            io = self.io
+    def read(self, io):
         return io.read(self)
 
-    def write(self, io=None):
-        if io == None:
-            io = self.io
+    def write(self, io):
         return io.write(self)
 
     def verify(self):
         ret = RpmData.verify(self)
         return ret
+
+    def extract(self, files=None, instroot=None):
+        # We need the cpiodata to extrace it.
+        if self.cpiodata == None:
+            return 1
+        cpio = CPIOFile()
+        cpio.setData(self.cpiodata)
+        file = cpio.getNextEntry()
+        while file != None:
+            file = cpio.getNextEntry()
 
     def getDeps(self, name, flags, version):
         n = self[name]

@@ -632,8 +632,8 @@ def main(args):
         sys.stdout.write(queryformat % rpm)
 
 def verifyAllRpms():
-    #import time
-    #repo = []
+    import time
+    repo = []
     for a in sys.argv[1:]:
         rpm = verifyRpm(a)
         if rpm != None:
@@ -643,9 +643,9 @@ def verifyAllRpms():
             #    print f
             rrpm = RRpm(rpm)
             rrpm.verifyIt(rpm)
-            #repo.append(rrpm)
-    #print "ready"
-    #time.sleep(30)
+            repo.append(rrpm)
+    print "ready"
+    time.sleep(30)
 
 if __name__ == "__main__":
     if None:

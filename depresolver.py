@@ -25,6 +25,7 @@
 #
 
 import time, sys, getopt, string
+import rpmconstants
 from pyrpm import ReadRpm
 
 class DepResolver:
@@ -44,40 +45,96 @@ class DepResolver:
 
     def addProvides(self, provides, rpm):
         for i in rpm.getProvides():
-            provides[i[0]] = (i[1], i[2], rpm)
+            if not provides.has_key(i[0]):
+                provides[i[0]] = []
+            provides[i[0]].append((i[1], i[2], rpm))
         for i in rpm.hdrfiletree.keys():
-            provides[i] = (0, 8, rpm)
+            if not provides.has_key(i):
+                provides[i] = []
+            provides[i].append((0, 0, rpm))
 
     def addRpms(self, rpms):
         addprovides = {}
         retrpms = []
         retrpms.extend(rpms)
         changed = 1
+        for rpm in retrpms: 
+            self.addProvides(addprovides, rpm)
         print "Resolving deps..."
         while changed:
-            addprovides = {}
             changed = 0
-            for r in retrpms: 
-                self.addProvides(addprovides, r)
-            for r in retrpms:
-                for i  in r.getRequires():
-                    if addprovides.has_key(i[0]):
-                        if addprovides[i[0]][2] == r:
-#                            print "rpm provides it's own requires, skipping..."
-                            continue
+            for rpm in retrpms:
+                for req in rpm.getRequires():
+                    ret = self.checkProvides(addprovides, req)
+                    if ret == rpm:
+#                        print "rpm provides it's own requires, skipping..."
+                        continue
+                    if ret != None:
+# XXX: really move the provides rpm 
 #                        print "other rpm that will be installed has key, advancing that in the order..."
                         continue
-                    if self.installprovides.has_key(i[0]):
-#                        print "installed rpm already satisfies requires, skipping..."
+
+                    if self.checkProvides(self.installprovides, req) != None:
                         continue
-                    if self.repoprovides.has_key(i[0]):
-#                        print i[0], self.repoprovides[i[0]][2].getNVR()
+
+                    ret = self.checkProvides(self.repoprovides, req)
+                    if ret != None:
+#                        print req[0], self.repoprovides[req[0]][2].getNVR()
 #                        print "found rpm in repo that satisfies requires, adding..."
-                        if self.repoprovides[i[0]][2] not in retrpms:
+                        if ret not in retrpms:
                             changed = 1
-                            retrpms.insert(0, self.repoprovides[i[0]][2])
-        for r in retrpms:
-            print r.getNVR()
+                            retrpms.insert(0, ret)
+                            self.addProvides(addprovides, rpm)
+                        continue
+#                    print "Couldn't find provides for:", req[0], req[1], req[2]
+        changed=1
+        while changed:
+            changed = 0
+            for rpm in retrpms:
+                for req in rpm.getRequires():
+                    ret = self.checkProvides(addprovides, req)
+                    if ret == rpm:
+#                        print "rpm provides it's own requires, skipping..."
+                        continue
+                    if ret != None:
+# XXX: really move the provides rpm 
+#                        print "other rpm that will be installed has key, advancing that in the order..."
+                        continue
+
+                    if self.checkProvides(self.installprovides, req) != None:
+                        continue
+
+                    ret = self.checkProvides(self.repoprovides, req)
+                    if ret != None:
+#                        print req[0], self.repoprovides[req[0]][2].getNVR()
+#                        print "found rpm in repo that satisfies requires, adding..."
+                        if ret not in retrpms:
+                            changed = 1
+                            retrpms.insert(0, ret)
+                        continue
+                    print "Couldn't find provides for:", req[0], req[1] & (rpmconstants.RPMSENSE_LESS | rpmconstants.RPMSENSE_GREATER | rpmconstants.RPMSENSE_EQUAL), req[2]
+
+        for rpm in retrpms:
+            print rpm.getNVR()
+
+    def checkProvides(self, provides, req):
+        if not provides.has_key(req[0]):
+            return None
+        for p in provides[req[0]]:
+            if self.checkProvide(p, req):
+                return p[2]
+        return None
+
+    def checkProvide(self, pro, req):
+        comp = req[1] & (rpmconstants.RPMSENSE_LESS | rpmconstants.RPMSENSE_GREATER | rpmconstants.RPMSENSE_EQUAL)
+        # Any match is ok.
+        if comp == 0:
+            return 1
+        if comp & rpmconstants.RPMSENSE_EQUAL:
+            return string.find(pro[1], req[2], 0, 0) != -1
+
+        print pro[1], req[0], comp, req[1]
+        return 0
 
     def eraseRpms(self, rpms):
         return rpms
@@ -101,15 +158,15 @@ def showHelp():
 
 if __name__ == "__main__":
     installed = []
-    finstalled = None
+    finstalled = []
     repo = []
-    frepo = None
+    frepo = []
     add = []
-    fadd = None
+    fadd = []
     remove = []
-    fremove = None
+    fremove = []
     update = []
-    fupdate = None
+    fupdate = []
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hqiraeu", ["help", "installed=", "repo=", "add=", "erase=", "update="])
@@ -133,7 +190,7 @@ if __name__ == "__main__":
         if opt in ['-u', "--update"]:
             fupdate = string.split(val)
 
-    if (fadd != None and fremove != None) or (fadd != None and fupdate != None) or (fremove != None and fupdate != None):
+    if (len(fadd) > 0 and len(fremove) > 0) or (len(fadd) > 0 and len(fupdate) > 0) or (len(fremove) > 0 and len(fupdate) > 0):
         print "Error: You can either add, erase or update rpms per run."
         sys.exit(1)
 
@@ -148,6 +205,7 @@ if __name__ == "__main__":
         rpm.readHeader()
         add.append(rpm)
 
+    print len(add), len(repo)
     resolver = DepResolver(installed, repo)
     rpms = resolver.addRpms(add)
 #    time.sleep(30)
