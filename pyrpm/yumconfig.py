@@ -135,7 +135,10 @@ class YumConf(Conf):
         repodir = '/etc/yum.repos.d'
         if self.vars.has_key("main") and self.vars["main"].has_key("reposdir"):
             repodir = self.vars["main"]["reposdir"]
-            
+
+        if not repodir:
+            return
+        
         filenames = glob(repodir + '/*.repo')
         for filename in filenames:
             self.filename = filename
