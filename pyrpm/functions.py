@@ -393,11 +393,6 @@ def evrCompare(evr1, comp, evr2):
             res = 1
     return res
 
-# Compare two packages by evr
-def pkgCompare(p1, p2):
-    return labelCompare((p1.getEpoch(), p1["version"], p1["release"]),
-        (p2.getEpoch(), p2["version"], p2["release"]))
-
 def depOperatorString(flag):
     """ generate readable operator """
     op = ""
@@ -445,7 +440,8 @@ def filterArchDuplicates(list):
             i += 1
         else:
             r = myhash[key]
-            ret = pkgCompare(r, pkg)
+            ret = labelCompare((r.getEpoch(), r["version"], r["release"]),
+                (pkg.getEpoch(), pkg["version"], pkg["release"]))
             if ret < 0:
                 printWarning(0, "%s was already added, replacing with %s" % \
                                    (r.getNEVRA(), pkg.getNEVRA()))
