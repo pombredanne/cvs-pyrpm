@@ -2,6 +2,10 @@
 
 import struct
 
+CPIO_MAGIC = { "070701" : "CPIO ASCII hex, expanded device numbers",
+               "070702" : "CPIO ASCII hex, expanded device numbers, CRC",
+            }
+
 def is_cpio(file):
     """See if file is a CPIO file by checking the magic number."""
     try:
@@ -77,7 +81,7 @@ class CPIOFile:
             cpio_headers['namesize'] = int(namesize,16)
             cpio_headers['checksum'] = checksum
 
-            if cpio_headers["magic"] == "070701" or cpio_headers["magic"] == "070702":
+            if cpio_headers["magic"] in CPIO_MAGIC.keys():
                 pass
             else:
                 raise IOError, "Bad magic reading CPIO headers %s" % magic
