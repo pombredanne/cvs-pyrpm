@@ -42,15 +42,18 @@ def _gen_depstr((name, flag, version)):
 
 # normalize list
 def _normalize(list):
+    if len(list) < 2:
+        return
+    hash = { }
     i = 0
     while i < len(list):
-        j = i + 1
-        while j < len(list):
-            if str(list[i]) == str(list[j]):
-                list.pop(j)
-            else:
-                j += 1
+        item = list[i]
+        if hash.has_key(item):
+            list.pop(i)
+        else:
+            hash[item] = 1
         i += 1
+    return
 
 # ----------------------------------------------------------------------------
 
@@ -138,7 +141,7 @@ class RpmResolver:
                 if len(resolved) > 0 and rpmconfig.debug_level > 1:
                     # do this only in debug level > 1
                     printDebug(2, "%s: resolved dependencies:" % r.getNEVRA())
-                    for u,s in resolved:
+                    for (u, s) in resolved:
                         str = ""
                         for r2 in s:
                             str += "%s " % r2.getNEVRA()
@@ -150,59 +153,7 @@ class RpmResolver:
                         printError("\t%s" % _gen_depstr(u))
         return no_unresolved
 
-    # generate relations from RpmList
-    def genRelations(self, rpmlist, operation):
-        relations = _Relations()
-
-        for rlist in rpmlist:
-            for r in rlist:
-                printDebug(1, "Generate Relations for %s" % r.getNEVRA())
-                (unresolved, resolved) = self.checkPkgDependencies(r, rpmlist)
-                if len(unresolved) > 0:
-                    printError("Found unresolved symbols in genRelations")
-                    return None
-                for (u,s) in resolved:
-                    (name, flag, version) = u
-                    if name[0:7] == "config(": # drop config requirements
-                        continue
-                    if len(s) < 1:
-                        continue
-                    f = 0
-                    if operation == "erase":
-                        if not (isInstallPreReq(flag) or \
-                                not (isErasePreReq(flag) or \
-                                     isLegacyPreReq(flag))):
-                            f += 2
-                        if not (isInstallPreReq(flag) or \
-                                (isErasePreReq(flag) or \
-                                 isLegacyPreReq(flag))):
-                            f += 1
-                    else: # install or update
-                        if not (isErasePreReq(flag) or \
-                                not (isInstallPreReq(flag) or \
-                                     isLegacyPreReq(flag))):
-                            f += 2
-                        if not (isErasePreReq(flag) or \
-                                (isInstallPreReq(flag) or \
-                                 isLegacyPreReq(flag))):
-                            f += 1
-                    if f != 0:
-                        for s2 in s:
-                            # drop requirements to installed packages and
-                            # self requirements
-                            if s2 not in self.installed and s2 != r:
-                                relations.append(r, s2, f)
-
-        # -- print relations
-        printDebug(2, "\t==== relations (%d) ====" % len(relations))
-        for (pkg, rel) in relations:
-            printDebug(2, "\t%d %d %s" % (len(rel.pre), len(rel._post),
-                                          pkg.getNEVRA()))
-        printDebug(2, "\t==== relations ====")
-
-        return relations
-    
-    # -- check for conflicts in RpmList (conflicts and obsoletes)
+    # check for conflicts in RpmList (conflicts and obsoletes)
     def checkConflicts(self, rpmlist):
         no_conflicts = 1
         for i in xrange(len(rpmlist)):
@@ -221,9 +172,10 @@ class RpmResolver:
                                         r2.getNEVRA()))
                             no_conflicts = 0
 
-        # -- check for file conflicts
+        if no_conflicts != 1:
+            return no_conflicts
 
-        i = 0
+        # check for file conflicts
         for f in rpmlist.filenames.multi:
             printDebug(1, "Checking for file conflicts for '%s'" % f)
             s = rpmlist.filenames.search(f)
@@ -237,112 +189,71 @@ class RpmResolver:
                     if fi1.mode & CP_IFLNK and fi2.mode & CP_IFLNK:
                         continue
                     # TODO: use md5
-                    if fi1.mode != fi2.mode or fi1.mtime != fi2.mtime or \
-                           fi1.filesize != fi2.filesize:
+                    if fi1.mode != fi2.mode or \
+                           fi1.filesize != fi2.filesize or \
+                           fi1.md5 != fi2.md5:
                         no_conflicts = 0
                         printError("%s: File conflict for '%s' with %s" % \
                                    (s[j].getNEVRA(), f, s[k].getNEVRA()))
-            i += 1
         return no_conflicts
 
-    # order rpmlist
-    def orderRpms(self, rpmlist, relations):
-        # save packages which have no relations
-        no_relations = [ ]
-        for i in xrange(len(rpmlist)):
-            rlist = rpmlist[i]
+    # return operation flag
+    def operationFlag(self, flag, operation):
+        f = 0
+        if operation == "erase":
+            if not (isInstallPreReq(flag) or \
+                    not (isErasePreReq(flag) or isLegacyPreReq(flag))):
+                f += 2
+            if not (isInstallPreReq(flag) or \
+                    (isErasePreReq(flag) or isLegacyPreReq(flag))):
+                f += 1
+        else: # operation: install or update
+            if not (isErasePreReq(flag) or \
+                    not (isInstallPreReq(flag) or isLegacyPreReq(flag))):
+                f += 2
+            if not (isErasePreReq(flag) or \
+                    (isInstallPreReq(flag) or isLegacyPreReq(flag))):
+                f += 1
+        return f
+
+    # generate relations from RpmList
+    def genRelations(self, rpmlist, operation):
+        relations = _Relations()
+
+        for rlist in rpmlist:
             for r in rlist:
-                if not relations.has_key(r):
-                    no_relations.append(r)
-
-        # order
-        order = [ ]
-        idx = 1
-        while len(relations) > 0:
-            next = None
-            # we have to have at least one entry, so start with -1 for len
-            next_post_len = -1
-            for (pkg, rel) in relations:
-                if len(rel.pre) == 0 and len(rel._post) > next_post_len:
-                    next = (pkg, rel)
-                    next_post_len = len(rel._post)
-            if next != None:
-                pkg = next[0]
-                order.append(pkg)
-                relations.remove(pkg)
-                printDebug(2, "%d: %s" % (idx, pkg.getNEVRA()))
-                idx += 1
-            else:
-                printDebug(1, "-- LOOP --")
-                printDebug(2, "\n===== remaining packages =====")
-                for (pkg2, rel2) in relations:
-                    printDebug(2, "%s" % pkg2.getNEVRA())
-                    for i in xrange(len(rel2.pre)):
-                        printDebug(2, "\t%s (%d)" % (rel2.pre[i][0].getNEVRA(),
-                                                 rel2.pre[i][1]))
-                printDebug(2, "===== remaining packages =====\n")
-
-                (package, rel) = relations[0]
-                loop = HashList()
-                loop[package] = 0
-                i = 0
-                pkg = package
-                p = None
-                while p != package and i >= 0 and i < len(relations):
-                    (p,f) = relations[pkg].pre[loop[pkg]]
-                    if p == package:
-                        break
-                    if loop.has_key(p):
-                        package = p
-                        # remove leading nodes
-                        while len(loop) > 0 and loop[0][0] != package:
-                            del loop[loop[0][0]]
-                        break
-                    else:
-                        loop[p] = 0
-                        pkg = p
-                        i += 1
-
-                if p != package:
-                    print "\nERROR: A loop without a loop?"
+                printDebug(1, "Generating Relations for %s" % r.getNEVRA())
+                (unresolved, resolved) = self.checkPkgDependencies(r, rpmlist)
+                if len(unresolved) > 0:
+                    printError("Found unresolved symbols in genRelations")
                     return None
+                for (u,s) in resolved:
+                    (name, flag, version) = u
+                    if name[0:7] == "config(": # drop config requirements
+                        continue
+                    if r in s:
+                        continue
+                        # drop requirements which are resolved by the package
+                        # itself
+                    f = self.operationFlag(flag, operation)
+                    if f == 0:
+                        # drop unneeded
+                        continue
+                    for s2 in s:
+                        relations.append(r, s2, f)
 
-                printDebug(1, "===== loop (%d) =====" % len(loop))
-                for (p,i) in loop:
-                    printDebug(1, "%s" % p.getNEVRA())
-                printDebug(1, "===== loop =====")
+        if rpmconfig.debug_level > 1:
+            # print relations
+            printDebug(2, "\t==== relations (%d) ====" % len(relations))
+            for (pkg, rel) in relations:
+                printDebug(2, "\t%d %d %s" % (len(rel.pre), len(rel._post),
+                                              pkg.getNEVRA()))
+            printDebug(2, "\t==== relations ====")
 
-                found = 0
-                for (p,i) in loop:
-                    (p2,f) = relations[p].pre[i]
-                    if f == 1:
-                        printDebug(1, "Removing requires for %s from %s" % \
-                                   (p2.getNEVRA(), p.getNEVRA()))
-                        del relations[p].pre[p2]
-                        del relations[p2]._post[p]
-                        found = 1
-                        break
-                if found == 0:
-                    (p, i) = loop[0]
-                    (p2,f) = relations[p].pre[i]
-                    printDebug(1, "Zapping requires for %s from %s to break up hard loop" % \
-                               (p2.getNEVRA(), p.getNEVRA()))
-                    del relations[p].pre[p2]
-                    del relations[p2]._post[p]
-
-        if len(no_relations) > 0:
-            printDebug(2, "===== packages without relations ====")
-        for r in no_relations:
-            order.append(r)
-            printDebug(2, "%d: %s" % (idx, r.getNEVRA()))
-            idx += 1
-
-        return order
-
-    # resolves list of installed, new, update and to erase rpms
-    # returns ordered list of operations
-    # operation has to be "install", "update" or "erase"
-    def resolve(self):        
+        return relations
+    
+    # generate instlist
+    def genInstList(self):
         instlist = RpmList()
 
         for r in self.installed:
@@ -356,33 +267,10 @@ class RpmResolver:
             else:
                 instlist.install(r)
 
-        # checking dependencies
-        if self.checkDependencies(instlist) != 1:
-            return None
+        return instlist
 
-        # check for conflicts
-        if self.checkConflicts(instlist) != 1:
-            return None
-
-        # save obsolete list before freeing instlist
-        obsoletes = instlist.obsoletes
-        del instlist
-
-        # generate 
-        todo = RpmList()
-        for r in self.rpms:
-            todo.update(r)
-
-        # resolving requires
-        relations = self.genRelations(todo, self.operation)
-
-        # order package list
-        order = self.orderRpms(todo, relations)
-        if order == None:
-            return None
-        del relations
-        del todo
-
+    # generate operations
+    def genOperations(self, order, obsoletes):
         operations = [ ]
         if self.operation == self.OP_ERASE:
             # reverse order
@@ -411,5 +299,163 @@ class RpmResolver:
                         for i in xrange(len(order2)-1, -1, -1):
                             operations.append((self.OP_ERASE, order2[i]))
                         del order2
+        return operations
+
+    # detect loop
+    def detectLoop(self, relations):
+        (package, rel) = relations[0]
+        loop = HashList()
+        loop[package] = 0
+        i = 0
+        pkg = package
+        p = None
+        while p != package and i >= 0 and i < len(relations):
+            (p,f) = relations[pkg].pre[loop[pkg]]
+            if p == package:
+                break
+            if loop.has_key(p):
+                package = p
+                # remove leading nodes
+                while len(loop) > 0 and loop[0][0] != package:
+                    del loop[loop[0][0]]
+                break
+            else:
+                loop[p] = 0
+                pkg = p
+                i += 1
+
+        if p != package:
+            printError("A loop without a loop?")
+            return None
+
+        if rpmconfig.debug_level > 0:
+            printDebug(1, "===== loop (%d) =====" % len(loop))
+            for (p,i) in loop:
+                printDebug(1, "%s" % p.getNEVRA())
+            printDebug(1, "===== loop =====")
+
+        return loop
+
+    # breakup loop
+    def breakupLoop(self, loop, relations):
+        found = 0
+        # first try to breakup soft loop
+        for (p,i) in loop:
+            (p2,f) = relations[p].pre[i]
+            if f == 1:
+                printDebug(1, "Removing requires for %s from %s" % \
+                           (p2.getNEVRA(), p.getNEVRA()))
+                del relations[p].pre[p2]
+                del relations[p2]._post[p]
+                found = 1
+                break
+        if found == 0:
+            # breakup hard loop (zapping)
+            (p, i) = loop[0]
+            (p2,f) = relations[p].pre[i]
+            printDebug(1, "Zapping requires for %s from %s to break up hard loop" % \
+                       (p2.getNEVRA(), p.getNEVRA()))
+            found = 1
+            del relations[p].pre[p2]
+            del relations[p2]._post[p]
+
+        return found
+
+    # order rpmlist
+    def orderRpms(self, relations, no_relations):
+        order = [ ]
+        idx = 1
+        while len(relations) > 0:
+            next = None
+            # we have to have at least one entry, so start with -1 for len
+            next_post_len = -1
+            for (pkg, rel) in relations:
+                if len(rel.pre) == 0 and len(rel._post) > next_post_len:
+                    next = (pkg, rel)
+                    next_post_len = len(rel._post)
+            if next != None:
+                pkg = next[0]
+                order.append(pkg)
+                relations.remove(pkg)
+                printDebug(2, "%d: %s" % (idx, pkg.getNEVRA()))
+                idx += 1
+            else:
+                if rpmconfig.debug_level > 0:
+                    printDebug(1, "-- LOOP --")
+                    printDebug(2, "\n===== remaining packages =====")
+                    for (pkg2, rel2) in relations:
+                        printDebug(2, "%s" % pkg2.getNEVRA())
+                        for i in xrange(len(rel2.pre)):
+                            printDebug(2, "\t%s (%d)" %
+                                       (rel2.pre[i][0].getNEVRA(),
+                                        rel2.pre[i][1]))
+                    printDebug(2, "===== remaining packages =====\n")
+
+                # detect loop
+                loop = self.detectLoop(relations)
+                if loop == None:
+                    return None
+
+                # breakup loop
+                if self.breakupLoop(loop, relations) != 1:
+                    printError("Could not breakup loop")
+                    return None
+
+        if len(no_relations) > 0:
+            printDebug(2, "===== packages without relations ====")
+        for r in no_relations:
+            order.append(r)
+            printDebug(2, "%d: %s" % (idx, r.getNEVRA()))
+            idx += 1
+
+        return order
+
+    # resolves list of installed, new, update and to erase rpms
+    # returns ordered list of operations
+    # operation has to be "install", "update" or "erase"
+    def resolve(self):
+        # generate instlist
+        instlist = self.genInstList()
+
+        # checking dependencies
+        if self.checkDependencies(instlist) != 1:
+            return None
+
+        # check for conflicts
+        if self.checkConflicts(instlist) != 1:
+            return None
+
+        # save obsolete list before freeing instlist
+        obsoletes = instlist.obsoletes
+        del instlist
+
+        # generate 
+        todo = RpmList()
+        for r in self.rpms:
+            todo.install(r)
+
+        # resolving requires
+        relations = self.genRelations(todo, self.operation)
+
+        # save packages which have no relations
+        no_relations = [ ]
+        for i in xrange(len(todo)):
+            rlist = todo[i]
+            for r in rlist:
+                if not relations.has_key(r):
+                    no_relations.append(r)
+        del todo
+
+        # order package list
+        order = self.orderRpms(relations, no_relations)
+        if order == None:
+            return None
+        del relations
+        del no_relations
+
+        # generate operations
+        operations = self.genOperations(order, obsoletes)
+        # cleanup order list
         del order
+        
         return operations
