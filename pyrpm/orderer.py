@@ -23,6 +23,7 @@
 
 from hashlist import HashList
 from rpmlist import RpmList
+from time import clock
 from resolver import *
 
 class _Relation:
@@ -46,17 +47,19 @@ class _Relations:
     def append(self, pkg, pre, flag):
         if pre == pkg:
             return
-        if not pkg in self.list:
-            self.list[pkg] = _Relation()
+        i = self.list[pkg]
+        if i == None:
+            i = _Relation()
+            self.list[pkg] = i
         if pre == None:
             return # we have to do nothing more for empty relations
-        if pre not in self.list[pkg].pre:
-            self.list[pkg].pre[pre] = flag
+        if pre not in i.pre:
+            i.pre[pre] = flag
         else:
             # prefer hard requirements, do not overwrite with soft req
-            if self.list[pkg].pre[pre] == 1 and flag == 2:
-                self.list[pkg].pre[pre] = flag
-        for (p,f) in self.list[pkg].pre:
+            if flag == 2 and i.pre[pre] == 1:
+                i.pre[pre] = flag
+        for (p, f) in i.pre:
             if p in self.list:
                 if pkg not in self.list[p]._post:
                     self.list[p]._post[pkg] = 1
@@ -65,9 +68,10 @@ class _Relations:
                 self.list[p]._post[pkg] = 1
     def remove(self, pkg):
         rel = self.list[pkg]
-        for (r,f) in rel._post:
-            if len(self.list[r].pre) > 0:
-                del self.list[r].pre[pkg]
+        for (r, f) in rel._post:
+            i = self.list[r]
+            if len(i.pre) > 0:
+                del i.pre[pkg]
         del self.list[pkg]
     def has_key(self, key):
         return self.list.has_key(key)
@@ -88,7 +92,7 @@ class RpmOrderer:
 
     def _operationFlag(self, flag):
         """ Return operation flag or requirement """
-        if self.operation == "erase":
+        if self.operation == RpmList.OP_ERASE:
             if not (isInstallPreReq(flag) or \
                     not (isErasePreReq(flag) or isLegacyPreReq(flag))):
                 return 2  # hard requirement
@@ -108,10 +112,15 @@ class RpmOrderer:
 
     def genRelations(self):
         """ Generate relations from RpmList """
+        if rpmconfig.timer:
+            time1 = clock()
         relations = _Relations()
 
         # generate todo list
         rpmlist = RpmResolver(self.rpms, self.operation)
+        if rpmconfig.timer:
+            print "orderer: genRelations(): RpmResolver() took %s seconds" % (clock() - time1)
+            time1 = clock()
 
         for rlist in rpmlist:
             for r in rlist:
@@ -119,17 +128,14 @@ class RpmOrderer:
                 (unresolved, resolved) = rpmlist.getPkgDependencies(r)
                 # ignore unresolved, we are only looking at the changes,
                 # therefore not all symbols are resolvable in these changes
-                for (u,s) in resolved:
-                    (name, flag, version) = u
-                    if name[0:7] == "config(": # drop config requirements
+                for ((name, flag, version), s) in resolved:
+                    if name.startswith("config("): # drop config requirements
                         continue
+                    # drop requirements which are resolved by the package itself
                     if r in s:
                         continue
-                        # drop requirements which are resolved by the package
-                        # itself
                     f = self._operationFlag(flag)
-                    if f == 0:
-                        # no hard or soft requirement
+                    if f == 0: # no hard or soft requirement
                         continue
                     for s2 in s:
                         relations.append(r, s2, f)
@@ -151,7 +157,7 @@ class RpmOrderer:
                 if rpmconfig.debug_level > 2 and len(rel.pre) > 0:
                     pre = " pre: "
                     for i in xrange(len(rel.pre)):
-                        (p,f) = rel.pre[i]
+                        (p, f) = rel.pre[i]
                         if i > 0: pre += ", "
                         if f == 2: pre += "*"
                         pre += p.getNEVRA()
@@ -354,9 +360,13 @@ class RpmOrderer:
         OP_UPDATE or OP_ERASE per package.
         If an error occurs, None is returned. """
 
+        if rpmconfig.timer:
+            time1 = clock()
         # generate relations
         relations = self.genRelations()
-
+        if rpmconfig.timer:
+            print "orderer: genRelations() took %s seconds" % (clock() - time1)
+            time1 = clock()
         # order package list
         order = self.orderRpms(relations)
         if order == None:
@@ -364,6 +374,10 @@ class RpmOrderer:
 
         # cleanup relations
         del relations
+        if rpmconfig.timer:
+            print "orderer: orderRpms() took %s seconds" % (clock() - time1)
 
         # generate operations
         return self.genOperations(order)
+
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -36,7 +36,7 @@
 #   ... like 'base'..
 #
 
-import ConfigParser, os, string
+import ConfigParser, os
 from functions import *
 from package import *
 
@@ -67,7 +67,7 @@ class RpmDistribution:
         r = config.get(self.CONF_MAIN, self.CONF_COLL)
         if r==None or len(r)==0:
             return
-        collnames = string.split(r, ',')
+        collnames = r.split(',')
         for x in collnames:
             if not config.has_section(x):
                 raise ParsingError, "%s: section '%s' missing" % (filename, x)

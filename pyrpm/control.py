@@ -21,6 +21,8 @@ import os, gc
 import package, io
 from resolver import *
 from orderer import *
+from config import rpmconfig
+from time import clock
 
 class _Triggers:
     """ enable search of triggers """
@@ -113,6 +115,8 @@ class RpmController:
     def run(self):
         if not self.__preprocess():
             return 0
+        if rpmconfig.timer:
+            time1 = clock()
         resolver = RpmResolver(self.installed, self.operation)
         for r in self.rpms:
             resolver.append(r)
@@ -122,6 +126,9 @@ class RpmController:
         o = resolver.obsoletes
         u = resolver.updates
         del resolver
+        if rpmconfig.timer:
+            print "resolver took %s seconds" % (clock() - time1)
+            time1 = clock()
         orderer = RpmOrderer(a, u, o, self.operation)
         operations = orderer.order()
         getFreeDiskspace(a)
@@ -129,9 +136,14 @@ class RpmController:
         del a
         del o
         del u
+        if rpmconfig.timer:
+            print "orderer took %s seconds" % (clock() - time1)
         if not operations:
             printError("Errors found during package dependancy checks and ordering.")
             sys.exit(1)
+        if rpmconfig.test:
+            printError("test run stopped")
+            sys.exit(0)
         self.triggerlist = _Triggers()
         for (op, pkg) in operations:
             if op == RpmResolver.OP_UPDATE or op == RpmResolver.OP_INSTALL:

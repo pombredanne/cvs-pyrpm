@@ -17,7 +17,7 @@
 #
 
 
-import gzip, types, string, bsddb
+import gzip, types, bsddb
 from struct import pack, unpack
 
 from functions import *
@@ -522,7 +522,7 @@ class RpmFileIO(RpmStreamIO):
     def __init__(self, source, verify=None, strict=None, hdronly=None):
         RpmStreamIO.__init__(self, source, verify, strict, hdronly)
         self.issrc = 0
-        if source[-8:] == ".src.rpm" or source[-10:] == ".nosrc.rpm":
+        if source.endswith(".src.rpm") or source.endswith(".nosrc.rpm"):
             self.issrc = 1
 
     def __openFile(self, mode="r"):

@@ -71,7 +71,7 @@ class RpmSpecFile:
         package = "head"
         # search for the package name
         for line in self.lines:
-            if line[:5] == "Name:":
+            if line.startswith("Name:"):
                 toks = line.split()
                 if len(toks) == 2:
                     self.Name = toks[1]
@@ -87,7 +87,7 @@ class RpmSpecFile:
 
         # Now split into sections
         for line in self.lines:
-            if line[:1] == "%":                            
+            if line.startswith("%"):                            
                 tokens = line[1:].split()
                 if tokens[0] in RpmSpecFile.sections:
                     if len(tokens) == 3 and tokens[1] == "-n":

@@ -24,6 +24,7 @@
 from stat import S_ISLNK, S_ISDIR
 from hashlist import HashList
 from rpmlist import RpmList
+from config import rpmconfig
 from functions import *
 
 
@@ -69,8 +70,11 @@ class ProvidesList:
                 if evrCompare(p[1], flag, version) == 1 and \
                        evrCompare(p[1], p[0], version) == 1:
                     ret.append(p[2])
-                if evrCompare(evrString(p[2]["epoch"], p[2]["version"],
-                                        p[2]["release"]), flag, version) == 1:
+                if p[2]["epoch"] == None:
+                    evr = ("0", p[2]["version"], p[2]["release"])
+                else:
+                    evr = (str(p[2]["epoch"][0]), p[2]["version"], p[2]["release"])
+                if evrCompare(evr, flag, version) == 1:
                     ret.append(p[2])
 
         if not arch or arch == "noarch":
@@ -128,9 +132,7 @@ class FilenamesList:
             self._remove(f, rpm)
 
     def search(self, name):
-        if not self.filename.has_key(name):
-            return [ ]
-        return self.filename[name]
+        return self.filename.get(name, [ ])
 
 # ----------------------------------------------------------------------------
 
@@ -243,13 +245,14 @@ class RpmResolver(RpmList):
         unresolved = [ ]
         resolved = [ ]
         for u in pkg["requires"]:
-            if u[0][0:7] == "rpmlib(": # drop rpmlib requirements
+            if u[0].startswith("rpmlib("): # drop rpmlib requirements
                 continue
+            #if u[0].startswith("config("): # drop config requirements
+            #    continue
             s = self.searchDependency(u, pkg["arch"])
-            if len(s) > 0:
-                if len(s) > 1 and pkg in s:
-                    # prefer self dependencies if there are others, too
-                    s = [pkg]
+            if len(s) > 1 and pkg in s:
+                # prefer self dependencies if there are others, too
+                s = [pkg]
             if len(s) == 0: # found nothing
                 unresolved.append(u)
             else: # resolved
@@ -287,7 +290,7 @@ class RpmResolver(RpmList):
         return no_unresolved
     # ----
 
-    def getResolvedDependencies(self, check_installed=0):
+    def getResolvedDependencies(self):
         """ Get all resolved dependencies """
         all_resolved = [ ]
         for i in xrange(len(self)):
@@ -300,7 +303,7 @@ class RpmResolver(RpmList):
         return all_resolved
     # ----
 
-    def getUnresolvedDependencies(self, check_installed=0):
+    def getUnresolvedDependencies(self):
         """ Get all unresolved dependencies """
         all_unresolved = [ ]
         for i in xrange(len(self)):
@@ -416,3 +419,4 @@ class RpmResolver(RpmList):
 
         return 1
 
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -48,6 +48,7 @@ class RpmConfig:
             "obsoleteversion", "conflictname", "conflictflags",
             "conflictversion", "filesizes", "filemodes", "filemd5s",
             "dirindexes", "basenames", "dirnames")
+        self.timer = 0
 
 # Automatically create a global rpmconfig variable.
 rpmconfig = RpmConfig()

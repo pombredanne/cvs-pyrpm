@@ -42,7 +42,7 @@ def usage():
     print "    [--nodeps] [--nodigest] [--nosignature]"
     print "    [--noorder] [--noscripts] [--notriggers]"
 
-if __name__=='__main__':
+if __name__ == '__main__':
   try:
     opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:", ["install", "upgrade", "freshen", "erase", "help", "verbose", "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=", "force", "ignoresize", "ignorearch", "justdb", "nodeps", "nodigest", "nosignature", "noorder", "noscripts", "notriggers", "oldpackage", "test"])
   except getopt.error, e:

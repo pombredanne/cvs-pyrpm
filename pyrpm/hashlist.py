@@ -16,7 +16,7 @@
 # Author: Thomas Woerner <twoerner@redhat.com>
 #
 
-import types
+from types import IntType
 
 class HashList:
     """ hash list """
@@ -32,9 +32,10 @@ class HashList:
         return self.list.__repr__()
 
     def __getitem__(self, key):
-        if isinstance(key, types.IntType):
-            return (self.list[key], self.hash[self.list[key]])
-        return self.hash.get(key) # return value only
+        if isinstance(key, IntType):
+            i = self.list[key]
+            return (i, self.hash.get(i))
+        return self.hash.get(key)
 
     def __setitem__(self, key, value):
         if not self.hash.has_key(key):
@@ -42,7 +43,7 @@ class HashList:
             self.list.append(key)
         else:
             self.hash[key] = value
-        return self.hash[key]
+        return value
 
     def __delitem__(self, key):
         if self.hash.has_key(key):
@@ -55,7 +56,7 @@ class HashList:
         return self[key]
 
     def has_key(self, key):
-        return (self[key] != None)
+        return self.hash.has_key(key)
 
     def keys(self):
         return self.hash.keys()

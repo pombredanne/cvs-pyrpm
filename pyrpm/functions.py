@@ -17,7 +17,9 @@
 #
 
 
-import os, os.path, tempfile, sys, string, types, resource, re
+import os, os.path, sys, resource, re
+from types import TupleType
+from tempfile import mkstemp
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE
 from config import rpmconfig
 from base import *
@@ -31,7 +33,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         os.makedirs("/var/tmp")
     args = [prog]
     if script != None:
-        (fd, tmpfilename) = tempfile.mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
+        (fd, tmpfilename) = mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
         if fd == None:
             return 0
         os.write(fd, script)
@@ -79,7 +81,7 @@ def installFile(rfi, data):
     mode = rfi.mode
     if S_ISREG(mode):
         makeDirs(rfi.filename)
-        (fd, tmpfilename) = tempfile.mkstemp(dir=os.path.dirname(rfi.filename),
+        (fd, tmpfilename) = mkstemp(dir=os.path.dirname(rfi.filename),
             prefix=rfi.filename + ".")
         if not fd:
             return 0
@@ -158,7 +160,7 @@ def listRpmDir(dirname):
     fls = os.listdir(dirname)
     files = [] 
     for f in fls:
-        if f[-4:]=='.rpm':
+        if f.endswith('.rpm'):
             files.append(f)
     return files
 
@@ -175,7 +177,7 @@ def createLink(src, dst):
     return 1
 
 def closeAllFDs():
-    for fd in range(3,resource.getrlimit(resource.RLIMIT_NOFILE)[1]):
+    for fd in range(3, resource.getrlimit(resource.RLIMIT_NOFILE)[1]):
         try:
             os.close(fd)
         except:
@@ -238,14 +240,11 @@ def raiseFatal(msg):
 
 # split EVR in epoch, version and release
 def evrSplit(evr):
-    i = 0
+    epoch = "0"
     p = evr.find(":") # epoch
     if p != -1:
         epoch = evr[:p]
-        i = p + 1
-    else:
-        epoch = "0"
-    p = evr.find("-", i) # version
+    p = evr.find("-", p + 1) # version
     if p != -1:
         version = evr[i:p]
         release = evr[p+1:]
@@ -257,15 +256,15 @@ def evrSplit(evr):
 # split [e:]name-version-release.arch into the 4 possible subcomponents.
 def envraSplit(envra):
     # Find the epoch separator
-    i = string.find(envra, ":")
+    i = envra.find(":")
     if i >= 0:
         epoch = envra[:i]
         envra = envra[i+1:]
     else:
         epoch = None
     # Search for last '.' and the last '-'
-    i = string.rfind(envra, ".")
-    j = string.rfind(envra, "-")
+    i = envra.rfind(".")
+    j = envra.rfind("-")
     # Arch can't have a - in it, so we can only have an arch if the last '.'
     # is found after the last '-'
     if i >= 0 and i>j:
@@ -280,7 +279,7 @@ def envraSplit(envra):
     else:
         release = None
     # Look for second '-' and store in version
-    i = string.rfind(envra, "-")
+    i = envra.rfind("-")
     if i >= 0:
         version = envra[i+1:]
         envra = envra[:i]
@@ -374,7 +373,10 @@ def labelCompare(e1, e2):
 # compares two EVR's with comparator
 def evrCompare(evr1, comp, evr2):
     res = -1
-    e1 = evrSplit(evr1)
+    if isinstance(evr1, TupleType):
+        e1 = evr1
+    else:
+        e1 = evrSplit(evr1)
     e2 = evrSplit(evr2)
     r = labelCompare(e1, e2)
     if r == -1:
@@ -387,16 +389,6 @@ def evrCompare(evr1, comp, evr2):
         if comp & RPMSENSE_GREATER:
             res = 1
     return res
-
-def evrString(epoch, version, release):
-    if epoch == None or epoch == "":
-        return "%s-%s" % (version, release)
-    else:
-        if isinstance(epoch, types.TupleType) or \
-               isinstance(epoch, types.ListType):
-            return "%s:%s-%s" % (epoch[0], version, release)
-        else:
-            return "%s:%s-%s" % (epoch, version, release)
 
 # Compare two packages by evr
 def pkgCompare(p1, p2):
@@ -535,7 +527,7 @@ def getBuildArchList(list):
     archs = []
     for p in list:
         a = p['arch']
-        if a=='noarch':
+        if a == 'noarch':
             continue
         if a not in archs:
             archs.append(a)
@@ -572,8 +564,8 @@ def tagsearch(searchtags, list, regex=None):
     return pkglist
 
 def normalizeRegex(regex):
-    regex = string.replace(regex, ".", "\.")
-    regex = string.replace(regex, "*", ".*")
+    regex = regex.replace(".", "\.")
+    regex = regex.replace("*", ".*")
     return regex
 
 EPOCHTAG=0

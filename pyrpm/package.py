@@ -17,7 +17,7 @@
 #
 
 
-import os.path, tempfile, sys, pwd, grp, md5
+import os.path, sys, pwd, grp, md5
 from stat import S_ISREG
 from struct import unpack
 from functions import *
@@ -62,7 +62,7 @@ class RpmUserCache:
         lines = fp.readlines()
         fp.close()
         for l in lines:
-            tmp = string.split(l, ":")
+            tmp = l.split(":")
             rethash[tmp[0]] = int(tmp[2])
         return rethash
 
