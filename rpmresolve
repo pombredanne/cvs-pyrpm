@@ -161,30 +161,39 @@ class RpmList:
     def __init__(self):
         self.clear()
     def clear(self):
-        self.rpms = [ ]
-        self.list = { }
+        self.list = HashList()
+        self.provides = Provides()
+        self.filenames = Filenames()
     def __len__(self):
-        return len(self.rpms)
+        return len(self.list)
     def __getitem__(self, i):
-        return self.rpms[i]
+        return self.list[i][1] # return rpm
     def append(self, pkg):
         if self.list.has_key(pkg["name"]):
-            i = self.list[pkg["name"]]
-            if str(pkg) == str(self.rpms[i]):
+            print "here"
+            rpm = self.list[pkg["name"]]
+            if str(pkg) == str(rpm):
                 return 0
 #            if labelCompare((pkg["epoch"], pkg["version"], pkg["release"]),
-#                            (self.rpms[i]["epoch"], self.rpms[i]["version"],
-#                             self.rpms[i]["release"])) < 0:
+#                            (rpm["epoch"], rpm["version"], rpm["release"])) \
+#                            < 0:
 #                return 0
-            if compare(pkg["arch"], self.rpms[i]["arch"]) <= 0:
-                return 0           
-            old = self.rpms.pop(i)
-            print "Replacing '%s' with '%s'" % (old.getNEVRA(), pkg.getNEVRA())
-        else:
-            i = len(self.rpms)
-        self.list[pkg["name"]] = i
-        self.rpms.insert(i, pkg)
+            if compare(pkg["arch"], rpm["arch"]) <= 0:
+                return 0
+            print "Replacing '%s' with '%s'" % (rpm.getNEVRA(), pkg.getNEVRA())
+            self.provides.remove_rpm(pkg)
+            self.filenames.remove_rpm(pkg)
+        self.list[pkg["name"]] = pkg
+        self.provides.add_rpm(pkg)
+        self.filenames.add_rpm(pkg)
         return 1
+    def remove(self, pkg):
+        if self.list.has_key(pkg["name"]):
+            self.provides.remove_rpm(pkg)
+            self.filenames.remove_rpm(pkg)
+            del self.list[pkg["name"]]
+        else:
+            raise IndexError, "Indexing error"
 
 # ----------------------------------------------------------------------------
 
@@ -197,6 +206,20 @@ class Provides:
         if not self.p_provide.has_key(name):
             self.p_provide[name] = [ ]
         self.p_provide[name].append((flag, version, rpm))
+    def remove(self, name, flag, version, rpm):
+        if not self.p_provide.has_key(name):
+            return
+        for p in self.p_provide[name]:
+            if p[0] == flag and p[1] == version and p[2] == rpm:
+                self.p_provide[name].remove(p)
+        if len(self.p_provide[name]) == 0:
+            del self.p_provide[name]
+    def add_rpm(self, rpm):
+        for p in rpm["provides"]:
+            self.append(p[0], p[1], p[2], rpm)
+    def remove_rpm(self, rpm):
+        for p in rpm["provides"]:
+            self.remove(p[0], p[1], p[2], rpm)
     def search(self, name, flag, version):
         if not self.p_provide.has_key(name):
             return [ ]
@@ -228,6 +251,21 @@ class Filenames:
         else:
             self.multi.append(name)
         self.provide[name].append(rpm)
+    def remove(self, name, rpm):
+        if not self.provide.has_key(name):
+            return
+        if len(self.provide[name]) == 2:
+            self.multi.remove(name)
+        if rpm in self.provide[name]:
+            self.provide[name].remove(rpm)
+        if len(self.provide[name]) == 0:
+            del self.provide[name]
+    def add_rpm(self, rpm):
+        for f in rpm["filenames"]:
+            self.append(f, rpm)
+    def remove_rpm(self, rpm):
+        for f in rpm["filenames"]:
+            self.remove(f, rpm)
     def search(self, name):
         if not self.provide.has_key(name):
             return [ ]
@@ -291,6 +329,37 @@ class Relations:
 
 # ----------------------------------------------------------------------------
 
+class RpmDepResolver:
+    def __init__(self, command):
+        self.command = command
+
+class RpmResolver:
+    def __init__(self, command):
+        self.clear()
+        self.command = command
+    def clear(self):
+        self.command = 0
+    def resolve(list, installed, available):
+        provides = Provides()
+        filenames = Filenames()
+
+        # resolve dependencies
+        dep_resolver = RpmDepResolver(command)
+        relations = dep_resolver.resolve(list, installed, available)
+        if relations == None:
+            return None
+        
+        # check for conflicts (package, file, obsoletes)
+        conflict_checker = RpmConflictChecker()
+        if not conflict_checker.check(list, installed):
+            return None
+
+        # order packages
+        orderer = RpmOrderer()
+        return orderer(list)
+
+# ----------------------------------------------------------------------------
+
 def usage():
     print """Usage: %s [-v[v]] [-nr] [-sd] [<rpm name/package>...]
 
@@ -325,6 +394,12 @@ rpms = RpmList()
 
 ignore_epoch = 0
 verbose = 0
+available_dir = None
+available = RpmList()
+installed_dir = None
+installed = RpmList()
+
+to_remove = [ ]
 
 tags = [ "name", "epoch", "version", "release", "arch", \
          "providename", "provideflags", "provideversion", \
@@ -343,7 +418,8 @@ if __name__ == '__main__':
         usage()
         sys.exit(0)
 
-    for i in xrange(1, len(sys.argv)):
+    i = 1
+    while i < len(sys.argv):
         if sys.argv[i] == "-h" or sys.argv[i] == "--help":
             usage()
             sys.exit(0)
@@ -356,31 +432,69 @@ if __name__ == '__main__':
             verbose += 1
         elif sys.argv[i] == "-ie"or sys.argv[i] == "--ignore-epoch":
             ignore_epoch = 1
+        elif sys.argv[i] == "--available":
+            i += 1
+            available_dir = sys.argv[i]+"/"
+        elif sys.argv[i] == "--installed":
+            i += 1
+            installed_dir = sys.argv[i]+"/"
         else:
-            r = pyrpmlib.RpmPackage("file:/"+sys.argv[i])
-            r.read(tags=tags)
             if verbose > 0:
                 progress_write("Reading %d " % (len(rpms)+1))
+            r = pyrpmlib.RpmPackage("file:/"+sys.argv[i])
+            try:
+                r.read(tags=tags)
+            except:
+                print "Loading of %s failed, exiting." % sys.argv[i]
+                sys.exit(-1)
             rpms.append(r)
+        i += 1
     if verbose > 0 and len(rpms) > 0:
         print
 
-    # -- processing
+    # -- load installed
 
-    provides = Provides()
-    filenames = Filenames()
-    
-    for i in xrange(len(rpms)):
-        if verbose > 0:
-            progress_write("Preprocessing [%d/%d] " % (i+1, len(rpms)))
-        for p in rpms[i]["provides"]:
-            provides.append(p[0], p[1], p[2], rpms[i])
-        for f in rpms[i]["filenames"]:
-            filenames.append(f, rpms[i])
-    if verbose > 0 and len(rpms) > 0:
-        print
+    if installed_dir != None:
+        list = os.listdir(installed_dir)
+        for i in xrange(len(list)):
+            f = list[i]
+            if verbose > 0:
+                progress_write("Loading installed [%d/%d] " % (i+1, len(list)))
+
+            r = pyrpmlib.RpmPackage("file:/%s%s" % (installed_dir, f))
+            try:
+                r.read(tags=tags)
+            except:
+                print "Loading of %s%s failed, exiting." % (installed_dir, f)
+                sys.exit(-1)
+            installed.append(r)
+        if verbose > 0 and len(list) > 0:
+            print
+            del list    
+
+    # -- load repo
+
+    if available_dir != None:
+        list = os.listdir(available_dir)
+        for i in xrange(len(list)):
+            f = list[i]
+            if verbose > 0:
+                progress_write("Loading available [%d/%d] " % (i+1, len(list)))
+
+            r = pyrpmlib.RpmPackage("file:/%s%s" % (available_dir, f))
+            try:
+                r.read(tags=tags)
+            except:
+                print "Loading of %s%s failed, exiting." % (available_dir, f)
+                sys.exit(-1)
+            available.append(r)
+        if verbose > 0 and len(list) > 0:
+            print
+            del list
 
     # -- resolving provides
+
+#    relations = resolve_provides(rpms, provides, filenames, )
 
     unresolved_requires = [ ]
     resolved = [ ]
@@ -413,9 +527,24 @@ if __name__ == '__main__':
                     break
             if drop == 1:
                 continue
-            s = provides.search(name, flag, version)
+            # check against installed packages
+            if len(installed) > 0:
+                s = installed.provides.search(name, flag, version)
+                if name[0] == '/': # all filenames are beginning with a '/'
+                    s += installed.filenames.search(u[0])
+                if len(s) > 0:
+                    continue
+            s = rpms.provides.search(name, flag, version)
             if name[0] == '/': # all filenames are beginning with a '/'
-                s += filenames.search(u[0])
+                s += rpms.filenames.search(u[0])
+            # check available if nothing is found
+            if len(s) == 0 and len(available) > 0:
+                s = available.provides.search(name, flag, version)
+                if name[0] == '/': # all filenames are beginning with a '/'
+                    s += available.filenames.search(u[0])
+                if len(s) > 0:
+                    rpms.append(s[0])
+                    s = [s[0]]
             if len(s) > 0:
                 normalize(s)
                 if verbose > 3:
@@ -437,12 +566,27 @@ if __name__ == '__main__':
                 if f != 0:
                     for s2 in s:
                         relations.append(r, s2, f)
-            else:
+            # nothing found
+            if len(s) == 0:
                 if old_r != r:
                     print "ERROR: %s: unresolved dependency:" % r.getNEVRA()
                     old_r = r
                 print "\t%s" % gen_depstr(u)
                 unresolved = 1
+        for u in r["obsoletes"]:
+            (name, flag, version) = u
+            # check against installed packages
+            if len(installed) > 0:
+                s = installed.provides.search(name, flag, version)
+                if name[0] == '/': # all filenames are beginning with a '/'
+                    s += installed.filenames.search(u[0])
+                if len(s) > 0:
+                    for r2 in s:
+                        print "%s obsoletes %s, removing %s" % (r.getNEVRA(), r2.getNEVRA(), r2.getNEVRA())
+                        installed.remove(r2)
+                        to_remove.append(r2)
+                        i = 0
+                        continue
         i += 1
     if verbose > 0 and len(rpms) > 0:
         print
@@ -458,15 +602,54 @@ if __name__ == '__main__':
         if verbose > 0:
             progress_write("Checking for conflicts [%d/%d] " % (i+1, len(rpms)))
         for c in r["conflicts"] + r["obsoletes"]:
-            s = provides.search(c[0], c[1], c[2])
+            s = [ ]
+            if len(installed) > 0:
+                s = installed.provides.search(c[0], c[1], c[2])
+                if name[0] == '/': # all filenames are beginning with a '/'
+                    s += installed.filenames.search(u[0])
+            s += rpms.provides.search(c[0], c[1], c[2])
             if c[0][0] == '/': # all filenames are beginning with a '/'
-                s += filenames.search(c[0])
+                s += rpms.filenames.search(c[0])
             if len(s) > 0:
                 normalize(s)
                 if r in s: s.remove(r)
             if len(s) > 0:
                 for r2 in s:
-                    print "\nERROR: %s Conflicts for '%s' with %s" % \
+                    if str(r) == str(r2):
+                        print "\nERROR: %s is already installed" % r.getNEVRA()
+                        rpms.remove(r)
+                    else:
+                        print "\nERROR: %s conflicts for '%s' with %s" % \
+                              (r.getNEVRA(), gen_depstr(c), r2.getNEVRA())
+                found_conflicts = 1
+        i += 1
+    if verbose > 0 and len(rpms) > 0:
+        print
+    if found_conflicts == 1:
+        sys.exit(-1)
+
+    # -- check conflicts (conflicts and obsoletes)
+
+    found_conflicts = 0
+    i = 0
+    while i < len(installed):
+        r = installed[i]
+        if verbose > 0:
+            progress_write("Checking for conflicts [%d/%d] " % (i+1, len(installed)))
+        for c in r["conflicts"] + r["obsoletes"]:
+            if len(installed) > 0:
+                s = installed.provides.search(c[0], c[1], c[2])
+                if name[0] == '/': # all filenames are beginning with a '/'
+                    s += installed.filenames.search(u[0])
+            s += rpms.provides.search(c[0], c[1], c[2])
+            if c[0][0] == '/': # all filenames are beginning with a '/'
+                s += rpms.filenames.search(c[0])
+            if len(s) > 0:
+                normalize(s)
+                if r in s: s.remove(r)
+            if len(s) > 0:
+                for r2 in s:
+                    print "\nERROR: %s conflicts for '%s' with %s" % \
                           (r.getNEVRA(), gen_depstr(c), r2.getNEVRA())
                 found_conflicts = 1
         i += 1
@@ -479,10 +662,10 @@ if __name__ == '__main__':
 
     found = 0
     i = 0
-    for f in filenames.multi:
+    for f in rpms.filenames.multi:
         if verbose > 0:
-            progress_write("Checking for file conflicts [%d/%d] " % (i+1, len(filenames.multi)))
-        s = filenames.search(f)
+            progress_write("Checking for file conflicts [%d/%d] " % (i+1, len(rpms.filenames.multi)))
+        s = rpms.filenames.search(f)
         for j in xrange(len(s)):
             fi1 = s[j].getRpmFileInfo(f)
             for k in xrange(j+1, len(s)):
@@ -492,44 +675,19 @@ if __name__ == '__main__':
                     continue
                 if fi1.mode & CP_IFLNK and fi2.mode & CP_IFLNK:
                     continue
+                # TODO: use md5
                 if fi1.mode != fi2.mode or fi1.mtime != fi2.mtime or \
                        fi1.filesize != fi2.filesize:
                     found = 1
                     print "\nERROR: %s: File conflict for '%s' with %s" % \
                           (s[j].getNEVRA(), f, s[k].getNEVRA())
         i += 1
-    if verbose > 0 and len(filenames.multi) > 0:
+    if verbose > 0 and len(rpms.filenames.multi) > 0:
         print
     if found == 1:
         sys.exit(0)
 
     # -- relations
-
-#    i = 0
-#    l = len(resolved)
-#    while len(resolved) > 0:
-#        rel = resolved.pop(0)
-#        pkg = rel[0]
-#        name = rel[1][0]
-#        flag = rel[1][1]
-#        s = rel[2]
-#        if verbose > 0:
-#            progress_write("Generating relations [%d/%d] " % (i+1, l))
-#        if name[0:7] != "config(": # drop config requirements
-#            f = 0
-#            if not (isErasePreReq(flag) or not (isInstallPreReq(flag) or \
-#                                                isLegacyPreReq(flag))):
-#                f += 2
-#            if not (isErasePreReq(flag) or (isInstallPreReq(flag) or \
-#                                            isLegacyPreReq(flag))):
-#                f += 1
-#            if f != 0:
-#                for s2 in s:
-#                    relations.append(pkg, s2, f)
-#        i += 1
-#
-#    if verbose > 0 and i > 1:
-#        print
 
     if verbose > 2:
         print "\t==== relations (%d) ====" % len(relations)
@@ -600,7 +758,7 @@ if __name__ == '__main__':
                 print "error no loop found"
                 sys.exit(0)
 
-            if verbose > 2:
+            if verbose > 1:
                 print "\n===== loop (%d) =====" % len(loop)
                 for (p,i) in loop:
                     print "%s" % p.getNEVRA()
@@ -610,7 +768,7 @@ if __name__ == '__main__':
             for (p,i) in loop:
                 (p2,f) = relations[p].pre[i]
                 if f == 1:
-                    if verbose == 2:
+                    if verbose > 1:
                         print "Removing requires for %s from %s" % \
                               (p2.getNEVRA(), p.getNEVRA())
                     del relations[p].pre[p2]
@@ -620,7 +778,7 @@ if __name__ == '__main__':
             if found == 0:
                 (p, i) = loop[0]
                 (p2,f) = relations[p].pre[i]
-                if verbose == 2:
+                if verbose > 1:
                     print "Zapping requires for %s from %s to break up hard loop" % \
                           (p2.getNEVRA(), p.getNEVRA())
                 del relations[p].pre[p2]
