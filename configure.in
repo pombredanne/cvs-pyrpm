@@ -1,6 +1,11 @@
-AC_INIT(pyrpmlib.py)
+AC_INIT(pyrpm.spec.in)
 AM_INIT_AUTOMAKE(pyrpm, 1.0.0)
+AM_PATH_PYTHON
+
 AC_OUTPUT([
 Makefile
 pyrpm.spec
+scripts/Makefile
+doc/Makefile
+pyrpm/Makefile
 ])

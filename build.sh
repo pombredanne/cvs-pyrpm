@@ -4,5 +4,4 @@ aclocal
 automake -a
 autoconf
 ./configure
-make tar
-rpmbuild -tb pyrpm-*.tar.bz2
+make build

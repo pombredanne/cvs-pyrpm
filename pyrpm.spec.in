@@ -14,13 +14,12 @@ packages in general e.g. to extract information, check dependancies or even
 install packages.
 
 %prep
-%setup -q -c %{name}-%{version}
-aclocal
-automake -a
-autoconf
+rm -rf ${RPM_BUILD_ROOT}
+%setup -q 
 
 %build
 %configure
+make
 
 %install
 %makeinstall
