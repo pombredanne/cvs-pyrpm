@@ -39,19 +39,16 @@ def getTag(tag):
             return eval("rpmconstants.RPMTAG_%s" % tag.upper())
     return None
 
-# in verify mode only allow newer rpm packages
-# XXX: this could go into non-strict mode in case of non-RH packaged rpm
-# or based on other data within the rpm header
-strict = 1
-
 # optional keys in the sig header
 sigkeys = [
     rpmconstants.RPMTAG_DSAHEADER,
     rpmconstants.RPMSIGTAG_GPG
 ]
-if not strict:
-    sigkeys.append(rpmconstants.RPMSIGTAG_PGP)
-    sigkeys.append(rpmconstants.RPMTAG_BADSHA1_2)
+# additional keys for the non-strict case
+sigkeys2 = [
+    rpmconstants.RPMSIGTAG_PGP,
+    rpmconstants.RPMTAG_BADSHA1_2
+]
 # required keys in the sig header
 reqsig = [
     rpmconstants.HEADER_SIGNATURES,
@@ -81,6 +78,8 @@ class ReadRpm:
         self.fd = fd # filedescriptor
         self.verify = verify # enable/disable more data checking
         self.hdronly = hdronly # if only the header is present from a hdlist
+        self.strict = 1 # XXX find some way to switch back to non-strict mode
+        # for older rpm packages
 
     def raiseErr(self, err):
         raise ValueError, "%s: %s" % (self.filename, err)
@@ -215,7 +214,7 @@ class ReadRpm:
             if tags and tag not in tags:
                 continue
             # ignore duplicate entries as long as they are identical
-            if strict == 0 and hdr.has_key(tag):
+            if self.strict == 0 and hdr.has_key(tag):
                 if hdr[tag] != self.parseTag(index, fmt2):
                     print "%s included tag %d twice" % (self.filename, tag)
             else:
@@ -248,9 +247,10 @@ class ReadRpm:
         if self.hdronly:
             return
         for i in self.sig.keys():
-            if i not in sigkeys and i not in reqsig:
+            if i not in sigkeys and i not in reqsig and \
+                (not self.strict or i not in sigkeys2):
                 self.raiseErr("new item in sigindex: %d" % i)
-        if not strict:
+        if not self.strict:
             return
         for i in reqsig:
             if i not in self.sig.keys():
@@ -307,7 +307,7 @@ class ReadRpm:
         if None:
             #import zlib
             payload = self.fd.read()
-            if strict and self.verify and self.payloadsize != len(payload):
+            if self.strict and self.verify and self.payloadsize != len(payload):
                 self.raiseErr("payloadsize")
             if payload[:9] != '\037\213\010\000\000\000\000\000\000':
                 self.raiseErr("not gzipped data")
@@ -320,7 +320,7 @@ class ReadRpm:
             #    buf = gz.read(4096)
             #    if not buf:
             #        break
-        if strict and self.verify and self.cpiosize != len(cpiodata):
+        if self.strict and self.verify and self.cpiosize != len(cpiodata):
             self.raiseErr("cpiosize")
         if 1:
             c = cpio.CPIOFile(cStringIO.StringIO(cpiodata))
@@ -339,13 +339,13 @@ class ReadRpm:
     def __getitem__(self, key):
         return self.hdr[getTag(key)]
 
-    def printNVR(self):
+    def getNVR(self):
         return "%s-%s-%s" % (self["name"], self["version"], self["release"])
 
-    def printNA(self):
+    def getNA(self):
         return "%s-%s" % (self["name"], self["arch"])
 
-    def printFilename(self):
+    def getFilename(self):
         return "%s-%s-%s.%s.rpm" % (self["name"], self["version"],
             self["release"], self["arch"])
 
@@ -473,7 +473,7 @@ if __name__ == "__main__":
     if None:
         rpms = readHdlist("/home/hdlist")
         for rpm in rpms:
-            print rpm.printFilename()
+            print rpm.getFilename()
         rpms = readHdlist("/home/hdlist2")
         sys.exit(0)
     if None:
