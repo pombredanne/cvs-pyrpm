@@ -402,6 +402,18 @@ def evrCompare(evr1, comp, evr2):
             res = 1
     return res
 
+def pkgCompare(p1, p2):
+    if p1["epoch"] == None:
+        e1 = "0"
+    else:
+        e1 = "%s" % p1["epoch"][0]
+    if p2["epoch"] == None:
+        e2 = "0"
+    else:
+        e2 = "%s" % p2["epoch"][0]
+    return labelCompare((e1, p1["version"], p1["release"]),
+                        (e2, p2["version"], p2["release"]))
+
 def depOperatorString(flag):
     """ generate readable operator """
     op = ""
@@ -511,14 +523,14 @@ def normalizeList(list):
     """ normalize list """
     if len(list) < 2:
         return
-    h = {}
+    hash = {}
     i = 0
     while i < len(list):
         item = list[i]
-        if h.has_key(item):
+        if hash.has_key(item):
             list.pop(i)
         else:
-            h[item] = 1
+            hash[item] = 1
             i += 1
 
 def getBuildArchList(list):
