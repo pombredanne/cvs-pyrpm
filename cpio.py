@@ -35,18 +35,12 @@ class CPIOFile:
 
     def __init__(self, data):
         self.filelist = {}              # hash of CPIO headers and stat data
-        self.cpiodata = data
-#        if isinstance(file, basestring):
-#            self.filename = file
-#            self.fp = open(file, "rb")
-#        else:
-#            self.filename = getattr(file, 'name', None)
-#            self.fp = file
-        self.pos = 0
-        self.defered = []
-        self.filename = None
-        self.filedata = None
-        self.filerawdata = None
+        self.cpiodata = data            # complete uncompressed cipo data
+        self.pos = 0                    # current position in cpio data
+        self.defered = []               # list of defered files for extract
+        self.filename = None            # current filename
+        self.filedata = None            # current file stat data
+        self.filerawdata = None         # raw data of current file
 
     def getNextHeader(self, pos):
         data = self.cpiodata[pos:pos+110]
@@ -67,18 +61,17 @@ class CPIOFile:
             int(data[94:102], 16), data[102:110]]
 
         size = filedata[12]
-        filename = self.cpiodata[pos:pos+size].rstrip("\x00")
+        filename = "/"+os.path.normpath("./"+self.cpiodata[pos:pos+size].rstrip("\x00"))
         pos = pos + size
         fsize = 110 + size
         pos = pos + ((4 - (fsize % 4)) % 4)
 
         # Detect if we're at the end of the archive
-        if filename == "TRAILER!!!":
-            return [0, filename, None]
+        if filename == "/TRAILER!!!":
+            return [0, None, None]
 
         # Contents
         filesize = filedata[7]
-        self.filelist[filename[1:]] = filedata
         return [pos, filename, filedata]
         
 
@@ -86,13 +79,13 @@ class CPIOFile:
         pos = 0
         while 1:
             [pos, filename, filedata] = self.getNextHeader(pos)
-            if filename == "TRAILER!!!":
+            if filename == None:
                 break
             # Contents
             filesize = filedata[7]
             pos = pos + filesize
             pos = pos + ((4 - (filesize % 4)) % 4)
-            self.filelist[filename[1:]] = filedata
+            self.filelist[filename] = filedata
 
     def createLink(self, src, dst):
         try:
@@ -206,9 +199,10 @@ class CPIOFile:
             ret = commands.getoutput("/bin/mknod "+fullname+" "+devtype+" "+str(self.filedata[10])+" "+str(self.filedata[11]))
             if ret != "":
                 print "Error creating device: "+ret
-            os.chown(fullname, self.filedata[3], self.filedata[4])
-            os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
-            os.utime(fullname, (self.filedata[6], self.filedata[6]))
+            else:
+                os.chown(fullname, self.filedata[3], self.filedata[4])
+                os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
+                os.utime(fullname, (self.filedata[6], self.filedata[6]))
         else:
             raise ValueError, "%s: not a valid CPIO filetype" % (oct(filetype))
 
@@ -217,7 +211,7 @@ class CPIOFile:
 
     def getNextEntry(self):
         [self.pos, filename, filedata] = self.getNextHeader(self.pos)
-        if filename == "TRAILER!!!":
+        if filename == None:
             return [None, None, None]
 
         # Contents

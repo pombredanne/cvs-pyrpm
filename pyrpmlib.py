@@ -19,8 +19,8 @@
 #
 
 #import profile
-import rpmconstants, cpio, os.path, popen2, posix, tempfile
-import sys, getopt, gzip, cStringIO, time
+import rpmconstants, cpio, ugid
+import os.path, popen2, tempfile, sys, gzip
 from types import StringType, IntType, ListType
 from struct import unpack
 rpmtag = rpmconstants.rpmtag
@@ -454,7 +454,6 @@ class RpmPackage(RpmData):
     def read(self, io):
         if io.read(self):
             return 1
-        
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
@@ -472,13 +471,17 @@ class RpmPackage(RpmData):
         # We need the cpiodata to extrace it.
         if self.cpiodata == None:
             return 1
+        if files == None:
+            files = self["filetree"]
         cfile = cpio.CPIOFile(self.cpiodata)
         [filename, filedata, filerawdata] = cfile.getNextEntry()
         while filename != None:
-            cfile.extractCurrentEntry(instroot)
+            if filename in files:
+                cfile.extractCurrentEntry(instroot)
             [filename, filedata, filerawdata] = cfile.getNextEntry()
         # Needed for hardlinks... :(
         cfile.postExtract()
+        return 0
 
     def runScript(self, instroot=None, prog=None, script=None, arg1=None, arg2=None):
         tmpfilename = tempfile.mktemp(dir="/var/tmp/", prefix="rpm-tmp-")
@@ -519,10 +522,33 @@ class RpmPackage(RpmData):
             return 0
         return 1
 
+    def updateFilestats(self, instroot=None):
+        if not self["basenames"]:
+            return
+        if instroot != None:
+            pw = ugid.Passwd(instroot+"/etc/passwd")
+            grp = ugid.Group(instroot+"/etc/group")
+        else:
+            pw = ugid.Passwd()
+            grp = ugid.Group()
+        for i in xrange(len(self["basenames"])):
+            fullname = self["dirnames"][self["dirindexes"][i]]+self["basenames"][i]
+            if instroot != None:
+                fullname = instroot+fullname
+            if not (os.path.isfile(fullname) or os.path.isdir(fullname)) or os.path.islink(fullname):
+                continue
+            uid = int(pw.getUID(self["fileusername"][i]))
+            gid = int(grp.getGID(self["filegroupname"][i]))
+            if uid != -1 and gid != -1:
+                os.chown(fullname, uid, gid)
+            os.chmod(fullname, (~cpio.CP_IFMT) & self["filemodes"][i])
+            os.utime(fullname, (self["filemtimes"][i], self["filemtimes"][i]))
+
     def install(self, instroot=None, files=None):
         if self["preinprog"] != None:
             self.runScript(instroot, self["preinprog"], self["prein"], "1")
-        self.extract(instroot, files)
+        self.extract(instroot, self["filetree"])
+        self.updateFilestats(instroot)
         if self["postinprog"] != None:
             self.runScript(instroot, self["postinprog"], self["postin"], "1")
 

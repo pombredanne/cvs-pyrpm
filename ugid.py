@@ -14,72 +14,55 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004 Red Hat, Inc.
 #
-# Author: Florian La Roche, <laroche@redhat.com>, <florian.laroche@gmx.net>
+# Author: Phil Knirsch <pknirsch@redhat.com>
 #
 
-import pwd
-import grp
-from types import StringType
+import string
 
-# TODO: XXX: write a simple parser for passwd/group and add checks against
-#            such default values
+class Passwd:
+    def __init__(self, pwfile="/etc/passwd"):
+        self.pwfile = pwfile
+        self.parseFile()
 
-class ID:
-    def __init__(self):
-        self.data = {}
-
-    def addId(self, key):
-        pass
-
-    def __getitem__(self, key):
-        if not self.data.has_key(key):
-            self.addId(key)
+    def parseFile(self, pwfile=None):
+        self.userlist = {}
+        if pwfile == None:
+            pwfile = self.pwfile
         try:
-            return self.data[key]
+            fp = open(pwfile,"r")
         except:
-            return None
+            return
+        lines = fp.readlines()
+        for l in lines:
+            tmp = string.split(l, ":")
+            self.userlist[tmp[0]] = tmp[2]
 
-    def __setitem__(self, key, item):
-        if self.data.has_key(key) or self.data.has_key(item):
-            raise ValueError, "id or name conflicts"
-        data = (key, item)
-        self.data[key] = data
-        self.data[item] = data
+    def getUID(self, name):
+        if name not in self.userlist.keys():
+            return -1
+        return self.userlist[name]
 
-class UID(ID):
-    def addId(self, key):
+class Group:
+    def __init__(self, grpfile="/etc/group"):
+        self.grpfile = grpfile
+        self.parseFile()
+
+    def parseFile(self, grpfile=None):
+        self.grouplist = {}
+        if grpfile == None:
+            grpfile = self.grpfile
         try:
-            if isinstance(key, StringType):
-                uid = pwd.getpwnam(key)[2]
-                self[uid] = key
-            else:
-                name = pwd.getpwuid(key)[0]
-                self[key] = name
+            fp = open(grpfile,"r")
         except:
-            return False
-        return True
+            return
+        lines = fp.readlines()
+        for l in lines:
+            tmp = string.split(l, ":")
+            self.grouplist[tmp[0]] = tmp[2]
 
-class GID(ID):
-    def addId(self, key):
-        try:
-            if isinstance(key, StringType):
-                uid = grp.getgrnam(key)[2]
-                self[uid] = key
-            else:
-                name = grp.getgrgid(key)[0]
-                self[key] = name
-        except:
-            return False
-        return True
-
-if __name__ == "__main__":
-    uid = UID()
-    uid.addId(0)
-    uid = UID()
-    uid.addId("root")
-    gid = GID()
-    gid.addId(0)
-    gid = GID()
-    gid.addId("root")
+    def getGID(self, name):
+        if name not in self.grouplist.keys():
+            return -1
+        return self.grouplist[name]
 
 # vim:ts=4:sw=4:showmatch:expandtab
