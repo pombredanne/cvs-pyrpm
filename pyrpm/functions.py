@@ -210,7 +210,7 @@ def getFreeDiskspace(pkglist):
     return freehash
 
 def parseBoolean(str):
-    lower = string.lower(str)
+    lower = str.lower()
     if lower == "yes" or lower == "true" or lower == "1" or lower == "on":
         return 1
     return 0
@@ -561,20 +561,20 @@ def tagsearch(searchtags, list, regex=None):
     return pkglist
 
 def normalizeRegex(regex):
-    regex = string.replace(regex, ".", "\.")
-    regex = string.replace(regex, "*", ".*")
-    regex = string.replace(regex, "+", "\+")
-    regex = string.replace(regex, "\\", "\\\\")
-    regex = string.replace(regex, "^", "\^")
-    regex = string.replace(regex, "$", "\$")
-    regex = string.replace(regex, "?", "\?")
-    regex = string.replace(regex, "{", "\{")
-    regex = string.replace(regex, "}", "\}")
-    regex = string.replace(regex, "[", "\[")
-    regex = string.replace(regex, "]", "\]")
-    regex = string.replace(regex, "|", "\|")
-    regex = string.replace(regex, "(", "\(")
-    regex = string.replace(regex, ")", "\)")
+    regex = regex.replace(".", "\.")
+    regex = regex.replace("*", ".*")
+    regex = regex.replace("+", "\+")
+    regex = regex.replace("\\", "\\\\")
+    regex = regex.replace("^", "\^")
+    regex = regex.replace("$", "\$")
+    regex = regex.replace("?", "\?")
+    regex = regex.replace("{", "\{")
+    regex = regex.replace("}", "\}")
+    regex = regex.replace("[", "\[")
+    regex = regex.replace("]", "\]")
+    regex = regex.replace("|", "\|")
+    regex = regex.replace("(", "\(")
+    regex = regex.replace(")", "\)")
     return regex
 
 EPOCHTAG=0

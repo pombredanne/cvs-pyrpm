@@ -22,7 +22,7 @@ import os
 
 class RpmConfig:
     def __init__(self):
-        (self.sysname, self.nodename, self.release, self.version, \
+        (self.sysname, self.nodename, self.release, self.version,
             self.machine) = os.uname()
         self.debug_level = 0
         self.warning_level = 0

@@ -872,41 +872,41 @@ class RpmCompsXMLIO:
         return 1
 
     def __parsePackageList(self, node):
-        list = {}
+        plist = {}
         while node != None:
             if node.type != "element":
                 node = node.next
                 continue
             if node.name == "packagereq":
-                type = node.prop("type")
-                if type == None:
-                    type = "default"
+                ptype = node.prop("type")
+                if ptype == None:
+                    ptype = "default"
                 requires = node.prop("requires")
                 if requires != None:
-                    requires = string.split(requires)
+                    requires = requires.split()
                 else:
                     requires = []
-                list[node.content] = (type, requires)
+                plist[node.content] = (ptype, requires)
             node = node.next
-        return list
+        return plist
 
     def __parseGroupList(self, node):
-        list = {}
-        list["groupreqs"] = []
-        list["metapkgs"] = {}
+        glist = {}
+        glist["groupreqs"] = []
+        glist["metapkgs"] = {}
         while node != None:
             if node.type != "element":
                 node = node.next
                 continue
             if   node.name == "groupreq":
-                list["groupreqs"].append(node.content)
+                glist["groupreqs"].append(node.content)
             elif node.name == "metapkg":
-                type = node.prop("type")
-                if type == None:
-                    type = "default"
-                list["metapkgs"][node.content] = type
+                gtype = node.prop("type")
+                if gtype == None:
+                    gtype = "default"
+                glist["metapkgs"][node.content] = gtype
             node = node.next
-        return list
+        return glist
 
     def __parseGroupHierarchy(self, node):
         # We don't need grouphierarchies, so don't parse them ;)

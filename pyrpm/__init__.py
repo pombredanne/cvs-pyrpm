@@ -16,7 +16,7 @@
 # Author: Harald Hoyer <harald@redhat.com>
 #
 
-__version__ = "0.01"
+__version__ = "0.10"
 __doc__ = """Read and manage RPM packages."""
 
 import os, locale
