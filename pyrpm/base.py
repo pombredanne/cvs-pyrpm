@@ -136,6 +136,12 @@ RPMVERIFY_MODE      = (1 << 6)     # from %verify(mode)
 RPMVERIFY_RDEV      = (1 << 7)     # from %verify(rdev)
 
 
+OP_INSTALL = "install"
+OP_UPDATE = "update"
+OP_ERASE = "erase"
+OP_FRESHEN = "freshen"
+
+
 # List of all rpm tags we care about. We mark older tags which are
 # not anymore in newer rpm packages (Fedora Core development tree) as
 # "legacy".

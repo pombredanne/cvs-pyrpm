@@ -18,11 +18,11 @@
 
 
 import os, gc
-import package, io
+from time import clock
+from config import rpmconfig
+import io, package
 from resolver import *
 from orderer import *
-from config import rpmconfig
-from time import clock
 
 class _Triggers:
     """ enable search of triggers """
@@ -99,7 +99,7 @@ class RpmController:
         self.buildroot = buildroot
         if not self.__readDB(db):
             return 0
-        if operation == RpmResolver.OP_ERASE:
+        if operation == OP_ERASE:
             for filename in filelist:
                 self.eraseFile(filename)
         else: 
@@ -149,7 +149,7 @@ class RpmController:
             sys.exit(0)
         self.triggerlist = _Triggers()
         for (op, pkg) in operations:
-            if op == RpmResolver.OP_UPDATE or op == RpmResolver.OP_INSTALL:
+            if op == OP_UPDATE or op == OP_INSTALL:
                 self.triggerlist.addPkg(pkg)
         for pkg in self.installed:
             self.triggerlist.addPkg(pkg)
@@ -169,11 +169,11 @@ class RpmController:
                 if status != 0:
                     sys.exit(1)
                 for (op, pkg) in subop:
-                    if op == RpmResolver.OP_INSTALL or \
-                       op == RpmResolver.OP_UPDATE or \
-                       op == RpmResolver.OP_FRESHEN:
+                    if op == OP_INSTALL or \
+                       op == OP_UPDATE or \
+                       op == OP_FRESHEN:
                         self.__addPkgToDB(pkg, nowrite=1)
-                    elif op == RpmResolver.OP_ERASE:
+                    elif op == OP_ERASE:
                         self.__erasePkgFromDB(pkg, nowrite=1)
                     pkg.close()
                 operations = operations[pkgsperfork:]
@@ -190,14 +190,14 @@ class RpmController:
                         printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
                     else:
                         printInfo(1, "%s %s" % (progress, pkg.getNEVRA()))
-                    if   op == RpmResolver.OP_INSTALL or \
-                         op == RpmResolver.OP_UPDATE or \
-                         op == RpmResolver.OP_FRESHEN:
+                    if   op == OP_INSTALL or \
+                         op == OP_UPDATE or \
+                         op == OP_FRESHEN:
                         if not pkg.install(self.pydb):
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
                         self.__addPkgToDB(pkg)
-                    elif op == RpmResolver.OP_ERASE:
+                    elif op == OP_ERASE:
                         self.__runTriggerUn(pkg)
                         if not pkg.erase(self.pydb):
                             sys.exit(1)
@@ -248,12 +248,12 @@ class RpmController:
         if not self.ignorearch:
             if not possible_archs.has_key(rpmconfig.machine):
                 raiseFatal("Unknow rpmconfig.machine architecture %s" % rpmconfig.machine)
-            if self.operation == RpmResolver.OP_UPDATE or self.operation == RpmResolver.OP_FRESHEN:
+            if self.operation == OP_UPDATE or self.operation == OP_FRESHEN:
                 filterArchList(self.rpms)
             else:
                 filterArchCompat(self.rpms)
         else:
-            if self.operation == RpmResolver.OP_UPDATE or self.operation == RpmResolver.OP_FRESHEN:
+            if self.operation == OP_UPDATE or self.operation == OP_FRESHEN:
                 filterArchList(self.rpms, rpmconfig.machine)
             else:
                 filterArchCompat(self.rpms, rpmconfig.machine)

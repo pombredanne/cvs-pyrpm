@@ -58,25 +58,25 @@ if __name__ == '__main__':
             print "Only one operation at a time is allow."
             usage()
             sys.exit(1)
-        rpmconfig.operation = RpmResolver.OP_INSTALL
+        rpmconfig.operation = OP_INSTALL
     elif opt in ["-U", "--upgrade"]:
         if rpmconfig.operation != None:
             print "Only one operation at a time is allow."
             usage()
             sys.exit(1)
-        rpmconfig.operation = RpmResolver.OP_UPDATE
+        rpmconfig.operation = OP_UPDATE
     elif opt in ["-F", "--freshen"]:
         if rpmconfig.operation != None:
             print "Only one operation at a time is allow."
             usage()
             sys.exit(1)
-        rpmconfig.operation = RpmResolver.OP_FRESHEN
+        rpmconfig.operation = OP_FRESHEN
     elif opt in ["-e", "--erase"]:
         if rpmconfig.operation != None:
             print "Only one operation at a time is allow."
             usage()
             sys.exit(1)
-        rpmconfig.operation = RpmResolver.OP_ERASE
+        rpmconfig.operation = OP_ERASE
     elif opt in ['-?', "--help"]:
         usage()
         sys.exit(0)

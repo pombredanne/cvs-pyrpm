@@ -135,7 +135,7 @@ for (opt, val) in opts:
     elif opt in ["-g", "--group"]:
         rpmconfig.compsfile = val
     elif opt == "--repo":
-        resolver = RpmResolver([], RpmResolver.OP_INSTALL)
+        resolver = RpmResolver([], OP_INSTALL)
         if os.path.isdir(val):
             addDirToRepo(val, resolver)
         if os.path.isdir(val+"/RedHat/RPMS"):
@@ -208,10 +208,10 @@ if command.startswith("group"):
     args = pkgs
 
 if   command == "install" or command == "groupinstall":
-    rpmconfig.operation = RpmResolver.OP_INSTALL
+    rpmconfig.operation = OP_INSTALL
 elif command == "update" or command == "upgrade" or \
      command == "groupupdate" or command == "groupupgrade":
-    rpmconfig.operation = RpmResolver.OP_FRESHEN
+    rpmconfig.operation = OP_FRESHEN
 
 installed = []
 if rpmconfig.buildroot:
@@ -225,7 +225,7 @@ else:
     installed = installed.values()
 del pydb
 
-opresolver = RpmResolver(installed, RpmResolver.OP_UPDATE)
+opresolver = RpmResolver(installed, OP_UPDATE)
 pkgs = []
 for f in args:
     if os.path.isfile(f) and f.endswith(".rpm"):
@@ -242,7 +242,7 @@ for f in args:
             printError("Couldn't find package %s, skipping" % f)
 
 for pkg in pkgs:
-    if rpmconfig.operation == RpmResolver.OP_UPDATE or rpmconfig.operation == RpmResolver.OP_FRESHEN:
+    if rpmconfig.operation == OP_UPDATE or rpmconfig.operation == OP_FRESHEN:
         name = pkg["name"]
         for ipkg in installed:
             if ipkg["name"] == name:
@@ -258,7 +258,7 @@ del opresolver
 del repos
 
 control = RpmController()
-control.handlePkgs(appended, RpmResolver.OP_UPDATE, rpmconfig.dbpath,
+control.handlePkgs(appended, OP_UPDATE, rpmconfig.dbpath,
     rpmconfig.buildroot)
 
 # vim:ts=4:sw=4:showmatch:expandtab

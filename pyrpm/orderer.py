@@ -22,9 +22,10 @@
 """
 
 from hashlist import HashList
-from rpmlist import RpmList
 from time import clock
-from resolver import *
+from config import rpmconfig
+from functions import *
+from resolver import RpmResolver
 
 class _Relation:
     """ Pre and post relations for a package """
@@ -92,7 +93,7 @@ class RpmOrderer:
 
     def _operationFlag(self, flag):
         """ Return operation flag or requirement """
-        if self.operation == RpmList.OP_ERASE:
+        if self.operation == OP_ERASE:
             if not (isInstallPreReq(flag) or \
                     not (isErasePreReq(flag) or isLegacyPreReq(flag))):
                 return 2  # hard requirement
@@ -172,7 +173,7 @@ class RpmOrderer:
     def genOperations(self, order):
         """ Generate operations list """
         operations = [ ]
-        if self.operation == RpmList.OP_ERASE:
+        if self.operation == OP_ERASE:
             # reverse order
             # obsoletes: there are none
             for i in xrange(len(order)-1, -1, -1):
@@ -180,30 +181,30 @@ class RpmOrderer:
         else:
             for r in order:
                 if self.updates and r in self.updates:
-                    op = RpmList.OP_UPDATE
+                    op = OP_UPDATE
                 else:
-                    op = RpmList.OP_INSTALL
+                    op = OP_INSTALL
                 operations.append((op, r))
                 if self.obsoletes and r in self.obsoletes:
                     if len(self.obsoletes[r]) == 1:
-                        operations.append((RpmList.OP_ERASE,
+                        operations.append((OP_ERASE,
                                            self.obsoletes[r][0]))
                     else:
                         # more than one obsolete: generate order
                         orderer = RpmOrderer(self.obsoletes[r], None, None,
-                                             RpmList.OP_ERASE)
+                                             OP_ERASE)
                         ops = orderer.order()
                         operations.extend(ops)
                         del orderer
                 if self.updates and r in self.updates:
                     if len(self.updates[r]) == 1:
-                        operations.append((RpmList.OP_ERASE,
+                        operations.append((OP_ERASE,
                                            self.updates[r][0]))
                     else:
                         
                         # more than one update: generate order
                         orderer = RpmOrderer(self.updates[r], None, None,
-                                             RpmList.OP_ERASE)
+                                             OP_ERASE)
                         ops = orderer.order()
                         operations.extend(ops)
                         del orderer

@@ -22,9 +22,8 @@
 """
 
 from stat import S_ISLNK, S_ISDIR
-from hashlist import HashList
-from rpmlist import RpmList
 from config import rpmconfig
+from hashlist import HashList
 from functions import *
 
 
@@ -133,6 +132,157 @@ class FilenamesList:
 
 # ----------------------------------------------------------------------------
 
+class RpmList:
+    OK = 1
+    ALREADY_INSTALLED = -1
+    OLD_PACKAGE = -2
+    NOT_INSTALLED = -3
+    UPDATE_FAILED = -4
+    ALREADY_ADDED = -5
+    # ----
+
+    def __init__(self, installed, operation):
+        self.clear()
+        for r in installed:
+            self._install(r)
+            if not self.installed.has_key(r["name"]):
+                self.installed[r["name"]] = [ ]
+            self.installed[r["name"]].append(r)
+        self.operation = operation
+    # ----
+
+    def clear(self):
+        self.list = HashList()
+        self.installed = HashList()
+        self.appended = []
+    # ----
+
+    def __len__(self):
+        return len(self.list)
+    # ----
+
+    def __getitem__(self, i):
+        return self.list[i][1] # return rpm list
+    # ----
+
+    def append(self, pkg):
+        if self.operation == OP_INSTALL:
+            ret = self._install(pkg)
+            if ret != self.OK:  return ret
+        elif self.operation == OP_UPDATE:
+            ret = self._update(pkg)
+            if ret != self.OK:  return ret
+        elif self.operation == OP_FRESHEN:
+            # pkg in self.installed
+            if not self.installed.has_key(pkg["name"]):
+                return self.NOT_INSTALLED
+            found = 0
+            for r in self.installed[pkg["name"]]:
+                if pkg["arch"] == r["arch"] or \
+                       buildarchtranslate[pkg["arch"]] == \
+                       buildarchtranslate[r["arch"]]:
+                    found = 1
+                    break
+            if found == 0:
+                return self.NOT_INSTALLED
+            ret = self._update(pkg)
+            if ret != self.OK:  return ret
+        else: # self.operation == OP_ERASE:
+            if self._erase(pkg) != 1:
+                return self.NOT_INSTALLED
+            self._pkgErase(pkg)
+        self.appended.append(pkg)
+        return self.OK
+    # ----
+
+    def _install(self, pkg):
+        key = pkg["name"]
+        if self.installed.has_key(key):
+            for r in self.installed[key]:
+                if r == pkg or \
+                   (r.getNEVR() == pkg.getNEVR() and \
+                    (pkg["arch"] == r["arch"] or \
+                     buildarchtranslate[pkg["arch"]] == \
+                     buildarchtranslate[r["arch"]])):
+                    printWarning(1, "%s: %s is already installed" % \
+                                 (pkg.getNEVRA(), r.getNEVRA()))
+                    return self.ALREADY_INSTALLED
+        if not self.list.has_key(key):
+            self.list[key] = [ ]
+        else:
+            if pkg in self.list[key]: 
+                printWarning(1, "%s was already added" % pkg.getNEVRA())
+                return self.ALREADY_ADDED
+        self.list[key].append(pkg)
+
+        return self.OK
+    # ----
+
+    def _update(self, pkg):
+        key = pkg["name"]
+
+        ret = self._install(pkg)
+        if ret != self.OK:  return ret
+
+        if self.list.has_key(key):
+            i = 0
+            while self.list[key] != None and i < len(self.list[key]):
+                r = self.list[key][i]
+                if r != pkg and (pkg["arch"] == r["arch"] or \
+                                 buildarchtranslate[pkg["arch"]] == \
+                                 buildarchtranslate[r["arch"]]):
+                        if self._pkgUpdate(pkg, r) != self.OK:
+                            return self.UPDATE_FAILED
+                else:
+                    i += 1
+
+        return self.OK
+    # ----
+
+    def _erase(self, pkg):
+        key = pkg["name"]
+        if not self.list.has_key(key) or pkg not in self.list[key]:
+            return self.NOT_INSTALLED
+        self.list[key].remove(pkg)
+        if len(self.list[key]) == 0:
+            del self.list[key]
+        if pkg in self.appended:
+            self.appended.remove(pkg)
+        return 1
+    # ----
+
+    def _pkgUpdate(self, pkg, update_pkg):
+        return self._erase(update_pkg)
+    # ----
+
+    def _pkgErase(self, pkg):
+        return self.OK
+    # ----
+
+    def isInstalled(self, pkg):
+        if self.installed.has_key(pkg["name"]) and \
+               pkg in self.installed[pkg["name"]]:
+            return 1
+        return 0
+    # ----
+
+    def getList(self):
+        l = []
+        for i in xrange(len(self)):
+            l.extend(self[i])
+            #rlist = self[i]
+            #for r in rlist:
+            #    l.append(r)
+        return l
+    # ----
+
+    def p(self):
+        for i in xrange(len(self)):
+            rlist = self[i]
+            for r in rlist:
+                print "\t%s" % r.getNEVRA()
+
+
 class RpmResolver(RpmList):
     OBSOLETE_FAILED = -10
     # ----
@@ -144,9 +294,9 @@ class RpmResolver(RpmList):
         RpmList.clear(self)
         self.provides = ProvidesList()
         self.filenames = FilenamesList()
-        self.obsoletes = HashList()
-        self.updates = HashList()
-        self.erased = HashList()
+        self.obsoletes = {}
+        self.updates = {}
+        self.erased = {}
     # ----
 
     def _install(self, pkg):
@@ -203,8 +353,8 @@ class RpmResolver(RpmList):
     def doObsoletes(self):
         """ Do obsoletes for new packages """
 
-        if self.operation == self.OP_INSTALL or \
-               self.operation == self.OP_ERASE:
+        if self.operation == OP_INSTALL or \
+               self.operation == OP_ERASE:
             # no obsoletes for install or erase
             return self.OK
         
@@ -315,7 +465,7 @@ class RpmResolver(RpmList):
     def getConflicts(self):
         """ Check for conflicts in conflicts and and obsoletes """
 
-        if self.operation == self.OP_ERASE:
+        if self.operation == OP_ERASE:
             # no conflicts for erase
             return None
 
@@ -350,7 +500,7 @@ class RpmResolver(RpmList):
     def getFileConflicts(self):
         """ Check for file conflicts """
 
-        if self.operation == self.OP_ERASE:
+        if self.operation == OP_ERASE:
             # no conflicts for erase
             return None
 
