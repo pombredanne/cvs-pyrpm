@@ -1,26 +1,27 @@
-#!python
-# -*- python -*-
-# -*- coding: utf-8 -*-
-## Copyright (C) 2005 Red Hat, Inc.
-## Copyright (C) 2005 Harald Hoyer <harald@redhat.com>
-
-## This program is free software; you can redistribute it and/or modify
-## it under the terms of the GNU General Public License as published by
-## the Free Software Foundation; either version 2 of the License, or
-## (at your option) any later version.
-
-## This program is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-## GNU General Public License for more details.
-
-## You should have received a copy of the GNU General Public License
-## along with this program; if not, write to the Free Software
-## Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-
+#! /usr/bin/python
+#
+# Copyright (C) 2005 Red Hat, Inc.
+# Copyright (C) 2005 Harald Hoyer <harald@redhat.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
 
 """Parser for RPM Specfiles.
 """
+
+__author__ = "Harald Hoyer <harald@redhat.com>"
 
 import string
 
@@ -54,7 +55,7 @@ class RpmSpecFile:
         else:
             # should raise an exception here??
             return
-        
+
         self.parse()
 
     def readFile(self, filename):
@@ -63,7 +64,7 @@ class RpmSpecFile:
         fd = open(filename)
         self.lines = fd.read().splitlines()
         fd.close()
-        
+
     def parse(self):
         """Parse the specfile lines
         """
@@ -87,12 +88,12 @@ class RpmSpecFile:
 
         # Now split into sections
         for line in self.lines:
-            if line.startswith("%"):                            
+            if line.startswith("%"):
                 tokens = line[1:].split()
                 if tokens[0] in RpmSpecFile.sections:
                     if len(tokens) == 3 and tokens[1] == "-n":
                         section = tokens[0]
-                        package = tokens[2]                    
+                        package = tokens[2]
                     else:
                         section = tokens[0]
                         package = self.Name
@@ -125,7 +126,7 @@ class RpmSpecFile:
             return self.section["description"].keys()
         else:
             return [self.Name]
-        
+
 
     def getSection(self, section, package = None):
         """Returns the section from package
@@ -153,7 +154,7 @@ class RpmSpecFile:
             if self.section.has_key(section) and \
                    self.section[section].has_key(package):
                 return string.join(self.section[section][package],
-                                   '\n') + "\n"            
+                                   '\n') + "\n"
         return ""
 
-__author__ = "Harald Hoyer <harald@redhat.com>"
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -1,5 +1,8 @@
 #!/usr/bin/python
 #
+# Copyright (C) 2004, 2005 Red Hat, Inc.
+# Author: Thomas Woerner, Karel Zak
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
@@ -12,9 +15,6 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
-#
-# Author: Thomas Woerner, Karel Zak
 #
 
 from hashlist import HashList
@@ -33,6 +33,7 @@ class RpmList:
 
     def __init__(self, installed, operation):
         self.clear()
+        self.__len__ = self.list.__len__
         for r in installed:
             self._install(r)
             if not self.installed.has_key(r["name"]):
@@ -45,10 +46,6 @@ class RpmList:
         self.list = HashList()
         self.installed = HashList()
         self.appended = [ ]
-    # ----
-
-    def __len__(self):
-        return len(self.list)
     # ----
 
     def __getitem__(self, i):
@@ -100,7 +97,7 @@ class RpmList:
         if not self.list.has_key(key):
             self.list[key] = [ ]
         else:
-            if pkg in self.list[key]: 
+            if pkg in self.list[key]:
                 printWarning(1, "%s was already added" % pkg.getNEVRA())
                 return self.ALREADY_ADDED
         self.list[key].append(pkg)
@@ -171,10 +168,10 @@ class RpmList:
     # ----
 
     def getList(self):
-        list = [ ]
+        l = [ ]
         for i in xrange(len(self)):
-            list.extend(self[i])
-        return list
+            l.extend(self[i])
+        return l
     # ----
 
     def p(self):

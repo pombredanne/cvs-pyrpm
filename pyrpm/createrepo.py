@@ -1,5 +1,11 @@
 # Creating libxml2 subtrees of RPM metadata from RpmPackage objects
 #
+# Copyright (C) 2004 Duke University
+# Copyright (C) 2005 Red Hat, Inc.
+#
+# Author: Miloslav Trmac
+# Based on createrepo 0.4.2
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -14,19 +20,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
-# Copyright 2004 Duke University
-# Copyright (C) 2005 Red Hat, Inc.
-#
-# Author: Miloslav Trmac
-# Based on createrepo 0.4.2
 
-import os
-import re
-import stat
-
-import base
-import functions
-import package
+import os, re, stat
+import base, functions, package
 
 
 # Files included in primary.xml
@@ -37,7 +33,7 @@ _dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
 def _utf8String(string):
     """Return string converted to UTF-8"""
 
-    if string is None:
+    if string == None:
         return ''
     elif isinstance(string, unicode):
         return string
@@ -69,7 +65,7 @@ def _textChildFromTag(parent, ns, tag, value):
         value = value[0]
     value = re.sub("\n$", '', _utf8String(value))
     parent.newTextChild(ns, tag, value)
-    
+
 
 def _stringVal(val):
     """Return val[0] if val is a tuple or a list, val otherwise"""
@@ -162,13 +158,13 @@ def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):
     size.newProp('installed', str(pkg['size'][0]))
     size.newProp('archive', str(pkg['signature']['payloadsize'][0]))
     location = pkgNode.newChild(None, 'location', None)
-    if url is not None:
+    if url != None:
         location.newProp('xml:base', url)
     location.newProp('href', filename)
     format = pkgNode.newChild(None, 'format', None)
     for tag in ['license', 'vendor', 'group', 'buildhost', 'sourcerpm']:
         _textChildFromTag(format, formatns, tag, pkg[tag])
-        
+
     hr = format.newChild(formatns, 'header-range', None)
     hr.newProp('start', str(pkg.range_header[0]))
     hr.newProp('end', str(pkg.range_header[0] + pkg.range_header[1]))
@@ -229,7 +225,7 @@ def metadataFilelistsNode(parent, pkg, pkgid):
         elif flag & base.RPMFILE_GHOST:
             node.newProp('type', 'ghost')
     return pkgNode
-       
+
 
 def metadataOtherNode(parent, pkg, pkgid):
     """Return a <package> node for other.xml, created from pkg."""
@@ -250,3 +246,5 @@ def metadataOtherNode(parent, pkg, pkgid):
         clog.newProp('author', _utf8String(name))
         clog.newProp('date', str(time))
     return pkgNode
+
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -1,5 +1,8 @@
 #!/usr/bin/python
 #
+# Copyright (C) 2005 Red Hat, Inc.
+# Author: Thomas Woerner
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
@@ -12,9 +15,6 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2005 Red Hat, Inc.
-#
-# Author: Thomas Woerner
 #
 
 """ The Orderer
@@ -33,7 +33,7 @@ class _Relation:
         self.pre = HashList()
         self._post = HashList()
     def __str__(self):
-        return "%d %d" % (len(self.pre), len(self._post))       
+        return "%d %d" % (len(self.pre), len(self._post))
 
 # ----
 
@@ -70,10 +70,10 @@ class _Relations:
 
     def remove(self, pkg):
         rel = self.list[pkg]
-        # remove all post relations for the matching pre relation packages 
+        # remove all post relations for the matching pre relation packages
         for (r, f) in rel.pre:
             del self.list[r]._post[pkg]
-        # remove all pre relations for the matching post relation packages 
+        # remove all pre relations for the matching post relation packages
         for (r, f) in rel._post:
             del self.list[r].pre[pkg]
         del self.list[pkg]
@@ -169,7 +169,7 @@ class RpmOrderer:
             printDebug(2, "\t==== relations ====")
 
         return relations
-    
+
     # ----
 
     def genOperations(self, order):
@@ -200,10 +200,8 @@ class RpmOrderer:
                         del orderer
                 if self.updates and r in self.updates:
                     if len(self.updates[r]) == 1:
-                        operations.append((OP_ERASE,
-                                           self.updates[r][0]))
+                        operations.append((OP_ERASE, self.updates[r][0]))
                     else:
-                        
                         # more than one update: generate order
                         orderer = RpmOrderer(self.updates[r], None, None,
                                              OP_ERASE)
@@ -243,7 +241,7 @@ class RpmOrderer:
                     break
             else:
                 (p,f) = relations[pkg].pre[loop[pkg]]
-                
+
             if loop.has_key(p):
                 # got node which is already in list: found loop
                 package = p
@@ -283,7 +281,7 @@ class RpmOrderer:
             if f == 1 and len(relations[p].pre) < node_pre_len:
                 node = p
                 node_pre_len = len(relations[p].pre)
-                
+
         if node != None:
             (p2,f) = relations[node].pre[loop[node]]
             printDebug(1, "Removing requires for %s from %s" % \
@@ -300,7 +298,7 @@ class RpmOrderer:
             if len(relations[p].pre) < node_pre_len:
                 node = p
                 node_pre_len = len(relations[p].pre)
-            
+
         if node != None:
             (p2,f) = relations[node].pre[loop[node]]
             printDebug(1, "Zapping requires for %s from %s to break up hard loop" % \
@@ -317,21 +315,8 @@ class RpmOrderer:
         """ Order rpmlist.
         Returns ordered list of packages. """
         order = [ ]
-        last = [ ]
         idx = 1
         while len(relations) > 0:
-            # remove and save all packages without a post relation in reverse
-            # order
-            # these packages will be appended later to the list
-            i = 0
-            while i < len(relations):
-                (pkg, rel) = relations[i]
-                if len(rel._post) == 0:
-                    last.insert(0, pkg)
-                    relations.remove(pkg)
-                else:
-                    i += 1
-                    
             next = None
             # we have to have at least one entry, so start with -1 for len
             next_post_len = -1
@@ -354,8 +339,7 @@ class RpmOrderer:
                         printDebug(2, "%s" % pkg2.getNEVRA())
                         for r in rel2.pre:
                             printDebug(2, "\t%s (%d)" %
-                                       (r[0].getNEVRA(),
-                                        r[1]))
+                                       (r[0].getNEVRA(), r[1]))
                     printDebug(2, "===== remaining packages =====\n")
 
                 # detect loop
@@ -367,8 +351,8 @@ class RpmOrderer:
                 if self._breakupLoop(loop, relations) != 1:
                     printError("Could not breakup loop")
                     return None
-        
-        return (order + last)
+
+        return order
 
     # ----
 

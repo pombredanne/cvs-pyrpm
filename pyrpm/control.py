@@ -1,4 +1,7 @@
 #
+# Copyright (C) 2004, 2005 Red Hat, Inc.
+# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
@@ -11,9 +14,6 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
-#
-# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
 
@@ -102,7 +102,7 @@ class RpmController:
         if operation == OP_ERASE:
             for filename in filelist:
                 self.eraseFile(filename)
-        else: 
+        else:
             for filename in filelist:
                 self.appendFile(filename)
         if len(self.rpms) == 0:
@@ -247,17 +247,12 @@ class RpmController:
 
     def __preprocess(self):
         if not self.ignorearch:
-            if not possible_archs.has_key(rpmconfig.machine):
-                raiseFatal("Unknow rpmconfig.machine architecture %s" % rpmconfig.machine)
             if self.operation == OP_UPDATE or self.operation == OP_FRESHEN:
-                filterArchList(self.rpms)
-            else:
-                filterArchCompat(self.rpms)
+                filterArchDuplicates(self.rpms)
         else:
+            filterArchCompat(self.rpms, rpmconfig.machine)
             if self.operation == OP_UPDATE or self.operation == OP_FRESHEN:
-                filterArchList(self.rpms, rpmconfig.machine)
-            else:
-                filterArchCompat(self.rpms, rpmconfig.machine)
+                filterArchDuplicates(self.rpms)
         return 1
 
     def __addPkgToDB(self, pkg, nowrite=None):

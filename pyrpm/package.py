@@ -1,4 +1,7 @@
 #
+# Copyright (C) 2004, 2005 Red Hat, Inc.
+# Author: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
@@ -11,19 +14,14 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
-#
-# Author: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak
 #
 
 
-import os.path, sys, pwd, grp, md5
+import os.path, sys, pwd, grp, md5, string, weakref
 from stat import S_ISREG
+from types import DictType
 from struct import unpack
 from functions import *
-from types import DictType
-import weakref
-import string
 
 class RpmData:
     def __init__(self):
@@ -31,7 +29,7 @@ class RpmData:
 
     def __repr__(self):
         return self.data.__repr__()
- 
+
     def __getitem__(self, key):
         return self.data.get(key)
 
@@ -58,7 +56,7 @@ class FastRpmData(DictType):
 
     def __repr__(self):
         return "FastRpmData: <0x" + str(self.hash) + ">"
-        
+
     def __hash__(self):
         return self.hash
 
@@ -371,7 +369,7 @@ class RpmPackage(RpmData):
             return 1
         (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
             = os.stat(rfi.filename)
-        
+
         f = open(rfi.filename)
         m = md5.new()
         buf = "1"

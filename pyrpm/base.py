@@ -1,4 +1,7 @@
 #
+# Copyright (C) 2004, 2005 Red Hat, Inc.
+# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
@@ -11,9 +14,6 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
-#
-# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
 

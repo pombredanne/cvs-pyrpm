@@ -1,4 +1,7 @@
 #
+# Copyright (C) 2004, 2005 Red Hat, Inc.
+# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
@@ -11,9 +14,6 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
-#
-# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
 
@@ -206,7 +206,7 @@ class RpmStreamIO(RpmIO):
         if self.hdr.has_key(tag):
             if self.hdr[tag] != self.__parseTag(index, storedata):
                 printError("%s: tag %d included twice" % (self.source, tag))
-        else: 
+        else:
             self.hdr[tag] = self.__parseTag(index, storedata)
             self.hdrtype[tag] = index[1]
         return (tag, self.hdr[tag])
@@ -239,7 +239,7 @@ class RpmStreamIO(RpmIO):
         fmt2 = self.fd.read(storeSize)
         if pad != 1:
             self.fd.read((pad - (storeSize % pad)) % pad)
-        if self.verify: 
+        if self.verify:
             self.__verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + len(fmt2))
 
@@ -312,12 +312,12 @@ class RpmStreamIO(RpmIO):
             count = count * 4
         elif ttype == RPM_STRING_ARRAY or \
             ttype == RPM_I18NSTRING:
-            size = 0 
+            size = 0
             for i in xrange(0, count):
                 end = fmt.index('\x00', offset) + 1
                 size += end - offset
                 offset = end
-            count = size 
+            count = size
         elif ttype == RPM_STRING:
             if count != 1:
                 raiseFatal("%s: tag string count wrong" % self.source)
@@ -371,7 +371,7 @@ class RpmStreamIO(RpmIO):
         isstring = 0
         if ttype == RPM_STRING or \
            ttype == RPM_STRING_ARRAY or\
-           ttype == RPM_I18NSTRING: 
+           ttype == RPM_I18NSTRING:
             format = "s"
             isstring = 1
         elif ttype == RPM_BIN:
@@ -419,7 +419,7 @@ class RpmStreamIO(RpmIO):
             index += pack("!iiii", tag, ttype, offset, count)
         align = (pad - (len(store) % pad)) % pad
         return (index, pack("%ds" % align, '\x00'))
-            
+
     def __alignTag(self, ttype, offset):
         if ttype == RPM_INT16:
             align = (2 - (offset % 2)) % 2
@@ -922,7 +922,7 @@ class RpmCompsXMLIO:
 #                continue
 #            if node.name == "name":
 #                lang = node.prop('lang')
-#                if lang != None: 
+#                if lang != None:
 #                    group["name:"+lang] = node.content
 #                else:
 #                    name = totext(node.content)

@@ -1,4 +1,7 @@
 #
+# Copyright (C) 2004, 2005 Red Hat, Inc.
+# Author: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
@@ -11,9 +14,6 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
-#
-# Author: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak
 #
 
 
@@ -39,7 +39,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         args = prog
     else:
         args = [prog]
-        
+
     if script != None:
         (fd, tmpfilename) = mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
         if fd == None:
@@ -50,7 +50,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         os.close(fd)
         fd = None
         args.append(tmpfilename)
-        
+
         if arg1 != None:
             args.append(arg1)
         if arg2 != None:
@@ -61,7 +61,6 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
     if pid == 0:
         os.close(rfd)
         fd = os.open("/dev/null", os.O_RDONLY)
-        # XXX: error if no /dev/null exists?
         if fd != 0:
             os.dup2(fd, 0)
             os.close(fd)
@@ -92,8 +91,8 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
     if status != 0:
         printError("Error in running script:")
         printError(str(args))
-        if not cret.endswith("\n"):
-            cret += "\n"
+        if cret.endswith("\n"):
+            cret = cret[:-1]
         printError(cret)
         return 0
     return 1
@@ -172,7 +171,7 @@ def makeDirs(fullname):
 
 def listRpmDir(dirname):
     """List directory like standard or.listdir, but returns only .rpm files"""
-    files = [] 
+    files = []
     for f in os.listdir(dirname):
         if f.endswith('.rpm'):
             files.append(f)
@@ -208,6 +207,14 @@ def closeAllFDs():
         except:
             pass
 
+# TODO:
+# - use blocksize instad of hardcoded 4096 blocksize
+# - also calculate removals and package updates for disk usage
+# - Can the check about regular files be removed again?
+# Things not done for disksize calculation, might stay this way:
+# - no hardlink detection
+# - no information about not-installed files like multilib files, left out
+#   docu files etc
 def getFreeDiskspace(pkglist):
     freehash = {}
     dirhash = {}
@@ -228,10 +235,15 @@ def getFreeDiskspace(pkglist):
                 if not freehash.has_key(dev):
                     statvfs = os.statvfs(devdir)
                     freehash[dev] = statvfs[0] * statvfs[4]
-        filenames = pkg["filenames"]
-        for i in xrange(len(filenames)):
-            dirname = pkg["dirnames"][pkg["dirindexes"][i]]
-            freehash[dirhash[dirname]] -= pkg["filesizes"][i]
+        dirnames = pkg["dirnames"]
+        dirindexes = pkg["dirindexes"]
+        filesizes = pkg["filesizes"]
+        filemodes = pkg["filemodes"]
+        for i in xrange(len(pkg["filenames"])):
+            if not S_ISREG(filemodes[i]): continue
+            dirname = dirnames[dirindexes[i]]
+            filesize = ((filesizes[i] + 4095) / 4096) * 4096
+            freehash[dirhash[dirname]] -= filesize
     return freehash
 
 def parseBoolean(str):
@@ -362,7 +374,7 @@ def stringCompare(str1, str2):
                 if int(str1[i1]) > int(str2[i2]): return 1
                 i1 += 1
                 i2 += 1
-            # found right side 
+            # found right side
             if i1 == len(str1): return -1
             if i2 == len(str2): return 1
         if i2 == len(str2): return -1
@@ -375,7 +387,7 @@ def stringCompare(str1, str2):
             if j2 == i2: return 1
             if str1[i1:j1] < str2[i2:j2]: return -1
             if str1[i1:j1] > str2[i2:j2]: return 1
-            # found right side 
+            # found right side
             i1 = j1
             i2 = j2
 
@@ -450,24 +462,21 @@ def depString((name, flag, version)):
         return name
     return "%s %s %s" % (name, depOperatorString(flag), version)
 
-
-def filterArchCompat(list, arch=None):
+def filterArchCompat(list, arch):
     # stage 1: filter packages which are not in compat arch
-    if arch != None and arch != "noarch":
-        i = 0
-        while i < len(list):
-            pkg = list[i]
-            if not possible_archs.has_key(pkg["arch"]):
-                printWarning(0, "%s: Unknow rpm package architecture %s" \
-                    % (pkg.source, pkg["arch"]))
-                list.pop(i)
-                continue
-            if pkg["arch"] != arch and pkg["arch"] not in arch_compats[arch]:
-                printWarning(0, "%s: Architecture not compatible with machine %s" % (pkg.source, arch))
-                list.pop(i)
-                continue
+    i = 0
+    while i < len(list):
+        pkg = list[i]
+        parch = pkg["arch"]
+        if parch == arch or parch == "noarch":
             i += 1
-    return 1
+            continue
+        if arch_compats.has_key(arch) and parch in arch_compats[arch]:
+            i += 1
+            continue
+        printWarning(1, "%s: Architecture not compatible with machine %s" % \
+            (pkg.source, arch))
+        list.pop(i)
 
 def filterArchDuplicates(list):
     # stage 1: filter duplicates: order by name.arch
@@ -489,21 +498,19 @@ def filterArchDuplicates(list):
                 myhash[key] = pkg
                 list.remove(r)
             elif ret == 0:
-                printWarning(2, "%s was already added" % \
-                                   pkg.getNEVRA())
+                printWarning(2, "%s was already added" % pkg.getNEVRA())
                 list.pop(i)
             else:
                 i += 1
-    del myhash
 
     # stage 2: filter duplicates: order by name
     myhash = {}
     i = 0
     while i < len(list):
         pkg = list[i]
-        removed = 0
         name = pkg["name"]
         arch = pkg["arch"]
+        removed = 0
         if not myhash.has_key(name):
             myhash[name] = [pkg]
         else:
@@ -531,30 +538,28 @@ def filterArchDuplicates(list):
                 myhash[name].append(pkg)
         if removed == 0:
             i += 1
-    del myhash
-
-    return 1
 
 def filterArchList(list, arch=None):
-    filterArchCompat(list, arch)
+    if arch != None:
+        filterArchCompat(list, arch)
     filterArchDuplicates(list)
 
 def normalizeList(list):
     """ normalize list """
     if len(list) < 2:
         return
-    hash = {}
+    h = {}
     i = 0
     while i < len(list):
         item = list[i]
-        if hash.has_key(item):
+        if h.has_key(item):
             list.pop(i)
         else:
-            hash[item] = 1
+            h[item] = 1
             i += 1
 
 def getBuildArchList(list):
-    """Returns list of build architectures used in 'list' of packages"""
+    """Returns list of build architectures used in 'list' of packages."""
     archs = []
     for p in list:
         a = p['arch']

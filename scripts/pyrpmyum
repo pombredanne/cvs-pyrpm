@@ -54,18 +54,18 @@ def usage():
 def runDepResolution(resolver, unresolved):
     iter = 1
     while len(unresolved) > 0:
-        print "Dependency iteration "+str(iter)
+        printInfo(1, "Dependency iteration " + str(iter) + "\n")
         iter += 1
         respkglist = []
         for pkg, deplist in unresolved:
             printInfo(1, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
             found = 0
             for dep in deplist:
-                printInfo(2, "\t"+depString(dep))
+                printInfo(2, "\t" + depString(dep) + "\n")
                 for repo in repos:
-                    res = repo.searchDependency(dep)
-                    for upkg in res:
+                    for upkg in repo.searchDependency(dep):
                         ret = resolver.append(upkg)
+                        printInfo(2, "\t" + str(ret) + "\n")
                         if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
                             found = 1
                             respkglist.append(upkg)

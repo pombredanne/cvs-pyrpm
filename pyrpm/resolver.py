@@ -1,5 +1,8 @@
 #!/usr/bin/python
 #
+# Copyright (C) 2004, 2005 Red Hat, Inc.
+# Author: Thomas Woerner
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
@@ -12,9 +15,6 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
-#
-# Author: Thomas Woerner
 #
 
 """ The Resolver
@@ -76,7 +76,7 @@ class ProvidesList:
         if not arch or arch == "noarch":
             # all rpms are matching
             return ret
-            
+
         # drop all packages which are not arch compatible
         i = 0
         while i < len(ret):
@@ -154,16 +154,16 @@ class RpmResolver(RpmList):
     def _install(self, pkg):
         ret = RpmList._install(self, pkg)
         if ret != self.OK:  return ret
-        
+
         self.provides.addPkg(pkg)
         self.filenames.addPkg(pkg)
         return self.OK
     # ----
-    
+
     def _erase(self, pkg):
         ret = RpmList._erase(self, pkg)
         if ret != self.OK:  return ret
-        
+
         self.provides.removePkg(pkg)
         self.filenames.removePkg(pkg)
         if self.isInstalled(pkg):
@@ -222,7 +222,7 @@ class RpmResolver(RpmList):
                self.operation == OP_ERASE:
             # no obsoletes for install or erase
             return self.OK
-        
+
         i = 0
         while i < len(self):
             rlist = self[i]
@@ -281,8 +281,8 @@ class RpmResolver(RpmList):
             rlist = self[i]
             for r in rlist:
                 if self.check_installed == 0 and \
-                       len(self.erased) == 0 and len(self.obsoletes) == 0 and \
-		       len(self.updates) == 0 and self.isInstalled(r):
+                    len(self.erased) == 0 and len(self.obsoletes) == 0 and \
+                    len(self.updates) == 0 and self.isInstalled(r):
                     # do not check installed packages if no packages
                     # are getting removed by erase or obsolete
                     continue
@@ -298,7 +298,7 @@ class RpmResolver(RpmList):
                 if len(unresolved) > 0:
                     no_unresolved = 0
                     printError("%s: unresolved dependencies:" % r.getNEVRA())
-                    for u in unresolved:                        
+                    for u in unresolved:
                         printError("\t%s" % depString(u))
         return no_unresolved
     # ----
@@ -332,33 +332,35 @@ class RpmResolver(RpmList):
     def getConflicts(self):
         """ Check for conflicts in conflicts and and obsoletes """
 
+        conflicts = [ ]
+
         if self.operation == OP_ERASE:
             # no conflicts for erase
-            return None
+            return conflicts
 
-        conflicts = [ ]
         for i in xrange(len(self)):
             rlist = self[i]
             for r in rlist:
                 printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
                 for c in r["conflicts"] + r["obsoletes"]:
                     s = self.searchDependency(c)
-                    if len(s) > 0:
-                        # the package does not conflict with itself
-                        if r in s: s.remove(r)
-                    if len(s) > 0:
-                        for r2 in s:
-                            if r.getNEVR() != r2.getNEVR():
-                                if not (self.check_installed == 0 and \
-                                        self.isInstalled(c[0]) and \
-                                        self.isInstalled(c[2])):
-                                    conflicts.append((r, c, r2))
+                    if len(s) == 0:
+                        continue
+                    # the package does not conflict with itself
+                    if r in s:
+                        s.remove(r)
+                    for r2 in s:
+                        if r.getNEVR() != r2.getNEVR():
+                            #if not (self.check_installed == 0 and \
+                            #        self.isInstalled(c[0]) and \
+                            #        self.isInstalled(c[2])):
+                            conflicts.append((r, c, r2))
         return conflicts
     # ----
 
     def checkConflicts(self):
         conflicts = self.getConflicts()
-        if conflicts == None or len(conflicts) == 0:
+        if len(conflicts) == 0:
             return self.OK
 
         for c in conflicts:
@@ -366,7 +368,7 @@ class RpmResolver(RpmList):
                        (c[0].getNEVRA(), depString(c[1]), c[2].getNEVRA()))
         return -1
     # ----
-        
+
     def getFileConflicts(self):
         """ Check for file conflicts """
 

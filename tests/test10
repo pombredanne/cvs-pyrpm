@@ -1,30 +1,102 @@
 #!/bin/sh
 
-exit 1
-
-TREE=/var/www/html/mirror/fedora/3/i386/os/Fedora/RPMS
-TREE=n
-
-test -d $TREE || exit 1
+test -x ./pyrpmyum || exit 1
 
 umask 022
 
-for p in n1 n2 ; do
-    r=/home/$p
-    umount $r/dev
-    umount $r/proc
-    mkdir -p $r/{dev,etc,tmp,proc,var/tmp}
-    chmod 1777 $r/tmp
-    touch $r/etc/fstab
-    mount --bind /dev $r/dev
-    mount -t proc proc $r/proc
-done
-time ./pyrpminstall -U -r /home/n1 $TREE/*.rpm 2>&1 \
-	| tee /home/n1/LOG
-time rpm -U --nodigest --nosignature --root=/home/n2 $TREE/*.rpm 2>&1 \
-	| tee /home/n2/LOG
-
+# This can be run as non-root to run resolver/orderer:
 #./pyrpminstall -U -r /home/n1 --test n/*.rpm
-#./pyrpmyum -h -r /home/n1/ --repo n update
-#./pyrpminstall -h -r /home/n1/ -F /var/www/html/mirror/fedora/updates/3/i386/*.rpm
 
+preparechroot() {
+    nodev=
+    if test x$1 = x--nodev ; then
+        nodev=--nodev
+        shift
+    fi
+    umount $1/dev
+    umount $1/proc
+    mkdir -p $1/{dev,etc,tmp,proc,var/tmp}
+    chmod 1777 $1/tmp
+    touch $1/etc/fstab
+    if test x$nodev = x ; then
+	mount --bind /dev $1/dev
+    else
+	mknod -m 0666 $1/dev/null c 1 3
+	mknod -m 0666 $1/dev/zero c 1 5
+	mknod -m 0644 $1/dev/random c 1 8
+	mknod -m 0644 $1/dev/urandom c 1 9
+	mknod -m 0660 $1/dev/ttyS0 c 4 64
+	mknod -m 0660 $1/dev/ttyS1 c 4 65
+	mknod -m 0666 $1/dev/ptmx c 5 2
+	mknod -m 0660 $1/dev/md0 b 9 0
+	mknod -m 0660 $1/dev/loop0 b 7 1
+    fi
+    mount -t proc proc $1/proc
+}
+cleanchroot() {
+    test -d $1/dev || return
+    test -d $1/proc || return
+    umount $1/dev 2> /dev/null
+    umount $1/proc 2> /dev/null
+    rm -fr $1
+}
+
+doinstall() {
+    nodev=
+    if test x$1 = x--nodev ; then
+        nodev=--nodev
+        shift
+    fi
+    test -d $1 || { echo "No dir $1 exists."; return; }
+    cleanchroot $2
+    preparechroot $nodev $2
+    if test x$3 = xrpm ; then
+        time rpm -U --nodigest --nosignature --root=$2 $1/*.rpm 2>&1 \
+            | tee $2.LOG.install
+    else
+        #time ./pyrpminstall -U -r $2 $1/*.rpm 2>&1 | tee $2/LOG.install
+        { time ./pyrpmyum -r $2 --repo $1 install '*'; } 2>&1 \
+	    | tee $2.LOG.install
+    fi
+}
+
+DATA=/mnt/data/laroche
+
+if test x$1 = xclean ; then
+    for i in $DATA/* ; do
+	test -d "$i" || continue
+	cleanchroot $2
+    done
+    exit 0
+fi
+
+RELEASED=/mnt/raid/redhat/released
+FEDORA=/mnt/raid/fedora
+RPMS=RedHat/RPMS
+#doinstall --nodev $RELEASED/RHL-5.2/GOLD/i386/$RPMS $DATA/5.2
+#doinstall --nodev $RELEASED/RHL-6.2/GOLD/i386/$RPMS $DATA/6.2
+#doinstall --nodev $RELEASED/RHEL-2.1/U6/AS/i386/tree/$RPMS $DATA/2.1-U6-i386
+doinstall --nodev $RELEASED/RHEL-3/U3/AS/i386/tree/$RPMS $DATA/3-U3-i386
+#doinstall --nodev $RELEASED/RHEL-3/U4/AS/i386/tree/$RPMS $DATA/3-U4-i386
+#doinstall --nodev /mnt/raid/trees/RHEL3U5/i386/$RPMS $DATA/3-U5-i386
+#doinstall $RELEASED/RHEL-4/Beta2/AS/i386/tree/$RPMS $DATA/4-Beta2-i386
+doinstall /mnt/raid/trees/RHEL4/i386/$RPMS $DATA/4-trees-i386
+doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
+
+doinstall --nodev $FEDORA/1/i386/os/Fedora/RPMS $DATA/FC1-i386
+doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $DATA/FC2-i386
+doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386
+
+exit 0
+
+if test x$1 = xclean ; then
+    cleanchroot /home/n1
+    cleanchroot /home/n2
+    exit 0
+fi
+TREE=/var/www/html/mirror/fedora/3/i386/os/Fedora/RPMS
+TREE=n
+TREE=/home/fc3/Fedora/RPMS
+doinstall $TREE /home/n1
+#./pyrpmyum -r /home/n1/ --repo /home/updates update
+doinstall $TREE /home/n2 rpm

@@ -14,10 +14,9 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2005 Red Hat, Inc.
 #
 
-__version__ = "0.12"
+__version__ = "0.13"
 __doc__ = """Read and manage RPM packages."""
 
 import os, locale
@@ -38,3 +37,5 @@ for _i in _files:
 del _i
 del _files
 del _cmd
+
+# vim:ts=4:sw=4:showmatch:expandtab
