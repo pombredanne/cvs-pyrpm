@@ -231,9 +231,12 @@ class RpmResolver:
         for i in xrange(len(self.instlist)):
             rlist = self.instlist[i]
             for r in rlist:
-                if r in self.installed:
-                    # do not check installed packages
-                    continue
+                if self.operation != self.OP_ERASE or \
+                   len(self.instlist.obsoletes) == 0:
+                    # do not check installed packages if no packages
+                    # are getting removed by erase or obsolete
+                    if r in self.installed:
+                        continue
                 printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = \
                              self.checkPkgDependencies(r, self.instlist)
