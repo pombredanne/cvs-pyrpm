@@ -506,17 +506,15 @@ class RRpm:
         self.triggerindex = rpm["triggerindex"]
         self.trigger = rpm["triggerscripts"]
         self.triggerprog = rpm["triggerscriptprog"]
-        if self.trigger != None:
-            if len(self.trigger) != len(self.triggerprog):
-                raise ValueError, "wrong trigger lengths"
         # legacy:
         self.triggerin = rpm["triggerin"]
         self.triggerun = rpm["triggerun"]
         self.triggerpostun = rpm["triggerpostun"]
 
-        #self.uids = uids
-        #self.gids = gids
-
+    def verify(self):
+        if self.trigger != None:
+            if len(self.trigger) != len(self.triggerprog):
+                raise ValueError, "wrong trigger lengths"
         if "-" in self.version:
             self.printErr("version contains wrong char")
         if rpm["payloadformat"] not in [None, "cpio"]:
