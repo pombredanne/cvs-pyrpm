@@ -18,12 +18,14 @@
 
 import struct
 import rpmconstants
+import cpio
 import os.path
 import re
 import sys
 import getopt
 #import zlib
 import gzip
+import cStringIO
 
 def parseLead(leaddata, fname=None, verify=1):
     """ Takes a python file object at the start of an RPM file and
@@ -199,6 +201,13 @@ def parseHeader(f, filename, verify=0, tags=None):
     payload = ""
     gz = gzip.GzipFile(fileobj=f)
     cpiodata = gz.read()
+    c = cpio.CPIOFile(cStringIO.StringIO(cpiodata))
+    try:
+        c.read()
+    except IOError, e:
+        print "Error reading CPIO payload: %s" % e
+    print c.namelist()
+        
     #while 1:
     #    buf = gz.read(4096)
     #    if not buf:
@@ -313,7 +322,7 @@ def queryFormatUnescape(s):
     return s
 
 def main(args):
-    queryformat="%{name}-%{version}-%{release}"
+    queryformat="%(name)s-%(version)s-%(release)s\n"
     try:
         opts, args = getopt.getopt(args, "hq", ["help", "queryformat="])
     except getopt.error, e:

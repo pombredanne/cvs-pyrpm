@@ -54,7 +54,6 @@ class CPIOFile:
             raise RuntimeError, 'Mode must be "r", "w" or "a"'
 
     def _read_cpio_headers(self):
-        CPIO_PAD= 4
         CPIO_HEADER_LEN = 110
 
         while 1:
@@ -86,10 +85,10 @@ class CPIOFile:
             # Read filename
             size = cpio_headers['namesize']
             cpio_headers["filename"] = self.fp.read(size).rstrip("\x00")
-
+            fsize = CPIO_HEADER_LEN + size
             # Padding
-            pad = ( CPIO_PAD - (( CPIO_HEADER_LEN + size ) % CPIO_PAD ) % CPIO_PAD )
-            self.fp.read(pad)
+            pad = ( 4 - ( fsize % 4 )) % 4
+            self.fp.seek(pad,1)
             cpio_headers["offset"] = self.fp.tell()
 
             # Detect if we're at the end of the archive
@@ -98,9 +97,9 @@ class CPIOFile:
 
             #contents
             filesize = cpio_headers['filesize']
-            pad = ( CPIO_PAD - (( filesize ) %4 ) %4 )
-            self.fp.read(filesize)
-            self.fp.seek(pad, 1)
+            pad = ( 4 - ( filesize %4 )) % 4 
+            self.fp.seek(filesize,1)
+            self.fp.seek(pad,1)
             self.filelist.append(cpio_headers)
 
     def namelist(self):
