@@ -67,14 +67,12 @@ class RpmIO(RpmError):
 
 
 class RpmStreamIO(RpmIO):
-    def __init__(self, verify=None, legacy=None, parsesig=None, hdronly=None, tags=None, ntags=None):
+    def __init__(self, verify=None, legacy=None, parsesig=None, hdronly=None):
         self.fd = None
         self.verify = verify
         self.legacy = legacy
         self.parsesig = parsesig
         self.hdronly = hdronly
-        self.tags = tags
-        self.ntags = ntags
         self.issrc = 0
         self.where = 0  # 0:lead 1:separator 2:sig 3:header 4:files
         self.idx = 0 # Current index
@@ -354,8 +352,8 @@ class RpmStreamIO(RpmIO):
 
 
 class RpmFileIO(RpmStreamIO):
-    def __init__(self, filename, verify=None, legacy=None, parsesig=None, hdronly=None, tags=None, ntags=None):
-        RpmStreamIO.__init__(self, verify, legacy, parsesig, hdronly, tags, ntags)
+    def __init__(self, filename, verify=None, legacy=None, parsesig=None, hdronly=None):
+        RpmStreamIO.__init__(self, verify, legacy, parsesig, hdronly)
         self.filename = filename
         self.issrc = 0
         if filename[-8:] == ".src.rpm" or filename[-10:] == ".nosrc.rpm":
@@ -404,6 +402,20 @@ class RpmRepoIO(RpmIO):
         return 0
 
 
+def getRpmIOFactory(source):
+    if source[:4] == 'db:/':
+        return RpmDBIO(source[4:])
+    if source[:5] == 'ftp:/':
+        return RpmFtpIO(source[5:])
+    if source[:6] == 'file:/':
+        return RpmFileIO(source[6:])
+    if source[:6] == 'http:/':
+        return RpmHttpIO(source[6:])
+    if source[:6] == 'repo:/':
+        return RpmRepoIO(source[6:])
+    return None
+
+
 class RpmData(RpmError):
     def __init__(self):
         RpmError.__init__(self)
@@ -431,38 +443,57 @@ class RpmData(RpmError):
 
 
 class RpmPackage(RpmData):
-    def __init__(self):
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None, tags=None, ntags=None):
         RpmData.__init__(self)
         self.clear()
+        self.source = source
+        self.verify = verify
+        self.legacy = legacy
+        self.parsesig = parsesig
+        self.hdronly = hdronly
+        self.tags = tags
+        self.ntags = ntags
 
     def clear(self):
         pass
 
-    def read(self, io):
+    def read(self):
+        io = getRpmIOFactory(self.source)
+        io.open()
+        if not io:
+            return 0
         if not self.readHeader(io):
             return 0
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
         self["conflicts"] = self.getConflicts()
+        io.close()
         return 1
 
     def write(self, io):
+        io = RpmIOFactory.getFactory(self.source)
         return io.write(self)
 
     def verify(self):
         ret = RpmData.verify(self)
         return ret
 
-    def install(self, io, files=None):
+    def install(self, files=None):
+        io = RpmIOFactory.getFactory(self.source)
+        io.open()
+        if not io:
+            return 0
         if not self.readHeader(io):
             return 0
+        if not files:
+            files = self["filenames"]
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preinprog"] != None:
             if not runScript(self["preinprog"], self["prein"], "1"):
                 return 0
-        if not self.extract(io, self["filetree"]):
+        if not self.extract(io, files):
             return 0
         if self["postinprog"] != None:
             if not runScript(self["postinprog"], self["postin"], "1"):
@@ -480,6 +511,7 @@ class RpmPackage(RpmData):
             (key, value) = io.read()
             self[key] = value
         self.generateFileNames()
+        self.header_read = 1
         return 1
 
     def extract(self, io, files=None):
@@ -573,10 +605,17 @@ class RpmPackage(RpmData):
         rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev)
         return rfi
 
+    def getNEVRA(self):
+        if self["epoch"] != None:
+            e = str(self["epoch"][0])+":"
+        else:
+            e = ""
+        return self["name"]+"-"+e+self["version"]+"-"+self["release"]+"."+self["arch"]
+
     def getDeps(self, name, flags, version):
         n = self[name]
         if not n:
-            return None
+            return []
         f = self[flags]
         v = self[version]
         if f == None or v == None or len(n) != len(f) or len(f) != len(v):
