@@ -183,8 +183,7 @@ rpmtag = {
     "verifyscriptprog": (1091, RPM_ARGSTRING, None, 4),
 
     # addon information:
-    # list of available languages
-    "i18ntable": (100, RPM_STRING_ARRAY, None, 0),
+    "i18ntable": (100, RPM_STRING_ARRAY, None, 0), # list of available langs
     "summary": (1004, RPM_I18NSTRING, None, 0),
     "description": (1005, RPM_I18NSTRING, None, 0),
     "url": (1020, RPM_STRING, None, 0),
@@ -194,19 +193,14 @@ rpmtag = {
     "changelogtime": (1080, RPM_INT32, None, 0),
     "changelogname": (1081, RPM_STRING_ARRAY, None, 0),
     "changelogtext": (1082, RPM_STRING_ARRAY, None, 0),
-    # relocatable rpm packages
-    "prefixes": (1098, RPM_STRING_ARRAY, None, 4),
-    # optimization flags for gcc
-    "optflags": (1122, RPM_STRING, None, 4),
-    # %pubkey in .spec files
+    "prefixes": (1098, RPM_STRING_ARRAY, None, 4), # relocatable rpm packages
+    "optflags": (1122, RPM_STRING, None, 4), # optimization flags for gcc
     "pubkeys": (266, RPM_STRING_ARRAY, None, 4),
     "sourcepkgid": (1146, RPM_BIN, 16, 4), # md5 from srpm (header+payload)
     "immutable": (63, RPM_BIN, 16, 0),
     # less important information:
-    # time of rpm build
-    "buildtime": (1006, RPM_INT32, 1, 0),
-    # hostname where rpm was built
-    "buildhost": (1007, RPM_STRING, None, 0),
+    "buildtime": (1006, RPM_INT32, 1, 0), # time of rpm build
+    "buildhost": (1007, RPM_STRING, None, 0), # hostname where rpm was built
     "cookie": (1094, RPM_STRING, None, 0), # build host and time
     # ignored now, successor is comps.xml
     # Code allows hardcoded exception to also have type RPM_STRING
@@ -265,10 +259,10 @@ rpmtag = {
     "nopatch": (1052, RPM_INT32, None, 1),
     "disturl": (1123, RPM_STRING, None, 1),
     "oldfilenames": (1027, RPM_STRING_ARRAY, None, 1),
+    "archivesize": (1046, RPM_INT32, 1, 1) # only in /var/lib/rpm/Packages
     "triggerin": (1100, RPM_STRING, None, 5),
     "triggerun": (1101, RPM_STRING, None, 5),
     "triggerpostun": (1102, RPM_STRING, None, 5),
-    "archivesize": (1046, RPM_INT32, 1, 1) # only in /var/lib/rpm/Packages
 }
 rpmtagname = {}
 # Add a reverse mapping for all tags and a new tag -> name mapping.
