@@ -111,22 +111,22 @@ class RpmList:
         # old package test
         if rpmconfig.oldpackage == 0:
             rpms = [ ]
-            if self.installed.has_key(key):
-                rpms = self.installed[pkg["name"]]
+            if self.list.has_key(key):
+                rpms = self.list[pkg["name"]]
             else:
-                if self.list.has_key(key):
-                    rpms = self.list[pkg["name"]]
+                if self.installed.has_key(key):
+                    rpms = self.installed[pkg["name"]]
             if len(rpms) > 0:
                 newer = 1
                 for r in rpms:
                     if pkgCompare(pkg, r) < 0:
                         newer = 0
                 if newer == 0:
-                    if self.installed.has_key(key):
-                        msg = "%s: A newer package is already installed"
-                    else:
+                    if self.list.has_key(key):
                         msg = "%s: A newer package is already added"
-                    printWarning(1, msg % r.getNEVRA())
+                    else:
+                        msg = "%s: A newer package is already installed"
+                    printWarning(1, msg % pkg.getNEVRA())
                     return self.OLD_PACKAGE
 
         ret = self._install(pkg)
