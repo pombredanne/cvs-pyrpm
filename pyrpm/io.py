@@ -543,6 +543,8 @@ class RpmFileIO(RpmStreamIO):
                 raiseFatal("%s: could not open file" % self.source)
 
     def __closeFile(self):
+        if self.fd:
+            self.fd.close()
         self.fd = None
 
     def open(self, mode="r"):

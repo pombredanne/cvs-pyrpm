@@ -39,25 +39,29 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         args = prog
     else:
         args = [prog]
+        
     if script != None:
         (fd, tmpfilename) = mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
         if fd == None:
             return 0
+        # script = "ls -l /proc/$$/fd >> /$$.out\n" + script
         os.write(fd, script)
         os.close(fd)
         fd = None
         args.append(tmpfilename)
+        
         if arg1 != None:
             args.append(arg1)
         if arg2 != None:
             args.append(arg2)
+
     (rfd, wfd) = os.pipe()
     pid = os.fork()
     if pid != 0:
         os.close(wfd)
         cret = ""
         cout = os.read(rfd, 8192)
-        while cout != "":
+        while cout:
             cret += cout
             cout = os.read(rfd, 8192)
         os.close(rfd)
@@ -69,7 +73,9 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         if wfd != 1:
             os.dup2(wfd, 1)
         os.dup2(1, 2)
-        closeAllFDs()
+        os.close(fd)
+        os.close(wfd)        
+        os.close(rfd)
         os.chdir("/")
         e = {"HOME": "/", "USER": "root", "LOGNAME": "root",
             "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin"}
@@ -185,10 +191,23 @@ def createLink(src, dst):
         return 0
     return 1
 
+def setCloseOnExec():
+    import fcntl
+    for fd in range(3, resource.getrlimit(resource.RLIMIT_NOFILE)[1]):
+        try:
+            fcntl.fcntl(fd, fcntl.F_SETFD, 1)
+            #sys.stderr.write("set close-on-exec for fd=%d\n" % fd)
+        except Exception, msg:
+            #print msg
+            pass
+
 def closeAllFDs():
+    # should not be used
+    raise Exception, "Please use setCloseOnExec!"
     for fd in range(3, resource.getrlimit(resource.RLIMIT_NOFILE)[1]):
         try:
             os.close(fd)
+            sys.stderr.write("Closed fd=%d\n" % fd)
         except:
             pass
 

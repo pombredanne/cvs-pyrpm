@@ -159,6 +159,7 @@ class RpmController:
         gc.collect()
         numops = len(operations)
         pkgsperfork = 100
+        setCloseOnExec()
         for i in xrange(0, numops, pkgsperfork):
             subop = operations[:pkgsperfork]
             for (op, pkg) in subop:
