@@ -29,6 +29,7 @@ autoconf
 rm -rf ${RPM_BUILD_ROOT}
 
 %files
+%{_docdir}/pyrpm-%{version}/
 %{_datadir}/pyrpm/
 %{_bindir}/*
 

@@ -246,8 +246,8 @@ class RpmStreamIO(RpmIO):
                 if t[1] != None and t[1] != ttype:
                     if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or \
                         ttype == RPM_STRING_ARRAY):
-                        pass    # special exception case
-                    elif t[0] == RPMTAG_GROUP and \
+                        pass    # special exception case for RPMTAG_GROUP (1016)
+                    elif t[0] == 1016 and \
                         ttype == RPM_STRING: # XXX hardcoded exception
                         pass
                     else:
