@@ -76,7 +76,8 @@ class _Filenames:
         if not self.provide.has_key(name):
             self.provide[name] = [ ]
         else:
-            self.multi.append(name)
+            if len(self.provide[name]) < 2:
+                self.multi.append(name)
         self.provide[name].append(rpm)
     def remove(self, name, rpm):
         if not self.provide.has_key(name):
