@@ -644,7 +644,9 @@ buildarchtranslate = {
 
 "x86_64" : "x86_64",
 "amd64" : "x86_64",
-"ia32e" : "x86_64"
+"ia32e" : "x86_64",
+
+"noarch" : "noarch"
 }
 
 
