@@ -613,32 +613,20 @@ VERSIONTAG=2
 RELEASETAG=3
 ARCHTAG=4
 
+__delimeter = { EPOCHTAG : None,
+                NAMETAG : ":",
+                VERSIONTAG : "-",
+                RELEASETAG : "-",
+                ARCHTAG : "." }
+
 def constructName(nametags, namevals):
     ret = ""
     for tag in nametags:
-        if tag == EPOCHTAG:
-            if namevals[EPOCHTAG] != None:
-                ret += namevals[EPOCHTAG]
-        if tag == NAMETAG:
-            if namevals[NAMETAG] != None:
-                if ret != "":
-                    ret += ":"
-                ret += namevals[NAMETAG]
-        if tag == VERSIONTAG:
-            if namevals[VERSIONTAG] != None:
-                if ret != "":
-                    ret += "-"
-                ret += namevals[VERSIONTAG]
-        if tag == RELEASETAG:
-            if namevals[RELEASETAG] != None:
-                if ret != "":
-                    ret += "-"
-                ret += namevals[RELEASETAG]
-        if tag == ARCHTAG:
-            if namevals[ARCHTAG] != None:
-                if ret != "":
-                    ret += "."
-                ret += namevals[ARCHTAG]
+        if tag in __delimeter.keys():
+            if namevals[tag]:
+                if ret:
+                    ret += __delimeter[tag]
+                ret += namevals[tag]
     return ret
 
 def __findPkgByName(pkgname, list, regex=None):
