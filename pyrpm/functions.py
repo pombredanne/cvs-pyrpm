@@ -117,8 +117,10 @@ def setFileMods(filename, uid, gid, mode, mtime):
     return 1
 
 def makeDirs(fullname):
-    dirname = fullname[:fullname.rfind("/")]
-    if not os.path.isdir(dirname):
+    idx = fullname.rfind("/")
+    if idx > 0:
+        dirname = fullname[:idx]
+        if not os.path.isdir(dirname):
             os.makedirs(dirname)
 
 def createLink(src, dst):

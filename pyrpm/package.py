@@ -183,8 +183,14 @@ class RpmPackage(RpmData):
         self.header_read = 1
         return 1
 
+    def isSourceRPM(self):
+        # XXX: is it right method how detect by header?
+        if self["sourcerpm"]==None:
+            return 1
+        return 0
+        
     def extract(self, files=None):
-        if files == None:
+        if not files:
             files = self["filenames"]
         # We don't need those lists earlier, so we create them "on-the-fly"
         # before we actually start extracting files.
@@ -192,17 +198,23 @@ class RpmPackage(RpmData):
         self.generateHardLinkList()
         (filename, filerawdata) = self.io.read()
         while filename != None and filename != "EOF" :
-            rfi = self.rfilist[filename]
-            if rfi != None:
-                if not str(rfi.inode)+":"+str(rfi.dev) in self.hardlinks.keys():
-                    if not installFile(rfi, filerawdata):
-                        return 0
-                else:
-                    if len(filerawdata) > 0:
+            if not self.rfilist.has_key(filename):
+                # src.rpm has empty tag "dirnames", but we use absolut paths in io.read(),
+                # so at least the directory '/' is there ...
+                if os.path.dirname(filename)=='/' and self.isSourceRPM():
+                    filename = filename[1:]
+            if filename in files:
+                rfi = self.rfilist[filename]
+                if rfi != None:
+                    if not str(rfi.inode)+":"+str(rfi.dev) in self.hardlinks.keys():
                         if not installFile(rfi, filerawdata):
                             return 0
-                        if not self.handleHardlinks(rfi):
-                            return 0
+                    else:
+                        if len(filerawdata) > 0:
+                            if not installFile(rfi, filerawdata):
+                                return 0
+                            if not self.handleHardlinks(rfi):
+                                return 0
             (filename, filerawdata) = self.io.read()
         return self.handleRemainingHardlinks()
 
