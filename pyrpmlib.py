@@ -54,16 +54,16 @@ class RpmIO(RpmError):
         RpmError.__init__(self)
 
     def open(self):
-        return 1
+        return 0
 
     def read(self):
-        return 1
+        return 0
 
     def write(self):
-        return 1
+        return 0
 
     def close(self):
-        return 1
+        return 0
 
 
 class RpmStreamIO(RpmIO):
@@ -82,10 +82,10 @@ class RpmStreamIO(RpmIO):
         self.hdrtype = {}
 
     def open(self):
-        return 1
+        return 0
 
     def close(self):
-        return 1
+        return 0
 
     def read(self):
         if self.fd == None:
@@ -109,18 +109,21 @@ class RpmStreamIO(RpmIO):
         # Read/parse signature
         if self.where == 2:
             # Last index of sig? Switch to from sig to hdr
-            if self.idx >= self.sigdata[0]:
+            if self.idx >= self.hdrdata[0]:
                 self.readHdr()
                 self.idx = 0
                 self.where = 3
                 return ("-", "")
-            v = self.getNextHeader(self.idx, self.sigdata[3], self.sigdata[4])
+            v = self.getNextHeader(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
             return v
         # Read/parse hdr
         if self.where == 3:
             # Last index of hdr? Switch to data files archive
             if self.idx >= self.hdrdata[0]:
+                self.hdrdata = None
+                self.hdr = {}
+                self.hdrtype = {}
                 self.cpiofd = gzip.GzipFile(fileobj=self.fd)
                 self.cpio = cpio.CPIOFile(self.cpiofd)
                 self.where = 4
@@ -130,24 +133,28 @@ class RpmStreamIO(RpmIO):
             return v
         # Read/parse data files archive
         if self.where == 4:
-            v = self.cpio.getNextEntry()
-            if v[0] != None:
-                return v
-        return  ("EOF", "", "")
+            (filename, filedata, filerawdata) = self.cpio.getNextEntry()
+            if filename != None:
+                return (filename, filerawdata)
+        return  ("EOF", "")
 
     def readLead(self):
         leaddata = self.fd.read(96)
         if leaddata[:4] != '\xed\xab\xee\xdb':
             self.printErr("no rpm magic found")
             return (None, None)
-        if self.verify and self.verifyLead(leaddata):
+        if self.verify and not self.verifyLead(leaddata):
             return (None, None)
         return ("magic", leaddata[:4])
 
     def readSig(self):
-        self.sigdata = self.readIndex(8, 1)
+        self.hdr = {}
+        self.hdrtype = {}
+        self.hdrdata = self.readIndex(8, 1)
 
     def readHdr(self):
+        self.hdr = {}
+        self.hdrtype = {}
         self.hdrdata = self.readIndex(1)
 
     def getNextHeader(self, idx, indexdata, storedata):
@@ -165,17 +172,17 @@ class RpmStreamIO(RpmIO):
     def verifyLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
             unpack("!4scchh66shh16x", leaddata)
-        ret = None
+        ret = 1
         if major not in ('\x03', '\x04') or minor != '\x00' or \
             sigtype != 5 or rpmtype not in (0, 1):
-            ret = 1
+            ret = 0
         if osnum not in (1, 255, 256):
-            ret = 1
+            ret = 0
         name = name.rstrip('\x00')
         if self.legacy:
             if os.path.basename(self.filename)[:len(name)] != name:
-                ret = 1
-        if ret:
+                ret = 0
+        if not ret:
             self.printErr("wrong data in rpm lead")
         return ret
 
@@ -288,48 +295,6 @@ class RpmStreamIO(RpmIO):
             self.raiseErr("unknown tag header")
         return count
 
-    def parseHeader(self, data, sigdata, hdrdata):
-        if (self.verify or self.parsesig) and not self.hdronly:
-            (sigindexNo, sigstoreSize, sigdata, sigfmt, sigfmt2, size) = \
-                sigdata
-            (self.sig, self.sigtype) = self.parseIndex(sigindexNo, sigfmt, \
-                sigfmt2)
-            if self.verify:
-                for i in rpmconstants.rpmsigtagrequired:
-                    if not self.sig.has_key(i):
-                        self.printErr("sig header is missing: %d" % i)
-        (hdrindexNo, hdrstoreSize, hdrdata, hdrfmt, hdrfmt2, size) = \
-            hdrdata
-        (self.hdr, self.hdrtype) = self.parseIndex(hdrindexNo, hdrfmt, \
-            hdrfmt2)
-        if self.verify:
-            for i in rpmconstants.rpmtagrequired:
-                if not self.hdr.has_key(i):
-                    self.printErr("hdr is missing: %d" % i)
-            self.verifyHeader()
-
-    def parseIndex(self, indexNo, fmt, fmt2):
-        # XXX parseIndex() should be implemented as C function for faster speed
-        hdr = {}
-        hdrtype = {}
-        for i in xrange(0, indexNo * 16, 16):
-            index = unpack("!4i", fmt[i:i + 16])
-            tag = index[0]
-            # support reading only some tags
-            if self.tags and tag not in self.tags:
-                continue
-            # negative tag list
-            if self.ntags and tag in self.ntags:
-                continue
-            # ignore duplicate entries as long as they are identical
-            if hdr.has_key(tag):
-                if hdr[tag] != self.parseTag(index, fmt2):
-                    self.printErr("tag %d included twice" % tag)
-            else: 
-                hdr[tag] = self.parseTag(index, fmt2)
-                hdrtype[tag] = index[1]
-        return (hdr, hdrtype)
-
     def parseTag(self, index, fmt):
         (tag, ttype, offset, count) = index
         if ttype == RPM_INT32:
@@ -370,11 +335,11 @@ class RpmStreamIO(RpmIO):
             print "Error reading CPIO payload: %s" % e
         if self.verify:
             return self.verifyPayload(c.namelist())
-        return 1
+        return 0
 
     def write(self, data):
         if self.filename == None:
-            return 1
+            return 0
         self.open()
         ret = self.writeHeader(data)
         ret = ret & self.writeData(data)
@@ -382,26 +347,17 @@ class RpmStreamIO(RpmIO):
         return ret
 
     def writeHeader(self, data):
-            return 1
+            return 0
 
     def writeData(self, data):
-            return 1
+            return 0
 
 
-class RpmFile(RpmStreamIO):
+class RpmFileIO(RpmStreamIO):
     def __init__(self, filename, verify=None, legacy=None, parsesig=None, hdronly=None, tags=None, ntags=None):
         RpmStreamIO.__init__(self, verify, legacy, parsesig, hdronly, tags, ntags)
         self.filename = filename
-        self.fd = None
-        self.cpiofd = None
-        self.verify = verify
-        self.legacy = legacy
-        self.parsesig = parsesig
-        self.hdronly = hdronly
-        self.tags = tags
-        self.ntags = ntags
         self.issrc = 0
-        self.headerlen = 0
         if filename[-8:] == ".src.rpm" or filename[-10:] == ".nosrc.rpm":
             self.issrc = 1
 
@@ -426,40 +382,33 @@ class RpmFile(RpmStreamIO):
         self.closeFile()
 
 
-class RpmDB(RpmIO):
+class RpmDBIO(RpmIO):
     def __init__(self):
         RpmIO.__init__(self)
-        self.source = None
 
-    def read(self, data):
-        return 1
+    def read(self):
+        return 0
 
-    def write(self, data):
-        return 1
+    def write(self):
+        return 0
 
 
-class RpmRepo(RpmIO):
+class RpmRepoIO(RpmIO):
     def __init__(self):
         RpmIO.__init__(self)
-        self.source = None
 
-    def read(self, data):
-        return 1
+    def read(self):
+        return 0
 
-    def write(self, data):
-        return 1
+    def write(self):
+        return 0
 
 
 class RpmData(RpmError):
     def __init__(self):
         RpmError.__init__(self)
         self.data = {}
-        self.hdr = {}
-        self.hdrtype = None
-        self.sig = {}
-        self.sigtype = None
         self.modified = None
-        self.cpiodata = None
 
     def __repr__(self):
         return self.data.__repr__()
@@ -477,7 +426,7 @@ class RpmData(RpmError):
         return self.data[key]
 
     def verify(self):
-        ret = 1
+        ret = 0
         return ret
 
 
@@ -490,13 +439,13 @@ class RpmPackage(RpmData):
         pass
 
     def read(self, io):
-        if io.read(self):
-            return 1
+        if not self.readHeader(io):
+            return 0
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
         self["conflicts"] = self.getConflicts()
-        return 0
+        return 1
 
     def write(self, io):
         return io.write(self)
@@ -520,41 +469,30 @@ class RpmPackage(RpmData):
     def extract(self, io, files=None):
         if files == None:
             files = self["filetree"]
-        (filename, filedata, filerawdata) = io.read()
+        (filename, filerawdata) = io.read()
         while filename != None and filename != "EOF" :
             if filename in files:
                 idx = files.index(filename)
-                print filename, \
-                      filedata[7], self["filesizes"][idx], \
-                      hex(filedata[8]*256+filedata[9]), hex(int(self["filedevices"][idx])), \
-                      oct(filedata[2]), oct(int(self["filemodes"][idx]))
-            (filename, filedata, filerawdata) = io.read()
+                rpminode = self["fileinodes"][idx]
+                rpmmode = self["filemodes"][idx]
+                pw = pwd.getpwnam(self["fileusername"][idx])
+                if pw != None:
+                    rpmuid = pw[2]
+                else:
+                    rpmuid = 0      # default to root as uid if not found
+                gr = grp.getgrnam(self["filegroupname"][idx])
+                if gr != None:
+                    rpmgid = gr[2]
+                else:
+                    rpmgid = 0      # default to root as gid if not found
+                rpmmtime = self["filemtimes"][idx]
+                rpmfilesize = self["filesizes"][idx]
+                rpmdev = self["filedevices"][idx]
+                rpmrdev = self["filerdevs"][idx]
+                if not installFile(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, filerawdata):
+                    return 1
+            (filename, filerawdata) = io.read()
         return 0
-
-    def updateFilestats(self):
-        # No files -> No need to do anything.
-        if not self["basenames"]:
-            return
-        # Check every file from the rpm headers and update the filemods
-        # according to the info from the rpm headers.
-        for i in xrange(len(self["basenames"])):
-            fullname = self["dirnames"][self["dirindexes"][i]]+self["basenames"][i]
-            if not (os.path.isfile(fullname) or os.path.isdir(fullname)) or os.path.islink(fullname):
-                continue
-            pw = pwd.getpwnam(self["fileusername"][i])
-            if pw != None:
-                uid = pw[2]
-            else:
-                uid = -1
-            grp = grp.getgrnam(self["filegroupname"][i])
-            if grp != None:
-                gid = grp[2]
-            else:
-                gid = -1
-            if uid != -1 and gid != -1:
-                os.chown(fullname, uid, gid)
-            os.chmod(fullname, (~cpio.CP_IFMT) & self["filemodes"][i])
-            os.utime(fullname, (self["filemtimes"][i], self["filemtimes"][i]))
 
     def readHeader(self, io):
         (key, value) = io.read()
@@ -567,6 +505,7 @@ class RpmPackage(RpmData):
             (key, value) = io.read()
             self[key] = value
         self.parseFilelist()
+        return 1
 
     def parseFilelist(self):
         self["filetree"] = []
@@ -576,13 +515,17 @@ class RpmPackage(RpmData):
             self["filetree"].append(self["dirnames"][self["dirindexes"][i]] + self["basenames"][i])
 
     def install(self, io, files=None):
-        self.readHeader(io)
+        if not self.readHeader(io):
+            return 0
         if self["preinprog"] != None:
-            runScript(self["preinprog"], self["prein"], "1")
-        self.extract(io, self["filetree"])
-        self.updateFilestats()
+            if not runScript(self["preinprog"], self["prein"], "1"):
+                return 0
+        if not self.extract(io, self["filetree"]):
+            return 0
         if self["postinprog"] != None:
-            runScript(self["postinprog"], self["postin"], "1")
+            if not runScript(self["postinprog"], self["postin"], "1"):
+                return 0
+        return 1
 
     def getDeps(self, name, flags, version):
         n = self[name]
@@ -616,6 +559,10 @@ class RpmPackage(RpmData):
     def getTriggers(self):
         return self.getDeps("triggername", "triggerflags", "triggerversion")
 
+class RpmFile:
+    def __init__(self):
+        pass
+
 
 # Collection of class indepedant helper functions
 def runScript(prog=None, script=None, arg1=None, arg2=None):
@@ -648,5 +595,95 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         print rerr
         return 0
     return 1
+
+def installFile(filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, data):
+    filetype = mode & cpio.CP_IFMT
+    if   filetype == cpio.CP_IFREG:
+        makeDirs(filename)
+        # CPIO archives are sick: Hardlinks are stored as 0 byte long
+        # regular files.
+        # The last hardlinked file in the archive contains the data, so
+        # we have to defere creating any 0 byte file until either:
+        #  - We create a file with data and the inode/devmajor/devminor are
+        #    identical
+        #  - We have processed all files and can check the defered list for
+        #    any more identical files (in which case they are hardlinked
+        #    again)
+        #  - For the rest in the end create 0 byte files as they were in
+        #    fact really 0 byte files, not hardlinks.
+        if len(data) == 0:
+            #self.addToDefered(filename)
+            return 1
+        tmpfilename = tempfile.mktemp(dir=os.path.dirname(filename), prefix=filename+".")
+        fd = open(tmpfilename, "w")
+        if not fd:
+            print "FOO1"
+            return 0
+        if not fd.write(data) < 0:
+            print "FOO2"
+            fd.close()
+            os.unlink(tmpfilename)
+            return 0
+        fd.close()
+        if not setFileMods(tmpfilename, uid, gid, mode, mtime):
+            print "FOO4"
+            os.unlink(tmpfilename)
+            return 0
+        try:
+            os.unlink(filename)
+        except:
+            print "FOO5"
+        if os.rename(tmpfilename, filename) != None:
+            print "FOO6"
+            return 0
+        #self.handleCurrentDefered(filename)
+    elif filetype == cpio.CP_IFDIR:
+        if os.path.isdir(filename):
+            return 0
+        os.makedirs(filename)
+        if not setFileMods(tmpfilename, uid, gid, mode, mtime):
+            os.unlink(tmpfilename)
+            return 0
+    elif filetype == cpio.CP_IFLNK:
+        symlinkfile = data.rstrip("\x00")
+        if os.path.islink(filename) and os.readlink(filename) == symlinkfile:
+            return 0
+        makeDirs(filename)
+        os.symlink(symlinkfile, filename)
+    elif filetype == cpio.CP_IFCHR or filetype == cpio.CP_IFBLK or filetype == cpio.CP_IFSO or filetype == cpio.CP_IFIFO:
+        if filetype == cpio.CP_IFCHR:
+            devtype = "c"
+        elif filetype == cpio.CP_IFBLK:
+            devtype = "b"
+        else:
+            return 0
+        makeDirs(filename)
+        devmajor = int(rdev)/256
+        devminor = int(rdev)%256
+        ret = commands.getoutput("/bin/mknod "+filename+" "+devtype+" "+str(devmajor)+" "+str(devminor))
+        if ret != "":
+            print "Error creating device: "+ret
+            return 0
+        else:
+            if not setFileMods(tmpfilename, uid, gid, mode, mtime):
+                os.unlink(tmpfilename)
+                return 0
+    else:
+        raise ValueError, "%s: not a valid CPIO filetype" % (oct(filetype))
+    return 1
+
+def setFileMods(filename, uid, gid, mode, mtime):
+    if os.chown(filename, uid, gid) != None:
+        return 0
+    if os.chmod(filename, (~cpio.CP_IFMT) & mode) != None:
+        return 0
+    if os.utime(filename, (mtime, mtime)) != None:
+        return 0
+    return 1
+
+def makeDirs(fullname):
+    dirname = fullname[:fullname.rfind("/")]
+    if not os.path.isdir(dirname):
+            os.makedirs(dirname)
 
 # vim:ts=4:sw=4:showmatch:expandtab
