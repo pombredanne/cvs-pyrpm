@@ -76,7 +76,7 @@ RPMSENSE_SCRIPT_PREP = (1 << 20)   # %prep build dependency.
 RPMSENSE_SCRIPT_BUILD = (1 << 21)  # %build build dependency.
 RPMSENSE_SCRIPT_INSTALL = (1 << 22)# %install build dependency.
 RPMSENSE_SCRIPT_CLEAN = (1 << 23)  # %clean build dependency.
-RPMSENSE_RPMLIB     = ((1 << 24) | RPMSENSE_PREREQ) # rpmlib(feature) dependency.
+RPMSENSE_RPMLIB     = ((1 << 24) | RPMSENSE_PREREQ) # rpmlib(feature) dep.
 RPMSENSE_TRIGGERPREIN = (1 << 25)  # @todo Implement %triggerprein.
 RPMSENSE_KEYRING    = (1 << 26)
 RPMSENSE_PATCHES    = (1 << 27)
@@ -84,15 +84,21 @@ RPMSENSE_CONFIG     = (1 << 28)
 
 RPMSENSE_SENSEMASK  = 15 # Mask to get senses: serial, less, greater, equal.
 
-RPMSENSE_TRIGGER    = (RPMSENSE_TRIGGERIN | RPMSENSE_TRIGGERUN | RPMSENSE_TRIGGERPOSTUN)
+RPMSENSE_TRIGGER = (RPMSENSE_TRIGGERIN | RPMSENSE_TRIGGERUN \
+    | RPMSENSE_TRIGGERPOSTUN)
 
-_ALL_REQUIRES_MASK  = (RPMSENSE_INTERP | RPMSENSE_SCRIPT_PRE | RPMSENSE_SCRIPT_POST | RPMSENSE_SCRIPT_PREUN | RPMSENSE_SCRIPT_POSTUN | RPMSENSE_SCRIPT_VERIFY | RPMSENSE_FIND_REQUIRES | RPMSENSE_SCRIPT_PREP | RPMSENSE_SCRIPT_BUILD | RPMSENSE_SCRIPT_INSTALL | RPMSENSE_SCRIPT_CLEAN | RPMSENSE_RPMLIB | RPMSENSE_KEYRING)
+_ALL_REQUIRES_MASK  = (RPMSENSE_INTERP | RPMSENSE_SCRIPT_PRE \
+    | RPMSENSE_SCRIPT_POST | RPMSENSE_SCRIPT_PREUN | RPMSENSE_SCRIPT_POSTUN \
+    | RPMSENSE_SCRIPT_VERIFY | RPMSENSE_FIND_REQUIRES | RPMSENSE_SCRIPT_PREP \
+    | RPMSENSE_SCRIPT_BUILD | RPMSENSE_SCRIPT_INSTALL | RPMSENSE_SCRIPT_CLEAN \
+    | RPMSENSE_RPMLIB | RPMSENSE_KEYRING)
 
 def _notpre(x):
     return (x & ~RPMSENSE_PREREQ)
 
-_INSTALL_ONLY_MASK = _notpre(RPMSENSE_SCRIPT_PRE|RPMSENSE_SCRIPT_POST|RPMSENSE_RPMLIB|RPMSENSE_KEYRING)
-_ERASE_ONLY_MASK   = _notpre(RPMSENSE_SCRIPT_PREUN|RPMSENSE_SCRIPT_POSTUN)
+_INSTALL_ONLY_MASK = _notpre(RPMSENSE_SCRIPT_PRE | RPMSENSE_SCRIPT_POST \
+    | RPMSENSE_RPMLIB | RPMSENSE_KEYRING)
+_ERASE_ONLY_MASK   = _notpre(RPMSENSE_SCRIPT_PREUN | RPMSENSE_SCRIPT_POSTUN)
 
 def isLegacyPreReq(x):
     return (x & _ALL_REQUIRES_MASK) == RPMSENSE_PREREQ
@@ -265,7 +271,7 @@ rpmtag = {
     "archivesize": (1046, RPM_INT32, 1, 1) # only in /var/lib/rpm/Packages
 }
 rpmtagname = {}
-# Add a reverse mapping for all tags and a new tag -> name mapping
+# Add a reverse mapping for all tags and a new tag -> name mapping.
 for key in rpmtag.keys():
     v = rpmtag[key]
     rpmtag[v[0]] = v
@@ -308,6 +314,7 @@ rpmsigtagrequired = []
 for key in ["md5"]:
     rpmsigtagrequired.append(rpmsigtag[key][0])
 del key
+
 
 # check arch names against this list
 possible_archs = {'noarch':1, 'i386':1, 'i486':1, 'i586':1, 'i686':1,

@@ -7,9 +7,9 @@
 # (c) 2004 Thomas Woerner <twoerner@redhat.com>
 #
 # version 2005-03-09-01
+#
 
 import sys, os
-
 import pyrpm
 
 def usage():
@@ -201,3 +201,4 @@ if __name__ == '__main__':
         print op, pkg.source
 
     sys.exit(0)
+
