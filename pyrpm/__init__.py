@@ -16,9 +16,13 @@
 # Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
-# This is only a conveniant wrapper until we maybe switch everything to
-# from pyrpm import * directly.
-
-from pyrpm import *
+# Pyrpm __init__ autoloader
+from base import *
+from functions import *
+from cpio import *
+from config import *
+from control import *
+from io import *
+from package import *
 
 # vim:ts=4:sw=4:showmatch:expandtab

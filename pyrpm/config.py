@@ -16,9 +16,11 @@
 # Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
-# This is only a conveniant wrapper until we maybe switch everything to
-# from pyrpm import * directly.
+class RpmConfig:
+    def __init__(self):
+        pass
 
-from pyrpm import *
+# Automatically create a global rpmconfig variable
+rpmconfig = RpmConfig()
 
 # vim:ts=4:sw=4:showmatch:expandtab

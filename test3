@@ -2,7 +2,6 @@
 
 import sys
 from pyrpmlib import *
-from rpmconstants import *
 
 files = [ "/mnt/raid/fedora/3/i386/os/Fedora/RPMS/gcc-3.4.2-6.fc3.i386.rpm",
 "/mnt/raid/fedora/3/i386/os/Fedora/RPMS/glibc-devel-2.3.3-74.i386.rpm",

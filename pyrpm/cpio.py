@@ -17,7 +17,7 @@
 # Author: Phil Knirsch, Paul Nasrat, Florian La Roche
 #
 
-import os, os.path, commands, shutil
+import os, os.path, commands
 
 CP_IFMT  =  0170000
 CP_IFIFO =  0010000

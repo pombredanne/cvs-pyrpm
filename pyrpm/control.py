@@ -16,9 +16,8 @@
 # Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
-# This is only a conveniant wrapper until we maybe switch everything to
-# from pyrpm import * directly.
-
-from pyrpm import *
+class RpmController:
+    def __init__(self):
+        pass
 
 # vim:ts=4:sw=4:showmatch:expandtab

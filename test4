@@ -2,7 +2,6 @@
 
 import sys, os
 from pyrpmlib import *
-from rpmconstants import *
 
 for i in sys.argv[1:]:
     rpmio = getRpmIOFactory("file:/"+i)

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
@@ -14,9 +13,22 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004 Red Hat, Inc.
 #
-# Author: Florian La Roche
+# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
+
+class RpmFileInfo:
+    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, md5sum):
+        self.filename = filename
+        self.inode = inode
+        self.mode = mode
+        self.uid = uid
+        self.gid = gid
+        self.mtime = mtime
+        self.filesize = filesize
+        self.dev = dev
+        self.rdev = rdev
+        self.md5sum = md5sum
 
 
 # RPM Constants - based from rpmlib.h and elsewhere
@@ -474,37 +486,5 @@ possible_archs = ['noarch', 'i386', 'i486', 'i586', 'i686', 'athlon',
     'arm', 'armv4l', 'mips', 'mipseb', 'hppa', 'mipsel', 'sh', 'axp',
     # these are in old rpms:
     'i786', 'i886', 'i986', 's390xc']
-
-
-RPMSENSE_ANY        = 0
-RPMSENSE_SERIAL     = (1 << 0)          # legacy
-RPMSENSE_LESS       = (1 << 1)
-RPMSENSE_GREATER    = (1 << 2)
-RPMSENSE_EQUAL      = (1 << 3)
-RPMSENSE_PROVIDES   = (1 << 4)          # only used internally by builds
-RPMSENSE_CONFLICTS  = (1 << 5)          # only used internally by builds
-RPMSENSE_PREREQ     = (1 << 6)          # legacy
-RPMSENSE_OBSOLETES  = (1 << 7)          # only used internally by builds
-RPMSENSE_INTERP     = (1 << 8)          # Interpreter used by scriptlet.
-RPMSENSE_SCRIPT_PRE = ((1 << 9) | RPMSENSE_PREREQ)      # %pre dependency
-RPMSENSE_SCRIPT_POST = ((1 << 10)|RPMSENSE_PREREQ)      # %post dependency
-RPMSENSE_SCRIPT_PREUN = ((1 << 11)|RPMSENSE_PREREQ)     # %preun dependency
-RPMSENSE_SCRIPT_POSTUN = ((1 << 12)|RPMSENSE_PREREQ)    # %postun dependency
-RPMSENSE_SCRIPT_VERIFY = (1 << 13)      # %verify dependency
-RPMSENSE_FIND_REQUIRES = (1 << 14)      # find-requires generated dependency
-RPMSENSE_FIND_PROVIDES = (1 << 15)      # find-provides generated dependency
-RPMSENSE_TRIGGERIN  = (1 << 16)         # %triggerin dependency
-RPMSENSE_TRIGGERUN  = (1 << 17)         # %triggerun dependency
-RPMSENSE_TRIGGERPOSTUN = (1 << 18)      # %triggerpostun dependency
-RPMSENSE_MISSINGOK  = (1 << 19)         # suggests/enhances/recommends hint
-RPMSENSE_SCRIPT_PREP = (1 << 20)        # %prep build dependency
-RPMSENSE_SCRIPT_BUILD = (1 << 21)       # %build build dependency
-RPMSENSE_SCRIPT_INSTALL = (1 << 22)     # %install build dependency
-RPMSENSE_SCRIPT_CLEAN = (1 << 23)       # %clean build dependency
-RPMSENSE_RPMLIB     = ((1 << 24) | RPMSENSE_PREREQ) # rpmlib(feature) dependency
-RPMSENSE_TRIGGERPREIN = (1 << 25)       # @todo Implement %triggerprein
-RPMSENSE_KEYRING    = (1 << 26)
-RPMSENSE_PATCHES    = (1 << 27)
-RPMSENSE_CONFIG     = (1 << 28)
 
 # vim:ts=4:sw=4:showmatch:expandtab
