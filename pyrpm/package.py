@@ -55,6 +55,9 @@ class FastRpmData(DictType):
         DictType.__init__(self)
         self.hash = int(string.atoi(str(weakref.ref(self)).split()[6][3:-1],
                                     16))
+
+    def __repr__(self):
+        return "FastRpmData: <0x" + str(self.hash) + ">"
         
     def __hash__(self):
         return self.hash
