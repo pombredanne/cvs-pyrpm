@@ -42,7 +42,6 @@ class PyGZIP:
         if magic != '\037\213':
             printError("Not a gzipped file")
             v1 = unpack("!H", magic)
-            print oct(v1[0])
             sys.exit(0)
         if ord(self.fd.read(1)) != 8:
             printError("Unknown compression method")
@@ -97,8 +96,8 @@ class PyGZIP:
                 size = 1024
             data = self.fd.read(size)
             if data == "":
-            # We've read to the end of the file, so we have to rewind in order
-            # to reread the 8 bytes containing the CRC and the file size.  The
+            # We've read to the end of the file, so we have to take the last 8
+            # bytes from the buffer containing the CRC and the file size.  The
             # decompressor is smart and knows when to stop, so feeding it
             # extra data is harmless.
                 crc32 = unpack("!I", self.enddata[0:4])
@@ -150,17 +149,18 @@ class CPIOFile:
     """ Read ASCII CPIO files. """
     def __init__(self, fd):
         self.fd = fd                    # filedescriptor
+        self.lastfilesize = 0
 
     def getNextEntry(self):
+        # Do padding if necessary for nexty entry
+        self.fd.read((4 - (self.lastfilesize % 4)) % 4)
         # The cpio header contains 8 byte hex numbers with the following
         # content: magic, inode, mode, uid, gid, nlink, mtime, filesize,
         # devMajor, devMinor, rdevMajor, rdevMinor, namesize, checksum.
         data = self.fd.read(110)
-
         # CPIO ASCII hex, expanded device numbers (070702 with CRC)
         if data[0:6] not in ["070701", "070702"]:
             raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
-
         # Read filename and padding.
         filenamesize = int(data[94:102], 16)
         filename = self.fd.read(filenamesize).rstrip("\x00")
@@ -176,13 +176,12 @@ class CPIOFile:
             filename = "%s%s" % ("/", filename)
         if filename.endswith("/") and len(filename) > 1:
             filename = filename[:-1]
-
         # Read file contents.
-        filesize = int(data[54:62], 16)
-        filerawdata = self.fd.read(filesize)
-        self.fd.read((4 - (filesize % 4)) % 4)
+        self.lastfilesize = int(data[54:62], 16)
+        return (filename, self.lastfilesize)
 
-        return (filename, filerawdata)
+    def read(self, size):
+        return self.fd.read(size)
 
 
 class RpmIO:
@@ -266,7 +265,6 @@ class RpmStreamIO(RpmIO):
                 self.hdrdata = None
                 self.hdr = {}
                 self.hdrtype = {}
-#                cpiofd = gzip.GzipFile(fileobj=self.fd)
                 cpiofd = PyGZIP(self.fd)
                 self.cpio = CPIOFile(cpiofd)
                 self.where = 4
@@ -276,11 +274,11 @@ class RpmStreamIO(RpmIO):
             self.idx += 1
             return (rpmtagname[v[0]], v[1])
         # Read/parse data files archive
-        if self.where == 4 and not self.hdronly:
-            (filename, filerawdata) = self.cpio.getNextEntry()
+        if self.where == 4 and not self.hdronly and self.cpio != None:
+            (filename, filesize) = self.cpio.getNextEntry()
             if filename != None:
-                return (filename, filerawdata)
-        return  ("EOF", "")
+                return (filename, self.cpio, filesize)
+        return  ("EOF", 0, 0)
 
     def write(self, pkg):
         if self.fd == None:

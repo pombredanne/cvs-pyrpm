@@ -98,7 +98,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         return 0
     return 1
 
-def installFile(rfi, data):
+def installFile(rfi, infd, size):
     mode = rfi.mode
     if S_ISREG(mode):
         makeDirs(rfi.filename)
@@ -106,10 +106,19 @@ def installFile(rfi, data):
             prefix=rfi.filename + ".")
         if not fd:
             return 0
-        if os.write(fd, data) < 0:
-            os.close(fd)
-            os.unlink(tmpfilename)
-            return 0
+        data = "1"
+        while size > 0 and data:
+            if size > 65536:
+                readlen = 65536
+            else:
+                readlen = size
+            data = infd.read(readlen)
+            if data:
+                size -= len(data)
+                if os.write(fd, data) < 0:
+                    os.close(fd)
+                    os.unlink(tmpfilename)
+                    return 0
         os.close(fd)
         if not setFileMods(tmpfilename, rfi.uid, rfi.gid, mode, rfi.mtime):
             os.unlink(tmpfilename)
@@ -125,6 +134,7 @@ def installFile(rfi, data):
         if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
             return 0
     elif S_ISLNK(mode):
+        data = infd.read(size)
         symlinkfile = data.rstrip("\x00")
         if os.path.islink(rfi.filename) \
             and os.readlink(rfi.filename) == symlinkfile:
@@ -150,6 +160,9 @@ def installFile(rfi, data):
             os.mknod(rfi.filename, mode, rfi.rdev)
         except:
             pass
+        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
+            os.unlink(rfi.filename)
+            return 0
     else:
         raise ValueError, "%s: not a valid filetype" % (oct(mode))
     return 1

@@ -16,7 +16,6 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-
 class RpmFileInfo:
     def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev,
         rdev, md5sum, flags, filecolor):
@@ -32,6 +31,9 @@ class RpmFileInfo:
         self.md5sum = md5sum
         self.flags = flags
         self.filecolor = filecolor
+
+    def getHardLinkID(self):
+        return self.inode*65536+self.dev
 
 # RPM Constants - based from rpmlib.h and elsewhere
 

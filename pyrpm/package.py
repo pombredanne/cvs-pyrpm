@@ -313,7 +313,7 @@ class RpmPackage(RpmData):
         # before we actually start extracting files.
         self.__generateFileInfoList()
         self.__generateHardLinkList()
-        (filename, filerawdata) = self.io.read()
+        (filename, cpio, filesize) = self.io.read()
         nfiles = len(files)
         n = 0
         pos = 0
@@ -332,18 +332,18 @@ class RpmPackage(RpmData):
             if self.rfilist.has_key(filename):
                 rfi = self.rfilist[filename]
                 if self.__verifyFileInstall(rfi, db):
-                    if not (rfi.inode*65536+rfi.dev) in self.hardlinks.keys():
-                        if not installFile(rfi, filerawdata):
+                    if not rfi.getHardLinkID() in self.hardlinks.keys():
+                        if not installFile(rfi, cpio, filesize):
                             return 0
                     else:
-                        if len(filerawdata) > 0:
-                            if not installFile(rfi, filerawdata):
+                        if filesize > 0:
+                            if not installFile(rfi, cpio, filesize):
                                 return 0
                             if not self.__handleHardlinks(rfi):
                                 return 0
                 else:
                     self.__removeHardlinks(rfi)
-            (filename, filerawdata) = self.io.read()
+            (filename, cpio, filesize) = self.io.read()
         if nfiles == 0:
             nfiles = 1
         if rpmconfig.printhash:
@@ -445,7 +445,9 @@ class RpmPackage(RpmData):
         self.hardlinks = {}
         for filename in self.rfilist.keys():
             rfi = self.rfilist[filename]
-            key = rfi.inode*65536 + rfi.dev
+            if not S_ISREG(rfi.mode):
+                continue
+            key = rfi.getHardLinkID()
             if not self.hardlinks.has_key(key):
                 self.hardlinks[key] = []
             self.hardlinks[key].append(rfi)
@@ -454,7 +456,7 @@ class RpmPackage(RpmData):
                 del self.hardlinks[key]
 
     def __handleHardlinks(self, rfi):
-        key = rfi.inode*65536 + rfi.dev
+        key = rfi.getHardLinkID()
         self.hardlinks[key].remove(rfi)
         for hrfi in self.hardlinks[key]:
             makeDirs(hrfi.filename)
@@ -464,7 +466,7 @@ class RpmPackage(RpmData):
         return 1
 
     def __removeHardlinks(self, rfi):
-        key = rfi.inode*65536 + rfi.dev
+        key = rfi.getHardLinkID()
         if self.hardlinks.has_key(key):
             del self.hardlinks[key]
 
@@ -472,7 +474,7 @@ class RpmPackage(RpmData):
         keys = self.hardlinks.keys()
         for key in keys:
             rfi = self.hardlinks[key][0]
-            if not installFile(rfi, ""):
+            if not installFile(rfi, 0, 0):
                 return 0
             if not self.__handleHardlinks(rfi):
                 return 0

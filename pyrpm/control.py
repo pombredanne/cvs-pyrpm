@@ -111,7 +111,7 @@ class RpmController:
             printInfo(0, "Nothing to do.\n")
             sys.exit(0)
         if rpmconfig.timer:
-            print "handleFiles() took %s seconds" % (clock() - time1)
+            printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
         if not self.run():
             return 0
         return 1
@@ -131,7 +131,7 @@ class RpmController:
         u = resolver.updates
         del resolver
         if rpmconfig.timer:
-            print "resolver took %s seconds" % (clock() - time1)
+            printInfo(0, "resolver took %s seconds\n" % (clock() - time1))
             time1 = clock()
         orderer = RpmOrderer(a, u, o, self.operation)
         operations = orderer.order()
@@ -140,13 +140,14 @@ class RpmController:
                 time9 = clock()
             getFreeDiskspace(a)
             if rpmconfig.timer:
-                print "getFreeDiskspace took %s seconds" % (clock() - time9)
+                printInfo(0, "getFreeDiskspace took %s seconds\n" % \
+                             (clock() - time9))
         del orderer
         del a
         del o
         del u
         if rpmconfig.timer:
-            print "orderer took %s seconds" % (clock() - time1)
+            printInfo(0, "orderer took %s seconds\n" % (clock() - time1))
         if not operations:
             if operations == []:
                 printError("No updates are necessary.")
