@@ -43,13 +43,13 @@ class RpmIO:
 
 
 class RpmStreamIO(RpmIO):
-    def __init__(self, source, verify=None, legacy=None, hdronly=None):
+    def __init__(self, source, verify=None, strict=None, hdronly=None):
         RpmIO.__init__(self, source)
         self.fd = None
         self.cpiofd = None
         self.cpio = None
         self.verify = verify
-        self.legacy = legacy
+        self.strict = strict
         self.hdronly = hdronly
         self.issrc = 0
         self.where = 0  # 0:lead 1:separator 2:sig 3:header 4:files
@@ -175,7 +175,7 @@ class RpmStreamIO(RpmIO):
         if osnum not in (1, 255, 256):
             ret = 0
         name = name.rstrip('\x00')
-        if self.legacy:
+        if self.strict:
             if os.path.basename(self.source)[:len(name)] != name:
                 ret = 0
         if not ret:
@@ -228,7 +228,7 @@ class RpmStreamIO(RpmIO):
                     printError("%s: sigtag %d has wrong type %d" % (self.source, tag, ttype))
                 if t[2] != None and t[2] != count:
                     printError("%s: sigtag %d has wrong count %d" % (self.source, tag, count))
-                if (t[3] & 1) and self.legacy:
+                if (t[3] & 1) and self.strict:
                     printError("%s: tag %d is marked legacy" % (self.source, tag))
                 if self.issrc:
                     if (t[3] & 4):
@@ -252,7 +252,7 @@ class RpmStreamIO(RpmIO):
                         printError("%s: tag %d has wrong type %d" % (self.source, tag, ttype))
                 if t[2] != None and t[2] != count:
                     printError("%s: tag %d has wrong count %d" % (self.source, tag, count))
-                if (t[3] & 1) and self.legacy:
+                if (t[3] & 1) and self.strict:
                     printError("%s: tag %d is marked legacy" % (self.source, tag))
                 if self.issrc:
                     if (t[3] & 4):
@@ -478,13 +478,13 @@ class RpmStreamIO(RpmIO):
 
 
 class RpmFtpIO(RpmStreamIO):
-    def __init__(self, source, verify=None, legacy=None, hdronly=None):
-        RpmStreamIO.__init__(self, source, verify, legacy, hdronly)
+    def __init__(self, source, verify=None, strict=None, hdronly=None):
+        RpmStreamIO.__init__(self, source, verify, strict, hdronly)
 
 
 class RpmFileIO(RpmStreamIO):
-    def __init__(self, source, verify=None, legacy=None, hdronly=None):
-        RpmStreamIO.__init__(self, source, verify, legacy, hdronly)
+    def __init__(self, source, verify=None, strict=None, hdronly=None):
+        RpmStreamIO.__init__(self, source, verify, strict, hdronly)
         self.issrc = 0
         if source[-8:] == ".src.rpm" or source[-10:] == ".nosrc.rpm":
             self.issrc = 1
@@ -515,8 +515,8 @@ class RpmFileIO(RpmStreamIO):
 
 
 class RpmHttpIO(RpmStreamIO):
-    def __init__(self, source, verify=None, legacy=None, hdronly=None):
-        RpmStreamIO.__init__(self, source, verify, legacy, hdronly)
+    def __init__(self, source, verify=None, strict=None, hdronly=None):
+        RpmStreamIO.__init__(self, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
         return 0
@@ -526,8 +526,8 @@ class RpmHttpIO(RpmStreamIO):
 
 
 class RpmDBIO(RpmFileIO):
-    def __init__(self, source, verify=None, legacy=None, hdronly=None):
-        RpmFileIO.__init__(self, source, verify, legacy, hdronly)
+    def __init__(self, source, verify=None, strict=None, hdronly=None):
+        RpmFileIO.__init__(self, source, verify, strict, hdronly)
 
 
 class RpmDB:
@@ -601,8 +601,8 @@ class RpmDB:
 
 
 class RpmPyDBIO(RpmFileIO):
-    def __init__(self, source, verify=None, legacy=None, hdronly=None):
-        RpmFileIO.__init__(self, source, verify, legacy, hdronly)
+    def __init__(self, source, verify=None, strict=None, hdronly=None):
+        RpmFileIO.__init__(self, source, verify, strict, hdronly)
 
 
 class RpmPyDB:
@@ -725,25 +725,25 @@ class RpmPyDB:
 
 
 class RpmRepoIO(RpmFileIO):
-    def __init__(self, source, verify=None, legacy=None, hdronly=None):
-        RpmFileIO.__init__(self, source, verify, legacy, hdronly)
+    def __init__(self, source, verify=None, strict=None, hdronly=None):
+        RpmFileIO.__init__(self, source, verify, strict, hdronly)
 
 
-def getRpmIOFactory(source, verify=None, legacy=None, hdronly=None):
+def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
     if source[:4] == 'db:/':
-        return RpmDBIO(source[4:], verify, legacy, hdronly)
+        return RpmDBIO(source[4:], verify, strict, hdronly)
     elif source[:5] == 'ftp:/':
-        return RpmFtpIO(source[5:], verify, legacy, hdronly)
+        return RpmFtpIO(source[5:], verify, strict, hdronly)
     elif source[:6] == 'file:/':
-        return RpmFileIO(source[6:], verify, legacy, hdronly)
+        return RpmFileIO(source[6:], verify, strict, hdronly)
     elif source[:6] == 'http:/':
-        return RpmHttpIO(source[6:], verify, legacy, hdronly)
+        return RpmHttpIO(source[6:], verify, strict, hdronly)
     elif source[:6] == 'pydb:/':
-        return RpmPyDBIO(source[6:], verify, legacy, hdronly)
+        return RpmPyDBIO(source[6:], verify, strict, hdronly)
     elif source[:6] == 'repo:/':
-        return RpmRepoIO(source[6:], verify, legacy, hdronly)
+        return RpmRepoIO(source[6:], verify, strict, hdronly)
     else:
-        return RpmFileIO(source, verify, legacy, hdronly)
+        return RpmFileIO(source, verify, strict, hdronly)
     return None
 
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -1,5 +1,5 @@
 SUBDIRS = doc pyrpm scripts
-EXTRA_DIST = pyrpm.spec build.sh FILES README TODO NEWS AUTHORS ChangeLog INFO pyrpmlib.py
+EXTRA_DIST = pyrpm.spec build.sh README NEWS AUTHORS ChangeLog pyrpmlib.py
 
 .PHONY: changelog build
 

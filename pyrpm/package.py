@@ -82,12 +82,12 @@ class RpmUserCache:
 
 
 class RpmPackage(RpmData):
-    def __init__(self, source, verify=None, legacy=None, hdronly=None):
+    def __init__(self, source, verify=None, strict=None, hdronly=None):
         RpmData.__init__(self)
         self.clear()
         self.source = source
         self.verify = verify
-        self.legacy = legacy
+        self.strict = strict
         self.hdronly = hdronly
 
     def clear(self):
@@ -98,7 +98,7 @@ class RpmPackage(RpmData):
     def open(self, mode="r"):
         if self.io != None:
             return 1
-        self.io = getRpmIOFactory(self.source, self.verify, self.legacy, self.hdronly)
+        self.io = getRpmIOFactory(self.source, self.verify, self.strict, self.hdronly)
         if not self.io:
             return 0
         if not self.io.open(mode):

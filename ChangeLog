@@ -37,6 +37,9 @@
 	* doc/pycheckrc: - add first version of a suitable ~/.pycheckrc
 	* pyrpm/*.py: try to reduce "from <file> import *" mess to
 	  see if we have a good structure
+	* pyrpm/io.py: rename legacy -> strict
+	* pyrpm/package.py: rename legacy -> strict
+	* FILES, INFO TODO: move into "doc" subdir
 
 2005-03-10  Phil Knirsch  <pknirsch@redhat.com>
 
