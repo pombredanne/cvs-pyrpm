@@ -6,49 +6,102 @@
 #
 # (c) 2004 Thomas Woerner <twoerner@redhat.com>
 #
-# version 2005-01-12-04
+# version 2005-01-13-01
 
 import sys, os, rpm, types
 
 # ----------------------------------------------------------------------------
 
 def evr_split(evr):
-    epoch = "0"
-    version = ""
-    release = ""
-
-    num = ""
-    has_epoch = 0
-    has_version = 0
-    for i in xrange(len(evr)):
-        if evr[i] == "-" and has_version == 0:
-            has_version = 1
-            version = num
-            num = ""
-        else:
-            if evr[i] == ":" and has_version == 0 and has_epoch == 0:
-                has_epoch = 1
-                if num != "(none)":
-                    epoch = num
-                num = ""
-            else:
-                num = num + evr[i]
-        if has_version:
-            release = num
-        else:
-            version = num
-
+    i = 0
+    p = evr.find(":") # epoch
+    if p != -1:
+        epoch = evr[:p]
+        if epoch == "0": epoch = ""
+        i = p+1
+    else:
+        epoch = ""
+    p = evr.find("-", i) # version
+    if p != -1:
+        version = evr[i:p]
+        release = evr[p+1:]
+    else:
+        version = evr[i:]
+        release = ""
     return (epoch, version, release)
 
 # ----------------------------------------------------------------------------
 
+def compare(str1, str2):
+    if str1 == "" and str2 == "": return 0;
+    elif str1 == "" and str2 != "": return -1;
+    elif str1 != "" and str2 == "": return 1;
+    elif str1 == str2: return 0;
+
+    i1 = i2 = 0
+    while i1 < len(str1) and i2 < len(str2):
+        # remove leading separators
+        while i1 < len(str1) and not str1[i1].isalnum(): i1 += 1
+        while i2 < len(str2) and not str2[i2].isalnum(): i2 += 1
+        j1 = i1
+        j2 = i2
+
+        # search for numbers and comprare them
+        while j1 < len(str1) and str1[j1].isdigit(): j1 += 1
+        while j2 < len(str2) and str2[j2].isdigit(): j2 += 1
+        if j1 > i1 or j2 > i1:
+            if j1 == i1: return -1
+            if j2 == i2: return 1
+            if j1-i1 > j2-i2: return 1
+            if j1-i1 < j2-i2: return -1
+            while i1 < j1 and i2 < j2:
+                if int(str1[i1]) > int(str2[i2]): return 1
+                if int(str1[i1]) < int(str2[i2]): return -1
+                i1 += 1
+                i2 += 1
+            # found right side 
+            if i2 == len(str2):
+                return 0
+
+        # search for alphas and compare them
+        while j1 < len(str1) and str1[j1].isalpha(): j1 += 1
+        while j2 < len(str2) and str2[j2].isalpha(): j2 += 1
+        if j1 > i1 or j2 > i1:
+            if j1 == i1: return -1
+            if j2 == i2: return 1
+            if str1[i1:j1] > str2[i2:j2]: return 1
+            if str1[i1:j1] < str2[i2:j2]: return -1
+            i1 = j1
+            i2 = j2
+            # found right side 
+            if i2 == len(str2):
+                return 0
+
+    # still no difference
+    if i2 == len(str2):
+        return 0
+    else:
+        if i1 == len(str1):
+            return -1
+        else:
+            return 1
+
 def evr_compare(evr1, comp, evr2):
     res = -1
+
     e1 = evr_split(evr1)
     e2 = evr_split(evr2)
-    if e2[2] == "": # fix epoch
+    if e2[2] == "": # no release
         e1 = (e1[0], e1[1], "")
-    r = rpm.labelCompare(e1, e2)
+
+    r = compare(e1[0], e2[0])
+    if r == 0: r = compare(e1[1], e2[1])
+    if r == 0: r = compare(e1[2], e2[2])
+    elif ignore_epoch == 1:
+        if compare(e1[1], e2[1]) == 0:
+            if compare(e1[2], e2[2]) == 0:
+                r = 0
+    
     if r == -1:
         if comp == "<" or comp == "<=":
             res = 1
@@ -58,12 +111,13 @@ def evr_compare(evr1, comp, evr2):
     else: # res == 1
         if comp == ">=" or comp == ">":
             res = 1
+
     return res
 
 # ----------------------------------------------------------------------------
 
 def gen_evr(epoch, version, release):
-    if ignore_epoch == 1 or epoch == None or epoch == "":
+    if epoch == None or epoch == "":
         return "%s-%s" % (version, release)
     else:
         return "%s:%s-%s" % (epoch, version, release)
@@ -83,14 +137,15 @@ def gen_operator(flag):
 # ----------------------------------------------------------------------------
 
 def hdr_str(hdr):
-    epoch = "0"
-    if ignore_epoch != 1:
-        if hdr[rpm.RPMTAG_EPOCH] != None:
-            epoch = hdr[rpm.RPMTAG_EPOCH]
-
-    return "%s:%s-%s-%s.%s" % (epoch, hdr[rpm.RPMTAG_NAME],
-                               hdr[rpm.RPMTAG_VERSION],
-                               hdr[rpm.RPMTAG_RELEASE], hdr[rpm.RPMTAG_ARCH])
+    if hdr[rpm.RPMTAG_EPOCH] != None:
+        return "%s-%s:%s-%s.%s" % (hdr[rpm.RPMTAG_NAME], hdr[rpm.RPMTAG_EPOCH],
+                                   hdr[rpm.RPMTAG_VERSION],
+                                   hdr[rpm.RPMTAG_RELEASE],
+                                   hdr[rpm.RPMTAG_ARCH])
+    else:
+        return "%s-%s-%s.%s" % (hdr[rpm.RPMTAG_NAME],
+                                hdr[rpm.RPMTAG_VERSION],
+                                hdr[rpm.RPMTAG_RELEASE], hdr[rpm.RPMTAG_ARCH])
 
 # ----------------------------------------------------------------------------
 
@@ -141,13 +196,10 @@ class RPM:
     def set(self, name, hdr):
         self.p_file = name
         self.p_name = hdr[rpm.RPMTAG_NAME]
-        if ignore_epoch == 1:
-            self.p_epoch = "0"
+        if hdr[rpm.RPMTAG_EPOCH] != None:
+            self.p_epoch = hdr[rpm.RPMTAG_EPOCH]
         else:
-            if hdr[rpm.RPMTAG_EPOCH] != None:
-                self.p_epoch = hdr[rpm.RPMTAG_EPOCH]
-            else:
-                self.p_epoch = "0"
+            self.p_epoch = ""
         self.p_version = hdr[rpm.RPMTAG_VERSION]
         self.p_release = hdr[rpm.RPMTAG_RELEASE]
         self.p_arch = hdr[rpm.RPMTAG_ARCH]
@@ -183,8 +235,13 @@ class RPM:
             self.p_installed = 0
 
     def __str__(self):
-        return "%s-%s-%s.%s" % (self.p_name, self.p_version, self.p_release,
-                                self.p_arch)
+        if self.p_epoch != "":
+            return "%s-%s:%s-%s.%s" % (self.p_name, self.p_epoch,
+                                       self.p_version, self.p_release,
+                                       self.p_arch)
+        else:
+            return "%s-%s-%s.%s" % (self.p_name, self.p_version,
+                                    self.p_release, self.p_arch)
 
 # ----------------------------------------------------------------------------
 
