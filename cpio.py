@@ -67,13 +67,13 @@ class CPIOFile:
             cpio_headers['mode'] = oct(int(mode,16))
             cpio_headers['uid'] = int(uid,16)
             cpio_headers['gid'] = int(gid, 16)
-            cpio_headers['nlink'] = nlink
-            cpio_headers['mtime'] = mtime
+            cpio_headers['nlink'] = int(nlink,16)
+            cpio_headers['mtime'] = int(mtime,16)
             cpio_headers['filesize'] = int(filesize,16)
-            cpio_headers['devMajor'] = devMajor
-            cpio_headers['rdevMajor'] = rdevMajor
-            cpio_headers['devMinor'] = devMinor
-            cpio_headers['rdevMinor'] = rdevMinor
+            cpio_headers['devMajor'] = int(devMajor,16)
+            cpio_headers['rdevMajor'] = int(rdevMajor,16)
+            cpio_headers['devMinor'] = int(devMinor,16)
+            cpio_headers['rdevMinor'] = int(rdevMinor,16)
             cpio_headers['namesize'] = int(namesize,16)
             cpio_headers['checksum'] = checksum
 
