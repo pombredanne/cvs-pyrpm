@@ -195,8 +195,7 @@ class RpmController:
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
                     i += 1
-                    progress = "[%d/%d] %s %s" % (i, numops, progress, \
-                                                  pkg.getNEVRA())
+                    progress = "[%d/%d] %s" % (i, numops, pkg.getNEVRA())
                     if op != OP_ERASE and self.operation != OP_ERASE:
                         doprint = 1
                         if rpmconfig.printhash:

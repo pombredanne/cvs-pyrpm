@@ -726,11 +726,11 @@ class RpmHttpIO(RpmStreamIO):
     def _read(self, nbytes=None):
         return self.urlg.read(nbytes)
 
-    def _write(self, nbytes=None):
+    def _write(self, data):
         return 0
 
-    def _tell(self, nbytes=None):
-        return 1
+    def _tell(self):
+        return None
 
 
 class RpmDBIO(RpmFileIO):

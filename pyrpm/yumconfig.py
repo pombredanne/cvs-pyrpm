@@ -85,8 +85,7 @@ class Conf:
         else:
             seps = '['+self.separators+']'
         rx = '^'
-        for i in xrange(fieldnum - 1):
-            rx = rx + '[^'+self.separators+']*' + seps
+        rx = rx + ('[^'+self.separators+']*' + seps) * (fieldnum - 1)
         rx = rx + value + '\(['+self.separators+']\|$\)'
         return self.findnextline(rx)
     def getline(self):
