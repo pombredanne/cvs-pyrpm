@@ -17,7 +17,7 @@
 #
 
 
-import gzip, types, bsddb
+import gzip, types, bsddb, libxml2
 from struct import pack, unpack
 
 from functions import *
@@ -675,15 +675,16 @@ class RpmPyDB:
             return 0
         return 1
 
-    def addPkg(self, pkg):
+    def addPkg(self, pkg, nowrite=None):
         if not self.__mkDBDirs():
             return 0
         nevra = pkg.getNEVRA()
-        src = "pydb:/"+self.source+"/headers/"+nevra
-        apkg = getRpmIOFactory(src)
-        if not apkg.write(pkg):
-            return 0
-        apkg.close()
+        if not nowrite:
+            src = "pydb:/"+self.source+"/headers/"+nevra
+            apkg = getRpmIOFactory(src)
+            if not apkg.write(pkg):
+                return 0
+            apkg.close()
         for filename in pkg["filenames"]:
             if not self.filenames.has_key(filename):
                 self.filenames[filename] = []
@@ -696,15 +697,16 @@ class RpmPyDB:
         self.pkglist[nevra] = pkg
         return 1
 
-    def erasePkg(self, pkg):
+    def erasePkg(self, pkg, nowrite=None):
         if not self.__mkDBDirs():
             return 0
         nevra = pkg.getNEVRA()
-        headerfile = self.source+"/headers/"+nevra
-        try:
-            os.unlink(headerfile)
-        except:
-            printWarning(1, "%s: Package not found in PyDB" % nevra)
+        if not nowrite:
+            headerfile = self.source+"/headers/"+nevra
+            try:
+                os.unlink(headerfile)
+            except:
+                printWarning(1, "%s: Package not found in PyDB" % nevra)
         for filename in pkg["filenames"]:
             # Check if the filename is in the filenames list and was referenced
             # by the package we want to remove
@@ -771,6 +773,158 @@ class RpmRepoIO(RpmFileIO):
         RpmFileIO.__init__(self, source, verify, strict, hdronly)
 
 
+class RpmCompsXMLIO:
+    def __init__(self, source, verify=None):
+        self.source = source
+        self.grouphash = {}
+        self.grouphierarchyhash = {}
+
+    def __str__(self):
+        return str(self.grouphash)
+
+    def read(self):
+        doc = libxml2.parseFile (self.source)
+        if doc == None:
+            return 0
+        root = doc.getRootElement()
+        if root == None:
+            return 0
+        return self.__parseNode(root.children)
+
+    def write(self):
+        pass
+
+    def getPackageNames(self, group):
+        ret = []
+        if not self.grouphash.has_key(group):
+            return ret
+        if self.grouphash[group].has_key("packagelist"):
+            pkglist = self.grouphash[group]["packagelist"]
+            for pkgname in pkglist:
+                if pkglist[pkgname][0] == "mandatory" or \
+                   pkglist[pkgname][0] == "default":
+                    ret.append(pkgname)
+                    for req in pkglist[pkgname][1]:
+                        ret.append(req)
+        if self.grouphash[group].has_key("grouplist"):
+            grplist = self.grouphash[group]["grouplist"]
+            for grpname in grplist["groupreqs"]:
+                ret.extend(self.getPackageNames(grpname))
+            for grpname in grplist["metapkgs"]:
+                if grplist["metapkgs"][grpname] == "mandatory" or \
+                   grplist["metapkgs"][grpname] == "default":
+                    ret.extend(self.getPackageNames(grpname))
+        # Sort and duplicate removal
+        ret.sort()
+        for i in xrange(len(ret)-2, -1, -1):
+            if ret[i+1] == ret[i]:
+                ret.pop(i+1)
+        return ret
+
+    def __parseNode(self, node):
+        while node != None:
+            if node.type != "element":
+                node = node.next
+                continue
+            if node.name == "group":
+                ret = self.__parseGroup(node.children)
+                if not ret:
+                    return 0
+            elif node.name == "grouphierarchy":
+                ret = self.__parseGroupHierarchy(node.children)
+                if not ret:
+                    return 0
+            else:
+                printWarning(1, "Unknown entry in comps.xml: %s" % node.name)
+                return 0
+            node = node.next
+
+    def __parseGroup(self, node):
+        group = {}
+        while node != None:
+            if node.type != "element":
+                node = node.next
+                continue
+            if  node.name == "name":
+                lang = node.prop("lang")
+                if lang:
+                    group["name:"+lang] = node.content
+                else:
+                    group["name"] = node.content
+            elif node.name == "id":
+                group["id"] = node.content
+            elif node.name == "description":
+                lang = node.prop("lang")
+                if lang:
+                    group["description:"+lang] = node.content
+                else:
+                    group["description"] = node.content
+            elif node.name == "default":
+                group["default"] = parseBoolean(node.content)
+            elif node.name == "langonly":
+                group["langonly"] = node.content
+            elif node.name == "packagelist":
+                group["packagelist"] = self.__parsePackageList(node.children)
+            elif node.name == "grouplist":
+                group["grouplist"] = self.__parseGroupList(node.children)
+            node = node.next
+        self.grouphash[group["id"]] = group
+        return 1
+
+    def __parsePackageList(self, node):
+        list = {}
+        while node != None:
+            if node.type != "element":
+                node = node.next
+                continue
+            if node.name == "packagereq":
+                type = node.prop("type")
+                if type == None:
+                    type = "default"
+                requires = node.prop("requires")
+                if requires != None:
+                    requires = string.split(requires)
+                else:
+                    requires = []
+                list[node.content] = (type, requires)
+            node = node.next
+        return list
+
+    def __parseGroupList(self, node):
+        list = {}
+        list["groupreqs"] = []
+        list["metapkgs"] = {}
+        while node != None:
+            if node.type != "element":
+                node = node.next
+                continue
+            if   node.name == "groupreq":
+                list["groupreqs"].append(node.content)
+            elif node.name == "metapkg":
+                type = node.prop("type")
+                if type == None:
+                    type = "default"
+                list["metapkgs"][node.content] = type
+            node = node.next
+        return list
+
+    def __parseGroupHierarchy(self, node):
+        # We don't need grouphierarchies, so don't parse them ;)
+        return 1
+#        group = {}
+#        while node != None:
+#            if node.type != "element":
+#                node = node.next
+#                continue
+#            if node.name == "name":
+#                lang = node.prop('lang')
+#                if lang != None: 
+#                    group["name:"+lang] = node.content
+#                else:
+#                    name = totext(node.content)
+#            node = node.next
+
+
 def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
     if source[:4] == 'db:/':
         return RpmDBIO(source[4:], verify, strict, hdronly)
@@ -787,24 +941,5 @@ def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
     else:
         return RpmFileIO(source, verify, strict, hdronly)
     return None
-
-
-if __name__ == "__main__":
-    import sys
-    for f in sys.argv[1:]:
-        if f == "-":
-            c = CPIOFile(sys.stdin)
-        else:
-            c = CPIOFile(f)
-        try:
-            filelist = []
-            while 1:
-                (filename, filerawdata) = c.getNextEntry()
-                if filename == None:
-                    break
-                filelist.append(filename)
-        except IOError, e:
-            printError ("error reading cpio: %s" % e)
-        print filelist
 
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -26,22 +26,30 @@ from pyrpm import *
 
 def usage():
     print "INSTALLING, UPGRADING, AND REMOVING PACKAGES using REPOS:"
-    print "    pyrpminstall {-i|--install} [install-options] PACKAGE_FILE ..."
-    print "    pyrpminstall {-U|--upgrade} [install-options] PACKAGE_FILE ..."
-    print "    pyrpminstall {-F|--freshen} [install-options] PACKAGE_FILE ..."
-    print "    pyrpminstall {-e|--erase} [install-options] PACKAGE_FILE ..."
+    print "    pyrpmyum install [install-options] PACKAGE_FILE ..."
+    print "    pyrpmyum groupinstall [install-options] PACKAGE_FILE ..."
+    print "    pyrpmyum upgrade [install-options] PACKAGE_FILE ..."
+    print "    pyrpmyum groupupgrade [install-options] PACKAGE_FILE ..."
+    print "    pyrpmyum update [install-options] PACKAGE_FILE ..."
+    print "    pyrpmyum groupupdate [install-options] PACKAGE_FILE ..."
+    print "    pyrpmyum remove [install-options] PACKAGE_FILE ..."
+    print "    pyrpmyum groupremove [install-options] PACKAGE_FILE ..."
     print
     print "general options:"
     print "    [-?, --help] [--version]"
     print "    [--quiet] [-v, --verbose] [-w, warning] [-d, --debug]"
-    print "    [--dbpath DIRECTORY] [-r, --root DIRECTORY]"
-    print "    [--repo DIRECTORY]"
+    print "    [-c CONFIGFILE] [--dbpath DIRECTORY] [-r, --root DIRECTORY]"
+    print "    [-g, --group COMPSFILE] [--repo DIRECTORY]"
     print
     print "install-options:"
     print "    [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]"
     print "    [--ignoresize] [--ignorearch]"
     print "    [--nodeps] [--nodigest] [--nosignature]"
     print "    [--noorder] [--noscripts] [--notriggers]"
+    print
+    print "Warning: Some of the install-options are not evaluated yet"
+    print "Warning: -c isn't working yet properly, use --repo for now"
+    print "Warning: [group]remove doesn't work yet either, use pyrpminstall -e"
 
 def runDepResolution(resolver, unresolved):
     iter = 1
@@ -53,7 +61,7 @@ def runDepResolution(resolver, unresolved):
             printInfo(1, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
             found = 0
             for dep in deplist:
-                print "\t"+depString(dep)
+                printInfo(2, "\t"+depString(dep))
                 for repo in repos:
                     res = repo.searchDependency(dep)
                     for upkg in res:
@@ -83,17 +91,27 @@ def runDepResolution(resolver, unresolved):
             sys.exit(1)
         unresolved = resolver.getUnresolvedDependencies()
 
+def addDirToRepo(dirname, resolver):
+    filenames = os.listdir(dirname)
+    for f in filenames:
+        if not f.endswith(".rpm") or not os.path.isfile(dirname+"/"+f):
+            continue
+        pkg = RpmPackage(dirname+"/"+f)
+        pkg.open()
+        pkg.read(tags=rpmconfig.resolvertags)
+        pkg.close()
+        ret = resolver.append(pkg)
 
 #
 # Main program
 #
 try:
-    opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:",
-        ["install", "upgrade", "freshen", "erase", "help", "verbose",
+    opts, args = getopt.getopt(sys.argv[1:], "?vwdhc:r:g:",
+        ["help", "verbose",
          "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=",
-         "repo=", "force", "ignoresize", "ignorearch", "justdb", "nodeps",
-         "nodigest", "nosignature", "noorder", "noscripts", "notriggers",
-         "oldpackage", "test"])
+         "group=", "repo=", "force", "ignoresize", "ignorearch", "justdb",
+         "nodeps", "nodigest", "nosignature", "noorder", "noscripts",
+         "notriggers", "oldpackage", "test"])
 except getopt.error, e:
     print "Error parsing command list arguments: %s" % e
     usage()
@@ -106,31 +124,7 @@ rpmconfig.debug_level = 0
 repos = []
 
 for (opt, val) in opts:
-    if opt in ["-i", "--install"]:
-        if rpmconfig.operation != None:
-            print "Only one operation at a time is allow."
-            usage()
-            sys.exit(1)
-        rpmconfig.operation = RpmResolver.OP_INSTALL
-    elif opt in ["-U", "--upgrade"]:
-        if rpmconfig.operation != None:
-            print "Only one operation at a time is allow."
-            usage()
-            sys.exit(1)
-        rpmconfig.operation = RpmResolver.OP_UPDATE
-    elif opt in ["-F", "--freshen"]:
-        if rpmconfig.operation != None:
-            print "Only one operation at a time is allow."
-            usage()
-            sys.exit(1)
-        rpmconfig.operation = RpmResolver.OP_FRESHEN
-    elif opt in ["-e", "--erase"]:
-        if rpmconfig.operation != None:
-            print "Only one operation at a time is allow."
-            usage()
-            sys.exit(1)
-        rpmconfig.operation = RpmResolver.OP_ERASE
-    elif opt in ['-?', "--help"]:
+    if   opt in ['-?', "--help"]:
         usage()
         sys.exit(0)
     elif opt in ["-v", "--verbose"]:
@@ -141,17 +135,18 @@ for (opt, val) in opts:
         rpmconfig.debug_level += 1
     elif opt in ["-r", "--root"]:
         rpmconfig.buildroot = val
+    elif opt in ["-g", "--group"]:
+        rpmconfig.compsfile = val
     elif opt == "--repo":
         resolver = RpmResolver([], RpmResolver.OP_INSTALL)
-        filenames = os.listdir(val)
-        for f in filenames:
-            if not f.endswith(".rpm") or not os.path.isfile(val+"/"+f):
-                continue
-            pkg = RpmPackage(val+"/"+f)
-            pkg.open()
-            pkg.read(tags=rpmconfig.resolvertags)
-            pkg.close()
-            ret = resolver.append(pkg)
+        if os.path.isdir(val):
+            addDirToRepo(val, resolver)
+        if os.path.isdir(val+"/RedHat/RPMS"):
+            addDirToRepo(val+"/RedHat/RPMS", resolver)
+        if os.path.isdir(val+"/Fedora/RPMS"):
+            addDirToRepo(val+"/Fedora/RPMS", resolver)
+        if rpmconfig.compsfile == None and os.path.isfile(val+"/repodata/comps.xml"):
+            rpmconfig.compsfile = val+"/repodata/comps.xml"
         repos.append(resolver)
         del resolver
     elif opt == "--quiet":
@@ -196,9 +191,30 @@ for (opt, val) in opts:
         rpmconfig.notriggers = 1
 
 if not args:
-    print "Error no packages to install"
+    printError("No command given")
     usage()
     sys.exit(1)
+
+command = args[0]
+args = args[1:]
+
+if command.startswith("group"):
+    if rpmconfig.compsfile == None:
+        printError("You need to specify a comps.xml file for group operations")
+        usage()
+        sys.exit(1)
+    comps = RpmCompsXMLIO(rpmconfig.compsfile)
+    comps.read()
+    pkgs = []
+    for grp in args:
+        pkgs.extend(comps.getPackageNames(grp))
+    args = pkgs
+
+if   command == "install" or command == "groupinstall":
+    rpmconfig.operation = RpmResolver.OP_INSTALL
+elif command == "update" or command == "upgrade" or \
+     command == "groupupdate" or command == "groupupgrade":
+    rpmconfig.operation = RpmResolver.OP_FRESHEN
 
 installed = []
 if rpmconfig.buildroot:
@@ -211,8 +227,6 @@ if installed == None:
 else:
     installed = installed.values()
 del pydb
-#for i in installed:
-#    print i.getNEVRA()
 
 opresolver = RpmResolver(installed, RpmResolver.OP_UPDATE)
 pkgs = []
@@ -228,8 +242,7 @@ for f in args:
             pkgs.extend(findPkgByName(f, repo.appended))
         filterArchList(pkgs, rpmconfig.machine)
         if len(pkgs) == 0:
-            printError("Couldn't find package %s" % f)
-            sys.exit(1)
+            printError("Couldn't find package %s, skipping" % f)
 
 for pkg in pkgs:
     if rpmconfig.operation == RpmResolver.OP_UPDATE or rpmconfig.operation == RpmResolver.OP_FRESHEN:

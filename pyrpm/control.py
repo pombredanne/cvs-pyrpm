@@ -166,6 +166,12 @@ class RpmController:
                 if status != 0:
                     sys.exit(1)
                 for (op, pkg) in subop:
+                    if op == RpmResolver.OP_INSTALL or \
+                       op == RpmResolver.OP_UPDATE or \
+                       op == RpmResolver.OP_FRESHEN:
+                        self.__addPkgToDB(pkg, nowrite=1)
+                    elif op == RpmResolver.OP_ERASE:
+                        self.__erasePkgFromDB(pkg, nowrite=1)
                     pkg.close()
                 operations = operations[pkgsperfork:]
                 subop = operations[:pkgsperfork]
@@ -181,12 +187,9 @@ class RpmController:
                         printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
                     else:
                         printInfo(1, "%s %s" % (progress, pkg.getNEVRA()))
-                    if   op == RpmResolver.OP_INSTALL:
-                        if not pkg.install(self.pydb):
-                            sys.exit(1)
-                        self.__runTriggerIn(pkg)
-                        self.__addPkgToDB(pkg)
-                    elif op == RpmResolver.OP_UPDATE or op == RpmResolver.OP_FRESHEN:
+                    if   op == RpmResolver.OP_INSTALL or \
+                         op == RpmResolver.OP_UPDATE or \
+                         op == RpmResolver.OP_FRESHEN:
                         if not pkg.install(self.pydb):
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
@@ -253,17 +256,17 @@ class RpmController:
                 filterArchCompat(self.rpms, rpmconfig.machine)
         return 1
 
-    def __addPkgToDB(self, pkg):
+    def __addPkgToDB(self, pkg, nowrite=None):
         if self.pydb == None:
             return 0
         self.pydb.setSource(self.db)
-        return self.pydb.addPkg(pkg)
+        return self.pydb.addPkg(pkg, nowrite)
 
-    def __erasePkgFromDB(self, pkg):
+    def __erasePkgFromDB(self, pkg, nowrite=None):
         if self.pydb == None:
             return 0
         self.pydb.setSource(self.db)
-        return self.pydb.erasePkg(pkg)
+        return self.pydb.erasePkg(pkg, nowrite)
 
     def __runTriggerIn(self, pkg):
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERIN, pkg.getEVR())

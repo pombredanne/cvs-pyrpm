@@ -173,7 +173,6 @@ class RpmPackage(RpmData):
             if not runScript(self["preinprog"], self["prein"], numPkgs):
                 printError("%s: Error running pre install script." \
                     % self.getNEVRA())
-                return 0
         if not self.__extract(db):
             return 0
         if rpmconfig.hash:
@@ -202,12 +201,21 @@ class RpmPackage(RpmData):
             if not runScript(self["preunprog"], self["preun"], numPkgs):
                 printError("%s: Error running pre uninstall script." \
                     % self.getNEVRA())
-                return 0
         # Remove files starting from the end (reverse process to install)
+        nfiles = len(files)
+        n = 0
+        pos = 0
+        if rpmconfig.hash:
+            printInfo(0, "\r\t\t\t\t ")
         for i in xrange(len(files)-1, -1, -1):
+            n += 1
+            npos = int(n*45/nfiles)
+            if pos < npos and rpmconfig.hash:
+                printInfo(0, "#"*(npos-pos))
+            pos = npos
             f = files[i]
             if db.isDuplicate(f):
-                printDebug(2, "File/Dir %s still in db, not removing..." % f)
+                printDebug(1, "File/Dir %s still in db, not removing..." % f)
                 continue
             if os.path.isdir(f):
                 if os.listdir(f) == []:
@@ -293,7 +301,6 @@ class RpmPackage(RpmData):
             if pos < npos and rpmconfig.hash:
                 printInfo(0, "#"*(npos-pos))
             pos = npos
-            sys.stdout.flush()
             if self.isSourceRPM() and os.path.dirname(filename)=='/':
                 # src.rpm has empty tag "dirnames", but we use absolut paths in
                 # io.read(), so at least the directory '/' is there ...
@@ -310,6 +317,8 @@ class RpmPackage(RpmData):
                                 return 0
                             if not self.__handleHardlinks(rfi):
                                 return 0
+                else:
+                    self.__removeHardlinks(rfi)
             (filename, filerawdata) = self.io.read()
         if nfiles == 0:
             nfiles = 1
@@ -330,14 +339,17 @@ class RpmPackage(RpmData):
         # Don't install ghost files ;)
         if rfi.flags & RPMFILE_GHOST:
             return 0
-        # Check if we are on a multiarch system and if we should overwrite the
-        # file with a 64bit version
-        pass
+        plist = db.filenames[rfi.filename]
         # Not a config file -> always overwrite it, resolver didn't say we
         # had any conflicts ;)
         if rfi.flags & RPMFILE_CONFIG == 0:
+            # Check if we need to overwrite a file on a multilib system. If any
+            # package which already owns the file has a higher "arch" don't
+            # overwrite it.
+            for pkg in plist:
+                if self["arch"] in arch_compats[pkg["arch"]]:
+                    return 0
             return 1
-        plist = db.filenames[rfi.filename]
         (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
             = os.stat(rfi.filename)
         md5sum = md5.new(open(rfi.filename).read()).hexdigest()
@@ -397,7 +409,7 @@ class RpmPackage(RpmData):
         for filename in self.rfilist.keys():
             rfi = self.rfilist[filename]
             key = rfi.inode*65536 + rfi.dev
-            if key not in self.hardlinks.keys():
+            if not self.hardlinks.has_key(key):
                 self.hardlinks[key] = []
             self.hardlinks[key].append(rfi)
         for key in self.hardlinks.keys():
@@ -413,6 +425,11 @@ class RpmPackage(RpmData):
                 return 0
         del self.hardlinks[key]
         return 1
+
+    def __removeHardlinks(self, rfi):
+        key = rfi.inode*65536 + rfi.dev
+        if self.hardlinks.has_key(key):
+            del self.hardlinks[key]
 
     def __handleRemainingHardlinks(self):
         keys = self.hardlinks.keys()

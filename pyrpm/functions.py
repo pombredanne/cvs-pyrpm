@@ -209,6 +209,12 @@ def getFreeDiskspace(pkglist):
             freehash[dirhash[dirname]] -= pkg["filesizes"][i]
     return freehash
 
+def parseBoolean(str):
+    lower = string.lower(str)
+    if lower == "yes" or lower == "true" or lower == "1" or lower == "on":
+        return 1
+    return 0
+
 # Error handling functions
 def printDebug(level, msg):
     if level <= rpmconfig.debug_level:
@@ -555,8 +561,20 @@ def tagsearch(searchtags, list, regex=None):
     return pkglist
 
 def normalizeRegex(regex):
-    regex = regex.replace(".", "\.")
-    regex = regex.replace("*", ".*")
+    regex = string.replace(regex, ".", "\.")
+    regex = string.replace(regex, "*", ".*")
+    regex = string.replace(regex, "+", "\+")
+    regex = string.replace(regex, "\\", "\\\\")
+    regex = string.replace(regex, "^", "\^")
+    regex = string.replace(regex, "$", "\$")
+    regex = string.replace(regex, "?", "\?")
+    regex = string.replace(regex, "{", "\{")
+    regex = string.replace(regex, "}", "\}")
+    regex = string.replace(regex, "[", "\[")
+    regex = string.replace(regex, "]", "\]")
+    regex = string.replace(regex, "|", "\|")
+    regex = string.replace(regex, "(", "\(")
+    regex = string.replace(regex, ")", "\)")
     return regex
 
 EPOCHTAG=0

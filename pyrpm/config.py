@@ -42,6 +42,7 @@ class RpmConfig:
         self.noorder = 0
         self.noscripts = 0
         self.notriggers = 0
+        self.compsfile = None
         self.resolvertags = ("name", "epoch", "version", "release", "arch",
             "providename", "provideflags", "provideversion", "requirename",
             "requireflags", "requireversion", "obsoletename", "obsoleteflags",
