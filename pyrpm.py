@@ -395,6 +395,7 @@ class ReadRpm:
 
     def getScript(self, s, p):
         script = self[s]
+        # prog can be a string or an string_array (with args to the app)
         prog = self[p]
         if script == None and prog == None:
             return (None, None)
