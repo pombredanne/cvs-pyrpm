@@ -29,6 +29,22 @@ CP_IFNWK =  0110000
 CP_IFLNK =  0120000
 CP_IFSOCK = 0140000
 
+# file data indexes
+CP_FDMAGIC = 0
+CP_FDINODE = 1
+CP_FDMODE = 2
+CP_FDUID = 3
+CP_FDGID = 4
+CP_FDNLINK = 5
+CP_FDMTIME = 6
+CP_FDFILESIZE = 7
+CP_FDDEVMAJOR = 8
+CP_FDDEVMINOR = 9
+CP_FDRDEVMAJOR = 10
+CP_FDRDEVMINOR = 11
+CP_FDNAMESIZE = 12
+CP_FDCHECKSUM = 13
+
 
 class CPIOFile:
     """ Read ASCII CPIO files. """
@@ -58,7 +74,7 @@ class CPIOFile:
             int(data[78:86], 16), int(data[86:94], 16), \
             int(data[94:102], 16), data[102:110]]
 
-        size = filedata[12]
+        size = filedata[CP_FDNAMESIZE]
         filename = self.fd.read(size)
         filename = "/"+os.path.normpath("./"+filename.rstrip("\x00"))
         fsize = 110 + size
@@ -69,7 +85,7 @@ class CPIOFile:
             return [None, None]
 
         # Contents
-        filesize = filedata[7]
+        filesize = filedata[CP_FDFILESIZE]
         return [filename, filedata]
         
 
@@ -79,7 +95,7 @@ class CPIOFile:
             if filename == None:
                 break
             # Contents
-            filesize = filedata[7]
+            filesize = filedata[CP_FDFILESIZE]
             self.fd.read(filesize)
             self.fd.read((4 - (filesize % 4)) % 4)
             self.filelist[filename] = filedata
@@ -101,9 +117,9 @@ class CPIOFile:
         # Check if we have a defered 0 byte file with the same inode, devmajor
         # and devminor and if yes, create a hardlink to the new file.
         for i in xrange(len(self.defered)-1, -1, -1):
-            if self.defered[i][1][1] == self.filedata[1] and \
-               self.defered[i][1][8] == self.filedata[8] and \
-               self.defered[i][1][9] == self.filedata[9]:
+            if self.defered[i][1][CP_FDINODE] == self.filedata[CP_FDINODE] and \
+               self.defered[i][1][CP_FDDEVMAJOR] == self.filedata[CP_FDDEVMAJOR] and \
+               self.defered[i][1][CP_FDDEVMINOR] == self.filedata[CP_FDDEVMINOR]:
                 self.createLink(filename, self.defered[i][0])
                 self.defered.pop(i)
 
@@ -119,13 +135,13 @@ class CPIOFile:
             fd = open(self.defered[i][0], "w")
             fd.write("")
             fd.close()
-            os.chmod(self.defered[i][0], (~CP_IFMT) & self.defered[i][1][2])
-            os.chown(self.defered[i][0], self.defered[i][1][3], self.defered[i][1][4])
-            os.utime(self.defered[i][0], (self.defered[i][1][6], self.defered[i][1][6]))
+            os.chmod(self.defered[i][0], (~CP_IFMT) & self.defered[i][1][CP_FDMODE])
+            os.chown(self.defered[i][0], self.defered[i][1][CP_FDUID], self.defered[i][1][CP_FDGID])
+            os.utime(self.defered[i][0], (self.defered[i][1][CP_FDMTIME], self.defered[i][1][CP_FDMTIME]))
             for j in xrange(i-1, -1, -1):
-                if self.defered[i][1][1] == self.defered[j][1][1] and \
-                   self.defered[i][1][8] == self.defered[j][1][8] and \
-                   self.defered[i][1][9] == self.defered[j][1][9]:
+                if self.defered[i][1][CP_FDINODE] == self.defered[j][1][CP_FDINODE] and \
+                   self.defered[i][1][CP_FDDEVMAJOR] == self.defered[j][1][CP_FDDEVMAJOR] and \
+                   self.defered[i][1][CP_FDDEVMINOR] == self.defered[j][1][CP_FDDEVMINOR]:
                     self.createLink(filename, self.defered[i][0])
 
     def makeDirs(self, fullname):
@@ -141,7 +157,7 @@ class CPIOFile:
         if not os.path.isdir(instroot):
             return 0
 
-        filetype = self.filedata[2] & CP_IFMT
+        filetype = self.filedata[CP_FDMODE] & CP_IFMT
         fullname = instroot + self.filename
         if   filetype == CP_IFREG:
             self.makeDirs(fullname)
@@ -156,23 +172,23 @@ class CPIOFile:
             #    again)
             #  - For the rest in the end create 0 byte files as they were in
             #    fact really 0 byte files, not hardlinks.
-            if self.filedata[7] == 0:
+            if self.filedata[CP_FDFILESIZE] == 0:
                 self.addToDefered(fullname)
                 return 1
             fd = open(fullname, "w")
             fd.write(self.filerawdata)
             fd.close()
-            os.chown(fullname, self.filedata[3], self.filedata[4])
-            os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
-            os.utime(fullname, (self.filedata[6], self.filedata[6]))
+            os.chown(fullname, self.filedata[CP_FDUID], self.filedata[CP_FDGID])
+            os.chmod(fullname, (~CP_IFMT) & self.filedata[CP_FDMODE])
+            os.utime(fullname, (self.filedata[CP_FDMTIME], self.filedata[CP_FDMTIME]))
             self.handleCurrentDefered(fullname)
         elif filetype == CP_IFDIR:
             if os.path.isdir(fullname):
                 return 1
             os.makedirs(fullname)
-            os.chown(fullname, self.filedata[3], self.filedata[4])
-            os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
-            os.utime(fullname, (self.filedata[6], self.filedata[6]))
+            os.chown(fullname, self.filedata[CP_FDUID], self.filedata[CP_FDGID])
+            os.chmod(fullname, (~CP_IFMT) & self.filedata[CP_FDMODE])
+            os.utime(fullname, (self.filedata[CP_FDMTIME], self.filedata[CP_FDMTIME]))
         elif filetype == CP_IFLNK:
             symlinkfile = self.filerawdata.rstrip("\x00")
             if os.path.islink(fullname) and os.readlink(fullname) == symlinkfile:
@@ -187,13 +203,13 @@ class CPIOFile:
             else:
                 return 0
             self.makeDirs(fullname)
-            ret = commands.getoutput("/bin/mknod "+fullname+" "+devtype+" "+str(self.filedata[10])+" "+str(self.filedata[11]))
+            ret = commands.getoutput("/bin/mknod "+fullname+" "+devtype+" "+str(self.filedata[CP_FDRDEVMAJOR])+" "+str(self.filedata[CP_FDRDEVMINOR]))
             if ret != "":
                 print "Error creating device: "+ret
             else:
-                os.chown(fullname, self.filedata[3], self.filedata[4])
-                os.chmod(fullname, (~CP_IFMT) & self.filedata[2])
-                os.utime(fullname, (self.filedata[6], self.filedata[6]))
+                os.chown(fullname, self.filedata[CP_FDUID], self.filedata[CP_FDGID])
+                os.chmod(fullname, (~CP_IFMT) & self.filedata[CP_FDMODE])
+                os.utime(fullname, (self.filedata[CP_FDMTIME], self.filedata[CP_FDMTIME]))
         else:
             raise ValueError, "%s: not a valid CPIO filetype" % (oct(filetype))
 
@@ -206,7 +222,7 @@ class CPIOFile:
             return [None, None, None]
 
         # Contents
-        filesize = filedata[7]
+        filesize = filedata[CP_FDFILESIZE]
         filerawdata = self.fd.read(filesize)
         self.fd.read((4 - (filesize % 4)) % 4)
         self.filename = filename
