@@ -69,10 +69,12 @@ class _Relations:
                 self.list[p]._post[pkg] = 1
     def remove(self, pkg):
         rel = self.list[pkg]
+        # remove all post relations for the matching pre relation packages 
+        for (r, f) in rel.pre:
+            del self.list[r]._post[pkg]
+        # remove all pre relations for the matching post relation packages 
         for (r, f) in rel._post:
-            i = self.list[r]
-            if len(i.pre) > 0:
-                del i.pre[pkg]
+            del self.list[r].pre[pkg]
         del self.list[pkg]
     def has_key(self, key):
         return self.list.has_key(key)
@@ -120,7 +122,8 @@ class RpmOrderer:
         # generate todo list
         rpmlist = RpmResolver(self.rpms, self.operation)
         if rpmconfig.timer:
-            print "orderer: genRelations(): RpmResolver() took %s seconds" % (clock() - time1)
+            print "orderer: genRelations(): RpmResolver() took %s seconds" % \
+                  (clock() - time1)
             time1 = clock()
 
         for rlist in rpmlist:
@@ -132,7 +135,8 @@ class RpmOrderer:
                 for ((name, flag, version), s) in resolved:
                     if name.startswith("config("): # drop config requirements
                         continue
-                    # drop requirements which are resolved by the package itself
+                    # drop requirements which are resolved by the package
+                    # itself
                     if r in s:
                         continue
                     f = self._operationFlag(flag)
@@ -314,8 +318,21 @@ class RpmOrderer:
         """ Order rpmlist.
         Returns ordered list of packages. """
         order = [ ]
+        last = [ ]
         idx = 1
         while len(relations) > 0:
+            # remove and save all packages without a post relation in reverse
+            # order
+            # these packages will be appended later to the list
+            i = 0
+            while i < len(relations):
+                (pkg, rel) = relations[i]
+                if len(rel._post) == 0:
+                    last.insert(0, pkg)
+                    relations.remove(pkg)
+                else:
+                    i += 1
+                    
             next = None
             # we have to have at least one entry, so start with -1 for len
             next_post_len = -1
@@ -323,7 +340,7 @@ class RpmOrderer:
                 if len(rel.pre) == 0 and len(rel._post) > next_post_len:
                     next = (pkg, rel)
                     next_post_len = len(rel._post)
-                
+
             if next != None:
                 pkg = next[0]
                 order.append(pkg)
@@ -351,8 +368,8 @@ class RpmOrderer:
                 if self._breakupLoop(loop, relations) != 1:
                     printError("Could not breakup loop")
                     return None
-
-        return order
+        
+        return (order + last)
 
     # ----
 
