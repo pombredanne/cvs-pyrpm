@@ -1,0 +1,59 @@
+
+RpmIO
+-----
+  read(data, name) : fail
+  write(data) : fail
+
+RpmFile(RpmIO)
+--------------
+  read(data, filename)
+  write(data, filename)
+
+RpmDBEntry(RpmIO)
+-----------------
+  read(data, envra)
+  write(data)
+
+RpmRepoEntry(RpmIO)
+-----------------
+  read(data, filename)
+  write(data, filename)
+
+RpmList
+-------
+
+RpmDB(RpmList)
+--------------
+
+RpmRepo(RpmList)
+----------------
+
+RpmData
+-------
+  self.data = [ ]
+  __setitem__
+  __getitem__
+  verify()
+
+RpmPackage(RpmData)
+-------------------
+  clear(): self.io = RpmIO()
+  getRequires()
+  getProvides()
+  getObsoletes()
+  getConflicts()
+  read(io):
+    self.io = io; io.read(self.data)
+  write(io)
+    self.io = io; io.write(self.data)
+  verify()
+  extract()
+  compose(envra)
+
+
+USAGE
+=====
+
+rpm = RPM(ReadFile("foo-1.2.rpm"))
+
+envra: [e:]n[-v[-r]][.arch]
