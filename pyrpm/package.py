@@ -21,8 +21,6 @@ import os.path, sys, pwd, grp, md5
 from stat import S_ISREG
 from struct import unpack
 from functions import *
-from io import *
-
 
 class RpmData:
     def __init__(self):
@@ -123,6 +121,8 @@ class RpmPackage(RpmData):
         self.rpmusercache = RpmUserCache()
 
     def open(self, mode="r"):
+        from io import getRpmIOFactory
+
         if self.io != None:
             return 1
         self.io = getRpmIOFactory(self.source, self.verify, self.strict,
