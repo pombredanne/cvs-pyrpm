@@ -128,8 +128,11 @@ class RpmList:
             while self.list[key] != None and i < len(self.list[key]):
                 r = self.list[key][i]
                 if r != pkg and (pkg["arch"] == r["arch"] or \
-                                 buildarchtranslate[pkg["arch"]] == \
-                                 buildarchtranslate[r["arch"]]):
+                                 (rpmconfig.exactarch == 0 and \
+                                  buildarchtranslate[pkg["arch"]] == \
+                                  buildarchtranslate[r["arch"]]) or \
+                                 pkg["arch"] == "noarch" or \
+                                 r["arch"] == "noarch"):
                     printWarning(1, "Replacing installed %s with %s" % \
                                  (r.getNEVRA(), pkg.getNEVRA()))
                     if self._pkgUpdate(pkg, r) != self.OK:
