@@ -592,6 +592,62 @@ arch_compats = {
 "ia32e" : ("x86_64", "athlon", "i686", "i586", "i486", "i386", "noarch")
 }
 
+# Buildarchtranslate table for multilib stuff
+buildarchtranslate = {
+"osfmach3_i686" : "i386",
+"osfmach3_i586" : "i386",
+"osfmach3_i486" : "i386",
+"osfmach3_i386" : "i386",
+
+"athlon" : "i386",
+"pentium4" : "i386",
+"pentium3" : "i386",
+"i686" : "i386",
+"i586" : "i386",
+"i486" : "i386",
+"i386" : "i386",
+
+"alphaev5" : "alpha",
+"alphaev56" : "alpha",
+"alphapca56" : "alpha",
+"alphaev6" : "alpha",
+"alphaev67" : "alpha",
+
+"sun4c" : "sparc",
+"sun4d" : "sparc",
+"sun4m" : "sparc",
+"sparcv8" : "sparc",
+"sparcv9" : "sparc",
+"sun4u" : "sparc64",
+
+"osfmach3_ppc" : "ppc",
+"powerpc" : "ppc",
+"powerppc" : "ppc",
+"ppc8260" : "ppc",
+"ppc8560" : "ppc",
+"ppc32dy4" : "ppc",
+"ppciseries" : "ppc",
+"ppcpseries" : "ppc",
+
+"atarist" : "m68kmint",
+"atariste" : "m68kmint",
+"ataritt" : "m68kmint",
+"falcon" : "m68kmint",
+"atariclone" : "m68kmint",
+"milan" : "m68kmint",
+"hades" : "m68kmint",
+
+"s390" : "s390",
+"s390x" : "s390x",
+
+"ia64" : "ia64",
+
+"x86_64" : "x86_64",
+"amd64" : "x86_64",
+"ia32e" : "x86_64"
+}
+
+
 # Some special magics for binary rpms
 RPM_HEADER_LEAD_MAGIC = '\xed\xab\xee\xdb'
 RPM_HEADER_INDEX_MAGIC = "\x8e\xad\xe8\x01\x00\x00\x00\x00"
