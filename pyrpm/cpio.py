@@ -99,119 +99,6 @@ class CPIOFile:
             self.fd.read((4 - (filesize % 4)) % 4)
             self.filelist[filename] = filedata
 
-    def createLink(self, src, dst):
-        try:
-            # First try to unlink the defered file
-            os.unlink(dst)
-        except:
-            pass
-        # Behave exactly like cpio: If the hardlink fails (because of different
-        # partitions), then it has to fail
-        os.link(src, dst)
- 
-    def addToDefered(self, filename):
-        self.defered.append((filename, self.filedata))
-
-    def handleCurrentDefered(self, filename):
-        # Check if we have a defered 0 byte file with the same inode, devmajor
-        # and devminor and if yes, create a hardlink to the new file.
-        for i in xrange(len(self.defered)-1, -1, -1):
-            if self.defered[i][1][CP_FDINODE] == self.filedata[CP_FDINODE] and \
-               self.defered[i][1][CP_FDDEVMAJOR] == self.filedata[CP_FDDEVMAJOR] and \
-               self.defered[i][1][CP_FDDEVMINOR] == self.filedata[CP_FDDEVMINOR]:
-                self.createLink(filename, self.defered[i][0])
-                self.defered.pop(i)
-
-    def postExtract(self):
-        # In the end we need to process the remaining files in the defered
-        # list and see if any of them need to be hardlinked, too.
-        for i in xrange(len(self.defered)-1, -1, -1):
-            # We mark already processed defered hardlinked files by setting
-            # the inode of those files to -1. We have to skip those naturally.
-            if self.defered[i][1][1] < 0:
-                continue
-            # Create empty file
-            fd = open(self.defered[i][0], "w")
-            fd.write("")
-            fd.close()
-            os.chmod(self.defered[i][0], (~CP_IFMT) & self.defered[i][1][CP_FDMODE])
-            os.chown(self.defered[i][0], self.defered[i][1][CP_FDUID], self.defered[i][1][CP_FDGID])
-            os.utime(self.defered[i][0], (self.defered[i][1][CP_FDMTIME], self.defered[i][1][CP_FDMTIME]))
-            for j in xrange(i-1, -1, -1):
-                if self.defered[i][1][CP_FDINODE] == self.defered[j][1][CP_FDINODE] and \
-                   self.defered[i][1][CP_FDDEVMAJOR] == self.defered[j][1][CP_FDDEVMAJOR] and \
-                   self.defered[i][1][CP_FDDEVMINOR] == self.defered[j][1][CP_FDDEVMINOR]:
-                    self.createLink(filename, self.defered[i][0])
-
-    def makeDirs(self, fullname):
-        dirname = fullname[:fullname.rfind("/")]
-        if not os.path.isdir(dirname):
-                os.makedirs(dirname)
-
-    def extractCurrentEntry(self, instroot=None):
-        if self.filename == None or self.filedata == None:
-            return 0
-        if instroot == None:
-            instroot = "/"
-        if not os.path.isdir(instroot):
-            return 0
-
-        filetype = self.filedata[CP_FDMODE] & CP_IFMT
-        fullname = instroot + self.filename
-        if   filetype == CP_IFREG:
-            self.makeDirs(fullname)
-            # CPIO archives are sick: Hardlinks are stored as 0 byte long
-            # regular files.
-            # The last hardlinked file in the archive contains the data, so
-            # we have to defere creating any 0 byte file until either:
-            #  - We create a file with data and the inode/devmajor/devminor are
-            #    identical
-            #  - We have processed all files and can check the defered list for
-            #    any more identical files (in which case they are hardlinked
-            #    again)
-            #  - For the rest in the end create 0 byte files as they were in
-            #    fact really 0 byte files, not hardlinks.
-            if self.filedata[CP_FDFILESIZE] == 0:
-                self.addToDefered(fullname)
-                return 1
-            fd = open(fullname, "w")
-            fd.write(self.filerawdata)
-            fd.close()
-            os.chown(fullname, self.filedata[CP_FDUID], self.filedata[CP_FDGID])
-            os.chmod(fullname, (~CP_IFMT) & self.filedata[CP_FDMODE])
-            os.utime(fullname, (self.filedata[CP_FDMTIME], self.filedata[CP_FDMTIME]))
-            self.handleCurrentDefered(fullname)
-        elif filetype == CP_IFDIR:
-            if os.path.isdir(fullname):
-                return 1
-            os.makedirs(fullname)
-            os.chown(fullname, self.filedata[CP_FDUID], self.filedata[CP_FDGID])
-            os.chmod(fullname, (~CP_IFMT) & self.filedata[CP_FDMODE])
-            os.utime(fullname, (self.filedata[CP_FDMTIME], self.filedata[CP_FDMTIME]))
-        elif filetype == CP_IFLNK:
-            symlinkfile = self.filerawdata.rstrip("\x00")
-            if os.path.islink(fullname) and os.readlink(fullname) == symlinkfile:
-                return 1
-            self.makeDirs(fullname)
-            os.symlink(symlinkfile, fullname)
-        elif filetype == CP_IFCHR or filetype == CP_IFBLK or filetype == CP_IFSOCK or filetype == CP_IFIFO:
-            if filetype == CP_IFCHR:
-                devtype = "c"
-            elif filetype == CP_IFBLK:
-                devtype = "b"
-            else:
-                return 0
-            self.makeDirs(fullname)
-            ret = commands.getoutput("/bin/mknod "+fullname+" "+devtype+" "+str(self.filedata[CP_FDRDEVMAJOR])+" "+str(self.filedata[CP_FDRDEVMINOR]))
-            if ret != "":
-                printWarning(1, "Error creating device: "+ret)
-            else:
-                os.chown(fullname, self.filedata[CP_FDUID], self.filedata[CP_FDGID])
-                os.chmod(fullname, (~CP_IFMT) & self.filedata[CP_FDMODE])
-                os.utime(fullname, (self.filedata[CP_FDMTIME], self.filedata[CP_FDMTIME]))
-        else:
-            raise ValueError, "%s: not a valid CPIO filetype" % (oct(filetype))
-
     def getCurrentEntry(self):
         return [self.filename, self.filedata, self.filerawdata]
 
@@ -235,10 +122,6 @@ class CPIOFile:
         self.filedata = None
         self.filerawdata = None
         self.defered = []
-
-    def namelist(self):
-        """Return a list of file names in the archive."""
-        return self.filelist
 
     def read(self):
         """Read an parse cpio archive."""

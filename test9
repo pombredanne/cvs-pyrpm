@@ -1,24 +1,30 @@
 #!/usr/bin/python
 
-import sys
+import sys, profile
 from pyrpmlib import *
 
 def usage():
     print "Usage: test9 [-i|-u|-f|-e] packagelist"
     sys.exit(0)
 
-control = RpmController()
-if len(sys.argv) < 3:
-    usage()
-if   sys.argv[1] == "-i":
-    control.installPkgs(sys.argv[2:], "/var/lib/pyrpm", "/mnt/build/pyrpm-fc3-i386/")
-elif sys.argv[1] == "-u":
-    control.updatePkgs(sys.argv[2:], "/var/lib/pyrpm", "/mnt/build/pyrpm-fc3-i386/")
-elif sys.argv[1] == "-f":
-    control.freshenPkgs(sys.argv[2:], "/var/lib/pyrpm", "/mnt/build/pyrpm-fc3-i386/")
-elif sys.argv[1] == "-e":
-    control.erasePkgs(sys.argv[2:], "/var/lib/pyrpm", "/mnt/build/pyrpm-fc3-i386/")
-else:
-    usage()
+def foo():
+    control = RpmController()
+    if len(sys.argv) < 3:
+        usage()
+    if   sys.argv[1] == "-i":
+        control.installPkgs(sys.argv[2:], "/var/lib/pyrpm", "/mnt/build/pyrpm-fc3-i386/")
+    elif sys.argv[1] == "-u":
+        control.updatePkgs(sys.argv[2:], "/var/lib/pyrpm", "/mnt/build/pyrpm-fc3-i386/")
+    elif sys.argv[1] == "-f":
+        control.freshenPkgs(sys.argv[2:], "/var/lib/pyrpm", "/mnt/build/pyrpm-fc3-i386/")
+    elif sys.argv[1] == "-e":
+        control.erasePkgs(sys.argv[2:], "/var/lib/pyrpm", "/mnt/build/pyrpm-fc3-i386/")
+    else:
+        usage()
+
+#prof = profile.Profile()
+#prof.runctx("foo()", globals(), globals())
+#prof.print_stats()
+foo()
 
 # vim:ts=4:sw=4:showmatch:expandtab

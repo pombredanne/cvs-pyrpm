@@ -29,15 +29,14 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         prog = "/bin/sh"
     if not os.path.exists("/var/tmp"):
         os.makedirs("/var/tmp")
-    (fd, tmpfilename) = tempfile.mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
-    if fd == None:
-        return 0
-    if script != None:
-        os.write(fd, script)
-    os.close(fd)
-    fd = None
     args = [prog]
-    if prog != "/sbin/ldconfig":
+    if script != None:
+        (fd, tmpfilename) = tempfile.mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
+        if fd == None:
+            return 0
+        os.write(fd, script)
+        os.close(fd)
+        fd = None
         args.append(tmpfilename)
         if arg1 != None:
             args.append(arg1)
@@ -50,7 +49,8 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         os.close(0)
         os.execv(prog, args)
         sys.exit()
-    os.unlink(tmpfilename)
+    if script != None:
+        os.unlink(tmpfilename)
     if status != 0:
         printError("Error in running script:")
         printError(str(prog))
@@ -77,6 +77,8 @@ def installFile(rfi, data):
             return 0
     elif filetype == CP_IFDIR:
         if os.path.isdir(rfi.filename):
+            if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
+                return 0
             return 1
         os.makedirs(rfi.filename)
         if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
@@ -91,6 +93,8 @@ def installFile(rfi, data):
         except:
             pass
         os.symlink(symlinkfile, rfi.filename)
+        if os.lchown(rfi.filename, rfi.uid, rfi.gid) != None:
+            return 0
     elif filetype == CP_IFIFO:
         makeDirs(rfi.filename)
         if not os.path.exists(rfi.filename) and os.mkfifo(rfi.filename) != None:
@@ -110,7 +114,10 @@ def installFile(rfi, data):
     return 1
 
 def setFileMods(filename, uid, gid, mode, mtime):
-    if os.chown(filename, uid, gid) != None:
+    try:
+        if os.chown(filename, uid, gid) != None:
+            return 0
+    except:
         return 0
     if os.chmod(filename, (~CP_IFMT) & mode) != None:
         return 0
@@ -326,14 +333,14 @@ def evrString(epoch, version, release):
 
 # Compare two packages by evr
 def pkgCompare(p1, p2):
-   if p1["epoch"] == None:
+    if p1["epoch"] == None:
         e1 = "0"
-   else:
-        e1 = p1["epoch"][0]
-   if p2["epoch"] == None:
+    else:
+        e1 = str(p1["epoch"][0])
+    if p2["epoch"] == None:
         e2 = "0"
-   else:
-        e2 = p2["epoch"][0]
-   return labelCompare((e1, p1["version"], p1["release"]), (e2, p2["version"], p2["release"]))
+    else:
+        e2 = str(p2["epoch"][0])
+    return labelCompare((e1, p1["version"], p1["release"]), (e2, p2["version"], p2["release"]))
 
 # vim:ts=4:sw=4:showmatch:expandtab

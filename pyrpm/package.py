@@ -58,25 +58,54 @@ class RpmData:
         return ret
 
 
+class RpmUserCache:
+    def __init__(self):
+        self.uid = {}
+        self.gid = {}
+
+    def getUID(self, username):
+        if username == "root":
+            return 0
+        if not self.uid.has_key(username):
+            if os.path.isfile("/etc/passwd"):
+                try:
+                    pw = pwd.getpwnam(username)
+                    self.uid[username] = pw[2]
+                except:
+                    self.uid[username] = 0
+        return self.uid[username]
+
+    def getGID(self, groupname):
+        if groupname == "root":
+            return 0
+        if not self.gid.has_key(groupname):
+            if os.path.isfile("/etc/group"):
+                try:
+                    gr = grp.getgrnam(groupname)
+                    self.gid[groupname] = gr[2]
+                except:
+                    self.gid[groupname] = 0
+        return self.gid[groupname]
+
+
 class RpmPackage(RpmData):
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
+    def __init__(self, source, verify=None, legacy=None, hdronly=None):
         RpmData.__init__(self)
         self.clear()
         self.source = source
         self.verify = verify
         self.legacy = legacy
-        self.parsesig = parsesig
         self.hdronly = hdronly
 
     def clear(self):
         self.io = None
         self.header_read = 0
+        self.rpmusercache = RpmUserCache()
 
     def open(self, mode="r"):
-        self.header_read = 0
         if self.io != None:
             return 1
-        self.io = getRpmIOFactory(self.source, self.verify, self.legacy, self.parsesig, self.hdronly)
+        self.io = getRpmIOFactory(self.source, self.verify, self.legacy, self.hdronly)
         if not self.io:
             return 0
         if not self.io.open(mode):
@@ -121,12 +150,14 @@ class RpmPackage(RpmData):
         os.umask(022)
         if self["preinprog"] != None:
             if not runScript(self["preinprog"], self["prein"], "1"):
+                printError("%s: Error running pre install script." % self.getNEVRA())
                 return 0
         if not self.__extract(db):
             return 0
+        # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None:
             if not runScript(self["postinprog"], self["postin"], "1"):
-                return 0
+                printError("%s: Error running post install script." % self.getNEVRA())
         self.rfilist = None
         return 1
 
@@ -136,16 +167,15 @@ class RpmPackage(RpmData):
         if not self.__readHeader():
             return 0
         files = self["filenames"]
-        self.__generateFileInfoList()
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preunprog"] != None:
             if not runScript(self["preunprog"], self["preun"], "1"):
                 printError("%s: Error running pre uninstall script." % self.getNEVRA())
+                return 0
         # Remove files starting from the end (reverse process to install)
         for i in xrange(len(files)-1, -1, -1):
             f = files[i]
-            rfi = self.getRpmFileInfo(f)
             if db.isDuplicate(f):
                 printDebug(2, "File/Dir %s still in db, not removing..." % f)
                 continue
@@ -159,6 +189,7 @@ class RpmPackage(RpmData):
                     os.unlink(f)
                 except:
                     printWarning(1, "Couldn't remove file %s from pkg %s" % (f, self.source))
+        # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None:
             if not runScript(self["postunprog"], self["postun"], "1"):
                 printError("%s: Error running post uninstall script." % self.getNEVRA())
@@ -172,6 +203,7 @@ class RpmPackage(RpmData):
 
     def __readHeader(self, tags=None, ntags=None):
         if self.header_read:
+            self.io.read(skip=1)      # Skip over complete header
             return 1
         (key, value) = self.io.read()
         # Read over lead
@@ -210,7 +242,12 @@ class RpmPackage(RpmData):
         self.__generateFileInfoList()
         self.__generateHardLinkList()
         (filename, filerawdata) = self.io.read()
+        nfiles = len(files)
+        n = 0
         while filename != None and filename != "EOF" :
+            n += 1
+            printInfo(0, "\r\t\t\t\t%s" % (int(n*45/nfiles)*"#"))
+            sys.stdout.flush()
             if not self.rfilist.has_key(filename):
                 # src.rpm has empty tag "dirnames", but we use absolut paths in io.read(),
                 # so at least the directory '/' is there ...
@@ -235,6 +272,9 @@ class RpmPackage(RpmData):
         # No db -> overwrite file ;)
         if not db:
             return 1
+        # File is not a regular file -> just do it
+        if (rfi.mode & CP_IFMT) != CP_IFREG:
+            return 1
         # File not already in db -> write it
         if not db.filenames.has_key(rfi.filename):
             return 1
@@ -253,9 +293,12 @@ class RpmPackage(RpmData):
             return 1
         # File has changed on disc, now check if it has changed between the
         # different packages that share it and the new package
-        for nevra in plist:
-            pkg = db.getPackage(nevra)
+        for pkg in plist:
             orfi = pkg.getRpmFileInfo(rfi.filename)
+            # Is the current file in the filesystem identical to the one in the
+            # old rpm? If yes, then it's a simple update.
+            if orfi.mode == mode and orfi.uid == uid and orfi.gid == gid and orfi.filesize == filesize and orfi.md5sum == md5sum:
+                return 1
             # If installed and new stats of the file are the same don't do
             # anything with it. If the file hasn't changed in the packages we
             # keep the editited file on disc.
@@ -283,6 +326,7 @@ class RpmPackage(RpmData):
             self["filenames"].append(filename)
 
     def __generateFileInfoList(self):
+        self.rpmusercache = RpmUserCache()
         self.rfilist = {}
         for filename in self["filenames"]:
             self.rfilist[filename] = self.getRpmFileInfo(filename)
@@ -326,28 +370,8 @@ class RpmPackage(RpmData):
             return None
         rpminode = self["fileinodes"][i]
         rpmmode = self["filemodes"][i]
-        if os.path.isfile("/etc/passwd"):
-            try:
-                pw = pwd.getpwnam(self["fileusername"][i])
-            except:
-                pw = None
-        else:
-            pw = None
-        if pw != None:
-            rpmuid = pw[2]
-        else:
-            rpmuid = 0      # default to root as uid if not found
-        if os.path.isfile("/etc/group"):
-            try:
-                gr = grp.getgrnam(self["filegroupname"][i])
-            except:
-                gr = None
-        else:
-            gr = None
-        if gr != None:
-            rpmgid = gr[2]
-        else:
-            rpmgid = 0      # default to root as gid if not found
+        rpmuid = self.rpmusercache.getUID(self["fileusername"][i])
+        rpmgid = self.rpmusercache.getGID(self["filegroupname"][i])
         rpmmtime = self["filemtimes"][i]
         rpmfilesize = self["filesizes"][i]
         rpmdev = self["filedevices"][i]

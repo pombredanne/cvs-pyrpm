@@ -6,6 +6,8 @@ from pyrpm import *
 rpms = []
 for i in sys.argv[1:]:
     rpm = RpmPackage("file:/"+i, verify=1)
-    rpm.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "filecolors", "fileclass", "classdict", "filedependsx", "filedependsn", "dependsdict"))
-    print rpm
+#    rpm.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "filecolors", "fileclass", "classdict", "filedependsx", "filedependsn", "dependsdict"))
+    rpm.read()
+    print rpm["preunprog"]
+    print rpm["preun"]
 #    rpms.append(rpm)
