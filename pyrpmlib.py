@@ -63,7 +63,7 @@ class RpmIO(RpmError):
 
 
 class RpmFile(RpmIO):
-    def __init__(self, filename=None, verify=None, verbose=None, legacy=None, payload=None, parsesig=None, tags=None, ntags=None, keepdata=None):
+    def __init__(self, filename=None, verify=None, verbose=None, legacy=None, payload=None, parsesig=None, hdronly=None, tags=None, ntags=None, keepdata=None):
         RpmIO.__init__(self)
         self.filename = filename
         self.fd = None
@@ -72,6 +72,7 @@ class RpmFile(RpmIO):
         self.legacy = legacy
         self.payload = payload
         self.parsesig = parsesig
+        self.hdronly = hdronly
         self.tags = tags
         self.ntags = ntags
         self.keepdata = keepdata
@@ -316,9 +317,9 @@ class RpmFile(RpmIO):
         return None
 
     def parseFilelist(self, data):
-        if data["dirnames"] == None or data["dirindexes"] == None:
-            return
         data["filetree"] = []
+        if data["dirnames"] == None or data["dirindexes"] == None:
+            return data["filetree"]
         for i in xrange (len(data["basenames"])):
             if self.verify:
                 data["filetree"].append((data["dirnames"][data["dirindexes"][i]] + data["basenames"][i],
