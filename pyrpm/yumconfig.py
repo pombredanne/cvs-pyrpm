@@ -146,7 +146,7 @@ class YumConf(Conf):
         self.rewind()
         stanza = None
         while 1:
-            stanza = self.next_stanza()
+            stanza = self.nextStanza()
             if not stanza:
                 break
             stanzavars = {}
@@ -154,7 +154,7 @@ class YumConf(Conf):
             self.nextline()
             
             while self.findnextcodeline():
-                vars = self.next_entry()
+                vars = self.nextEntry()
                 if not vars:
                     break
 
@@ -171,7 +171,7 @@ class YumConf(Conf):
             
         self.rewind()
 
-    def get_entry(self):
+    def getEntry(self):
         vars = self.getfields()
             
         try:            
@@ -184,13 +184,13 @@ class YumConf(Conf):
       
         return [strip(vars[0]), strip(vars[1])]
 
-    def next_entry(self):
+    def nextEntry(self):
         while self.findnextcodeline():
-            #print "next_entry: " + self.getline()
-            if self.is_stanza_decl():
+            #print "nextEntry: " + self.getline()
+            if self.isStanzaDecl():
                 return 0
             
-            vars = self.get_entry()
+            vars = self.getEntry()
             
             if vars:
                 return vars
@@ -200,31 +200,16 @@ class YumConf(Conf):
         return 0
                 
     def findnextcodeline(self):
+        # cannot rename, because of inherited class
         return self.findnextline('^[\t ]*[\[A-Za-z_]+.*')
     
-    def is_stanza_decl(self):
+    def isStanzaDecl(self):
         # return true if the current line is of the form [...]
         if self.stanza_re.match(self.getline()):
             return 1
         return 0
-
-    def find_stanza(self, stanza_name):
-        # leave the current line at the first line of the stanza
-        # (the first line after the [stanza_name] entry)
-        self.rewind()
-        while self.findnextline('^[\t ]*\[.*\]'):
-            m = self.stanza_re.match(self.getline())
-
-            if m and (stanza_name == m.group('stanza')):
-                self.nextline()
-                return 1
-            
-            self.nextline()
-            
-        self.rewind()
-        return 0
                 
-    def next_stanza(self):
+    def nextStanza(self):
         # leave the current line at the first line of the stanza
         # (the first line after the [stanza_name] entry)
         while self.findnextline('^[\t ]*\[.*\]'):
@@ -239,9 +224,6 @@ class YumConf(Conf):
         self.rewind()
         return 0
                 
-    def prevline(self):
-        self.line = max([self.line - 1, 0])
-        
     def __getitem__(self, stanza):               
         return self.vars[stanza]
         
