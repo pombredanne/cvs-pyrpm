@@ -65,3 +65,5 @@ class HashList:
         key = self.list[idx]
         self.list.pop(idx)
         del self[key]
+
+# vim:ts=4:sw=4:showmatch:expandtab

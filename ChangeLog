@@ -1,3 +1,22 @@
+2005-03-12  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/base.py:
+	- do not import config.py
+	- limit linesize to 80
+	- remove suggestions for possible binary rpm package changes
+	- a bit more descriptions
+	- add "del key" to remove temp variables
+	- clean up possible_archs for FC development tree only
+	* pyrpm/config.py:
+	- limit linesize to 80
+	* pyrpm/cpio.py:
+	- add CP_ISDIR, CP_ISLNK, CP_ISREG. They should probably disappear
+	  again via "import stat" at proper places if there is no special
+	  reason to keep our own set of macros. "grep CP_ *.py"...
+	- pyrpm/package.py: - use CP_ISREG
+	- pyrpm/resolver.py: - use CP_IS*
+	- pyrpm/specfile.py: - do not "import sys"
+	
 2005-03-10  Phil Knirsch  <pknirsch@redhat.com>
 
 	* scripts/pyrpmyum 1.2: - Added path stuff to pyrpmyum

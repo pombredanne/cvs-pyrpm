@@ -22,7 +22,6 @@
 """Parser for RPM Specfiles.
 """
 
-import sys
 import string
 
 class RpmSpecFile:

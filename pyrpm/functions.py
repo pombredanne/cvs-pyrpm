@@ -102,8 +102,7 @@ def installFile(rfi, data):
         if not setFileMods(rfi.filename, rfi.uid, rfi.gid, rfi.mode, rfi.mtime):
             os.unlink(rfi.filename)
             return 0
-    elif filetype == CP_IFCHR or \
-         filetype == CP_IFBLK:
+    elif filetype == CP_IFCHR or filetype == CP_IFBLK:
         makeDirs(rfi.filename)
         try:
             os.mknod(rfi.filename, rfi.mode, rfi.rdev)

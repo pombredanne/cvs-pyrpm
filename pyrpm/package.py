@@ -16,6 +16,7 @@
 # Author: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak
 #
 
+
 import os.path, tempfile, sys, gzip, pwd, grp, md5
 from struct import unpack
 from base import *
@@ -294,7 +295,7 @@ class RpmPackage(RpmData):
         if not db:
             return 1
         # File is not a regular file -> just do it
-        if (rfi.mode & CP_IFMT) != CP_IFREG:
+        if not CP_ISREG(rfi.mode):
             return 1
         # File not already in db -> write it
         if not db.filenames.has_key(rfi.filename):

@@ -16,10 +16,10 @@
 # Author: Phil Knirsch, Thomas Woerner, Florian La Roche
 #
 
-from config import *
 
 class RpmFileInfo:
-    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev, rdev, md5sum, flags, filecolor):
+    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev,
+        rdev, md5sum, flags, filecolor):
         self.filename = filename
         self.inode = inode
         self.mode = mode
@@ -132,13 +132,9 @@ RPMVERIFY_MODE      = (1 << 6)     # from %verify(mode)
 RPMVERIFY_RDEV      = (1 << 7)     # from %verify(rdev)
 
 
-# XXX: TODO for possible rpm changes:
-# - arch should not be needed for src.rpms
-# - deps could be left away from src.rpms
-# - cookie could go away
-# - rhnplatform could go away
-
-# list of all rpm tags in Fedora Core development
+# List of all rpm tags we care about. We mark older tags which are
+# not anymore in newer rpm packages (Fedora Core development tree) as
+# "legacy".
 # tagname: (tag, type, how-many, flags:legacy=1,src-only=2,bin-only=4)
 rpmtag = {
     # basic info
@@ -212,16 +208,15 @@ rpmtag = {
     # XXX code allows hardcoded exception to also have type RPM_STRING
     #     for RPMTAG_GROUP
     "group": (1016, RPM_I18NSTRING, None, 0),
-    "size": (1009, RPM_INT32, 1, 0),         # sum of all file sizes
+    "size": (1009, RPM_INT32, 1, 0),                # sum of all file sizes
     "distribution": (1010, RPM_STRING, None, 0),
     "vendor": (1011, RPM_STRING, None, 0),
     "packager": (1015, RPM_STRING, None, 0),
-    "os": (1021, RPM_STRING, None, 0),         # always "linux"
-    "payloadformat": (1124, RPM_STRING, None, 0), # "cpio"
-    # "gzip" or "bzip2"
-    "payloadcompressor": (1125, RPM_STRING, None, 0),
-    "payloadflags": (1126, RPM_STRING, None, 0), # "9"
-    "rhnplatform": (1131, RPM_STRING, None, 4),   # == arch
+    "os": (1021, RPM_STRING, None, 0),              # always "linux"
+    "payloadformat": (1124, RPM_STRING, None, 0),   # "cpio"
+    "payloadcompressor": (1125, RPM_STRING, None, 0), # "gzip" or "bzip2"
+    "payloadflags": (1126, RPM_STRING, None, 0),    # "9"
+    "rhnplatform": (1131, RPM_STRING, None, 4),     # == arch
     "platform": (1132, RPM_STRING, None, 0),
 
     # rpm source packages:
@@ -230,8 +225,7 @@ rpmtag = {
     "buildarchs": (1089, RPM_STRING_ARRAY, None, 2),
     "excludearch": (1059, RPM_STRING_ARRAY, None, 2),
     "exclusivearch": (1061, RPM_STRING_ARRAY, None, 2),
-    # ['Linux'] or ['linux']
-    "exclusiveos": (1062, RPM_STRING_ARRAY, None, 2),
+    "exclusiveos": (1062, RPM_STRING_ARRAY, None, 2), # ['Linux'] or ['linux']
 
     # information about files
     "filesizes": (1028, RPM_INT32, None, 0),
@@ -257,9 +251,8 @@ rpmtag = {
     "filedependsn": (1144, RPM_INT32, None, 0),
     "dependsdict": (1145, RPM_INT32, None, 0),
 
-    # legacy additions:
-    # selinux filecontexts
-    "filecontexts": (1147, RPM_STRING_ARRAY, None, 1),
+    # tags not in Fedora Core development trees anymore:
+    "filecontexts": (1147, RPM_STRING_ARRAY, None, 1), # selinux filecontexts
     "capability": (1105, RPM_INT32, None, 1),
     "xpm": (1013, RPM_BIN, None, 1),
     "gif": (1012, RPM_BIN, None, 1),
@@ -271,7 +264,6 @@ rpmtag = {
     "triggerin": (1100, RPM_STRING, None, 5),
     "triggerun": (1101, RPM_STRING, None, 5),
     "triggerpostun": (1102, RPM_STRING, None, 5),
-
     # Stored only in /var/lib/rpm/Packages
     "archivesize": (1046, RPM_INT32, 1, 1)
 }
@@ -281,15 +273,17 @@ for key in rpmtag.keys():
     v = rpmtag[key]
     rpmtag[v[0]] = v
     rpmtagname[v[0]] = key
+del key
 
 # Required tags in a header.
 rpmtagrequired = []
 for key in ["name", "version", "release", "arch"]:
     rpmtagrequired.append(rpmtag[key][0])
+del key
 
 # Info within the sig header.
 rpmsigtag = {
-    # size of gpg/dsaheader sums differ between 64/65
+    # size of gpg/dsaheader sums differ between 64/65(contains '\n')
     "dsaheader": (267, RPM_BIN, None, 0),
     "gpg": (1005, RPM_BIN, None, 0),
     "header_signatures": (62, RPM_BIN, 16, 0),   # XXX
@@ -297,7 +291,7 @@ rpmsigtag = {
     "size_in_sig": (1000, RPM_INT32, 1, 0),
     "sha1header": (269, RPM_STRING, None, 0),
     "md5": (1004, RPM_BIN, 16, 0),
-    # legacy entries:
+    # legacy entries in older rpm packages:
     "pgp": (1002, RPM_BIN, None, 1),
     "badsha1_1": (264, RPM_STRING, None, 1),
     "badsha1_2": (265, RPM_STRING, None, 1)
@@ -308,25 +302,26 @@ for key in rpmsigtag.keys():
     v = rpmsigtag[key]
     rpmsigtag[v[0]] = v
     rpmsigtagname[v[0]] = key
+del key
 
 # Required tags in a signature header.
 rpmsigtagrequired = []
-#for key in ["header_signatures", "payloadsize", "size_in_sig", \
-#    "sha1header", "md5"]:
 for key in ["md5"]:
     rpmsigtagrequired.append(rpmsigtag[key][0])
+del key
 
 # check arch names against this list
+# XXX: make this a hash?
 possible_archs = ['noarch', 'i386', 'i486', 'i586', 'i686', 'athlon',
-    'x86_64', 'ia32e', 'alpha', 'sparc', 'sparc64', 's390', 's390x', 'ia64',
+    'pentium3', 'pentium4', 'x86_64', 'ia32e', 'ia64', 'alpha', 'axp',
+    'sparc', 'sparc64', 's390', 's390x', 'ia64',
     'ppc', 'ppc64', 'ppc64iseries', 'ppc64pseries', 'ppcpseries', 'ppciseries',
     'ppcmac', 'ppc8260', 'm68k',
-    'arm', 'armv4l', 'mips', 'mipseb', 'hppa', 'mipsel', 'sh', 'axp',
-    # these are in old rpms:
-    'i786', 'i886', 'i986', 's390xc']
+    'arm', 'armv4l', 'mips', 'mipseb', 'mipsel', 'hppa', 'sh']
 
 arch_compats = {
-"alphaev67" : ("alphaev6", "alphapca56", "alphaev56", "alphaev5", "alpha", "axp", "noarch"),
+"alphaev67" : ("alphaev6", "alphapca56", "alphaev56", "alphaev5", "alpha",
+    "axp", "noarch"),
 "alphaev6" : ("alphapca56", "alphaev56", "alphaev5", "alpha", "axp", "noarch"),
 "alphapca56" : ("alphaev56", "alphaev5", "alpha", "axp", "noarch"),
 "alphaev56" : ("alphaev5", "alpha", "axp", "noarch"),
@@ -339,8 +334,10 @@ arch_compats = {
 "i486" : ("i386", "noarch"),
 "i386" : ("noarch"),
 
-"osfmach3_i686": ("i686", "osfmach3_i586", "i586", "osfmach3_i486", "i486", "osfmach3_i386", "i486", "i386", "noarch"),
-"osfmach3_i586": ("i586", "osfmach3_i486", "i486", "osfmach3_i386", "i486", "i386", "noarch"),
+"osfmach3_i686": ("i686", "osfmach3_i586", "i586", "osfmach3_i486", "i486",
+    "osfmach3_i386", "i486", "i386", "noarch"),
+"osfmach3_i586": ("i586", "osfmach3_i486", "i486", "osfmach3_i386", "i486",
+    "i386", "noarch"),
 "osfmach3_i486": ("i486", "osfmach3_i386", "i486", "i386", "noarch"),
 "osfmach3_i386": ("i486", "i386", "noarch"),
 

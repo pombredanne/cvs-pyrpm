@@ -387,10 +387,10 @@ class RpmResolver(RpmList):
                         # not buildarchtranslate same
                         continue
                     # ignore directories
-                    if fi1.mode & CP_IFDIR and fi2.mode & CP_IFDIR:
+                    if CP_ISDIR(fi1.mode) and CP_ISDIR(fi2.mode):
                         continue
                     # ignore links
-                    if fi1.mode & CP_IFLNK and fi2.mode & CP_IFLNK:
+                    if CP_ISLNK(fi1.mode) and CP_ISLNK(fi2.mode):
                         continue
                     if fi1.mode != fi2.mode or \
                            fi1.filesize != fi2.filesize or \
