@@ -191,9 +191,7 @@ def setCloseOnExec():
     for fd in range(3, resource.getrlimit(resource.RLIMIT_NOFILE)[1]):
         try:
             fcntl.fcntl(fd, fcntl.F_SETFD, 1)
-            #sys.stderr.write("set close-on-exec for fd=%d\n" % fd)
-        except Exception, msg:
-            #print msg
+        except:
             pass
 
 def closeAllFDs():
