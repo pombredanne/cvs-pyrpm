@@ -1,6 +1,6 @@
 install-exec-local:
 	$(mkinstalldirs) $(DESTDIR)$(bindir)
-	install -m 0755 $(srcdir)/pyrpminstall $(DESTDIR)$(bindir)/pyrpminstall
+	install -m 0755 $(srcdir)/scripts/pyrpminstall $(DESTDIR)$(bindir)/pyrpminstall
 
 install-data-local:
 	$(mkinstalldirs) $(DESTDIR)$(datadir)/pyrpm
