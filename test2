@@ -1,20 +1,19 @@
 #!/usr/bin/python
 
 import sys, os
-import pyrpmlib
+from pyrpmlib import *
 from rpmconstants import *
 
 for i in sys.argv[1:]:
-    rpmio = pyrpmlib.RpmFileIO(i, tags=[RPMTAG_NAME, RPMTAG_VERSION, RPMTAG_RELEASE, RPMTAG_EPOCH, RPMTAG_SIZE, RPMTAG_ARCH, RPMTAG_PROVIDENAME, RPMTAG_REQUIREFLAGS, RPMTAG_REQUIRENAME, RPMTAG_REQUIREVERSION, RPMTAG_PROVIDEFLAGS, RPMTAG_PROVIDEVERSION, RPMTAG_DIRINDEXES, RPMTAG_BASENAMES, RPMTAG_DIRNAMES, RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_POSTIN, RPMTAG_POSTINPROG, RPMTAG_PREUN, RPMTAG_PREUNPROG, RPMTAG_POSTUN, RPMTAG_POSTUNPROG, RPMTAG_VERIFYSCRIPT, RPMTAG_VERIFYSCRIPTPROG, RPMTAG_FILEMODES, RPMTAG_FILEMTIMES, RPMTAG_FILEUSERNAME, RPMTAG_FILEGROUPNAME])
-    rpm = pyrpmlib.RpmPackage()
-    rpmio.open()
+    rpm = RpmPackage("file:/"+i)
+    rpm.open()
     pid = os.fork()
     if pid != 0:
         os.wait()
-        rpmio.close()
+        rpm.close()
         continue
     else:
         os.chroot("/mnt/build/pyrpm-fc3-i386/")
-        rpm.install(rpmio)
+        rpm.install()
 	sys.exit()
 # vim:ts=4:sw=4:showmatch:expandtab

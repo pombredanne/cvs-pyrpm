@@ -375,9 +375,11 @@ class RpmFileIO(RpmStreamIO):
 
     def open(self):
         self.openFile()
+        return 1
 
     def close(self):
         self.closeFile()
+        return 1
 
 
 class RpmDBIO(RpmIO):
@@ -402,17 +404,17 @@ class RpmRepoIO(RpmIO):
         return 0
 
 
-def getRpmIOFactory(source):
+def getRpmIOFactory(source, verify=None, legacy=None, parsesig=None, hdronly=None):
     if source[:4] == 'db:/':
-        return RpmDBIO(source[4:])
+        return RpmDBIO(source[4:], verify, legacy, parsesig, hdronly)
     if source[:5] == 'ftp:/':
-        return RpmFtpIO(source[5:])
+        return RpmFtpIO(source[5:], verify, legacy, parsesig, hdronly)
     if source[:6] == 'file:/':
-        return RpmFileIO(source[6:])
+        return RpmFileIO(source[6:], verify, legacy, parsesig, hdronly)
     if source[:6] == 'http:/':
-        return RpmHttpIO(source[6:])
+        return RpmHttpIO(source[6:], verify, legacy, parsesig, hdronly)
     if source[:6] == 'repo:/':
-        return RpmRepoIO(source[6:])
+        return RpmRepoIO(source[6:], verify, legacy, parsesig, hdronly)
     return None
 
 
@@ -443,7 +445,7 @@ class RpmData(RpmError):
 
 
 class RpmPackage(RpmData):
-    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None, tags=None, ntags=None):
+    def __init__(self, source, verify=None, legacy=None, parsesig=None, hdronly=None):
         RpmData.__init__(self)
         self.clear()
         self.source = source
@@ -451,40 +453,53 @@ class RpmPackage(RpmData):
         self.legacy = legacy
         self.parsesig = parsesig
         self.hdronly = hdronly
-        self.tags = tags
-        self.ntags = ntags
 
     def clear(self):
-        pass
+        self.io = None
 
-    def read(self):
-        io = getRpmIOFactory(self.source)
-        io.open()
-        if not io:
+    def open(self):
+        if self.io != None:
+            return 1
+        self.io = getRpmIOFactory(self.source)
+        if not self.io:
             return 0
-        if not self.readHeader(io):
+        if not self.io.open():
+            return 0
+        return 1
+
+    def close(self):
+        if self.io != None:
+            self.io.close()
+        self.io = None
+        return 1
+
+    def read(self, tags=None, ntags=None):
+        if not self.open():
+            return 0
+        if not self.readHeader(self.io):
             return 0
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
         self["conflicts"] = self.getConflicts()
-        io.close()
+        self.close()
         return 1
 
-    def write(self, io):
-        io = RpmIOFactory.getFactory(self.source)
-        return io.write(self)
+    def write(self):
+        if not self.open():
+            return 0
+        ret = self.io.write(self)
+        self.close()
+        return ret
 
     def verify(self):
         ret = RpmData.verify(self)
         return ret
 
     def install(self, files=None):
-        io = RpmIOFactory.getFactory(self.source)
-        io.open()
-        if not io:
+        if not self.open():
             return 0
-        if not self.readHeader(io):
+        if not self.readHeader(self.io):
             return 0
         if not files:
             files = self["filenames"]
@@ -493,14 +508,14 @@ class RpmPackage(RpmData):
         if self["preinprog"] != None:
             if not runScript(self["preinprog"], self["prein"], "1"):
                 return 0
-        if not self.extract(io, files):
+        if not self.extract(self.io, files):
             return 0
         if self["postinprog"] != None:
             if not runScript(self["postinprog"], self["postin"], "1"):
                 return 0
         return 1
 
-    def readHeader(self, io):
+    def readHeader(self, io, tags=None, ntags=None):
         (key, value) = io.read()
         # Read over lead
         while key != None and key != "-":
@@ -509,7 +524,12 @@ class RpmPackage(RpmData):
         (key, value) = io.read()
         while key != None and key != "-":
             (key, value) = io.read()
-            self[key] = value
+            if tags and key in tags:
+                self[key] = value
+            elif ntags and not key in ntags:
+                self[key] = value
+            else:
+                self[key] = value
         self.generateFileNames()
         self.header_read = 1
         return 1
