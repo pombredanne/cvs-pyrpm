@@ -365,7 +365,7 @@ class RpmResolver(RpmList):
     def getFileConflicts(self):
         """ Check for file conflicts """
 
-        if self.operation != self.OP_ERASE:
+        if self.operation == self.OP_ERASE:
             # no conflicts for erase
             return None
 
@@ -377,6 +377,12 @@ class RpmResolver(RpmList):
                 fi1 = s[j].getRpmFileInfo(file)
                 for k in xrange(j+1, len(s)):
                     fi2 = s[k].getRpmFileInfo(file)
+                    if s[j].getNEVR() == s[k].getNEVR() and \
+                           buildarchtranslate[s[j]["arch"]] != \
+                           buildarchtranslate[s[k]["arch"]]:
+                        # do not check packages with the same NEVR which are
+                        # not buildarchtranslate same
+                        continue
                     # ignore directories
                     if fi1.mode & CP_IFDIR and fi2.mode & CP_IFDIR:
                         continue
