@@ -40,14 +40,6 @@ def getTag(tag):
             return eval("rpmconstants.RPMTAG_%s" % tag.upper())
     return None
 
-# optional keys in the sig header
-sigkeys = [rpmtag["dsaheader"], rpmtag["gpg"]]
-# optional keys for the non-strict case
-sigkeys2 = [rpmtag["pgp"], rpmtag["badsha1_2"]]
-# required keys in the sig header for the strict case
-reqsig = [rpmtag["header_signatures"], rpmtag["payloadsize"],
-    rpmtag["size_in_sig"], rpmtag["sha1header"], rpmtag["md5"]]
-
 # rpm tag types
 #RPM_NULL = 0
 RPM_CHAR = 1
@@ -59,6 +51,30 @@ RPM_STRING = 6
 RPM_BIN = 7
 RPM_STRING_ARRAY = 8
 RPM_I18NSTRING = 9
+
+# optional keys in the sig header
+sigkeys = [rpmtag["dsaheader"], rpmtag["gpg"]]
+# optional keys for the non-strict case
+sigkeys2 = [rpmtag["pgp"], rpmtag["badsha1_2"]]
+# required keys in the sig header for the strict case
+reqsig = [rpmtag["header_signatures"], rpmtag["payloadsize"],
+    rpmtag["size_in_sig"], rpmtag["sha1header"], rpmtag["md5"]]
+
+#   tag                      type        how many, required, strict
+ssigkeys = {
+    # all required tags for the strict case
+    rpmtag["header_signatures"]:(RPM_BIN,None, 1, 1),
+    rpmtag["payloadsize"]:  (RPM_INT32,  1,    1, 1),
+    rpmtag["size_in_sig"]:  (RPM_INT32,  1,    1, 1),
+    rpmtag["sha1header"]:   (RPM_BIN,    None, 1, 1),
+    rpmtag["md5"]:          (RPM_BIN,    None, 1, 1),
+    # optional tags
+    rpmtag["dsaheader"]:    (RPM_BIN,    None, 0, 1),
+    rpmtag["gpg"]:          (RPM_BIN,    None, 0, 1),
+    # older rpm packages only
+    rpmtag["pgp"]:          (RPM_BIN,    None, 0, 0),
+    rpmtag["badsha1_2"]:    (RPM_BIN,    None, 0, 0)
+}
 
 # limit: does not support all RHL5.x and earlier rpms if verify is enabled
 class ReadRpm:
@@ -354,7 +370,9 @@ class ReadRpm:
         prog = self.getItem(p)
         if script and not prog:
             self.raiseErr("no prog")
-        if prog not in (None, "/bin/sh", "/sbin/ldconfig", "/usr/bin/fc-cache",
+        if script == None and prog == None:
+            return (None, None)
+        if prog not in ("/bin/sh", "/sbin/ldconfig", "/usr/bin/fc-cache",
             "/usr/sbin/glibc_post_upgrade", "/usr/sbin/libgcc_post_upgrade",
             "/usr/sbin/build-locale-archive", "/usr/bin/scrollkeeper-update"):
             self.raiseErr("unknown prog: %s" % prog)
@@ -442,19 +460,16 @@ class RDir:
         self.files[name] = file
 
 class RDep:
-    def __init__(self, name, flags, epoch, version, release):
+    def __init__(self, name, flags, evr):
         self.name = name
         self.flags = flags
-        self.epoch = epoch
-        self.version = version
-        self.release = release
+        self.evr = evr
 
 notthere = [rpmconstants.RPMTAG_PREREQ, rpmconstants.RPMTAG_AUTOREQPROV,
     rpmconstants.RPMTAG_AUTOREQ, rpmconstants.RPMTAG_AUTOPROV,
     rpmconstants.RPMTAG_CAPABILITY, rpmconstants.RPMTAG_BUILDCONFLICTS,
     rpmconstants.RPMTAG_BUILDMACROS, rpmconstants.RPMTAG_OLDFILENAMES,
     rpmconstants.RPMTAG_OLDORIGFILENAMES,
-    rpmconstants.RPMTAG_SOURCE, rpmconstants.RPMTAG_PATCH,
     rpmconstants.RPMTAG_ROOT, rpmconstants.RPMTAG_DEFAULTPREFIX,
     rpmconstants.RPMTAG_BUILDROOT, rpmconstants.RPMTAG_INSTALLPREFIX,
     rpmconstants.RPMTAG_EXCLUDEOS, rpmconstants.RPMTAG_DOCDIR,
@@ -526,16 +541,17 @@ class RRpm:
         if rpm.getItem(rpmconstants.RPMTAG_VENDOR) not in ("Red Hat, Inc."):
             print "unknown vendor"
         if rpm.getItem(rpmconstants.RPMTAG_DISTRIBUTION) not in \
-            ("Red Hat Linux", "", "Red Hat FC-3", "Red Hat (FC-3)",
+            (None, "", "Red Hat Linux", "Red Hat FC-3", "Red Hat (FC-3)",
             "Red Hat (RHEL-3)"):
             print "unknown vendor"
         if rpm.getItem(rpmconstants.RPMTAG_PREFIXES) not in (None, ["/usr"],
             ["/var/named/chroot"], ["/usr/X11R6"], ["/usr/lib/qt-3.3"]):
             print "unknown prefix"
-        if rpm.getItem(rpmconstants.RPMTAG_RHNPLATFORM) != self.arch:
+        if rpm.getItem(rpmconstants.RPMTAG_RHNPLATFORM) not in (None,
+            self.arch):
             print "unknown arch"
         if rpm.getItem(rpmconstants.RPMTAG_PLATFORM) not in ( \
-            "i386-redhat-linux-gnu", "i386-redhat-linux",
+            None, "i386-redhat-linux-gnu", "i386-redhat-linux",
             "noarch-redhat-linux-gnu", "i686-redhat-linux-gnu",
             "i586-redhat-linux-gnu"):
             print "unknown arch", rpm.getItem(rpmconstants.RPMTAG_PLATFORM)
