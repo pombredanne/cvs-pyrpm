@@ -27,7 +27,6 @@ from hashlist import HashList
 from rpmlist import RpmList
 from functions import *
 
-
 # ----------------------------------------------------------------------------
 
 class ProvidesList:
@@ -267,7 +266,7 @@ class RpmResolver(RpmList):
                 s = [pkg]
             if len(s) == 0: # found nothing
                 if self.check_installed == 1 or \
-                       len(self.searchLostDependency(u)) != 0:
+                       len(self.searchLostDependency(u)) == 0:
                     unresolved.append(u)
             else: # resolved
                 resolved.append((u, s))
