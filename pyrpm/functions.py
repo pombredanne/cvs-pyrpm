@@ -371,10 +371,10 @@ def filterArchList(list, arch=None):
             pkg = list[i]
             if pkg["arch"] not in possible_archs:
                 error = 1
-                pyrpm.printError(0, "%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
+                printError(0, "%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
             if pkg["arch"] != arch and pkg["arch"] not in arch_compats[arch]:
                 error = 1
-                pyrpm.printError(0, "%s: Architecture not compatible with machine %s" % (pkg.source, arch))
+                printError(0, "%s: Architecture not compatible with machine %s" % (pkg.source, arch))
         if error != 0:
             return -1
 
@@ -389,14 +389,14 @@ def filterArchList(list, arch=None):
             i += 1
         else:
             r = hash[key]
-            ret = pyrpm.pkgCompare(r, pkg)
+            ret = pkgCompare(r, pkg)
             if ret < 0:
-                pyrpm.printWarning(0, "%s was already added, replacing with %s" % \
+                printWarning(0, "%s was already added, replacing with %s" % \
                                    (r.getNEVRA(), pkg.getNEVRA()))
                 hash[key] = pkg
                 list.remove(r)
             elif ret == 0:
-                pyrpm.printWarning(0, "%s was already added" % \
+                printWarning(0, "%s was already added" % \
                                    pkg.getNEVRA())
                 list.remove(pkg)
             else:
@@ -418,18 +418,18 @@ def filterArchList(list, arch=None):
                       removed == 0:
                 r = hash[pkg["name"]][j]
                 if pkg["arch"] != r["arch"] and \
-                       pyrpm.buildarchtranslate[pkg["arch"]] != \
-                       pyrpm.buildarchtranslate[r["arch"]]:
+                       buildarchtranslate[pkg["arch"]] != \
+                       buildarchtranslate[r["arch"]]:
                     j += 1
-                elif r["arch"] in pyrpm.arch_compats[pkg["arch"]]:
-                    pyrpm.printWarning(0, "%s was already added, replacing with %s" % \
+                elif r["arch"] in arch_compats[pkg["arch"]]:
+                    printWarning(0, "%s was already added, replacing with %s" % \
                                        (r.getNEVRA(), pkg.getNEVRA()))
                     hash[pkg["name"]].remove(r)
                     hash[pkg["name"]].append(pkg)
                     list.remove(r)
                     removed = 1
                 elif pkg["arch"] == r["arch"]:
-                    pyrpm.printWarning(0, "%s was already added" % \
+                    printWarning(0, "%s was already added" % \
                                        pkg.getNEVRA())
                     list.remove(pkg)
                     removed = 1

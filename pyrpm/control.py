@@ -20,6 +20,7 @@
 import os, re, time, gc
 import package, io
 from resolver import *
+from orderer import *
 
 class _Triggers:
     """ enable search of triggers """
@@ -75,131 +76,67 @@ class RpmController:
         self.ignorearch = None
         self.operation = None
         self.buildroot = None
-        self.new = []
-        self.update = []
-        self.erase = []
+        self.rpms = []
         self.installed = []
-        self.available = []
-        self.oldpackages = []
 
-    def installPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        self.operation = RpmResolver.OP_INSTALL
-        self.db = db 
-        self.buildroot = buildroot
-        for filename in pkglist:
-            self.newPkg(filename)
-        if not self.__readDB(db):
-            return 0
-        if not self.run():
-            return 0
-        return 1
-
-    def updatePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        self.operation = RpmResolver.OP_UPDATE
-        self.db = db 
-        self.buildroot = buildroot
-        for filename in pkglist:
-            self.updatePkg(filename)
-        if not self.__readDB(db):
-            return 0
-        if not self.run():
-            return 0
-        return 1
-
-    def freshenPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        self.operation = RpmResolver.OP_UPDATE
-        self.db = db 
-        self.buildroot = buildroot
-        for filename in pkglist:
-            self.updatePkg(filename)
-        if not self.__readDB(db):
-            return 0
-        insthash = {}
-        rmlist = []
-        # Create hashlist of installed packages
-        for pkg in self.installed:
-            name = pkg["name"]
-            if not insthash.has_key(name):
-                insthash[name] = []
-            insthash[name].append(pkg)
-        # Remove all packages that weren't installed or that are already
-        # installed with same or newer version
-        for pkg in self.update:
-            if not insthash.has_key(pkg["name"]):
-                rmlist.append(pkg)
-                continue
-            for ipkg in insthash[pkg["name"]]:
-                if pkgCompare(pkg, ipkg) <= 0:
-                    rmlist.append(pkg)
-                    break
-        # Remove collected packages
-        for pkg in rmlist:
-            self.update.remove(pkg)
-        if not self.run():
-            return 0
-        return 1
-
-    def erasePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        self.operation = RpmResolver.OP_ERASE
-        self.db = db 
+    def handlePkgs(self, operation, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        self.operation = operation
+        self.db = db
         self.buildroot = buildroot
         if not self.__readDB(db):
             return 0
-        for filename in pkglist:
-            if not self.erasePkg(filename):
-                return 0
-        if len(self.erase) == 0:
-            printInfo(0, "No installed packages found to be removed.\n")
+        if operation == RpmResolver.OP_ERASE:
+            for filename in pkglist:
+                self.erasePkg(filename)
+        else: 
+            for filename in pkglist:
+                self.appendPkg(filename)
+        if len(self.rpms) == 0:
+            printInfo(0, "Nothing to do.\n")
             sys.exit(0)
         if not self.run():
             return 0
         return 1
 
+    def installPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        return self.handlePkgs(RpmResolver.OP_INSTALL, pkglist, db, buildroot)
+
+    def updatePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        return self.handlePkgs(RpmResolver.OP_UPDATE, pkglist, db, buildroot)
+
+    def freshenPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        return self.handlePkgs(RpmResolver.OP_FRESHEN, pkglist, db, buildroot)
+
+    def erasePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
+        return self.handlePkgs(RpmResolver.OP_ERASE, pkglist, db, buildroot)
+
     def run(self):
         if not self.__preprocess():
             return 0
-        if   self.operation == RpmResolver.OP_INSTALL:
-            rpms = self.new
-        elif self.operation == RpmResolver.OP_UPDATE:
-            rpms = self.update
-        elif self.operation == RpmResolver.OP_ERASE:
-            rpms = self.erase
-        resolver = RpmResolver(rpms, self.installed, self.operation)
-        operations = resolver.resolve()
+        resolver = RpmResolver(self.installed, self.operation)
+        for r in self.rpms:
+            ret = resolver.append(r)
+        if resolver.resolve() != 1:
+            sys.exit(1)
+        a = resolver.appended
+        o = resolver.obsoletes
+        u = resolver.updates
         del resolver
+        orderer = RpmOrderer(a, o, self.operation)
+        operations = orderer.order()
+        del o
+        del a
         if not operations:
             printError("Errors found during package dependancy checks and ordering.")
             sys.exit(1)
-        # Handle updates by doing an install for the new package and adding
-        # operations to erase all all updated packages directly afterwards
-        for i in xrange(len(operations)-1, -1, -1):
-            (op, pkg) = operations[i]
-            if op != RpmResolver.OP_UPDATE:
-                continue
-            if not self.oldpackages.has_key(pkg["name"]):
-                continue
-            for upkg in self.oldpackages[pkg["name"]]:
-                operations.insert(i+1, (RpmResolver.OP_ERASE, upkg))
-        # Now we need to look for duplicate operations and remove the later
-        # ones (can happen due to obsoletes and automatic erase operations)
-        for i in xrange(len(operations)-1, -1, -1):
-            for j in xrange(i-1, -1, -1):
-                if operations[i][0] == operations[j][0] and \
-                   operations[i][1] == operations[j][1]:
-                    operations.pop(i)
-                    break
         self.triggerlist = _Triggers()
         for (op, pkg) in operations:
             if op == RpmResolver.OP_UPDATE or op == RpmResolver.OP_INSTALL:
                 self.triggerlist.addPkg(pkg)
         for pkg in self.installed:
             self.triggerlist.addPkg(pkg)
-        del self.new
-        del self.update
-        del self.erase
+        del self.rpms
         del self.installed
-        del self.available
-        del self.oldpackages
         i = 1
         gc.collect()
         numops = len(operations)
@@ -228,12 +165,19 @@ class RpmController:
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
                         self.__addPkgToDB(pkg)
-                    elif op == RpmResolver.OP_UPDATE:
+                    elif op == RpmResolver.OP_UPDATE or op == RpmResolver.OP_FRESHEN:
                         printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
                         if not pkg.install(self.pydb):
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
                         self.__addPkgToDB(pkg)
+                        if u.has_key(pkg):
+                            for opkg in u[pkg]:
+                                self.__runTriggerUn(opkg)
+                                if not opkg.erase(self.pydb):
+                                    sys.exit(1)
+                                self.__runTriggerPostUn(opkg)
+                                self.__erasePkgFromDB(opkg)
                     elif op == RpmResolver.OP_ERASE:
                         printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
                         self.__runTriggerUn(pkg)
@@ -247,27 +191,11 @@ class RpmController:
                     printInfo(0, "\n")
             return 1
 
-    def newPkg(self, file):
+    def appendPkg(self, file):
         pkg = package.RpmPackage(file)
         pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
-        self.new.append(pkg)
+        self.rpms.append(pkg)
         pkg.close()
-        return 1
-
-    def updatePkg(self, file):
-        pkg = package.RpmPackage(file)
-        pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
-        pkg.close()
-        for i in xrange(len(self.update)):
-            if not pkg["name"] == self.update[i]["name"]:
-                continue
-            if pkgCompare(pkg, self.update[i]) > 0:
-                printInfo(1, "Replacing update %s with newer package %s\n" % (self.update[i].getNEVRA(), pkg.getNEVRA()))
-                self.update[i] = pkg
-            else:
-                printInfo(1, "Newer package %s already in update set\n" % self.update[i].getNEVRA())
-            return
-        self.update.append(pkg)
         return 1
 
     def erasePkg(self, file):
@@ -386,74 +314,10 @@ class RpmController:
         if not self.ignorearch:
             if rpmconfig.machine not in possible_archs:
                 raiseFatal("Unknow rpmconfig.machine architecture %s" % rpmconfig.machine)
-            self.__filterArch()
-        if self.operation == RpmResolver.OP_INSTALL:
-            if not self.__checkInstall():
-                printError("Can't install older or same packages.")
-                return 0
-        if self.operation == RpmResolver.OP_UPDATE:
-            self.oldpackages = self.__findUpdatePkgs()
-            if self.oldpackages == None:
-                printError("Can't update to older or same packages.")
-                return 0
+            filterArchList(self.rpms)
+        else:
+            filterArchList(self.rpms, rpmconfig.machine)
         return 1
-
-    def __filterArch(self):
-        self.__filterArchList(self.new)
-        self.__filterArchList(self.update)
-        self.__filterArchList(self.available)
-
-    def __filterArchList(self, flist):
-        duplicates = {}
-        rmlist = []
-        for pkg in flist:
-            name = pkg.getNEVR()
-            arch = pkg["arch"]
-            if arch not in possible_archs:
-                raiseFatal("%s: Unknow rpm package architecture %s" % (pkg.source, arch))
-            if arch != rpmconfig.machine and arch not in arch_compats[rpmconfig.machine]:
-                raiseFatal("%s: Architecture not compatible with rpmconfig.machine %s" % (pkg.source, rpmconfig.machine))
-            if duplicates.has_key(name):
-                if arch in arch_compats[duplicates[name][0]]:
-                    printInfo(2, "%s: removing due to arch_compat\n" % pkg.source)
-                    rmlist.append(pkg)
-                else:
-                    printInfo(2, "%s: removing due to arch_compat\n" % duplicates[name][1].source)
-                    rmlist.append(duplicates[name][1])
-                    duplicates[name] = [arch, pkg]
-            else:
-                duplicates[name] = [arch, pkg]
-        for i in rmlist:
-            flist.remove(i)
-
-    def __checkInstall(self):
-        clist = {}
-        for pkg in self.installed:
-            if not clist.has_key(pkg["name"]):
-                clist[pkg["name"]] = []
-            clist[pkg["name"]].append(pkg)
-        for pkg in self.new:
-            if not clist.has_key(pkg["name"]):
-                continue
-            for ipkg in clist[pkg["name"]]:
-                if pkgCompare(pkg, ipkg) <= 0:
-                    return 0
-        return 1
-
-    def __findUpdatePkgs(self):
-        phash = {}
-        for pkg in self.update:
-            name = pkg["name"]
-            phash[name] = []
-            for upkg in self.installed:
-                if upkg["name"] != name:
-                    continue
-                if pkgCompare(upkg, pkg) < 0:
-                    phash[name].append(upkg)
-                else:
-                    printError("Can't install older or same package %s" % pkg.getNEVR())
-                    return None
-        return phash
 
     def __addPkgToDB(self, pkg):
         if self.pydb == None:
