@@ -192,7 +192,8 @@ class ReadRpm:
                 checkSize += (8 - (checkSize % 8)) % 8
             checkSize += self.verifyTag(index, fmt2, issig)
         if checkSize != storeSize:
-            # XXX: add a check for very old rpm versions here
+            # XXX: add a check for very old rpm versions here, seems this
+            # is triggered for a few RHL5.x rpm packages
             self.printErr("storeSize/checkSize is %d/%d" % (storeSize,
                 checkSize))
 
@@ -559,7 +560,9 @@ class RRpm:
 
 def verifyRpm(filename, payload=None):
     """Read in a complete rpm and verify its integrity."""
-    rpm = ReadRpm(filename, 1, legacy=0)
+    rpm = ReadRpm(filename, 1, legacy=1)
+    #[rpmconstants.RPMTAG_CHANGELOGTIME, rpmconstants.RPMTAG_CHANGELOGNAME,
+    # rpmconstants.RPMTAG_CHANGELOGTEXT]
     if rpm.readHeader():
         return None
     if payload:
