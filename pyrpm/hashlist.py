@@ -13,7 +13,8 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004, 2005 Red Hat, Inc.
 #
-# Author: Thomas Woerner <twoerner@redhat.com>
+# Authors: Thomas Woerner <twoerner@redhat.com>
+#          Harald Hoyer <harald@redhat.com>
 #
 
 from types import IntType
@@ -24,12 +25,11 @@ class HashList:
     def __init__(self):
         self.list = []
         self.hash = {}
-
+        
         self.__len__ = self.list.__len__
         self.__repr__ = self.list.__repr__
         self.has_key = self.hash.has_key
         self.keys = self.hash.keys
-        self.__contains__ = self.__getitem__
 
     def __getitem__(self, key):
         if isinstance(key, IntType):
@@ -37,6 +37,11 @@ class HashList:
             return (i, self.hash.get(i))
         return self.hash.get(key)
 
+    def __contains__(self, key):
+        if isinstance(key, IntType):
+            return self.list.__contains__(key)
+        return self.hash.__contains__(key)
+            
     def __setitem__(self, key, value):
         if not self.hash.has_key(key):
             self.hash[key] = value
