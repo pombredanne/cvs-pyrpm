@@ -88,15 +88,13 @@ class CPIOFile:
 
         size = filedata[CP_FDNAMESIZE]
         filename = self.fd.read(size)
-        filename = "/"+os.path.normpath("./"+filename.rstrip("\x00"))
+        filename = "/" + os.path.normpath("./" + filename.rstrip("\x00"))
         fsize = 110 + size
         self.fd.read((4 - (fsize % 4)) % 4)
 
         # Detect if we're at the end of the archive
         if filename == "/TRAILER!!!":
             return [None, None]
-
-        # Contents
         return [filename, filedata]
         
 

@@ -32,7 +32,7 @@ class RpmIO:
     def open(self, mode="r"):
         return 0
 
-    def read(self):
+    def read(self, skip=None):
         return 0
 
     def write(self, pkg):
@@ -495,12 +495,8 @@ class RpmFileIO(RpmStreamIO):
                 self.fd = open(self.source, mode)
             except:
                 raiseFatal("%s: could not open file" % self.source)
-#            if offset:
-#                self.fd.seek(offset, 1)
 
     def __closeFile(self):
-        if self.fd != None:
-            self.fd.close()
         self.fd = None
 
     def open(self, mode="r"):
