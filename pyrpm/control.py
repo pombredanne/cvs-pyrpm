@@ -161,14 +161,16 @@ class RpmController:
                     (op, pkg) = subop.pop(0)
                     i += 1
                     progress = "[%d/%d]" % (i, numops)
-                    if   op == RpmResolver.OP_INSTALL:
+                    if rpmconfig.hash:
                         printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
+                    else:
+                        printInfo(1, "%s %s" % (progress, pkg.getNEVRA()))
+                    if   op == RpmResolver.OP_INSTALL:
                         if not pkg.install(self.pydb):
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
                         self.__addPkgToDB(pkg)
                     elif op == RpmResolver.OP_UPDATE or op == RpmResolver.OP_FRESHEN:
-                        printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
                         if not pkg.install(self.pydb):
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
@@ -181,7 +183,6 @@ class RpmController:
                                 self.__runTriggerPostUn(opkg)
                                 self.__erasePkgFromDB(opkg)
                     elif op == RpmResolver.OP_ERASE:
-                        printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
                         self.__runTriggerUn(pkg)
                         if not pkg.erase(self.pydb):
                             sys.exit(1)
@@ -189,7 +190,6 @@ class RpmController:
                         self.__erasePkgFromDB(pkg)
                     pkg.close()
                     del pkg
-                    printInfo(0, "\n")
                 sys.exit(0)
         return 1
 

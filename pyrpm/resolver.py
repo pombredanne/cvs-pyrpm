@@ -388,7 +388,7 @@ class RpmResolver(RpmList):
                         continue
                     if fi1.mode != fi2.mode or \
                            fi1.filesize != fi2.filesize or \
-                           fi1.md5 != fi2.md5:
+                           fi1.md5sum != fi2.md5sum:
                         conflicts.append((s[j], filename, s[k]))
         return conflicts
     # ----

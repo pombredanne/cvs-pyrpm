@@ -17,7 +17,7 @@
 #
 
 
-import os, os.path, tempfile, sys, string, types
+import os, os.path, tempfile, sys, string, types, resource
 from config import rpmconfig
 from base import *
 from cpio import *
@@ -42,11 +42,25 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
             args.append(arg1)
         if arg2 != None:
             args.append(arg2)
+    (rfd, wfd) = os.pipe()
     pid = os.fork()
     if pid != 0:
+        os.close(wfd)
         (cpid, status) = os.waitpid(pid, 0)
+        cret = ""
+        cout = os.read(rfd, 8192)
+        while cout != "":
+            cret += cout
+            cout = os.read(rfd, 8192)
+        os.close(rfd)
     else:
-        os.close(0)
+        fd = os.open("/dev/null", os.O_RDONLY)
+        if fd != 0:
+            os.dup2(fd, 0)
+        if wfd != 1:
+            os.dup2(wfd, 1)
+        os.dup2(1, 2)
+        closeAllFDs()
         os.execv(prog, args)
         sys.exit()
     if script != None:
@@ -55,6 +69,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         printError("Error in running script:")
         printError(str(prog))
         printError(str(args))
+        printError(cret)
         return 0
     return 1
 
@@ -142,6 +157,13 @@ def createLink(src, dst):
     if os.link(src, dst) != None:
         return 0
     return 1
+
+def closeAllFDs():
+    for fd in range(3,resource.getrlimit(resource.RLIMIT_NOFILE)[1]):
+        try:
+            os.close(fd)
+        except:
+            pass
 
 # Error handling functions
 def printDebug(level, msg):

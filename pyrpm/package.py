@@ -147,6 +147,10 @@ class RpmPackage(RpmData):
                 return 0
         if not self.__extract(db):
             return 0
+        if rpmconfig.hash:
+            printInfo(0, "\n")
+        else:
+            printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None:
             if not runScript(self["postinprog"], self["postin"], numPkgs):
@@ -250,11 +254,11 @@ class RpmPackage(RpmData):
             pos = npos
             sys.stdout.flush()
             if not self.rfilist.has_key(filename):
-                # src.rpm has empty tag "dirnames", but we use absolut paths in io.read(),
-                # so at least the directory '/' is there ...
+                # src.rpm has empty tag "dirnames", but we use absolut paths in
+                # io.read(), so at least the directory '/' is there ...
                 if os.path.dirname(filename)=='/' and self.isSourceRPM():
                     filename = filename[1:]
-            if filename in files:
+            if self.rfilist.has_key(filename):
                 rfi = self.rfilist[filename]
                 if self.__verifyFileInstall(rfi, db):
                     if not str(rfi.inode)+":"+str(rfi.dev) in self.hardlinks.keys():
@@ -308,15 +312,15 @@ class RpmPackage(RpmData):
             # anything with it. If the file hasn't changed in the packages we
             # keep the editited file on disc.
             if rfi.mode == orfi.mode and rfi.uid == orfi.uid and rfi.gid == orfi.gid and rfi.filesize == orfi.filesize and rfi.md5sum == orfi.md5sum:
-                printDebug(1, "%s: Same file between new and installed package, skipping." % self.getNEVRA())
+                printWarning(1, "%s: Same file between new and installed package, skipping." % self.getNEVRA())
                 continue
             # OK, file in new package is different to some old package and it
             # is editied on disc. Now verify if it is a noreplace or not
             if rfi.flags & RPMFILE_NOREPLACE:
-                printDebug(1, "%s: config(noreplace) file found that changed between old and new rpms and has changed on disc, creating new file as %s.rpmnew" %(self.getNEVRA(), rfi.filename))
+                printWarning(0, "%s: config(noreplace) file found that changed between old and new rpms and has changed on disc, creating new file as %s.rpmnew" %(self.getNEVRA(), rfi.filename))
                 rfi.filename += ".rpmnew"
             else:
-                printDebug(1, "%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
+                printWarning(0, "%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
                 if os.rename(rfi.filename, rfi.filename+".rpmsave") != None:
                     raiseFatal("%s: Edited config file %s couldn't be renamed, aborting." % (self.getNEVRA(), rfi.filename))
             break

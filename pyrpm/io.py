@@ -618,6 +618,7 @@ class RpmPyDB:
             src = "pydb:/"+self.source+"/headers/"+nevra
             pkg = package.RpmPackage(src)
             pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "dirindexes", "basenames", "dirnames", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
+            pkg.close()
             for filename in pkg["filenames"]:
                 if not self.filenames.has_key(filename):
                     self.filenames[filename] = []
@@ -635,9 +636,10 @@ class RpmPyDB:
             return 0
         nevra = pkg.getNEVRA()
         src = "pydb:/"+self.source+"/headers/"+nevra
-        pyrpmio = getRpmIOFactory(src)
-        if not pyrpmio.write(pkg):
+        apkg = getRpmIOFactory(src)
+        if not apkg.write(pkg):
             return 0
+        apkg.close()
         for filename in pkg["filenames"]:
             if not self.filenames.has_key(filename):
                 self.filenames[filename] = []
