@@ -321,6 +321,8 @@ possible_archs = {'noarch':1, 'i386':1, 'i486':1, 'i586':1, 'i686':1,
 
 
 arch_compats = {
+"noarch" : ("noarch"),
+
 "alphaev67" : ("alphaev6", "alphapca56", "alphaev56", "alphaev5", "alpha",
     "axp", "noarch"),
 "alphaev6" : ("alphapca56", "alphaev56", "alphaev5", "alpha", "axp", "noarch"),

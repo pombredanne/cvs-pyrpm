@@ -456,12 +456,12 @@ def filterArchDuplicates(list):
             ret = labelCompare((r.getEpoch(), r["version"], r["release"]),
                 (pkg.getEpoch(), pkg["version"], pkg["release"]))
             if ret < 0:
-                printWarning(0, "%s was already added, replacing with %s" % \
+                printWarning(2, "%s was already added, replacing with %s" % \
                                    (r.getNEVRA(), pkg.getNEVRA()))
                 myhash[key] = pkg
                 list.remove(r)
             elif ret == 0:
-                printWarning(1, "%s was already added" % \
+                printWarning(2, "%s was already added" % \
                                    pkg.getNEVRA())
                 list.pop(i)
             else:
@@ -487,14 +487,14 @@ def filterArchDuplicates(list):
                        buildarchtranslate[r["arch"]]:
                     j += 1
                 elif r["arch"] in arch_compats[pkg["arch"]]:
-                    printWarning(0, "%s was already added, replacing with %s" % \
+                    printWarning(2, "%s was already added, replacing with %s" % \
                                        (r.getNEVRA(), pkg.getNEVRA()))
                     myhash[pkg["name"]].remove(r)
                     myhash[pkg["name"]].append(pkg)
                     list.remove(r)
                     removed = 1
                 elif pkg["arch"] == r["arch"]:
-                    printWarning(0, "%s was already added" % \
+                    printWarning(2, "%s was already added" % \
                                        pkg.getNEVRA())
                     list.pop(i) # remove 'pkg'
                     removed = 1

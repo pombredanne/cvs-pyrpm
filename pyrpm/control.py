@@ -139,6 +139,9 @@ class RpmController:
         if rpmconfig.timer:
             print "orderer took %s seconds" % (clock() - time1)
         if not operations:
+            if operations == []:
+                printError("No updates are necessary.")
+                sys.exit(0)
             printError("Errors found during package dependancy checks and ordering.")
             sys.exit(1)
         if rpmconfig.test:
