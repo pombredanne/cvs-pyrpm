@@ -21,7 +21,7 @@ import os.path, sys, pwd, grp, md5
 from stat import S_ISREG
 from struct import unpack
 from functions import *
-import io
+from io import *
 
 
 class RpmData:
@@ -125,7 +125,7 @@ class RpmPackage(RpmData):
     def open(self, mode="r"):
         if self.io != None:
             return 1
-        self.io = io.getRpmIOFactory(self.source, self.verify, self.strict,
+        self.io = getRpmIOFactory(self.source, self.verify, self.strict,
             self.hdronly)
         if not self.io:
             return 0
