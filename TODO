@@ -5,6 +5,9 @@ what are the following rpm tags exactly:
   - "immutable": (RPMTAG_HEADERIMMUTABLE, RPM_BIN, 16, 0)
   - "header_signatures": (HEADER_SIGNATURES, RPM_BIN, 16, 0)
 Signature checking
+Do we need anything for SELinux support?
+warn about exclude flag if shipped in binary rpm packages
+change filenames to be split for dirname/basename to reduce memory allocations
 Verify correct file and script handling
 Implement file checkes (md5 checks, %config, %ghost, etc)
 Write reader/writer for rpmdb, rebuilddb/verify support
