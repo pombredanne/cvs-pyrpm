@@ -34,6 +34,7 @@ RPM_STRING = rpmconstants.RPM_STRING
 RPM_BIN = rpmconstants.RPM_BIN
 RPM_STRING_ARRAY = rpmconstants.RPM_STRING_ARRAY
 RPM_I18NSTRING = rpmconstants.RPM_I18NSTRING
+RPM_ARGSTRING = rpmconstants.RPM_ARGSTRING
 
 
 class RpmError:
@@ -239,7 +240,11 @@ class RpmStreamIO(RpmIO):
             else:
                 t = rpmtag[tag]
                 if t[1] != None and t[1] != ttype:
-                    self.printErr("tag %d has wrong type %d" % (tag, ttype))
+                    if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or \
+                        ttype == RPM_STRING_ARRAY):
+                        pass    # special exception case
+                    else:
+                        self.printErr("tag %d has wrong type %d" % (tag, ttype))
                 if t[2] != None and t[2] != count:
                     self.printErr("tag %d has wrong count %d" % (tag, count))
                 if (t[3] & 1) and self.legacy:

@@ -34,6 +34,7 @@ RPM_STRING = rpmconstants.RPM_STRING
 RPM_BIN = rpmconstants.RPM_BIN
 RPM_STRING_ARRAY = rpmconstants.RPM_STRING_ARRAY
 RPM_I18NSTRING = rpmconstants.RPM_I18NSTRING
+RPM_ARGSTRING = rpmconstants.RPM_ARGSTRING
 
 
 # limit: does not support all RHL5.x and earlier rpms if verify is enabled
@@ -134,7 +135,11 @@ class ReadRpm:
             else:
                 t = rpmtag[tag]
                 if t[1] != None and t[1] != ttype:
-                    self.printErr("tag %d has wrong type %d" % (tag, ttype))
+                    if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or \
+                        ttype == RPM_STRING_ARRAY):
+                        pass    # special exception case
+                    else:
+                        self.printErr("tag %d has wrong type %d" % (tag, ttype))
                 if t[2] != None and t[2] != count:
                     self.printErr("tag %d has wrong count %d" % (tag, count))
                 if (t[3] & 1) and self.legacy:
@@ -259,7 +264,7 @@ class ReadRpm:
     def verifyHeader(self):
         if self.hdronly:
             return
-        self.cpiosize = self[["payloadsize"]][0]
+        #self.cpiosize = self[["payloadsize"]][0]
         # header + payload size
         self.payloadsize = self[["size_in_sig"]][0] - self.hdrdata[5]
         identifysig = self[["header_signatures"]]
@@ -522,8 +527,12 @@ class RRpm:
             self.printErr("version contains wrong char")
         if rpm["payloadformat"] not in [None, "cpio"]:
             self.printErr("wrong payload format")
-        if rpm["payloadcompressor"] not in [None, "gzip"]:
+        if rpm.legacy:
+          if rpm["payloadcompressor"] not in [None, "gzip"]:
             self.printErr("no gzip compressor: %s" % rpm["payloadcompressor"])
+        else:
+          if rpm["payloadcompressor"] not in [None, "gzip", "bzip2"]:
+            self.printErr("no gzip/bzip2 compressor: %s" % rpm["payloadcompressor"])
         if rpm.legacy:
           if rpm["payloadflags"] not in ["9"]:
             self.printErr("no payload flags: %s" % rpm["payloadflags"])
@@ -540,7 +549,8 @@ class RRpm:
             self.printErr("unknown distribution: %s" % rpm["distribution"])
         if rpm["rhnplatform"] not in (None, self.arch):
             self.printErr("unknown arch for rhnplatform")
-        if rpm["platform"] not in (None, self.arch + "-redhat-linux-gnu",
+        if rpm.legacy:
+          if rpm["platform"] not in (None, self.arch + "-redhat-linux-gnu",
             self.arch + "-redhat-linux", "--target=${target_platform}",
             self.arch + "-unknown-linux",
             "--target=${TARGET_PLATFORM}", "--target=$TARGET_PLATFORM", ""):
@@ -634,10 +644,15 @@ def main(args):
 def verifyAllRpms():
     #import time
     #repo = []
-    for a in sys.argv[1:]:
-        rpm = verifyRpm(a)
+    args = sys.argv[1:]
+    legacy = 0
+    if args[0] == "--strict":
+        legacy = 1
+        args = args[1:]
+    for a in args:
+        rpm = verifyRpm(a, legacy)
         if rpm != None:
-            #f = rpm["dirnamesxxx"]
+            #f = rpm["optflags"]
             #if f:
             #    print rpm.getFilename()
             #    print f

@@ -33,6 +33,10 @@ RPM_BIN = 7
 RPM_STRING_ARRAY = 8
 RPM_I18NSTRING = 9
 
+# new type internal to this tool:
+# STRING_ARRAY for app + params or STRING otherwise
+RPM_ARGSTRING = 12
+
 # header private tags
 HEADER_IMAGE = 61
 HEADER_SIGNATURES = 62 # starts a header with signatures
@@ -266,18 +270,17 @@ rpmtag = {
     "triggerscriptprog": (RPMTAG_TRIGGERSCRIPTPROG, RPM_STRING_ARRAY, None, 4),
     "triggerindex": (RPMTAG_TRIGGERINDEX, RPM_INT32, None, 4),
 
-    # scripts, they can also be RPM_STRING_ARRAY
+    # scripts
     "prein": (RPMTAG_PREIN, RPM_STRING, None, 4),
-    "preinprog": (RPMTAG_PREINPROG, RPM_STRING, None, 4),
+    "preinprog": (RPMTAG_PREINPROG, RPM_ARGSTRING, None, 4),
     "postin": (RPMTAG_POSTIN, RPM_STRING, None, 4),
-    # can be RPM_STRING or RPM_STRING_ARRAY
-    "postinprog": (RPMTAG_POSTINPROG, None, None, 4),
+    "postinprog": (RPMTAG_POSTINPROG, RPM_ARGSTRING, None, 4),
     "preun": (RPMTAG_PREUN, RPM_STRING, None, 4),
-    "preunprog": (RPMTAG_PREUNPROG, RPM_STRING, None, 4),
+    "preunprog": (RPMTAG_PREUNPROG, RPM_ARGSTRING, None, 4),
     "postun": (RPMTAG_POSTUN, RPM_STRING, None, 4),
-    "postunprog": (RPMTAG_POSTUNPROG, None, None, 4),
+    "postunprog": (RPMTAG_POSTUNPROG, RPM_ARGSTRING, None, 4),
     "verifyscript": (RPMTAG_VERIFYSCRIPT, RPM_STRING, None, 4),
-    "verifyscriptprog": (RPMTAG_VERIFYSCRIPTPROG, RPM_STRING, None, 4),
+    "verifyscriptprog": (RPMTAG_VERIFYSCRIPTPROG, RPM_ARGSTRING, None, 4),
 
     # addon information:
     # list of available languages
@@ -314,7 +317,7 @@ rpmtag = {
     "packager": (RPMTAG_PACKAGER, RPM_STRING, None, 0),
     "os": (RPMTAG_OS, RPM_STRING, None, 0),         # always "linux"
     "payloadformat": (RPMTAG_PAYLOADFORMAT, RPM_STRING, None, 0), # "cpio"
-    # "gzip"
+    # "gzip" or "bzip2"
     "payloadcompressor": (RPMTAG_PAYLOADCOMPRESSOR, RPM_STRING, None, 0),
     "payloadflags": (RPMTAG_PAYLOADFLAGS, RPM_STRING, None, 0), # "9"
     "rhnplatform": (RPMTAG_RHNPLATFORM, RPM_STRING, None, 4),   # == arch
@@ -410,11 +413,11 @@ for key in ["md5"]:
     rpmsigtagrequired.append(rpmsigtag[key][0])
 
 # check arch names against this list
-possible_archs = ['noarch', 'i386', 'i486', 'i586', 'i686', 'athlon', 'alpha',
-    's390', 's390x', 'ia64', 'x86_64', 'ppc', 'ppc64', 'sparc', 'sparc64',
-    'ppc64iseries', 'ppc64pseries', 'ia32e', 'ppcpseries', 'ppciseries',
-    'ppcmac',
-    'arm', 'armv4l', 'mips', 'mipseb', 'hppa', 'axp', 'm68k', 'mipsel', 'sh',
+possible_archs = ['noarch', 'i386', 'i486', 'i586', 'i686', 'athlon',
+    'x86_64', 'ia32e', 'alpha', 'sparc', 'sparc64', 's390', 's390x', 'ia64',
+    'ppc', 'ppc64', 'ppc64iseries', 'ppc64pseries', 'ppcpseries', 'ppciseries',
+    'ppcmac', 'ppc8260', 'm68k',
+    'arm', 'armv4l', 'mips', 'mipseb', 'hppa', 'mipsel', 'sh', 'axp',
     # these are in old rpms:
     'i786', 'i886', 'i986', 's390xc']
 
