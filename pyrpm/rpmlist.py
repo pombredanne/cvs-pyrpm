@@ -113,23 +113,13 @@ class RpmList:
     def __getitem__(self, i):
         return self.list[i][1] # return rpm list
     def install(self, pkg):
-        if self.list.has_key(pkg["name"]):
-            for r in self.list[pkg["name"]]:
-                if str(pkg) == str(r):
-                    printDebug(1, "Package %s is already in list" % \
-                               r.getNEVRA())
-                    return 0
-        # remove obsolete packages
-        for u in pkg["obsoletes"]:
-            s = self.searchDependency(u)
-            for r2 in s:
-                if str(r2) != str(pkg):
-                    printDebug(1, "%s obsoletes %s, removing %s" % \
-                               (pkg.getNEVRA(), r2.getNEVRA(), r2.getNEVRA()))
-                    self.obsolete(pkg, r2)
-        # add package to list
         if not self.list.has_key(pkg["name"]):
             self.list[pkg["name"]] = [ ]
+        for r in self.list[pkg["name"]]:
+            if str(pkg) == str(r):
+                printDebug(1, "Package %s is already in list" % \
+                           r.getNEVRA())
+                return 0
         self.list[pkg["name"]].append(pkg)
         self.provides.add_rpm(pkg)
         self.filenames.add_rpm(pkg)
@@ -156,7 +146,18 @@ class RpmList:
             while i < len(rpms):
                 self.erase(rpms[0])
                 i += 1
-        return self.install(pkg)
+        if self.install(pkg) == 1:
+            # remove obsolete packages
+            for u in pkg["obsoletes"]:
+                s = self.searchDependency(u)
+                for r2 in s:
+                    if str(r2) != str(pkg):
+                        printDebug(1, "%s obsoletes %s, removing %s" % \
+                                   (pkg.getNEVRA(), r2.getNEVRA(), \
+                                    r2.getNEVRA()))
+                        self.obsolete(pkg, r2)
+            return 1
+        return 0
     def erase(self, pkg):
         if self.list.has_key(pkg["name"]):
             found = 0
