@@ -32,11 +32,11 @@ class ProvidesList:
     """ enable search of provides """
     """ provides of packages can be added and removed by package """
     def __init__(self):
-        self.provide = {}
+        self.provide = { }
 
     def _append(self, name, flag, version, rpm):
         if not self.provide.has_key(name):
-            self.provide[name] = []
+            self.provide[name] = [ ]
         self.provide[name].append((flag, version, rpm))
 
     def _remove(self, name, flag, version, rpm):
@@ -97,8 +97,8 @@ class FilenamesList:
     """ enable search of filenames """
     """ filenames of packages can be added and removed by package """
     def __init__(self):
-        self.filename = {}
-        self.multi = []
+        self.filename = { }
+        self.multi = [ ]
 
     def _append(self, name, rpm):
         if not self.filename.has_key(name):
