@@ -273,6 +273,7 @@ for key in rpmtag.keys():
     v = rpmtag[key]
     rpmtag[v[0]] = v
     rpmtagname[v[0]] = key
+del v
 del key
 
 # Required tags in a header.
@@ -303,6 +304,7 @@ for key in rpmsigtag.keys():
     rpmsigtag[v[0]] = v
     rpmsigtagname[v[0]] = key
 del key
+del v
 
 # Required tags in a signature header.
 rpmsigtagrequired = []

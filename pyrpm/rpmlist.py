@@ -82,7 +82,7 @@ class RpmList:
             if ret != self.OK:  return ret
         else: # self.operation == self.OP_ERASE:
             if self._erase(pkg) != 1:
-                return NOT_INSTALLED
+                return self.NOT_INSTALLED
             self._pkgErase(pkg)
         self.appended.append(pkg)
         return self.OK
@@ -107,7 +107,7 @@ class RpmList:
         return self.OK
     # ----
 
-    def _update(self, pkg, oldpackages=0):
+    def _update(self, pkg):
         key = pkg["name"]
 
         ret = self._install(pkg)
@@ -156,12 +156,13 @@ class RpmList:
     # ----
 
     def getList(self):
-        list = [ ]
+        l = []
         for i in xrange(len(self)):
-            rlist = self[i]
-            for r in rlist:
-                list.append(r)
-        return list
+            l.extend(self[i])
+            #rlist = self[i]
+            #for r in rlist:
+            #    l.append(r)
+        return l
     # ----
 
     def p(self):

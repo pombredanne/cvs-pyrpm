@@ -137,7 +137,7 @@ class RpmPackage(RpmData):
 
     def write(self, source=None):
         if source != None:
-            origsource = self.source
+            #origsource = self.source
             self.source = source
             self.close()
         if not self.open("w"):

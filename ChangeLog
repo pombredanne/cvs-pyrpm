@@ -5,7 +5,7 @@
 	- limit linesize to 80
 	- remove suggestions for possible binary rpm package changes
 	- a bit more descriptions
-	- add "del key" to remove temp variables
+	- add "del key"/"del v" to remove temp variables
 	- clean up possible_archs for FC development tree only
 	* pyrpm/config.py:
 	- limit linesize to 80
@@ -16,6 +16,15 @@
 	- pyrpm/package.py: - use CP_ISREG
 	- pyrpm/resolver.py: - use CP_IS*
 	- pyrpm/specfile.py: - do not "import sys"
+	* AUTHORS: - add email for myself
+	* pyrpm/functions.ps: - filterArchDuplicates() doesn't use "arch"
+	* pyrpm/package.py: - write(): remove "origsource", it is unused
+	* pyrpm/resolver.py: - removed unused var
+	- do not use "str" or "file" as var
+	* pyrpm/rpmlist.py: - NOT_INSTALLED -> self.NOT_INSTALLED
+	- _update() doesn't use "oldpackages", remove it
+	- getList() can use ".extend()", do not use "list" as var
+
 	
 2005-03-10  Phil Knirsch  <pknirsch@redhat.com>
 

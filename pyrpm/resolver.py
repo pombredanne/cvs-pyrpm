@@ -246,7 +246,6 @@ class RpmResolver(RpmList):
         """ Check dependencies for a rpm package """
         unresolved = [ ]
         resolved = [ ]
-        j = 0
         for u in pkg["requires"]:
             if u[0][0:7] == "rpmlib(": # drop rpmlib requirements
                 continue
@@ -280,10 +279,10 @@ class RpmResolver(RpmList):
                     # do this only in debug level > 1
                     printDebug(2, "%s: resolved dependencies:" % r.getNEVRA())
                     for (u, s) in resolved:
-                        str = ""
+                        s2 = ""
                         for r2 in s:
-                            str += "%s " % r2.getNEVRA()
-                        printDebug(2, "\t%s: %s" % (depString(u), str))
+                            s2 += "%s " % r2.getNEVRA()
+                        printDebug(2, "\t%s: %s" % (depString(u), s2))
                 if len(unresolved) > 0:
                     no_unresolved = 0
                     printError("%s: unresolved dependencies:" % r.getNEVRA())
@@ -373,13 +372,13 @@ class RpmResolver(RpmList):
             return None
 
         conflicts = [ ]
-        for file in self.filenames.multi:
-            printDebug(1, "Checking for file conflicts for '%s'" % file)
-            s = self.filenames.search(file)
+        for filename in self.filenames.multi:
+            printDebug(1, "Checking for file conflicts for '%s'" % filename)
+            s = self.filenames.search(filename)
             for j in xrange(len(s)):
-                fi1 = s[j].getRpmFileInfo(file)
+                fi1 = s[j].getRpmFileInfo(filename)
                 for k in xrange(j+1, len(s)):
-                    fi2 = s[k].getRpmFileInfo(file)
+                    fi2 = s[k].getRpmFileInfo(filename)
                     if s[j].getNEVR() == s[k].getNEVR() and \
                            buildarchtranslate[s[j]["arch"]] != \
                            buildarchtranslate[s[k]["arch"]]:
@@ -395,7 +394,7 @@ class RpmResolver(RpmList):
                     if fi1.mode != fi2.mode or \
                            fi1.filesize != fi2.filesize or \
                            fi1.md5 != fi2.md5:
-                        conflicts.append((s[j], file, s[k]))
+                        conflicts.append((s[j], filename, s[k]))
         return conflicts
     # ----
 

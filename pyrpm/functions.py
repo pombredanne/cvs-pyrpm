@@ -380,7 +380,7 @@ def filterArchCompat(list, arch=None):
             i += 1
     return 1
 
-def filterArchDuplicates(list, arch=None):
+def filterArchDuplicates(list):
     # stage 1: filert duplicates: order by name.arch
     hash = { }
     i = 0
@@ -448,7 +448,7 @@ def filterArchDuplicates(list, arch=None):
 
 def filterArchList(list, arch=None):
     filterArchCompat(list, arch)
-    filterArchDuplicates(list, arch)
+    filterArchDuplicates(list)
 
 def normalizeList(list):
     """ normalize list """
