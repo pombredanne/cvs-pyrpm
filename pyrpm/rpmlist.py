@@ -109,15 +109,21 @@ class RpmList:
         key = pkg["name"]
 
         # old package test
-        if rpmconfig.oldpackage == 0 and self.installed.has_key(key):
-            rpms = self.installed[pkg["name"]]
+        if rpmconfig.oldpackage == 0:
+            if self.installed.has_key(key):
+                rpms = self.installed[pkg["name"]]
+            else:
+                rpms = self.list[pkg["name"]]
             newer = 1
             for r in rpms:
                 if pkgCompare(pkg, r) < 0:
                     newer = 0
             if newer == 0:
-                printWarning(1, "%s: A newer package is already installed" % \
-                             r.getNEVRA())
+                if self.installed.has_key(key):
+                    msg = "%s: A newer package is already installed"
+                else:
+                    msg = "%s: A newer package is already added"
+                printWarning(1, msg % r.getNEVRA())
                 return self.OLD_PACKAGE
 
         ret = self._install(pkg)
