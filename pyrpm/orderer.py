@@ -75,14 +75,15 @@ class _Relations:
 # ----------------------------------------------------------------------------
 
 class RpmOrderer:
-    def __init__(self, rpms, obsoletes, operation):
+    def __init__(self, rpms, updates, obsoletes, operation):
         """ rpms is a list of the packages which has to be installed, updated
         or removed. The operation is either OP_INSTALL, OP_UPDATE or
         OP_ERASE. """
         self.rpms = rpms
+        self.updates = updates
         self.obsoletes = obsoletes
         self.operation = operation
-        
+
     # ----
 
     def _operationFlag(self, flag):
@@ -102,7 +103,7 @@ class RpmOrderer:
                     (isInstallPreReq(flag) or isLegacyPreReq(flag))):
                 return 1  # soft requirement
         return 0
-    
+
     # ----
 
     def genRelations(self):
@@ -114,7 +115,7 @@ class RpmOrderer:
 
         for rlist in rpmlist:
             for r in rlist:
-                printDebug(1, "Generating Relations for %s" % r.getNEVRA())
+                printDebug(1, "Generating relations for %s" % r.getNEVRA())
                 (unresolved, resolved) = rpmlist.getPkgDependencies(r)
                 # ignore unresolved, we are only looking at the changes,
                 # therefore not all symbols are resolvable in these changes
@@ -138,7 +139,7 @@ class RpmOrderer:
             rlist = rpmlist[i]
             for r in rlist:
                 if not relations.has_key(r):
-                    printDebug(1, "Generating empty Relations for %s" % \
+                    printDebug(1, "No relations for %s found, generating empty relations" % \
                                r.getNEVRA())
                     relations.append(r, None, 0)
 
@@ -172,18 +173,34 @@ class RpmOrderer:
                 operations.append((self.operation, order[i]))
         else:
             for r in order:
-                operations.append((self.operation, r))
-                if r in self.obsoletes:
+                if self.updates and r in self.updates:
+                    op = RpmList.OP_UPDATE
+                else:
+                    op = RpmList.OP_INSTALL
+                operations.append((op, r))
+                if self.obsoletes and r in self.obsoletes:
                     if len(self.obsoletes[r]) == 1:
                         operations.append((RpmList.OP_ERASE,
                                            self.obsoletes[r][0]))
                     else:
                         # more than one obsolete: generate order
-                        resolver = RpmResolver(self.obsoletes[r],
-                                               RpmList.OP_ERASE)
-                        ops = resolver.resolve()
+                        orderer = RpmOrderer(self.obsoletes[r], None, None,
+                                             RpmList.OP_ERASE)
+                        ops = orderer.order()
                         operations.extend(ops)
-                        del resolver
+                        del orderer
+                if self.updates and r in self.updates:
+                    if len(self.updates[r]) == 1:
+                        operations.append((RpmList.OP_ERASE,
+                                           self.updates[r][0]))
+                    else:
+                        
+                        # more than one update: generate order
+                        orderer = RpmOrderer(self.updates[r], None, None,
+                                             RpmList.OP_ERASE)
+                        ops = orderer.order()
+                        operations.extend(ops)
+                        del orderer
         return operations
 
     # ----
