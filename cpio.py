@@ -23,7 +23,7 @@ class CPIOFile:
     """ Read ASCII CPIO files. """
 
     def __init__(self, file):
-        self.filelist = []              # list of CPIO header dicts
+        self.filelist = {}              # hash of CPIO headers and stat data
         if isinstance(file, basestring):
             self.filename = file
             self.fp = open(file, "rb")
@@ -41,8 +41,8 @@ class CPIOFile:
 
             #(magic, inode, mode, uid, gid, nlink, mtime, filesize, devMajor, \
             #    devMinor, rdevMajor, rdevMinor, namesize, checksum)
-            filedata = [data[0:6], data[6:14], \
-                oct(int(data[14:22], 16)), int(data[22:30], 16), \
+            filedata = [data[0:6], int(data[6:14], 16), \
+                int(data[14:22], 16), int(data[22:30], 16), \
                 int(data[30:38], 16), int(data[38:46], 16), \
                 int(data[46:54], 16), int(data[54:62], 16), \
                 int(data[62:70], 16), int(data[70:78], 16), \
@@ -62,7 +62,7 @@ class CPIOFile:
             filesize = filedata[7]
             self.fp.read(filesize)
             self.fp.read((4 - (filesize % 4)) % 4)
-            self.filelist.append(filename)
+            self.filelist[filename[1:]] = filedata
 
     def namelist(self):
         """Return a list of file names in the archive."""
