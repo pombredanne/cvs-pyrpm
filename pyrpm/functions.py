@@ -18,7 +18,7 @@
 
 
 import os, os.path, sys, resource, re
-from types import TupleType
+from types import TupleType, ListType
 from tempfile import mkstemp
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE
 from config import rpmconfig
@@ -31,7 +31,10 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         prog = "/bin/sh"
     if not os.path.exists("/var/tmp"):
         os.makedirs("/var/tmp")
-    args = [prog]
+    if isinstance(prog, TupleType):
+        args = prog
+    else:
+        args = [prog]
     if script != None:
         (fd, tmpfilename) = mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
         if fd == None:
@@ -64,14 +67,18 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         os.dup2(1, 2)
         closeAllFDs()
         os.chdir("/")
-        os.putenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin")
-        os.execv(prog, args)
+        #os.putenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin")
+        e = {"HOME": "/", "USER": "root", "LOGNAME": "root",
+            "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin"}
+        if isinstance(prog, TupleType):
+            os.execve(prog[0], args, e)
+        else:
+            os.execve(prog, args, e)
         sys.exit(255)
     if script != None:
         os.unlink(tmpfilename)
     if status != 0:
         printError("Error in running script:")
-        printError(str(prog))
         printError(str(args))
         printError(cret)
         return 0

@@ -197,7 +197,7 @@ rpmtag = {
     "optflags": (1122, RPM_STRING, None, 4), # optimization flags for gcc
     "pubkeys": (266, RPM_STRING_ARRAY, None, 4),
     "sourcepkgid": (1146, RPM_BIN, 16, 4), # md5 from srpm (header+payload)
-    "immutable": (63, RPM_BIN, 16, 0),
+    "immutable": (63, RPM_BIN, 16, 0), # content of this tag is unclear
     # less important information:
     "buildtime": (1006, RPM_INT32, 1, 0), # time of rpm build
     "buildhost": (1007, RPM_STRING, None, 0), # hostname where rpm was built
@@ -254,6 +254,7 @@ rpmtag = {
     "capability": (1105, RPM_INT32, None, 1),
     "xpm": (1013, RPM_BIN, None, 1),
     "gif": (1012, RPM_BIN, None, 1),
+    # bogus RHL5.2 data in XFree86-libs, ash, pdksh
     "verifyscript2": (15, RPM_STRING, None, 1),
     "nosource": (1051, RPM_INT32, None, 1),
     "nopatch": (1052, RPM_INT32, None, 1),
@@ -284,7 +285,7 @@ rpmsigtag = {
     # size of gpg/dsaheader sums differ between 64/65(contains '\n')
     "dsaheader": (267, RPM_BIN, None, 0),
     "gpg": (1005, RPM_BIN, None, 0),
-    "header_signatures": (62, RPM_BIN, 16, 0),
+    "header_signatures": (62, RPM_BIN, 16, 0), # content of this tag is unclear
     "payloadsize": (1007, RPM_INT32, 1, 0),
     "size_in_sig": (1000, RPM_INT32, 1, 0),
     "sha1header": (269, RPM_STRING, None, 0),
