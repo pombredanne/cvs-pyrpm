@@ -1,4 +1,5 @@
-scripts = pyrpmdb2rpmdb  pyrpminstall pyrpmspecinfo pyrpmyum rpmdb2pyrpmdb
+scripts = pyrpmcreaterepo pyrpmdb2rpmdb pyrpminstall pyrpmspecinfo pyrpmyum \
+	rpmdb2pyrpmdb
 EXTRA_DIST = $(scripts)
 bin_SCRIPTS = $(scripts)
 
