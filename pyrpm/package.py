@@ -370,8 +370,11 @@ class RpmPackage(RpmData):
             # Check if we need to overwrite a file on a multilib system. If any
             # package which already owns the file has a higher "arch" don't
             # overwrite it.
+            if self["arch"] == "noarch":
+                return 1
             for pkg in plist:
-                if self["arch"] in arch_compats[pkg["arch"]]:
+                if not archDuplicate(self["arch"], pkg["arch"]) and \
+                   self["arch"] in arch_compats[pkg["arch"]]:
                     return 0
             return 1
         # File should exsist in filesystem but doesn't...
