@@ -58,12 +58,8 @@ class HashList:
     def has_key(self, key):
         return self.hash.has_key(key)
 
-    def keys(self):
-        return self.hash.keys()
-
     def pop(self, idx):
-        key = self.list[idx]
-        self.list.pop(idx)
+        key = self.list.pop(idx)
         del self[key]
 
 # vim:ts=4:sw=4:showmatch:expandtab
