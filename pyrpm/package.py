@@ -229,10 +229,10 @@ class RpmPackage(RpmData):
         n = 0
         pos = 0
         if rpmconfig.printhash:
-            printInfo(0, "\r\t\t\t\t\t\t\t ")
+            printInfo(0, "\r\t\t\t\t\t\t ")
         for i in xrange(len(files)-1, -1, -1):
             n += 1
-            npos = int(n*22/nfiles)
+            npos = int(n*30/nfiles)
             if pos < npos and rpmconfig.printhash:
                 printInfo(0, "#"*(npos-pos))
             pos = npos
@@ -317,10 +317,10 @@ class RpmPackage(RpmData):
         n = 0
         pos = 0
         if rpmconfig.printhash:
-            printInfo(0, "\r\t\t\t\t\t\t\t ")
+            printInfo(0, "\r\t\t\t\t\t\t ")
         while filename != None and filename != "EOF" :
             n += 1
-            npos = int(n*22/nfiles)
+            npos = int(n*30/nfiles)
             if pos < npos and rpmconfig.printhash:
                 printInfo(0, "#"*(npos-pos))
             pos = npos
@@ -347,7 +347,7 @@ class RpmPackage(RpmData):
         if nfiles == 0:
             nfiles = 1
         if rpmconfig.printhash:
-            printInfo(0, "#"*(22-int(22*n/nfiles)))
+            printInfo(0, "#"*(30-int(30*n/nfiles)))
         return self.__handleRemainingHardlinks()
 
     def __verifyFileInstall(self, rfi, db):
@@ -374,6 +374,7 @@ class RpmPackage(RpmData):
                 if self["arch"] in arch_compats[pkg["arch"]]:
                     return 0
             return 1
+        # File should exsist in filesystem but doesn't...
         if not os.path.exists(rfi.filename):
             printWarning(1, "%s: File doesn't exist" % rfi.filename)
             return 1
@@ -409,7 +410,7 @@ class RpmPackage(RpmData):
             if rfi.mode == orfi.mode and rfi.uid == orfi.uid and \
                 rfi.gid == orfi.gid and rfi.filesize == orfi.filesize and \
                 rfi.md5sum == orfi.md5sum:
-                printWarning(1, "%s: Same file between new and installed package, skipping." % self.getNEVRA())
+                printWarning(1, "%s: Same config file between new and installed package, skipping." % self.getNEVRA())
                 continue
             # OK, file in new package is different to some old package and it
             # is editied on disc. Now verify if it is a noreplace or not

@@ -194,18 +194,17 @@ class RpmController:
                     os.chroot(self.buildroot)
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
-                    if op == OP_INSTALL or \
-                       op == OP_UPDATE or \
-                       op == OP_FRESHEN:
+                    if   op == OP_INSTALL:
+                        opstring = "Install: "
+                    elif op == OP_UPDATE or op == OP_FRESHEN:
                         opstring = "Update:  "
                     else:
                         if self.operation != OP_ERASE:
                             opstring = "Cleanup: "
                         else:
                             opstring = "Erase:   "
-
                     i += 1
-                    progress = "%s[%d/%d] %s" % (opstring, i, numops, pkg.getNEVRA())
+                    progress = "[%d/%d] %s%s" % (i, numops, opstring, pkg.getNEVRA())
                     if rpmconfig.printhash:
                         printInfo(0, progress)
                     else:
