@@ -7,7 +7,7 @@ what are the following rpm tags exactly:
 Signature checking
 Verify correct file and script handling
 Implement file checkes (md5 checks, %config, %ghost, etc)
-Write reader/writer for rpmdb
+Write reader/writer for rpmdb, rebuilddb/verify support
 Analyze current rpmdb and maybe design new one
 X Integrate Thomas' depresolver into current class structure and design
 Merge rpmdb/bsddb functionality 
