@@ -44,11 +44,11 @@ class _Triggers:
         if len(self.triggers[name]) == 0:
             del self.triggers[name]
 
-    def add_rpm(self, rpm):
+    def addPkg(self, rpm):
         for t in rpm["triggers"]:
             self.append(t[0], t[1], t[2], t[3], t[4], rpm)
 
-    def remove_rpm(self, rpm):
+    def removePkg(self, rpm):
         for t in rpm["triggers"]:
             self.remove(t[0], t[1], t[2], t[3], t[4], rpm)
 
@@ -191,9 +191,9 @@ class RpmController:
         self.triggerlist = Triggers()
         for (op, pkg) in operations:
             if op == RpmResolver.OP_UPDATE or op == RpmResolver.OP_INSTALL:
-                self.triggerlist.add_rpm(pkg)
+                self.triggerlist.addPkg(pkg)
         for pkg in self.installed:
-            self.triggerlist.add_rpm(pkg)
+            self.triggerlist.addPkg(pkg)
         del self.new
         del self.update
         del self.erase
