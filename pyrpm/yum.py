@@ -128,6 +128,8 @@ class RpmYum:
                     printInfo(2, "\t" + depString(dep) + "\n")
                     for repo in self.repos:
                         for upkg in repo.searchDependency(dep):
+                            if upkg in self.erase_list:
+                                continue
                             ret = self.opresolver.append(upkg)
                             self.opresolver.doObsoletes()
                             if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
@@ -142,7 +144,11 @@ class RpmYum:
                         tmplist.extend(findPkgByName(pkg["name"], repo.appended))
                     while len(tmplist) > 0 and tmplist[0]["arch"] != pkg["arch"]:
                         tmplist.pop(0)
-                    if len(tmplist) == 0 or tmplist[0].getNEVRA() == pkg.getNEVRA():
+                    while len(tmplist) > 0 and tmplist[0].getNEVRA() == pkg.getNEVRA():
+                        tmplist.pop(0)
+                    while len(tmplist) > 0 and tmplist[0] in self.erase_list:
+                        tmplist.pop(0)
+                    if len(tmplist) == 0:
                         if self.autoerase:
                             printWarning(1, "Autoerasing package %s due to missing update package." % pkg.getNEVRA())
                             ret = self.opresolver.append(genObsoletePkg(pkg))
@@ -175,16 +181,17 @@ class RpmYum:
             if not self.autoerase:
                 continue
             conflicts = self.opresolver.getConflicts()
-            for (pkg1, c, pkg2) in conflicts:
-                printInfo(1, "Resolving conflicts for %s:%s\n" % (pkg1.getNEVRA(), pkg2.getNEVRA()))
-                if pkg1 in installed:
-                    pkg = pkg1
-                else:
-                    pkg = pkg2
-                ret = self.opresolver.append(genObsoletePkg(pkg))
-                if ret > 0:
-                    self.opresolver.doObsoletes()
-                    self.erase_list.append(pkg)
+            for pkg1 in conflicts:
+                for (c, pkg2) in conflicts[pkg1]:
+                    printInfo(1, "Resolving conflicts for %s:%s\n" % (pkg1.getNEVRA(), pkg2.getNEVRA()))
+                    if pkg1 in installed:
+                        pkg = pkg1
+                    else:
+                        pkg = pkg2
+                    ret = self.opresolver.append(genObsoletePkg(pkg))
+                    if ret > 0:
+                        self.opresolver.doObsoletes()
+                        self.erase_list.append(pkg)
             unresolved = self.opresolver.getUnresolvedDependencies()
 
     def runCommand(self):
@@ -231,6 +238,7 @@ class RpmYum:
             excludes = findPkgByName(ex, pkg_list)
             for pkg in excludes:
                 pkg_list.remove(pkg)
+        filterArchCompat(pkg_list, rpmconfig.machine)
         for pkg in pkg_list:
             resolver.append(pkg)
         self.repos.append(resolver)

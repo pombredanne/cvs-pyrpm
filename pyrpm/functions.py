@@ -517,8 +517,6 @@ def archDuplicate(parch, arch):
     return 0
 
 def filterArchCompat(list, arch):
-    raise Exception, "deprecated"
-
     # stage 1: filter packages which are not in compat arch
     i = 0
     while i < len(list):

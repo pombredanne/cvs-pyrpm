@@ -267,13 +267,9 @@ class RpmController:
         return 1
 
     def __preprocess(self):
-        if not self.ignorearch:
-            if self.operation == OP_UPDATE or self.operation == OP_FRESHEN:
-                filterArchDuplicates(self.rpms)
-        else:
-            filterArchCompat(self.rpms, rpmconfig.machine)
-            if self.operation == OP_UPDATE or self.operation == OP_FRESHEN:
-                filterArchDuplicates(self.rpms)
+        if self.ignorearch:
+            return 1
+        filterArchCompat(self.rpms, rpmconfig.machine)
         return 1
 
     def __addPkgToDB(self, pkg, nowrite=None):
