@@ -52,9 +52,9 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         sys.exit()
     os.unlink(tmpfilename)
     if status != 0:
-        print "Error in running script:"
-        print prog
-        print args
+        printError("Error in running script:")
+        printError(prog)
+        printError(args)
         return 0
     return 1
 

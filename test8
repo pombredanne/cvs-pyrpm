@@ -1,0 +1,11 @@
+#!/usr/bin/python
+
+import sys
+from pyrpm import *
+
+for i in sys.argv[1:]:
+    pkg = RpmPackage(i, verify=1)
+    pkg.read()
+    pkg.source = "file://var/tmp/"+i
+    pkg.write()
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -16,7 +16,7 @@
 # Author: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak
 #
 
-import os.path, tempfile, sys, gzip, pwd, grp
+import os.path, tempfile, sys, gzip, pwd, grp, md5
 from struct import unpack
 from base import *
 from functions import *
@@ -137,7 +137,6 @@ class RpmPackage(RpmData):
             return 0
         files = self["filenames"]
         self.__generateFileInfoList()
-        self.__generateHardLinkList()
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preunprog"] != None:
@@ -147,7 +146,6 @@ class RpmPackage(RpmData):
         for i in xrange(len(files)-1, -1, -1):
             f = files[i]
             rfi = self.getRpmFileInfo(f)
-            print rfi.filename, hex(rfi.flags)
             if db.isDuplicate(f):
                 printDebug(2, "File/Dir %s still in db, not removing..." % f)
                 continue
@@ -165,6 +163,12 @@ class RpmPackage(RpmData):
             if not runScript(self["postunprog"], self["postun"], "1"):
                 printError("%s: Error running post uninstall script." % self.getNEVRA())
         return 1
+
+    def isSourceRPM(self):
+        # XXX: is it right method how detect by header?
+        if self["sourcerpm"]==None:
+            return 1
+        return 0
 
     def __readHeader(self, tags=None, ntags=None):
         if self.header_read:
@@ -199,12 +203,6 @@ class RpmPackage(RpmData):
         self.header_read = 1
         return 1
 
-    def isSourceRPM(self):
-        # XXX: is it right method how detect by header?
-        if self["sourcerpm"]==None:
-            return 1
-        return 0
-        
     def __extract(self, db=None):
         files = self["filenames"]
         # We don't need those lists earlier, so we create them "on-the-fly"
@@ -220,8 +218,7 @@ class RpmPackage(RpmData):
                     filename = filename[1:]
             if filename in files:
                 rfi = self.rfilist[filename]
-                print rfi.filename, hex(rfi.flags)
-                if rfi != None:
+                if self.__verifyFileInstall(rfi, db):
                     if not str(rfi.inode)+":"+str(rfi.dev) in self.hardlinks.keys():
                         if not installFile(rfi, filerawdata):
                             return 0
@@ -233,6 +230,49 @@ class RpmPackage(RpmData):
                                 return 0
             (filename, filerawdata) = self.io.read()
         return self.__handleRemainingHardlinks()
+
+    def __verifyFileInstall(self, rfi, db):
+        # No db -> overwrite file ;)
+        if not db:
+            return 1
+        # File not already in db -> write it
+        if not db.filenames.has_key(rfi.filename):
+            return 1
+        # Don't install ghost files ;)
+        if rfi.flags & RPMFILE_GHOST:
+            return 0
+        # Not a config file -> always overwrite it, resolver didn't say we
+        # had any conflicts ;)
+        if rfi.flags & RPMFILE_CONFIG == 0:
+            return 1
+        plist = db.filenames[rfi.filename]
+        (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) = os.stat(rfi.filename)
+        md5sum = md5.new(open(rfi.filename).read()).hexdigest()
+        # Same file in new rpm as on disk -> just write it.
+        if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid and rfi.filesize == filesize and rfi.md5sum == md5sum:
+            return 1
+        # File has changed on disc, now check if it has changed between the
+        # different packages that share it and the new package
+        for nevra in plist:
+            pkg = db.getPackage(nevra)
+            orfi = pkg.getRpmFileInfo(rfi.filename)
+            # If installed and new stats of the file are the same don't do
+            # anything with it. If the file hasn't changed in the packages we
+            # keep the editited file on disc.
+            if rfi.mode == orfi.mode and rfi.uid == orfi.uid and rfi.gid == orfi.gid and rfi.filesize == orfi.filesize and rfi.md5sum == orfi.md5sum:
+                printDebug(1, "%s: Same file between new and installed package, skipping." % self.getNEVRA())
+                continue
+            # OK, file in new package is different to some old package and it
+            # is editied on disc. Now verify if it is a noreplace or not
+            if rfi.flags & RPMFILE_NOREPLACE:
+                printDebug(1, "%s: config(noreplace) file found that changed between old and new rpms and has changed on disc, creating new file as %s.rpmnew" %(self.getNEVRA(), rfi.filename))
+                rfi.filename += ".rpmnew"
+            else:
+                printDebug(1, "%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
+                if os.rename(rfi.filename, rfi.filename+".rpmsave") != None:
+                    raiseFatal("%s: Edited config file %s couldn't be renamed, aborting." % (self.getNEVRA(), rfi.filename))
+            break
+        return 1
 
     def __generateFileNames(self):
         self["filenames"] = []
@@ -275,7 +315,7 @@ class RpmPackage(RpmData):
             rfi = self.hardlinks[key][0]
             if not installFile(rfi, ""):
                 return 0
-            if not self.handleHardlinks(rfi):
+            if not self.__handleHardlinks(rfi):
                 return 0
         return 1
 

@@ -31,7 +31,7 @@ class RpmIO:
     def __init__(self, source):
         self.source = source
 
-    def open(self):
+    def open(self, mode="r"):
         return 0
 
     def read(self):
@@ -60,7 +60,7 @@ class RpmStreamIO(RpmIO):
         self.hdr = {}
         self.hdrtype = {}
 
-    def open(self):
+    def open(self, mode="r"):
         return 0
 
     def close(self):
@@ -247,7 +247,7 @@ class RpmStreamIO(RpmIO):
                     if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or \
                         ttype == RPM_STRING_ARRAY):
                         pass    # special exception case
-                    elif t[0] == rpmconstants.RPMTAG_GROUP and \
+                    elif t[0] == RPMTAG_GROUP and \
                         ttype == RPM_STRING: # XXX hardcoded exception
                         pass
                     else:
@@ -318,7 +318,7 @@ class RpmStreamIO(RpmIO):
         raiseFatal("%s: unknown tag type: %d" % (self.source, ttype))
         return None
 
-    def __generateTag(self, tag, ttype, value):
+    def __generateTag(self, ttype, value):
         # Decided if we have to write out a list or a single element
         if isinstance(value, types.TupleType) or isinstance(value, types.ListType):
             count = len(value)
@@ -410,7 +410,7 @@ class RpmStreamIO(RpmIO):
             # Convert back the RPM_ARGSTRING to RPM_STRING
             if ttype == RPM_ARGSTRING:
                 ttype = RPM_STRING
-            (count, data) = self.__generateTag(tag, ttype, value)
+            (count, data) = self.__generateTag(ttype, value)
             pad = self.__alignTag(ttype, offset)
             offset += len(pad)
             indexlist.append((tag, ttype, offset, count))
@@ -425,7 +425,7 @@ class RpmStreamIO(RpmIO):
             # Convert back the RPM_ARGSTRING to RPM_STRING
             if ttype == RPM_ARGSTRING:
                 ttype = RPM_STRING
-            (count, data) = self.__generateTag(tag, ttype, value)
+            (count, data) = self.__generateTag(ttype, value)
             pad = self.__alignTag(ttype, offset)
             offset += len(pad)
             indexlist.append((tag, ttype, offset, count))
@@ -454,7 +454,7 @@ class RpmStreamIO(RpmIO):
             # Convert back the RPM_ARGSTRING to RPM_STRING
             if ttype == RPM_ARGSTRING:
                 ttype = RPM_STRING
-            (count, data) = self.__generateTag(tag, ttype, value)
+            (count, data) = self.__generateTag(ttype, value)
             pad = self.__alignTag(ttype, offset)
             offset += len(pad)
             indexlist.append((tag, ttype, offset, count))
@@ -469,7 +469,7 @@ class RpmStreamIO(RpmIO):
             # Convert back the RPM_ARGSTRING to RPM_STRING
             if ttype == RPM_ARGSTRING:
                 ttype = RPM_STRING
-            (count, data) = self.__generateTag(tag, ttype, value)
+            (count, data) = self.__generateTag(ttype, value)
             pad = self.__alignTag(ttype, offset)
             offset += len(pad)
             indexlist.append((tag, ttype, offset, count))
@@ -479,14 +479,9 @@ class RpmStreamIO(RpmIO):
         return (index, store+pad)
 
 
-class RpmDBIO(RpmIO):
+class RpmFtpIO(RpmStreamIO):
     def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
-        RpmIO.__init__(self)
-
-
-class RpmFtpIO(RpmIO):
-    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
-        RpmIO.__init__(self)
+        RpmStreamIO.__init__(self, source, verify, legacy, skipsig, hdronly)
 
 
 class RpmFileIO(RpmStreamIO):
@@ -521,26 +516,32 @@ class RpmFileIO(RpmStreamIO):
         return 1
 
 
-class RpmHttpIO(RpmIO):
+class RpmHttpIO(RpmStreamIO):
     def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
         RpmStreamIO.__init__(self, source, verify, legacy, skipsig, hdronly)
 
-    def open(self):
-        pass
+    def open(self, mode="r"):
+        return 0
 
-    def open(self):
-        pass
+    def close(self):
+        return 0
+
+
+class RpmDBIO(RpmFileIO):
+    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
+        RpmFileIO.__init__(self, source, verify, legacy, skipsig, hdronly)
 
 
 class RpmPyDBIO(RpmFileIO):
     def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
         RpmFileIO.__init__(self, source, verify, legacy, skipsig, hdronly)
 
+
 class RpmPyDB:
-    def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
+    def __init__(self, source):
         self.source = source
         self.filenames = {}
-        self.pkglist = []
+        self.pkglist = {}
 
     def read(self):
         if not self.__mkDBDirs():
@@ -556,7 +557,12 @@ class RpmPyDB:
                 self.filenames[key].append(val)
             key = fd.readline()
         fd.close()
-        self.pkglist = os.listdir(self.source+"/headers")
+        namelist = os.listdir(self.source+"/headers")
+        for nevra in namelist:
+            src = "pydb:/"+self.source+"/headers/"+nevra
+            pkg = package.RpmPackage(src)
+            pkg.read()
+            self.pkglist[nevra] = pkg
         return 1
 
     def write(self):
@@ -582,15 +588,16 @@ class RpmPyDB:
         pyrpmio = getRpmIOFactory(src)
         if not pyrpmio.write(pkg):
             return 0
-        for file in pkg["filenames"]:
-            if not self.filenames.has_key(file):
-                self.filenames[file] = []
-            if self.filenames[file].count(nevra) > 0:
-                printWarning(2, "%s: File '%s' was already in PyDB for package" % (nevra, file))
-                self.filenames[file].remove(nevra)
-            self.filenames[file].append(nevra)
+        for filename in pkg["filenames"]:
+            if not self.filenames.has_key(filename):
+                self.filenames[filename] = []
+            if self.filenames[filename].count(nevra) > 0:
+                printWarning(2, "%s: File '%s' was already in PyDB for package" % (nevra, filename))
+                self.filenames[filename].remove(nevra)
+            self.filenames[filename].append(nevra)
         if not self.write():
             return 0
+        self.pkglist[nevra] = pkg
         return 1
 
     def erasePkg(self, pkg):
@@ -602,42 +609,32 @@ class RpmPyDB:
             os.unlink(headerfile)
         except:
             printWarning(1, "%s: Package not found in PyDB" % nevra)
-        for file in pkg["filenames"]:
+        for filename in pkg["filenames"]:
             # Check if the filename is in the filenames list and was referenced
             # by the package we want to remove
-            if not self.filenames.has_key(file) or \
-               not nevra in self.filenames[file]:
-                printWarning(1, "%s: File '%s' not found in PyDB during erase" % (nevra, file))
+            if not self.filenames.has_key(filename) or \
+               not nevra in self.filenames[filename]:
+                printWarning(1, "%s: File '%s' not found in PyDB during erase" % (nevra, filename))
                 continue
-            self.filenames[file].remove(nevra)
+            self.filenames[filename].remove(nevra)
         if not self.write():
             return 0
+        del self.pkglist[nevra]
         return 1
 
     def getPackage(self, name):
         if not self.pkglist:
             if not self.read():
                 return None
-        for nevra in self.pkglist:
-            if nevra == name:
-                src = "pydb:/"+self.source+"/headers/"+nevra
-                pkg = package.RpmPackage(src)
-                pkg.read()
-                return pkg
-        # Not found
-        return None
+        if not self.pkglist.has_key(name):
+                return None
+        return self.pkglist[name]
 
     def getPkgList(self):
         if not self.pkglist:
             if not self.read():
                 return None
-        list = []
-        for nevra in self.pkglist:
-            src = "pydb:/"+self.source+"/headers/"+nevra
-            pkg = package.RpmPackage(src)
-            pkg.read()
-            list.append(pkg)
-        return list
+        return self.pkglist
 
     def isDuplicate(self, file):
         if not self.pkglist:
@@ -667,9 +664,9 @@ class RpmPyDB:
         return 1
 
 
-class RpmRepoIO(RpmIO):
+class RpmRepoIO(RpmFileIO):
     def __init__(self, source, verify=None, legacy=None, skipsig=None, hdronly=None):
-        RpmIO.__init__(self)
+        RpmFileIO.__init__(self, source, verify, legacy, skipsig, hdronly)
 
 
 def getRpmIOFactory(source, verify=None, legacy=None, skipsig=None, hdronly=None):

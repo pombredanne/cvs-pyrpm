@@ -85,7 +85,6 @@ class CPIOFile:
             return [None, None]
 
         # Contents
-        filesize = filedata[CP_FDFILESIZE]
         return [filename, filedata]
         
 
@@ -205,7 +204,7 @@ class CPIOFile:
             self.makeDirs(fullname)
             ret = commands.getoutput("/bin/mknod "+fullname+" "+devtype+" "+str(self.filedata[CP_FDRDEVMAJOR])+" "+str(self.filedata[CP_FDRDEVMINOR]))
             if ret != "":
-                print "Error creating device: "+ret
+                printWarning(1, "Error creating device: "+ret)
             else:
                 os.chown(fullname, self.filedata[CP_FDUID], self.filedata[CP_FDGID])
                 os.chmod(fullname, (~CP_IFMT) & self.filedata[CP_FDMODE])
@@ -256,7 +255,7 @@ if __name__ == "__main__":
         try:
             c.read()
         except IOError, e:
-            print "error reading cpio: %s" % e
+            printError (1, "error reading cpio: %s" % e)
         print c.filelist
 
 # vim:ts=4:sw=4:showmatch:expandtab

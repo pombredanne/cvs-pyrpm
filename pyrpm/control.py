@@ -38,8 +38,8 @@ class RpmController:
     def installPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
         self.buildroot = buildroot
         self.operation = "install"
-        for file in pkglist:
-            self.newPkg(file)
+        for filename in pkglist:
+            self.newPkg(filename)
         if not self.__readDB(db):
             return 0
         if not self.run():
@@ -49,8 +49,8 @@ class RpmController:
     def updatePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
         self.buildroot = buildroot
         self.operation = "update"
-        for file in pkglist:
-            self.updatePkg(file)
+        for filename in pkglist:
+            self.updatePkg(filename)
         if not self.__readDB(db):
             return 0
         if not self.run():
@@ -60,8 +60,8 @@ class RpmController:
     def freshenPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
         self.buildroot = buildroot
         self.operation = "update"
-        for file in pkglist:
-            self.updatePkg(file)
+        for filename in pkglist:
+            self.updatePkg(filename)
         if not self.__readDB(db):
             return 0
         instlist = []
@@ -82,8 +82,8 @@ class RpmController:
         self.operation = "erase"
         if not self.__readDB(db):
             return 0
-        for file in pkglist:
-            if not self.erasePkg(file):
+        for filename in pkglist:
+            if not self.erasePkg(filename):
                 return 0
         if len(self.erase) == 0:
             printInfo(0, "No installed packages found to be removed.\n")
@@ -110,7 +110,6 @@ class RpmController:
         # operations to erase all all updated packages directly afterwards
         for i in xrange(len(operations)-1, -1, -1):
             (op, pkg) = operations[i]
-            print op, pkg.getNEVRA()
             if op != "update":
                 continue
             if not self.oldpackages.has_key(pkg["name"]):
@@ -152,6 +151,7 @@ class RpmController:
                     if not pkg.erase(self.pydb):
                         sys.exit(1)
                 sys.exit(0)
+        return 1
 
     def newPkg(self, file):
         pkg = package.RpmPackage(file)
@@ -273,7 +273,7 @@ class RpmController:
             self.pydb = io.RpmPyDB(self.buildroot+self.db)
         else:
             self.pydb = io.RpmPyDB(self.db)
-        self.installed = self.pydb.getPkgList()
+        self.installed = self.pydb.getPkgList().values()
         if self.installed == None:
             self.installed = []
             return 0
@@ -298,11 +298,11 @@ class RpmController:
         self.__filterArchList(self.update)
         self.__filterArchList(self.available)
 
-    def __filterArchList(self, list):
+    def __filterArchList(self, flist):
         duplicates = {}
         rmlist = []
         (sysname, nodename, release, version, machine) = os.uname()
-        for pkg in list:
+        for pkg in flist:
             name = pkg.getNEVR()
             arch = pkg["arch"]
             if arch not in possible_archs:
@@ -318,36 +318,36 @@ class RpmController:
             else:
                 duplicates[name] = [arch, pkg]
         for i in rmlist:
-            list.remove(i)
+            flist.remove(i)
 
     def __checkInstall(self):
-        list = {}
+        clist = {}
         for pkg in self.installed:
-            if not list.has_key(pkg["name"]):
-                list[pkg["name"]] = []
-            list[pkg["name"]].append(pkg)
+            if not clist.has_key(pkg["name"]):
+                clist[pkg["name"]] = []
+            clist[pkg["name"]].append(pkg)
         for pkg in self.new:
-            if not list.has_key(pkg["name"]):
+            if not clist.has_key(pkg["name"]):
                 continue
-            for ipkg in list[pkg["name"]]:
+            for ipkg in clist[pkg["name"]]:
                 if pkgCompare(pkg, ipkg) <= 0:
                     return 0
         return 1
 
     def __findUpdatePkgs(self):
-        hash = {}
+        phash = {}
         for pkg in self.update:
             name = pkg["name"]
-            hash[name] = []
+            phash[name] = []
             for upkg in self.installed:
                 if upkg["name"] != name:
                     continue
                 if pkgCompare(upkg, pkg) < 0:
-                    hash[name].append(upkg)
+                    phash[name].append(upkg)
                 else:
                     printError("Can't install older or same package %s" % pkg.getNEVR())
                     return None
-        return hash
+        return phash
 
     def __addPkgToDB(self, pkg):
         if self.pydb == None:
