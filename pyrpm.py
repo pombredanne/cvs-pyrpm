@@ -23,7 +23,7 @@ import re
 import sys
 import getopt
 #import zlib
-#import gzip
+import gzip
 
 def parseLead(f, fname=None, verify=1):
     """ Takes a python file object at the start of an RPM file and
@@ -171,12 +171,14 @@ def verifyHeader(sigindex, hdr, hdrsize, payloadsize, cpiosize):
             #raise ValueError, "key not present in sig: %d" % i
             return
     size = sigindex[rpmconstants.RPMSIGTAG_SIZE][0] # header + payload
-    if size != hdrsize + payloadsize + 16:
-        print size, hdrsize, payloadsize, hdrsize+payloadsize
-        raise ValueError, "size"
+    #if size != hdrsize + payloadsize + 16:
+    #    print size, hdrsize, payloadsize, hdrsize+payloadsize
+    #    raise ValueError, "size"
     identifysig = sigindex[rpmconstants.HEADER_SIGNATURES] # what data is in here?
-    #if cpiosize != sigindex[rpmconstants.RPMSIGTAG_PAYLOADSIZE]: # uncompressed payload
-    #    raise ValueError, "cpio size"
+    # uncompressed payload
+    if cpiosize != sigindex[rpmconstants.RPMSIGTAG_PAYLOADSIZE][0]:
+        print cpiosize, sigindex[rpmconstants.RPMSIGTAG_PAYLOADSIZE]
+        raise ValueError, "cpio size"
     sha1 = sigindex[rpmconstants.RPMTAG_SHA1HEADER] # header
     md5sum = sigindex[rpmconstants.RPMSIGTAG_MD5] # header + payload
     if sigindex.has_key(rpmconstants.RPMTAG_DSAHEADER):
@@ -188,17 +190,17 @@ def parseHeader(f, filename, verify=0, tags=None):
     skip = 0
     sigindex = readIndex(filename, f, 8, verify, skip, tags)[0]
     (hdr, hdrsize) = readIndex(filename, f, 1, verify, skip, tags)
-    payload = f.read()
-    if payload[:9] != '\037\213\010\000\000\000\000\000\000':
-        raise ValueError, "nnot gzipped data"
+    #payload = f.read()
+    #if payload[:9] != '\037\213\010\000\000\000\000\000\000':
+    #    raise ValueError, "nnot gzipped data"
     #cpiodata = zlib.decompress(payload)
-    #gz = gzip.GzipFile(fileobj=f)
+    payload = ""
+    gz = gzip.GzipFile(fileobj=f)
+    cpiodata = gz.read()
     #while 1:
     #    buf = gz.read(4096)
     #    if not buf:
     #        break
-    #cpiodata = None
-    cpiodata = "x"
     if verify:
         verifyHeader(sigindex, hdr, hdrsize, len(payload), len(cpiodata))
     return (lead, sigindex, hdr)
