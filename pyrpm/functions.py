@@ -518,7 +518,6 @@ def filterArchDuplicates(list):
             i += 1
         else:
             r = myhash[key]
-            print r.getNEVRA(), pkg.getNEVRA()
             ret = pkgCompare(r, pkg)
             if ret < 0:
                 printWarning(2, "%s was already added, replacing with %s" % \

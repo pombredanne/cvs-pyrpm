@@ -157,7 +157,7 @@ def addDirToRepo(dirname, resolver, excludes):
 # update
 autoerase = 0
 
-# Default: Ask use for confirmation of complete operation
+# Default: Ask user for confirmation of complete operation
 confirm = 1
 
 try:
