@@ -265,7 +265,7 @@ class RpmResolver(RpmList):
             for r in rlist:
                 if check_installed == 0 and \
                        len(self.erased) == 0 and len(self.obsoletes) == 0 and \
-                       self.isInstalled(r):
+		       len(self.updates) == 0 and self.isInstalled(r):
                     # do not check installed packages if no packages
                     # are getting removed by erase or obsolete
                     continue
@@ -293,12 +293,6 @@ class RpmResolver(RpmList):
         for i in xrange(len(self)):
             rlist = self[i]
             for r in rlist:
-                if check_installed == 0 and \
-                       len(self.erased) == 0 and len(self.obsoletes) == 0 and \
-                       self.isInstalled(r):
-                    # do not check installed packages if no packages
-                    # are getting removed by erase or obsolete
-                    continue
                 printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(resolved) > 0:
@@ -312,12 +306,6 @@ class RpmResolver(RpmList):
         for i in xrange(len(self)):
             rlist = self[i]
             for r in rlist:
-                if check_installed == 0 and \
-                       len(self.erased) == 0 and len(self.obsoletes) == 0 and \
-                       self.isInstalled(r):
-                    # do not check installed packages if no packages
-                    # are getting removed by erase or obsolete
-                    continue
                 printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(unresolved) > 0:

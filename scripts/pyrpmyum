@@ -43,7 +43,7 @@ def usage():
     print "    [--nodeps] [--nodigest] [--nosignature]"
     print "    [--noorder] [--noscripts] [--notriggers]"
 
-def runDepResolution(resolver, unresolved, skiplist):
+def runDepResolution(resolver, unresolved):
     iter = 1
     while len(unresolved) > 0:
         print "Dependency iteration "+str(iter)
@@ -51,12 +51,26 @@ def runDepResolution(resolver, unresolved, skiplist):
         respkglist = []
         for pkg, deplist in unresolved:
             printInfo(1, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
+            found = 0
             for dep in deplist:
                 print "\t"+depString(dep)
                 for repo in repos:
                     res = repo.searchDependency(dep)
-                    for pkg in res:
-                        respkglist.append(pkg)
+                    for upkg in res:
+                        if resolver.append(upkg) > 0:
+                            found = 1
+                        respkglist.append(upkg)
+            if found == 0:
+                tmplist = []
+                for repo in repos:
+                    tmplist.extend(findPkgByName(pkg["name"], repo.appended))
+                filterArchList(tmplist, rpmconfig.machine)
+                if len(tmplist) == 0 or tmplist[0].getNEVRA() == pkg.getNEVRA():
+                    printError("Couldn't find update for package %s" % pkg.getNEVRA())
+                    sys.exit(1)
+                else:
+                    resolver.append(tmplist[0])
+                    respkglist.append(tmplist[0])
         normalizeList(respkglist)
         filterArchList(respkglist)
         if len(respkglist) == 0:
@@ -65,9 +79,6 @@ def runDepResolution(resolver, unresolved, skiplist):
                 for dep in deplist:
                     printInfo(1, "\t" + depString(dep)+"\n")
             sys.exit(1)
-        for pkg in respkglist:
-            if not pkg in skiplist:
-                resolver.append(pkg)
         unresolved = resolver.getUnresolvedDependencies()
 
 
@@ -199,23 +210,27 @@ if installed == None:
 else:
     installed = installed.values()
 del pydb
+#for i in installed:
+#    print i.getNEVRA()
 
-opresolver = RpmResolver(installed, rpmconfig.operation)
+opresolver = RpmResolver(installed, RpmResolver.OP_UPDATE)
+pkgs = []
 for f in args:
     if os.path.isfile(f) and f.endswith(".rpm"):
         pkg = RpmPackage(f)
         pkg.open()
         pkg.read(tags=rpmconfig.resolvertags)
         pkg.close()
+        pkgs.append(pkgs)
     else:
-        pkgs = []
         for repo in repos:
             pkgs.extend(findPkgByName(f, repo.appended))
         filterArchList(pkgs, rpmconfig.machine)
         if len(pkgs) == 0:
             printError("Couldn't find package %s" % f)
             sys.exit(1)
-        pkg = pkgs[0]
+
+for pkg in pkgs:
     if rpmconfig.operation == RpmResolver.OP_UPDATE or rpmconfig.operation == RpmResolver.OP_FRESHEN:
         name = pkg["name"]
         for ipkg in installed:
@@ -223,10 +238,10 @@ for f in args:
                 ret = opresolver.append(pkg)
                 break
     else:
-        ret = opresolver.append(pkg)
+        opresolver.append(pkg)
 
 unresolved = opresolver.getUnresolvedDependencies()
-runDepResolution(opresolver, unresolved, [])
+runDepResolution(opresolver, unresolved)
 appended = opresolver.appended
 del opresolver
 del repos

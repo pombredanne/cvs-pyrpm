@@ -122,10 +122,13 @@ class RpmController:
         o = resolver.obsoletes
         u = resolver.updates
         del resolver
-        orderer = RpmOrderer(a, o, self.operation)
+        orderer = RpmOrderer(a, u, o, self.operation)
         operations = orderer.order()
-        del o
+        getFreeDiskspace(a)
+        del orderer
         del a
+        del o
+        del u
         if not operations:
             printError("Errors found during package dependancy checks and ordering.")
             sys.exit(1)
@@ -175,13 +178,6 @@ class RpmController:
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
                         self.__addPkgToDB(pkg)
-                        if u.has_key(pkg):
-                            for opkg in u[pkg]:
-                                self.__runTriggerUn(opkg)
-                                if not opkg.erase(self.pydb):
-                                    sys.exit(1)
-                                self.__runTriggerPostUn(opkg)
-                                self.__erasePkgFromDB(opkg)
                     elif op == RpmResolver.OP_ERASE:
                         self.__runTriggerUn(pkg)
                         if not pkg.erase(self.pydb):

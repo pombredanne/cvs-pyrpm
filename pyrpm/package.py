@@ -138,6 +138,10 @@ class RpmPackage(RpmData):
             return 0
         if not self.__readHeader(tags, ntags):
             return 0
+        # We don't need those lists earlier, so we create them "on-the-fly"
+        # before we actually start extracting files.
+        self.__generateFileInfoList()
+        self.__generateHardLinkList()
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preinprog"] != None or self["postinprog"] != None:
@@ -190,6 +194,10 @@ class RpmPackage(RpmData):
                     os.unlink(f)
                 except:
                     printWarning(1, "Couldn't remove file %s from pkg %s" % (f, self.source))
+        if rpmconfig.hash:
+            printInfo(0, "\n")
+        else:
+            printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None:
             if not runScript(self["postunprog"], self["postun"], numPkgs):
@@ -204,7 +212,6 @@ class RpmPackage(RpmData):
 
     def __readHeader(self, tags=None, ntags=None):
         if self.header_read:
-#            self.io.read(skip=1)      # Skip over complete header
             return 1
         (key, value) = self.io.read()
         # Read over lead
@@ -238,10 +245,6 @@ class RpmPackage(RpmData):
 
     def __extract(self, db=None):
         files = self["filenames"]
-        # We don't need those lists earlier, so we create them "on-the-fly"
-        # before we actually start extracting files.
-        self.__generateFileInfoList()
-        self.__generateHardLinkList()
         (filename, filerawdata) = self.io.read()
         nfiles = len(files)
         n = 0
@@ -467,9 +470,6 @@ class RpmPackage(RpmData):
             if dep == depnames[0] or self[dep] == None:
                 continue
             if len(self[dep]) != len(self[depnames[0]]):
-                print self["triggerindex"]
-                print dep, depnames[0]
-                print self[dep], self[depnames[0]]
                 raiseFatal("%s: wrong length of deps" % self.source)
         deps = []
         for i in xrange(0, len(self[depnames[0]])):

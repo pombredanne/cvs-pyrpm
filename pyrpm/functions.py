@@ -17,7 +17,7 @@
 #
 
 
-import os, os.path, tempfile, sys, string, types, resource
+import os, os.path, tempfile, sys, string, types, resource, re
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE
 from config import rpmconfig
 from base import *
@@ -150,6 +150,15 @@ def makeDirs(fullname):
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
 
+def listRpmDir(dirname):
+    """List directory like standard or.listdir, but returns only .rpm files"""
+    fls = os.listdir(dirname)
+    files = [] 
+    for f in fls:
+        if f[-4:]=='.rpm':
+            files.append(f)
+    return files
+
 def createLink(src, dst):
     try:
         # First try to unlink the defered file
@@ -168,6 +177,32 @@ def closeAllFDs():
             os.close(fd)
         except:
             pass
+
+def getFreeDiskspace(pkglist):
+    freehash = {}
+    dirhash = {}
+    if rpmconfig.buildroot == None:
+        br = "/"
+    else:
+        br = rpmconfig.buildroot
+    for pkg in pkglist:
+        if not pkg.has_key("dirnames"):
+            continue
+        for dirname in pkg["dirnames"]:
+            if not dirhash.has_key(dirname):
+                devdir = br+dirname
+                while not os.path.exists(devdir):
+                    devdir = os.path.dirname(devdir)
+                dev = os.stat(devdir)[2]
+                dirhash[dirname] = dev
+                if not freehash.has_key(dev):
+                    (f_bsize, f_frsize, f_blocks, f_bfree, f_bavail, f_files, f_ffree, f_favail, f_flag, f_namemax) = os.statvfs(devdir)
+                    freehash[dev] = f_bsize * f_bavail
+        filenames = pkg["filenames"]
+        for i in xrange(len(filenames)):
+            dirname = pkg["dirnames"][pkg["dirindexes"][i]]
+            freehash[dirhash[dirname]] -= pkg["filesizes"][i]
+    return freehash
 
 # Error handling functions
 def printDebug(level, msg):
@@ -230,7 +265,7 @@ def envraSplit(envra):
     j = string.rfind(envra, "-")
     # Arch can't have a - in it, so we can only have an arch if the last '.'
     # is found after the last '-'
-    if i >= 0 and j >= 0 and i>j:
+    if i >= 0 and i>j:
         arch = envra[i+1:]
         envra = envra[:i]
     else:
@@ -427,7 +462,7 @@ def filterArchDuplicates(list):
                 myhash[key] = pkg
                 list.remove(r)
             elif ret == 0:
-                printWarning(0, "%s was already added" % \
+                printWarning(1, "%s was already added" % \
                                    pkg.getNEVRA())
                 list.pop(i)
             else:
@@ -503,107 +538,157 @@ def getBuildArchList(list):
             archs.append(a)
     return archs
 
-def listRpmDir(dirname):
-    """List directory like standard or.listdir, but returns only .rpm files"""
-    fls = os.listdir(dirname)
-    files = [] 
-    for f in fls:
-        if f[-4:]=='.rpm':
-            files.append(f)
-    return files
+def tagsearch(searchtags, list, regex=None):
+    pkglist = []
+    st = []
+    if regex:
+        for (key, val) in searchtags:
+            st.append([key, normalizeRegex(val)])
+        searchtags = st
+    for pkg in list:
+        # If we have an epoch we need to check it
+        found = 1
+        for (key, val) in searchtags:
+            if not pkg.has_key(key):
+                found = 0
+                break
+            if key == "epoch":
+                pval = str(pkg[key][0])
+            else:
+                pval = pkg[key]
+            if not regex:
+                if val != pval:
+                    found = 0
+                    break
+            else:
+                if not re.match(val, pval):
+                    found = 0
+                    break
+        if found:
+            pkglist.append(pkg)
+    return pkglist
 
-def findPkgByName(pkgname, list):
+def normalizeRegex(regex):
+    regex = string.replace(regex, ".", "\.")
+    regex = string.replace(regex, "*", ".*")
+    return regex
+
+EPOCHTAG=0
+NAMETAG=1
+VERSIONTAG=2
+RELEASETAG=3
+ARCHTAG=4
+
+def constructName(nametags, namevals):
+    ret = ""
+    for tag in nametags:
+        if tag == EPOCHTAG:
+            if namevals[EPOCHTAG] != None:
+                ret += namevals[EPOCHTAG]
+        if tag == NAMETAG:
+            if namevals[NAMETAG] != None:
+                if ret != "":
+                    ret += ":"
+                ret += namevals[NAMETAG]
+        if tag == VERSIONTAG:
+            if namevals[VERSIONTAG] != None:
+                if ret != "":
+                    ret += "-"
+                ret += namevals[VERSIONTAG]
+        if tag == RELEASETAG:
+            if namevals[RELEASETAG] != None:
+                if ret != "":
+                    ret += "-"
+                ret += namevals[RELEASETAG]
+        if tag == ARCHTAG:
+            if namevals[ARCHTAG] != None:
+                if ret != "":
+                    ret += "."
+                ret += namevals[ARCHTAG]
+    return ret
+
+def __findPkgByName(pkgname, list, regex=None):
     """Find a package by name in a given list. Name can contain version,
 release and arch. Returns a list of all matching packages, starting with
 best match."""
     pkglist = []
-    (epoch, name, version, release, arch) = envraSplit(pkgname)
-    # First check is against nvra as name
-    n = name
-    if version != None:
-        n += "-" + version
-    if release != None:
-        n += "-" + release
-    if arch != None:
-        n += "." + arch
-    # First check is complete nvra as name
-    for pkg in list: 
-        # If we have an epoch we need to check it
-        if epoch != None and pkg["epoch"][0] != epoch:
-            continue
-        nevra = pkg.getNEVRA()
-        if pkg["name"] == n:
-            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            pkglist.append(pkg)
-    # Next check is against nvr as name, a as arch
-    n = name
-    if version != None:
-        n += "-" + version
-    if release != None:
-        n += "-" + release
-    for pkg in list:
-        # If we have an epoch we need to check it
-        if epoch != None and pkg["epoch"][0] != epoch:
-            continue
-        nevra = pkg.getNEVRA()
-        if pkg["name"] == n and pkg["arch"] == arch:
-            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            pkglist.append(pkg)
-    # Next check is against nv as name, ra as version
-    n = name
-    if version != None:
-        n += "-" + version
-    v = ""
-    if release != None:
-        v += release
-    if arch != None:
-        v += "." + arch
-    for pkg in list:
-        # If we have an epoch we need to check it
-        if epoch != None and pkg["epoch"][0] != epoch:
-            continue
-        nevra = pkg.getNEVRA()
-        if pkg["name"] == n and pkg["version"] == v:
-            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            pkglist.append(pkg)
-    # Next check is against nv as name, r as version, a as arch
-    n = name
-    if version != None:
-        n += "-" + version
-    for pkg in list:
-        # If we have an epoch we need to check it
-        if epoch != None and pkg["epoch"][0] != epoch:
-            continue
-        nevra = pkg.getNEVRA()
-        if pkg["name"] == n and pkg["version"] == release and pkg["arch"] == arch:
-            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            pkglist.append(pkg)
-    # Next check is against n as name, v as version, ra as release
-    r = ""
-    if release != None:
-        r = release
-    if arch != None:
-        r += "." + arch
-    for pkg in list:
-        # If we have an epoch we need to check it
-        if epoch != None and pkg["epoch"][0] != epoch:
-            continue
-        nevra = pkg.getNEVRA()
-        if pkg["name"] == name and pkg["version"] == version and \
-                pkg["release"] == r:
-            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            pkglist.append(pkg)
-    # Next check is against n as name, v as version, r as release, a as arch
-    for pkg in list:
-        # If we have an epoch we need to check it
-        if epoch != None and pkg["epoch"][0] != epoch:
-            continue
-        nevra = pkg.getNEVRA()
-        if pkg["name"] == name and pkg["version"] == version and \
-                pkg["release"] == release and pkg["arch"] == arch:
-            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-            pkglist.append(pkg)
-    # No matching package found
+    envra = envraSplit(pkgname)
+    tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG, RELEASETAG], envra)), \
+            ("arch", constructName([ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    if envra[RELEASETAG] != None:
+        tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG], envra)), \
+                ("version", constructName([RELEASETAG, ARCHTAG], envra))]
+        pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG], envra)), \
+            ("version", constructName([RELEASETAG], envra)), \
+            ("arch", constructName([ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
+            ("version", constructName([VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
+            ("version", constructName([VERSIONTAG, RELEASETAG], envra)), \
+            ("arch", constructName([ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    if envra[RELEASETAG] != None:
+        tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
+                ("version", constructName([VERSIONTAG], envra)), \
+                ("release", constructName([RELEASETAG, ARCHTAG], envra))]
+        pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
+            ("version", constructName([VERSIONTAG], envra)), \
+            ("release", constructName([RELEASETAG], envra)), \
+            ("arch", constructName([ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+
+    tags = [("epoch", constructName([EPOCHTAG], envra)), \
+            ("name", constructName([NAMETAG, VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("epoch", constructName([EPOCHTAG], envra)), \
+            ("name", constructName([NAMETAG, VERSIONTAG, RELEASETAG], envra)), \
+            ("arch", constructName([ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    if envra[RELEASETAG] != None:
+        tags = [("epoch", constructName([EPOCHTAG], envra)), \
+                ("name", constructName([NAMETAG, VERSIONTAG], envra)), \
+                ("version", constructName([RELEASETAG, ARCHTAG], envra))]
+        pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("epoch", constructName([EPOCHTAG], envra)), \
+            ("name", constructName([NAMETAG, VERSIONTAG], envra)), \
+            ("version", constructName([RELEASETAG], envra)), \
+            ("arch", constructName([ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("epoch", constructName([EPOCHTAG], envra)), \
+            ("name", constructName([NAMETAG], envra)), \
+            ("version", constructName([VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("epoch", constructName([EPOCHTAG], envra)), \
+            ("name", constructName([NAMETAG], envra)), \
+            ("version", constructName([VERSIONTAG, RELEASETAG], envra)), \
+            ("arch", constructName([ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    if envra[RELEASETAG] != None:
+        tags = [("epoch", constructName([EPOCHTAG], envra)), \
+                ("name", constructName([NAMETAG], envra)), \
+                ("version", constructName([VERSIONTAG], envra)), \
+                ("release", constructName([RELEASETAG, ARCHTAG], envra))]
+        pkglist.extend(tagsearch(tags, list, regex))
+    tags = [("epoch", constructName([EPOCHTAG], envra)), \
+            ("name", constructName([NAMETAG], envra)), \
+            ("version", constructName([VERSIONTAG], envra)), \
+            ("release", constructName([RELEASETAG], envra)), \
+            ("arch", constructName([ARCHTAG], envra))]
+    pkglist.extend(tagsearch(tags, list, regex))
+    filterArchList(pkglist)
+    return pkglist
+
+def findPkgByName(pkgname, list):
+    pkglist = __findPkgByName(pkgname, list, None)
+    if len(pkglist) == 0:
+        pkglist = __findPkgByName(pkgname, list, 1)
     return pkglist
 
 # vim:ts=4:sw=4:showmatch:expandtab

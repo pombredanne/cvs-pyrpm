@@ -97,7 +97,7 @@ class RpmList:
                     (pkg["arch"] == r["arch"] or \
                      buildarchtranslate[pkg["arch"]] == \
                      buildarchtranslate[r["arch"]])):
-                    printWarning(0, "%s: %s is already installed" % \
+                    printWarning(1, "%s: %s is already installed" % \
                                  (pkg.getNEVRA(), r.getNEVRA()))
                     return self.ALREADY_INSTALLED
         if not self.list.has_key(key):
