@@ -1,4 +1,37 @@
+#!/usr/bin/python
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2004 Red Hat, Inc.
+#
+# Author: Florian La Roche
+#
+
+
+
 # RPM Constants - based from rpmlib.h and elsewhere
+
+# rpm tag types
+#RPM_NULL = 0
+RPM_CHAR = 1
+RPM_INT8 = 2
+RPM_INT16 = 3
+RPM_INT32 = 4
+RPM_INT64 = 5 # currently unused
+RPM_STRING = 6
+RPM_BIN = 7
+RPM_STRING_ARRAY = 8
+RPM_I18NSTRING = 9
 
 # header private tags
 HEADER_IMAGE = 61
@@ -112,6 +145,7 @@ RPMTAG_TRIGGERVERSION = 1067
 RPMTAG_TRIGGERFLAGS = 1068
 RPMTAG_TRIGGERINDEX = 1069
 RPMTAG_VERIFYSCRIPT = 1079
+RPMTAG_VERIFYSCRIPT2 = 15
 RPMTAG_CHANGELOGTIME = 1080
 RPMTAG_CHANGELOGNAME = 1081
 RPMTAG_CHANGELOGTEXT = 1082
@@ -179,6 +213,7 @@ RPMTAG_FILEDEPENDSX = 1143
 RPMTAG_FILEDEPENDSN = 1144
 RPMTAG_DEPENDSDICT = 1145
 RPMTAG_SOURCEPKGID = 1146
+RPMTAG_FILECONTEXTS = 1147
 RPMSIGTAG_BADSHA1_1 = RPMTAG_BADSHA1_1
 RPMSIGTAG_BADSHA1_2 = RPMTAG_BADSHA1_2
 RPMSIGTAG_SHA1 = RPMTAG_SHA1HEADER
@@ -193,53 +228,221 @@ RPMTAG_DELTARAWPAYLOADXDELTA = 20005 # BIN
 RPMTAG_DELTAORIGPAYLOADFORMAT = 20006 # RPMTAG_PAYLOADFORMAT
 RPMTAG_DELTAFILEFLAGS = 20007 # INT16 array
 
-rpmtag = {
-    "name": RPMTAG_NAME,
-    "version": RPMTAG_VERSION,
-    "release": RPMTAG_RELEASE,
-    "epoch": RPMTAG_EPOCH,
-    "arch": RPMTAG_ARCH,
-    "summary": RPMTAG_SUMMARY,
-    "description": RPMTAG_DESCRIPTION,
-    "license": RPMTAG_LICENSE,
-    "dsaheader": RPMTAG_DSAHEADER,
-    "gpg": RPMSIGTAG_GPG,
-    "pgp": RPMSIGTAG_PGP,
-    "badsha1_2": RPMTAG_BADSHA1_2,
-    "header_signatures": HEADER_SIGNATURES,
-    "payloadsize": RPMSIGTAG_PAYLOADSIZE,
-    "size_in_sig": RPMSIGTAG_SIZE,
-    "sha1header": RPMTAG_SHA1HEADER,
-    "md5": RPMSIGTAG_MD5
-}
-for tag in rpmtag.keys():
-    rpmtag[rpmtag[tag]] = tag
+# XXX: TODO for possible rpm changes:
+# - arch should not be needed for src.rpms
+# - deps could be left away from src.rpms
+# - cookie could go away
+# - rhnplatform could go away
 
-# These tags make up the huge paralell arrays that have file details
-filetags = [
-	RPMTAG_FILESIZES, 
-	RPMTAG_FILESTATES, 
-	RPMTAG_FILEMODES, 
-	RPMTAG_FILEUIDS, 
-	RPMTAG_FILEGIDS, 
-	RPMTAG_FILERDEVS, 
-	RPMTAG_FILEMTIMES, 
-	RPMTAG_FILEMD5S, 
-	RPMTAG_FILELINKTOS, 
-	RPMTAG_FILEFLAGS, 
-	RPMTAG_FILEUSERNAME, 
-	RPMTAG_FILEGROUPNAME, 
-	RPMTAG_FILEVERIFYFLAGS,
-	RPMTAG_FILEDEVICES, 
-	RPMTAG_FILEINODES, 
-	RPMTAG_FILELANGS, 
-	RPMTAG_DIRINDEXES, 
-	RPMTAG_FILECOLORS, 
-	RPMTAG_FILECLASS, 
-	RPMTAG_FILEDEPENDSX, 
-	RPMTAG_FILEDEPENDSN, 
-	RPMTAG_BASENAMES, 
-	RPMTAG_DIRNAMES # SPECIAL: not paralell, but used with DIRINDEXES
-]
+# list of all rpm tags in Fedora Core development
+# tagname: (tag, type, how-many, flags:legacy=1,src-only=2,bin-only=4)
+rpmtag = {
+    # basic info
+    "name": (RPMTAG_NAME, RPM_STRING, None, 0),
+    "epoch": (RPMTAG_EPOCH, RPM_INT32, 1, 0),
+    "version": (RPMTAG_VERSION, RPM_STRING, None, 0),
+    "release": (RPMTAG_RELEASE, RPM_STRING, None, 0),
+    "arch": (RPMTAG_ARCH, RPM_STRING, None, 0),
+
+    # dependencies: provides, requires, obsoletes, conflicts
+    "providename": (RPMTAG_PROVIDENAME, RPM_STRING_ARRAY, None, 0),
+    "provideflags": (RPMTAG_PROVIDEFLAGS, RPM_INT32, None, 0),
+    "provideversion": (RPMTAG_PROVIDEVERSION, RPM_STRING_ARRAY, None, 0),
+    "requirename": (RPMTAG_REQUIRENAME, RPM_STRING_ARRAY, None, 0),
+    "requireflags": (RPMTAG_REQUIREFLAGS, RPM_INT32, None, 0),
+    "requireversion": (RPMTAG_REQUIREVERSION, RPM_STRING_ARRAY, None, 0),
+    "obsoletename": (RPMTAG_OBSOLETENAME, RPM_STRING_ARRAY, None, 4),
+    "obsoleteflags": (RPMTAG_OBSOLETEFLAGS, RPM_INT32, None, 4),
+    "obsoleteversion": (RPMTAG_OBSOLETEVERSION, RPM_STRING_ARRAY, None, 4),
+    "conflictname": (RPMTAG_CONFLICTNAME, RPM_STRING_ARRAY, None, 0),
+    "conflictflags": (RPMTAG_CONFLICTFLAGS, RPM_INT32, None, 0),
+    "conflictversion": (RPMTAG_CONFLICTVERSION, RPM_STRING_ARRAY, None, 0),
+
+    # triggers
+    "triggername": (RPMTAG_TRIGGERNAME, RPM_STRING_ARRAY, None, 4),
+    "triggerflags": (RPMTAG_TRIGGERFLAGS, RPM_INT32, None, 4),
+    "triggerversion": (RPMTAG_TRIGGERVERSION, RPM_STRING_ARRAY, None, 4),
+    "triggerscripts": (RPMTAG_TRIGGERSCRIPTS, RPM_STRING_ARRAY, None, 4),
+    "triggerscriptprog": (RPMTAG_TRIGGERSCRIPTPROG, RPM_STRING_ARRAY, None, 4),
+    "triggerindex": (RPMTAG_TRIGGERINDEX, RPM_INT32, None, 4),
+
+    # scripts, they can also be RPM_STRING_ARRAY
+    "prein": (RPMTAG_PREIN, RPM_STRING, None, 4),
+    "preinprog": (RPMTAG_PREINPROG, RPM_STRING, None, 4),
+    "postin": (RPMTAG_POSTIN, RPM_STRING, None, 4),
+    # can be RPM_STRING or RPM_STRING_ARRAY
+    "postinprog": (RPMTAG_POSTINPROG, None, None, 4),
+    "preun": (RPMTAG_PREUN, RPM_STRING, None, 4),
+    "preunprog": (RPMTAG_PREUNPROG, RPM_STRING, None, 4),
+    "postun": (RPMTAG_POSTUN, RPM_STRING, None, 4),
+    "postunprog": (RPMTAG_POSTUNPROG, None, None, 4),
+    "verifyscript": (RPMTAG_VERIFYSCRIPT, RPM_STRING, None, 4),
+    "verifyscriptprog": (RPMTAG_VERIFYSCRIPTPROG, RPM_STRING, None, 4),
+
+    # addon information:
+    # list of available languages
+    "i18ntable": (HEADER_I18NTABLE, RPM_STRING_ARRAY, None, 0),
+    "summary": (RPMTAG_SUMMARY, RPM_I18NSTRING, None, 0),
+    "description": (RPMTAG_DESCRIPTION, RPM_I18NSTRING, None, 0),
+    "url": (RPMTAG_URL, RPM_STRING, None, 0),
+    "license": (RPMTAG_LICENSE, RPM_STRING, None, 0),
+    "rpmversion": (RPMTAG_RPMVERSION, RPM_STRING, None, 0),
+    "sourcerpm": (RPMTAG_SOURCERPM, RPM_STRING, None, 4),
+    "changelogtime": (RPMTAG_CHANGELOGTIME, RPM_INT32, None, 0),
+    "changelogname": (RPMTAG_CHANGELOGNAME, RPM_STRING_ARRAY, None, 0),
+    "changelogtext": (RPMTAG_CHANGELOGTEXT, RPM_STRING_ARRAY, None, 0),
+    # relocatable rpm packages
+    "prefixes": (RPMTAG_PREFIXES, RPM_STRING_ARRAY, None, 4),
+    # optimization flags for gcc
+    "optflags": (RPMTAG_OPTFLAGS, RPM_STRING, None, 4),
+    # %pubkey in .spec files
+    "pubkeys": (RPMTAG_PUBKEYS, RPM_STRING_ARRAY, None, 4),
+    "sourcepkgid": (RPMTAG_SOURCEPKGID, RPM_BIN, 16, 4),    # XXX
+    "immutable": (RPMTAG_HEADERIMMUTABLE, RPM_BIN, 16, 0),  # XXX
+    # less important information:
+    # time of rpm build
+    "buildtime": (RPMTAG_BUILDTIME, RPM_INT32, 1, 0),
+    # hostname where rpm was built
+    "buildhost": (RPMTAG_BUILDHOST, RPM_STRING, None, 0),
+    "cookie": (RPMTAG_COOKIE, RPM_STRING, None, 0), # build host and time
+    # ignored now, succ is comps.xml
+    # group can be RPM_STRING or RPM_I18NSTRING
+    "group": (RPMTAG_GROUP, None, None, 0),
+    "size": (RPMTAG_SIZE, RPM_INT32, 1, 0),         # sum of all file sizes
+    "distribution": (RPMTAG_DISTRIBUTION, RPM_STRING, None, 0),
+    "vendor": (RPMTAG_VENDOR, RPM_STRING, None, 0),
+    "packager": (RPMTAG_PACKAGER, RPM_STRING, None, 0),
+    "os": (RPMTAG_OS, RPM_STRING, None, 0),         # always "linux"
+    "payloadformat": (RPMTAG_PAYLOADFORMAT, RPM_STRING, None, 0), # "cpio"
+    # "gzip"
+    "payloadcompressor": (RPMTAG_PAYLOADCOMPRESSOR, RPM_STRING, None, 0),
+    "payloadflags": (RPMTAG_PAYLOADFLAGS, RPM_STRING, None, 0), # "9"
+    "rhnplatform": (RPMTAG_RHNPLATFORM, RPM_STRING, None, 4),   # == arch
+    "platform": (RPMTAG_PLATFORM, RPM_STRING, None, 0),
+
+    # source rpm packages:
+    "source": (RPMTAG_SOURCE, RPM_STRING_ARRAY, None, 2),
+    "patch": (RPMTAG_PATCH, RPM_STRING_ARRAY, None, 2),
+    "buildarchs": (RPMTAG_BUILDARCHS, RPM_STRING_ARRAY, None, 2),
+    "excludearch": (RPMTAG_EXCLUDEARCH, RPM_STRING_ARRAY, None, 2),
+    "exclusivearch": (RPMTAG_EXCLUSIVEARCH, RPM_STRING_ARRAY, None, 2),
+    # ['Linux'] or ['linux']
+    "exclusiveos": (RPMTAG_EXCLUSIVEOS, RPM_STRING_ARRAY, None, 2),
+
+    # information about files
+    "filesizes": (RPMTAG_FILESIZES, RPM_INT32, None, 0),
+    "filemodes": (RPMTAG_FILEMODES, RPM_INT16, None, 0),
+    "filerdevs": (RPMTAG_FILERDEVS, RPM_INT16, None, 0),
+    "filemtimes": (RPMTAG_FILEMTIMES, RPM_INT32, None, 0),
+    "filemd5s": (RPMTAG_FILEMD5S, RPM_STRING_ARRAY, None, 0),
+    "filelinktos": (RPMTAG_FILELINKTOS, RPM_STRING_ARRAY, None, 0),
+    "fileflags": (RPMTAG_FILEFLAGS, RPM_INT32, None, 0),
+    "fileusername": (RPMTAG_FILEUSERNAME, RPM_STRING_ARRAY, None, 0),
+    "filegroupname": (RPMTAG_FILEGROUPNAME, RPM_STRING_ARRAY, None, 0),
+    "fileverifyflags": (RPMTAG_FILEVERIFYFLAGS, RPM_INT32, None, 0),
+    "filedevices": (RPMTAG_FILEDEVICES, RPM_INT32, None, 0),
+    "fileinodes": (RPMTAG_FILEINODES, RPM_INT32, None, 0),
+    "filelangs": (RPMTAG_FILELANGS, RPM_STRING_ARRAY, None, 0),
+    "dirindexes": (RPMTAG_DIRINDEXES, RPM_INT32, None, 0),
+    "basenames": (RPMTAG_BASENAMES, RPM_STRING_ARRAY, None, 0),
+    "dirnames": (RPMTAG_DIRNAMES, RPM_STRING_ARRAY, None, 0),
+    "filecolors": (RPMTAG_FILECOLORS, RPM_INT32, None, 0),
+    "fileclass": (RPMTAG_FILECLASS, RPM_INT32, None, 0),
+    "classdict": (RPMTAG_CLASSDICT, RPM_STRING_ARRAY, None, 0),
+    "filedependsx": (RPMTAG_FILEDEPENDSX, RPM_INT32, None, 0),
+    "filedependsn": (RPMTAG_FILEDEPENDSN, RPM_INT32, None, 0),
+    "dependsdict": (RPMTAG_DEPENDSDICT, RPM_INT32, None, 0),
+
+    # legacy additions:
+    # selinux filecontexts
+    "filecontexts": (RPMTAG_FILECONTEXTS, RPM_STRING_ARRAY, None, 1),
+    "archivesize": (RPMTAG_ARCHIVESIZE, RPM_INT32, 1, 1),
+    "capability": (RPMTAG_CAPABILITY, RPM_INT32, None, 1),
+    "xpm": (RPMTAG_XPM, RPM_BIN, None, 1),
+    "gif": (RPMTAG_GIF, RPM_BIN, None, 1),
+    "verifyscript2": (RPMTAG_VERIFYSCRIPT2, RPM_STRING, None, 1),
+    "nosource": (RPMTAG_NOSOURCE, RPM_INT32, None, 1),
+    "nopatch": (RPMTAG_NOPATCH, RPM_INT32, None, 1),
+    "disturl": (RPMTAG_DISTURL, RPM_STRING, None, 1),
+    "oldfilenames": (RPMTAG_OLDFILENAMES, RPM_STRING_ARRAY, None, 1),
+    "triggerin": (RPMTAG_TRIGGERIN, RPM_STRING, None, 5),
+    "triggerun": (RPMTAG_TRIGGERUN, RPM_STRING, None, 5),
+    "triggerpostun": (RPMTAG_TRIGGERPOSTUN, RPM_STRING, None, 5)
+}
+# Add a reverse mapping for all tags.
+for key in rpmtag.keys():
+    v = rpmtag[key]
+    rpmtag[v[0]] = v
+# Required tags in a header.
+rpmtagrequired = []
+for key in ["name", "version", "release", "arch"]:
+    rpmtagrequired.append(rpmtag[key][0])
+
+# Info within the sig header.
+rpmsigtag = {
+    # size of gpg/dsaheader sums differ between 64/65
+    "dsaheader": (RPMTAG_DSAHEADER, RPM_BIN, None, 0),
+    "gpg": (RPMSIGTAG_GPG, RPM_BIN, None, 0),
+    "header_signatures": (HEADER_SIGNATURES, RPM_BIN, 16, 0),   # XXX
+    "payloadsize": (RPMSIGTAG_PAYLOADSIZE, RPM_INT32, 1, 0),
+    "size_in_sig": (RPMSIGTAG_SIZE, RPM_INT32, 1, 0),
+    "sha1header": (RPMTAG_SHA1HEADER, RPM_STRING, None, 0),
+    "md5": (RPMSIGTAG_MD5, RPM_BIN, 16, 0),
+    # legacy entries:
+    "pgp": (RPMSIGTAG_PGP, RPM_BIN, None, 1),
+    "badsha1_1": (RPMTAG_BADSHA1_1, RPM_STRING, None, 1),
+    "badsha1_2": (RPMTAG_BADSHA1_2, RPM_STRING, None, 1)
+}
+# Add a reverse mapping for all tags.
+for key in rpmsigtag.keys():
+    v = rpmsigtag[key]
+    rpmsigtag[v[0]] = v
+# Required tags in a signature header.
+rpmsigtagrequired = []
+#for key in ["header_signatures", "payloadsize", "size_in_sig", \
+#    "sha1header", "md5"]:
+for key in ["md5"]:
+    rpmsigtagrequired.append(rpmsigtag[key][0])
+
+# check arch names against this list
+possible_archs = ['noarch', 'i386', 'i486', 'i586', 'i686', 'athlon', 'alpha',
+    's390', 's390x', 'ia64', 'x86_64', 'ppc', 'ppc64', 'sparc', 'sparc64',
+    'ppc64iseries', 'ppc64pseries', 'ia32e', 'ppcpseries', 'ppciseries',
+    'ppcmac',
+    'arm', 'armv4l', 'mips', 'mipseb', 'hppa', 'axp', 'm68k', 'mipsel', 'sh',
+    # these are in old rpms:
+    'i786', 'i886', 'i986', 's390xc']
+
+
+RPMSENSE_ANY        = 0
+RPMSENSE_SERIAL     = (1 << 0)          # legacy
+RPMSENSE_LESS       = (1 << 1)
+RPMSENSE_GREATER    = (1 << 2)
+RPMSENSE_EQUAL      = (1 << 3)
+RPMSENSE_PROVIDES   = (1 << 4)          # only used internally by builds
+RPMSENSE_CONFLICTS  = (1 << 5)          # only used internally by builds
+RPMSENSE_PREREQ     = (1 << 6)          # legacy
+RPMSENSE_OBSOLETES  = (1 << 7)          # only used internally by builds
+RPMSENSE_INTERP     = (1 << 8)          # Interpreter used by scriptlet.
+RPMSENSE_SCRIPT_PRE = ((1 << 9) | RPMSENSE_PREREQ)      # %pre dependency
+RPMSENSE_SCRIPT_POST = ((1 << 10)|RPMSENSE_PREREQ)      # %post dependency
+RPMSENSE_SCRIPT_PREUN = ((1 << 11)|RPMSENSE_PREREQ)     # %preun dependency
+RPMSENSE_SCRIPT_POSTUN = ((1 << 12)|RPMSENSE_PREREQ)    # %postun dependency
+RPMSENSE_SCRIPT_VERIFY = (1 << 13)      # %verify dependency
+RPMSENSE_FIND_REQUIRES = (1 << 14)      # find-requires generated dependency
+RPMSENSE_FIND_PROVIDES = (1 << 15)      # find-provides generated dependency
+RPMSENSE_TRIGGERIN  = (1 << 16)         # %triggerin dependency
+RPMSENSE_TRIGGERUN  = (1 << 17)         # %triggerun dependency
+RPMSENSE_TRIGGERPOSTUN = (1 << 18)      # %triggerpostun dependency
+RPMSENSE_MISSINGOK  = (1 << 19)         # suggests/enhances/recommends hint
+RPMSENSE_SCRIPT_PREP = (1 << 20)        # %prep build dependency
+RPMSENSE_SCRIPT_BUILD = (1 << 21)       # %build build dependency
+RPMSENSE_SCRIPT_INSTALL = (1 << 22)     # %install build dependency
+RPMSENSE_SCRIPT_CLEAN = (1 << 23)       # %clean build dependency
+RPMSENSE_RPMLIB     = ((1 << 24) | RPMSENSE_PREREQ) # rpmlib(feature) dependency
+RPMSENSE_TRIGGERPREIN = (1 << 25)       # @todo Implement %triggerprein
+RPMSENSE_KEYRING    = (1 << 26)
+RPMSENSE_PATCHES    = (1 << 27)
+RPMSENSE_CONFIG     = (1 << 28)
 
 # vim:ts=4:sw=4:showmatch:expandtab

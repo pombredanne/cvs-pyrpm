@@ -18,92 +18,43 @@
 # Author: Paul Nasrat, Florian La Roche
 #
 
-import struct, rpmconstants, cpio, os.path, re, sys, getopt, gzip, cStringIO
+#import profile
+import rpmconstants, cpio, os.path
+import sys, getopt, gzip, cStringIO
+from types import StringType, IntType, ListType
+from struct import unpack
 rpmtag = rpmconstants.rpmtag
+rpmsigtag = rpmconstants.rpmsigtag
+#import ugid
 
-def getPadSize(size, pad):
-    """Return padding size if data of size "size" is padded to "pad"
-    alignment. Pad is 1 for no padding or e.g. 8."""
-    return (pad - (size % pad)) % pad
+RPM_CHAR = rpmconstants.RPM_CHAR
+RPM_INT8 = rpmconstants.RPM_INT8
+RPM_INT16 = rpmconstants.RPM_INT16
+RPM_INT32 = rpmconstants.RPM_INT32
+RPM_INT64 = rpmconstants.RPM_INT64
+RPM_STRING = rpmconstants.RPM_STRING
+RPM_BIN = rpmconstants.RPM_BIN
+RPM_STRING_ARRAY = rpmconstants.RPM_STRING_ARRAY
+RPM_I18NSTRING = rpmconstants.RPM_I18NSTRING
 
-def getTag(tag):
-    """Find the integer tag."""
-    import types
-    if isinstance(tag, types.IntType):
-        return tag
-    elif isinstance(tag, types.StringType):
-        if tag[:3] == "RPM":
-            return eval("rpmconstants.%s" % tag)
-        else:
-            if rpmtag.has_key(tag):
-                return rpmtag[tag]
-            return eval("rpmconstants.RPMTAG_%s" % tag.upper())
-    return None
-
-# rpm tag types
-#RPM_NULL = 0
-RPM_CHAR = 1
-RPM_INT8 = 2
-RPM_INT16 = 3
-RPM_INT32 = 4
-RPM_INT64 = 5 # currently unused
-RPM_STRING = 6
-RPM_BIN = 7
-RPM_STRING_ARRAY = 8
-RPM_I18NSTRING = 9
-
-# optional keys in the sig header
-sigkeys = [rpmtag["dsaheader"], rpmtag["gpg"]]
-# optional keys for the non-strict case
-sigkeys2 = [rpmtag["pgp"], rpmtag["badsha1_2"]]
-# required keys in the sig header for the strict case
-reqsig = [rpmtag["header_signatures"], rpmtag["payloadsize"],
-    rpmtag["size_in_sig"], rpmtag["sha1header"], rpmtag["md5"]]
-
-#   tag                      type        how many, required, strict
-ssigkeys = {
-    # all required tags for the strict case
-    rpmtag["header_signatures"]:(RPM_BIN,None, 1, 1),
-    rpmtag["payloadsize"]:  (RPM_INT32,  1,    1, 1),
-    rpmtag["size_in_sig"]:  (RPM_INT32,  1,    1, 1),
-    rpmtag["sha1header"]:   (RPM_BIN,    None, 1, 1),
-    rpmtag["md5"]:          (RPM_BIN,    None, 1, 1),
-    # optional tags
-    rpmtag["dsaheader"]:    (RPM_BIN,    None, 0, 1),
-    rpmtag["gpg"]:          (RPM_BIN,    None, 0, 1),
-    # older rpm packages only
-    rpmtag["pgp"]:          (RPM_BIN,    None, 0, 0),
-    rpmtag["badsha1_2"]:    (RPM_BIN,    None, 0, 0)
-}
 
 # limit: does not support all RHL5.x and earlier rpms if verify is enabled
 class ReadRpm:
 
-    def __init__(self, filename, verify=None, fd=None, hdronly=None):
+    def __init__(self, filename, verify=None, fd=None, hdronly=None, legacy=1):
         self.filename = filename
-        self.fd = fd # filedescriptor
+        self.issrc = 0
+        if filename[-8:] == ".src.rpm" or filename[-10:] == ".nosrc.rpm":
+            self.issrc = 1
         self.verify = verify # enable/disable more data checking
+        self.fd = fd # filedescriptor
         self.hdronly = hdronly # if only the header is present from a hdlist
-        self.strict = 1 # XXX find some way to switch back to non-strict mode
-        # for older rpm packages
+        # 1 == check if legacy tags are included, 0 allows more old tags
+        # 1 is good for Fedora Core development trees
+        self.legacy = legacy
 
-    def _buildFileNames(self):
-        """Returns (dir, filename, linksto, flags)"""
-        if not self.hdr:
-                return None
-        hdr = self.hdr
-        dirnames = [ hdr[getTag("dirnames")][index] 
-                     for index in hdr[getTag("dirindexes")]
-                   ]
-        return zip (dirnames,
-                    hdr[getTag("basenames")], 
-                    hdr[getTag("filelinktos")],
-                    hdr[getTag("filemodes")],
-                    hdr[getTag("fileusername")],
-                    hdr[getTag("filegroupname")],
-                    hdr[getTag("filemtimes")],
-                    hdr[getTag("fileflags")]
-                )
+    def printErr(self, err):
+        print "%s: %s" % (self.filename, err)
 
     def raiseErr(self, err):
         raise ValueError, "%s: %s" % (self.filename, err)
@@ -118,43 +69,82 @@ class ReadRpm:
                 self.fd.seek(offset, 1)
 
     def closeFd(self):
-        if self.fd:
-            self.fd.close()
-            self.fd = None
+        self.fd = None
 
-    def getOneNumber(self, tag, sig=0):
+    def __repr__(self):
+        return self.hdr.__repr__()
+
+    def __getitem__(self, key):
         try:
-            if sig:
-                num = self.sig[tag]
-            else:
-                num = self.hdr[tag]
+            if isinstance(key, StringType):
+                return self.hdr[rpmtag[key][0]]
+            if isinstance(key, IntType):
+                return self.hdr[key]
+            # trick to also look at the sig header
+            if isinstance(key, ListType):
+                if isinstance(key[0], StringType):
+                    return self.sig[rpmsigtag[key[0]][0]]
+                return self.sig[key[0]]
+            self.raiseErr("wrong arg")
         except:
+            # XXX: try to catch wrong/misspelled keys here?
             return None
-        if len(num) != 1:
-            print num, len(num)
-            raise ValueError, "bad length %d" % len(num)
-        return num[0]
 
     def parseLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
-            struct.unpack("!4scchh66shh16x", leaddata)
+            unpack("!4scchh66shh16x", leaddata)
         failed = None
         if self.verify:
-            if (major != '\x03' and major != '\x04') or minor != '\x00' or \
+            if major not in ('\x03', '\x04') or minor != '\x00' or \
                 sigtype != 5 or rpmtype not in (0, 1):
                 failed = 1
             if osnum not in (1, 255, 256):
                 failed = 1
             name = name.rstrip('\x00')
-            if os.path.basename(self.filename)[:len(name)] != name:
+            if self.legacy:
+              if os.path.basename(self.filename)[:len(name)] != name:
                 failed = 1
         if failed:
             print major, minor, rpmtype, arch, name, osnum, sigtype
             self.raiseErr("wrong data in rpm lead")
         return (magic, major, minor, rpmtype, arch, name, osnum, sigtype)
 
-    def verifyTag(self, index, fmt):
+    def verifyTag(self, index, fmt, issig):
         (tag, ttype, offset, count) = index
+        if issig:
+            if not rpmsigtag.has_key(tag):
+                self.printErr("rpmsigtag has no tag %d" % tag)
+            else:
+                t = rpmsigtag[tag]
+                if t[1] != None and t[1] != ttype:
+                    self.printErr("sigtag %d has wrong type %d" % (tag, ttype))
+                if t[2] != None and t[2] != count:
+                    self.printErr("sigtag %d has wrong count %d" % (tag, count))
+                if (t[3] & 1) and self.legacy:
+                    self.printErr("tag %d is marked legacy" % tag)
+                if self.issrc:
+                    if (t[3] & 4):
+                        self.printErr("tag %d should be for binary rpms" % tag)
+                else:
+                    if (t[3] & 2):
+                        self.printErr("tag %d should be for src rpms" % tag)
+        else:
+            if not rpmtag.has_key(tag):
+                self.printErr("rpmtag has no tag %d" % tag)
+            else:
+                t = rpmtag[tag]
+                if t[1] != None and t[1] != ttype:
+                    self.printErr("tag %d has wrong type %d" % (tag, ttype))
+                if t[2] != None and t[2] != count:
+                    self.printErr("tag %d has wrong count %d" % (tag, count))
+                if (t[3] & 1) and self.legacy:
+                    self.printErr("tag %d is marked legacy" % tag)
+                if self.issrc:
+                    if (t[3] & 4):
+                        self.printErr("tag %d should be for binary rpms" % tag)
+                else:
+                    if (t[3] & 2):
+                        self.printErr("tag %d should be for src rpms" % tag)
         if count == 0:
             self.raiseErr("zero length tag")
         if ttype < 1 or ttype > 9:
@@ -185,10 +175,10 @@ class ReadRpm:
             self.raiseErr("unknown tag header")
         return count
 
-    def verifyIndex(self, fmt, fmt2, indexNo, storeSize):
+    def verifyIndex(self, fmt, fmt2, indexNo, storeSize, issig):
         checkSize = 0
         for i in xrange(0, indexNo * 16, 16):
-            index = struct.unpack("!iiii", fmt[i:i + 16])
+            index = unpack("!iiii", fmt[i:i + 16])
             ttype = index[1]
             # alignment for some types of data
             if ttype == RPM_INT16:
@@ -197,113 +187,85 @@ class ReadRpm:
                 checkSize += (4 - (checkSize % 4)) % 4
             elif ttype == RPM_INT64:
                 checkSize += (8 - (checkSize % 8)) % 8
-            checkSize += self.verifyTag(index, fmt2)
+            checkSize += self.verifyTag(index, fmt2, issig)
         if checkSize != storeSize:
-            self.raiseErr("storeSize/checkSize is %d/%d" % (storeSize,
+            # XXX: add a check for very old rpm versions here
+            self.printErr("storeSize/checkSize is %d/%d" % (storeSize,
                 checkSize))
 
-    def readIndex(self, pad):
+    def readIndex(self, pad, issig=None):
         data = self.fd.read(16)
         if not len(data):
             return None
-        (magic, indexNo, storeSize) = struct.unpack("!8sii", data)
+        (magic, indexNo, storeSize) = unpack("!8sii", data)
         if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
             self.raiseErr("bad index magic")
         fmt = self.fd.read(16 * indexNo)
-        fmt2 = self.fd.read(storeSize + getPadSize(storeSize, pad))
+        fmt2 = self.fd.read(storeSize)
+        padfmt = ""
+        if pad != 1:
+            padfmt = self.fd.read((pad - (storeSize % pad)) % pad)
         if self.verify:
-            self.verifyIndex(fmt, fmt2, indexNo, storeSize)
-        return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + len(fmt2))
+            self.verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
+        return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + \
+            len(fmt2) + len(padfmt))
 
     def parseTag(self, index, fmt):
         (tag, ttype, offset, count) = index
         if ttype == RPM_INT32:
-            data = struct.unpack("!%dI" % count, fmt[offset:offset + count * 4])
-        elif ttype == RPM_STRING_ARRAY or \
-            ttype == RPM_I18NSTRING:
+            return unpack("!%dI" % count, fmt[offset:offset + count * 4])
+        elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
             data = []
             for i in xrange(0, count):
                 end = fmt.index('\x00', offset)
                 data.append(fmt[offset:end])
                 offset = end + 1
+            return data
         elif ttype == RPM_STRING:
-            data = fmt[offset:fmt.index('\x00', offset)]
+            return fmt[offset:fmt.index('\x00', offset)]
         elif ttype == RPM_CHAR:
-            data = struct.unpack("!%dc" % count, fmt[offset:offset + count])
+            return unpack("!%dc" % count, fmt[offset:offset + count])
         elif ttype == RPM_INT8:
-            data = struct.unpack("!%dB" % count, fmt[offset:offset + count])
+            return unpack("!%dB" % count, fmt[offset:offset + count])
         elif ttype == RPM_INT16:
-            data = struct.unpack("!%dH" % count, fmt[offset:offset + count * 2])
+            return unpack("!%dH" % count, fmt[offset:offset + count * 2])
         elif ttype == RPM_INT64:
-            data = struct.unpack("!%dQ" % count, fmt[offset:offset + count * 8])
+            return unpack("!%dQ" % count, fmt[offset:offset + count * 8])
         elif ttype == RPM_BIN:
-            data = fmt[offset:offset + count]
-        else:
-            raise ValueError, "unknown tag header"
-        return data
+            return fmt[offset:offset + count]
+        self.raiseErr("unknown tag header")
+        return None
 
     def parseIndex(self, indexNo, fmt, fmt2, tags=None):
-        # XXX: parseIndex() seems to consume lots of CPU, analyse why
+        # XXX parseIndex() should be implemented as C function for faster speed
         hdr = {}
         hdrtype = {}
         for i in xrange(0, indexNo * 16, 16):
-            index = struct.unpack("!iiii", fmt[i:i + 16])
+            index = unpack("!4i", fmt[i:i + 16])
             tag = index[0]
+            # support reading only some tags
             if tags and tag not in tags:
                 continue
             # ignore duplicate entries as long as they are identical
-            if self.strict == 0 and hdr.has_key(tag):
+            if hdr.has_key(tag):
                 if hdr[tag] != self.parseTag(index, fmt2):
-                    print "%s included tag %d twice" % (self.filename, tag)
+                    self.printErr("tag %d included twice" % tag)
             else:
                 hdr[tag] = self.parseTag(index, fmt2)
                 hdrtype[tag] = index[1]
         return (hdr, hdrtype)
 
-    def addTag(self, tag, data, type, hdr=1):
-        # XXX: this should also get implemented as setitem(tag, data, type, hdr)
-        if hdr:
-            self.hdr[tag] = data
-            self.hdrtype[tag] = type
-        else:
-            self.sig[tag] = data
-            self.sigtype[tag] = type
-
-    def newIndex(self, hdr, pad): # XXX not finished yet
-        indexNo = len(hdr)
-        storeSize = 0
-        data = ""
-        fmt = ""
-        fmt2 = ""
-        size = 0
-        return (indexNo, storeSize, data, fmt, fmt2, size)
-
-    def writeIndex(self):
-        pass # XXX
-
     def verifyHeader(self):
         if self.hdronly:
             return
-        for i in self.sig.keys():
-            if i not in sigkeys and i not in reqsig and \
-                (not self.strict or i not in sigkeys2):
-                self.raiseErr("new item in sigindex: %d" % i)
-        if not self.strict:
-            return
-        for i in reqsig:
-            if i not in self.sig.keys():
-                self.raiseErr("key not present in sig: %d" % i)
-        self.cpiosize = self.getOneNumber("payloadsize", 1)
+        #self.cpiosize = self[["payloadsize"]][0]
         # header + payload size
-        self.payloadsize = self.getOneNumber(getTag("size_in_sig"), 1) \
-            - self.hdrdata[5]
-        # XXX: what data is in here?
-        identifysig = self.sig[rpmtag["header_signatures"]]
-        sha1 = self.sig[rpmtag["sha1header"]] # header
-        md5sum = self.sig[rpmtag["md5"]] # header + payload
-        if self.sig.has_key(rpmtag["dsaheader"]):
-            dsa = self.sig[rpmtag["dsaheader"]] # header
-            gpg = self.sig[rpmtag["gpg"]] # header + payload
+        #self.payloadsize = self[["size_in_sig"]][0] - self.hdrdata[5]
+        identifysig = self[["header_signatures"]]
+        sha1 = self[["sha1header"]] # header
+        md5sum = self[["md5"]] # header + payload
+        dsa = self[["dsaheader"]] # header
+        gpg = self[["gpg"]] # header + payload
 
     def parseHeader(self, tags=None, parsesig=None):
         if (self.verify or parsesig) and not self.hdronly:
@@ -311,26 +273,35 @@ class ReadRpm:
                 self.sigdata
             (self.sig, self.sigtype) = self.parseIndex(sigindexNo, sigfmt, \
                 sigfmt2)
+            if self.verify:
+                for i in rpmconstants.rpmsigtagrequired:
+                    if not self.sig.has_key(i):
+                        self.printErr("sig header is missing: %d" % i)
         (hdrindexNo, hdrstoreSize, hdrdata, hdrfmt, hdrfmt2, size) = \
             self.hdrdata
         (self.hdr, self.hdrtype) = self.parseIndex(hdrindexNo, hdrfmt, \
             hdrfmt2, tags)
         if self.verify:
+            for i in rpmconstants.rpmtagrequired:
+                if not self.hdr.has_key(i):
+                    self.printErr("hdr is missing: %d" % i)
             self.verifyHeader()
 
     def readHeader(self, parse=1, tags=None, keepdata=None):
         self.openFd()
         leaddata = self.fd.read(96)
         if leaddata[:4] != '\xed\xab\xee\xdb':
-            self.raiseErr("no rpm magic found")
+            self.printErr("no rpm magic found")
+            return 1
         if self.verify:
             self.parseLead(leaddata)
-        self.sigdata = self.readIndex(8)
+        self.sigdata = self.readIndex(8, 1)
         self.hdrdata = self.readIndex(1)
         if keepdata:
             self.leaddata = leaddata
         if parse:
             self.parseHeader(tags)
+        return None
 
     def readHdlist(self, parse=1, tags=None):
         self.hdrdata = self.readIndex(1)
@@ -345,7 +316,7 @@ class ReadRpm:
         if None:
             #import zlib
             payload = self.fd.read()
-            if self.strict and self.verify and self.payloadsize != len(payload):
+            if self.verify and self.payloadsize != len(payload):
                 self.raiseErr("payloadsize")
             if payload[:9] != '\037\213\010\000\000\000\000\000\000':
                 self.raiseErr("not gzipped data")
@@ -358,7 +329,7 @@ class ReadRpm:
             #    buf = gz.read(4096)
             #    if not buf:
             #        break
-        if self.strict and self.verify and self.cpiosize != len(cpiodata):
+        if self.verify and self.cpiosize != len(cpiodata):
             self.raiseErr("cpiosize")
         if 1:
             c = cpio.CPIOFile(cStringIO.StringIO(cpiodata))
@@ -371,114 +342,77 @@ class ReadRpm:
         if keepdata:
             self.cpiodata = cpiodata
 
-    def __repr__(self):
-        return self.hdr.__repr__()
-
-    def __getitem__(self, key):
-        if key == "RPMTAG_FILENAMES" or key == "filenames":
-            fi = self._buildFileNames()
-            return [ "%s%s" % (file[0],file[1]) for file in fi]
-        return self.hdr[getTag(key)]
-
-    def getItem(self, tag):
-        try:
-            return self[tag]
-        except:
-            return None
-
     def getScript(self, s, p):
-        script = self.getItem(s)
-        prog = self.getItem(p)
-        if script and not prog:
-            self.raiseErr("no prog")
+        script = self[s]
+        prog = self[p]
         if script == None and prog == None:
             return (None, None)
-        if prog not in ("/bin/sh", "/sbin/ldconfig", "/usr/bin/fc-cache",
-            "/usr/sbin/glibc_post_upgrade", "/usr/sbin/libgcc_post_upgrade",
-            "/usr/sbin/build-locale-archive", "/usr/bin/scrollkeeper-update"):
-            self.raiseErr("unknown prog: %s" % prog)
+        if self.verify:
+            if script and prog == None:
+                self.raiseErr("no prog")
+            if self.legacy:
+              if prog not in ("/bin/sh", "/sbin/ldconfig", "/usr/bin/fc-cache",
+                "/usr/sbin/glibc_post_upgrade", "/usr/sbin/libgcc_post_upgrade",
+                "/usr/sbin/glibc_post_upgrade.i386",
+                "/usr/sbin/glibc_post_upgrade.i686",
+                "/usr/sbin/build-locale-archive",
+                "/usr/bin/scrollkeeper-update"):
+                self.raiseErr("unknown prog: %s" % prog)
         return (script, prog)
 
     def getNVR(self):
         return "%s-%s-%s" % (self["name"], self["version"], self["release"])
 
     def getNA(self):
-        return "%s-%s" % (self["name"], self["arch"])
+        return "%s.%s" % (self["name"], self["arch"])
 
     def getFilename(self):
         return "%s-%s-%s.%s.rpm" % (self["name"], self["version"],
             self["release"], self["arch"])
 
     def getDeps(self, name, flags, version):
-        n = self.getItem(name)
+        n = self[name]
         if not n:
-            return []
-        f = self.hdr[flags]
-        v = self.hdr[version]
+            return None
+        f = self[flags]
+        v = self[version]
+        if f == None or v == None or len(n) != len(f) or len(f) != len(v):
+            if f != None or v != None:
+                self.raiseErr("wrong length of deps")
         deps = []
         for i in xrange(0, len(n)):
-            deps.append( (n[i], f[i], v[i]) )
+            if f != None:
+                deps.append( (n[i], f[i], v[i]) )
+            else:
+                deps.append( (n[i], None, None) )
         return deps
 
     def getProvides(self):
-        return self.getDeps(rpmconstants.RPMTAG_PROVIDENAME,
-            rpmconstants.RPMTAG_PROVIDEFLAGS,
-            rpmconstants.RPMTAG_PROVIDEVERSION)
+        return self.getDeps("providename", "provideflags", "provideversion")
 
     def getRequires(self):
-        return self.getDeps(rpmconstants.RPMTAG_REQUIRENAME,
-            rpmconstants.RPMTAG_REQUIREFLAGS,
-            rpmconstants.RPMTAG_REQUIREVERSION)
+        return self.getDeps("requirename", "requireflags", "requireversion")
 
     def getObsoletes(self):
-        return self.getDeps(rpmconstants.RPMTAG_OBSOLETENAME,
-            rpmconstants.RPMTAG_OBSOLETEFLAGS,
-            rpmconstants.RPMTAG_OBSOLETEVERSION)
+        return self.getDeps("obsoletename", "obsoleteflags", "obsoleteversion")
 
     def getConflicts(self):
-        return self.getDeps(rpmconstants.RPMTAG_CONFLICTNAME,
-            rpmconstants.RPMTAG_CONFLICTFLAGS,
-            rpmconstants.RPMTAG_CONFLICTVERSION)
+        return self.getDeps("conflictname", "conflictflags", "conflictversion")
 
     def getTriggers(self):
-        return self.getDeps(rpmconstants.RPMTAG_TRIGGERNAME,
-            rpmconstants.RPMTAG_TRIGGERFLAGS,
-            rpmconstants.RPMTAG_TRIGGERVERSION)
+        return self.getDeps("triggername", "triggerflags", "triggerversion")
 
+    def _buildFileNames(self):
+        """Returns (dir, filename, linksto, flags)."""
+        dirnames = [ self["dirnames"][index] 
+                     for index in self["dirindexes"]
+                   ]
+        return zip (dirnames, self["basenames"], self["filelinktos"],
+                    self["filemodes"], self["fileusername"],
+                    self["filegroupname"], self["filemtimes"],
+                    self["fileflags"]
+                )
 
-class RFile:
-    def __init__(self, name, mode, uid, gid, time, flag, md5sum=None, \
-        size=None, rdev=None, symlink=None):
-        self.name = name
-        self.mode = mode
-        self.uid = uid
-        self.gid = gid
-        self.time = time
-        self.flag = flag
-        if md5sum != None: # regular file
-            self.md5sum = md5sum
-            self.size = size
-        if rdev: # block/char device
-            self.rdev = rdev
-        if symlink: # symlink
-            self.symlink = symlink
-
-class RDir:
-    def __init__(self, name, mode, uid, gid, time, flag):
-        self.name = name
-        self.mode = mode
-        self.uid = uid
-        self.gid = gid
-        self.time = time
-        self.flag = flag
-        self.files = {}
-
-    def addFile(self, file):
-        name = file.name
-        if self.files.has_key(name):
-            raise ValueError, "dir %s already contains file %s" % (self.name,
-                name)
-        self.files[name] = file
 
 class RDep:
     def __init__(self, name, flags, evr):
@@ -486,102 +420,98 @@ class RDep:
         self.flags = flags
         self.evr = evr
 
-notthere = [rpmconstants.RPMTAG_PREREQ, rpmconstants.RPMTAG_AUTOREQPROV,
-    rpmconstants.RPMTAG_AUTOREQ, rpmconstants.RPMTAG_AUTOPROV,
-    rpmconstants.RPMTAG_CAPABILITY, rpmconstants.RPMTAG_BUILDCONFLICTS,
-    rpmconstants.RPMTAG_BUILDMACROS, rpmconstants.RPMTAG_OLDFILENAMES,
-    rpmconstants.RPMTAG_OLDORIGFILENAMES,
-    rpmconstants.RPMTAG_ROOT, rpmconstants.RPMTAG_DEFAULTPREFIX,
-    rpmconstants.RPMTAG_BUILDROOT, rpmconstants.RPMTAG_INSTALLPREFIX,
-    rpmconstants.RPMTAG_EXCLUDEOS, rpmconstants.RPMTAG_DOCDIR,
-    rpmconstants.RPMTAG_INSTPREFIXES, rpmconstants.RPMTAG_INSTALLCOLOR,
-    rpmconstants.RPMTAG_INSTALLTID, rpmconstants.RPMTAG_REMOVETID,
-    rpmconstants.RPMTAG_SHA1RHN,
-    rpmconstants.RPMTAG_PATCHESNAME, rpmconstants.RPMTAG_PATCHESFLAGS,
-    rpmconstants.RPMTAG_PATCHESVERSION,
-    rpmconstants.RPMTAG_CACHECTIME, rpmconstants.RPMTAG_CACHEPKGPATH,
-    rpmconstants.RPMTAG_CACHEPKGSIZE, rpmconstants.RPMTAG_CACHEPKGMTIME,
-    rpmconstants.RPMTAG_NOSOURCE, rpmconstants.RPMTAG_NOPATCH,
-    rpmconstants.RPMTAG_INSTALLTIME]
-
 class RRpm:
     def __init__(self, rpm):
-        self.name = rpm[rpmconstants.RPMTAG_NAME]
-        self.version = rpm[rpmconstants.RPMTAG_VERSION]
-        self.release = rpm[rpmconstants.RPMTAG_RELEASE]
-        self.epoch = rpm.getOneNumber(rpmconstants.RPMTAG_EPOCH)
+        self.filename = rpm.filename
+        self.name = rpm["name"]
+        self.version = rpm["version"]
+        self.release = rpm["release"]
+        self.epoch = rpm["epoch"]
         if self.epoch:
+            self.epoch = self.epoch[0]
             evr = str(self.epoch) + ":" + self.version + "-" + self.release
         else:
             evr = self.version + "-" + self.release
-        self.dep = (self.name, 0, evr) # XXX: 0 is not correct
-        self.arch = rpm[rpmconstants.RPMTAG_ARCH]
+        self.dep = (self.name, rpmconstants.RPMSENSE_EQUAL, evr)
+        self.arch = rpm["arch"]
 
         self.provides = rpm.getProvides()
         self.requires = rpm.getRequires()
         self.obsoletes = rpm.getObsoletes()
         self.conflicts = rpm.getConflicts()
 
-        (self.pre, self.preprog) = rpm.getScript(rpmconstants.RPMTAG_PREIN,
-            rpmconstants.RPMTAG_PREINPROG)
-        (self.post, self.postprog) = rpm.getScript(rpmconstants.RPMTAG_POSTIN,
-            rpmconstants.RPMTAG_POSTINPROG)
-        (self.preun, self.preunprog) = rpm.getScript(rpmconstants.RPMTAG_PREUN,
-            rpmconstants.RPMTAG_PREUNPROG)
-        (self.postun, self.postunprog) = rpm.getScript( \
-            rpmconstants.RPMTAG_POSTUN, rpmconstants.RPMTAG_POSTUNPROG)
-        (self.verify, self.verifyprog) = rpm.getScript( \
-            rpmconstants.RPMTAG_VERIFYSCRIPT,
-            rpmconstants.RPMTAG_VERIFYSCRIPTPROG)
+        (self.pre, self.preprog) = rpm.getScript("prein", "preinprog")
+        (self.post, self.postprog) = rpm.getScript("postin", "postinprog")
+        (self.preun, self.preunprog) = rpm.getScript("preun", "preunprog")
+        (self.postun, self.postunprog) = rpm.getScript("postun", "postunprog")
+        (self.verify, self.verifyprog) = rpm.getScript("verifyscript",
+            "verifyscriptprog")
 
         self.triggers = rpm.getTriggers()
-        self.trigger = rpm.getItem(rpmconstants.RPMTAG_TRIGGERSCRIPTS)
-        self.triggerprog = rpm.getItem(rpmconstants.RPMTAG_TRIGGERSCRIPTPROG)
-        self.triggerindex = rpm.getItem(rpmconstants.RPMTAG_TRIGGERINDEX)
-        self.triggerin = rpm.getItem(rpmconstants.RPMTAG_TRIGGERIN)
-        self.triggerun = rpm.getItem(rpmconstants.RPMTAG_TRIGGERUN)
-        self.triggerpostun = rpm.getItem(rpmconstants.RPMTAG_TRIGGERPOSTUN)
+        self.triggerindex = rpm["triggerindex"]
+        self.trigger = rpm["triggerscripts"]
+        self.triggerprog = rpm["triggerscriptprog"]
+        if self.trigger != None:
+            if len(self.trigger) != len(self.triggerprog):
+                raise ValueError, "wrong trigger lengths"
+        # legacy:
+        self.triggerin = rpm["triggerin"]
+        self.triggerun = rpm["triggerun"]
+        self.triggerpostun = rpm["triggerpostun"]
 
         #self.uids = uids
         #self.gids = gids
 
-        for i in notthere:
-            if rpm.getItem(i) != None:
-                print "tag %d is still present" % i, rpm.getItem(i)
-        if rpm.getItem(rpmconstants.RPMTAG_PAYLOADFORMAT) != "cpio":
-            print "no cpio payload"
-        if rpm.getItem(rpmconstants.RPMTAG_PAYLOADCOMPRESSOR) != "gzip":
-            print "no cpio compressor"
-        if rpm.getItem(rpmconstants.RPMTAG_PAYLOADFLAGS) != "9":
-            print "no payload flags"
-        if rpm.getItem(rpmconstants.RPMTAG_OS) != "linux":
-            print "bad os"
-        if rpm.getItem(rpmconstants.RPMTAG_PACKAGER) not in ( \
+        if "-" in self.version:
+            self.printErr("version contains wrong char")
+        if rpm["payloadformat"] not in [None, "cpio"]:
+            self.printErr("wrong payload format")
+        if rpm["payloadcompressor"] not in [None, "gzip"]:
+            self.printErr("no gzip compressor: %s" % rpm["payloadcompressor"])
+        if rpm.legacy:
+          if rpm["payloadflags"] not in ["9"]:
+            self.printErr("no payload flags: %s" % rpm["payloadflags"])
+        if rpm["os"] not in ["Linux", "linux"]:
+            self.printErr("bad os: %s" % rpm["os"])
+        if rpm.legacy:
+          if rpm["packager"] not in (None, \
             "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>"):
-            print "unknown packager"
-        if rpm.getItem(rpmconstants.RPMTAG_VENDOR) not in ("Red Hat, Inc."):
-            print "unknown vendor"
-        if rpm.getItem(rpmconstants.RPMTAG_DISTRIBUTION) not in \
-            (None, "", "Red Hat Linux", "Red Hat FC-3", "Red Hat (FC-3)",
-            "Red Hat (RHEL-3)"):
-            print "unknown vendor"
-        if rpm.getItem(rpmconstants.RPMTAG_PREFIXES) not in (None, ["/usr"],
-            ["/var/named/chroot"], ["/usr/X11R6"], ["/usr/lib/qt-3.3"]):
-            print "unknown prefix"
-        if rpm.getItem(rpmconstants.RPMTAG_RHNPLATFORM) not in (None,
-            self.arch):
-            print "unknown arch"
-        if rpm.getItem(rpmconstants.RPMTAG_PLATFORM) not in ( \
-            None, "i386-redhat-linux-gnu", "i386-redhat-linux",
-            "noarch-redhat-linux-gnu", "i686-redhat-linux-gnu",
-            "i586-redhat-linux-gnu"):
-            print "unknown arch", rpm.getItem(rpmconstants.RPMTAG_PLATFORM)
+            self.printErr("unknown packager: %s" % rpm["packager"])
+          if rpm["vendor"] not in (None, "Red Hat, Inc."):
+            self.printErr("unknown vendor: %s" % rpm["vendor"])
+          if rpm["distribution"] not in (None, "Red Hat Linux", "Red Hat FC-3",
+            "Red Hat (FC-3)", "Red Hat (RHEL-3)", "Red Hat (FC-4)"):
+            self.printErr("unknown distribution: %s" % rpm["distribution"])
+        if rpm["rhnplatform"] not in (None, self.arch):
+            self.printErr("unknown arch for rhnplatform")
+        if rpm["platform"] not in (None, self.arch + "-redhat-linux-gnu",
+            self.arch + "-redhat-linux", "--target=${target_platform}",
+            self.arch + "-unknown-linux",
+            "--target=${TARGET_PLATFORM}", "--target=$TARGET_PLATFORM", ""):
+            self.printErr("unknown arch %s" % rpm["platform"])
+        if rpm["exclusiveos"] not in (None, ['Linux'], ['linux']):
+            self.printErr("unknown os %s" % rpm["exclusiveos"])
+        if rpm.legacy:
+          if rpm["buildarchs"] not in (None, ['noarch']):
+            self.printErr("bad buildarch: %s" % rpm["buildarchs"])
+        if rpm["excludearch"] != None:
+            for i in rpm["excludearch"]:
+                if i not in rpmconstants.possible_archs:
+                    self.printErr("new possible arch %s" % i)
+        if rpm["exclusivearch"] != None:
+            for i in rpm["exclusivearch"]:
+                if i not in rpmconstants.possible_archs:
+                    self.printErr("new possible arch %s" % i)
+
+    def printErr(self, err):
+        print "%s: %s" % (self.filename, err)
 
 
 def verifyRpm(filename, payload=None):
     """Read in a complete rpm and verify its integrity."""
-    rpm = ReadRpm(filename, 1)
-    rpm.readHeader()
+    rpm = ReadRpm(filename, 1, legacy=0)
+    if rpm.readHeader():
+        return None
     if payload:
         rpm.readPayload()
     return rpm
@@ -606,6 +536,7 @@ def showHelp():
     print
 
 def queryFormatUnescape(s):
+    import re
     # Hack to emulate %{name} but not %%{name} and expand escapes
     rpmre = re.compile(r'([^%])%\{(\w+)\}')
     s = re.sub(rpmre, r'\1%(\2)s', s)
@@ -643,19 +574,26 @@ def main(args):
         rpm = verifyRpm(a)
         sys.stdout.write(queryformat % rpm)
 
+def verifyAllRpms():
+    for a in sys.argv[1:]:
+        rpm = verifyRpm(a)
+        if rpm != None:
+            f = rpm["disturlxxx"]
+            if f:
+                print rpm.getFilename()
+                print f
+            rrpm = RRpm(rpm)
+
 if __name__ == "__main__":
     if None:
-        rpms = readHdlist("/home/hdlist")
+        rpms = readHdlist("/home/fedora/i386/Fedora/base/hdlist", 1)
         for rpm in rpms:
             print rpm.getFilename()
-        rpms = readHdlist("/home/hdlist2")
+        rpms = readHdlist("/home/fedora/i386/Fedora/base/hdlist2", 1)
         sys.exit(0)
-    if None:
-        for a in sys.argv[1:]:
-            if os.path.basename(a) == "reiserfs-utils-3.x.0f-1.src.rpm":
-                continue
-            rpm = verifyRpm(a)
-            rrpm = RRpm(rpm)
+    if 1:
+        #profile.run("verifyAllRpms()")
+        verifyAllRpms()
         sys.exit(0)
     main(sys.argv[1:])
 
