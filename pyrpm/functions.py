@@ -17,7 +17,7 @@
 #
 
 
-import os.path, tempfile, sys, string, types
+import os, os.path, tempfile, sys, string, types
 from config import *
 from cpio import *
 from base import *
@@ -367,13 +367,17 @@ def filterArchList(list, arch=None):
     # stage 1: filter packages which are not in compat arch
     if arch != None and arch != "noarch":
         error = 0
-        for pkg in list:
+        i = 0
+        while i < len(list):
+            pkg = list[i]
             if pkg["arch"] not in possible_archs:
                 error = 1
                 printError("%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
             if pkg["arch"] != arch and pkg["arch"] not in arch_compats[arch]:
-                error = 1
-                printError("%s: Architecture not compatible with machine %s" % (pkg.source, arch))
+                printWarning(0, "%s: Architecture not compatible with machine %s" % (pkg.source, arch))
+                list.pop(i)
+                continue
+            i += 1
         if error != 0:
             return -1
 
@@ -397,7 +401,7 @@ def filterArchList(list, arch=None):
             elif ret == 0:
                 printWarning(0, "%s was already added" % \
                                    pkg.getNEVRA())
-                list.remove(pkg)
+                list.pop(i)
             else:
                 i += 1
     del hash
@@ -430,7 +434,7 @@ def filterArchList(list, arch=None):
                 elif pkg["arch"] == r["arch"]:
                     printWarning(0, "%s was already added" % \
                                        pkg.getNEVRA())
-                    list.remove(pkg)
+                    list.pop(i) # remove 'pkg'
                     removed = 1
                 else:
                     j += 1
@@ -456,6 +460,26 @@ def normalizeList(list):
             hash[item] = 1
             i += 1
     return
+
+def getBuildArchList(list):
+    """Returns list of build architectures used in 'list' of packages"""
+    archs = []
+    for p in list:
+        a = p['arch']
+        if a=='noarch':
+            continue
+        if a not in archs:
+            archs.append(a)
+    return archs
+
+def listRpmDir(dirname):
+    """List directory like standard or.listdir, but returns only .rpm files"""
+    fls = os.listdir(dirname)
+    files = [] 
+    for f in fls:
+        if f[-4:]=='.rpm':
+            files.append(f)
+    return files
 
 def findPkgByName(pkgname, list):
     """Find a package by name in a given list. Name can contain version,

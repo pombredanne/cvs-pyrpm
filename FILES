@@ -15,6 +15,8 @@ pyrpm:		Package with current implementation divided in separate files
   +- package.py: RpmPackage class: Representation of rpm package, used
   |             everywhere
   +- resolver.py: RpmReslover class: Main class for depresolving and ordering
+  +- rpmdist.py: RpmDistribution, RpmDistributionCollection: Used for work with 
+		packages collections
   +- rpmlist.py: RpmList class: Main class for package storage
 pyrpmdb2rpmdb:	Script to convert a PyRPM DB to a RpmDB using rpm
 pyrpmdeps:	twoerner's depresolver using pyrpmlib
