@@ -455,7 +455,96 @@ def normalizeList(list):
             list.pop(i)
         else:
             hash[item] = 1
-        i += 1
+            i += 1
     return
+
+def findPkgByName(pkgname, list):
+    """Find a package by name in a given list. Name can contain version,
+release and arch"""
+    (epoch, name, version, release, arch) = envraSplit(pkgname)
+    # First check is against nvra as name
+    n = name
+    if version != None:
+        n += "-"+version
+    if release != None:
+        n += "-"+release
+    if arch != None:
+        n += "."+arch
+    for pkg in list: 
+        # If we have an epoch we need to check it
+        if epoch != None and pkg["epoch"][0] != epoch:
+            continue
+        nevra = pkg.getNEVRA()
+        if pkg["name"] == n:
+            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
+            return pkg
+    # Next check is against nvr as name, a as arch
+    n = name
+    if version != None:
+        n += "-"+version
+    if release != None:
+        n += "-"+release
+    for pkg in list:
+        # If we have an epoch we need to check it
+        if epoch != None and pkg["epoch"][0] != epoch:
+            continue
+        nevra = pkg.getNEVRA()
+        if pkg["name"] == n and pkg["arch"] == arch:
+            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
+            return pkg
+    # Next check is against nv as name, ra as version
+    n = name
+    if version != None:
+        n += "-"+version
+    v = ""
+    if release != None:
+        v += release
+    if arch != None:
+        v += "."+arch
+    for pkg in list:
+        # If we have an epoch we need to check it
+        if epoch != None and pkg["epoch"][0] != epoch:
+            continue
+        nevra = pkg.getNEVRA()
+        if pkg["name"] == n and pkg["version"] == v:
+            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
+            return pkg
+    # Next check is against nv as name, r as version, a as arch
+    n = name
+    if version != None:
+        n += "-"+version
+    for pkg in list:
+        # If we have an epoch we need to check it
+        if epoch != None and pkg["epoch"][0] != epoch:
+            continue
+        nevra = pkg.getNEVRA()
+        if pkg["name"] == n and pkg["version"] == release and pkg["arch"] == arch:
+            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
+            return pkg
+    # Next check is against n as name, v as version, ra as release
+    r = ""
+    if release != None:
+        r = release
+    if arch != None:
+        r += "-"+arch
+    for pkg in list:
+        # If we have an epoch we need to check it
+        if epoch != None and pkg["epoch"][0] != epoch:
+            continue
+        nevra = pkg.getNEVRA()
+        if pkg["name"] == name and pkg["version"] == version and pkg["release"] == r:
+            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
+            return pkg
+    # Next check is against n as name, v as version, r as release, a as arch
+    for pkg in list:
+        # If we have an epoch we need to check it
+        if epoch != None and pkg["epoch"][0] != epoch:
+            continue
+        nevra = pkg.getNEVRA()
+        if pkg["name"] == name and pkg["version"] == version and pkg["release"] == release and pkg["arch"] == arch:
+            printInfo(3, "Adding %s to package to be removed.\n" % nevra)
+            return pkg
+    # No matching package found
+    return None
 
 # vim:ts=4:sw=4:showmatch:expandtab

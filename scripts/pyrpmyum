@@ -11,23 +11,16 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
+# Copyright 2004 Red Hat, Inc.
 #
 # Author: Phil Knirsch
 #
 
 import sys, os, getopt
-
-PYRPMDIR = "/usr/local/share/pyrpm"
-
-if not PYRPMDIR in sys.path:
-    sys.path.append(PYRPMDIR)
-
-
-from pyrpm import *
+from pyrpmlib import *
 
 def usage():
-    print "INSTALLING, UPGRADING, AND REMOVING PACKAGES:"
+    print "INSTALLING, UPGRADING, AND REMOVING PACKAGES using REPOS:"
     print "    pyrpminstall {-i|--install} [install-options] PACKAGE_FILE ..."
     print "    pyrpminstall {-U|--upgrade} [install-options] PACKAGE_FILE ..."
     print "    pyrpminstall {-F|--freshen} [install-options] PACKAGE_FILE ..."
@@ -37,6 +30,7 @@ def usage():
     print "    [-?, --help] [--version]"
     print "    [--quiet] [-v, --verbose] [-w, warning] [-d, --debug]"
     print "    [--dbpath DIRECTORY] [-r, --root DIRECTORY]"
+    print "    [--repo DIRECTORY]"
     print
     print "install-options:"
     print "    [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]"
@@ -46,7 +40,7 @@ def usage():
 
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:", ["install", "upgrade", "freshen", "erase", "help", "verbose", "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=", "force", "ignoresize", "ignorearch", "justdb", "nodeps", "nodigest", "nosignature", "noorder", "noscripts", "notriggers", "oldpackage", "test"])
+    opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:", ["install", "upgrade", "freshen", "erase", "help", "verbose", "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=", "repo=", "force", "ignoresize", "ignorearch", "justdb", "nodeps", "nodigest", "nosignature", "noorder", "noscripts", "notriggers", "oldpackage", "test"])
 except getopt.error, e:
     print "Error parsing command list arguments: %s" % e
     usage()
@@ -57,6 +51,7 @@ rpmconfig.operation = None
 rpmconfig.verbose_level = 0
 rpmconfig.warning_level = 0
 rpmconfig.debug_level = 0
+repos = []
 
 for (opt, val) in opts:
     if opt in ["-i", "--install"]:
@@ -94,6 +89,17 @@ for (opt, val) in opts:
         rpmconfig.debug_level += 1
     elif opt in ["-r", "--root"]:
         rpmconfig.buildroot = val
+    elif opt == "--repo":
+        resolver = RpmResolver([], RpmResolver.OP_INSTALL)
+        filenames = os.listdir(val)
+        for f in filenames:
+            pkg = RpmPackage(val+"/"+f)
+            pkg.open()
+            pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
+            pkg.close()
+            ret = resolver.append(pkg)
+        repos.append(resolver)
+        del resolver
     elif opt == "--quiet":
         rpmconfig.debug_level = 0
         rpmconfig.warning_level = 0
@@ -140,7 +146,63 @@ if not args:
     usage()
     sys.exit(1)
 
+installed = []
+if rpmconfig.buildroot != None:
+    pydb = RpmPyDB(rpmconfig.buildroot+rpmconfig.dbpath)
+else:
+    pydb = RpmPyDB(rpmconfig.dbpath)
+installed = pydb.getPkgList().values()
+if installed == None:
+    installed = []
+
+del pydb
+opresolver = RpmResolver(installed, rpmconfig.operation)
+
+for f in args:
+    if os.path.isfile(f) and f.endswith(".rpm"):
+        pkg = RpmPackage(f)
+        pkg.open()
+        pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
+        pkg.close()
+    else:
+        for repo in repos:
+            pkg = findPkgByName(f, repo.appended)
+            if pkg != None:
+                break
+        if pkg == None:
+            printError("Couldn't find package %s" % f)
+            sys.exit(1)
+    ret = opresolver.append(pkg)
+
+unresolved = opresolver.getUnresolvedDependencies()
+iter = 1
+while len(unresolved) > 0:
+    print "Dependency iteration "+str(iter)
+    iter += 1
+    respkglist = []
+    for pkg, deplist in unresolved:
+        printInfo(1, "Resolving dependencies for "+pkg.getNEVRA()+"\n")
+        for dep in deplist:
+            for repo in repos:
+                res = repo.searchDependency(dep)
+                for pkg in res:
+                    respkglist.append(pkg)
+    normalizeList(respkglist)
+    filterArchList(respkglist)
+    if len(respkglist) == 0:
+        for pkg, deplist in unresolved:
+            printInfo(1, "Unresolved dependencies for "+pkg.getNEVRA()+"\n")
+            for dep in deplist:
+                printInfo(1, "\t" + depString(dep)+"\n")
+        sys.exit(1)
+    for pkg in respkglist:
+        opresolver.append(pkg)
+    unresolved = opresolver.getUnresolvedDependencies()
+
+appended = opresolver.appended
+del opresolver
+del repos
 control = RpmController()
-control.handleFiles(args, rpmconfig.operation, rpmconfig.dbpath, rpmconfig.buildroot)
+control.handlePkgs(appended, rpmconfig.operation, rpmconfig.dbpath, rpmconfig.buildroot)
 
 # vim:ts=4:sw=4:showmatch:expandtab

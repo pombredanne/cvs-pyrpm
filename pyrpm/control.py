@@ -79,18 +79,14 @@ class RpmController:
         self.rpms = []
         self.installed = []
 
-    def handlePkgs(self, operation, pkglist, db="/var/lib/pyrpm", buildroot=None):
+    def handlePkgs(self, pkglist, operation, db="/var/lib/pyrpm", buildroot=None):
         self.operation = operation
         self.db = db
         self.buildroot = buildroot
         if not self.__readDB(db):
             return 0
-        if operation == RpmResolver.OP_ERASE:
-            for filename in pkglist:
-                self.erasePkg(filename)
-        else: 
-            for filename in pkglist:
-                self.appendPkg(filename)
+        for pkg in pkglist:
+            self.rpms.append(pkg)
         if len(self.rpms) == 0:
             printInfo(0, "Nothing to do.\n")
             sys.exit(0)
@@ -98,17 +94,24 @@ class RpmController:
             return 0
         return 1
 
-    def installPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        return self.handlePkgs(RpmResolver.OP_INSTALL, pkglist, db, buildroot)
-
-    def updatePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        return self.handlePkgs(RpmResolver.OP_UPDATE, pkglist, db, buildroot)
-
-    def freshenPkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        return self.handlePkgs(RpmResolver.OP_FRESHEN, pkglist, db, buildroot)
-
-    def erasePkgs(self, pkglist, db="/var/lib/pyrpm", buildroot=None):
-        return self.handlePkgs(RpmResolver.OP_ERASE, pkglist, db, buildroot)
+    def handleFiles(self, filelist, operation, db="/var/lib/pyrpm", buildroot=None):
+        self.operation = operation
+        self.db = db
+        self.buildroot = buildroot
+        if not self.__readDB(db):
+            return 0
+        if operation == RpmResolver.OP_ERASE:
+            for filename in filelist:
+                self.eraseFile(filename)
+        else: 
+            for filename in filelist:
+                self.appendFile(filename)
+        if len(self.rpms) == 0:
+            printInfo(0, "Nothing to do.\n")
+            sys.exit(0)
+        if not self.run():
+            return 0
+        return 1
 
     def run(self):
         if not self.__preprocess():
@@ -187,112 +190,25 @@ class RpmController:
                         self.__erasePkgFromDB(pkg)
                     pkg.close()
                     del pkg
-                    gc.collect()
                     printInfo(0, "\n")
             return 1
 
-    def appendPkg(self, file):
+    def appendFile(self, file):
         pkg = package.RpmPackage(file)
         pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
         self.rpms.append(pkg)
         pkg.close()
         return 1
 
-    def erasePkg(self, file):
+    def eraseFile(self, file):
         if self.pydb == None:
             if not self.__readDB():
                 return 0
-        (epoch, name, version, release, arch) = envraSplit(file)
-        # First check is against nvra as name
-        n = name
-        if version != None:
-            n += "-"+version
-        if release != None:
-            n += "-"+release
-        if arch != None:
-            n += "."+arch
-        for pkg in self.installed:
-            # If we have an epoch we need to check it
-            if epoch != None and pkg["epoch"][0] != epoch:
-                continue
-            nevra = pkg.getNEVRA()
-            if pkg["name"] == n:
-                printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.rpms.append(pkg)
-                return 1
-        # Next check is against nvr as name, a as arch
-        n = name
-        if version != None:
-            n += "-"+version
-        if release != None:
-            n += "-"+release
-        for pkg in self.installed:
-            # If we have an epoch we need to check it
-            if epoch != None and pkg["epoch"][0] != epoch:
-                continue
-            nevra = pkg.getNEVRA()
-            if pkg["name"] == n and pkg["arch"] == arch:
-                printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.rpms.append(pkg)
-                return 1
-        # Next check is against nv as name, ra as version
-        n = name
-        if version != None:
-            n += "-"+version
-        v = ""
-        if release != None:
-            v += release
-        if arch != None:
-            v += "."+arch
-        for pkg in self.installed:
-            # If we have an epoch we need to check it
-            if epoch != None and pkg["epoch"][0] != epoch:
-                continue
-            nevra = pkg.getNEVRA()
-            if pkg["name"] == n and pkg["version"] == v:
-                printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.rpms.append(pkg)
-                return 1
-        # Next check is against nv as name, r as version, a as arch
-        n = name
-        if version != None:
-            n += "-"+version
-        for pkg in self.installed:
-            # If we have an epoch we need to check it
-            if epoch != None and pkg["epoch"][0] != epoch:
-                continue
-            nevra = pkg.getNEVRA()
-            if pkg["name"] == n and pkg["version"] == release and pkg["arch"] == arch:
-                printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.rpms.append(pkg)
-                return 1
-        # Next check is against n as name, v as version, ra as release
-        r = ""
-        if release != None:
-            r = release
-        if arch != None:
-            r += "-"+arch
-        for pkg in self.installed:
-            # If we have an epoch we need to check it
-            if epoch != None and pkg["epoch"][0] != epoch:
-                continue
-            nevra = pkg.getNEVRA()
-            if pkg["name"] == name and pkg["version"] == version and pkg["release"] == r:
-                printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.rpms.append(pkg)
-                return 1
-        # Next check is against n as name, v as version, r as release, a as arch
-        for pkg in self.installed:
-            # If we have an epoch we need to check it
-            if epoch != None and pkg["epoch"][0] != epoch:
-                continue
-            nevra = pkg.getNEVRA()
-            if pkg["name"] == name and pkg["version"] == version and pkg["release"] == release and pkg["arch"] == arch:
-                printInfo(3, "Adding %s to package to be removed.\n" % nevra)
-                self.rpms.append(pkg)
-                return 1
-        # No matching package found
-        return 0
+        pkg = findPkgByName(file, self.installed)
+        if pkg == None:
+            return 0
+        self.rpms.append(pkg)
+        return 1
 
     def __readDB(self, db="/var/lib/pyrpm"):
         if self.db == None:

@@ -1,4 +1,4 @@
-scripts = pyrpmdb2rpmdb  pyrpminstall  pyrpmspecinfo  rpmdb2pyrpmdb
+scripts = pyrpmdb2rpmdb  pyrpminstall pyrpmspecinfo pyrpmyum rpmdb2pyrpmdb
 EXTRA_DIST = $(scripts)
 bin_SCRIPTS = $(scripts)
 
