@@ -21,6 +21,7 @@
 import struct, rpmconstants, cpio, os.path, re, sys, getopt, gzip, cStringIO
 
 # in verify mode only allow newer rpm packages
+# XXX: this could go into non-strict mode in case of non-RH packaged rpm
 strict = 1
 
 # optional keys in the sig header
@@ -265,7 +266,7 @@ class ReadRpm:
             #        break
         if strict and self.verify and self.cpiosize != len(cpiodata):
             self.raiseErr("cpiosize")
-        if None:
+        if 1:
             c = cpio.CPIOFile(cStringIO.StringIO(cpiodata))
             try:
                 c.read()
@@ -421,6 +422,7 @@ if __name__ == "__main__":
             if os.path.basename(a) == "reiserfs-utils-3.x.0f-1.src.rpm":
                 continue
             rpm = verifyRpm(a)
+        sys.exit(0)
     main(sys.argv[1:])
 
 # vim:ts=4:sw=4:showmatch:expandtab
