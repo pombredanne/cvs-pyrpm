@@ -11,22 +11,28 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004 Red Hat, Inc.
+# Copyright 2005 Red Hat, Inc.
 #
-# Author: Phil Knirsch, Thomas Woerner, Florian La Roche
+# Author: Harald Hoyer <harald@redhat.com>
 #
 
-# Pyrpm __init__ autoloader
-from base import *
-from functions import *
-from cpio import *
-from config import *
-from control import *
-from io import *
-from package import *
-from resolver import *
-from hashlist import *
-from rpmlist import *
-from orderer import *
+import sys
+import os
 
-# vim:ts=4:sw=4:showmatch:expandtab
+_files = map(lambda v: v[:-3], filter(lambda v: v[-3:] == ".py" and \
+                                      v != "__init__.py" and \
+                                      v[0] != '.', \
+                                      os.listdir(__path__[0])))
+
+import locale
+locale.setlocale(locale.LC_ALL, "C")
+_files.sort()
+locale.setlocale(locale.LC_ALL, "")
+
+for _i in _files:
+    _cmd = "from " + _i + " import *"
+    exec _cmd
+
+del _i
+del _files
+del _cmd
