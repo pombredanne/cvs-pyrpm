@@ -194,6 +194,14 @@ class RpmResolver(RpmList):
             if not pkg in self.obsoletes:
                 self.obsoletes[pkg] = [ ]
             self.obsoletes[pkg].append(obsolete_pkg)
+        else:
+            if obsolete_pkg in self.obsoletes:
+                if pkg in self.obsoletes:
+                    self.obsoletes[pkg].extend(self.obsoletes[obsolete_pkg])
+                    normalizeList(self.obsoletes[pkg])
+                else:
+                    self.obsoletes[pkg] = self.obsoletes[obsolete_pkg]
+                del self.obsoletes[obsolete_pkg]
         return self._erase(obsolete_pkg)
     # ----
 
@@ -205,9 +213,17 @@ class RpmResolver(RpmList):
         elif update_pkg in self.updates:
             if pkg in self.updates:
                 self.updates[pkg].extend(self.updates[update_pkg])
+                normalizeList(self.updates[pkg])
             else:
                 self.updates[pkg] = self.updates[update_pkg]
             del self.updates[update_pkg]
+        if update_pkg in self.obsoletes:
+            if pkg in self.obsoletes:
+                self.obsoletes[pkg].extend(self.obsoletes[update_pkg])
+                normalizeList(self.obsoletes[pkg])
+            else:
+                self.obsoletes[pkg] = self.obsoletes[update_pkg]
+            del self.obsoletes[update_pkg]
         return RpmList._pkgUpdate(self, pkg, update_pkg)
     # ----
 
