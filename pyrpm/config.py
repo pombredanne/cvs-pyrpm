@@ -27,7 +27,7 @@ class RpmConfig:
         self.debug_level = 0
         self.warning_level = 0
         self.verbose_level = 0
-        self.hash = 0
+        self.printhash = 0
         self.buildroot = None
         self.dbpath = "/var/lib/pyrpm/"
         self.force = 0

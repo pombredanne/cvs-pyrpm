@@ -175,7 +175,7 @@ class RpmPackage(RpmData):
                     % self.getNEVRA())
         if not self.__extract(db):
             return 0
-        if rpmconfig.hash:
+        if rpmconfig.printhash:
             printInfo(0, "\n")
         else:
             printInfo(1, "\n")
@@ -205,12 +205,12 @@ class RpmPackage(RpmData):
         nfiles = len(files)
         n = 0
         pos = 0
-        if rpmconfig.hash:
+        if rpmconfig.printhash:
             printInfo(0, "\r\t\t\t\t ")
         for i in xrange(len(files)-1, -1, -1):
             n += 1
             npos = int(n*45/nfiles)
-            if pos < npos and rpmconfig.hash:
+            if pos < npos and rpmconfig.printhash:
                 printInfo(0, "#"*(npos-pos))
             pos = npos
             f = files[i]
@@ -230,7 +230,7 @@ class RpmPackage(RpmData):
                 except:
                     printWarning(1, "Couldn't remove file %s from pkg %s" \
                         % (f, self.source))
-        if rpmconfig.hash:
+        if rpmconfig.printhash:
             printInfo(0, "\n")
         else:
             printInfo(1, "\n")
@@ -293,12 +293,12 @@ class RpmPackage(RpmData):
         nfiles = len(files)
         n = 0
         pos = 0
-        if rpmconfig.hash:
+        if rpmconfig.printhash:
             printInfo(0, "\r\t\t\t\t ")
         while filename != None and filename != "EOF" :
             n += 1
             npos = int(n*45/nfiles)
-            if pos < npos and rpmconfig.hash:
+            if pos < npos and rpmconfig.printhash:
                 printInfo(0, "#"*(npos-pos))
             pos = npos
             if self.isSourceRPM() and os.path.dirname(filename)=='/':
@@ -322,7 +322,7 @@ class RpmPackage(RpmData):
             (filename, filerawdata) = self.io.read()
         if nfiles == 0:
             nfiles = 1
-        if rpmconfig.hash:
+        if rpmconfig.printhash:
             printInfo(0, "#"*(45-int(45*n/nfiles)))
         return self.__handleRemainingHardlinks()
 

@@ -51,9 +51,6 @@ if __name__ == '__main__':
     sys.exit(1)
 
   rpmconfig.operation = None
-  rpmconfig.verbose_level = 0
-  rpmconfig.warning_level = 0
-  rpmconfig.debug_level = 0
 
   for (opt, val) in opts:
     if opt in ["-i", "--install"]:
@@ -95,7 +92,7 @@ if __name__ == '__main__':
         rpmconfig.debug_level = 0
         rpmconfig.warning_level = 0
         rpmconfig.verbose_level = 0
-        rpmconfig.hash = 0
+        rpmconfig.printhash = 0
     elif opt == "--version":
         print "pyrpminstall 0.1.0"
         sys.exit(0)
@@ -104,7 +101,7 @@ if __name__ == '__main__':
     elif opt == "--force":
         rpmconfig.force = 1
     elif opt in ["-h", "--hash"]:
-        rpmconfig.hash = 1
+        rpmconfig.printhash = 1
     elif opt == "--oldpackage":
         rpmconfig.oldpackage = 1
     elif opt == "--justdb":

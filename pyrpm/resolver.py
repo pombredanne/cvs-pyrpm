@@ -272,7 +272,6 @@ class RpmResolver(RpmList):
                 printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(resolved) > 0 and rpmconfig.debug_level > 1:
-                    # do this only in debug level > 1
                     printDebug(2, "%s: resolved dependencies:" % r.getNEVRA())
                     for (u, s) in resolved:
                         s2 = ""

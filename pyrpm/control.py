@@ -186,7 +186,7 @@ class RpmController:
                     (op, pkg) = subop.pop(0)
                     i += 1
                     progress = "[%d/%d]" % (i, numops)
-                    if rpmconfig.hash:
+                    if rpmconfig.printhash:
                         printInfo(0, "%s %s" % (progress, pkg.getNEVRA()))
                     else:
                         printInfo(1, "%s %s" % (progress, pkg.getNEVRA()))
