@@ -38,9 +38,7 @@ class HashList:
     def __getitem__(self, key):
         if isinstance(key, types.IntType):
             return (self.list[key], self.hash[self.list[key]])
-        if self.hash.has_key(key):
-            return self.hash[key] # return value only
-#        raise IndexError, "Indexing error"
+        return self.hash.get(key) # return value only
         
     def __setitem__(self, key, value):
         if not self.hash.has_key(key):

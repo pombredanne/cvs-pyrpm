@@ -411,8 +411,7 @@ class RpmResolver:
                                                self.instlist.obsoletes[r],
                                                self.OP_ERASE)
                         ops = resolver.resolve()
-                        for i in xrange(len(ops)-1, -1, -1):
-                            operations.append((self.OP_ERASE, ops[i]))
+                        operations.extend(ops)
                         del resolver
         return operations
 
