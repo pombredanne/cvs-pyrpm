@@ -114,6 +114,7 @@ if __name__ == '__main__':
         rpmconfig.notriggers = 1
     elif opt == "--test":
         rpmconfig.test = 1
+        rpmconfig.timer = 1
         rpmconfig.noscripts = 1
         rpmconfig.notriggers = 1
     elif opt == "--ignoresize":
