@@ -1,4 +1,6 @@
 *.pyc
+*.tar.gz
+*.tar.bz2
 Makefile.in
 Makefile
 aclocal.m4
@@ -6,6 +8,7 @@ autom4te.cache
 config.log
 config.status
 configure
-*.gz
-*.bz2
+install-sh
+missing
+py-compile
 pyrpm.spec
