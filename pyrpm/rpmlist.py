@@ -20,182 +20,154 @@
 from hashlist import *
 from functions import *
 
-class _Provides:
-    """ enable search of provides """
-    """ provides of packages can be added and removed by package """
-    def __init__(self):
-        self.clear()
-    def clear(self):
-        self.p_provide = { }
-    def append(self, name, flag, version, rpm):
-        if not self.p_provide.has_key(name):
-            self.p_provide[name] = [ ]
-        self.p_provide[name].append((flag, version, rpm))
-    def remove(self, name, flag, version, rpm):
-        if not self.p_provide.has_key(name):
-            return
-        for p in self.p_provide[name]:
-            if p[0] == flag and p[1] == version and p[2] == rpm:
-                self.p_provide[name].remove(p)
-        if len(self.p_provide[name]) == 0:
-            del self.p_provide[name]
-    def add_rpm(self, rpm):
-        for p in rpm["provides"]:
-            self.append(p[0], p[1], p[2], rpm)
-    def remove_rpm(self, rpm):
-        for p in rpm["provides"]:
-            self.remove(p[0], p[1], p[2], rpm)
-    def search(self, name, flag, version):
-        if not self.p_provide.has_key(name):
-            return [ ]
-
-        ret = [ ]
-        for p in self.p_provide[name]:
-            if version == "":
-                ret.append(p[2])
-            else:
-                if evrCompare(p[1], flag, version) == 1 and \
-                       evrCompare(p[1], p[0], version) == 1:
-                    ret.append(p[2])
-                if evrCompare(evrString(p[2]["epoch"], p[2]["version"],
-                                        p[2]["release"]), flag, version) == 1:
-                    ret.append(p[2])
-        return ret
-
-# ----------------------------------------------------------------------------
-
-class _Filenames:
-    """ enable search of filenames """
-    """ filenames of packages can be added and removed by package """
-    def __init__(self):
-        self.clear()
-    def clear(self):
-        self.provide = { }
-        self.multi = [ ]
-    def append(self, name, rpm):
-        if not self.provide.has_key(name):
-            self.provide[name] = [ ]
-        else:
-            if len(self.provide[name]) == 1:
-                self.multi.append(name)
-        self.provide[name].append(rpm)
-    def remove(self, name, rpm):
-        if not self.provide.has_key(name):
-            return
-        if len(self.provide[name]) == 2:
-            self.multi.remove(name)
-        if rpm in self.provide[name]:
-            self.provide[name].remove(rpm)
-        if len(self.provide[name]) == 0:
-            del self.provide[name]
-    def add_rpm(self, rpm):
-        for f in rpm["filenames"]:
-            self.append(f, rpm)
-    def remove_rpm(self, rpm):
-        for f in rpm["filenames"]:
-            self.remove(f, rpm)
-    def search(self, name):
-        if not self.provide.has_key(name):
-            return [ ]
-        return self.provide[name]
-
-# ----------------------------------------------------------------------------
-
 class RpmList:
-    def __init__(self):
+    OP_INSTALL = "install"
+    OP_UPDATE = "update"
+    OP_ERASE = "erase"
+    OP_FRESHEN = "freshen"
+
+    OK = 1
+    ALREADY_INSTALLED = -1
+    OLD_PACKAGE = -2
+    NOT_INSTALLED = -3
+    UPDATE_FAILED = -4
+    ALREADY_ADDED = -5
+    # ----
+
+    def __init__(self, installed, operation):
         self.clear()
+        for r in installed:
+            self._install(r)
+            if not self.installed.has_key(r["name"]):
+                self.installed[r["name"]] = [ ]
+            self.installed[r["name"]].append(r)
+        self.operation = operation
+    # ----
+
     def clear(self):
         self.list = HashList()
-        self.obsoletes = HashList()
-        self.provides = _Provides()
-        self.filenames = _Filenames()
+        self.installed = HashList()
+        self.appended = [ ]
+    # ----
+
     def __len__(self):
         return len(self.list)
+    # ----
+
     def __getitem__(self, i):
         return self.list[i][1] # return rpm list
-    def install(self, pkg):
-#        key = "%s.%s" % (pkg["name"], pkg["arch"])
+    # ----
+
+    def append(self, pkg):
+        if self.operation == self.OP_INSTALL:
+            ret = self._install(pkg)
+            if ret != self.OK:  return ret
+        elif self.operation == self.OP_UPDATE:
+            ret = self._update(pkg)
+            if ret != self.OK:  return ret
+        elif self.operation == self.OP_FRESHEN:
+            # pkg in self.installed
+            if not self.installed.has_key(pkg["name"]):
+                return self.NOT_INSTALLED
+            found = 0
+            for r in self.installed[pkg["name"]]:
+                if pkg["arch"] == r["arch"] or \
+                       buildarchtranslate[pkg["arch"]] == \
+                       buildarchtranslate[r["arch"]]:
+                    found = 1
+                    break
+            if found == 0:
+                return self.NOT_INSTALLED
+            ret = self._update(pkg)
+            if ret != self.OK:  return ret
+        else: # self.operation == self.OP_ERASE:
+            if self._erase(pkg) != 1:
+                return NOT_INSTALLED
+            self._pkgErase(pkg)
+        self.appended.append(pkg)
+        return self.OK
+    # ----
+
+    def _install(self, pkg):
         key = pkg["name"]
+        if self.installed.has_key(key):
+            for r in self.installed[key]:
+                if r == pkg or \
+                   (r.getNEVR() == pkg.getNEVR() and \
+                    (pkg["arch"] == r["arch"] or \
+                     buildarchtranslate[pkg["arch"]] == \
+                     buildarchtranslate[r["arch"]])):
+                    printWarning(0, "%s: %s is already installed" % \
+                                 (pkg.getNEVRA(), r.getNEVRA()))
+                    return self.ALREADY_INSTALLED
         if not self.list.has_key(key):
             self.list[key] = [ ]
-        for r in self.list[key]:
-            if str(pkg) == str(r):
-                printDebug(1, "Package %s is already in list" % \
-                           r.getNEVRA())
-                return 0
         self.list[key].append(pkg)
-        self.provides.add_rpm(pkg)
-        self.filenames.add_rpm(pkg)
-        return 1
-    def update(self, pkg):
-#        key = "%s.%s" % (pkg["name"], pkg["arch"])
+
+        return self.OK
+    # ----
+
+    def _update(self, pkg, oldpackages=0):
         key = pkg["name"]
+
+        ret = self._install(pkg)
+        if ret != self.OK:  return ret
+
         if self.list.has_key(key):
-            rpms = self.list[key]
-            newer = 1
-            for r in rpms:
-                if str(pkg) == str(r):
-                    printDebug(1, "Package %s is already in list" % \
-                               r.getNEVRA())
-                    return 0
-                # TODO: disable this for old packages (AS 2.1)
-                if labelCompare((pkg["epoch"], pkg["version"], pkg["release"]),
-                                (r["epoch"], r["version"], r["release"])) \
-                                < 0:
-                    newer = 0
-            if newer == 0:
-                printDebug(1, "%s: A newer package is already in list" % \
-                           r.getNEVRA())
-                return 0
             i = 0
-            while i < len(rpms):
-                self.erase(rpms[0])
-                i += 1
-        if self.install(pkg) == 1:
-            # remove obsolete packages
-            for u in pkg["obsoletes"]:
-                s = self.searchDependency(u)
-                for r2 in s:
-                    if r2 != pkg and r2.getNEVR() != pkg.getNEVR():
-                        # package is not the same and 
-                        printDebug(1, "%s obsoletes %s, removing %s" % \
-                                   (pkg.getNEVRA(), r2.getNEVRA(), \
-                                    r2.getNEVRA()))
-                        self.obsolete(pkg, r2)
-            return 1
-        return 0
-    def erase(self, pkg):
-#        key = "%s.%s" % (pkg["name"], pkg["arch"])
+            while self.list[key] != None and i < len(self.list[key]):
+                r = self.list[key][i]
+                if r != pkg and (pkg["arch"] == r["arch"] or \
+                                 buildarchtranslate[pkg["arch"]] == \
+                                 buildarchtranslate[r["arch"]]):
+                        if self._pkgUpdate(pkg, r) != self.OK:
+                            return self.UPDATE_FAILED
+                else:
+                    i += 1
+
+        return self.OK
+    # ----
+
+    def _erase(self, pkg):
         key = pkg["name"]
-        if self.list.has_key(key):
-            found = 0
-            for r in self.list[key]:
-                if str(r) == str(pkg):
-                    pkg = r
-                    found = 1
-            if found == 0:
-                printDebug(1, "%s: Package is not in list." % \
-                           pkg.getNEVRA())
-                return 0
-            self.provides.remove_rpm(pkg)
-            self.filenames.remove_rpm(pkg)
-            self.list[key].remove(pkg)
-            if len(self.list[key]) == 0:
-                del self.list[key]
+        if not self.list.has_key(key) or pkg not in self.list[key]:
+            return self.NOT_INSTALLED
+        self.list[key].remove(pkg)
+        if len(self.list[key]) == 0:
+            del self.list[key]
+        if pkg in self.appended:
+            self.appended.remove(pkg)
+        return 1
+    # ----
+
+    def _pkgUpdate(self, pkg, update_pkg):
+        return self._erase(update_pkg)
+    # ----
+
+    def _pkgErase(self, pkg):
+        return self.OK
+    # ----
+
+    def isInstalled(self, pkg):
+        if self.installed.has_key(pkg["name"]) and \
+               pkg in self.installed[pkg["name"]]:
             return 1
-        printDebug(1, "%s: Package is not in list." % pkg.getNEVRA())
         return 0
-    def obsolete(self, pkg, obsolete_pkg):
-        if not pkg in self.obsoletes:
-            self.obsoletes[pkg] = [ ]
-        self.obsoletes[pkg].append(obsolete_pkg)
-        return self.erase(obsolete_pkg)
-    def searchDependency(self, dep):
-        (name, flag, version) = dep
-        s = self.provides.search(name, flag, version)
-        
-        if name[0] == '/': # all filenames are beginning with a '/'
-            s += self.filenames.search(name)
-        return s
+    # ----
+
+    def getList(self):
+        list = [ ]
+        for i in xrange(len(self)):
+            rlist = self[i]
+            for r in rlist:
+                list.append(r)
+        return list
+    # ----
+
+    def p(self):
+        for i in xrange(len(self)):
+            rlist = self[i]
+            for r in rlist:
+                print "\t%s" % r.getNEVRA()
 
 # vim:ts=4:sw=4:showmatch:expandtab

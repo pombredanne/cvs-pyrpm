@@ -22,224 +22,259 @@
 """
 
 import string
-from hashlist import *
 from rpmlist import *
 
-# ----------------------------------------------------------------------------
-
-def _genOperator(flag):
-    """ generate readable operator """
-    op = ""
-    if flag & RPMSENSE_LESS:
-        op = "<"
-    if flag & RPMSENSE_GREATER:
-        op += ">"
-    if flag & RPMSENSE_EQUAL:
-        op += "="
-    return op
-
-# ----
-
-def _genDepString((name, flag, version)):
-    if version == "":
-        return name
-    return "%s %s %s" % (name, _genOperator(flag), version)
-
-# ----
-
-def _normalize(list):
-    """ normalize list """
-    if len(list) < 2:
-        return
-    hash = { }
-    i = 0
-    while i < len(list):
-        item = list[i]
-        if hash.has_key(item):
-            list.pop(i)
-        else:
-            hash[item] = 1
-        i += 1
-    return
 
 # ----------------------------------------------------------------------------
 
-class _Relation:
-    """ Pre and post relations for a package """
+class ProvidesList:
+    """ enable search of provides """
+    """ provides of packages can be added and removed by package """
     def __init__(self):
-        self.pre = HashList()
-        self._post = HashList()
-    def __str__(self):
-        return "%d %d" % (len(self.pre), len(self._post))       
+        self.clear()
+        
+    def clear(self):
+        self.provide = { }
 
-# ----
+    def append(self, name, flag, version, rpm):
+        if not self.provide.has_key(name):
+            self.provide[name] = [ ]
+        self.provide[name].append((flag, version, rpm))
 
-class _Relations:
-    """ relations list for packages """
-    def __init__(self):
-        self.list = HashList()
-    def __len__(self):
-        return len(self.list)
-    def __getitem__(self, key):
-        return self.list[key]
-    def append(self, pkg, pre, flag):
-        if pre == pkg:
+    def remove(self, name, flag, version, rpm):
+        if not self.provide.has_key(name):
             return
-        if not pkg in self.list:
-            self.list[pkg] = _Relation()
-        if pre == None:
-            return # we have to do nothing more for empty relations
-        if pre not in self.list[pkg].pre:
-            self.list[pkg].pre[pre] = flag
-        else:
-            # prefer hard requirements, do not overwrite with soft req
-            if self.list[pkg].pre[pre] == 1 and flag == 2:
-                self.list[pkg].pre[pre] = flag
-        for (p,f) in self.list[pkg].pre:
-            if p in self.list:
-                if pkg not in self.list[p]._post:
-                    self.list[p]._post[pkg] = 1
+        for p in self.provide[name]:
+            if p[0] == flag and p[1] == version and p[2] == rpm:
+                self.provide[name].remove(p)
+        if len(self.provide[name]) == 0:
+            del self.provide[name]
+
+    def addPkg(self, rpm):
+        for p in rpm["provides"]:
+            self.append(p[0], p[1], p[2], rpm)
+
+    def removePkg(self, rpm):
+        for p in rpm["provides"]:
+            self.remove(p[0], p[1], p[2], rpm)
+
+    def search(self, name, flag, version, arch=None):
+        if not self.provide.has_key(name):
+            return [ ]
+
+        ret = [ ]
+        for p in self.provide[name]:
+            if version == "":
+                ret.append(p[2])
             else:
-                self.list[p] = _Relation()
-                self.list[p]._post[pkg] = 1
-    def remove(self, pkg):
-        rel = self.list[pkg]
-        for (r,f) in rel._post:
-            if len(self.list[r].pre) > 0:
-                del self.list[r].pre[pkg]
-        del self.list[pkg]
-    def has_key(self, key):
-        return self.list.has_key(key)
+                if evrCompare(p[1], flag, version) == 1 and \
+                       evrCompare(p[1], p[0], version) == 1:
+                    ret.append(p[2])
+                if evrCompare(evrString(p[2]["epoch"], p[2]["version"],
+                                        p[2]["release"]), flag, version) == 1:
+                    ret.append(p[2])
+
+        if not arch or arch == "noarch":
+            # all rpms are matching
+            return ret
+            
+        # drop all packages which are not arch compatible
+        i = 0
+        while i < len(ret):
+            r = ret[i]
+            if r["arch"] == "noarch" or r["arch"] == arch or \
+                   buildarchtranslate[arch] == \
+                   buildarchtranslate[r["arch"]] or \
+                   r["arch"] in arch_compats[arch] or \
+                   arch in arch_compats[r["arch"]]:
+                i += 1
+            else:
+                ret.remove(r)
+
+        return ret
 
 # ----------------------------------------------------------------------------
 
-class RpmResolver:
-    """ The RpmResolver is able ro resolve a list of rpms for installation, 
-    update or removal.
-    The main function of this class is resolve, which does the complete job.
-    This is done in 9 stages:
-      1) Generate the list of packages which will be installed after the
-         operations are done
-      2) Check dependencies in this list. Are there unresolved requires?
-      3) Check for conflicts between packages in this list.
-         Obsoletes are treatened as conflicts in here.
-      4) Check for file conflicts: Are there files in multiple packages,
-         which have the same name and path, but are different in size and
-         md5sum?
-      5) Generate the todo list. This is the list of the changes, which should
-         be made. The already installed packages are not relevant for the
-         ordering process of the changes.
-      6) Generate the relations for the packages in the todo list. There are
-         pre and post relation lists for every package. In the pre relation
-         list are the packages, which have to be installed before this package
-         can be installed. Every pre relation has a weight: hard or soft. A
-         hard weight means, that the relation is needed in pre and post
-         scripts, the soft weight is needed later at execution time. The post
-         relation list holds all packages which are dependant on this package.
-         This list is only needed for optimization purposes.
-      7) Save all packages which do not have any relation to another package
-         from the todo list.
-      8) Order the packages in the relations:
-         a) Search for a leaf node, which has the most post relations. Leaf
-            node means, that this rpm package has no dependency to an other
-            package in the list.
-         b) If the list is not empty and there is no leaf node, then there is
-            one or more loops in the relations. Continue with d)
-         c) Put the found node (the rpm package) in the order list and remove
-            it and all it's relations from the relations list. Goto a)
-         d) Detect a loop
-            A) Take the first package with the smallest list of pre relations
-            B) goto 
+class FilenamesList:
+    """ enable search of filenames """
+    """ filenames of packages can be added and removed by package """
+    def __init__(self):
+        self.clear()
 
-      9) 
+    def clear(self):
+        self.filename = { }
+        self.multi = [ ]
 
-    """
+    def append(self, name, rpm):
+        if not self.filename.has_key(name):
+            self.filename[name] = [ ]
+        else:
+            if len(self.filename[name]) == 1:
+                self.multi.append(name)
+        self.filename[name].append(rpm)
 
-    OP_INSTALL = "install"
-    OP_UPDATE = "update"
-    OP_ERASE = "erase"
+    def remove(self, name, rpm):
+        if not self.filename.has_key(name):
+            return
+        if len(self.filename[name]) == 2:
+            self.multi.remove(name)
+        if rpm in self.filename[name]:
+            self.filename[name].remove(rpm)
+        if len(self.filename[name]) == 0:
+            del self.filename[name]
 
-    def __init__(self, rpms, installed, operation):
-        """ rpms is a list of the packages which has to be installed, updated
-        or removed. Installed is a list of the packages which are installed
-        at this time. The operation is either OP_INSTALL, OP_UPDATE or
-        OP_ERASE. """
-        self.rpms = rpms
-        self.operation = operation
-        self.installed = installed
+    def addPkg(self, rpm):
+        for f in rpm["filenames"]:
+            self.append(f, rpm)
 
-        # generate instlist
-        self.instlist = RpmList()
+    def removePkg(self, rpm):
+        for f in rpm["filenames"]:
+            self.remove(f, rpm)
 
-        # install installed pacakges
-        for r in self.installed:
-            self.instlist.install(r)
-        # install/update/erase rpms
-        for r in self.rpms:
-            if self.operation == self.OP_ERASE:
-                self.instlist.erase(r)
-            elif self.operation == self.OP_UPDATE:
-                self.instlist.update(r)
-            else:
-                self.instlist.install(r)
+    def search(self, name):
+        if not self.filename.has_key(name):
+            return [ ]
+        return self.filename[name]
 
+# ----------------------------------------------------------------------------
+
+class RpmResolver(RpmList):
+    OBSOLETE_FAILED = -10
     # ----
 
-    def checkPkgDependencies(self, rpm, rpmlist):
+    def __init__(self, installed, operation):
+        RpmList.__init__(self, installed, operation)
+
+    def clear(self):
+        RpmList.clear(self)
+        self.provides = ProvidesList()
+        self.filenames = FilenamesList()
+        self.obsoletes = HashList()
+        self.updates = HashList()
+        self.erased = HashList()
+    # ----
+
+    def _install(self, pkg):
+        ret = RpmList._install(self, pkg)
+        if ret != self.OK:  return ret
+        
+        self.provides.addPkg(pkg)
+        self.filenames.addPkg(pkg)
+        return self.OK
+    # ----
+    
+    def _erase(self, pkg):
+        ret = RpmList._erase(self, pkg)
+        if ret != self.OK:  return ret
+        
+        self.provides.removePkg(pkg)
+        self.filenames.removePkg(pkg)
+        return self.OK
+    # ----
+
+    def _pkgObsolete(self, pkg, obsolete_pkg):
+        if self.isInstalled(obsolete_pkg):
+            if not pkg in self.obsoletes:
+                self.obsoletes[pkg] = [ ]
+            self.obsoletes[pkg].append(obsolete_pkg)
+        return self._erase(obsolete_pkg)
+    # ----
+
+    def _pkgUpdate(self, pkg, update_pkg):
+        if not pkg in self.updates:
+            self.updates[pkg] = [ ]
+        if update_pkg in self.updates:
+            self.updates[pkg] = self.updates[update_pkg]
+            del self.updates[update_pkg]
+        else:
+            self.updates[pkg].append(update_pkg)
+        return RpmList._pkgUpdate(self, pkg, update_pkg)
+    # ----
+
+    def _pkgErase(self, pkg):
+        self.erased[pkg] = 1
+        return RpmList._pkgErase(pkg)
+    # ----
+
+    def searchDependency(self, dep, arch=None):
+        (name, flag, version) = dep
+        s = self.provides.search(name, flag, version, arch)
+        if name[0] == '/': # all filenames are beginning with a '/'
+            s += self.filenames.search(name)
+        normalizeList(s)
+        return s
+    # ----
+
+    def doObsoletes(self):
+        """ Do obsoletes for new packages """
+
+        if self.operation == self.OP_INSTALL or \
+               self.operation == self.OP_ERASE:
+            # no obsoletes for install or erase
+            return self.OK
+        
+        i = 0
+        while i < len(self):
+            rlist = self[i]
+            for pkg in rlist:
+                if self.isInstalled(pkg):
+                    # obsoletes only for new packages
+                    continue
+                # remove obsolete packages
+                for u in pkg["obsoletes"]:
+                    s = self.searchDependency(u)
+                    for r in s:
+                        if r != pkg and r["name"] != pkg["name"]:
+                            # package is not the same and has not the same name
+                            if self.isInstalled(r):
+                                fmt = "%s obsoletes installed %s, removing %s"
+                            else:
+                                fmt = "%s obsoletes added %s, removing %s"
+                            printWarning(0, fmt % (pkg.getNEVRA(),
+                                                   r.getNEVRA(),
+                                                   r.getNEVRA()))
+
+                            if self._pkgObsolete(pkg, r) != self.OK:
+                                return self.OBSOLETE_FAILED
+                            else:
+                                i -= 1
+            i += 1
+        return self.OK
+    # ----
+
+    def getPkgDependencies(self, pkg):
         """ Check dependencies for a rpm package """
         unresolved = [ ]
         resolved = [ ]
         j = 0
-        for u in rpm["requires"]:
+        for u in pkg["requires"]:
             if u[0][0:7] == "rpmlib(": # drop rpmlib requirements
                 continue
-            s = rpmlist.searchDependency(u)
+            s = self.searchDependency(u, pkg["arch"])
             if len(s) > 0:
-                _normalize(s)
-                if len(s) > 1 and rpm in s:
+                if len(s) > 1 and pkg in s:
                     # prefer self dependencies if there are others, too
-                    s = [rpm]
-                elif u[0][0] != "/": # check arch if no file requires
-                    i = 0
-                    while i < len(s):
-                        r = s[i]
-                        # equal are ok, noarch is ok
-                        if not (r["arch"] == rpm["arch"] or \
-                                rpm["arch"] == "noarch" or \
-                                r["arch"] == "noarch"):
-#                            print "%s -> %s" % (rpm.getNEVRA(), r.getNEVRA())
-                            # is rpm in arch compat list of r?
-                            # if buildarchtranslate[r["arch"]] != buildarchtranslate[rpm["arch"]]:
-                            if rpm["arch"] not in arch_compats[r["arch"]]:
-                                if buildarchtranslate[r["arch"]] != \
-                                       buildarchtranslate[rpm["arch"]]:
-#                                    print "\t removing"
-                                    s.pop(i)
-                                    continue
-                        i += 1
+                    s = [pkg]
             if len(s) == 0: # found nothing
                 unresolved.append(u)
             else: # resolved
                 resolved.append((u, s))
         return (unresolved, resolved)
-
     # ----
 
     def checkDependencies(self):
-        """ Check dependencies for a list of rpm packages """
+        """ Check dependencies """
         no_unresolved = 1
-        for i in xrange(len(self.instlist)):
-            rlist = self.instlist[i]
+        for i in xrange(len(self)):
+            rlist = self[i]
             for r in rlist:
-                if self.operation != self.OP_ERASE or \
-                   len(self.instlist.obsoletes) == 0:
+                if len(self.erased) == 0 and len(self.obsoletes) == 0 and \
+                       self.isInstalled(r):
                     # do not check installed packages if no packages
                     # are getting removed by erase or obsolete
-                    if r in self.installed:
-                        continue
+                    continue
                 printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
-                (unresolved, resolved) = \
-                             self.checkPkgDependencies(r, self.instlist)
+                (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(resolved) > 0 and rpmconfig.debug_level > 1:
                     # do this only in debug level > 1
                     printDebug(2, "%s: resolved dependencies:" % r.getNEVRA())
@@ -247,319 +282,123 @@ class RpmResolver:
                         str = ""
                         for r2 in s:
                             str += "%s " % r2.getNEVRA()
-                        printDebug(2, "\t%s: %s" % (_genDepString(u), str))
+                        printDebug(2, "\t%s: %s" % (depString(u), str))
                 if len(unresolved) > 0:
                     no_unresolved = 0
                     printError("%s: unresolved dependencies:" % r.getNEVRA())
                     for u in unresolved:                        
-                        printError("\t%s" % _genDepString(u))
+                        printError("\t%s" % depString(u))
         return no_unresolved
-
     # ----
 
-    def checkConflicts(self):
-        """ Check for conflicts in RpmList (conflicts and obsoletes) """
-        no_conflicts = 1
-        for i in xrange(len(self.instlist)):
-            rlist = self.instlist[i]
+    def getResolvedDependencies(self):
+        """ Get all resolved dependencies """
+        all_resolved = [ ]
+        for i in xrange(len(self)):
+            rlist = self[i]
             for r in rlist:
-                if r in self.installed:
-                    # do not check installed packages
+                if len(self.erased) == 0 and len(self.obsoletes) == 0 and \
+                       self.isInstalled(r):
+                    # do not check installed packages if no packages
+                    # are getting removed by erase or obsolete
                     continue
+                printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
+                (unresolved, resolved) = self.getPkgDependencies(r)
+                if len(resolved) > 0:
+                    all_resolved.append((r, resolved))
+        return all_resolved
+    # ----
+
+    def getUnresolvedDependencies(self):
+        """ Get all unresolved dependencies """
+        all_unresolved = [ ]
+        for i in xrange(len(self)):
+            rlist = self[i]
+            for r in rlist:
+                if len(self.erased) == 0 and len(self.obsoletes) == 0 and \
+                       self.isInstalled(r):
+                    # do not check installed packages if no packages
+                    # are getting removed by erase or obsolete
+                    continue
+                printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
+                (unresolved, resolved) = self.getPkgDependencies(r)
+                if len(unresolved) > 0:
+                    all_unresolved.append((r, unresolved))
+        return all_unresolved
+    # ----
+
+    def getConflicts(self):
+        """ Check for conflicts in conflicts and and obsoletes """
+
+        if self.operation == self.OP_ERASE:
+            # no conflicts for erase
+            return None
+
+        conflicts = [ ]
+        for i in xrange(len(self)):
+            rlist = self[i]
+            for r in rlist:
                 printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
                 for c in r["conflicts"] + r["obsoletes"]:
-                    s = self.instlist.searchDependency(c)
+                    s = self.searchDependency(c)
                     if len(s) > 0:
-                        _normalize(s)
                         # the package does not conflict with itself
                         if r in s: s.remove(r)
                     if len(s) > 0:
                         for r2 in s:
-                            printError("%s conflicts for '%s' with %s" % \
-                                       (r.getNEVRA(), _genDepString(c), \
-                                        r2.getNEVRA()))
-                            no_conflicts = 0
-
-        return no_conflicts
-
+                            if r.getNEVR() != r2.getNEVR():
+                                conflicts.append((r, c, r2))
+        return conflicts
     # ----
 
-    def checkFileConflicts(self):
+    def checkConflicts(self):
+        conflicts = self.getConflicts()
+        if conflicts == None or len(conflicts) == 0:
+            return self.OK
+
+        for c in conflicts:
+            printError("%s conflicts for '%s' with %s" % \
+                       (c[0].getNEVRA(), depString(c[1]), c[2].getNEVRA()))
+        return -1
+    # ----
+        
+    def getFileConflicts(self):
         """ Check for file conflicts """
-        no_conflicts = 1
-        for f in self.instlist.filenames.multi:
+
+        if self.operation != self.OP_ERASE:
+            # no conflicts for erase
+            return None
+
+        conflicts = [ ]
+        for file in self.filenames.multi:
             printDebug(1, "Checking for file conflicts for '%s'" % f)
-            s = self.instlist.filenames.search(f)
+            s = self.filenames.search(file)
             for j in xrange(len(s)):
-                fi1 = s[j].getRpmFileInfo(f)
+                fi1 = s[j].getRpmFileInfo(file)
                 for k in xrange(j+1, len(s)):
-                    fi2 = s[k].getRpmFileInfo(f)
-                    # ignore directories and links
+                    fi2 = s[k].getRpmFileInfo(file)
+                    # ignore directories
                     if fi1.mode & CP_IFDIR and fi2.mode & CP_IFDIR:
                         continue
+                    # ignore links
                     if fi1.mode & CP_IFLNK and fi2.mode & CP_IFLNK:
                         continue
-                    # TODO: use md5
                     if fi1.mode != fi2.mode or \
                            fi1.filesize != fi2.filesize or \
                            fi1.md5 != fi2.md5:
-                        no_conflicts = 0
-                        printError("%s: File conflict for '%s' with %s" % \
-                                   (s[j].getNEVRA(), f, s[k].getNEVRA()))
-        return no_conflicts
-
+                        conflicts.append((s[j], file, s[k]))
+        return conflicts
     # ----
 
-    def _operationFlag(self, flag):
-        """ Return operation flag or requirement """
-        if self.operation == "erase":
-            if not (isInstallPreReq(flag) or \
-                    not (isErasePreReq(flag) or isLegacyPreReq(flag))):
-                return 2  # hard requirement
-            if not (isInstallPreReq(flag) or \
-                    (isErasePreReq(flag) or isLegacyPreReq(flag))):
-                return 1  # soft requirement
-        else: # operation: install or update
-            if not (isErasePreReq(flag) or \
-                    not (isInstallPreReq(flag) or isLegacyPreReq(flag))):
-                return 2  # hard requirement
-            if not (isErasePreReq(flag) or \
-                    (isInstallPreReq(flag) or isLegacyPreReq(flag))):
-                return 1  # soft requirement
-        return 0
-    
-    # ----
+    def checkFileConflicts(self):
+        conflicts = self.getFileConflicts()
+        if conflicts == None or len(conflicts) == 0:
+            return self.OK
 
-    def genRelations(self):
-        """ Generate relations from RpmList """
-        relations = _Relations()
-
-        # generate todo list
-        rpmlist = RpmList()
-        for r in self.rpms:
-            printDebug(1, "Adding %s to todo list." % r.getNEVRA())
-            if self.operation == self.OP_UPDATE:
-                rpmlist.update(r)
-            else:
-                rpmlist.install(r)
-
-        for rlist in rpmlist:
-            for r in rlist:
-                printDebug(1, "Generating Relations for %s" % r.getNEVRA())
-                (unresolved, resolved) = self.checkPkgDependencies(r, rpmlist)
-                # ignore unresolved, we are only looking at the changes,
-                # therefore not all symbols are resolvable in these changes
-                for (u,s) in resolved:
-                    (name, flag, version) = u
-                    if name[0:7] == "config(": # drop config requirements
-                        continue
-                    if r in s:
-                        continue
-                        # drop requirements which are resolved by the package
-                        # itself
-                    f = self._operationFlag(flag)
-                    if f == 0:
-                        # no hard or soft requirement
-                        continue
-                    for s2 in s:
-                        relations.append(r, s2, f)
-
-        # packages which have no relations
-        for i in xrange(len(rpmlist)):
-            rlist = rpmlist[i]
-            for r in rlist:
-                if not relations.has_key(r):
-                    printDebug(1, "Generating an empty Relation for %s" % \
-                               r.getNEVRA())
-                    relations.append(r, None, 0)
-
-        if rpmconfig.debug_level > 1:
-            # print relations
-            printDebug(2, "\t==== relations (%d) ====" % len(relations))
-            for (pkg, rel) in relations:
-                pre = ""
-                if rpmconfig.debug_level > 2 and len(rel.pre) > 0:
-                    pre = " pre: "
-                    for i in xrange(len(rel.pre)):
-                        (p,f) = rel.pre[i]
-                        if i > 0: pre += ", "
-                        if f == 2: pre += "*"
-                        pre += p.getNEVRA()
-                printDebug(2, "\t%d %d %s%s" % (len(rel.pre), len(rel._post),
-                                                pkg.getNEVRA(), pre))
-            printDebug(2, "\t==== relations ====")
-
-        return relations
-    
-    # ----
-
-    def _genOperations(self, order):
-        """ Generate operations list """
-        operations = [ ]
-        if self.operation == self.OP_ERASE:
-            # reverse order
-            # obsoletes: there are none
-            for i in xrange(len(order)-1, -1, -1):
-                operations.append((self.operation, order[i]))
-        else:
-            for r in order:
-                operations.append((self.operation, r))
-                if r in self.instlist.obsoletes:
-                    if len(self.instlist.obsoletes[r]) == 1:
-                        operations.append((self.OP_ERASE,
-                                           self.instlist.obsoletes[r][0]))
-                    else:
-                        # more than one obsolete: generate order
-                        resolver = RpmResolver(self.instlist.obsoletes[r],
-                                               self.instlist.obsoletes[r],
-                                               self.OP_ERASE)
-                        ops = resolver.resolve()
-                        operations.extend(ops)
-                        del resolver
-        return operations
-
-    # ----
-
-    def _detectLoop(self, relations):
-        """ Detect loop in relations """
-
-        # search for the best node: the smallest list of pre relations
-        node = relations[0]
-        node_pre_len = len(node[1].pre)
-        for (pkg, rel) in relations:
-            if len(rel.pre) == 0 and len(rel.pre) < node_pre_len:
-                node = (pkg, rel)
-                node_pre_len = len(rel.pre)
-
-        # found starting node
-        (package, rel) = node
-        loop = HashList()
-        loop[package] = 0
-        i = 0
-        pkg = package
-        p = None
-        while i < len(relations):
-            if p == package:
-                break
-            # try to find a minimal loop
-            p = None
-            for (p2,i2) in loop:
-                if p2 in relations[pkg].pre:
-                    p = p2
-            if p == None:
-                (p,f) = relations[pkg].pre[loop[pkg]]
-            if loop.has_key(p):
-                # got node which is already in list: found loop
-                package = p
-                # remove leading nodes
-                while len(loop) > 0 and loop[0][0] != package:
-                    del loop[loop[0][0]]
-                break
-            else:
-                loop[p] = 0
-                pkg = p
-                i += 1
-
-        if p != package:
-            printError("A loop without a loop?")
-            return None
-
-        if rpmconfig.debug_level > 0:
-            printDebug(1, "===== loop (%d) =====" % len(loop))
-            for (p,i) in loop:
-                printDebug(1, "%s" % p.getNEVRA())
-            printDebug(1, "===== loop =====")
-
-        return loop
-
-    # ----
-
-    def _breakupLoop(self, loop, relations):
-        """ Breakup loop in relations """
-        ### first try to breakup a soft relation
-
-        # search for the best node: soft relation and the smallest list of pre
-        # relations
-        node = None
-        node_pre_len = 1000000000
-        for (p,i) in loop:
-            (p2,f) = relations[p].pre[i]
-            if f == 1 and len(relations[p].pre) < node_pre_len:
-                node = p
-                node_pre_len = len(relations[p].pre)
-                
-        if node != None:
-            (p2,f) = relations[node].pre[loop[node]]
-            printDebug(1, "Removing requires for %s from %s" % \
-                       (p2.getNEVRA(), node.getNEVRA()))
-            del relations[node].pre[p2]
-            del relations[p2]._post[node]
-            return 1
-
-        ### breakup hard loop (zapping)
-
-        # search for the best node: the smallest list of pre relations
-        for (p,i) in loop:
-            (p2,f) = relations[p].pre[i]
-            if len(relations[p].pre) < node_pre_len:
-                node = p
-                node_pre_len = len(relations[p].pre)
-                
-        if node != None:
-            (p2,f) = relations[node].pre[loop[node]]
-            printDebug(1, "Zapping requires for %s from %s to break up hard loop" % \
-                       (p2.getNEVRA(), node.getNEVRA()))
-            del relations[node].pre[p2]
-            del relations[p2]._post[node]
-            return 1
-
-        return 0
-
-    # ----
-
-    def orderRpms(self, relations):
-        """ Order rpmlist.
-        Returns ordered list of packages. """
-        order = [ ]
-        idx = 1
-        while len(relations) > 0:
-            next = None
-            # we have to have at least one entry, so start with -1 for len
-            next_post_len = -1
-            for (pkg, rel) in relations:
-                if len(rel.pre) == 0 and len(rel._post) > next_post_len:
-                    next = (pkg, rel)
-                    next_post_len = len(rel._post)
-            if next != None:
-                pkg = next[0]
-                order.append(pkg)
-                relations.remove(pkg)
-                printDebug(2, "%d: %s" % (idx, pkg.getNEVRA()))
-                idx += 1
-            else:
-                if rpmconfig.debug_level > 0:
-                    printDebug(1, "-- LOOP --")
-                    printDebug(2, "\n===== remaining packages =====")
-                    for (pkg2, rel2) in relations:
-                        printDebug(2, "%s" % pkg2.getNEVRA())
-                        for i in xrange(len(rel2.pre)):
-                            printDebug(2, "\t%s (%d)" %
-                                       (rel2.pre[i][0].getNEVRA(),
-                                        rel2.pre[i][1]))
-                    printDebug(2, "===== remaining packages =====\n")
-
-                # detect loop
-                loop = self._detectLoop(relations)
-                if loop == None:
-                    return None
-
-                # breakup loop
-                if self._breakupLoop(loop, relations) != 1:
-                    printError("Could not breakup loop")
-                    return None
-
-        return order
-
+        for c in conflicts:
+            printError("%s: File conflict for '%s' with %s" % \
+                       (c[0].getNEVRA(), c[1], c[2].getNEVRA()))
+        return -1
     # ----
 
     def resolve(self):
@@ -569,33 +408,20 @@ class RpmResolver:
         OP_UPDATE or OP_ERASE per package.
         If an error occurs, None is returned. """
 
+        # checking obsoletes for new packages
+        if self.doObsoletes() != 1:
+            return -1
+
         # checking dependencies
         if self.checkDependencies() != 1:
-            return None
+            return -1
 
         # check for conflicts
         if self.checkConflicts() != 1:
-            return None
+            return -2
 
         # check for file conflicts
         if self.checkFileConflicts() != 1:
-            return None
+            return -3
 
-        # generate relations
-        relations = self.genRelations()
-
-        # order package list
-        order = self.orderRpms(relations)
-        # cleanup relations
-        del relations
-
-        # error in orderRpms
-        if order == None:
-            return None
-
-        # generate operations
-        operations = self._genOperations(order)
-        # cleanup order list
-        del order
-        
-        return operations
+        return 1
