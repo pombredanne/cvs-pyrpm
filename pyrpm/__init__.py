@@ -19,7 +19,7 @@
 __version__ = "0.15"
 __doc__ = """Read and manage RPM packages."""
 
-import os, locale
+import os, locale, sys
 
 _files = map(lambda v: v[:-3], filter(lambda v: v[-3:] == ".py" and \
                                       v != "__init__.py" and \
@@ -29,6 +29,10 @@ _files = map(lambda v: v[:-3], filter(lambda v: v[-3:] == ".py" and \
 locale.setlocale(locale.LC_ALL, "C")
 _files.sort()
 locale.setlocale(locale.LC_ALL, "")
+
+# not tested at all, just a guess
+if sys.version_info < (2, 3):
+    sys.exit("error: Python 2.3 or later required")
 
 for _i in _files:
     _cmd = "from %s import *" % _i
