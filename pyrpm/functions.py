@@ -31,7 +31,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         prog = "/bin/sh"
     if not os.path.exists("/var/tmp"):
         try:
-            os.makedir("/var", mode=0755)
+            os.makedirs("/var", mode=0755)
         except:
             pass
         os.makedirs("/var/tmp", mode=01777)
