@@ -30,7 +30,11 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
     if prog == None:
         prog = "/bin/sh"
     if not os.path.exists("/var/tmp"):
-        os.makedirs("/var/tmp")
+        try:
+            os.makedir("/var", mode=0755)
+        except:
+            pass
+        os.makedirs("/var/tmp", mode=01777)
     if isinstance(prog, TupleType):
         args = prog
     else:
