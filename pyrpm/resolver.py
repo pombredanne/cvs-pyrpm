@@ -133,15 +133,12 @@ class RpmResolver(RpmList):
 
     def __init__(self, installed, operation, check_installed=0):
         RpmList.__init__(self, installed, operation)
-        print "HERE"
         self.check_installed = check_installed
         self.installed_unresolved = self.getUnresolvedDependencies()
-        print self.installed_unresolved
     # ----
 
     def clear(self):
         RpmList.clear(self)
-        print "FOO"
         self.provides = ProvidesList()
         self.filenames = FilenamesList()
         self.obsoletes = { }
@@ -302,7 +299,7 @@ class RpmResolver(RpmList):
                 if len(resolved) > 0:
                     if r not in all_resolved:
                         all_resolved[r] = [ ]
-                    all_resolved[r].append(resolved)
+                    all_resolved[r].extend(resolved)
         return all_resolved
     # ----
 
@@ -317,7 +314,7 @@ class RpmResolver(RpmList):
                 if len(unresolved) > 0:
                     if r not in all_unresolved:
                         all_unresolved[r] = [ ]
-                    all_unresolved[r].append(unresolved)
+                    all_unresolved[r].extend(unresolved)
         return all_unresolved
     # ----
 
