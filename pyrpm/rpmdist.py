@@ -76,11 +76,11 @@ class RpmDistribution:
             if len(name)==0 or len(abbr)==0:
                 raise ParsingError, '%s: [%s] missing %s or %s' % \
                     (filename, x, self.CONF_NAME, self.CONF_ABBR)
-            coll = RpmDistributonCollection(self, name, abbr)
+            coll = RpmDistributionCollection(self, name, abbr)
             for o in config.options(x):
                 if o in [self.CONF_NAME, self.CONF_ABBR]:
                     continue
-                coll.appendDirecorty(o, config.get(x, o))
+                coll.appendDirectory(o, config.get(x, o))
             self.appendCollection(coll)
         del config
         
@@ -141,8 +141,8 @@ class RpmDistribution:
         return pkgs
 
 
-class RpmDistributonCollection:
-    """part of distrinution, an exmaple GA, updates, extras ..."""
+class RpmDistributionCollection:
+    """part of distribution, for example GA, updates, extras ..."""
 
     def __init__(self, distribution, name, abbr):
         self.name = name
@@ -176,7 +176,7 @@ class RpmDistributonCollection:
                 files.append(d+'/'+f)
         return files
 
-    def appendDirecorty(self, arch, path):
+    def appendDirectory(self, arch, path):
         """add directory with files to collection"""
         if not self.dirs.has_key(arch):
             self.dirs[arch] = []
