@@ -1,4 +1,9 @@
 X Allow streaming of rpms (header and cpio data)
+support bzip2 for payload data
+what are the following rpm tags exactly:
+  - "sourcepkgid": (RPMTAG_SOURCEPKGID, RPM_BIN, 16, 4)
+  - "immutable": (RPMTAG_HEADERIMMUTABLE, RPM_BIN, 16, 0)
+  - "header_signatures": (HEADER_SIGNATURES, RPM_BIN, 16, 0)
 Signature checking
 Verify correct file and script handling
 Implement file checkes (md5 checks, %config, %ghost, etc)
