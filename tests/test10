@@ -55,9 +55,10 @@ doinstall() {
             | tee $2.LOG.install
     else
         #time ./pyrpminstall -U -r $2 $1/*.rpm 2>&1 | tee $2/LOG.install
-        { time ./pyrpmyum -r $2 install $1; } 2>&1 \
+        { time ./pyrpmyum -y -r $2 install $1; } 2>&1 \
 	    | tee $2.LOG.install
     fi
+    sync
 }
 
 DATA=/mnt/data/laroche
@@ -72,6 +73,7 @@ fi
 
 RELEASED=/mnt/raid/redhat/released
 FEDORA=/mnt/raid/fedora
+FEDORA=/mnt/data/laroche/fedora
 RPMS=RedHat/RPMS
 #doinstall --nodev $RELEASED/RHL-5.2/GOLD/i386/$RPMS $DATA/5.2
 #doinstall --nodev $RELEASED/RHL-6.2/GOLD/i386/$RPMS $DATA/6.2
@@ -84,20 +86,33 @@ RPMS=RedHat/RPMS
 #doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
 
 #doinstall --nodev $FEDORA/1/i386/os/Fedora/RPMS $DATA/FC1-i386
-doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $DATA/FC2-i386
-doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386
+#doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $DATA/FC2-i386
+
+#doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386
+#rm -f $DATA/FC3-i386/var/lib/pyrpm/headers/gnucash*
+#{ time ./pyrpmyum -y -r $DATA/FC3-i386 update $FEDORA/updates/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update
+#sync
+
 #doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386-rpm rpm
+#rm -f $DATA/FC3-i386-rpm/etc/yum.repos.d/*
+cat > $DATA/FC3-i386-rpm/etc/yum.conf <<EOF
+[main]
+cachedir=/var/cache/yum
+debuglevel=0
+errorlevel=0
+logfile=/var/log/yum.log
+pkgpolicy=newest
+assumeyes=1
+distroverpkg=fedora-release
+gpgcheck=0
+tolerant=1
+exactarch=1
+retries=10
+obsoletes=1
 
-exit 0
+[updates]
+name=Fedora Linux Core \$releasever - \$basearch - Updates
+baseurl=file://localhost$DATA/fedora/updates/\$releasever/\$basearch
+EOF
+#time yum -c $DATA/FC3-i386-rpm/etc/yum.conf --installroot=$DATA/FC3-i386-rpm update 2>&1 | tee $DATA/FC3-i386-rpm.LOG.update
 
-if test x$1 = xclean ; then
-    cleanchroot /home/n1
-    cleanchroot /home/n2
-    exit 0
-fi
-TREE=/var/www/html/mirror/fedora/3/i386/os/Fedora/RPMS
-TREE=n
-TREE=/home/fc3/Fedora/RPMS
-doinstall $TREE /home/n1
-#./pyrpmyum -r /home/n1/ --repo /home/updates update
-doinstall $TREE /home/n2 rpm
