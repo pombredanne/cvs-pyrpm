@@ -160,6 +160,21 @@ class RpmResolver(RpmList):
 
         self.provides.removePkg(pkg)
         self.filenames.removePkg(pkg)
+
+        # replay obsoletes
+        if pkg in self.obsoletes:
+            for p in self.obsoletes[pkg]:
+                self.provides.addPkg(p)
+                self.filenames.addPkg(p)
+            del self.obsoletes[pkg]
+
+        # replay updates
+        if pkg in self.updates:
+            for p in self.updates[pkg]:
+                self.provides.addPkg(p)
+                self.filenames.addPkg(p)
+            del self.updates[pkg]
+
         return self.OK
     # ----
 
@@ -174,12 +189,14 @@ class RpmResolver(RpmList):
     def _pkgUpdate(self, pkg, update_pkg):
         if self.isInstalled(update_pkg):
             if not pkg in self.updates:
-                self.updates[pkg] = [ ]
-            if update_pkg in self.updates:
-                self.updates[pkg] = self.updates[update_pkg]
-                del self.updates[update_pkg]
+                self.updates[pkg] = [ ]    
+            self.updates[pkg].append(update_pkg)
+        elif update_pkg in self.updates:
+            if pkg in self.updates:
+                self.updates[pkg].extend(self.updates[update_pkg])
             else:
-                self.updates[pkg].append(update_pkg)
+                self.updates[pkg] = self.updates[update_pkg]
+            del self.updates[update_pkg]
         return RpmList._pkgUpdate(self, pkg, update_pkg)
     # ----
 
@@ -318,7 +335,7 @@ class RpmResolver(RpmList):
     def getConflicts(self):
         """ Check for conflicts in conflicts and and obsoletes """
 
-        conflicts = [ ]
+        conflicts = HashList()
 
         if self.operation == OP_ERASE:
             # no conflicts for erase
@@ -340,7 +357,9 @@ class RpmResolver(RpmList):
                             #if not (self.check_installed == 0 and \
                             #        self.isInstalled(c[0]) and \
                             #        self.isInstalled(c[2])):
-                            conflicts.append((r, c, r2))
+                            if r not in conflicts:
+                                conflicts[r] = [ ]
+                            conflicts[r].append((c, r2))
         return conflicts
     # ----
 
@@ -349,9 +368,10 @@ class RpmResolver(RpmList):
         if len(conflicts) == 0:
             return self.OK
 
-        for c in conflicts:
-            printError("%s conflicts for '%s' with %s" % \
-                       (c[0].getNEVRA(), depString(c[1]), c[2].getNEVRA()))
+        for pkg in conflicts:
+            printError("%s conflicts with:" % pkg.getNEVRA())
+            for c,r in conflicts[pkg]:
+                printError("\t'%s' <=> %s" % (depString(c), r.getNEVRA()))
         return -1
     # ----
 
