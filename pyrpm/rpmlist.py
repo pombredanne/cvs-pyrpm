@@ -20,6 +20,7 @@
 from hashlist import HashList
 from config import rpmconfig
 from functions import buildarchtranslate, printWarning, pkgCompare
+from base import OP_INSTALL, OP_UPDATE, OP_ERASE, OP_FRESHEN
 
 class RpmList:
     OK = 1
