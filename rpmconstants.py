@@ -193,15 +193,27 @@ RPMTAG_DELTARAWPAYLOADXDELTA = 20005 # BIN
 RPMTAG_DELTAORIGPAYLOADFORMAT = 20006 # RPMTAG_PAYLOADFORMAT
 RPMTAG_DELTAFILEFLAGS = 20007 # INT16 array
 
-rpmtagname = {
+rpmtag = {
     "name": RPMTAG_NAME,
     "version": RPMTAG_VERSION,
     "release": RPMTAG_RELEASE,
     "epoch": RPMTAG_EPOCH,
+    "arch": RPMTAG_ARCH,
     "summary": RPMTAG_SUMMARY,
     "description": RPMTAG_DESCRIPTION,
-    "license": RPMTAG_LICENSE
+    "license": RPMTAG_LICENSE,
+    "dsaheader": RPMTAG_DSAHEADER,
+    "gpg": RPMSIGTAG_GPG,
+    "pgp": RPMSIGTAG_PGP,
+    "badsha1_2": RPMTAG_BADSHA1_2,
+    "header_signatures": HEADER_SIGNATURES,
+    "payloadsize": RPMSIGTAG_PAYLOADSIZE,
+    "size_in_sig": RPMSIGTAG_SIZE,
+    "sha1header": RPMTAG_SHA1HEADER,
+    "md5": RPMSIGTAG_MD5
 }
+for tag in rpmtag.keys():
+    rpmtag[rpmtag[tag]] = tag
 
 # These tags make up the huge paralell arrays that have file details
 filetags = [

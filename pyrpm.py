@@ -19,10 +19,11 @@
 #
 
 import struct, rpmconstants, cpio, os.path, re, sys, getopt, gzip, cStringIO
+rpmtag = rpmconstants.rpmtag
 
 def getPadSize(size, pad):
     """Return padding size if data of size "size" is padded to "pad"
-    alignment. Pad is 1 for no padding or e.g. 8. """
+    alignment. Pad is 1 for no padding or e.g. 8."""
     return (pad - (size % pad)) % pad
 
 def getTag(tag):
@@ -34,29 +35,18 @@ def getTag(tag):
         if tag[:3] == "RPM":
             return eval("rpmconstants.%s" % tag)
         else:
-            if rpmconstants.rpmtagname.has_key(tag):
-                return rpmconstants.rpmtagname[tag]
+            if rpmtag.has_key(tag):
+                return rpmtag[tag]
             return eval("rpmconstants.RPMTAG_%s" % tag.upper())
     return None
 
 # optional keys in the sig header
-sigkeys = [
-    rpmconstants.RPMTAG_DSAHEADER,
-    rpmconstants.RPMSIGTAG_GPG
-]
-# additional keys for the non-strict case
-sigkeys2 = [
-    rpmconstants.RPMSIGTAG_PGP,
-    rpmconstants.RPMTAG_BADSHA1_2
-]
-# required keys in the sig header
-reqsig = [
-    rpmconstants.HEADER_SIGNATURES,
-    rpmconstants.RPMSIGTAG_PAYLOADSIZE,
-    rpmconstants.RPMSIGTAG_SIZE,
-    rpmconstants.RPMTAG_SHA1HEADER,
-    rpmconstants.RPMSIGTAG_MD5
-]
+sigkeys = [rpmtag["dsaheader"], rpmtag["gpg"]]
+# optional keys for the non-strict case
+sigkeys2 = [rpmtag["pgp"], rpmtag["badsha1_2"]]
+# required keys in the sig header for the strict case
+reqsig = [rpmtag["header_signatures"], rpmtag["payloadsize"],
+    rpmtag["size_in_sig"], rpmtag["sha1header"], rpmtag["md5"]]
 
 # rpm tag types
 #RPM_NULL = 0
@@ -97,6 +87,19 @@ class ReadRpm:
         if self.fd:
             self.fd.close()
             self.fd = None
+
+    def getOneNumber(self, tag, sig=0):
+        try:
+            if sig:
+                num = self.sig[tag]
+            else:
+                num = self.hdr[tag]
+        except:
+            return None
+        if len(num) != 1:
+            print num, len(num)
+            raise ValueError, "bad length %d" % len(num)
+        return num[0]
 
     def parseLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
@@ -206,6 +209,7 @@ class ReadRpm:
         return data
 
     def parseIndex(self, indexNo, fmt, fmt2, tags=None):
+        # XXX: parseIndex() seems to consume lots of CPU, analyse why
         hdr = {}
         hdrtype = {}
         for i in xrange(0, indexNo * 16, 16):
@@ -255,17 +259,17 @@ class ReadRpm:
         for i in reqsig:
             if i not in self.sig.keys():
                 self.raiseErr("key not present in sig: %d" % i)
-        self.cpiosize = self.sig[rpmconstants.RPMSIGTAG_PAYLOADSIZE][0]
+        self.cpiosize = self.getOneNumber("payloadsize", 1)
         # header + payload size
-        self.payloadsize = self.sig[rpmconstants.RPMSIGTAG_SIZE][0] \
+        self.payloadsize = self.getOneNumber(getTag("size_in_sig"), 1) \
             - self.hdrdata[5]
         # XXX: what data is in here?
-        identifysig = self.sig[rpmconstants.HEADER_SIGNATURES]
-        sha1 = self.sig[rpmconstants.RPMTAG_SHA1HEADER] # header
-        md5sum = self.sig[rpmconstants.RPMSIGTAG_MD5] # header + payload
-        if self.sig.has_key(rpmconstants.RPMTAG_DSAHEADER):
-            dsa = self.sig[rpmconstants.RPMTAG_DSAHEADER] # header
-            gpg = self.sig[rpmconstants.RPMSIGTAG_GPG] # header + payload
+        identifysig = self.sig[rpmtag["header_signatures"]]
+        sha1 = self.sig[rpmtag["sha1header"]] # header
+        md5sum = self.sig[rpmtag["md5"]] # header + payload
+        if self.sig.has_key(rpmtag["dsaheader"]):
+            dsa = self.sig[rpmtag["dsaheader"]] # header
+            gpg = self.sig[rpmtag["gpg"]] # header + payload
 
     def parseHeader(self, tags=None, parsesig=None):
         if (self.verify or parsesig) and not self.hdronly:
@@ -339,6 +343,23 @@ class ReadRpm:
     def __getitem__(self, key):
         return self.hdr[getTag(key)]
 
+    def getItem(self, tag):
+        try:
+            return self[tag]
+        except:
+            return None
+
+    def getScript(self, s, p):
+        script = self.getItem(s)
+        prog = self.getItem(p)
+        if script and not prog:
+            self.raiseErr("no prog")
+        if prog not in (None, "/bin/sh", "/sbin/ldconfig", "/usr/bin/fc-cache",
+            "/usr/sbin/glibc_post_upgrade", "/usr/sbin/libgcc_post_upgrade",
+            "/usr/sbin/build-locale-archive", "/usr/bin/scrollkeeper-update"):
+            self.raiseErr("unknown prog: %s" % prog)
+        return (script, prog)
+
     def getNVR(self):
         return "%s-%s-%s" % (self["name"], self["version"], self["release"])
 
@@ -348,6 +369,42 @@ class ReadRpm:
     def getFilename(self):
         return "%s-%s-%s.%s.rpm" % (self["name"], self["version"],
             self["release"], self["arch"])
+
+    def getDeps(self, name, flags, version):
+        n = self.getItem(name)
+        if not n:
+            return []
+        f = self.hdr[flags]
+        v = self.hdr[version]
+        deps = []
+        for i in xrange(0, len(n)):
+            deps.append( (n[i], f[i], v[i]) )
+        return deps
+
+    def getProvides(self):
+        return self.getDeps(rpmconstants.RPMTAG_PROVIDENAME,
+            rpmconstants.RPMTAG_PROVIDEFLAGS,
+            rpmconstants.RPMTAG_PROVIDEVERSION)
+
+    def getRequires(self):
+        return self.getDeps(rpmconstants.RPMTAG_REQUIRENAME,
+            rpmconstants.RPMTAG_REQUIREFLAGS,
+            rpmconstants.RPMTAG_REQUIREVERSION)
+
+    def getObsoletes(self):
+        return self.getDeps(rpmconstants.RPMTAG_OBSOLETENAME,
+            rpmconstants.RPMTAG_OBSOLETEFLAGS,
+            rpmconstants.RPMTAG_OBSOLETEVERSION)
+
+    def getConflicts(self):
+        return self.getDeps(rpmconstants.RPMTAG_CONFLICTNAME,
+            rpmconstants.RPMTAG_CONFLICTFLAGS,
+            rpmconstants.RPMTAG_CONFLICTVERSION)
+
+    def getTriggers(self):
+        return self.getDeps(rpmconstants.RPMTAG_TRIGGERNAME,
+            rpmconstants.RPMTAG_TRIGGERFLAGS,
+            rpmconstants.RPMTAG_TRIGGERVERSION)
 
 
 class RFile:
@@ -392,24 +449,104 @@ class RDep:
         self.version = version
         self.release = release
 
-class RRpm:
-    def __init__(self, dep, arch, provides, requires, conflicts, obsoletes,
-        uids, gids):
-        self.dep = dep # name, flags, EVR
-        self.arch = arch
-        self.provides = provides
-        self.requires = requires
-        self.conflicts = conflicts
-        self.obsoletes = obsoletes
-        # scripts: pre post preun postun verify trigger
-        self.uids = uids
-        self.gids = gids
+notthere = [rpmconstants.RPMTAG_PREREQ, rpmconstants.RPMTAG_AUTOREQPROV,
+    rpmconstants.RPMTAG_AUTOREQ, rpmconstants.RPMTAG_AUTOPROV,
+    rpmconstants.RPMTAG_CAPABILITY, rpmconstants.RPMTAG_BUILDCONFLICTS,
+    rpmconstants.RPMTAG_BUILDMACROS, rpmconstants.RPMTAG_OLDFILENAMES,
+    rpmconstants.RPMTAG_OLDORIGFILENAMES,
+    rpmconstants.RPMTAG_SOURCE, rpmconstants.RPMTAG_PATCH,
+    rpmconstants.RPMTAG_ROOT, rpmconstants.RPMTAG_DEFAULTPREFIX,
+    rpmconstants.RPMTAG_BUILDROOT, rpmconstants.RPMTAG_INSTALLPREFIX,
+    rpmconstants.RPMTAG_EXCLUDEOS, rpmconstants.RPMTAG_DOCDIR,
+    rpmconstants.RPMTAG_INSTPREFIXES, rpmconstants.RPMTAG_INSTALLCOLOR,
+    rpmconstants.RPMTAG_INSTALLTID, rpmconstants.RPMTAG_REMOVETID,
+    rpmconstants.RPMTAG_SHA1RHN,
+    rpmconstants.RPMTAG_PATCHESNAME, rpmconstants.RPMTAG_PATCHESFLAGS,
+    rpmconstants.RPMTAG_PATCHESVERSION,
+    rpmconstants.RPMTAG_CACHECTIME, rpmconstants.RPMTAG_CACHEPKGPATH,
+    rpmconstants.RPMTAG_CACHEPKGSIZE, rpmconstants.RPMTAG_CACHEPKGMTIME,
+    rpmconstants.RPMTAG_NOSOURCE, rpmconstants.RPMTAG_NOPATCH,
+    rpmconstants.RPMTAG_INSTALLTIME]
 
-def verifyRpm(filename):
+class RRpm:
+    def __init__(self, rpm):
+        self.name = rpm[rpmconstants.RPMTAG_NAME]
+        self.version = rpm[rpmconstants.RPMTAG_VERSION]
+        self.release = rpm[rpmconstants.RPMTAG_RELEASE]
+        self.epoch = rpm.getOneNumber(rpmconstants.RPMTAG_EPOCH)
+        if self.epoch:
+            evr = str(self.epoch) + ":" + self.version + "-" + self.release
+        else:
+            evr = self.version + "-" + self.release
+        self.dep = (self.name, 0, evr) # XXX: 0 is not correct
+        self.arch = rpm[rpmconstants.RPMTAG_ARCH]
+
+        self.provides = rpm.getProvides()
+        self.requires = rpm.getRequires()
+        self.obsoletes = rpm.getObsoletes()
+        self.conflicts = rpm.getConflicts()
+
+        (self.pre, self.preprog) = rpm.getScript(rpmconstants.RPMTAG_PREIN,
+            rpmconstants.RPMTAG_PREINPROG)
+        (self.post, self.postprog) = rpm.getScript(rpmconstants.RPMTAG_POSTIN,
+            rpmconstants.RPMTAG_POSTINPROG)
+        (self.preun, self.preunprog) = rpm.getScript(rpmconstants.RPMTAG_PREUN,
+            rpmconstants.RPMTAG_PREUNPROG)
+        (self.postun, self.postunprog) = rpm.getScript( \
+            rpmconstants.RPMTAG_POSTUN, rpmconstants.RPMTAG_POSTUNPROG)
+        (self.verify, self.verifyprog) = rpm.getScript( \
+            rpmconstants.RPMTAG_VERIFYSCRIPT,
+            rpmconstants.RPMTAG_VERIFYSCRIPTPROG)
+
+        self.triggers = rpm.getTriggers()
+        self.trigger = rpm.getItem(rpmconstants.RPMTAG_TRIGGERSCRIPTS)
+        self.triggerprog = rpm.getItem(rpmconstants.RPMTAG_TRIGGERSCRIPTPROG)
+        self.triggerindex = rpm.getItem(rpmconstants.RPMTAG_TRIGGERINDEX)
+        self.triggerin = rpm.getItem(rpmconstants.RPMTAG_TRIGGERIN)
+        self.triggerun = rpm.getItem(rpmconstants.RPMTAG_TRIGGERUN)
+        self.triggerpostun = rpm.getItem(rpmconstants.RPMTAG_TRIGGERPOSTUN)
+
+        #self.uids = uids
+        #self.gids = gids
+
+        for i in notthere:
+            if rpm.getItem(i) != None:
+                print "tag %d is still present" % i, rpm.getItem(i)
+        if rpm.getItem(rpmconstants.RPMTAG_PAYLOADFORMAT) != "cpio":
+            print "no cpio payload"
+        if rpm.getItem(rpmconstants.RPMTAG_PAYLOADCOMPRESSOR) != "gzip":
+            print "no cpio compressor"
+        if rpm.getItem(rpmconstants.RPMTAG_PAYLOADFLAGS) != "9":
+            print "no payload flags"
+        if rpm.getItem(rpmconstants.RPMTAG_OS) != "linux":
+            print "bad os"
+        if rpm.getItem(rpmconstants.RPMTAG_PACKAGER) not in ( \
+            "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>"):
+            print "unknown packager"
+        if rpm.getItem(rpmconstants.RPMTAG_VENDOR) not in ("Red Hat, Inc."):
+            print "unknown vendor"
+        if rpm.getItem(rpmconstants.RPMTAG_DISTRIBUTION) not in \
+            ("Red Hat Linux", "", "Red Hat FC-3", "Red Hat (FC-3)",
+            "Red Hat (RHEL-3)"):
+            print "unknown vendor"
+        if rpm.getItem(rpmconstants.RPMTAG_PREFIXES) not in (None, ["/usr"],
+            ["/var/named/chroot"], ["/usr/X11R6"], ["/usr/lib/qt-3.3"]):
+            print "unknown prefix"
+        if rpm.getItem(rpmconstants.RPMTAG_RHNPLATFORM) != self.arch:
+            print "unknown arch"
+        if rpm.getItem(rpmconstants.RPMTAG_PLATFORM) not in ( \
+            "i386-redhat-linux-gnu", "i386-redhat-linux",
+            "noarch-redhat-linux-gnu", "i686-redhat-linux-gnu",
+            "i586-redhat-linux-gnu"):
+            print "unknown arch", rpm.getItem(rpmconstants.RPMTAG_PLATFORM)
+
+
+def verifyRpm(filename, payload=None):
     """Read in a complete rpm and verify its integrity."""
     rpm = ReadRpm(filename, 1)
     rpm.readHeader()
-    #rpm.readPayload()
+    if payload:
+        rpm.readPayload()
     return rpm
 
 def readHdlist(filename, verify=None):
@@ -481,6 +618,7 @@ if __name__ == "__main__":
             if os.path.basename(a) == "reiserfs-utils-3.x.0f-1.src.rpm":
                 continue
             rpm = verifyRpm(a)
+            rrpm = RRpm(rpm)
         sys.exit(0)
     main(sys.argv[1:])
 
