@@ -44,7 +44,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         (fd, tmpfilename) = mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
         if fd == None:
             return 0
-        # test for open fds
+        # test for open fds:
         # script = "ls -l /proc/$$/fd >> /$$.out\n" + script
         os.write(fd, script)
         os.close(fd)
@@ -58,25 +58,17 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
 
     (rfd, wfd) = os.pipe()
     pid = os.fork()
-    if pid != 0:
-        os.close(wfd)
-        cret = ""
-        cout = os.read(rfd, 8192)
-        while cout:
-            cret += cout
-            cout = os.read(rfd, 8192)
+    if pid == 0:
         os.close(rfd)
-        (cpid, status) = os.waitpid(pid, 0)
-    else:
         fd = os.open("/dev/null", os.O_RDONLY)
+        # XXX: error if no /dev/null exists?
         if fd != 0:
             os.dup2(fd, 0)
+            os.close(fd)
         if wfd != 1:
             os.dup2(wfd, 1)
+            os.close(wfd)
         os.dup2(1, 2)
-        os.close(fd)
-        os.close(wfd)        
-        os.close(rfd)
         os.chdir("/")
         e = {"HOME": "/", "USER": "root", "LOGNAME": "root",
             "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin"}
@@ -85,11 +77,23 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
         else:
             os.execve(prog, args, e)
         sys.exit(255)
+    # XXX: pid == -1 error case???
+    os.close(wfd)
+    # no need to read in chunks if we don't pass on data to some output func
+    cret = ""
+    cout = os.read(rfd, 8192)
+    while cout:
+        cret += cout
+        cout = os.read(rfd, 8192)
+    os.close(rfd)
+    (cpid, status) = os.waitpid(pid, 0)
     if script != None:
         os.unlink(tmpfilename)
     if status != 0:
         printError("Error in running script:")
         printError(str(args))
+        if not cret.endswith("\n"):
+            cret += "\n"
         printError(cret)
         return 0
     return 1
