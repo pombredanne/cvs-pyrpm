@@ -352,7 +352,16 @@ class RpmPackage(RpmData):
             return 1
         (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
             = os.stat(rfi.filename)
-        md5sum = md5.new(open(rfi.filename).read()).hexdigest()
+        
+        f = open(rfi.filename)
+        m = md5.new()
+        buf = "1"
+        while buf:
+            buf = f.read(65536)
+            if buf:
+                m.update(buf)
+        f.close()
+        md5sum = m.hexdigest()
         # Same file in new rpm as on disk -> just write it.
         if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid \
             and rfi.filesize == filesize and rfi.md5sum == md5sum:
