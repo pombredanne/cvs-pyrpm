@@ -79,7 +79,8 @@ def installFile(rfi, data):
     mode = rfi.mode
     if S_ISREG(mode):
         makeDirs(rfi.filename)
-        (fd, tmpfilename) = tempfile.mkstemp(dir=os.path.dirname(rfi.filename), prefix=rfi.filename + ".")
+        (fd, tmpfilename) = tempfile.mkstemp(dir=os.path.dirname(rfi.filename),
+            prefix=rfi.filename + ".")
         if not fd:
             return 0
         if os.write(fd, data) < 0:
@@ -102,7 +103,8 @@ def installFile(rfi, data):
             return 0
     elif S_ISLNK(mode):
         symlinkfile = data.rstrip("\x00")
-        if os.path.islink(rfi.filename) and os.readlink(rfi.filename) == symlinkfile:
+        if os.path.islink(rfi.filename) \
+            and os.readlink(rfi.filename) == symlinkfile:
             return 1
         makeDirs(rfi.filename)
         try:
@@ -368,7 +370,8 @@ def pkgCompare(p1, p2):
         e2 = "0"
     else:
         e2 = str(p2["epoch"][0])
-    return labelCompare((e1, p1["version"], p1["release"]), (e2, p2["version"], p2["release"]))
+    return labelCompare((e1, p1["version"], p1["release"]),
+        (e2, p2["version"], p2["release"]))
 
 def depOperatorString(flag):
     """ generate readable operator """
@@ -394,7 +397,8 @@ def filterArchCompat(list, arch=None):
         while i < len(list):
             pkg = list[i]
             if not possible_archs.has_key(pkg["arch"]):
-                printWarning(0, "%s: Unknow rpm package architecture %s" % (pkg.source, pkg["arch"]))
+                printWarning(0, "%s: Unknow rpm package architecture %s" \
+                    % (pkg.source, pkg["arch"]))
                 list.pop(i)
                 continue
             if pkg["arch"] != arch and pkg["arch"] not in arch_compats[arch]:
@@ -585,7 +589,8 @@ best match."""
         if epoch != None and pkg["epoch"][0] != epoch:
             continue
         nevra = pkg.getNEVRA()
-        if pkg["name"] == name and pkg["version"] == version and pkg["release"] == r:
+        if pkg["name"] == name and pkg["version"] == version and \
+                pkg["release"] == r:
             printInfo(3, "Adding %s to package to be removed.\n" % nevra)
             pkglist.append(pkg)
     # Next check is against n as name, v as version, r as release, a as arch
@@ -594,7 +599,8 @@ best match."""
         if epoch != None and pkg["epoch"][0] != epoch:
             continue
         nevra = pkg.getNEVRA()
-        if pkg["name"] == name and pkg["version"] == version and pkg["release"] == release and pkg["arch"] == arch:
+        if pkg["name"] == name and pkg["version"] == version and \
+                pkg["release"] == release and pkg["arch"] == arch:
             printInfo(3, "Adding %s to package to be removed.\n" % nevra)
             pkglist.append(pkg)
     # No matching package found
