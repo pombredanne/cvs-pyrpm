@@ -14,7 +14,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004 Red Hat, Inc.
 #
-# Author: Thomas Woerner
+# Author: Thomas Woerner, Karel Zak
 #
 
 from hashlist import *
@@ -113,12 +113,12 @@ class RpmList:
     def __getitem__(self, i):
         return self.list[i][1] # return rpm list
     def install(self, pkg):
-        if not self.list.has_key(pkg["name"]):
-            self.list[pkg["name"]] = [ ]
-        for r in self.list[pkg["name"]]:
-            if str(pkg) == str(r):
-                printDebug(1, "Package %s is already in list" % r.getNEVRA())
-                return 0
+        if self.list.has_key(pkg["name"]):
+            for r in self.list[pkg["name"]]:
+                if str(pkg) == str(r):
+                    printDebug(1, "Package %s is already in list" % \
+                               r.getNEVRA())
+                    return 0
         # remove obsolete packages
         for u in pkg["obsoletes"]:
             s = self.search_dep(u)
@@ -127,6 +127,9 @@ class RpmList:
                     printDebug(1, "%s obsoletes %s, removing %s" % \
                                (pkg.getNEVRA(), r2.getNEVRA(), r2.getNEVRA()))
                     self.obsolete(pkg, r2)
+        # add package to list
+        if not self.list.has_key(pkg["name"]):
+            self.list[pkg["name"]] = [ ]
         self.list[pkg["name"]].append(pkg)
         self.provides.add_rpm(pkg)
         self.filenames.add_rpm(pkg)
@@ -184,3 +187,5 @@ class RpmList:
         if name[0] == '/': # all filenames are beginning with a '/'
             s += self.filenames.search(name)
         return s
+
+# vim:ts=4:sw=4:showmatch:expandtab
