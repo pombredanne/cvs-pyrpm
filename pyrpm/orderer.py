@@ -142,8 +142,7 @@ class RpmOrderer:
                         relations.append(r, s2, f)
 
         # packages which have no relations
-        for i in xrange(len(rpmlist)):
-            rlist = rpmlist[i]
+        for rlist in rpmlist:
             for r in rlist:
                 if not relations.has_key(r):
                     printDebug(1, "No relations for %s found, generating empty relations" % \
@@ -238,8 +237,10 @@ class RpmOrderer:
             for (p2,i2) in loop:
                 if p2 in relations[pkg].pre:
                     p = p2
-            if p == None:
+                    break
+            else:
                 (p,f) = relations[pkg].pre[loop[pkg]]
+                
             if loop.has_key(p):
                 # got node which is already in list: found loop
                 package = p
@@ -296,7 +297,7 @@ class RpmOrderer:
             if len(relations[p].pre) < node_pre_len:
                 node = p
                 node_pre_len = len(relations[p].pre)
-                
+            
         if node != None:
             (p2,f) = relations[node].pre[loop[node]]
             printDebug(1, "Zapping requires for %s from %s to break up hard loop" % \
@@ -322,6 +323,7 @@ class RpmOrderer:
                 if len(rel.pre) == 0 and len(rel._post) > next_post_len:
                     next = (pkg, rel)
                     next_post_len = len(rel._post)
+                
             if next != None:
                 pkg = next[0]
                 order.append(pkg)
@@ -334,10 +336,10 @@ class RpmOrderer:
                     printDebug(2, "\n===== remaining packages =====")
                     for (pkg2, rel2) in relations:
                         printDebug(2, "%s" % pkg2.getNEVRA())
-                        for i in xrange(len(rel2.pre)):
+                        for r in rel2.pre:
                             printDebug(2, "\t%s (%d)" %
-                                       (rel2.pre[i][0].getNEVRA(),
-                                        rel2.pre[i][1]))
+                                       (r[0].getNEVRA(),
+                                        r[1]))
                     printDebug(2, "===== remaining packages =====\n")
 
                 # detect loop
