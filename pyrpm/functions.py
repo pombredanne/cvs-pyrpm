@@ -565,7 +565,7 @@ def tagsearch(searchtags, list, regex=None):
     st = []
     if regex:
         for (key, val) in searchtags:
-            st.append([key, normalizeRegex(val)])
+            st.append([key, re.compile(normalizeRegex(val))])
         searchtags = st
     for pkg in list:
         # If we have an epoch we need to check it
@@ -583,7 +583,7 @@ def tagsearch(searchtags, list, regex=None):
                     found = 0
                     break
             else:
-                if not re.match(val, pval):
+                if not val.match(pval):
                     found = 0
                     break
         if found:
