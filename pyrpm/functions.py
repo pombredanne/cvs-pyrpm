@@ -46,13 +46,13 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
     pid = os.fork()
     if pid != 0:
         os.close(wfd)
-        (cpid, status) = os.waitpid(pid, 0)
         cret = ""
         cout = os.read(rfd, 8192)
         while cout != "":
             cret += cout
             cout = os.read(rfd, 8192)
         os.close(rfd)
+        (cpid, status) = os.waitpid(pid, 0)
     else:
         fd = os.open("/dev/null", os.O_RDONLY)
         if fd != 0:
@@ -61,8 +61,10 @@ def runScript(prog=None, script=None, arg1=None, arg2=None):
             os.dup2(wfd, 1)
         os.dup2(1, 2)
         closeAllFDs()
+        os.chdir("/")
+        os.putenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin")
         os.execv(prog, args)
-        sys.exit()
+        sys.exit(255)
     if script != None:
         os.unlink(tmpfilename)
     if status != 0:

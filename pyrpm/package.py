@@ -178,11 +178,12 @@ class RpmPackage(RpmData):
             if db.isDuplicate(f):
                 printDebug(2, "File/Dir %s still in db, not removing..." % f)
                 continue
-            if os.path.isdir(f) and os.listdir(f) != []:
-                try:
-                    os.rmdir(f)
-                except:
-                    printWarning(1, "Couldn't remove dir %s from pkg %s" % (f, self.source))
+            if os.path.isdir(f):
+                if os.listdir(f) == []:
+                    try:
+                        os.rmdir(f)
+                    except:
+                        printWarning(1, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
                 try:
                     os.unlink(f)
