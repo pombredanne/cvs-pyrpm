@@ -20,8 +20,28 @@
 
 import struct, rpmconstants, cpio, os.path, re, sys, getopt, gzip, cStringIO
 
+def getPadSize(size, pad):
+    """Return padding size if data of size "size" is padded to "pad"
+    alignment. Pad is 1 for no padding or e.g. 8. """
+    return (pad - (size % pad)) % pad
+
+def getTag(tag):
+    """Find the integer tag."""
+    import types
+    if isinstance(tag, types.IntType):
+        return tag
+    elif isinstance(tag, types.StringType):
+        if tag[:3] == "RPM":
+            return eval("rpmconstants.%s" % tag)
+        else:
+            if rpmconstants.rpmtagname.has_key(tag):
+                return rpmconstants.rpmtagname[tag]
+            return eval("rpmconstants.RPMTAG_%s" % tag.upper())
+    return None
+
 # in verify mode only allow newer rpm packages
 # XXX: this could go into non-strict mode in case of non-RH packaged rpm
+# or based on other data within the rpm header
 strict = 1
 
 # optional keys in the sig header
@@ -55,14 +75,12 @@ RPM_I18NSTRING = 9
 
 # limit: does not support all RHL5.x and earlier rpms if verify is enabled
 class ReadRpm:
-    # self.filename == filename
-    # self.fd == filedescriptor
-    # self.verify == enable/disable more data checking
 
-    def __init__(self, filename, verify=None):
+    def __init__(self, filename, verify=None, fd=None, hdronly=None):
         self.filename = filename
-        self.fd = None
-        self.verify = verify
+        self.fd = fd # filedescriptor
+        self.verify = verify # enable/disable more data checking
+        self.hdronly = hdronly # if only the header is present from a hdlist
 
     def raiseErr(self, err):
         raise ValueError, "%s: %s" % (self.filename, err)
@@ -150,11 +168,13 @@ class ReadRpm:
 
     def readIndex(self, pad):
         data = self.fd.read(16)
+        if not len(data):
+            return None
         (magic, indexNo, storeSize) = struct.unpack("!8sii", data)
         if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
             self.raiseErr("bad index magic")
         fmt = self.fd.read(16 * indexNo)
-        fmt2 = self.fd.read(storeSize + (pad - (storeSize % pad)) % pad)
+        fmt2 = self.fd.read(storeSize + getPadSize(storeSize, pad))
         if self.verify:
             self.verifyIndex(fmt, fmt2, indexNo, storeSize)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + len(fmt2))
@@ -188,6 +208,7 @@ class ReadRpm:
 
     def parseIndex(self, indexNo, fmt, fmt2, tags=None):
         hdr = {}
+        hdrtype = {}
         for i in xrange(0, indexNo * 16, 16):
             index = struct.unpack("!iiii", fmt[i:i + 16])
             tag = index[0]
@@ -199,9 +220,33 @@ class ReadRpm:
                     print "%s included tag %d twice" % (self.filename, tag)
             else:
                 hdr[tag] = self.parseTag(index, fmt2)
-        return hdr
+                hdrtype[tag] = index[1]
+        return (hdr, hdrtype)
+
+    def addTag(self, tag, data, type, hdr=1):
+        # XXX: this should also get implemented as setitem(tag, data, type, hdr)
+        if hdr:
+            self.hdr[tag] = data
+            self.hdrtype[tag] = type
+        else:
+            self.sig[tag] = data
+            self.sigtype[tag] = type
+
+    def newIndex(self, hdr, pad): # XXX not finished yet
+        indexNo = len(hdr)
+        storeSize = 0
+        data = ""
+        fmt = ""
+        fmt2 = ""
+        size = 0
+        return (indexNo, storeSize, data, fmt, fmt2, size)
+
+    def writeIndex(self):
+        pass # XXX
 
     def verifyHeader(self):
+        if self.hdronly:
+            return
         for i in self.sig.keys():
             if i not in sigkeys and i not in reqsig:
                 self.raiseErr("new item in sigindex: %d" % i)
@@ -223,13 +268,15 @@ class ReadRpm:
             gpg = self.sig[rpmconstants.RPMSIGTAG_GPG] # header + payload
 
     def parseHeader(self, tags=None, parsesig=None):
-        if self.verify or parsesig:
+        if (self.verify or parsesig) and not self.hdronly:
             (sigindexNo, sigstoreSize, sigdata, sigfmt, sigfmt2, size) = \
                 self.sigdata
-            self.sig = self.parseIndex(sigindexNo, sigfmt, sigfmt2)
+            (self.sig, self.sigtype) = self.parseIndex(sigindexNo, sigfmt, \
+                sigfmt2)
         (hdrindexNo, hdrstoreSize, hdrdata, hdrfmt, hdrfmt2, size) = \
             self.hdrdata
-        self.hdr = self.parseIndex(hdrindexNo, hdrfmt, hdrfmt2, tags)
+        (self.hdr, self.hdrtype) = self.parseIndex(hdrindexNo, hdrfmt, \
+            hdrfmt2, tags)
         if self.verify:
             self.verifyHeader()
 
@@ -246,6 +293,14 @@ class ReadRpm:
             self.leaddata = leaddata
         if parse:
             self.parseHeader(tags)
+
+    def readHdlist(self, parse=1, tags=None):
+        self.hdrdata = self.readIndex(1)
+        if not self.hdrdata:
+            return None
+        if parse:
+            self.parseHeader(tags)
+        return 1
 
     def readPayload(self, keepdata=None, verbose=None):
         self.openFd(96 + self.sigdata[5] + self.hdrdata[5])
@@ -282,18 +337,17 @@ class ReadRpm:
         return self.hdr.__repr__()
 
     def __getitem__(self, key):
-        import types
-        if isinstance(key, types.IntType):
-            return self.hdr[key]
-        elif isinstance(key, types.StringType):
-            if key[:3] == "RPM":
-                return self.hdr[eval("rpmconstants.%s" % key)]
-            else:
-                if rpmconstants.rpmtagname.has_key(key):
-                    return self.hdr[rpmconstants.rpmtagname[key]]
-                keybyname = eval("rpmconstants.RPMTAG_%s" % key.upper())
-                return self.hdr[keybyname]
-        return None
+        return self.hdr[getTag(key)]
+
+    def printNVR(self):
+        return "%s-%s-%s" % (self["name"], self["version"], self["release"])
+
+    def printNA(self):
+        return "%s-%s" % (self["name"], self["arch"])
+
+    def printFilename(self):
+        return "%s-%s-%s.%s.rpm" % (self["name"], self["version"],
+            self["release"], self["arch"])
 
 
 class RFile:
@@ -358,17 +412,15 @@ def verifyRpm(filename):
     #rpm.readPayload()
     return rpm
 
-def uncompressRpm(filename):
-    """Read in a complete rpm and uncompress its payload."""
-    return # below we write out a new rpm, so keep this only as disabled example
-    rpm = ReadRpm(filename)
-    rpm.readHeader(0, None, 1)
-    rpm.closeFd()
-    rpm.readPayload(1)
-    (sigindexNo, sigstoreSize, sigdata, sigfmt, sigfmt2, ssize) = rpm.sigdata
-    (hdrindexNo, hdrstoreSize, hdrdata, hdrfmt, hdrfmt2, hsize) = rpm.hdrdata
-    open(os.path.basename(filename), "w").write(rpm.leaddata +
-        sigdata + sigfmt + sigfmt2 + hdrdata + hdrfmt + hdrfmt2 + rpm.cpiodata)
+def readHdlist(filename, verify=None):
+    fd = open(filename, "ro")
+    rpms = []
+    while 1:
+        rpm = ReadRpm(filename, verify, fd, 1)
+        if not rpm.readHdlist():
+            break
+        rpms.append(rpm)
+    return rpms
 
 def showHelp():
     print "pyrpm [options] /path/to/foo.rpm"
@@ -418,6 +470,12 @@ def main(args):
         sys.stdout.write(queryformat % rpm)
 
 if __name__ == "__main__":
+    if None:
+        rpms = readHdlist("/home/hdlist")
+        for rpm in rpms:
+            print rpm.printFilename()
+        rpms = readHdlist("/home/hdlist2")
+        sys.exit(0)
     if None:
         for a in sys.argv[1:]:
             if os.path.basename(a) == "reiserfs-utils-3.x.0f-1.src.rpm":
