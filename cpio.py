@@ -149,3 +149,5 @@ if __name__ == "__main__":
         except IOError, e:
             print "error reading cpio: %s" % e
         print c.filelist
+
+# vim:ts=4:sw=4:showmatch:expandtab

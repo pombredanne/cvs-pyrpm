@@ -20,16 +20,21 @@
 
 import struct, rpmconstants, cpio, os.path, re, sys, getopt, gzip, cStringIO
 
+# in verify mode only allow newer rpm packages
+strict = 1
+
 # optional keys in the sig header
 sigkeys = [
+#   rpmconstants.RPMSIGTAG_PGP,
+#   rpmconstants.RPMTAG_BADSHA1_2,
     rpmconstants.RPMTAG_DSAHEADER,
     rpmconstants.RPMSIGTAG_GPG
 ]
 # required keys in the sig header
 reqsig = [
-    rpmconstants.RPMSIGTAG_SIZE,
     rpmconstants.HEADER_SIGNATURES,
     rpmconstants.RPMSIGTAG_PAYLOADSIZE,
+    rpmconstants.RPMSIGTAG_SIZE,
     rpmconstants.RPMTAG_SHA1HEADER,
     rpmconstants.RPMSIGTAG_MD5
 ]
@@ -40,12 +45,13 @@ RPM_CHAR = 1
 RPM_INT8 = 2
 RPM_INT16 = 3
 RPM_INT32 = 4
-RPM_INT64 = 5 # Unused currently
+RPM_INT64 = 5 # currently unused
 RPM_STRING = 6
 RPM_BIN = 7
 RPM_STRING_ARRAY = 8
 RPM_I18NSTRING = 9
 
+# limit: does not support all RHL5.x and earlier rpms if verify is enabled
 class ReadRpm:
     # self.filename == filename
     # self.fd == filedescriptor
@@ -193,6 +199,8 @@ class ReadRpm:
         return hdr
 
     def verifyHeader(self):
+        if not strict:
+            return
         for i in self.sig.keys():
             if i not in sigkeys and i not in reqsig:
                 self.raiseErr("new item in sigindex: %d" % i)
@@ -241,7 +249,7 @@ class ReadRpm:
         if None:
             #import zlib
             payload = self.fd.read()
-            if self.verify and self.payloadsize != len(payload):
+            if strict and self.verify and self.payloadsize != len(payload):
                 self.raiseErr("payloadsize")
             if payload[:9] != '\037\213\010\000\000\000\000\000\000':
                 self.raiseErr("not gzipped data")
@@ -254,7 +262,7 @@ class ReadRpm:
             #    buf = gz.read(4096)
             #    if not buf:
             #        break
-        if self.verify and self.cpiosize != len(cpiodata):
+        if strict and self.verify and self.cpiosize != len(cpiodata):
             self.raiseErr("cpiosize")
         if None:
             c = cpio.CPIOFile(cStringIO.StringIO(cpiodata))
