@@ -186,16 +186,16 @@ def closeAllFDs():
 def getFreeDiskspace(pkglist):
     freehash = {}
     dirhash = {}
-    if rpmconfig.buildroot == None:
-        br = "/"
-    else:
+    if rpmconfig.buildroot:
         br = rpmconfig.buildroot
+    else:
+        br = "/"
     for pkg in pkglist:
         if not pkg.has_key("dirnames"):
             continue
         for dirname in pkg["dirnames"]:
             if not dirhash.has_key(dirname):
-                devdir = br+dirname
+                devdir = br + dirname
                 while not os.path.exists(devdir):
                     devdir = os.path.dirname(devdir)
                 dev = os.stat(devdir)[2]
@@ -395,16 +395,8 @@ def evrCompare(evr1, comp, evr2):
 
 # Compare two packages by evr
 def pkgCompare(p1, p2):
-    if p1["epoch"] == None:
-        e1 = "0"
-    else:
-        e1 = str(p1["epoch"][0])
-    if p2["epoch"] == None:
-        e2 = "0"
-    else:
-        e2 = str(p2["epoch"][0])
-    return labelCompare((e1, p1["version"], p1["release"]),
-        (e2, p2["version"], p2["release"]))
+    return labelCompare((p1.getEpoch(), p1["version"], p1["release"]),
+        (p2.getEpoch(), p2["version"], p2["release"]))
 
 def depOperatorString(flag):
     """ generate readable operator """

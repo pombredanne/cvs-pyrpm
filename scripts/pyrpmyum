@@ -99,7 +99,6 @@ except getopt.error, e:
     usage()
     sys.exit(1)
 
-rpmconfig.buildroot = "/"
 rpmconfig.operation = None
 rpmconfig.verbose_level = 0
 rpmconfig.warning_level = 0
@@ -202,8 +201,8 @@ if not args:
     sys.exit(1)
 
 installed = []
-if rpmconfig.buildroot != None:
-    pydb = RpmPyDB(rpmconfig.buildroot+rpmconfig.dbpath)
+if rpmconfig.buildroot:
+    pydb = RpmPyDB(rpmconfig.buildroot + rpmconfig.dbpath)
 else:
     pydb = RpmPyDB(rpmconfig.dbpath)
 installed = pydb.getPkgList()

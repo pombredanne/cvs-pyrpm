@@ -50,7 +50,6 @@ if __name__ == '__main__':
     usage()
     sys.exit(1)
 
-  rpmconfig.buildroot = "/"
   rpmconfig.operation = None
   rpmconfig.verbose_level = 0
   rpmconfig.warning_level = 0

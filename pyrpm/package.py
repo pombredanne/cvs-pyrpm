@@ -125,7 +125,8 @@ class RpmPackage(RpmData):
     def open(self, mode="r"):
         if self.io != None:
             return 1
-        self.io = getRpmIOFactory(self.source, self.verify, self.strict, self.hdronly)
+        self.io = getRpmIOFactory(self.source, self.verify, self.strict,
+            self.hdronly)
         if not self.io:
             return 0
         if not self.io.open(mode):
@@ -170,7 +171,8 @@ class RpmPackage(RpmData):
             numPkgs = str(db.getNumPkgs(self["name"])+1)
         if self["preinprog"] != None:
             if not runScript(self["preinprog"], self["prein"], numPkgs):
-                printError("%s: Error running pre install script." % self.getNEVRA())
+                printError("%s: Error running pre install script." \
+                    % self.getNEVRA())
                 return 0
         if not self.__extract(db):
             return 0
@@ -181,7 +183,8 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None:
             if not runScript(self["postinprog"], self["postin"], numPkgs):
-                printError("%s: Error running post install script." % self.getNEVRA())
+                printError("%s: Error running post install script." \
+                    % self.getNEVRA())
         self.rfilist = None
         return 1
 
@@ -197,7 +200,8 @@ class RpmPackage(RpmData):
             numPkgs = str(db.getNumPkgs(self["name"])-1)
         if self["preunprog"] != None:
             if not runScript(self["preunprog"], self["preun"], numPkgs):
-                printError("%s: Error running pre uninstall script." % self.getNEVRA())
+                printError("%s: Error running pre uninstall script." \
+                    % self.getNEVRA())
                 return 0
         # Remove files starting from the end (reverse process to install)
         for i in xrange(len(files)-1, -1, -1):
@@ -210,12 +214,14 @@ class RpmPackage(RpmData):
                     try:
                         os.rmdir(f)
                     except:
-                        printWarning(1, "Couldn't remove dir %s from pkg %s" % (f, self.source))
+                        printWarning(1, "Couldn't remove dir %s from pkg %s" \
+                            % (f, self.source))
             else:
                 try:
                     os.unlink(f)
                 except:
-                    printWarning(1, "Couldn't remove file %s from pkg %s" % (f, self.source))
+                    printWarning(1, "Couldn't remove file %s from pkg %s" \
+                        % (f, self.source))
         if rpmconfig.hash:
             printInfo(0, "\n")
         else:
@@ -223,12 +229,13 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None:
             if not runScript(self["postunprog"], self["postun"], numPkgs):
-                printError("%s: Error running post uninstall script." % self.getNEVRA())
+                printError("%s: Error running post uninstall script." \
+                    % self.getNEVRA())
         return 1
 
     def isSourceRPM(self):
         # XXX: is it right method how detect by header?
-        if self["sourcerpm"]==None:
+        if self["sourcerpm"] == None:
             return 1
         return 0
 
@@ -331,10 +338,12 @@ class RpmPackage(RpmData):
         if rfi.flags & RPMFILE_CONFIG == 0:
             return 1
         plist = db.filenames[rfi.filename]
-        (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) = os.stat(rfi.filename)
+        (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
+            = os.stat(rfi.filename)
         md5sum = md5.new(open(rfi.filename).read()).hexdigest()
         # Same file in new rpm as on disk -> just write it.
-        if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid and rfi.filesize == filesize and rfi.md5sum == md5sum:
+        if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid \
+            and rfi.filesize == filesize and rfi.md5sum == md5sum:
             return 1
         # File has changed on disc, now check if it has changed between the
         # different packages that share it and the new package
@@ -342,12 +351,15 @@ class RpmPackage(RpmData):
             orfi = pkg.getRpmFileInfo(rfi.filename)
             # Is the current file in the filesystem identical to the one in the
             # old rpm? If yes, then it's a simple update.
-            if orfi.mode == mode and orfi.uid == uid and orfi.gid == gid and orfi.filesize == filesize and orfi.md5sum == md5sum:
+            if orfi.mode == mode and orfi.uid == uid and orfi.gid == gid \
+                and orfi.filesize == filesize and orfi.md5sum == md5sum:
                 return 1
             # If installed and new stats of the file are the same don't do
             # anything with it. If the file hasn't changed in the packages we
             # keep the editited file on disc.
-            if rfi.mode == orfi.mode and rfi.uid == orfi.uid and rfi.gid == orfi.gid and rfi.filesize == orfi.filesize and rfi.md5sum == orfi.md5sum:
+            if rfi.mode == orfi.mode and rfi.uid == orfi.uid and \
+                rfi.gid == orfi.gid and rfi.filesize == orfi.filesize and \
+                rfi.md5sum == orfi.md5sum:
                 printWarning(1, "%s: Same file between new and installed package, skipping." % self.getNEVRA())
                 continue
             # OK, file in new package is different to some old package and it
@@ -370,7 +382,8 @@ class RpmPackage(RpmData):
         if self["dirnames"] == None or self["dirindexes"] == None:
             return
         for i in xrange (len(self["basenames"])):
-            filename = self["dirnames"][self["dirindexes"][i]] + self["basenames"][i]
+            filename = self["dirnames"][self["dirindexes"][i]] \
+                + self["basenames"][i]
             self["filenames"].append(filename)
 
     def __generateFileInfoList(self):
@@ -449,15 +462,22 @@ class RpmPackage(RpmData):
             rpmflags = self["fileflags"][i]
         if self.has_key("filecolors"):
             rpmfilecolor = self["filecolors"][i]
-        rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum, rpmflags, rpmfilecolor)
+        rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid,
+            rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum, rpmflags,
+            rpmfilecolor)
         return rfi
 
+    def getEpoch(self):
+        e = self["epoch"]
+        if e == None:
+            return "0"
+        return str(e[0])
+
     def getEVR(self):
-        if self["epoch"] != None:
-            e = str(self["epoch"][0])+":"
-        else:
-            e = ""
-        return "%s%s-%s" % (e, self["version"], self["release"])
+        e = self["epoch"]
+        if e != None:
+            return "%s:%s-%s" % (str(e[0]), self["version"], self["release"])
+        return "%s-%s" % (self["version"], self["release"])
 
     def getNEVR(self):
         return "%s-%s" % (self["name"], self.getEVR())
@@ -472,15 +492,19 @@ class RpmPackage(RpmData):
         return self.__getDeps(("requirename", "requireflags", "requireversion"))
 
     def getObsoletes(self):
-        return self.__getDeps(("obsoletename", "obsoleteflags", "obsoleteversion"))
+        return self.__getDeps(("obsoletename", "obsoleteflags",
+            "obsoleteversion"))
 
     def getConflicts(self):
-        return self.__getDeps(("conflictname", "conflictflags", "conflictversion"))
+        return self.__getDeps(("conflictname", "conflictflags",
+            "conflictversion"))
 
     def getTriggers(self):
         if self["triggerindex"] == None:
-            return self.__getDeps(("triggername", "triggerflags", "triggerversion", "triggerscriptprog", "triggerscripts"))
-        deps =  self.__getDeps(("triggername", "triggerflags", "triggerversion"))
+            return self.__getDeps(("triggername", "triggerflags",
+                "triggerversion", "triggerscriptprog", "triggerscripts"))
+        deps =  self.__getDeps(("triggername", "triggerflags",
+            "triggerversion"))
         numdeps = len(deps)
         if len(self["triggerscriptprog"]) != len(self["triggerscripts"]):
             raiseFatal("%s: wrong length of triggerscripts/prog" % self.source)

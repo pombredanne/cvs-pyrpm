@@ -225,8 +225,8 @@ class RpmController:
         if self.pydb != None:
             return 1
         self.installed = []
-        if self.buildroot != None:
-            self.pydb = io.RpmPyDB(self.buildroot+self.db)
+        if self.buildroot:
+            self.pydb = io.RpmPyDB(self.buildroot + self.db)
         else:
             self.pydb = io.RpmPyDB(self.db)
         if self.pydb == None:

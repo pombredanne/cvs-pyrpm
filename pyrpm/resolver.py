@@ -70,10 +70,7 @@ class ProvidesList:
                 if evrCompare(p[1], flag, version) == 1 and \
                        evrCompare(p[1], p[0], version) == 1:
                     ret.append(p[2])
-                if p[2]["epoch"] == None:
-                    evr = ("0", p[2]["version"], p[2]["release"])
-                else:
-                    evr = (str(p[2]["epoch"][0]), p[2]["version"], p[2]["release"])
+                evr = (p[2].getEpoch(), p[2]["version"], p[2]["release"])
                 if evrCompare(evr, flag, version) == 1:
                     ret.append(p[2])
 
