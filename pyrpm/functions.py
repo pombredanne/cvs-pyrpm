@@ -435,7 +435,10 @@ def evrCompare(evr1, comp, evr2):
         e1 = evr1
     else:
         e1 = evrSplit(evr1)
-    e2 = evrSplit(evr2)
+    if isinstance(evr2, TupleType):
+        e2 = evr2
+    else:
+        e2 = evrSplit(evr2)
     r = labelCompare(e1, e2)
     if r == -1:
         if comp & RPMSENSE_LESS:

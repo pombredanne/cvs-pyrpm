@@ -33,48 +33,51 @@ class ProvidesList:
     """ enable search of provides """
     """ provides of packages can be added and removed by package """
     def __init__(self):
-        self.provide = { }
-
-    def _append(self, name, flag, version, rpm):
-        if not self.provide.has_key(name):
-            self.provide[name] = [ ]
-        self.provide[name].append((flag, version, rpm))
-
-    def _remove(self, name, flag, version, rpm):
-        if not self.provide.has_key(name):
-            return
-        for p in self.provide[name]:
-            if p[0] == flag and p[1] == version and p[2] == rpm:
-                self.provide[name].remove(p)
-        if len(self.provide[name]) == 0:
-            del self.provide[name]
+        self.provide = {}
 
     def addPkg(self, rpm):
-        for p in rpm["provides"]:
-            self._append(p[0], p[1], p[2], rpm)
+        for (name, flag, version) in rpm["provides"]:
+            if not self.provide.has_key(name):
+                self.provide[name] = []
+            self.provide[name].append((flag, version, rpm))
 
     def removePkg(self, rpm):
-        for p in rpm["provides"]:
-            self._remove(p[0], p[1], p[2], rpm)
+        for (name, flag, version) in rpm["provides"]:
+            if not self.provide.has_key(name):
+                continue
+            provide = self.provide[name]
+            i = 0
+            while i < len(provide):
+                p = provide[i]
+                if p[0] == flag and p[1] == version and p[2] == rpm:
+                    provide.pop(i)
+                else:
+                    i += 1
+            if len(provide) == 0:
+                del self.provide[name]
 
     def search(self, name, flag, version, arch=None):
         if not self.provide.has_key(name):
-            return [ ]
-
-        ret = [ ]
-        for p in self.provide[name]:
+            return []
+        evr = None
+        ret = []
+        for (f, v, rpm) in self.provide[name]:
+            if rpm in ret:
+                continue
             if version == "":
-                ret.append(p[2])
-            else:
-                if evrCompare(p[1], flag, version) == 1 and \
-                       evrCompare(p[1], p[0], version) == 1:
-                    ret.append(p[2])
-                evr = (p[2].getEpoch(), p[2]["version"], p[2]["release"])
-                if evrCompare(evr, flag, version) == 1:
-                    ret.append(p[2])
+                ret.append(rpm)
+                continue
+            if evr == None:
+                evr = evrSplit(version)
+            if evrCompare(v, flag, evr) == 1 and \
+                evrCompare(v, f, evr) == 1:
+                ret.append(rpm)
+                continue
+            evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
+            if evrCompare(evr2, flag, evr) == 1:
+                ret.append(rpm)
 
-        if not arch or arch == "noarch":
-            # all rpms are matching
+        if not arch or arch == "noarch":   # all rpms are matching
             return ret
 
         # drop all packages which are not arch compatible
@@ -88,7 +91,7 @@ class ProvidesList:
                    arch in arch_compats[r["arch"]]:
                 i += 1
             else:
-                ret.remove(r)
+                ret.pop(i)
 
         return ret
 
@@ -98,37 +101,31 @@ class FilenamesList:
     """ enable search of filenames """
     """ filenames of packages can be added and removed by package """
     def __init__(self):
-        self.filename = { }
-        self.multi = [ ]
-
-    def _append(self, name, rpm):
-        if not self.filename.has_key(name):
-            self.filename[name] = [ ]
-        else:
-            if len(self.filename[name]) == 1:
-                self.multi.append(name)
-        self.filename[name].append(rpm)
-
-    def _remove(self, name, rpm):
-        if not self.filename.has_key(name):
-            return
-        if len(self.filename[name]) == 2:
-            self.multi.remove(name)
-        if rpm in self.filename[name]:
-            self.filename[name].remove(rpm)
-        if len(self.filename[name]) == 0:
-            del self.filename[name]
+        self.filename = {}
+        self.multi = {}
 
     def addPkg(self, rpm):
-        for f in rpm["filenames"]:
-            self._append(f, rpm)
+        for name in rpm["filenames"]:
+            if not self.filename.has_key(name):
+                self.filename[name] = []
+            else:
+                self.multi[name] = None
+            self.filename[name].append(rpm)
 
     def removePkg(self, rpm):
-        for f in rpm["filenames"]:
-            self._remove(f, rpm)
+        for name in rpm["filenames"]:
+            if not self.filename.has_key(name):
+                continue
+            f = self.filename[name]
+            if len(f) == 2:
+                del self.multi[name]
+            if rpm in f:
+                f.remove(rpm)
+            if len(f) == 0:
+                del self.filename[name]
 
     def search(self, name):
-        return self.filename.get(name, [ ])
+        return self.filename.get(name, [])
 
 # ----------------------------------------------------------------------------
 
@@ -377,7 +374,7 @@ class RpmResolver(RpmList):
             return None
 
         conflicts = [ ]
-        for filename in self.filenames.multi:
+        for filename in self.filenames.multi.keys():
             printDebug(1, "Checking for file conflicts for '%s'" % filename)
             s = self.filenames.search(filename)
             for j in xrange(len(s)):
