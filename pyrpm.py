@@ -19,6 +19,9 @@
 import struct
 import rpmconstants
 import os.path
+import re
+import sys
+import getopt
 
 def parseLead(f, fname=None, verify=1):
     """ Takes a python file object at the start of an RPM file and
@@ -272,11 +275,55 @@ class RRpm:
         self.uids = uids
         self.gids = gids
 
-if __name__ == "__main__":
-    import sys
-    sys.argv = sys.argv[1:]
-    for a in sys.argv:
-        rpm = RpmHeader(a)
-        #print "%s-%s-%s" % (rpm['name'], rpm['version'], rpm['release'])
 
+def showHelp():
+    print "pyrpm [options] /path/to/foo.rpm"
+    print
+    print "options:"
+    print "--help this message"
+    print "--queryformat [queryformat]  specifying a format to print the query as"
+    print "                   see python String Formatting Operations for details"
+    print
+
+def queryFormatUnescape(s):
+    # Hack to emulate %{name} but not %%{name} and expand escapes
+    rpmre = re.compile(r'([^%])%\{(\w+)\}')
+    s = re.sub(rpmre, r'\1%(\2)s', s)
+    s = s.replace("\\n","\n")
+    s = s.replace("\\t","\t")
+    s = s.replace('\\"', '\"')
+    s = s.replace('\\v','\v')
+    s = s.replace('\\r','\r')
+    return s
+    
+def main(args):
+    queryformat="%{name}-%{version}-%{release}"
+    try:
+        opts, args = getopt.getopt(args, "hq", ["help", "queryformat="])
+    except getopt.error, e:
+        print "Error parsing command list arguments: %s" % e
+        showHelp()
+        sys.exit(1)
+
+    for (opt, val) in opts:
+        if opt in ["-h", "--help"]:
+            showHelp()
+            sys.exit(1)
+        if opt in ['-c', "--queryformat"]:
+            queryformat = val 
+
+    if not args:
+        print "Error no packages to query"
+        showHelp()
+        sys.exit(1)
+
+    queryformat = queryFormatUnescape(queryformat)
+
+    for a in args:
+        rpm = RpmHeader(a)
+        sys.stdout.write(queryformat % rpm)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+    
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -1,0 +1,3 @@
+Expose cpio
+Merge rpmdb/bsddb functionality 
+Ensure all RPM_TYPEs implemented
