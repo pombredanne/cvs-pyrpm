@@ -34,12 +34,12 @@ class ProvidesList:
     def __init__(self):
         self.provide = {}
 
-    def append(self, name, flag, version, rpm):
+    def _append(self, name, flag, version, rpm):
         if not self.provide.has_key(name):
             self.provide[name] = []
         self.provide[name].append((flag, version, rpm))
 
-    def remove(self, name, flag, version, rpm):
+    def _remove(self, name, flag, version, rpm):
         if not self.provide.has_key(name):
             return
         for p in self.provide[name]:
@@ -50,11 +50,11 @@ class ProvidesList:
 
     def addPkg(self, rpm):
         for p in rpm["provides"]:
-            self.append(p[0], p[1], p[2], rpm)
+            self._append(p[0], p[1], p[2], rpm)
 
     def removePkg(self, rpm):
         for p in rpm["provides"]:
-            self.remove(p[0], p[1], p[2], rpm)
+            self._remove(p[0], p[1], p[2], rpm)
 
     def search(self, name, flag, version, arch=None):
         if not self.provide.has_key(name):
@@ -100,7 +100,7 @@ class FilenamesList:
         self.filename = {}
         self.multi = []
 
-    def append(self, name, rpm):
+    def _append(self, name, rpm):
         if not self.filename.has_key(name):
             self.filename[name] = [ ]
         else:
@@ -108,7 +108,7 @@ class FilenamesList:
                 self.multi.append(name)
         self.filename[name].append(rpm)
 
-    def remove(self, name, rpm):
+    def _remove(self, name, rpm):
         if not self.filename.has_key(name):
             return
         if len(self.filename[name]) == 2:
@@ -120,11 +120,11 @@ class FilenamesList:
 
     def addPkg(self, rpm):
         for f in rpm["filenames"]:
-            self.append(f, rpm)
+            self._append(f, rpm)
 
     def removePkg(self, rpm):
         for f in rpm["filenames"]:
-            self.remove(f, rpm)
+            self._remove(f, rpm)
 
     def search(self, name):
         if not self.filename.has_key(name):
