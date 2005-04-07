@@ -19,8 +19,7 @@
 
 from hashlist import HashList
 from config import rpmconfig
-from functions import buildarchtranslate, printWarning, pkgCompare, \
-     archCompat, archDuplicate
+from functions import printWarning, pkgCompare, archCompat, archDuplicate
 from base import OP_INSTALL, OP_UPDATE, OP_ERASE, OP_FRESHEN
 
 class RpmList:
@@ -67,9 +66,7 @@ class RpmList:
                 return self.NOT_INSTALLED
             found = 0
             for r in self.installed[pkg["name"]]:
-                if pkg["arch"] == r["arch"] or \
-                       buildarchtranslate[pkg["arch"]] == \
-                       buildarchtranslate[r["arch"]]:
+                if archDuplicate(pkg["arch"], r["arch"]):
                     found = 1
                     break
             if found == 0:
@@ -86,21 +83,19 @@ class RpmList:
 
     def _install(self, pkg):
         key = pkg["name"]
-        if self.installed.has_key(key):
-            for r in self.installed[key]:
-                if r == pkg or \
-                   (r.getNEVR() == pkg.getNEVR() and \
-                    (pkg["arch"] == r["arch"] or \
-                     buildarchtranslate[pkg["arch"]] == \
-                     buildarchtranslate[r["arch"]])):
-                    printWarning(1, "%s: %s is already installed" % \
-                                 (pkg.getNEVRA(), r.getNEVRA()))
-                    return self.ALREADY_INSTALLED
         if self.list.has_key(key):
-            if pkg in self.list[key]:
-                printWarning(1, "%s was already added" % pkg.getNEVRA())
-                return self.ALREADY_ADDED
-        else:
+            for r in self.list[key]:
+                if r == pkg or (r.getNEVR() == pkg.getNEVR() and \
+                                archDuplicate(r["arch"], pkg["arch"])):
+                    if self.isInstalled(r):
+                        printWarning(1, "%s: %s is already installed" % \
+                                     (pkg.getNEVRA(), r.getNEVRA()))
+                        return self.ALREADY_INSTALLED
+                    else:
+                        printWarning(1, "%s: %s was already added" % \
+                                     (pkg.getNEVRA(), r.getNEVRA()))
+                        return self.ALREADY_ADDED
+        if not self.list.has_key(key):
             self.list[key] = [ ]
         self.list[key].append(pkg)
 
