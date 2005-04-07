@@ -78,13 +78,17 @@ class RpmYum:
         self.pkgs = []
         for f in args:
             if os.path.isfile(f) and f.endswith(".rpm"):
-                self.pkgs.append(self.__readRpmPackage(f))
+                pkg = self.__readRpmPackage(f)
+                if rpmconfig.ignorearch or archCompat(pkg["arch"], rpmconfig.machine):
+                    self.pkgs.append(pkg)
             elif os.path.isdir(f):
                 for g in os.listdir(f):
                     fn = "%s/%s" % (f, g)
                     if not g.endswith(".rpm") or not os.path.isfile(fn):
                         continue
-                    self.pkgs.append(self.__readRpmPackage(fn))
+                    pkg = self.__readRpmPackage(fn)
+                    if rpmconfig.ignorearch or archCompat(pkg["arch"], rpmconfig.machine):
+                        self.pkgs.append(pkg)
             else:
                 for repo in self.repos:
                     self.pkgs.extend(findPkgByName(f, repo.appended))
@@ -228,11 +232,15 @@ class RpmYum:
             fn = "%s/%s" % (dirname, f)
             if not f.endswith(".rpm") or not os.path.isfile(fn):
                 continue
-            pkg_list.append(self.__readRpmPackage(fn))
-        for ex in excludes.split():
-            for pkg in findPkgByName(ex, pkg_list):
+            pkg = self.__readRpmPackage(fn)
+            if rpmconfig.ignorearch or \
+               archCompat(pkg["arch"], rpmconfig.machine):
+                pkg_list.append(pkg)
+        ex_list = string.split(excludes)
+        for ex in ex_list:
+            excludes = findPkgByName(ex, pkg_list)
+            for pkg in excludes:
                 pkg_list.remove(pkg)
-        filterArchCompat(pkg_list, rpmconfig.machine)
         for pkg in pkg_list:
             resolver.append(pkg)
         self.repos.append(resolver)

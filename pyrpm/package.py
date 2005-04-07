@@ -194,7 +194,7 @@ class RpmPackage(RpmData):
             numPkgs = str(db.getNumPkgs(self["name"])+1)
         if self["preinprog"] != None and not rpmconfig.noscripts:
             if not runScript(self["preinprog"], self["prein"], numPkgs):
-                printError("%s: Error running pre install script." \
+                printError("\n%s: Error running pre install script." \
                     % self.getNEVRA())
         if not self.__extract(db):
             return 0
@@ -205,7 +205,7 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None and not rpmconfig.noscripts:
             if not runScript(self["postinprog"], self["postin"], numPkgs):
-                printError("%s: Error running post install script." \
+                printError("\n%s: Error running post install script." \
                     % self.getNEVRA())
         self.rfilist = None
         return 1
@@ -222,7 +222,7 @@ class RpmPackage(RpmData):
             numPkgs = str(db.getNumPkgs(self["name"])-1)
         if self["preunprog"] != None and not rpmconfig.noscripts:
             if not runScript(self["preunprog"], self["preun"], numPkgs):
-                printError("%s: Error running pre uninstall script." \
+                printError("\n%s: Error running pre uninstall script." \
                     % self.getNEVRA())
         # Remove files starting from the end (reverse process to install)
         nfiles = len(files)
@@ -260,7 +260,7 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None and not rpmconfig.noscripts:
             if not runScript(self["postunprog"], self["postun"], numPkgs):
-                printError("%s: Error running post uninstall script." \
+                printError("\n%s: Error running post uninstall script." \
                     % self.getNEVRA())
         return 1
 
@@ -413,17 +413,17 @@ class RpmPackage(RpmData):
             if rfi.mode == orfi.mode and rfi.uid == orfi.uid and \
                 rfi.gid == orfi.gid and rfi.filesize == orfi.filesize and \
                 rfi.md5sum == orfi.md5sum:
-                printWarning(1, "%s: Same config file between new and installed package, skipping." % self.getNEVRA())
+                printWarning(1, "\n%s: Same config file between new and installed package, skipping." % self.getNEVRA())
                 continue
             # OK, file in new package is different to some old package and it
             # is editied on disc. Now verify if it is a noreplace or not
             if rfi.flags & RPMFILE_NOREPLACE:
-                printWarning(0, "%s: config(noreplace) file found that changed between old and new rpms and has changed on disc, creating new file as %s.rpmnew" %(self.getNEVRA(), rfi.filename))
+                printWarning(0, "\n%s: config(noreplace) file found that changed between old and new rpms and has changed on disc, creating new file as %s.rpmnew" %(self.getNEVRA(), rfi.filename))
                 rfi.filename += ".rpmnew"
             else:
-                printWarning(0, "%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
+                printWarning(0, "\n%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
                 if os.rename(rfi.filename, rfi.filename+".rpmsave") != None:
-                    raiseFatal("%s: Edited config file %s couldn't be renamed, aborting." % (self.getNEVRA(), rfi.filename))
+                    raiseFatal("\n%s: Edited config file %s couldn't be renamed, aborting." % (self.getNEVRA(), rfi.filename))
             break
         return 1
 
