@@ -80,11 +80,8 @@ class ProvidesList:
         i = 0
         while i < len(ret):
             r = ret[i]
-            if r["arch"] == "noarch" or r["arch"] == arch or \
-                   buildarchtranslate[arch] == \
-                   buildarchtranslate[r["arch"]] or \
-                   r["arch"] in arch_compats[arch] or \
-                   arch in arch_compats[r["arch"]]:
+            if r["arch"] == "noarch" or archDuplicate(r["arch"], arch) or \
+                   archCompat(r["arch"], arch) or archCompat(arch, r["arch"]):
                 i += 1
             else:
                 ret.pop(i)
@@ -202,6 +199,13 @@ class RpmResolver(RpmList):
                 else:
                     self.obsoletes[pkg] = self.obsoletes[obsolete_pkg]
                 del self.obsoletes[obsolete_pkg]
+        if obsolete_pkg in self.updates:
+            if pkg in self.updates:
+                self.updates[pkg].extend(self.updates[obsolete_pkg])
+                normalizeList(self.updates[pkg])
+            else:
+                self.updates[pkg] = self.updates[obsolete_pkg]
+            del self.updates[obsolete_pkg]
         return self._erase(obsolete_pkg)
     # ----
 
