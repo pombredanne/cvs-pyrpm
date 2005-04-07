@@ -155,7 +155,7 @@ class RpmList:
                         if archDuplicate(pkg["arch"], r["arch"]):
                             updates.append(r)
 
-        ret = self._install(pkg)
+        ret = self._install(pkg, 1)
         if ret != self.OK:  return ret
 
         for r in updates:
