@@ -176,17 +176,29 @@ class RpmYum:
             if not self.autoerase:
                 continue
             conflicts = self.opresolver.getConflicts()
-            for pkg1 in conflicts.keys():
-                for (c, pkg2) in conflicts[pkg1]:
-                    printInfo(1, "Resolving conflicts for %s:%s\n" % (pkg1.getNEVRA(), pkg2.getNEVRA()))
-                    if pkg1 in self.installed:
-                        pkg = pkg1
-                    else:
-                        pkg = pkg2
-                    ret = self.opresolver.append(self.__genObsoletePkg(pkg))
-                    if ret > 0:
-                        self.erase_list.append(pkg)
+            self.__doConflictAutoerase(conflicts)
             unresolved = self.opresolver.getUnresolvedDependencies()
+        if not self.autoerase:
+            return 1
+        conflicts = self.opresolver.getConflicts()
+        while len(conflicts) > 0:
+            self.__doConflictAutoerase(conflicts)
+            conflicts = self.opresolver.getConflicts()
+
+    def __doConflictAutoerase(self, conflicts):
+        for pkg1 in conflicts.keys():
+            for (c, pkg2) in conflicts[pkg1]:
+                printInfo(1, "Resolving conflicts for %s:%s\n" % (pkg1.getNEVRA(), pkg2.getNEVRA()))
+                if pkg1 in self.installed:
+                    pkg = pkg1
+                elif pkg2 in self.installed:
+                    pkg = pkg2
+                else:
+                    pkg = pkg2
+                ret = self.opresolver.append(self.__genObsoletePkg(pkg))
+                if ret > 0:
+                    self.erase_list.append(pkg)
+        conflicts = self.opresolver.getConflicts()
 
     def runCommand(self):
         appended = self.opresolver.appended
