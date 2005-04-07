@@ -15,21 +15,22 @@ preparechroot() {
     fi
     umount $1/dev
     umount $1/proc
-    mkdir -p $1/{dev,etc,tmp,proc,var/tmp}
+    mkdir -p $1/{dev,etc/sysconfig,tmp,proc,var/tmp}
     chmod 1777 $1/tmp
     touch $1/etc/fstab
+    echo "NETWORKING=yes" > $1/etc/sysconfig/network
     if test x$nodev = x ; then
-	mount --bind /dev $1/dev
+        mount --bind /dev $1/dev
     else
-	mknod -m 0666 $1/dev/null c 1 3
-	mknod -m 0666 $1/dev/zero c 1 5
-	mknod -m 0644 $1/dev/random c 1 8
-	mknod -m 0644 $1/dev/urandom c 1 9
-	mknod -m 0660 $1/dev/ttyS0 c 4 64
-	mknod -m 0660 $1/dev/ttyS1 c 4 65
-	mknod -m 0666 $1/dev/ptmx c 5 2
-	mknod -m 0660 $1/dev/md0 b 9 0
-	mknod -m 0660 $1/dev/loop0 b 7 1
+        mknod -m 0666 $1/dev/null c 1 3
+        mknod -m 0666 $1/dev/zero c 1 5
+        mknod -m 0644 $1/dev/random c 1 8
+        mknod -m 0644 $1/dev/urandom c 1 9
+        mknod -m 0660 $1/dev/ttyS0 c 4 64
+        mknod -m 0660 $1/dev/ttyS1 c 4 65
+        mknod -m 0666 $1/dev/ptmx c 5 2
+        mknod -m 0660 $1/dev/md0 b 9 0
+        mknod -m 0660 $1/dev/loop0 b 7 1
     fi
     mount -t proc proc $1/proc
 }
@@ -55,8 +56,9 @@ doinstall() {
             | tee $2.LOG.install
     else
         #time ./pyrpminstall -U -r $2 $1/*.rpm 2>&1 | tee $2/LOG.install
-        { time ./pyrpmyum -y -r $2 install $1; } 2>&1 \
-	    | tee $2.LOG.install
+        # --nofileconflicts
+        { time ./pyrpmyum --autoerase -y -r $2 install $1; } 2>&1 \
+            | tee $2.LOG.install
     fi
     sync
 }
@@ -65,19 +67,22 @@ DATA=/mnt/data/laroche
 
 if test x$1 = xclean ; then
     for i in $DATA/* ; do
-	test -d "$i" || continue
-	cleanchroot $2
+        test -d "$i" || continue
+        cleanchroot $2
     done
     exit 0
 fi
 
 RELEASED=/mnt/raid/redhat/released
 FEDORA=/mnt/raid/fedora
-FEDORA=/mnt/data/laroche/fedora
+#FEDORA=/mnt/data/laroche/fedora
 RPMS=RedHat/RPMS
+
+# Currently non-working:
 #doinstall --nodev $RELEASED/RHL-5.2/GOLD/i386/$RPMS $DATA/5.2
 #doinstall --nodev $RELEASED/RHL-6.2/GOLD/i386/$RPMS $DATA/6.2
 #doinstall --nodev $RELEASED/RHEL-2.1/U6/AS/i386/tree/$RPMS $DATA/2.1-U6-i386
+
 #doinstall --nodev $RELEASED/RHEL-3/U3/AS/i386/tree/$RPMS $DATA/3-U3-i386
 #doinstall --nodev $RELEASED/RHEL-3/U4/AS/i386/tree/$RPMS $DATA/3-U4-i386
 #doinstall --nodev /mnt/raid/trees/RHEL3U5/i386/$RPMS $DATA/3-U5-i386
@@ -85,13 +90,21 @@ RPMS=RedHat/RPMS
 #doinstall /mnt/raid/trees/RHEL4/i386/$RPMS $DATA/4-trees-i386
 #doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
 
-#doinstall --nodev $FEDORA/1/i386/os/Fedora/RPMS $DATA/FC1-i386
-#doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $DATA/FC2-i386
+doinstall --nodev $FEDORA/1/i386/os/Fedora/RPMS $DATA/FC1-i386
+{ time ./pyrpmyum -y --autoerase -r $DATA/FC1-i386 update $FEDORA/updates/1/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update
+{ time ./pyrpmyum -y --autoerase -r $DATA/FC1-i386 update $FEDORA/updates/testing/1/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update.1
+sync
 
-#doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386
+doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $DATA/FC2-i386
+{ time ./pyrpmyum -y --autoerase -r $DATA/FC2-i386 update $FEDORA/updates/2/i386 ; } 2>&1 | tee $DATA/FC2-i386.LOG.update
+{ time ./pyrpmyum -y --autoerase -r $DATA/FC2-i386 update $FEDORA/updates/testing/2/i386 ; } 2>&1 | tee $DATA/FC2-i386.LOG.update.1
+sync
+
+doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386
 #rm -f $DATA/FC3-i386/var/lib/pyrpm/headers/gnucash*
-#{ time ./pyrpmyum -y -r $DATA/FC3-i386 update $FEDORA/updates/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update
-#sync
+{ time ./pyrpmyum -y --autoerase -r $DATA/FC3-i386 update $FEDORA/updates/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update
+{ time ./pyrpmyum -y --autoerase -r $DATA/FC3-i386 update $FEDORA/updates/testing/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update.1
+sync
 
 #doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386-rpm rpm
 #rm -f $DATA/FC3-i386-rpm/etc/yum.repos.d/*
@@ -115,4 +128,7 @@ name=Fedora Linux Core \$releasever - \$basearch - Updates
 baseurl=file://localhost$DATA/fedora/updates/\$releasever/\$basearch
 EOF
 #time yum -c $DATA/FC3-i386-rpm/etc/yum.conf --installroot=$DATA/FC3-i386-rpm update 2>&1 | tee $DATA/FC3-i386-rpm.LOG.update
+
+
+#doinstall         $FEDORA/development/i386/Fedora/RPMS $DATA/FC4-i386
 
