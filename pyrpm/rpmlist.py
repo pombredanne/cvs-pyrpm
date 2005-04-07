@@ -36,7 +36,7 @@ class RpmList:
         self.clear()
         self.__len__ = self.list.__len__
         for r in installed:
-            self._install(r)
+            self._install(r, 1)
             if not self.installed.has_key(r["name"]):
                 self.installed[r["name"]] = [ ]
             self.installed[r["name"]].append(r)
@@ -83,9 +83,9 @@ class RpmList:
         return self.OK
     # ----
 
-    def _install(self, pkg):
+    def _install(self, pkg, no_check=0):
         key = pkg["name"]
-        if self.list.has_key(key):
+        if no_check == 0 and self.list.has_key(key):
             for r in self.list[key]:
                 if r == pkg or (r.getNEVR() == pkg.getNEVR() and \
                                 archDuplicate(r["arch"], pkg["arch"])):

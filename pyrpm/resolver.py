@@ -142,12 +142,13 @@ class RpmResolver(RpmList):
         self.installed_unresolved = HashList()
     # ----
 
-    def _install(self, pkg):
-        ret = RpmList._install(self, pkg)
+    def _install(self, pkg, no_check=0):
+        ret = RpmList._install(self, pkg, no_check)
         if ret != self.OK:  return ret
 
         self.provides.addPkg(pkg)
         self.filenames.addPkg(pkg)
+        
         return self.OK
     # ----
 
