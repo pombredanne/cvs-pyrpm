@@ -205,103 +205,122 @@ class RpmOrderer:
 
     # ----
 
-    def _detectLoop(self, relations):
-        """ Detect loop in relations """
-
-        # search for the best node: the smallest list of pre relations
-        node = relations[0]
-        node_pre_len = len(node[1].pre)
-        for (pkg, rel) in relations:
-            if len(rel.pre) < node_pre_len:
-                node = (pkg, rel)
-                node_pre_len = len(rel.pre)
-
-        # found starting node
-        (package, rel) = node
-        loop = HashList()
-        loop[package] = 0
-        i = 0
-        pkg = package
-        p = None
-        while i < len(relations):
-            if p == package:
-                break
-            # try to find a minimal loop
-            p = None
-            for (p2,i2) in loop:
-                if p2 in relations[pkg].pre:
-                    p = p2
-                    break
+    def _detectLoops(self, relations, path, pkg, loops, used):
+        if pkg in used: return
+        used[pkg] = 1
+        for (p,f) in relations[pkg].pre:
+            if len(path) > 0 and p in path:
+                w = path[path.index(p):] # make shallow copy of loop
+                w.append(pkg)
+                w.append(p)
+                loops.append(w)
             else:
-                (p,f) = relations[pkg].pre[loop[pkg]]
-
-            if loop.has_key(p):
-                # got node which is already in list: found loop
-                package = p
-                # remove leading nodes
-                while len(loop) > 0 and loop[0][0] != package:
-                    del loop[loop[0][0]]
-                break
-            else:
-                loop[p] = 0
-                pkg = p
-                i += 1
-
-        if p != package:
-            printError("A loop without a loop?")
-            return None
-
-        if rpmconfig.debug_level > 0:
-            printDebug(1, "===== loop (%d) =====" % len(loop))
-            for (p,i) in loop:
-                printDebug(1, "%s" % p.getNEVRA())
-            printDebug(1, "===== loop =====")
-
-        return loop
+                w = path[:] # make shallow copy of path
+                w.append(pkg)
+                self._detectLoops(relations, w, p, loops, used)
 
     # ----
 
-    def _breakupLoop(self, loop, relations):
-        """ Breakup loop in relations """
-        ### first try to breakup a soft relation
+    def getLoops(self, relations):
+        loops = [ ]
+        used =  { }
+        for (pkg, rel) in relations:
+            if not used.has_key(pkg):
+                self._detectLoops(relations, [ ], pkg, loops, used)
+        return loops
 
-        # search for the best node: soft relation and the smallest list of pre
-        # relations
-        node = None
-        node_pre_len = 1000000000
-        for (p,i) in loop:
-            (p2,f) = relations[p].pre[i]
-            if f == 1 and len(relations[p].pre) < node_pre_len:
-                node = p
-                node_pre_len = len(relations[p].pre)
+    # ----
 
-        if node != None:
-            (p2,f) = relations[node].pre[loop[node]]
-            printDebug(1, "Removing requires for %s from %s" % \
-                       (p2.getNEVRA(), node.getNEVRA()))
-            del relations[node].pre[p2]
-            del relations[p2]._post[node]
+    def genCounter(self, relations, loops):
+        counter = HashList()
+        for i in xrange(len(loops)):
+            w = loops[i]
+            j = 0
+            while j < len(w)-1:
+                node = w[j]
+                next = w[j+1]
+                if node not in counter:
+                    counter[node] = HashList()
+                if next not in counter[node]:
+                    counter[node][next] = 1
+                else:
+                    counter[node][next] += 1
+                j += 1
+        return counter
+
+    # ----
+
+    def breakupLoops(self, relations, loops):
+        counter = self.genCounter(relations, loops)
+
+        # breakup soft loop
+        max_count_node = None
+        max_count_next = None
+        max_count = 0
+        for node,list in counter:
+            for next,count in list:
+                if max_count < count and relations[node].pre[next] == 1:
+                    max_count_node = node
+                    max_count_next = next
+                    max_count = count
+
+        if max_count_node:
+            printDebug(1, "Removing requires for %s from %s (%d)" % \
+                       (max_count_next.getNEVRA(), max_count_node.getNEVRA(),
+                        max_count))
+            del relations[max_count_node].pre[max_count_next]
+            del relations[max_count_next]._post[max_count_node]
             return 1
 
-        ### breakup hard loop (zapping)
+        # breakup hard loop
+        max_count_node = None
+        max_count_next = None
+        max_count = 0
+        for node,list in counter:
+            for next,count in list:
+                if max_count < count:
+                    max_count_node = node
+                    max_count_next = next
+                    max_count = count
 
-        # search for the best node: the smallest list of pre relations
-        for (p,i) in loop:
-            (p2,f) = relations[p].pre[i]
-            if len(relations[p].pre) < node_pre_len:
-                node = p
-                node_pre_len = len(relations[p].pre)
-
-        if node != None:
-            (p2,f) = relations[node].pre[loop[node]]
-            printDebug(1, "Zapping requires for %s from %s to break up hard loop" % \
-                       (p2.getNEVRA(), node.getNEVRA()))
-            del relations[node].pre[p2]
-            del relations[p2]._post[node]
+        if max_count_node:
+            printDebug(1, "Zapping requires for %s from %s (%d)" % \
+                       (max_count_next.getNEVRA(), max_count_node.getNEVRA(),
+                        max_count))
+            del relations[max_count_node].pre[max_count_next]
+            del relations[max_count_next]._post[max_count_node]
             return 1
-
+        
         return 0
 
+    # ----
+
+    def _separatePostLeafNodes(self, relations, list):
+        while len(relations) > 0:
+            i = 0
+            found = 0
+            while i < len(relations):
+                (pkg, rel) = relations[i]
+                if len(rel._post) == 0:
+                    list.insert(0, pkg)
+                    relations.remove(pkg)
+                    found = 1
+                else:
+                    i += 1
+            if found == 0:
+                break
+
+    # ----
+
+    def _getNextLeafNode(self, relations):
+        next = None
+        next_post_len = -1
+        for (pkg, rel) in relations:
+            if len(rel.pre) == 0 and len(rel._post) > next_post_len:
+                next = pkg
+                next_post_len = len(rel._post)
+        return next
+        
     # ----
 
     def orderRpms(self, relations):
@@ -314,35 +333,16 @@ class RpmOrderer:
             # remove and save all packages without a post relation in reverse
             # order 
             # these packages will be appended later to the list
-            while len(relations) > 0:
-                i = 0
-                found = 0
-                while i < len(relations):
-                    (pkg, rel) = relations[i]
-                    if len(rel._post) == 0:
-                        last.insert(0, pkg)
-                        relations.remove(pkg)
-                        found = 1
-                    else:
-                        i += 1
-                if found == 0:
-                    break
+            self._separatePostLeafNodes(relations, last)
+
             if len(relations) == 0:
                 break
 
-            next = None
-            # we have to have at least one entry, so start with -1 for len
-            next_post_len = -1
-            for (pkg, rel) in relations:
-                if len(rel.pre) == 0 and len(rel._post) > next_post_len:
-                    next = (pkg, rel)
-                    next_post_len = len(rel._post)
-
+            next = self._getNextLeafNode(relations)
             if next != None:
-                pkg = next[0]
-                order.append(pkg)
-                relations.remove(pkg)
-                printDebug(2, "%d: %s" % (idx, pkg.getNEVRA()))
+                order.append(next)
+                relations.remove(next)
+                printDebug(2, "%d: %s" % (idx, next.getNEVRA()))
                 idx += 1
             else:
                 if rpmconfig.debug_level > 0:
@@ -355,14 +355,9 @@ class RpmOrderer:
                                        (r[0].getNEVRA(), r[1]))
                     printDebug(2, "===== remaining packages =====\n")
 
-                # detect loop
-                loop = self._detectLoop(relations)
-                if loop == None:
-                    return None
-
-                # breakup loop
-                if self._breakupLoop(loop, relations) != 1:
-                    printError("Could not breakup loop")
+                loops = self.getLoops(relations)
+                if self.breakupLoops(relations, loops) != 1:
+                    printError("Unable to breakup loop.")
                     return None
 
         if rpmconfig.debug_level > 1:
