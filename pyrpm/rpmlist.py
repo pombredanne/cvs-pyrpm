@@ -147,12 +147,12 @@ class RpmList:
 
                     if archCompat(pkg["arch"], r["arch"]):
                         if self.isInstalled(r):
-                            printWarning(1, "%s is already installed" % \
-                                         pkg.getNEVRA())
+                            printWarning(1, "%s: Ignoring due to installed %s" % \
+                                         (pkg.getNEVRA(), r.getNEVRA()))
                             return self.ALREADY_INSTALLED
                         else:
-                            printWarning(1, "%s was already added" % \
-                                         pkg.getNEVRA())
+                            printWarning(1, "%s: Ignoring due to already added %s" % \
+                                         (pkg.getNEVRA(), r.getNEVRA()))
                             return self.ALREADY_ADDED
                     else:
                         if archDuplicate(pkg["arch"], r["arch"]):
