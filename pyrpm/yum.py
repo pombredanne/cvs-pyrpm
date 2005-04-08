@@ -91,7 +91,7 @@ class RpmYum:
                         self.pkgs.append(pkg)
             else:
                 for repo in self.repos:
-                    self.pkgs.extend(findPkgByName(f, repo.appended))
+                    self.pkgs.extend(findPkgByName(f, repo.getList()))
                 if len(self.pkgs) == 0:
                     printError("Couldn't find package %s, skipping" % f)
 
@@ -111,7 +111,7 @@ class RpmYum:
         self.pkgs = []
         # Look for obsoletes and add them to our update packages
         for repo in self.repos:
-            for pkg in repo.appended:
+            for pkg in repo.getList():
                 for u in pkg["obsoletes"]:
                     s = self.opresolver.searchDependency(u)
                     if len(s) > 0:
@@ -143,8 +143,10 @@ class RpmYum:
                 if found == 0:
                     tmplist = []
                     for repo in self.repos:
-                        tmplist.extend(findPkgByName(pkg["name"], repo.appended))
+                        tmplist.extend(findPkgByName(pkg["name"], repo.getList()))
                     for upkg in tmplist:
+                        if upkg in self.erase_list:
+                            continue
                         res = self.opresolver.append(upkg)
                         if res > 0:
                             found = 1
@@ -152,9 +154,7 @@ class RpmYum:
                     if found == 0:
                         if self.autoerase:
                             printWarning(1, "Autoerasing package %s due to missing update package." % pkg.getNEVRA())
-                            ret = self.opresolver.append(self.__genObsoletePkg(pkg))
-                            if ret > 0:
-                                self.erase_list.append(pkg)
+                            self.__doAutoerase(pkg)
                         else:
                             printWarning(0, "Couldn't find update for package %s" \
                                 % pkg.getNEVRA())
@@ -163,9 +163,7 @@ class RpmYum:
                 for (pkg, deplist) in unresolved:
                     if self.autoerase:
                         printWarning(1, "Autoerasing package %s due to unresolved symbols." % pkg.getNEVRA())
-                        ret = self.opresolver.append(self.__genObsoletePkg(pkg))
-                        if ret > 0:
-                            self.erase_list.append(pkg)
+                        self.__doAutoerase(pkg)
                     else:
                         printInfo(1, "Unresolved dependencies for "+pkg.getNEVRA()+"\n")
                         for dep in deplist:
@@ -185,6 +183,23 @@ class RpmYum:
             self.__doConflictAutoerase(conflicts)
             conflicts = self.opresolver.getConflicts()
 
+    def __doAutoerase(self, pkg):
+        opkg = self.__genObsoletePkg(pkg)
+        ret = self.opresolver.append(opkg)
+        if ret > 0:
+            self.erase_list.append(pkg)
+            if opkg in self.opresolver.updates.keys():
+                for upkg in self.opresolver.updates[opkg]:
+                    if upkg in self.erase_list:
+                        continue
+                    self.opresolver.append(upkg)
+                    self.opresolver.updates[opkg].remove(upkg)
+                if len(self.opresolver.updates[opkg]) == 0:
+                    del self.opresolver.updates[opkg]
+        else:
+            return 0
+        return 1
+
     def __doConflictAutoerase(self, conflicts):
         for pkg1 in conflicts.keys():
             for (c, pkg2) in conflicts[pkg1]:
@@ -195,10 +210,7 @@ class RpmYum:
                     pkg = pkg2
                 else:
                     pkg = pkg2
-                ret = self.opresolver.append(self.__genObsoletePkg(pkg))
-                if ret > 0:
-                    self.erase_list.append(pkg)
-        conflicts = self.opresolver.getConflicts()
+                self.__doAutoerase(pkg)
 
     def runCommand(self):
         appended = self.opresolver.appended
@@ -238,7 +250,6 @@ class RpmYum:
         return pkg
 
     def addRepo(self, dirname, excludes):
-        resolver = RpmResolver([], OP_INSTALL)
         pkg_list = []
         for f in os.listdir(dirname):
             fn = "%s/%s" % (dirname, f)
@@ -248,13 +259,12 @@ class RpmYum:
             if rpmconfig.ignorearch or \
                archCompat(pkg["arch"], rpmconfig.machine):
                 pkg_list.append(pkg)
-        ex_list = string.split(excludes)
+        ex_list = excludes.split()
         for ex in ex_list:
             excludes = findPkgByName(ex, pkg_list)
             for pkg in excludes:
                 pkg_list.remove(pkg)
-        for pkg in pkg_list:
-            resolver.append(pkg)
+        resolver = RpmResolver(pkg_list, OP_INSTALL)
         self.repos.append(resolver)
 
     def __test(self):
