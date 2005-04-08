@@ -1121,4 +1121,15 @@ def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
         return RpmFileIO(source, verify, strict, hdronly)
     return None
 
+###
+### this space intentionally left blank
+###
+
+class FooRpmDB(RpmDatabase):
+    pass
+
+###
+### this space intentionally left blank
+###
+
 # vim:ts=4:sw=4:showmatch:expandtab
