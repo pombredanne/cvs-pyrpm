@@ -270,6 +270,22 @@ class RpmPackage(RpmData):
             return 1
         return 0
 
+    def isEqual(self, pkg):
+        return self.getNEVRA() == pkg.getNEVRA()
+
+    def isIdentical(self, pkg):
+        if not self.isEqual(pkg):
+            return 0
+        if not self.has_key("signature") or not pkg.has_key("signature"):
+            return 0
+        # MD5 sum should always be there, so check that first
+        if self["signature"].has_key("md5") and \
+           pkg["signature"].has_key("md5"):
+            return self["signature"]["md5"] == pkg["signature"]["md5"]
+        if self["signature"].has_key("sha1header") and \
+           pkg["signature"].has_key("sha1header"):
+            return self["signature"]["sha1header"] == pkg["signature"]["sha1header"]
+        return 0
     def __readHeader(self, tags=None, ntags=None):
         if self.header_read:
             return 1
