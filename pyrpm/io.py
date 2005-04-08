@@ -1126,7 +1126,62 @@ def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
 ###
 
 class FooRpmDB(RpmDatabase):
-    pass
+    """testbed for directly accessing /var/lib/rpm/*"""
+    def __init__(self, source, buildroot=None):
+        RpmDatabase.__init__ (self, source, buildroot)
+
+    def pkg_from_rpmdb_by_key(self, key):
+        pkg = package.RpmPackage("dummy")
+        data = self.rpmdb[key]
+        val = unpack("i", key)[0]
+        if val == 0:
+            return None
+        else:
+            rpmio = RpmFileIO("dummy")
+            (indexNo, storeSize) = unpack("!ii", data[0:8])
+            indexdata = data[8:indexNo*16+8]
+            storedata = data[indexNo*16+8:]
+            pkg["signature"] = {}
+            for idx in xrange(0, indexNo):
+                (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata, storedata)
+                if   tag == 257:
+                    pkg["signature"]["size_in_sig"] = tagval
+                elif tag == 261:
+                    pkg["signature"]["md5"] = tagval
+                elif tag == 269:
+                    pkg["signature"]["sha1header"] =tagval
+                elif rpmtag.has_key(tag):
+                    if rpmtagname[tag] == "archivesize":
+                        pkg["signature"]["payloadsize"] = tagval
+                    else:
+                        pkg[rpmtagname[tag]] = tagval
+            rpmio.hdr = {}
+            rpmio.hdrtype = {}
+            pkg.generateFileNames()
+            nevra = pkg.getNEVRA()
+            pkg.source = "db:/"+self.source+"/"+nevra
+
+    def read(self):
+        """read RPM db from Berkeley DB files"""
+        if self.is_read:
+            return 1
+        dbpath = self._getDBPath()
+        self.rpmdb = bsddb.hashopen(dbpath+"/Packages", "r")
+        for key in self.rpmdb.keys():
+            pkg = self.pkg_from_rpmdb_by_key (key)
+            if pkg:
+                if not pkg.has_key("arch"):
+                    continue
+                if pkg["name"].startswith("gpg-pubkey"):
+                    continue
+                for filename in pkg["filenames"]:
+                    if not self.filenames.has_key(filename):
+                        self.filenames[filename] = []
+                    self.filenames[filename].append(pkg)
+                self.pkglist[nevra] = pkg
+
+        self.is_read = 1
+        return 1
 
 ###
 ### this space intentionally left blank
