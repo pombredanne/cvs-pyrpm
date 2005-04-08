@@ -744,20 +744,83 @@ class RpmHttpIO(RpmStreamIO):
     def _tell(self):
         return None
 
-
-class RpmDBIO(RpmFileIO):
-    def __init__(self, source, verify=None, strict=None, hdronly=None):
-        RpmFileIO.__init__(self, source, verify, strict, hdronly)
-
-
-class RpmDB:
-    def __init__(self, source):
+class RpmDatabase:
+    def __init__(self, source, buildroot=None):
         self.source = source
+        self.buildroot = buildroot
         self.filenames = {}
         self.pkglist = {}
+        self.is_read = 0
+
+    def setSource(self, source):
+        self.source = source
+
+    def setBuildroot(self, buildroot):
+        self.buildroot = buildroot
 
     def read(self):
-        db = bsddb.hashopen(self.source+"/Packages", "r")
+        raiseFatal("RpmDatabase::read() method not implemented")
+
+    def write(self):
+        raiseFatal("RpmDatabase::write() method not implemented")
+
+    def addPkg(self, pkg, nowrite=None):
+        raiseFatal("RpmDatabase::addPkg() method not implemented")
+
+    def erasePkg(self, pkg, nowrite=None):
+        raiseFatal("RpmDatabase::erasePkg() method not implemented")
+
+    def getPackage(self, name):
+        if not self.pkglist:
+            if not self.read():
+                return None
+        if not self.pkglist.has_key(name):
+                return None
+        return self.pkglist[name]
+
+    def getPkgList(self):
+        if not self.pkglist:
+            if not self.read():
+                return {}
+        return self.pkglist.values()
+
+    def isInstalled(self, pkg):
+        return pkg in self.pkglist.values()
+
+    def isDuplicate(self, file):
+        if not self.pkglist:
+            if not self.read():
+                return 1
+        if self.filenames.has_key(file) and len(self.filenames[file]) > 1:
+            return 1
+        return 0
+
+    def getNumPkgs(self, name):
+        if not self.pkglist:
+            if not self.read():
+                return 0
+        count = 0
+        for pkg in self.pkglist.values():
+            if pkg["name"] == name:
+                count += 1
+        return count
+
+    def _getDBPath(self):
+        if self.buildroot != None:
+            return self.buildroot + self.source
+        else:
+            return self.source
+
+
+class RpmDB(RpmDatabase):
+    def __init__(self, source, buildroot=None):
+        RpmDatabase.__init__(self, source, buildroot)
+
+    def read(self):
+        if self.is_read:
+            return 1
+        dbpath = self._getDBPath()
+        db = bsddb.hashopen(dbpath+"/Packages", "r")
         for key in db.keys():
             rpmio = RpmFileIO("dummy")
             pkg = package.RpmPackage("dummy")
@@ -795,51 +858,23 @@ class RpmDB:
                 self.pkglist[nevra] = pkg
                 rpmio.hdr = {}
                 rpmio.hdrtype = {}
+        self.is_read = 1
         return 1
 
-    def getPackage(self, name):
-        if not self.pkglist:
-            if not self.read():
-                return None
-        if not self.pkglist.has_key(name):
-                return None
-        return self.pkglist[name]
 
-    def getPkgList(self):
-        if not self.pkglist:
-            if not self.read():
-                return {}
-        return self.pkglist
-
-    def isDuplicate(self, file):
-        if not self.pkglist:
-            if not self.read():
-                return 1
-        if self.filenames.has_key(file) and len(self.filenames[file]) > 1:
-            return 1
-        return 0
-
-
-class RpmPyDBIO(RpmFileIO):
-    def __init__(self, source, verify=None, strict=None, hdronly=None):
-        RpmFileIO.__init__(self, source, verify, strict, hdronly)
-
-
-class RpmPyDB:
-    def __init__(self, source):
-        self.source = source
-        self.filenames = {}
-        self.pkglist = {}
-
-    def setSource(self, source):
-        self.source = source
+class RpmPyDB(RpmDatabase):
+    def __init__(self, source, buildroot):
+        RpmDatabase.__init__(self, source, buildroot)
 
     def read(self):
+        if self.is_read:
+            return 1
         if not self.__mkDBDirs():
             return 0
-        namelist = os.listdir(self.source+"/headers")
+        dbpath = self._getDBPath()
+        namelist = os.listdir(dbpath+"/headers")
         for nevra in namelist:
-            src = "pydb:/"+self.source+"/headers/"+nevra
+            src = "pydb:/"+dbpath+"/headers/"+nevra
             pkg = package.RpmPackage(src)
             pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "dirindexes", "basenames", "dirnames", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
             pkg.close()
@@ -848,6 +883,7 @@ class RpmPyDB:
                     self.filenames[filename] = []
                 self.filenames[filename].append(pkg)
             self.pkglist[nevra] = pkg
+        self.is_read = 1
         return 1
 
     def write(self):
@@ -858,9 +894,10 @@ class RpmPyDB:
     def addPkg(self, pkg, nowrite=None):
         if not self.__mkDBDirs():
             return 0
+        dbpath = self._getDBPath()
         nevra = pkg.getNEVRA()
         if not nowrite:
-            src = "pydb:/"+self.source+"/headers/"+nevra
+            src = "pydb:/"+dbpath+"/headers/"+nevra
             apkg = getRpmIOFactory(src)
             if not apkg.write(pkg):
                 return 0
@@ -873,7 +910,7 @@ class RpmPyDB:
                     % (nevra, filename))
                 self.filenames[filename].remove(pkg)
             self.filenames[filename].append(pkg)
-        if not self.write():
+        if not nowrite and not self.write():
             return 0
         self.pkglist[nevra] = pkg
         return 1
@@ -881,9 +918,10 @@ class RpmPyDB:
     def erasePkg(self, pkg, nowrite=None):
         if not self.__mkDBDirs():
             return 0
+        dbpath = self._getDBPath()
         nevra = pkg.getNEVRA()
         if not nowrite:
-            headerfile = self.source+"/headers/"+nevra
+            headerfile = dbpath+"/headers/"+nevra
             try:
                 os.unlink(headerfile)
             except:
@@ -897,62 +935,25 @@ class RpmPyDB:
                     % (nevra, filename))
                 continue
             self.filenames[filename].remove(pkg)
-        if not self.write():
+        if not nowrite and not self.write():
             return 0
         del self.pkglist[nevra]
         return 1
 
-    def getPackage(self, name):
-        if not self.pkglist:
-            if not self.read():
-                return None
-        if not self.pkglist.has_key(name):
-                return None
-        return self.pkglist[name]
-
-    def getPkgList(self):
-        if not self.pkglist:
-            if not self.read():
-                return {}
-        return self.pkglist
-
-    def isDuplicate(self, file):
-        if not self.pkglist:
-            if not self.read():
-                return 1
-        if self.filenames.has_key(file) and len(self.filenames[file]) > 1:
-            return 1
-        return 0
-
-    def getNumPkgs(self, name):
-        if not self.pkglist:
-            if not self.read():
-                return 0
-        count = 0
-        for pkg in self.pkglist.values():
-            if pkg["name"] == name:
-                count += 1
-        return count
-
     def __mkDBDirs(self):
-        if not os.path.isdir(self.source):
+        dbpath = self._getDBPath()
+        if not os.path.isdir(dbpath+"/headers"):
             try:
-                os.makedirs(self.source)
+                os.makedirs(dbpath+"/headers")
             except:
-                printError("%s: Couldn't open PyRPM database" % self.source)
-                return 0
-        if not os.path.isdir(self.source+"/headers"):
-            try:
-                os.makedirs(self.source+"/headers")
-            except:
-                printError("%s: Couldn't open PyRPM headers" % self.source)
+                printError("%s: Couldn't open PyRPM database" % dbpath)
                 return 0
         return 1
 
 
-class RpmRepoIO(RpmFileIO):
-    def __init__(self, source, verify=None, strict=None, hdronly=None):
-        RpmFileIO.__init__(self, source, verify, strict, hdronly)
+class RpmRepo(RpmDatabase):
+    def __init__(self, source, buildroot=None):
+        RpmDatabase.__init__(self, source, buildroot)
 
 
 class RpmCompsXMLIO:
@@ -1108,18 +1109,14 @@ class RpmCompsXMLIO:
 
 
 def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
-    if source[:4] == 'db:/':
-        return RpmDBIO(source[4:], verify, strict, hdronly)
-    elif source[:5] == 'ftp:/':
+    if   source[:5] == 'ftp:/':
         return RpmFtpIO(source, verify, strict, hdronly)
     elif source[:6] == 'file:/':
         return RpmFileIO(source[6:], verify, strict, hdronly)
     elif source[:6] == 'http:/':
         return RpmHttpIO(source, verify, strict, hdronly)
     elif source[:6] == 'pydb:/':
-        return RpmPyDBIO(source[6:], verify, strict, hdronly)
-    elif source[:6] == 'repo:/':
-        return RpmRepoIO(source[6:], verify, strict, hdronly)
+        return RpmFileIO(source[6:], verify, strict, hdronly)
     else:
         return RpmFileIO(source, verify, strict, hdronly)
     return None

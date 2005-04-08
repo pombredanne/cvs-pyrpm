@@ -136,8 +136,9 @@ def main():
     usage()
     sys.exit(1)
 
-  control = RpmController()
-  control.handleFiles(args, operation, rpmconfig.dbpath, rpmconfig.buildroot)
+  pydb = RpmPyDB(rpmconfig.dbpath, rpmconfig.buildroot)
+  control = RpmController(operation, pydb, rpmconfig.buildroot)
+  control.handleFiles(args)
   ops = control.getOperations()
   control.runOperations(ops)
 

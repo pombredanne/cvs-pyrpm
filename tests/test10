@@ -34,6 +34,7 @@ preparechroot() {
     fi
     mount -t proc proc $1/proc
 }
+
 cleanchroot() {
     test -d $1/dev || return
     test -d $1/proc || return
@@ -63,6 +64,32 @@ doinstall() {
     sync
 }
 
+genyumconf() {
+cat > /tmp/yum-$2.conf <<EOF
+[main]
+cachedir=/var/cache/yum
+debuglevel=0
+errorlevel=0
+logfile=/var/log/yum.log
+pkgpolicy=newest
+assumeyes=1
+distroverpkg=fedora-release
+gpgcheck=0
+tolerant=1
+exactarch=0
+retries=10
+obsoletes=1
+
+[base]
+name=Fedora Linux Core $1 - \$basearch
+baseurl=file://$FEDORA/$1/\$basearch/os/
+
+[updates]
+name=Fedora Linux Core $1 - \$basearch - Updates
+baseurl=file://$FEDORA/updates/$1/\$basearch/
+EOF
+}
+
 DATA=/mnt/data/laroche
 
 if test x$1 = xclean ; then
@@ -90,43 +117,51 @@ RPMS=RedHat/RPMS
 #doinstall /mnt/raid/trees/RHEL4/i386/$RPMS $DATA/4-trees-i386
 #doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
 
+# Raw FC1 install
 doinstall --nodev $FEDORA/1/i386/os/Fedora/RPMS $DATA/FC1-i386
+# Update FC1 to updates
 { time ./pyrpmyum -y --autoerase -r $DATA/FC1-i386 update $FEDORA/updates/1/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update
-{ time ./pyrpmyum -y --autoerase -r $DATA/FC1-i386 update $FEDORA/updates/testing/1/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update.1
+# Update FC1 to testing
+{ time ./pyrpmyum -y -vvv --autoerase -r $DATA/FC1-i386 update $FEDORA/updates/testing/1/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update.1
 sync
 
+# Raw FC2 install
 doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $DATA/FC2-i386
+# Update FC2 to updates
 { time ./pyrpmyum -y --autoerase -r $DATA/FC2-i386 update $FEDORA/updates/2/i386 ; } 2>&1 | tee $DATA/FC2-i386.LOG.update
+# Update FC2 to testing
 { time ./pyrpmyum -y --autoerase -r $DATA/FC2-i386 update $FEDORA/updates/testing/2/i386 ; } 2>&1 | tee $DATA/FC2-i386.LOG.update.1
 sync
 
+# Raw FC3 install
 doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386
 #rm -f $DATA/FC3-i386/var/lib/pyrpm/headers/gnucash*
+# Update FC3 to updates
 { time ./pyrpmyum -y --autoerase -r $DATA/FC3-i386 update $FEDORA/updates/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update
+# Update FC3 to testing
 { time ./pyrpmyum -y --autoerase -r $DATA/FC3-i386 update $FEDORA/updates/testing/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update.1
 sync
 
+# Install FC1 with all updates
+PID=$$
+genyumconf(1, $PID)
+{ time ./pyrpmyum -y --autoerase -c /tmp/yum-$PID.conf -r $DATA/FC1-2-3-i386 install "*"; } 2>&1 | tee $DATA/FC1-2-3-i386.LOG.update
+
+# Update to FC2 with all updates
+genyumconf(2)
+{ time ./pyrpmyum -y --autoerase -c /tmp/yum-$PID.conf -r $DATA/FC1-2-3-i386 install "*"; } 2>&1 | tee $DATA/FC1-2-3-i386.LOG.update
+
+# Update to FC3 with all updates
+genyumconf(3)
+{ time ./pyrpmyum -y --autoerase -c /tmp/yum-$PID.conf -r $DATA/FC1-2-3-i386 install "*"; } 2>&1 | tee $DATA/FC1-2-3-i386.LOG.update
+rm -f /tmp/yum-$PID.conf
+
+
+
+
+
 #doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386-rpm rpm
 #rm -f $DATA/FC3-i386-rpm/etc/yum.repos.d/*
-cat > $DATA/FC3-i386-rpm/etc/yum.conf <<EOF
-[main]
-cachedir=/var/cache/yum
-debuglevel=0
-errorlevel=0
-logfile=/var/log/yum.log
-pkgpolicy=newest
-assumeyes=1
-distroverpkg=fedora-release
-gpgcheck=0
-tolerant=1
-exactarch=1
-retries=10
-obsoletes=1
-
-[updates]
-name=Fedora Linux Core \$releasever - \$basearch - Updates
-baseurl=file://localhost$DATA/fedora/updates/\$releasever/\$basearch
-EOF
 #time yum -c $DATA/FC3-i386-rpm/etc/yum.conf --installroot=$DATA/FC3-i386-rpm update 2>&1 | tee $DATA/FC3-i386-rpm.LOG.update
 
 

@@ -36,8 +36,8 @@ class RpmYum:
         self.command = None
         # List of repository resolvers
         self.repos = []
-        # List of installed packages
-        self.installed = []
+        # Our database
+        self.pydb = None
 
     def setAutoerase(self, flag):
         self.autoerase = flag
@@ -49,13 +49,9 @@ class RpmYum:
         self.command = command
 
     def processArgs(self, args):
-        # Read db and store list of installed rpms
-        if rpmconfig.buildroot:
-            pydb = RpmPyDB(rpmconfig.buildroot + rpmconfig.dbpath)
-        else:
-            pydb = RpmPyDB(rpmconfig.dbpath)
-        self.installed = pydb.getPkgList().values()
-        del pydb
+        # Create and read db
+        self.pydb = RpmPyDB(rpmconfig.dbpath, rpmconfig.buildroot)
+        self.pydb.read()
         # If we do a group operation handle it accordingly
         if self.command.startswith("group"):
             if rpmconfig.compsfile == None:
@@ -71,7 +67,7 @@ class RpmYum:
             del comps
         else:
             if len(args) == 0:
-                for pkg in self.installed:
+                for pkg in self.pydb.getPkgList():
                     args.append(pkg["name"])
         # Look for packages we need/want to install. Arguments can either be
         # direct filenames or package nevra's with * wildcards
@@ -97,11 +93,11 @@ class RpmYum:
 
     def runDepRes(self):
         # Add packages to be updated  to our operation resolver
-        self.opresolver = RpmResolver(self.installed, OP_UPDATE)
+        self.opresolver = RpmResolver(self.pydb.getPkgList(), OP_UPDATE)
         for pkg in self.pkgs:
             if self.command in ("update", "upgrade", "groupupdate", "groupupgrade"):
                 name = pkg["name"]
-                for ipkg in self.installed:
+                for ipkg in self.pydb.getPkgList():
                     if ipkg["name"] == name:
                         self.opresolver.append(pkg)
                         break
@@ -160,13 +156,13 @@ class RpmYum:
                                 % pkg.getNEVRA())
                             sys.exit(1)
             if unresolved_deps:
-                for (pkg, deplist) in unresolved:
+                for pkg in unresolved.keys():
                     if self.autoerase:
                         printWarning(1, "Autoerasing package %s due to unresolved symbols." % pkg.getNEVRA())
                         self.__doAutoerase(pkg)
                     else:
                         printInfo(1, "Unresolved dependencies for "+pkg.getNEVRA()+"\n")
-                        for dep in deplist:
+                        for dep in unresolved[pkg]:
                             printInfo(1, "\t" + depString(dep)+"\n")
                 if not self.autoerase:
                     sys.exit(1)
@@ -204,18 +200,15 @@ class RpmYum:
         for pkg1 in conflicts.keys():
             for (c, pkg2) in conflicts[pkg1]:
                 printInfo(1, "Resolving conflicts for %s:%s\n" % (pkg1.getNEVRA(), pkg2.getNEVRA()))
-                if pkg1 in self.installed:
+                if   self.pydb.isInstalled(pkg1):
                     pkg = pkg1
-                elif pkg2 in self.installed:
+                elif self.pydb.isInstalled(pkg2):
                     pkg = pkg2
                 else:
                     pkg = pkg2
                 self.__doAutoerase(pkg)
 
     def runCommand(self):
-        appended = self.opresolver.appended
-        del self.opresolver
-        self.opresolver = None
         for repo in self.repos:
             del repo
         self.repos = []
@@ -230,9 +223,8 @@ class RpmYum:
             else:
                 if choice[0] != "y" and choice[0] != "Y":
                     sys.exit(0)
-        control = RpmController()
-        control.handlePkgs(appended, OP_UPDATE, rpmconfig.dbpath, rpmconfig.buildroot)
-        ops = control.getOperations()
+        control = RpmController(OP_UPDATE, self.pydb, rpmconfig.buildroot)
+        ops = control.getOperations(self.opresolver)
         i = 0
         while i < len(ops):
             (op, pkg) = ops[i]

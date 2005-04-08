@@ -69,57 +69,52 @@ class _Triggers:
 
 
 class RpmController:
-    def __init__(self):
-        self.db = None
-        self.pydb = None
-        self.ignorearch = None
-        self.operation = None
-        self.buildroot = None
-        self.rpms = []
-        self.installed = []
-
-    def handlePkgs(self, pkglist, operation, db="/var/lib/pyrpm", buildroot=None):
+    def __init__(self, operation, db, buildroot=None):
         self.operation = operation
         self.db = db
         self.buildroot = buildroot
-        if not self.__readDB(db):
-            return 0
+        self.rpms = []
+        if not self.db.read():
+            raiseFatal("Couldn't read database")
+
+    def handlePkgs(self, pkglist):
+        if rpmconfig.timer:
+            time1 = clock()
         for pkg in pkglist:
             self.rpms.append(pkg)
         if len(self.rpms) == 0:
             printInfo(2, "Nothing to do.\n")
             return 1
+        if rpmconfig.timer:
+            printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
         return 1
 
-    def handleFiles(self, filelist, operation, db="/var/lib/pyrpm", buildroot=None):
+    def handleFiles(self, filelist):
         if rpmconfig.timer:
             time1 = clock()
-        self.operation = operation
-        self.db = db
-        self.buildroot = buildroot
-        if not self.__readDB(db):
-            return 0
-        if operation == OP_ERASE:
+        if self.operation == OP_ERASE:
             for filename in filelist:
                 self.eraseFile(filename)
         else:
             for filename in filelist:
                 self.appendFile(filename)
         if len(self.rpms) == 0:
-            printInfo(0, "Nothing to do.\n")
-            sys.exit(0)
+            printInfo(2, "Nothing to do.\n")
+            return 1
         if rpmconfig.timer:
             printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
         return 1
 
-    def getOperations(self):
+    def getOperations(self, resolver=None):
         if not self.__preprocess():
             return 0
         if rpmconfig.timer:
             time1 = clock()
-        resolver = RpmResolver(self.installed, self.operation)
-        for r in self.rpms:
-            resolver.append(r)
+        if resolver == None:
+            resolver = RpmResolver(self.db.getPkgList(), self.operation)
+            for r in self.rpms:
+                resolver.append(r)
+        del self.rpms
         if resolver.resolve() != 1:
             sys.exit(1)
         a = resolver.appended
@@ -161,10 +156,8 @@ class RpmController:
         for (op, pkg) in operations:
             if op == OP_UPDATE or op == OP_INSTALL:
                 self.triggerlist.addPkg(pkg)
-        for pkg in self.installed:
+        for pkg in self.db.getPkgList():
             self.triggerlist.addPkg(pkg)
-        del self.rpms
-        del self.installed
         numops = len(operations)
         gc.collect()
         pkgsperfork = 100
@@ -193,6 +186,8 @@ class RpmController:
                 del operations
                 if self.buildroot:
                     os.chroot(self.buildroot)
+                # We're in a buildroot now, reset the buildroot in the db object
+                self.db.setBuildroot(None)
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
                     if   op == OP_INSTALL:
@@ -213,13 +208,13 @@ class RpmController:
                     if   op == OP_INSTALL or \
                          op == OP_UPDATE or \
                          op == OP_FRESHEN:
-                        if not pkg.install(self.pydb):
+                        if not pkg.install(self.db):
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
                         self.__addPkgToDB(pkg)
                     elif op == OP_ERASE:
                         self.__runTriggerUn(pkg)
-                        if not pkg.erase(self.pydb):
+                        if not pkg.erase(self.db):
                             sys.exit(1)
                         self.__runTriggerPostUn(pkg)
                         self.__erasePkgFromDB(pkg)
@@ -240,47 +235,23 @@ class RpmController:
         return 1
 
     def eraseFile(self, file):
-        if self.pydb == None:
-            if not self.__readDB():
-                return 0
-        pkgs = findPkgByName(file, self.installed)
+        pkgs = findPkgByName(file, self.db.getPkgList())
         if len(pkgs) == 0:
             return 0
         self.rpms.append(pkgs[0])
         return 1
 
-    def __readDB(self, db="/var/lib/pyrpm"):
-        if self.db == None:
-            self.db = db
-        if self.pydb != None:
-            return 1
-        self.installed = []
-        if self.buildroot:
-            self.pydb = io.RpmPyDB(self.buildroot + self.db)
-        else:
-            self.pydb = io.RpmPyDB(self.db)
-        if self.pydb == None:
-            return 0
-        self.installed = self.pydb.getPkgList().values()
-        return 1
-
     def __preprocess(self):
-        if self.ignorearch:
+        if rpmconfig.ignorearch:
             return 1
         filterArchCompat(self.rpms, rpmconfig.machine)
         return 1
 
     def __addPkgToDB(self, pkg, nowrite=None):
-        if self.pydb == None:
-            return 0
-        self.pydb.setSource(self.db)
-        return self.pydb.addPkg(pkg, nowrite)
+        return self.db.addPkg(pkg, nowrite)
 
     def __erasePkgFromDB(self, pkg, nowrite=None):
-        if self.pydb == None:
-            return 0
-        self.pydb.setSource(self.db)
-        return self.pydb.erasePkg(pkg, nowrite)
+        return self.db.erasePkg(pkg, nowrite)
 
     def __runTriggerIn(self, pkg):
         if rpmconfig.notriggers:
@@ -288,12 +259,12 @@ class RpmController:
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERIN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
         os.umask(022)
-        tnumPkgs = str(self.pydb.getNumPkgs(pkg["name"])+1)
+        tnumPkgs = str(self.db.getNumPkgs(pkg["name"])+1)
         # any-%triggerin
         for (prog, script, spkg) in tlist:
             if spkg == pkg:
                 continue
-            snumPkgs = str(self.pydb.getNumPkgs(spkg["name"]))
+            snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
             if not runScript(prog, script, snumPkgs, tnumPkgs):
                 printError("%s: Error running any trigger in script." % spkg.getNEVRA())
                 return 0
@@ -312,7 +283,7 @@ class RpmController:
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
         os.umask(022)
-        tnumPkgs = str(self.pydb.getNumPkgs(pkg["name"])-1)
+        tnumPkgs = str(self.db.getNumPkgs(pkg["name"])-1)
         # old-%triggerun
         for (prog, script, spkg) in tlist:
             if spkg != pkg:
@@ -324,7 +295,7 @@ class RpmController:
         for (prog, script, spkg) in tlist:
             if spkg == pkg:
                 continue
-            snumPkgs = str(self.pydb.getNumPkgs(spkg["name"]))
+            snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
             if not runScript(prog, script, snumPkgs, tnumPkgs):
                 printError("%s: Error running any trigger un script." % spkg.getNEVRA())
                 return 0
@@ -336,7 +307,7 @@ class RpmController:
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERPOSTUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
         os.umask(022)
-        tnumPkgs = str(self.pydb.getNumPkgs(pkg["name"])-1)
+        tnumPkgs = str(self.db.getNumPkgs(pkg["name"])-1)
         # old-%triggerpostun
         for (prog, script, spkg) in tlist:
             if spkg != pkg:
@@ -347,7 +318,7 @@ class RpmController:
         for (prog, script, spkg) in tlist:
             if spkg == pkg:
                 continue
-            snumPkgs = str(self.pydb.getNumPkgs(spkg["name"]))
+            snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
             if not runScript(prog, script, snumPkgs, tnumPkgs):
                 printError("%s: Error running any trigger postun script." % spkg.getNEVRA())
                 return 0
