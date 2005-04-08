@@ -532,80 +532,14 @@ def filterArchCompat(list, arch):
 def filterArchDuplicates(list):
     raise Exception, "deprecated"
 
-    # stage 1: filter duplicates: order by name.arch
-    myhash = {}
-    i = 0
-    while i < len(list):
-        pkg = list[i]
-        key = "%s.%s" % (pkg["name"], pkg["arch"])
-        if not myhash.has_key(key):
-            myhash[key] = pkg
-            i += 1
-        else:
-            r = myhash[key]
-            ret = pkgCompare(r, pkg)
-            if ret < 0:
-                printWarning(2, "%s was already added, replacing with %s" % \
-                                   (r.getNEVRA(), pkg.getNEVRA()))
-                myhash[key] = pkg
-                list.remove(r)
-            elif ret == 0:
-                printWarning(2, "%s was already added" % pkg.getNEVRA())
-                list.pop(i)
-            else:
-                printWarning(2, "%s a newer version was already added" % \
-                                    pkg.getNEVRA())
-                list.pop(i)
-
-    # stage 2: filter duplicates: order by name
-    myhash = {}
-    i = 0
-    while i < len(list):
-        pkg = list[i]
-        name = pkg["name"]
-        arch = pkg["arch"]
-        removed = 0
-        if not myhash.has_key(name):
-            myhash[name] = [pkg]
-        else:
-            j = 0
-            while myhash[name] and j < len(myhash[name]) and removed == 0:
-                r = myhash[name][j]
-                if arch != r["arch"] and \
-                    buildarchtranslate[arch] != buildarchtranslate[r["arch"]]:
-                    j += 1
-                elif r["arch"] in arch_compats[arch]:
-                    printWarning(2, "%s was already added, replacing with %s" % \
-                                       (r.getNEVRA(), pkg.getNEVRA()))
-                    myhash[name].remove(r)
-                    myhash[name].append(pkg)
-                    list.remove(r)
-                    removed = 1
-                elif arch == r["arch"]:
-                    printWarning(2, "%s was already added" % pkg.getNEVRA())
-                    list.pop(i) # remove 'pkg'
-                    removed = 1
-                else:
-                    printWarning(2, "%s a higher arch was already added" % pkg.getNEVRA())
-                    list.pop(i)
-                    j += 1
-            if removed == 0:
-                myhash[name].append(pkg)
-        if removed == 0:
-            i += 1
-
 def filterArchList(list, arch=None):
     raise Exception, "deprecated"
-
-    if arch != None:
-        filterArchCompat(list, arch)
-    filterArchDuplicates(list)
 
 def normalizeList(list):
     """ normalize list """
     if len(list) < 2:
         return
-    h = {}
+    h = { }
     i = 0
     while i < len(list):
         item = list[i]
