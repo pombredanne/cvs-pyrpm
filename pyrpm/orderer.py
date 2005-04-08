@@ -59,7 +59,7 @@ class _Relations:
             # prefer hard requirements, do not overwrite with soft req
             if flag == 2 and i.pre[pre] == 1:
                 i.pre[pre] = flag
-        for (p, f) in i.pre:
+        for p in i.pre:
             if p in self.list:
                 if pkg not in self.list[p]._post:
                     self.list[p]._post[pkg] = 1
@@ -70,10 +70,10 @@ class _Relations:
     def remove(self, pkg):
         rel = self.list[pkg]
         # remove all post relations for the matching pre relation packages
-        for (r, f) in rel.pre:
+        for r in rel.pre:
             del self.list[r]._post[pkg]
         # remove all pre relations for the matching post relation packages
-        for (r, f) in rel._post:
+        for r in rel._post:
             del self.list[r].pre[pkg]
         del self.list[pkg]
 
@@ -118,8 +118,8 @@ class RpmOrderer:
         # generate todo list
         resolver = RpmResolver(self.rpms, self.operation)
 
-        for rlist in resolver:
-            for r in rlist:
+        for name in resolver:
+            for r in resolver[name]:
                 printDebug(1, "Generating relations for %s" % r.getNEVRA())
                 (unresolved, resolved) = resolver.getPkgDependencies(r)
                 # ignore unresolved, we are only looking at the changes,
@@ -148,12 +148,14 @@ class RpmOrderer:
         if rpmconfig.debug_level > 1:
             # print relations
             printDebug(2, "\t==== relations (%d) ====" % len(relations))
-            for (pkg, rel) in relations:
+            for pkg in relations:
+                rel = relations[pkg]
                 pre = ""
                 if rpmconfig.debug_level > 2 and len(rel.pre) > 0:
                     pre = " pre: "
                     for i in xrange(len(rel.pre)):
-                        (p, f) = rel.pre[i]
+                        p = rel.pre[i]
+                        f = rel.pre[p]
                         if i > 0: pre += ", "
                         if f == 2: pre += "*"
                         pre += p.getNEVRA()
@@ -208,7 +210,7 @@ class RpmOrderer:
     def _detectLoops(self, relations, path, pkg, loops, used):
         if pkg in used: return
         used[pkg] = 1
-        for (p,f) in relations[pkg].pre:
+        for p in relations[pkg].pre:
             if len(path) > 0 and p in path:
                 w = path[path.index(p):] # make shallow copy of loop
                 w.append(pkg)
@@ -224,7 +226,7 @@ class RpmOrderer:
     def getLoops(self, relations):
         loops = [ ]
         used =  { }
-        for (pkg, rel) in relations:
+        for pkg in relations:
             if not used.has_key(pkg):
                 self._detectLoops(relations, [ ], pkg, loops, used)
         return loops
@@ -257,8 +259,9 @@ class RpmOrderer:
         max_count_node = None
         max_count_next = None
         max_count = 0
-        for node,list in counter:
-            for next,count in list:
+        for node in counter:
+            for next in counter[node]:
+                count = counter[node][next]
                 if max_count < count and relations[node].pre[next] == 1:
                     max_count_node = node
                     max_count_next = next
@@ -276,8 +279,9 @@ class RpmOrderer:
         max_count_node = None
         max_count_next = None
         max_count = 0
-        for node,list in counter:
-            for next,count in list:
+        for node in counter:
+            for next in counter[node]:
+                count = counter[node][next]
                 if max_count < count:
                     max_count_node = node
                     max_count_next = next
@@ -300,8 +304,8 @@ class RpmOrderer:
             i = 0
             found = 0
             while i < len(relations):
-                (pkg, rel) = relations[i]
-                if len(rel._post) == 0:
+                pkg = relations[i]
+                if len(relations[pkg]._post) == 0:
                     list.insert(0, pkg)
                     relations.remove(pkg)
                     found = 1
@@ -315,7 +319,8 @@ class RpmOrderer:
     def _getNextLeafNode(self, relations):
         next = None
         next_post_len = -1
-        for (pkg, rel) in relations:
+        for pkg in relations:
+            rel = relations[pkg]
             if len(rel.pre) == 0 and len(rel._post) > next_post_len:
                 next = pkg
                 next_post_len = len(rel._post)
@@ -348,11 +353,13 @@ class RpmOrderer:
                 if rpmconfig.debug_level > 0:
                     printDebug(1, "-- LOOP --")
                     printDebug(2, "\n===== remaining packages =====")
-                    for (pkg2, rel2) in relations:
+                    for pkg2 in relations:
+                        rel2 = relations[pkg2]
                         printDebug(2, "%s" % pkg2.getNEVRA())
                         for r in rel2.pre:
+                            # print nevra and flag
                             printDebug(2, "\t%s (%d)" %
-                                       (r[0].getNEVRA(), r[1]))
+                                       (r.getNEVRA(), rel2.pre[r]))
                     printDebug(2, "===== remaining packages =====\n")
 
                 loops = self.getLoops(relations)
