@@ -1121,6 +1121,15 @@ def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
         return RpmFileIO(source, verify, strict, hdronly)
     return None
 
+def getRpmDBFactory(source, root=None):
+    if   source[:6] == 'pydb:/':
+        return RpmPyDB(source, root)
+    elif source[:7] == 'rpmdb:/':
+        return RpmDB(source, root)
+    elif source[:7] == 'foodb:/':
+        # testbed class
+        return FooRpmDB(source, root)
+
 ###
 ### this space intentionally left blank
 ###
