@@ -429,7 +429,7 @@ class RpmPackage(RpmData):
             if rfi.mode == orfi.mode and rfi.uid == orfi.uid and \
                 rfi.gid == orfi.gid and rfi.filesize == orfi.filesize and \
                 rfi.md5sum == orfi.md5sum:
-                printWarning(1, "\n%s: Same config file between new and installed package, skipping." % self.getNEVRA())
+                printWarning(2, "\n%s: Same config file between new and installed package, skipping." % self.getNEVRA())
                 continue
             # OK, file in new package is different to some old package and it
             # is editied on disc. Now verify if it is a noreplace or not

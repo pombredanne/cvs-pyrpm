@@ -126,19 +126,23 @@ class RpmController:
             time1 = clock()
         orderer = RpmOrderer(a, u, o, self.operation)
         operations = orderer.order()
-        if not rpmconfig.ignoresize:
-            if rpmconfig.timer:
-                time9 = clock()
-            getFreeDiskspace(a)
-            if rpmconfig.timer:
-                printInfo(0, "getFreeDiskspace took %s seconds\n" % \
-                             (clock() - time9))
+        if rpmconfig.timer:
+            printInfo(0, "orderer took %s seconds\n" % (clock() - time1))
         del orderer
         del a
         del o
         del u
-        if rpmconfig.timer:
-            printInfo(0, "orderer took %s seconds\n" % (clock() - time1))
+        if not rpmconfig.ignoresize:
+            if rpmconfig.timer:
+                time9 = clock()
+            mhash = getFreeDiskspace(operations)
+            if rpmconfig.timer:
+                printInfo(0, "getFreeDiskspace took %s seconds\n" % \
+                             (clock() - time9))
+            for dev in mhash.keys():
+                if mhash[dev][0] < 31457280:
+                    printInfo(0, "Less than 30MB of diskspace left on device %s for operation" % hex(dev))
+                    sys.exit(1)
         return operations
 
     def runOperations(self, operations):

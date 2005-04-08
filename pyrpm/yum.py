@@ -38,6 +38,8 @@ class RpmYum:
         self.repos = []
         # Our database
         self.pydb = None
+        # Our list of package names that get installed instead of updated
+        self.always_install = ["kernel", "kernel-smp"]
 
     def setAutoerase(self, flag):
         self.autoerase = flag
@@ -58,7 +60,7 @@ class RpmYum:
                 printError("You need to specify a comps.xml file for group operations")
                 usage()
                 sys.exit(1)
-            comps = RpmCompsXMLIO(rpmconfig.compsfile)
+            comps = RpmCompsXML(rpmconfig.compsfile)
             comps.read()
             pkgs = []
             for grp in args:
@@ -88,8 +90,19 @@ class RpmYum:
             else:
                 for repo in self.repos:
                     self.pkgs.extend(findPkgByName(f, repo.getList()))
+                self.pkgs = self.__selectNewestPkgs(self.pkgs)
                 if len(self.pkgs) == 0:
                     printError("Couldn't find package %s, skipping" % f)
+
+    def __selectNewestPkgs(self, pkglist):
+        rethash = {}
+        for pkg in pkglist:
+            if not rethash.has_key(pkg["name"]):
+                rethash[pkg["name"]] = pkg
+            else:
+                if pkgCompare(rethash[pkg["name"]], pkg) <= 0:
+                    rethash[pkg["name"]] = pkg
+        return rethash.values()
 
     def runDepRes(self):
         # Add packages to be updated  to our operation resolver
@@ -99,19 +112,27 @@ class RpmYum:
                 name = pkg["name"]
                 for ipkg in self.pydb.getPkgList():
                     if ipkg["name"] == name:
-                        self.opresolver.append(pkg)
+                        if name in self.always_install:
+                            self.opresolver._install(pkg)
+                        else:
+                            self.opresolver.append(pkg)
                         break
             else:
-                self.opresolver.append(pkg)
-        del self.pkgs
-        self.pkgs = []
+                if pkg["name"] in self.always_install:
+                    self.opresolver._install(pkg)
+                else:
+                    self.opresolver.append(pkg)
         # Look for obsoletes and add them to our update packages
         for repo in self.repos:
             for pkg in repo.getList():
+                if pkg in self.pkgs:
+                    continue
                 for u in pkg["obsoletes"]:
                     s = self.opresolver.searchDependency(u)
                     if len(s) > 0:
                         self.opresolver.append(pkg)
+        del self.pkgs
+        self.pkgs = []
         self.__runDepResolution()
 
     def __runDepResolution(self):

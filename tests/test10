@@ -8,6 +8,7 @@ umask 022
 #./pyrpminstall -U -r /home/n1 --test n/*.rpm
 
 preparechroot() {
+    fuser -k $1 2>/dev/null
     nodev=
     if test x$1 = x--nodev ; then
         nodev=--nodev

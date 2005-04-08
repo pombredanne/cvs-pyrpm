@@ -956,7 +956,7 @@ class RpmRepo(RpmDatabase):
         RpmDatabase.__init__(self, source, buildroot)
 
 
-class RpmCompsXMLIO:
+class RpmCompsXML:
     def __init__(self, source):
         self.source = source
         self.grouphash = {}

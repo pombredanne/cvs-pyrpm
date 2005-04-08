@@ -233,14 +233,15 @@ def closeAllFDs():
 # - no hardlink detection
 # - no information about not-installed files like multilib files, left out
 #   docu files etc
-def getFreeDiskspace(pkglist):
+def getFreeDiskspace(operations):
     freehash = {}
+    minfreehash = {}
     dirhash = {}
     if rpmconfig.buildroot:
         br = rpmconfig.buildroot
     else:
         br = "/"
-    for pkg in pkglist:
+    for (op, pkg) in operations:
         dirnames = pkg["dirnames"]
         if dirnames == None:
             continue
@@ -265,16 +266,28 @@ def getFreeDiskspace(pkglist):
             if not freehash.has_key(dev):
                 statvfs = os.statvfs(devname)
                 freehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
+                minfreehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
         dirindexes = pkg["dirindexes"]
         filesizes = pkg["filesizes"]
         filemodes = pkg["filemodes"]
         for i in xrange(len(dirindexes)):
-            if not S_ISREG(filemodes[i]): continue
+            if not S_ISREG(filemodes[i]):
+                continue
             dirname = dirnames[dirindexes[i]]
             dev = freehash[dirhash[dirname]]
+            mdev = minfreehash[dirhash[dirname]]
             filesize = ((filesizes[i] / dev[1]) + 1) * dev[1]
-            dev[0] -= filesize
-    return freehash
+            if op == OP_ERASE:
+                dev[0] += filesize
+            else:
+                dev[0] -= filesize
+            if mdev[0] > dev[0]:
+                mdev[0] = dev[0]
+        for dev in minfreehash.keys():
+            # Less than 30MB space left on device?
+            if minfreehash[dev][0] < 31457280:
+                printInfo(1, "%s: Less than 30MB of diskspace left on device %s\n" % (pkg.getNEVRA(), hex(dev)))
+    return minfreehash
 
 def parseBoolean(str):
     lower = str.lower()
