@@ -37,7 +37,7 @@ class RpmList:
         self.__len__ = self.list.__len__
         for r in installed:
             self._install(r, 1)
-            if not self.installed.has_key(r["name"]):
+            if not r["name"] in self.installed:
                 self.installed[r["name"]] = [ ]
             self.installed[r["name"]].append(r)
         self.operation = operation
@@ -50,7 +50,7 @@ class RpmList:
     # ----
 
     def __getitem__(self, i):
-        return self.list[i][1] # return rpm list
+        return self.list[i] # return rpm list
     # ----
 
     def append(self, pkg):
@@ -62,7 +62,7 @@ class RpmList:
             if ret != self.OK:  return ret
         elif self.operation == OP_FRESHEN:
             # pkg in self.installed
-            if not self.installed.has_key(pkg["name"]):
+            if not pkg["name"] in self.installed:
                 return self.NOT_INSTALLED
             found = 0
             for r in self.installed[pkg["name"]]:
@@ -85,10 +85,9 @@ class RpmList:
 
     def _install(self, pkg, no_check=0):
         key = pkg["name"]
-        if no_check == 0 and self.list.has_key(key):
+        if no_check == 0 and key in self.list:
             for r in self.list[key]:
-                if r == pkg or (r.getNEVR() == pkg.getNEVR() and \
-                                archDuplicate(r["arch"], pkg["arch"])):
+                if r == pkg or r.isEqual(pkg):
                     if self.isInstalled(r):
                         printWarning(1, "%s: %s is already installed" % \
                                      (pkg.getNEVRA(), r.getNEVRA()))
@@ -97,7 +96,7 @@ class RpmList:
                         printWarning(1, "%s: %s was already added" % \
                                      (pkg.getNEVRA(), r.getNEVRA()))
                         return self.ALREADY_ADDED
-        if not self.list.has_key(key):
+        if not key in self.list:
             self.list[key] = [ ]
         self.list[key].append(pkg)
 
@@ -108,8 +107,8 @@ class RpmList:
         key = pkg["name"]
 
         updates = [ ]
-        if self.list.has_key(key):
-            rpms = self.list[pkg["name"]]
+        if key in self.list:
+            rpms = self.list[key]
             
             for r in rpms:
                 ret = pkgCompare(r, pkg)
@@ -172,7 +171,7 @@ class RpmList:
 
     def _erase(self, pkg):
         key = pkg["name"]
-        if not self.list.has_key(key) or pkg not in self.list[key]:
+        if not key in self.list or pkg not in self.list[key]:
             return self.NOT_INSTALLED
         self.list[key].remove(pkg)
         if len(self.list[key]) == 0:
@@ -191,23 +190,22 @@ class RpmList:
     # ----
 
     def isInstalled(self, pkg):
-        if self.installed.has_key(pkg["name"]) and \
-               pkg in self.installed[pkg["name"]]:
+        key = pkg["name"]
+        if key in self.installed and pkg in self.installed[key]:
             return 1
         return 0
     # ----
 
     def getList(self):
         l = [ ]
-        for i in xrange(len(self)):
-            l.extend(self[i])
+        for name in self:
+            l.extend(self[name])
         return l
     # ----
 
     def p(self):
-        for i in xrange(len(self)):
-            rlist = self[i]
-            for r in rlist:
+        for name in self:
+            for r in self[name]:
                 print "\t%s" % r.getNEVRA()
 
 # vim:ts=4:sw=4:showmatch:expandtab
