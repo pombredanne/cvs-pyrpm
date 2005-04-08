@@ -23,8 +23,8 @@ class HashList:
     """ hash list """
 
     def __init__(self):
-        self.list = []
-        self.hash = {}
+        self.list = [ ]
+        self.hash = { }
 
         self.__len__ = self.list.__len__
         self.__repr__ = self.list.__repr__
@@ -33,8 +33,7 @@ class HashList:
 
     def __getitem__(self, key):
         if isinstance(key, IntType):
-            i = self.list[key]
-            return (i, self.hash.get(i))
+            return self.list[key]
         return self.hash.get(key)
 
     def __contains__(self, key):
@@ -58,7 +57,7 @@ class HashList:
         return None
 
     def pop(self, idx):
-        key = self.list.pop(idx)
+        key = self.list[idx]
         del self[key]
 
 # vim:ts=4:sw=4:showmatch:expandtab
