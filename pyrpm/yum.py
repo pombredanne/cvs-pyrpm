@@ -113,13 +113,13 @@ class RpmYum:
                 for ipkg in self.pydb.getPkgList():
                     if ipkg["name"] == name:
                         if name in self.always_install:
-                            self.opresolver._install(pkg)
+                            self.opresolver.append(pkg)
                         else:
                             self.opresolver.append(pkg)
                         break
             else:
                 if pkg["name"] in self.always_install:
-                    self.opresolver._install(pkg)
+                    self.opresolver.append(pkg)
                 else:
                     self.opresolver.append(pkg)
         # Look for obsoletes and add them to our update packages
