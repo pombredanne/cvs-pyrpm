@@ -66,6 +66,8 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
     pid = os.fork()
     if pid == 0:
         os.close(rfd)
+        if not os.path.exists("/dev"):
+            os.mkdir("/dev")
         if not os.path.exists("/dev/null"):
             os.mknod("/dev/null", 0666, 259)
         fd = os.open("/dev/null", os.O_RDONLY)

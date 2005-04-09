@@ -40,6 +40,7 @@ class RpmYum:
         self.pydb = None
         # Our list of package names that get installed instead of updated
         self.always_install = ["kernel", "kernel-smp"]
+        self.always_install = []
 
     def setAutoerase(self, flag):
         self.autoerase = flag

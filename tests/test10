@@ -4,9 +4,6 @@ test -x ./pyrpmyum || exit 1
 
 umask 022
 
-# This can be run as non-root to run resolver/orderer:
-#./pyrpminstall -U -r /home/n1 --test n/*.rpm
-
 preparechroot() {
     fuser -k $1 2>/dev/null
     nodev=
@@ -14,6 +11,7 @@ preparechroot() {
         nodev=--nodev
         shift
     fi
+    killall cups-config-daemon 2>/dev/null
     umount $1/dev
     umount $1/proc
     mkdir -p $1/{dev,etc/sysconfig,tmp,proc,var/tmp}
@@ -39,8 +37,14 @@ preparechroot() {
 cleanchroot() {
     test -d $1/dev || return
     test -d $1/proc || return
+    killall cups-config-daemon 2>/dev/null
     umount $1/dev 2> /dev/null
     umount $1/proc 2> /dev/null
+    test -d $1/proc/1 -o -e $1/dev/pts/1 \
+        && { echo "umount did not work for $1"; exit 1; }
+    if mount | grep -q ^$1 ; then
+        echo "umount did not work for $1"; exit 1;
+    fi
     rm -fr $1
 }
 
@@ -53,12 +57,11 @@ doinstall() {
     test -d $1 || { echo "No dir $1 exists."; return; }
     cleanchroot $2
     preparechroot $nodev $2
+    sync
     if test x$3 = xrpm ; then
         { time rpm -U --nodigest --nosignature --root=$2 $1/*.rpm; } 2>&1 \
             | tee $2.LOG.install
     else
-        #time ./pyrpminstall -U -r $2 $1/*.rpm 2>&1 | tee $2/LOG.install
-        # --nofileconflicts
         { time ./pyrpmyum --autoerase -y -r $2 install $1; } 2>&1 \
             | tee $2.LOG.install
     fi
@@ -94,10 +97,14 @@ EOF
 DATA=/mnt/data/laroche
 
 if test x$1 = xclean ; then
-    for i in $DATA/* ; do
-        test -d "$i" || continue
+    if test -n "$2" ; then
         cleanchroot $2
-    done
+    else
+        for i in $DATA/* ; do
+            test -d "$i" || continue
+            cleanchroot $i
+        done
+    fi
     exit 0
 fi
 
@@ -105,66 +112,95 @@ RELEASED=/mnt/raid/redhat/released
 FEDORA=/mnt/raid/fedora
 #FEDORA=/mnt/data/laroche/fedora
 RPMS=RedHat/RPMS
+PYRPMYUM="./pyrpmyum -y --autoerase"
+# Specify if updates to newer releases should be done.
+RELEASEUPDATE=0
 
 # Currently non-working:
 #doinstall --nodev $RELEASED/RHL-5.2/GOLD/i386/$RPMS $DATA/5.2
 #doinstall --nodev $RELEASED/RHL-6.2/GOLD/i386/$RPMS $DATA/6.2
 #doinstall --nodev $RELEASED/RHEL-2.1/U6/AS/i386/tree/$RPMS $DATA/2.1-U6-i386
 
-#doinstall --nodev $RELEASED/RHEL-3/U3/AS/i386/tree/$RPMS $DATA/3-U3-i386
-#doinstall --nodev $RELEASED/RHEL-3/U4/AS/i386/tree/$RPMS $DATA/3-U4-i386
-#doinstall --nodev /mnt/raid/trees/RHEL3U5/i386/$RPMS $DATA/3-U5-i386
-#doinstall $RELEASED/RHEL-4/Beta2/AS/i386/tree/$RPMS $DATA/4-Beta2-i386
-#doinstall /mnt/raid/trees/RHEL4/i386/$RPMS $DATA/4-trees-i386
-#doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
+if false ; then
+doinstall --nodev $RELEASED/RHEL-3/U3/AS/i386/tree/$RPMS $DATA/3-U3-i386
+doinstall --nodev $RELEASED/RHEL-3/U4/AS/i386/tree/$RPMS $DATA/3-U4-i386
+doinstall --nodev /mnt/raid/trees/RHEL3U5/i386/$RPMS $DATA/3-U5-i386
+doinstall $RELEASED/RHEL-4/Beta2/AS/i386/tree/$RPMS $DATA/4-Beta2-i386
+doinstall /mnt/raid/trees/RHEL4/i386/$RPMS $DATA/4-trees-i386
+doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
+fi
 
+# Fedora Core 1
+if true ; then
 # Raw FC1 install
-doinstall --nodev $FEDORA/1/i386/os/Fedora/RPMS $DATA/FC1-i386
+doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $DATA/FC1-i386
 # Update FC1 to updates
-{ time ./pyrpmyum -y --autoerase -r $DATA/FC1-i386 update $FEDORA/updates/1/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update
+{ time $PYRPMYUM -r $DATA/FC1-i386 update $FEDORA/updates/1/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update
 # Update FC1 to testing
-{ time ./pyrpmyum -y -vvv --autoerase -r $DATA/FC1-i386 update $FEDORA/updates/testing/1/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update.1
-sync
+{ time $PYRPMYUM -r $DATA/FC1-i386 update $FEDORA/updates/testing/1/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update.1
+if test $RELEASEUPDATE = 1 ; then
+# Update FC1 to FC2
+{ time $PYRPMYUM -r $DATA/FC1-i386 update $FEDORA/2/i386 $FEDORA/updates/2/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update.2
+# Update to FC3
+{ time $PYRPMYUM -r $DATA/FC1-i386 update $FEDORA/3/i386 $FEDORA/updates/3/i386 ; } 2>&1 | tee $DATA/FC1-i386.LOG.update.3
+# Update to FC-development
+{ time $PYRPMYUM -r $DATA/FC1-i386 update $FEDORA/development/i386/Fedora/RPMS ; } 2>&1 | tee $DATA/FC1-i386.LOG.update.4
+fi
+fi
 
+# Fedora Core 2
+if true ; then
 # Raw FC2 install
 doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $DATA/FC2-i386
 # Update FC2 to updates
-{ time ./pyrpmyum -y --autoerase -r $DATA/FC2-i386 update $FEDORA/updates/2/i386 ; } 2>&1 | tee $DATA/FC2-i386.LOG.update
+{ time $PYRPMYUM -r $DATA/FC2-i386 update $FEDORA/updates/2/i386 ; } 2>&1 | tee $DATA/FC2-i386.LOG.update
 # Update FC2 to testing
-{ time ./pyrpmyum -y --autoerase -r $DATA/FC2-i386 update $FEDORA/updates/testing/2/i386 ; } 2>&1 | tee $DATA/FC2-i386.LOG.update.1
-sync
+{ time $PYRPMYUM -r $DATA/FC2-i386 update $FEDORA/updates/testing/2/i386 ; } 2>&1 | tee $DATA/FC2-i386.LOG.update.1
+if test $RELEASEUPDATE = 1 ; then
+# Update FC2 to FC3
+{ time $PYRPMYUM -r $DATA/FC2-i386 update $FEDORA/3/i386 $FEDORA/updates/3/i386 ; } 2>&1 | tee $DATA/FC2-i386.LOG.update.2
+# Update to FC-development
+{ time $PYRPMYUM -r $DATA/FC2-i386 update $FEDORA/development/i386/Fedora/RPMS ; } 2>&1 | tee $DATA/FC2-i386.LOG.update.3
+fi
+fi
 
+# Fedora Core 3
+if true ; then
 # Raw FC3 install
 doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386
-#rm -f $DATA/FC3-i386/var/lib/pyrpm/headers/gnucash*
+killall cups-config-daemon 2>/dev/null
 # Update FC3 to updates
-{ time ./pyrpmyum -y --autoerase -r $DATA/FC3-i386 update $FEDORA/updates/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update
+{ time $PYRPMYUM -r $DATA/FC3-i386 update $FEDORA/updates/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update
 # Update FC3 to testing
-{ time ./pyrpmyum -y --autoerase -r $DATA/FC3-i386 update $FEDORA/updates/testing/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update.1
-sync
+{ time $PYRPMYUM -r $DATA/FC3-i386 update $FEDORA/updates/testing/3/i386 ; } 2>&1 | tee $DATA/FC3-i386.LOG.update.1
+if test $RELEASEUPDATE = 1 ; then
+# Update to FC-development
+{ time $PYRPMYUM -r $DATA/FC3-i386 update $FEDORA/development/i386/Fedora/RPMS ; } 2>&1 | tee $DATA/FC3-i386.LOG.update.2
+fi
+fi
 
+# Fedora Core development
+if true ; then
+doinstall         $FEDORA/development/i386/Fedora/RPMS $DATA/FC4-i386
+fi
+
+# Fedora Core 3 with /bin/rpm
+if false ; then
+doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386-rpm rpm
+rm -f $DATA/FC3-i386-rpm/etc/yum.repos.d/*
+#time yum -c $DATA/FC3-i386-rpm/etc/yum.conf --installroot=$DATA/FC3-i386-rpm update 2>&1 | tee $DATA/FC3-i386-rpm.LOG.update
+fi
+
+if false ; then
 # Install FC1 with all updates
 PID=$$
-genyumconf(1, $PID)
-{ time ./pyrpmyum -y --autoerase -c /tmp/yum-$PID.conf -r $DATA/FC1-2-3-i386 install "*"; } 2>&1 | tee $DATA/FC1-2-3-i386.LOG.update
-
+genyumconf 1 $PID
+{ time $PYRPMYUM -c /tmp/yum-$PID.conf -r $DATA/FC1-2-3-i386 install "*"; } 2>&1 | tee $DATA/FC1-2-3-i386.LOG.update
 # Update to FC2 with all updates
-genyumconf(2)
-{ time ./pyrpmyum -y --autoerase -c /tmp/yum-$PID.conf -r $DATA/FC1-2-3-i386 install "*"; } 2>&1 | tee $DATA/FC1-2-3-i386.LOG.update
-
+genyumconf 2 $PID
+{ time $PYRPMYUM -c /tmp/yum-$PID.conf -r $DATA/FC1-2-3-i386 install "*"; } 2>&1 | tee $DATA/FC1-2-3-i386.LOG.update.1
 # Update to FC3 with all updates
-genyumconf(3)
-{ time ./pyrpmyum -y --autoerase -c /tmp/yum-$PID.conf -r $DATA/FC1-2-3-i386 install "*"; } 2>&1 | tee $DATA/FC1-2-3-i386.LOG.update
+genyumconf 3 $PID
+{ time $PYRPMYUM -c /tmp/yum-$PID.conf -r $DATA/FC1-2-3-i386 install "*"; } 2>&1 | tee $DATA/FC1-2-3-i386.LOG.update.2
 rm -f /tmp/yum-$PID.conf
-
-
-
-
-
-#doinstall         $FEDORA/3/i386/os/Fedora/RPMS $DATA/FC3-i386-rpm rpm
-#rm -f $DATA/FC3-i386-rpm/etc/yum.repos.d/*
-#time yum -c $DATA/FC3-i386-rpm/etc/yum.conf --installroot=$DATA/FC3-i386-rpm update 2>&1 | tee $DATA/FC3-i386-rpm.LOG.update
-
-
-#doinstall         $FEDORA/development/i386/Fedora/RPMS $DATA/FC4-i386
-
+fi
