@@ -77,9 +77,6 @@ class RpmList:
             if self._erase(pkg) != 1:
                 return self.NOT_INSTALLED
             self._pkgErase(pkg)
-        if not self.isInstalled(pkg):
-            # do not readd obsoleted or updated and readded packages
-            self.appended.append(pkg)
         return self.OK
     # ----
 
@@ -92,6 +89,10 @@ class RpmList:
         if not key in self.list:
             self.list[key] = [ ]
         self.list[key].append(pkg)
+
+        if not self.isInstalled(pkg):
+            # do not readd obsoleted or updated and readded packages
+            self.appended.append(pkg)
 
         return self.OK
     # ----
@@ -169,6 +170,11 @@ class RpmList:
             del self.list[key]
         if pkg in self.appended:
             self.appended.remove(pkg)
+
+        if not self.isInstalled(pkg):
+            # do not readd obsoleted or updated and readded packages
+            self.appended.append(pkg)
+
         return 1
     # ----
 
