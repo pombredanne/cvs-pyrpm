@@ -35,12 +35,15 @@ class RpmYum:
         # Default: No command
         self.command = None
         # List of repository resolvers
-        self.repos = []
+        self.repos = [ ]
         # Our database
         self.pydb = None
         # Our list of package names that get installed instead of updated
         self.always_install = ["kernel", "kernel-smp"]
-        self.always_install = []
+        # List of vaild commands
+        self.command_list = ["install", "update", "upgrade", "erase", \
+                             "groupinstall", "groupupdate", "groupupgrade", \
+                             "grouperase"]
 
     def setAutoerase(self, flag):
         self.autoerase = flag
@@ -49,7 +52,12 @@ class RpmYum:
         self.confirm = flag
 
     def setCommand(self, command):
-        self.command = command
+        self.command = command.lower()
+        if self.command not in self.command_list:
+            printError("Invalid command")
+            sys.exit(1)
+        if self.command == "upgrade" or self.command == "groupupgrade":
+            self.always_install = [ ]
 
     def processArgs(self, args):
         # Create and read db
@@ -91,7 +99,6 @@ class RpmYum:
             else:
                 for repo in self.repos:
                     self.pkgs.extend(findPkgByName(f, repo.getList()))
-                self.pkgs = self.__selectNewestPkgs(self.pkgs)
                 if len(self.pkgs) == 0:
                     printError("Couldn't find package %s, skipping" % f)
 
@@ -108,21 +115,23 @@ class RpmYum:
     def runDepRes(self):
         # Add packages to be updated  to our operation resolver
         self.opresolver = RpmResolver(self.pydb.getPkgList(), OP_UPDATE)
-        for pkg in self.pkgs:
+        self.pkgs = self.__selectNewestPkgs(self.pkgs)
+        i = 0 
+        while i < len(self.pkgs):
             if self.command in ("update", "upgrade", "groupupdate", "groupupgrade"):
-                name = pkg["name"]
+                name = self.pkgs[i]["name"]
+                found = 0
                 for ipkg in self.pydb.getPkgList():
                     if ipkg["name"] == name:
-                        if name in self.always_install:
-                            self.opresolver.append(pkg)
-                        else:
-                            self.opresolver.append(pkg)
+                        self.__appendPkg(self.pkgs[i])
+                        i += 1
+                        found = 1
                         break
+                if not found:
+                    self.pkgs.pop(i)
             else:
-                if pkg["name"] in self.always_install:
-                    self.opresolver.append(pkg)
-                else:
-                    self.opresolver.append(pkg)
+                self.__appendPkg(self.pkgs[i])
+                i += 1
         # Look for obsoletes and add them to our update packages
         for repo in self.repos:
             for pkg in repo.getList():
@@ -131,7 +140,7 @@ class RpmYum:
                 for u in pkg["obsoletes"]:
                     s = self.opresolver.searchDependency(u)
                     if len(s) > 0:
-                        self.opresolver.append(pkg)
+                        self.__appendPkg(pkg)
         del self.pkgs
         self.pkgs = []
         self.__runDepResolution()
@@ -154,7 +163,7 @@ class RpmYum:
                         for upkg in repo.searchDependency(dep):
                             if upkg in self.erase_list:
                                 continue
-                            ret = self.opresolver.append(upkg)
+                            ret = self.__appendPkg(upkg)
                             if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
                                 found = 1
                                 unresolved_deps = 0
@@ -165,8 +174,8 @@ class RpmYum:
                     for upkg in tmplist:
                         if upkg in self.erase_list:
                             continue
-                        res = self.opresolver.append(upkg)
-                        if res > 0:
+                        ret = self.__appendPkg(upkg)
+                        if ret > 0:
                             found = 1
                             unresolved_deps = 0
                     if found == 0:
@@ -229,6 +238,16 @@ class RpmYum:
                 else:
                     pkg = pkg2
                 self.__doAutoerase(pkg)
+
+    def __appendPkg(self, pkg):
+        if pkg["name"] in self.always_install:
+            ret = self.opresolver._install(pkg)
+            if not self.opresolver.isInstalled(pkg):
+            # do not readd obsoleted or updated and readded packages
+                self.opresolver.appended.append(pkg)
+            return ret
+        else:
+            return self.opresolver.append(pkg)
 
     def runCommand(self):
         for repo in self.repos:
