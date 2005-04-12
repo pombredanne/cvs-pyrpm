@@ -117,21 +117,15 @@ class RpmController:
         del self.rpms
         if resolver.resolve() != 1:
             sys.exit(1)
-        a = resolver.appended
-        o = resolver.obsoletes
-        u = resolver.updates
-        del resolver
         if rpmconfig.timer:
             printInfo(0, "resolver took %s seconds\n" % (clock() - time1))
             time1 = clock()
-        orderer = RpmOrderer(a, u, o, self.operation)
+        orderer = RpmOrderer(resolver.installs, resolver.updates, resolver.obsoletes, resolver.erases)
+        del resolver
         operations = orderer.order()
         if rpmconfig.timer:
             printInfo(0, "orderer took %s seconds\n" % (clock() - time1))
         del orderer
-        del a
-        del o
-        del u
         if not rpmconfig.ignoresize:
             if rpmconfig.timer:
                 time9 = clock()

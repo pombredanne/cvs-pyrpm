@@ -245,14 +245,18 @@ class RpmPackage(RpmData):
                     try:
                         os.rmdir(f)
                     except:
-                        printWarning(1, "Couldn't remove dir %s from pkg %s" \
-                            % (f, self.source))
+                        # Maybe it's symlink....
+                        try:
+                            os.unlink(f)
+                        except:
+                            printWarning(1, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
                 try:
                     os.unlink(f)
                 except:
-                    printWarning(1, "Couldn't remove file %s from pkg %s" \
-                        % (f, self.source))
+                    if not (self["fileflags"][i] & RPMFILE_GHOST):
+                        printWarning(1, "Couldn't remove file %s from pkg %s" \
+                            % (f, self.source))
         if rpmconfig.printhash:
             printInfo(0, "\n")
         else:
