@@ -23,6 +23,7 @@ from io import *
 from resolver import RpmResolver
 from control import RpmController
 from package import RpmPackage
+from hashlist import HashList
 
 
 class RpmYum:
@@ -150,16 +151,25 @@ class RpmYum:
                     self.opresolver.erase(pkg)
                     continue
                 found = 0
+                pkg_list = HashList()
                 for dep in unresolved[pkg]:
                     printInfo(2, "\t" + depString(dep) + "\n")
                     for repo in self.repos:
                         for upkg in repo.searchDependency(dep):
-                            if upkg in self.erase_list:
+                            if upkg in pkg_list:
                                 continue
-                            ret = self.opresolver.update(upkg)
-                            if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
-                                found = 1
-                                unresolved_deps = 0
+                            pkg_list[upkg] = 1
+                for upkg in pkg_list:
+                    if upkg in self.erase_list:
+                        continue
+                    if not upkg in self.opresolver:
+                        ret = self.opresolver.update(upkg)
+                        if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
+                            found = 1
+                            unresolved_deps = 0
+                    else:
+                        found = 1
+                        unresolved_deps = 0
                 if found == 0:
                     tmplist = []
                     for repo in self.repos:
