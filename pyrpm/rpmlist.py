@@ -32,7 +32,7 @@ class RpmList:
     ARCH_INCOMPAT = -6
     # ----
 
-    def __init__(self, installed, operation):
+    def __init__(self, installed):
         self.clear()
         self.__len__ = self.list.__len__
         for r in installed:
@@ -40,44 +40,18 @@ class RpmList:
             if not r["name"] in self.installed:
                 self.installed[r["name"]] = [ ]
             self.installed[r["name"]].append(r)
-        self.operation = operation
     # ----
 
     def clear(self):
         self.list = HashList()
         self.installed = HashList()
-        self.appended = [ ]
+        self.installs = [ ]
+        self.updates = { }
+        self.erases = [ ]
     # ----
 
     def __getitem__(self, i):
         return self.list[i] # return rpm list
-    # ----
-
-    def append(self, pkg):
-        if self.operation == OP_INSTALL:
-            ret = self._install(pkg)
-            if ret != self.OK:  return ret
-        elif self.operation == OP_UPDATE:
-            ret = self._update(pkg)
-            if ret != self.OK:  return ret
-        elif self.operation == OP_FRESHEN:
-            # pkg in self.installed
-            if not pkg["name"] in self.installed:
-                return self.NOT_INSTALLED
-            found = 0
-            for r in self.installed[pkg["name"]]:
-                if archDuplicate(pkg["arch"], r["arch"]):
-                    found = 1
-                    break
-            if found == 0:
-                return self.NOT_INSTALLED
-            ret = self._update(pkg)
-            if ret != self.OK:  return ret
-        else: # self.operation == OP_ERASE:
-            if self._erase(pkg) != 1:
-                return self.NOT_INSTALLED
-            self._pkgErase(pkg)
-        return self.OK
     # ----
 
     def _install(self, pkg, no_check=0):
@@ -90,14 +64,22 @@ class RpmList:
             self.list[key] = [ ]
         self.list[key].append(pkg)
 
+        return self.OK
+    # ----
+
+    def install(self, pkg):
+        ret = self._install(pkg)
+        if ret != self.OK:  return ret
+
         if not self.isInstalled(pkg):
-            # do not readd obsoleted or updated and readded packages
-            self.appended.append(pkg)
+            self.installs.append(pkg)
+        if pkg in self.erases:
+            self.erases.remove(pkg)
 
         return self.OK
     # ----
 
-    def _update(self, pkg):
+    def update(self, pkg):
         key = pkg["name"]
 
         updates = [ ]
@@ -146,7 +128,7 @@ class RpmList:
                         if archDuplicate(pkg["arch"], r["arch"]):
                             updates.append(r)
 
-        ret = self._install(pkg, 1)
+        ret = self.install(pkg)
         if ret != self.OK:  return ret
 
         for r in updates:
@@ -161,29 +143,45 @@ class RpmList:
         return self.OK
     # ----
 
-    def _erase(self, pkg):
+    def freshen(self, pkg):
+        # pkg in self.installed
+        if not pkg["name"] in self.installed:
+            return self.NOT_INSTALLED
+        found = 0
+        for r in self.installed[pkg["name"]]:
+            if archDuplicate(pkg["arch"], r["arch"]):
+                found = 1
+                break
+        if found == 1:
+            return self.update(pkg)
+
+        return self.NOT_INSTALLED
+    # ----
+
+    def erase(self, pkg):
         key = pkg["name"]
         if not key in self.list or pkg not in self.list[key]:
             return self.NOT_INSTALLED
         self.list[key].remove(pkg)
         if len(self.list[key]) == 0:
             del self.list[key]
-        if pkg in self.appended:
-            self.appended.remove(pkg)
 
-        if not self.isInstalled(pkg):
-            # do not readd obsoleted or updated and readded packages
-            self.appended.append(pkg)
+        if self.isInstalled(pkg):
+            self.erases.append(pkg)
+        if pkg in self.installs:
+            self.installs.remove(pkg)
 
-        return 1
+        return self.OK
     # ----
 
     def _pkgUpdate(self, pkg, update_pkg):
-        return self._erase(update_pkg)
-    # ----
-
-    def _pkgErase(self, pkg):
-        return self.OK
+        if self.isInstalled(update_pkg):
+            if not pkg in self.updates:
+                self.updates[pkg] = [ ]
+            self.updates[pkg].append(update_pkg)
+        else:
+            self._inheritUpdates(pkg, update_pkg)
+        return self.erase(update_pkg)
     # ----
 
     def isInstalled(self, pkg):
@@ -191,6 +189,13 @@ class RpmList:
         if key in self.installed and pkg in self.installed[key]:
             return 1
         return 0
+    # ----
+
+    def __contains__(self, pkg):
+        key = pkg["name"]
+        if not key in self.list or pkg not in self.list[key]:
+            return None
+        return pkg
     # ----
 
     def __install_check(self, r, pkg):
@@ -212,6 +217,16 @@ class RpmList:
                          (pkg.getNEVRA(), r["arch"]))
             return 1
         return 0
+    # ----
+
+    def _inheritUpdates(self, pkg, old_pkg):
+        if old_pkg in self.updates:
+            if pkg in self.updates:
+                self.updates[pkg].extend(self.updates[old_pkg])
+                normalizeList(self.updates[pkg])
+            else:
+                self.updates[pkg] = self.updates[old_pkg]
+            del self.updates[old_pkg]
     # ----
 
     def getList(self):

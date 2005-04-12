@@ -80,20 +80,28 @@ class _Relations:
 # ----------------------------------------------------------------------------
 
 class RpmOrderer:
-    def __init__(self, rpms, updates, obsoletes, operation):
+    def __init__(self, installs, updates, obsoletes, erases):
         """ rpms is a list of the packages which has to be installed, updated
         or removed. The operation is either OP_INSTALL, OP_UPDATE or
         OP_ERASE. """
-        self.rpms = rpms
+        self.installs = installs
+        self.erases = erases
         self.updates = updates
+        if self.updates:
+            for pkg in self.updates:
+                for p in self.updates[pkg]:
+                    self.erases.remove(p)
         self.obsoletes = obsoletes
-        self.operation = operation
+        if self.obsoletes:
+            for pkg in self.obsoletes:
+                for p in self.obsoletes[pkg]:
+                    self.erases.remove(p)
 
     # ----
 
-    def _operationFlag(self, flag):
+    def _operationFlag(self, flag, operation):
         """ Return operation flag or requirement """
-        if self.operation == OP_ERASE:
+        if operation == OP_ERASE:
             if not (isInstallPreReq(flag) or \
                     not (isErasePreReq(flag) or isLegacyPreReq(flag))):
                 return 2  # hard requirement
@@ -111,12 +119,12 @@ class RpmOrderer:
 
     # ----
 
-    def genRelations(self):
+    def genRelations(self, rpms, operation):
         """ Generate relations from RpmList """
         relations = _Relations()
 
-        # generate todo list
-        resolver = RpmResolver(self.rpms, self.operation)
+        # generate todo list for installs
+        resolver = RpmResolver(rpms, operation)
 
         for name in resolver:
             for r in resolver[name]:
@@ -132,7 +140,7 @@ class RpmOrderer:
                     # itself
                     if r in s:
                         continue
-                    f = self._operationFlag(flag)
+                    f = self._operationFlag(flag, OP_INSTALL)
                     if f == 0: # no hard or soft requirement
                         continue
                     for r2 in s:
@@ -167,42 +175,34 @@ class RpmOrderer:
 
     # ----
 
+    def _genEraseOps(self, list):
+        if len(list) == 1:
+            ops = [(OP_ERASE, list[0])]
+        else:
+            # more than one in list: generate order
+            orderer = RpmOrderer(None, None, None, list)
+            ops = orderer.order()
+            del orderer
+        return ops
+
+    # ----
+
     def genOperations(self, order):
         """ Generate operations list """
         operations = [ ]
-        if self.operation == OP_ERASE:
-            # reverse order
-            # obsoletes: there are none
-            for i in xrange(len(order)-1, -1, -1):
-                operations.append((self.operation, order[i]))
-        else:
-            for r in order:
+        for r in order:
+            if r in self.erases:
+                operations.append((OP_ERASE, r))
+            else:
                 if self.updates and r in self.updates:
                     op = OP_UPDATE
                 else:
                     op = OP_INSTALL
                 operations.append((op, r))
                 if self.obsoletes and r in self.obsoletes:
-                    if len(self.obsoletes[r]) == 1:
-                        operations.append((OP_ERASE,
-                                           self.obsoletes[r][0]))
-                    else:
-                        # more than one obsolete: generate order
-                        orderer = RpmOrderer(self.obsoletes[r], None, None,
-                                             OP_ERASE)
-                        ops = orderer.order()
-                        operations.extend(ops)
-                        del orderer
+                    operations.extend(self._genEraseOps(self.obsoletes[r]))
                 if self.updates and r in self.updates:
-                    if len(self.updates[r]) == 1:
-                        operations.append((OP_ERASE, self.updates[r][0]))
-                    else:
-                        # more than one update: generate order
-                        orderer = RpmOrderer(self.updates[r], None, None,
-                                             OP_ERASE)
-                        ops = orderer.order()
-                        operations.extend(ops)
-                        del orderer
+                    operations.extend(self._genEraseOps(self.updates[r]))
         return operations
 
     # ----
@@ -328,7 +328,7 @@ class RpmOrderer:
         
     # ----
 
-    def orderRpms(self, relations):
+    def _genOrder(self, relations):
         """ Order rpms.
         Returns ordered list of packages. """
         order = [ ]
@@ -376,6 +376,42 @@ class RpmOrderer:
 
     # ----
 
+    def genOrder(self):
+        order = [ ]
+
+        # order installs
+        if self.installs and len(self.installs) > 0:
+            # generate relations
+            relations = self.genRelations(self.installs, OP_INSTALL)
+
+            # order package list
+            order2 = self._genOrder(relations)
+            if order == None:
+                return None
+            order.extend(order2)
+            
+            # cleanup relations
+            del relations
+
+        # order erases
+        if self.erases and len(self.erases) > 0:
+            # generate relations
+            relations = self.genRelations(self.erases, OP_ERASE)
+
+            # order package list
+            order2 = self._genOrder(relations)
+            if order2 == None:
+                return None
+            order2.reverse()
+            order.extend(order2)
+
+            # cleanup relations
+            del relations
+
+        return order
+
+    # ----
+
     def order(self):
         """ Start the order process
         Returns ordered list of operations on success, with tupels of the
@@ -383,16 +419,9 @@ class RpmOrderer:
         OP_UPDATE or OP_ERASE per package.
         If an error occurs, None is returned. """
 
-        # generate relations
-        relations = self.genRelations()
-
-        # order package list
-        order = self.orderRpms(relations)
+        order = self.genOrder()
         if order == None:
             return None
-
-        # cleanup relations
-        del relations
 
         # generate operations
         return self.genOperations(order)

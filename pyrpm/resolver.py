@@ -125,8 +125,8 @@ class RpmResolver(RpmList):
     OBSOLETE_FAILED = -10
     # ----
 
-    def __init__(self, installed, operation, check_installed=0):
-        RpmList.__init__(self, installed, operation)
+    def __init__(self, installed, check_installed=0):
+        RpmList.__init__(self, installed)
         self.check_installed = check_installed
         self.installed_unresolved = self.getUnresolvedDependencies()
     # ----
@@ -136,8 +136,6 @@ class RpmResolver(RpmList):
         self.provides = ProvidesList()
         self.filenames = FilenamesList()
         self.obsoletes = { }
-        self.updates = { }
-        self.erased = { }
         self.check_installed = 0
         self.installed_unresolved = HashList()
     # ----
@@ -152,7 +150,7 @@ class RpmResolver(RpmList):
         return self.OK
     # ----
 
-    def _update(self, pkg):
+    def update(self, pkg):
         obsoletes = [ ]
         for u in pkg["obsoletes"]:
             s = self.searchDependency(u)
@@ -160,7 +158,7 @@ class RpmResolver(RpmList):
                 if r["name"] != pkg["name"]:
                     obsoletes.append(r)
 
-        ret = RpmList._update(self, pkg)
+        ret = RpmList.update(self, pkg)
         if ret != self.OK:  return ret
 
         normalizeList(obsoletes)
@@ -177,8 +175,8 @@ class RpmResolver(RpmList):
         return self.OK
     # ----
 
-    def _erase(self, pkg):
-        ret = RpmList._erase(self, pkg)
+    def erase(self, pkg):
+        ret = RpmList.erase(self, pkg)
         if ret != self.OK:  return ret
 
         self.provides.removePkg(pkg)
@@ -193,48 +191,25 @@ class RpmResolver(RpmList):
                 self.obsoletes[pkg] = [ ]
             self.obsoletes[pkg].append(obsolete_pkg)
         else:
-            if obsolete_pkg in self.obsoletes:
-                if pkg in self.obsoletes:
-                    self.obsoletes[pkg].extend(self.obsoletes[obsolete_pkg])
-                    normalizeList(self.obsoletes[pkg])
-                else:
-                    self.obsoletes[pkg] = self.obsoletes[obsolete_pkg]
-                del self.obsoletes[obsolete_pkg]
-        if obsolete_pkg in self.updates:
-            if pkg in self.updates:
-                self.updates[pkg].extend(self.updates[obsolete_pkg])
-                normalizeList(self.updates[pkg])
-            else:
-                self.updates[pkg] = self.updates[obsolete_pkg]
-            del self.updates[obsolete_pkg]
-        return self._erase(obsolete_pkg)
+            self._inheritUpdates(pkg, obsolete_pkg)
+            self._inheritObsoletes(pkg, obsolete_pkg)
+        return self.erase(obsolete_pkg)
     # ----
 
     def _pkgUpdate(self, pkg, update_pkg):
-        if self.isInstalled(update_pkg):
-            if not pkg in self.updates:
-                self.updates[pkg] = [ ]
-            self.updates[pkg].append(update_pkg)
-        elif update_pkg in self.updates:
-            if pkg in self.updates:
-                self.updates[pkg].extend(self.updates[update_pkg])
-                normalizeList(self.updates[pkg])
-            else:
-                self.updates[pkg] = self.updates[update_pkg]
-            del self.updates[update_pkg]
-        if update_pkg in self.obsoletes:
-            if pkg in self.obsoletes:
-                self.obsoletes[pkg].extend(self.obsoletes[update_pkg])
-                normalizeList(self.obsoletes[pkg])
-            else:
-                self.obsoletes[pkg] = self.obsoletes[update_pkg]
-            del self.obsoletes[update_pkg]
+        if not self.isInstalled(update_pkg):
+            self._inheritObsoletes(pkg, update_pkg)
         return RpmList._pkgUpdate(self, pkg, update_pkg)
     # ----
 
-    def _pkgErase(self, pkg):
-        self.erased[pkg] = 1
-        return RpmList._pkgErase(self, pkg)
+    def _inheritObsoletes(self, pkg, old_pkg):
+        if old_pkg in self.obsoletes:
+            if pkg in self.obsoletes:
+                self.obsoletes[pkg].extend(self.obsoletes[old_pkg])
+                normalizeList(self.obsoletes[pkg])
+            else:
+                self.obsoletes[pkg] = self.obsoletes[old_pkg]
+            del self.obsoletes[old_pkg]
     # ----
 
     def searchDependency(self, dep, arch=None):
@@ -243,10 +218,6 @@ class RpmResolver(RpmList):
         if name[0] == '/': # all filenames are beginning with a '/'
             self.filenames.search(name, s)
         return s
-    # ----
-
-    def doObsoletes(self):
-        raise Exception, "deprecated"
     # ----
 
     def getPkgDependencies(self, pkg):
@@ -277,11 +248,10 @@ class RpmResolver(RpmList):
         no_unresolved = 1
         for name in self:
             for r in self[name]:
-                if self.check_installed == 0 and \
-                    len(self.erased) == 0 and len(self.obsoletes) == 0 and \
-                    len(self.updates) == 0 and self.isInstalled(r):
+                if self.check_installed == 0 and len(self.erases) == 0 and \
+                       self.isInstalled(r):
                     # do not check installed packages if no packages
-                    # are getting removed by erase or obsolete
+                    # are getting removed (by erase, update or obsolete)
                     continue
                 printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
@@ -333,8 +303,8 @@ class RpmResolver(RpmList):
 
         conflicts = HashList()
 
-        if self.operation == OP_ERASE:
-            # no conflicts for erase
+        if len(self.installs) == 0:
+            # no conflicts if there is no new package
             return conflicts
 
         for name in self:
@@ -381,8 +351,8 @@ class RpmResolver(RpmList):
         """ Check for file conflicts """
         conflicts =  HashList()
 
-        if self.operation == OP_ERASE:
-            # no conflicts for erase
+        if len(self.installs) == 0:
+            # no conflicts if there is no new package
             return conflicts
         
         for filename in self.filenames.multi.keys():
