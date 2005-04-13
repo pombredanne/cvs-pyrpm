@@ -115,17 +115,18 @@ class RpmList:
                     ret = self.__install_check(r, pkg)
                     if ret != 1: return ret
 
-                    if archCompat(pkg["arch"], r["arch"]):
-                        if self.isInstalled(r):
-                            msg = "%s: Ignoring due to installed %s"
-                            ret = self.ALREADY_INSTALLED
+                    if archDuplicate(pkg["arch"], r["arch"]):
+                        if archCompat(pkg["arch"], r["arch"]):
+                            if self.isInstalled(r):
+                                msg = "%s: Ignoring due to installed %s"
+                                ret = self.ALREADY_INSTALLED
+                            else:
+                                msg = "%s: Ignoring due to already added %s"
+                                ret = self.ALREADY_ADDED
+                            printWarning(1, msg % (pkg.getNEVRA(),
+                                                   r.getNEVRA()))
+                            return ret
                         else:
-                            msg = "%s: Ignoring due to already added %s"
-                            ret = self.ALREADY_ADDED
-                        printWarning(1, msg % (pkg.getNEVRA(), r.getNEVRA()))
-                        return ret
-                    else:
-                        if archDuplicate(pkg["arch"], r["arch"]):
                             updates.append(r)
 
         ret = self.install(pkg)
