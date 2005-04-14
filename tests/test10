@@ -15,8 +15,8 @@ preparechroot() {
     nodev=
     if test x$1 = x--nodev ; then
         nodev=--nodev
-        shift
     fi
+    shift
     dokill
     umount $1/dev
     umount $1/proc
