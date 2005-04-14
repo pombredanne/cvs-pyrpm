@@ -11,12 +11,12 @@ dokill() {
 }
 
 preparechroot() {
-    fuser -k $1 2> /dev/null
     nodev=
     if test x$1 = x--nodev ; then
         nodev=--nodev
+    	shift
     fi
-    shift
+    fuser -k $1 2> /dev/null
     dokill
     umount $1/dev
     umount $1/proc
