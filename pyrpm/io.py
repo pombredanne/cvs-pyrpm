@@ -681,7 +681,14 @@ class RpmFileIO(RpmStreamIO):
         if not self.fd:
             try:
                 import fcntl
-                self.fd = open(self.source, mode)
+                if not self.source.startswith("file:/"):
+                    filename = self.source
+                else:
+                    filename = self.source[5:]
+                    if filename[1] == "/":
+                        idx = filename[2:].index("/")
+                        filename = filename[idx+2:]
+                self.fd = open(filename, mode)
                 fcntl.fcntl(self.fd.fileno(), fcntl.F_SETFD, 1)
             except:
                 raiseFatal("%s: could not open file" % self.source)
@@ -869,9 +876,9 @@ class RpmPyDB(RpmDatabase):
     def read(self):
         if self.is_read:
             return 1
-        if not self.__mkDBDirs():
-            return 0
         dbpath = self._getDBPath()
+        if not os.path.isdir(dbpath+"/headers"):
+            return 1
         namelist = os.listdir(dbpath+"/headers")
         for nevra in namelist:
             src = "pydb:/"+dbpath+"/headers/"+nevra
@@ -892,7 +899,7 @@ class RpmPyDB(RpmDatabase):
         return 1
 
     def addPkg(self, pkg, nowrite=None):
-        if not self.__mkDBDirs():
+        if not nowrite and not self.__mkDBDirs():
             return 0
         dbpath = self._getDBPath()
         nevra = pkg.getNEVRA()
@@ -916,7 +923,7 @@ class RpmPyDB(RpmDatabase):
         return 1
 
     def erasePkg(self, pkg, nowrite=None):
-        if not self.__mkDBDirs():
+        if not nowrite and not self.__mkDBDirs():
             return 0
         dbpath = self._getDBPath()
         nevra = pkg.getNEVRA()
@@ -954,6 +961,153 @@ class RpmPyDB(RpmDatabase):
 class RpmRepo(RpmDatabase):
     def __init__(self, source, buildroot=None):
         RpmDatabase.__init__(self, source, buildroot)
+        self.flagmap = { None: None,
+                         "EQ": RPMSENSE_EQUAL,
+                         "LT": RPMSENSE_LESS,
+                         "GT": RPMSENSE_GREATER,
+                         "LE": RPMSENSE_EQUAL | RPMSENSE_LESS,
+                         "GE": RPMSENSE_EQUAL | RPMSENSE_GREATER }
+
+    def read(self):
+        if not self.source.startswith("file:/"):
+            filename = self.source
+        else:
+            filename = self.source[5:]
+            if filename[1] == "/":
+                idx = filename[2:].index("/")
+                filename = filename[idx+2:]
+        doc = libxml2.parseFile(filename + "/repodata/primary.xml.gz")
+        if doc == None:
+            return 0
+        root = doc.getRootElement()
+        if root == None:
+            return 0
+        return self.__parseNode(root.children)
+
+    def __parseNode(self, node):
+        while node != None:
+            if node.type != "element":
+                node = node.next
+                continue
+            if node.name == "package" and node.prop("type") == "rpm":
+                pkg = self.__parsePackage(node.children)
+                if not pkg["arch"] == "src":
+                    nevra = pkg.getNEVRA()
+                    self.pkglist[nevra] = pkg
+            node = node.next
+        return 1
+
+    def __parsePackage(self, node):
+        pkg = package.RpmPackage("dummy")
+        pkg["signature"] = {}
+        while node != None:
+            if node.type != "element":
+                node = node.next
+                continue
+            if   node.name == "name":
+                pkg["name"] = node.content
+            elif node.name == "arch":
+                pkg["arch"] = node.content
+            elif node.name == "version":
+                pkg["version"] = node.prop("ver")
+                pkg["release"] = node.prop("rel")
+                pkg["epoch"] = [int(node.prop("epoch"))]
+            elif node.name == "checksum":
+                if   node.prop("type") == "md5":
+                    pkg["signature"]["md5"] = node.content
+                elif node.prop("type") == "sha":
+                    pkg["signature"]["sha1header"] = node.content
+            elif node.name == "location":
+                pkg.source = self.source + node.prop("href")
+            elif node.name == "format":
+                self.__parseFormat(node.children, pkg)
+            node = node.next
+        pkg.header_read = 1
+        pkg["provides"] = pkg.getProvides()
+        pkg["requires"] = pkg.getRequires()
+        pkg["obsoletes"] = pkg.getObsoletes()
+        pkg["conflicts"] = pkg.getConflicts()
+        pkg["triggers"] = pkg.getTriggers()
+        if pkg.has_key("providename"):
+            del pkg["providename"]
+        if pkg.has_key("provideflags"):
+            del pkg["provideflags"]
+        if pkg.has_key("provideversion"):
+            del pkg["provideversion"]
+        if pkg.has_key("requirename"):
+            del pkg["requirename"]
+        if pkg.has_key("requireflags"):
+            del pkg["requireflags"]
+        if pkg.has_key("requireversion"):
+            del pkg["requireversion"]
+        if pkg.has_key("obsoletename"):
+            del pkg["obsoletename"]
+        if pkg.has_key("obsoleteflags"):
+            del pkg["obsoleteflags"]
+        if pkg.has_key("obsoleteversion"):
+            del pkg["obsoleteversion"]
+        if pkg.has_key("conflictname"):
+            del pkg["conflictname"]
+        if pkg.has_key("conflictflags"):
+            del pkg["conflictflags"]
+        if pkg.has_key("conflictversion"):
+            del pkg["conflictversion"]
+        return pkg
+
+    def __parseFormat(self, node, pkg):
+        pkg["filenames"] = []
+        while node != None:
+            if node.type != "element":
+                node = node.next
+                continue
+            elif node.name == "sourcerpm":
+                pkg["sourcerpm"] = node.content
+            elif node.name == "provides":
+                plist = self.__parseDeps(node.children, pkg)
+                pkg["providename"], pkg["provideflags"], pkg["provideversion"] = plist
+            elif node.name == "requires":
+                plist = self.__parseDeps(node.children, pkg)
+                pkg["requirename"], pkg["requireflags"], pkg["requireversion"] = plist
+            elif node.name == "obsoletes":
+                plist = self.__parseDeps(node.children, pkg)
+                pkg["obsoletename"], pkg["obsoleteflags"], pkg["obsoleteversion"] = plist
+            elif node.name == "conflicts":
+                plist = self.__parseDeps(node.children, pkg)
+                pkg["conflictname"], pkg["conflictflags"], pkg["conflictversion"] = plist
+            elif node.name == "file":
+                pkg["filenames"].append(node.content)
+            node = node.next
+
+    def __parseDeps(self, node, pkg):
+        plist = []
+        plist.append([])
+        plist.append([])
+        plist.append([])
+        while node != None:
+            if node.type != "element":
+                node = node.next
+                continue
+            if node.name == "entry":
+                name = node.prop("name")
+                flags = node.prop("flags")
+                ver = node.prop("ver")
+                if ver == None:
+                    plist[0].append(node.prop("name"))
+                    plist[1].append(0)
+                    plist[2].append("")
+                    node = node.next
+                    continue
+                epoch = node.prop("epoch")
+                rel = node.prop("rel")
+                if epoch != None:
+                    ver = "%s:%s" % (epoch, ver)
+                if rel != None:
+                    ver = "%s-%s" % (ver, rel)
+                plist[0].append(node.prop("name"))
+                plist[1].append(self.flagmap[flags])
+                plist[2].append(ver)
+            node = node.next
+        return plist
 
 
 class RpmCompsXML:
@@ -1112,7 +1266,7 @@ def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
     if   source[:5] == 'ftp:/':
         return RpmFtpIO(source, verify, strict, hdronly)
     elif source[:6] == 'file:/':
-        return RpmFileIO(source[6:], verify, strict, hdronly)
+        return RpmFileIO(source, verify, strict, hdronly)
     elif source[:6] == 'http:/':
         return RpmHttpIO(source, verify, strict, hdronly)
     elif source[:6] == 'pydb:/':

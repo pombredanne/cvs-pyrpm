@@ -86,7 +86,8 @@ class RpmUserCache:
     def getUID(self, username):
         if not self.uid.has_key(username):
             if os.path.isfile("/etc/passwd"):
-                if os.path.isfile("/sbin/ldconfig"):
+                if rpmconfig.buildroot == None and \
+                   os.path.isfile("/sbin/ldconfig"):
                     try:
                         pw = pwd.getpwnam(username)
                         self.uid[username] = pw[2]
@@ -107,7 +108,8 @@ class RpmUserCache:
     def getGID(self, groupname):
         if not self.gid.has_key(groupname):
             if os.path.isfile("/etc/group"):
-                if os.path.isfile("/sbin/ldconfig"):
+                if rpmconfig.buildroot == None and \
+                   os.path.isfile("/sbin/ldconfig"):
                     try:
                         gr = grp.getgrnam(groupname)
                         self.gid[groupname] = gr[2]

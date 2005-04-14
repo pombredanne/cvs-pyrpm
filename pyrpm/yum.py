@@ -205,8 +205,9 @@ class RpmYum:
                 continue
             conflicts = self.opresolver.getConflicts()
             self.__doConflictAutoerase(conflicts)
-            conflicts = self.opresolver.getFileConflicts()
-            self.__doConflictAutoerase(conflicts)
+            if not rpmconfig.nofileconflicts:
+                conflicts = self.opresolver.getFileConflicts()
+                self.__doConflictAutoerase(conflicts)
             unresolved = self.opresolver.getUnresolvedDependencies()
         if not self.autoerase:
             return 1
@@ -214,6 +215,8 @@ class RpmYum:
         while len(conflicts) > 0:
             self.__doConflictAutoerase(conflicts)
             conflicts = self.opresolver.getConflicts()
+        if rpmconfig.nofileconflicts:
+            return 1
         conflicts = self.opresolver.getFileConflicts()
         while len(conflicts) > 0:
             self.__doConflictAutoerase(conflicts)
@@ -275,7 +278,10 @@ class RpmYum:
             else:
                 if choice[0] != "y" and choice[0] != "Y":
                     sys.exit(0)
-        control = RpmController(OP_UPDATE, self.pydb, rpmconfig.buildroot)
+        if self.command.endswith("remove"):
+            control = RpmController(OP_ERASE, self.pydb, rpmconfig.buildroot)
+        else:
+            control = RpmController(OP_UPDATE, self.pydb, rpmconfig.buildroot)
         ops = control.getOperations(self.opresolver)
         i = 0
         while i < len(ops):
@@ -293,7 +299,13 @@ class RpmYum:
         pkg.close()
         return pkg
 
-    def addRepo(self, dirname, excludes):
+    def addRepo(self, baseurl, excludes):
+        repo = RpmRepo(baseurl)
+        repo.read()
+        resolver = RpmResolver(repo.getPkgList(), OP_INSTALL)
+        self.repos.append(resolver)
+
+    def addRepoByDir(self, dirname, excludes):
         pkg_list = []
         for f in os.listdir(dirname):
             fn = "%s/%s" % (dirname, f)

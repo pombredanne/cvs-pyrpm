@@ -164,6 +164,7 @@ class RpmController:
         for i in xrange(0, numops, pkgsperfork):
             subop = operations[:pkgsperfork]
             for (op, pkg) in subop:
+                pkg.close()
                 pkg.open()
             pid = os.fork()
             if pid != 0:

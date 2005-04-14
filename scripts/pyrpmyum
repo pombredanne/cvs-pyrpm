@@ -17,7 +17,7 @@
 # Author: Phil Knirsch
 #
 
-import sys, os, getopt
+import sys, os, getopt, string
 
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
@@ -42,13 +42,13 @@ general options:
     [--quiet] [-v, --verbose] [-y]
     [-c CONFIGFILE] [--dbpath DIRECTORY] [-r, --root DIRECTORY]
 
-install-options:
+more options:
     [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]
     [--ignoresize] [--ignorearch] [--exactarch]
     [--noconflicts] [--nofileconflicts]
     [--nodeps] [--nodigest] [--nosignature]
     [--noorder] [--noscripts] [--notriggers]
-    [--autoerase]
+    [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
 
 Warning: Some of the install-options are not evaluated yet
 Warning: [group]remove doesn't work yet either, use pyrpminstall -e"""
@@ -68,7 +68,8 @@ try:
          "hash", "version", "quiet", "dbpath=", "root=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "nofileconflicts", "nodeps", "nodigest", "nosignature",
-         "noorder", "noscripts", "notriggers", "oldpackage", "autoerase"])
+         "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
+         "installpkgs="])
 except getopt.error, e:
     print "Error parsing command list arguments: %s" % e
     usage()
@@ -101,13 +102,7 @@ for (opt, val) in opts:
                 if not baseurl.startswith("file:/"):
                     printWarning(0, "%s: Only file:/ baseurls supported for now." % key)
                     continue
-                val = baseurl[5:]
-                if os.path.isdir(val):
-                    yum.addRepo(val, excludes)
-                if os.path.isdir(val+"/RedHat/RPMS"):
-                    yum.addRepo(val+"/RedHat/RPMS", excludes)
-                if os.path.isdir(val+"/Fedora/RPMS"):
-                    yum.addRepo(val+"/Fedora/RPMS", excludes)
+                yum.addRepo(baseurl, excludes)
                 if rpmconfig.compsfile == None and \
                    os.path.isfile(val+"/repodata/comps.xml"):
                     rpmconfig.compsfile = val+"/repodata/comps.xml"
@@ -125,6 +120,8 @@ for (opt, val) in opts:
         yum.setConfirm(0)
     elif opt == "--dbpath":
         rpmconfig.dbpath = val
+    elif opt == "--installpkgs":
+        yum.always_install = string.split(val)
     elif opt == "--force":
         rpmconfig.force = 1
     elif opt in ["-h", "--hash"]:
