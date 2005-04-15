@@ -171,6 +171,8 @@ class RpmList:
             self.erases.append(pkg)
         if pkg in self.installs:
             self.installs.remove(pkg)
+        if pkg in self.updates:
+            del self.updates[pkg]
 
         return self.OK
     # ----

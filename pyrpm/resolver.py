@@ -182,6 +182,9 @@ class RpmResolver(RpmList):
         self.provides.removePkg(pkg)
         self.filenames.removePkg(pkg)
 
+        if pkg in self.obsoletes:
+            del self.obsoletes[pkg]
+
         return self.OK
     # ----
 
