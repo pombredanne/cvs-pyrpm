@@ -696,20 +696,19 @@ class RpmPackage(RpmData):
     def __getDeps(self, depnames):
         if self[depnames[0]] == None:
             return []
-        for dep in depnames:
-            if dep == depnames[0] or self[dep] == None:
-                continue
-            if len(self[dep]) != len(self[depnames[0]]):
-                raiseFatal("%s: wrong length of deps" % self.source)
+        deplength = len(self[depnames[0]])
+        deps2 = []
+        for d in depnames:
+            x = self[d]
+            if x != None:
+                if len(x) != deplength:
+                    raiseFatal("%s: wrong length of deps" % self.source)
+                deps2.append(x)
+            else:
+                deps2.append(None*deplength)
         deps = []
-        for i in xrange(0, len(self[depnames[0]])):
-            l = []
-            for j in xrange(0, len(depnames)):
-                if self[depnames[j]] != None:
-                    l.append(self[depnames[j]][i])
-                else:
-                    l.append(None)
-            deps.append(l)
+        for i in xrange(deplength):
+            deps.append( [deps2[j][i] for j in xrange(len(depnames))] )
         return deps
 
 
