@@ -20,7 +20,7 @@
 import os, gc
 from time import clock
 from config import rpmconfig
-import io, package
+import package
 from resolver import *
 from orderer import *
 

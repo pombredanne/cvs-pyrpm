@@ -468,7 +468,7 @@ class RpmStreamIO(RpmIO):
         elif ttype == RPM_STRING_ARRAY or \
             ttype == RPM_I18NSTRING:
             size = 0
-            for i in xrange(0, count):
+            for _ in xrange(0, count):
                 end = fmt.index('\x00', offset) + 1
                 size += end - offset
                 offset = end
@@ -495,7 +495,7 @@ class RpmStreamIO(RpmIO):
             return unpack("!%dI" % count, fmt[offset:offset + count * 4])
         elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
             data = []
-            for i in xrange(0, count):
+            for _ in xrange(0, count):
                 end = fmt.index('\x00', offset)
                 data.append(fmt[offset:end])
                 offset = end + 1
@@ -1110,7 +1110,7 @@ class RpmRepo(RpmDatabase):
                 flags = node.prop("flags")
                 ver = node.prop("ver")
                 if ver == None:
-                    plist[0].append(node.prop("name"))
+                    plist[0].append(name)
                     plist[1].append(0)
                     plist[2].append("")
                     node = node.next
@@ -1121,7 +1121,7 @@ class RpmRepo(RpmDatabase):
                     ver = "%s:%s" % (epoch, ver)
                 if rel != None:
                     ver = "%s-%s" % (ver, rel)
-                plist[0].append(node.prop("name"))
+                plist[0].append(name)
                 plist[1].append(self.flagmap[flags])
                 plist[2].append(ver)
             node = node.next
@@ -1193,6 +1193,7 @@ class RpmCompsXML:
                 printWarning(1, "Unknown entry in comps.xml: %s" % node.name)
                 return 0
             node = node.next
+        return 0
 
     def __parseGroup(self, node):
         group = {}
@@ -1359,6 +1360,7 @@ class FooRpmDB(RpmDatabase):
                     if not self.filenames.has_key(filename):
                         self.filenames[filename] = []
                     self.filenames[filename].append(pkg)
+                nevra = pkg.getNEVRA()
                 self.pkglist[nevra] = pkg
 
         self.is_read = 1

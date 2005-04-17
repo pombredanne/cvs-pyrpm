@@ -221,6 +221,7 @@ class RpmYum:
         while len(conflicts) > 0:
             self.__doConflictAutoerase(conflicts)
             conflicts = self.opresolver.getFileConflicts()
+        return 1
 
     def __doAutoerase(self, pkg):
         if self.opresolver.updates.has_key(pkg):
@@ -262,6 +263,7 @@ class RpmYum:
             return self.opresolver.update(pkg)
         elif self.command.endswith("remove"):
             return self.opresolver.erase(pkg)
+        raise AssertionError, "unknown command %s" % self.command
 
     def runCommand(self):
         for repo in self.repos:
