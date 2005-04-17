@@ -712,4 +712,16 @@ class RpmPackage(RpmData):
             deps.append(l)
         return deps
 
+
+def readRpmPackage(source, verify=None, strict=None, hdronly=None, tags=None):
+    """Read RPM package from source and close it.
+
+    tags, if defined, specifies tags to load."""
+
+    pkg = RpmPackage(source, verify, strict, hdronly)
+    pkg.read(tags = tags)
+    pkg.close()
+    return pkg
+
+
 # vim:ts=4:sw=4:showmatch:expandtab

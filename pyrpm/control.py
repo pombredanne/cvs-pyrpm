@@ -227,10 +227,8 @@ class RpmController:
         return 1
 
     def appendFile(self, file):
-        pkg = package.RpmPackage(file)
-        pkg.read(tags=rpmconfig.resolvertags)
+        pkg = package.readRpmPackage(file, tags=rpmconfig.resolvertags)
         self.rpms.append(pkg)
-        pkg.close()
         return 1
 
     def eraseFile(self, file):

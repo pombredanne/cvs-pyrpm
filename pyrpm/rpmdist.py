@@ -192,9 +192,7 @@ class RpmDistributionCollection:
         pkgs = []
         for f in files:
             printDebug(2, "%04d: reading %s" % (len(pkgs), f))
-            pkg = RpmPackage('file:/'+f)
-            pkg.read(tags)
-            pkg.close()
+            pkg = readRpmPackage('file:/'+f, tags = tags)
             pkgs.append(pkg)
         return pkgs
 

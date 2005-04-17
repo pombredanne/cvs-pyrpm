@@ -116,12 +116,8 @@ def metadataReadPackage(filename):
 
     For convenience only, other metadata* functions work with any RpmPackage
     as long it contains all needed tags."""
-
-    pkg = package.RpmPackage("file:/" + filename, verify = None,
-                             hdronly = True)
-    pkg.read()
-    pkg.close()
-    return pkg
+    return package.readRpmPackage("file:/" + filename, verify = None,
+                                  hdronly = True)
 
 
 def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):

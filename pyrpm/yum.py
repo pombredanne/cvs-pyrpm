@@ -22,7 +22,7 @@ from functions import *
 from io import *
 from resolver import RpmResolver
 from control import RpmController
-from package import RpmPackage
+from package import RpmPackage, readRpmPackage
 from hashlist import HashList
 
 
@@ -295,11 +295,7 @@ class RpmYum:
         control.runOperations(ops)
 
     def __readRpmPackage(self, filename):
-        pkg = RpmPackage(filename)
-        pkg.open()
-        pkg.read(tags=rpmconfig.resolvertags)
-        pkg.close()
-        return pkg
+        return readRpmPackage(filename, tags = rpmconfig.resolvertags)
 
     def addRepo(self, baseurl, excludes):
         repo = RpmRepo(baseurl)
