@@ -31,6 +31,8 @@ DIGEST_CHUNK = 65536
 def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
     if prog == None:
         prog = "/bin/sh"
+    if prog == "/bin/sh" and script == None:
+        return 1
     if not os.path.exists("/var/tmp"):
         try:
             os.makedirs("/var", mode=0755)
@@ -100,7 +102,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
     if script != None:
         os.unlink(tmpfilename)
     if status != 0:
-        printError("Error in running script:")
+        printError("Error in running script (cpid=%s,status=%s):" % (str(cpid), str(status)))
         printError(str(args))
         if cret.endswith("\n"):
             cret = cret[:-1]
@@ -241,12 +243,6 @@ def updateDigestFromFile(digest, fd, bytes = None):
         if bytes is not None:
             bytes -= len(data)
 
-# TODO:
-# - Also calculate removals and package updates for disk usage.
-# - This routine takes a lot of time. Maybe for new installs try to detect
-#   cases where the installation goes into one partition only and then only
-#   sum together the payload cpio size. Another possibility would be to check
-#   if the update would fit into the smallest device.
 # Things not done for disksize calculation, might stay this way:
 # - no hardlink detection
 # - no information about not-installed files like multilib files, left out
