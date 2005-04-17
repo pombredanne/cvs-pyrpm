@@ -233,12 +233,10 @@ class RpmOrderer:
 
     # ----
 
-    def genCounter(self, relations, loops):
+    def genCounter(self, loops):
         counter = HashList()
-        for i in xrange(len(loops)):
-            w = loops[i]
-            j = 0
-            while j < len(w)-1:
+        for w in loops:
+            for j in xrange(len(w) - 1):
                 node = w[j]
                 next = w[j+1]
                 if node not in counter:
@@ -247,13 +245,12 @@ class RpmOrderer:
                     counter[node][next] = 1
                 else:
                     counter[node][next] += 1
-                j += 1
         return counter
 
     # ----
 
     def breakupLoops(self, relations, loops):
-        counter = self.genCounter(relations, loops)
+        counter = self.genCounter(loops)
 
         # breakup soft loop
         max_count_node = None
@@ -386,13 +383,10 @@ class RpmOrderer:
 
             # order package list
             order2 = self._genOrder(relations)
-            if order == None:
+            if order2 == None:
                 return None
             order.extend(order2)
             
-            # cleanup relations
-            del relations
-
         # order erases
         if self.erases and len(self.erases) > 0:
             # generate relations
@@ -404,9 +398,6 @@ class RpmOrderer:
                 return None
             order2.reverse()
             order.extend(order2)
-
-            # cleanup relations
-            del relations
 
         return order
 
