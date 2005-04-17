@@ -41,6 +41,7 @@ class RpmList:
             if not r["name"] in self.installed:
                 self.installed[r["name"]] = [ ]
             self.installed[r["name"]].append(r)
+        self.__getitem__ = self.list.__getitem__
     # ----
 
     def clear(self):
@@ -51,8 +52,8 @@ class RpmList:
         self.erases = [ ]
     # ----
 
-    def __getitem__(self, i):
-        return self.list[i] # return rpm list
+    #def __getitem__(self, i):
+    #    return self.list[i] # return rpm list
     # ----
 
     def _install(self, pkg, no_check=0):
