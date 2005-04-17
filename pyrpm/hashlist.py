@@ -57,7 +57,8 @@ class HashList:
         return None
 
     def pop(self, idx):
-        key = self.list[idx]
-        del self[key]
+        key = self.list.pop(idx)
+        del self.hash[key]
+        return key
 
 # vim:ts=4:sw=4:showmatch:expandtab
