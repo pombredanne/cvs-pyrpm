@@ -40,7 +40,8 @@ class RpmYum:
         # Our database
         self.pydb = None
         # Our list of package names that get installed instead of updated
-        self.always_install = ["kernel", "kernel-smp"]
+        self.always_install = ["kernel", "kernel-smp", "kernel-bigmem",
+            "kernel-enterprise", "kernel-debug", "kernel-unsupported"]
         # List of vaild commands
         self.command_list = ["install", "update", "upgrade", "remove", \
                              "groupinstall", "groupupdate", "groupupgrade", \
@@ -298,6 +299,7 @@ class RpmYum:
         return readRpmPackage(filename, tags = rpmconfig.resolvertags)
 
     def addRepo(self, baseurl, excludes):
+        # XXX: excludes not yet done
         repo = RpmRepo(baseurl)
         repo.read()
         resolver = RpmResolver(repo.getPkgList(), OP_INSTALL)
@@ -313,10 +315,8 @@ class RpmYum:
             if rpmconfig.ignorearch or \
                archCompat(pkg["arch"], rpmconfig.machine):
                 pkg_list.append(pkg)
-        ex_list = excludes.split()
-        for ex in ex_list:
-            excludes = findPkgByName(ex, pkg_list)
-            for pkg in excludes:
+        for ex in excludes.split():
+            for pkg in findPkgByName(ex, pkg_list):
                 pkg_list.remove(pkg)
         resolver = RpmResolver(pkg_list, OP_INSTALL)
         self.repos.append(resolver)
