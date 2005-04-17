@@ -1,6 +1,7 @@
 #
 # Copyright (C) 2004, 2005 Red Hat, Inc.
-# Author: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak
+# Authors: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak,
+#          Miloslav Trmac
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
@@ -17,10 +18,9 @@
 #
 
 
-import os.path, sys, pwd, grp, md5, string, weakref
+import os.path, sys, struct, pwd, grp, md5, sha, weakref
 from stat import S_ISREG
 from types import DictType
-from struct import unpack
 from functions import *
 
 class RpmData:
@@ -51,8 +51,7 @@ class FastRpmData(DictType):
     __getitem__ = DictType.get
     def __init__(self):
         DictType.__init__(self)
-        self.hash \
-            = int(string.atoi(str(weakref.ref(self)).split()[6][3:-1], 16))
+        self.hash = int(str(weakref.ref(self)).split()[6][3:-1], 16)
 
     def __repr__(self):
         return "FastRpmData: <0x" + str(self.hash) + ">"
@@ -184,6 +183,100 @@ class RpmPackage(RpmData):
         if not self.open("w"):
             return 0
         return self.io.write(self)
+
+    def verifySignatureTag(self, tag):
+        """Verify digest or signature self["signature"][tag].
+
+        Return 1 if verified, -1 if failed, 0 if unkown."""
+        if tag == "dsaheader":
+            return 0 # FIXME: unimplemented
+        elif tag == "sha1header":
+            digest = sha.new(RPM_HEADER_INDEX_MAGIC)
+            r = self.__digestImmutableRegion(digest)
+            if r != 1:
+                return r
+            if self["signature"][tag] == digest.hexdigest():
+                return 1
+            else:
+                return -1
+        elif tag == "size_in_sig":
+            if self.range_header[0] is None:
+                return 0
+            fd = self.io.getFdForRange(self.range_header[0]
+                                       + self.range_header[1], None)
+            if fd is None:
+                return 0
+            total = os.fstat(fd.fileno()).st_size
+            if self["signature"][tag][0] == total - self.range_header[0]:
+                return 1
+            else:
+                return -1
+        elif tag == "pgp":
+            return 0 # FIXME: unimplemented
+        elif tag == "md5":
+            if self.range_header[0] is None:
+                return 0
+            fd = self.io.getFdForRange(self.range_header[0], None)
+            digest = md5.new()
+            updateDigestFromFile(digest, fd, None)
+            if self["signature"][tag] == digest.digest():
+                return 1
+            else:
+                return -1
+        elif tag == "gpg":
+            return 0 # FIXME: unimplemented
+        # "payloadsize" requires uncompressing payload and adds no value,
+        # unimplemented
+        # "badsha1_1", "badsha1_2" are legacy, unimplemented.    
+        return 0
+
+    def __digestImmutableRegion(self, digest):
+        """Update digest with data from immutable header region."""
+
+        immutable = self["immutable"]
+        if immutable is None:
+            # What was the digest computed from?
+            return -1
+        (tag, type_, offset, count) = struct.unpack("!4i", immutable)
+        if (tag != 63 or type_ != RPM_BIN or -offset <= 0 or -offset % 16 != 0
+            or count != 16):
+            return -1
+        regionIndexEntries = -offset / 16
+        if self.range_header[0] is None:
+            return 0
+        fd = self.io.getFdForRange(*self.range_header)
+        if fd is None:
+            return 0
+        data = fd.read(16)
+        (totalIndexEntries, totalDataSize) = struct.unpack("!8x2i", data)
+        data = fd.read(16 * totalIndexEntries)
+        unsignedTags = []
+        for i in xrange(totalIndexEntries):
+            (tag, type_, offset, count) = \
+                  struct.unpack("!4i", data[i * 16 : (i + 1) * 16])
+            if tag == 63:
+                break
+            unsignedTags.append(tag)
+        else:
+            raiseFatal("%s: immutable tag disappeared" % self.source)
+        if (type_ != RPM_BIN or count != 16 or
+            i + regionIndexEntries > totalIndexEntries):
+            return -1
+        digest.update(struct.pack("!2i", regionIndexEntries, offset + 16))
+        digest.update(data[i * 16 : (i + regionIndexEntries) * 16])
+        for i in xrange(i + regionIndexEntries, totalIndexEntries):
+            (tag,) = struct.unpack("!i", data[i * 16 : i * 16 + 4])
+            unsignedTags.append(tag)
+        if unsignedTags:
+            # FIXME: only once per package
+            printWarning(0, "%s: Unsigned tags %s"
+                         % (self.source,
+                            [rpmtagname[i] for i in unsignedTags]))
+        # In practice region data starts at offset 0, but the original design
+        # was proposing concatenated regions etc; where would the data region
+        # start in that case? Lowest offset in region perhaps?
+        updateDigestFromFile(digest, fd, offset + 16)
+        return 1
 
     def install(self, db=None, tags=None, ntags=None):
         if not self.open():
@@ -409,11 +502,7 @@ class RpmPackage(RpmData):
         if S_ISREG(mode):
             f = open(rfi.filename)
             m = md5.new()
-            buf = "1"
-            while buf:
-                buf = f.read(65536)
-                if buf:
-                    m.update(buf)
+            updateDigestFromFile(m, f)
             f.close()
             md5sum = m.hexdigest()
         # Same file in new rpm as on disk -> just write it.

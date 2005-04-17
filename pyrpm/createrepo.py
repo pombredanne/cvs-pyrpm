@@ -143,10 +143,10 @@ def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):
 
     stats = os.stat(filename)
     time = pkgNode.newChild(None, 'time', None)
-    time.newProp('file', str(stats[stat.ST_MTIME]))
+    time.newProp('file', str(stats.st_mtime))
     time.newProp('build', str(pkg['buildtime'][0]))
     size = pkgNode.newChild(None, 'size', None)
-    size.newProp('package', str(stats[stat.ST_SIZE]))
+    size.newProp('package', str(stats.st_size))
     size.newProp('installed', str(pkg['size'][0]))
     size.newProp('archive', str(pkg['signature']['payloadsize'][0]))
     location = pkgNode.newChild(None, 'location', None)

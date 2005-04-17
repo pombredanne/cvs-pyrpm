@@ -22,7 +22,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import fnmatch, getopt, gzip, md5, os, sha, stat, sys, libxml2
+import fnmatch, getopt, gzip, md5, os, sha, sys, libxml2
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
@@ -237,11 +237,10 @@ class MDError(Exception):
         self.args = args
 
 
-def getChecksum(sumtype, file, CHUNK=2**16):
+def getChecksum(sumtype, file):
     """takes filename, hand back Checksum of it
        sumtype = md5 or sha
-       filename = /path/to/file
-       CHUNK=65536 by default"""
+       filename = /path/to/file"""
 
     # chunking brazenly lifted from Ryan Tomayko
     opened_here = 0
@@ -250,7 +249,7 @@ def getChecksum(sumtype, file, CHUNK=2**16):
             fo = file # assume it's a file-like-object
         else:
             opened_here = 1
-            fo = open(file, 'r', CHUNK)
+            fo = open(file, 'r', pyrpm.DIGEST_CHUNK)
 
         if sumtype == 'md5':
             sum_ = md5.new()
@@ -258,10 +257,7 @@ def getChecksum(sumtype, file, CHUNK=2**16):
             sum_ = sha.new()
         else:
             raise MDError, 'Error Checksumming file, wrong checksum type %s' % sumtype
-        chunk = fo.read
-        while chunk:
-            chunk = fo.read(CHUNK)
-            sum_.update(chunk)
+        pyrpm.updateDigestFromFile(sum_, fo)
 
         if opened_here:
             fo.close()
@@ -385,7 +381,7 @@ def repoXML(node, cmds):
         uncsum = getChecksum(sumtype, zfo)
         zfo.close()
         csum = getChecksum(sumtype, os.path.join(cmds['tempdir'], filename))
-        timestamp = os.stat(os.path.join(cmds['tempdir'], filename))[stat.ST_MTIME]
+        timestamp = os.stat(os.path.join(cmds['tempdir'], filename)).st_mtime
         data = node.newChild(None, 'data', None)
         data.newProp('type', ftype)
         location = data.newChild(None, 'location', None)
@@ -401,7 +397,7 @@ def repoXML(node, cmds):
     # if we've got a group file then checksum it once and be done
     if cmds['groupfile'] is not None:
         grpfile = cmds['groupfile']
-        timestamp = os.stat(grpfile)[stat.ST_MTIME]
+        timestamp = os.stat(grpfile).st_mtime
         sfile = os.path.basename(grpfile)
         fo = open(grpfile, 'r')
         output = open(os.path.join(cmds['tempdir'], sfile), 'w')

@@ -24,6 +24,8 @@ from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE
 from config import rpmconfig
 from base import *
 
+# Number of bytes to read from file at once when computing digests
+DIGEST_CHUNK = 65536
 
 # Collection of class indepedant helper functions
 def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
@@ -224,6 +226,20 @@ def closeAllFDs():
             sys.stderr.write("Closed fd=%d\n" % fd)
         except:
             pass
+
+def updateDigestFromFile(digest, fd, bytes = None):
+    """Update digest with data from fd, until EOF or only specified bytes."""
+
+    while True:
+        chunk = DIGEST_CHUNK
+        if bytes is not None and chunk > bytes:
+            chunk = bytes
+        data = fd.read(chunk)
+        if not data:
+            break
+        digest.update(data)
+        if bytes is not None:
+            bytes -= len(data)
 
 # TODO:
 # - Also calculate removals and package updates for disk usage.

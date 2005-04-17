@@ -215,6 +215,12 @@ class RpmIO:
     def close(self):
         return 0
 
+    def getFdForRange(self, start, len):
+        """Return a Python file object for "package" range [start, start + len)
+
+        Seek the file object to offset start.  len == None means "until end
+        of package".  Return None if the requested range is not available."""
+        return None
 
 class RpmStreamIO(RpmIO):
     def __init__(self, source, verify=None, strict=None, hdronly=None):
@@ -379,7 +385,7 @@ class RpmStreamIO(RpmIO):
 
     def __readIndex(self, pad, issig=None):
         data = self._read(16)
-        if not len(data):
+        if len(data) != 16:
             return None
         (magic, indexNo, storeSize) = unpack("!8sii", data)
         if magic != RPM_HEADER_INDEX_MAGIC or indexNo < 1:
@@ -708,6 +714,18 @@ class RpmFileIO(RpmStreamIO):
         self.__closeFile()
         return 1
 
+    def getFdForRange(self, start, len):
+        fd = open(self.source, "r")
+        try:
+            fd.seek(0, 2)
+            total = fd.tell()
+            if len is not None and start + len > total:
+                raiseFatal("%s: file was truncated" % self.source)
+            fd.seek(start)
+        except:
+            fd.close()
+            return None
+        return fd
 
 class RpmFtpIO(RpmStreamIO):
     def __init__(self, source, verify=None, strict=None, hdronly=None):
