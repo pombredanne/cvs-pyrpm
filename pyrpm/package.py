@@ -706,10 +706,7 @@ class RpmPackage(RpmData):
                 deps2.append(x)
             else:
                 deps2.append(None*deplength)
-        deps = []
-        for i in xrange(deplength):
-            deps.append( [deps2[j][i] for j in xrange(len(depnames))] )
-        return deps
+        return zip(*deps2)
 
 
 def readRpmPackage(source, verify=None, strict=None, hdronly=None, tags=None):
