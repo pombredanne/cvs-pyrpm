@@ -136,10 +136,11 @@ class RpmList:
 
         for r in updates:
             if self.isInstalled(r):
-                msg = "%s was already installed, replacing with %s"
+                printWarning(2, "%s was already installed, replacing with %s" \
+                                 % (r.getNEVRA(), pkg.getNEVRA()))
             else:
-                msg = "%s was already added, replacing with %s"
-            printWarning(1, msg % (r.getNEVRA(), pkg.getNEVRA()))
+                printWarning(1, "%s was already added, replacing with %s" \
+                                 % (r.getNEVRA(), pkg.getNEVRA()))
             if self._pkgUpdate(pkg, r) != self.OK:
                 return self.UPDATE_FAILED
 
