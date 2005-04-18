@@ -114,7 +114,8 @@ baseurl=file://localhost$FEDORA/updates/$1/\$basearch/
 EOF
 }
 
-DATA=/mnt/build/laroche
+DATA=/mnt/data/laroche
+ARCH=i386
 
 if test x$1 = xclean ; then
     if test -n "$2" ; then
@@ -152,60 +153,60 @@ fi
 
 # Fedora Core 1
 if true ; then
-IN=$DATA/FC1-i386
+IN=$DATA/FC1-$ARCH
 # Raw FC1 install
-doinstall --nodev $FEDORA/1/i386/os/Fedora/RPMS $IN
+doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
 # Update FC1 to updates
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/1/i386 ; } 2>&1 | tee $IN.LOG.update
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.update
 # Update FC1 to testing
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/1/i386 ; } 2>&1 | tee $IN.LOG.update.1
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/1/$ARCH ; } 2>&1 | tee $IN.LOG.update.1
 if test $RELEASEUPDATE = 1 ; then
 # Update FC1 to FC2+updates
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/2/i386 $FEDORA/updates/2/i386 ; } 2>&1 | tee $IN.LOG.update.2
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/2/$ARCH/os/Fedora/RPMS $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.update.2
 # Update to FC3+updates
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/3/i386 $FEDORA/updates/3/i386 ; } 2>&1 | tee $IN.LOG.update.3
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.update.3
 # Update to FC-development
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/i386/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.update.4
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.update.4
 fi
 fi
 
 # Fedora Core 2
 if true ; then
-IN=$DATA/FC2-i386
+IN=$DATA/FC2-$ARCH
 # Raw FC2 install
-doinstall --nodev $FEDORA/2/i386/os/Fedora/RPMS $IN
+doinstall --nodev $FEDORA/2/$ARCH/os/Fedora/RPMS $IN
 # Update FC2 to updates
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/2/i386 ; } 2>&1 | tee $IN.LOG.update
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.update
 # Update FC2 to testing
-{ time $PYRPMYUM --nofileconflicts -r $IN update $FEDORA/updates/testing/2/i386 ; } 2>&1 | tee $IN.LOG.update.1
+{ time $PYRPMYUM --nofileconflicts -r $IN update $FEDORA/updates/testing/2/$ARCH ; } 2>&1 | tee $IN.LOG.update.1
 if test $RELEASEUPDATE = 1 ; then
 # Update FC2 to FC3+updates
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/3/i386 $FEDORA/updates/3/i386 ; } 2>&1 | tee $IN.LOG.update.2
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.update.2
 # Update to FC-development
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/i386/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.update.3
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.update.3
 fi
 fi
 
 # Fedora Core 3
 if true ; then
-IN=$DATA/FC3-i386
+IN=$DATA/FC3-$ARCH
 # Raw FC3 install
-doinstall         $FEDORA/3/i386/os/Fedora/RPMS $IN
+doinstall         $FEDORA/3/$ARCH/os/Fedora/RPMS $IN
 # Update FC3 to updates
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/3/i386 ; } 2>&1 | tee $IN.LOG.update
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.update
 # Update FC3 to testing
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/3/i386 ; } 2>&1 | tee $IN.LOG.update.1
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/3/$ARCH ; } 2>&1 | tee $IN.LOG.update.1
 if test $RELEASEUPDATE = 1 ; then
 # Update to FC-development
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/i386/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.update.2
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.update.2
 fi
 fi
 
 # Fedora Core development
 if false ; then
-doinstall $FEDORA/development/i386/Fedora/RPMS $DATA/FC4-i386
-ln -sf $FEDORA/development/i386/Fedora/RPMS /tmp/n
-doinstall /tmp/n $DATA/FC4-i386-rpm rpm
+doinstall $FEDORA/development/$ARCH/Fedora/RPMS $DATA/FC4-$ARCH
+ln -sf $FEDORA/development/$ARCH/Fedora/RPMS /tmp/n
+doinstall /tmp/n $DATA/FC4-$ARCH-rpm rpm
 fi
 
 # Fedora Core 1/2/3 with /bin/rpm and updates with yum
@@ -213,15 +214,15 @@ if false ; then
 NODEV="--nodev"
 for i in 1 2 3 ; do
     test $i = 3 && NODEV=
-    IN=$DATA/FC$i-i386-rpm
-    doinstall $NODEV $FEDORA/$i/i386/os/Fedora/RPMS $IN rpm
+    IN=$DATA/FC$i-$ARCH-rpm
+    doinstall $NODEV $FEDORA/$i/$ARCH/os/Fedora/RPMS $IN rpm
     genyumconf $i $IN
     { time chroot $IN yum update; } 2>&1 | tee $IN.LOG.update
 done
 fi
 
 if true ; then
-IN=$DATA/FC1-2-3-i386
+IN=$DATA/FC1-2-3-$ARCH
 # Install FC1 with all updates
 cleanchroot $IN
 preparechroot --nodev $IN
