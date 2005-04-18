@@ -678,7 +678,7 @@ class RpmPackage(RpmData):
         if self["triggerindex"] == None:
             return self.__getDeps(("triggername", "triggerflags",
                 "triggerversion", "triggerscriptprog", "triggerscripts"))
-        deps =  self.__getDeps(("triggername", "triggerflags",
+        deps = self.__getDeps(("triggername", "triggerflags",
             "triggerversion"))
         numdeps = len(deps)
         if len(self["triggerscriptprog"]) != len(self["triggerscripts"]):
@@ -686,6 +686,10 @@ class RpmPackage(RpmData):
         if numdeps != len(self["triggerindex"]):
             raiseFatal("%s: wrong length of triggerindex" % self.source)
         for i in xrange(numdeps):
+            # Convert tuple into list, small hack
+            di = deps[i]
+            deps[i] = []
+            deps[i].extend(di)
             ti = self["triggerindex"][i]
             if ti > len(self["triggerscriptprog"]):
                 raiseFatal("%s: wrong index in triggerindex" % self.source)
