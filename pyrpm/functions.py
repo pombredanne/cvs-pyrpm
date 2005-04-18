@@ -661,7 +661,13 @@ def __findPkgByName(pkgname, list, regex=None):
 release and arch. Returns a list of all matching packages, starting with
 best match."""
     pkglist = []
+    tmplist = []
     envra = envraSplit(pkgname)
+    if not regex:
+        for pkg in list:
+            if pkg["name"].find(envra[1]) >= 0:
+                tmplist.append(pkg)
+        list = tmplist
     tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
     pkglist.extend(tagsearch(tags, list, regex))
     tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG, RELEASETAG], envra)), \
@@ -736,6 +742,8 @@ best match."""
 def findPkgByName(pkgname, list):
     pkglist = __findPkgByName(pkgname, list, None)
     if len(pkglist) == 0:
+        if pkgname.find("*") < 0:
+            return [ ]
         pkglist = __findPkgByName(pkgname, list, 1)
     return pkglist
 

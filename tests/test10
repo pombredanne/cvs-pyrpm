@@ -229,8 +229,8 @@ genyumconf 1 $IN withbase
 { time $PYRPMYUM -c $IN/etc/yum.conf -r $IN install "*"; } 2>&1 | tee $IN.LOG.install
 # Update to FC2 with all updates
 genyumconf 2 $IN withbase
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN upgrade "*"; } 2>&1 | tee $IN.LOG.update.1
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update; } 2>&1 | tee $IN.LOG.update.1
 # Update to FC3 with all updates
 genyumconf 3 $IN withbase
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN upgrade "*"; } 2>&1 | tee $IN.LOG.update.2
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update; } 2>&1 | tee $IN.LOG.update.2
 fi

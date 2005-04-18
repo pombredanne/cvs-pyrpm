@@ -61,10 +61,35 @@ class RpmYum:
         if self.command == "upgrade" or self.command == "groupupgrade":
             self.always_install = [ ]
 
+    def addRepo(self, baseurl, excludes):
+        repo = RpmRepo(baseurl)
+        repo.read()
+        resolver = RpmResolver(repo.getPkgList(), OP_INSTALL)
+        self.repos.append(resolver)
+
+    def addRepoByDir(self, dirname, excludes):
+        pkg_list = []
+        for f in os.listdir(dirname):
+            fn = "%s/%s" % (dirname, f)
+            if not f.endswith(".rpm") or not os.path.isfile(fn):
+                continue
+            pkg = self.__readRpmPackage(fn)
+            if rpmconfig.ignorearch or \
+               archCompat(pkg["arch"], rpmconfig.machine):
+                pkg_list.append(pkg)
+        for ex in excludes.split():
+            excludes = findPkgByName(ex, pkg_list)
+            for pkg in excludes:
+                pkg_list.remove(pkg)
+        resolver = RpmResolver(pkg_list, OP_INSTALL)
+        self.repos.append(resolver)
+
     def processArgs(self, args):
         # Create and read db
         self.pydb = RpmPyDB(rpmconfig.dbpath, rpmconfig.buildroot)
         self.pydb.read()
+        self.__generateObsoletesList()
+        self.opresolver = RpmResolver(self.pydb.getPkgList())
         # If we do a group operation handle it accordingly
         if self.command.startswith("group"):
             if rpmconfig.compsfile == None:
@@ -81,9 +106,23 @@ class RpmYum:
             if len(args) == 0:
                 for pkg in self.pydb.getPkgList():
                     args.append(pkg["name"])
+                for pkg in self.__obsoleteslist:
+                    for u in pkg["obsoletes"]:
+                        s = self.opresolver.searchDependency(u)
+                        if len(s) > 0:
+                            if not pkg in self.opresolver:
+                                self.opresolver.update(pkg)
+                            for ipkg in s:
+                                try:
+                                    args.remove(ipkg["name"])
+                                except:
+                                    pass
         # Look for packages we need/want to install. Arguments can either be
         # direct filenames or package nevra's with * wildcards
         self.pkgs = []
+        repolists = []
+        for repo in self.repos:
+            repolists.append(repo.getList())
         for f in args:
             if os.path.isfile(f) and f.endswith(".rpm"):
                 pkg = self.__readRpmPackage(f)
@@ -101,10 +140,65 @@ class RpmYum:
                 if self.command.endswith("remove"):
                     self.pkgs.extend(findPkgByName(f, self.pydb.getPkgList()))
                 else:
-                    for repo in self.repos:
-                        self.pkgs.extend(findPkgByName(f, repo.getList()))
+                    for rlist in repolists:
+                        self.pkgs.extend(findPkgByName(f, rlist))
                     if len(self.pkgs) == 0:
                         printError("Couldn't find package %s, skipping" % f)
+
+    def runDepRes(self):
+        # Add packages to be updated  to our operation resolver
+        self.pkgs = self.__selectNewestPkgs(self.pkgs)
+        for pkg in self.pkgs:
+            self.__appendPkg(pkg)
+            if  self.command.endswith("update") or \
+                self.command.endswith("upgrade") :
+                self.__handleObsoletes(pkg)
+        del self.pkgs
+        self.pkgs = []
+        self.__runDepResolution()
+
+    def runCommand(self):
+        for repo in self.repos:
+            del repo
+        self.repos = []
+        if len(self.erase_list) > 0:
+            printInfo(0, "Warning: Following packages will be automatically removed:\n")
+            for pkg in self.erase_list:
+                printInfo(0, "\t%s\n" % pkg.getNEVRA())
+        if self.confirm:
+            choice = raw_input("Is this ok [y/N]: ")
+            if len(choice) == 0:
+                sys.exit(0)
+            else:
+                if choice[0] != "y" and choice[0] != "Y":
+                    sys.exit(0)
+        if self.command.endswith("remove"):
+            control = RpmController(OP_ERASE, self.pydb, rpmconfig.buildroot)
+        else:
+            control = RpmController(OP_UPDATE, self.pydb, rpmconfig.buildroot)
+        ops = control.getOperations(self.opresolver)
+        i = 0
+        while i < len(ops):
+            (op, pkg) = ops[i]
+            if pkg.has_key("thisisaobsoletespackage"):
+                ops.pop(i)
+                continue
+            i += 1
+        control.runOperations(ops)
+
+    def __generateObsoletesList(self):
+        self.__obsoleteslist = []
+        for repo in self.repos:
+            for pkg in repo.getList():
+                if pkg.has_key("obsoletes"):
+                    self.__obsoleteslist.append(pkg)
+
+    def __readRpmPackage(self, filename):
+        pkg = RpmPackage(filename)
+        pkg.open()
+        pkg.read(tags=rpmconfig.resolvertags)
+        pkg.close()
+        return pkg
 
     def __selectNewestPkgs(self, pkglist):
         rethash = {}
@@ -116,25 +210,18 @@ class RpmYum:
                     rethash[pkg["name"]] = pkg
         return rethash.values()
 
-    def runDepRes(self):
-        # Add packages to be updated  to our operation resolver
-        self.opresolver = RpmResolver(self.pydb.getPkgList())
-        self.pkgs = self.__selectNewestPkgs(self.pkgs)
-        for pkg in self.pkgs:
-            self.__appendPkg(pkg)
-        # Look for obsoletes and add them to our update packages
-        if not self.command.endswith("remove"):
-            for repo in self.repos:
-                for pkg in repo.getList():
-                    if pkg in self.pkgs:
-                        continue
-                    for u in pkg["obsoletes"]:
-                        s = self.opresolver.searchDependency(u)
-                        if len(s) > 0:
-                            self.opresolver.update(pkg)
-        del self.pkgs
-        self.pkgs = []
-        self.__runDepResolution()
+    def __appendPkg(self, pkg):
+        if   self.command.endswith("install"):
+            return self.opresolver.install(pkg)
+        elif self.command.endswith("update"):
+            if pkg["name"] in self.always_install:
+                return self.opresolver.install(pkg)
+            else:
+                return self.opresolver.update(pkg)
+        elif self.command.endswith("upgrade"):
+            return self.opresolver.update(pkg)
+        elif self.command.endswith("remove"):
+            return self.opresolver.erase(pkg)
 
     def __runDepResolution(self):
         # Special erase list for unresolvable package dependancies or conflicts
@@ -168,6 +255,7 @@ class RpmYum:
                         if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
                             found = 1
                             unresolved_deps = 0
+                        self.__handleObsoletes(upkg)
                     else:
                         found = 1
                         unresolved_deps = 0
@@ -182,6 +270,7 @@ class RpmYum:
                         if ret > 0:
                             found = 1
                             unresolved_deps = 0
+                        self.__handleObsoletes(upkg)
                     if found == 0:
                         if self.autoerase:
                             printWarning(1, "Autoerasing package %s due to missing update package." % pkg.getNEVRA())
@@ -204,25 +293,26 @@ class RpmYum:
             unresolved = self.opresolver.getUnresolvedDependencies()
             if not self.autoerase:
                 continue
-            conflicts = self.opresolver.getConflicts()
-            self.__doConflictAutoerase(conflicts)
-            if not rpmconfig.nofileconflicts:
-                conflicts = self.opresolver.getFileConflicts()
-                self.__doConflictAutoerase(conflicts)
+            self.__handleConflictAutoerases()
             unresolved = self.opresolver.getUnresolvedDependencies()
         if not self.autoerase:
             return 1
-        conflicts = self.opresolver.getConflicts()
-        while len(conflicts) > 0:
-            self.__doConflictAutoerase(conflicts)
-            conflicts = self.opresolver.getConflicts()
-        if rpmconfig.nofileconflicts:
-            return 1
-        conflicts = self.opresolver.getFileConflicts()
-        while len(conflicts) > 0:
-            self.__doConflictAutoerase(conflicts)
-            conflicts = self.opresolver.getFileConflicts()
-        return 1
+        return self.__handleConflictAutoerases()
+
+    def __handleObsoletes(self, pkg):
+        found = 1
+        while found:
+            found = 0
+            for opkg in self.__obsoleteslist:
+                for u in opkg["obsoletes"]:
+                    s = self.opresolver.searchDependency(u)
+                    if pkg in s:
+                        if not pkg in self.opresolver:
+                            self.opresolver.update(pkg)
+                            found = 1
+                            break
+                if found:
+                    break
 
     def __doAutoerase(self, pkg):
         if self.opresolver.updates.has_key(pkg):
@@ -240,6 +330,19 @@ class RpmYum:
             return 0
         return 1
 
+    def __handleConflictAutoerases(self):
+        conflicts = self.opresolver.getConflicts()
+        while len(conflicts) > 0:
+            self.__doConflictAutoerase(conflicts)
+            conflicts = self.opresolver.getConflicts()
+        if rpmconfig.nofileconflicts:
+            return 1
+        conflicts = self.opresolver.getFileConflicts()
+        while len(conflicts) > 0:
+            self.__doConflictAutoerase(conflicts)
+            conflicts = self.opresolver.getFileConflicts()
+        return 1
+
     def __doConflictAutoerase(self, conflicts):
         for pkg1 in conflicts.keys():
             for (c, pkg2) in conflicts[pkg1]:
@@ -251,95 +354,5 @@ class RpmYum:
                 else:
                     pkg = pkg2
                 self.__doAutoerase(pkg)
-
-    def __appendPkg(self, pkg):
-        if   self.command.endswith("install"):
-            return self.opresolver.install(pkg)
-        elif self.command.endswith("update"):
-            if pkg["name"] in self.always_install:
-                return self.opresolver.install(pkg)
-            else:
-                return self.opresolver.update(pkg)
-        elif self.command.endswith("upgrade"):
-            return self.opresolver.update(pkg)
-        elif self.command.endswith("remove"):
-            return self.opresolver.erase(pkg)
-        raise AssertionError, "unknown command %s" % self.command
-
-    def runCommand(self):
-        for repo in self.repos:
-            del repo
-        self.repos = []
-        if len(self.erase_list) > 0:
-            printInfo(0, "Warning: Following packages will be automatically removed:\n")
-            for pkg in self.erase_list:
-                printInfo(0, "\t%s\n" % pkg.getNEVRA())
-        if self.confirm:
-            choice = raw_input("Is this ok [y/N]: ")
-            if len(choice) == 0:
-                sys.exit(0)
-            else:
-                if choice[0] != "y" and choice[0] != "Y":
-                    sys.exit(0)
-        if self.command.endswith("remove"):
-            control = RpmController(OP_ERASE, self.pydb, rpmconfig.buildroot)
-        else:
-            control = RpmController(OP_UPDATE, self.pydb, rpmconfig.buildroot)
-        ops = control.getOperations(self.opresolver)
-        i = 0
-        while i < len(ops):
-            (op, pkg) = ops[i]
-            if pkg.has_key("thisisaobsoletespackage"):
-                ops.pop(i)
-                continue
-            i += 1
-        control.runOperations(ops)
-
-    def __readRpmPackage(self, filename):
-        return readRpmPackage(filename, tags = rpmconfig.resolvertags)
-
-    def addRepo(self, baseurl, excludes):
-        # XXX: excludes not yet done
-        repo = RpmRepo(baseurl)
-        repo.read()
-        resolver = RpmResolver(repo.getPkgList(), OP_INSTALL)
-        self.repos.append(resolver)
-
-    def addRepoByDir(self, dirname, excludes):
-        pkg_list = []
-        for f in os.listdir(dirname):
-            fn = "%s/%s" % (dirname, f)
-            if not f.endswith(".rpm") or not os.path.isfile(fn):
-                continue
-            pkg = self.__readRpmPackage(fn)
-            if rpmconfig.ignorearch or \
-               archCompat(pkg["arch"], rpmconfig.machine):
-                pkg_list.append(pkg)
-        for ex in excludes.split():
-            for pkg in findPkgByName(ex, pkg_list):
-                pkg_list.remove(pkg)
-        resolver = RpmResolver(pkg_list, OP_INSTALL)
-        self.repos.append(resolver)
-
-    def __test(self):
-        pass
-
-    def __genObsoletePkg(self, pkg):
-        dummy = RpmPackage("dummy")
-        dummy["name"] = "obsoletes-%s" % pkg.getNEVRA()
-        dummy["thisisaobsoletespackage"] = 1
-        dummy["version"] = "0"
-        dummy["release"] = "0"
-        dummy["arch"] = "noarch"
-        dummy["filenames"] = [ ] 
-        dummy["obsoletename"] = [pkg["name"]]
-        dummy["obsoleteflags"] = [RPMSENSE_EQUAL]
-        dummy["obsoleteversion"] = [pkg.getEVR()]
-        dummy["provides"] = dummy.getProvides()
-        dummy["requires"] = dummy.getRequires()
-        dummy["obsoletes"] = dummy.getObsoletes()
-        dummy["conflicts"] = dummy.getConflicts()
-        dummy["triggers"] = dummy.getTriggers()
-        return dummy
 
 # vim:ts=4:sw=4:showmatch:expandtab
