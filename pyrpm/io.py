@@ -17,10 +17,11 @@
 #
 
 
-import types, bsddb, libxml2, urlgrabber.grabber, zlib
+import fcntl, types, bsddb, libxml2, urlgrabber.grabber, zlib
 from struct import pack, unpack
 
 from functions import *
+import openpgp
 import package
 
 
@@ -684,20 +685,23 @@ class RpmFileIO(RpmStreamIO):
             self.issrc = 1
 
     def __openFile(self, mode="r"):
-        if not self.fd:
-            try:
-                import fcntl
-                if not self.source.startswith("file:/"):
-                    filename = self.source
-                else:
-                    filename = self.source[5:]
-                    if filename[1] == "/":
-                        idx = filename[2:].index("/")
-                        filename = filename[idx+2:]
-                self.fd = open(filename, mode)
-                fcntl.fcntl(self.fd.fileno(), fcntl.F_SETFD, 1)
-            except:
-                raiseFatal("%s: could not open file" % self.source)
+        """Open self.source, mark it close-on-exec.
+
+        Return the opened file."""
+        
+        if not self.source.startswith("file:/"):
+            filename = self.source
+        else:
+            filename = self.source[5:]
+            if filename[1] == "/":
+                idx = filename[2:].index("/")
+                filename = filename[idx+2:]
+        try:
+            fd = open(filename, mode)
+            fcntl.fcntl(fd.fileno(), fcntl.F_SETFD, 1)
+            return fd
+        except:
+            raiseFatal("%s: could not open file" % self.source)
 
     def __closeFile(self):
         if self.fd:
@@ -706,7 +710,8 @@ class RpmFileIO(RpmStreamIO):
 
     def open(self, mode="r"):
         RpmStreamIO.open(self)
-        self.__openFile(mode)
+        if not self.fd:
+            self.fd = self.__openFile(mode)
         return 1
 
     def close(self):
@@ -715,7 +720,7 @@ class RpmFileIO(RpmStreamIO):
         return 1
 
     def getFdForRange(self, start, len):
-        fd = open(self.source, "r")
+        fd = self.__openFile()
         try:
             fd.seek(0, 2)
             total = fd.tell()
@@ -775,6 +780,7 @@ class RpmDatabase:
         self.buildroot = buildroot
         self.filenames = {}
         self.pkglist = {}
+        self.keyring = openpgp.PGPKeyRing()
         self.is_read = 0
 
     def setSource(self, source):
@@ -869,9 +875,12 @@ class RpmDB(RpmDatabase):
                             pkg["signature"]["payloadsize"] = tagval
                         else:
                             pkg[rpmtagname[tag]] = tagval
-                if not pkg.has_key("arch"):
-                    continue
                 if pkg["name"].startswith("gpg-pubkey"):
+                    keys = openpgp.parsePGPKeys(pkg["description"])
+                    for k in keys:
+                        self.keyring.addKey(k)
+                    continue
+                if not pkg.has_key("arch"):
                     continue
                 pkg.generateFileNames()
                 nevra = pkg.getNEVRA()
@@ -908,6 +917,12 @@ class RpmPyDB(RpmDatabase):
                     self.filenames[filename] = []
                 self.filenames[filename].append(pkg)
             self.pkglist[nevra] = pkg
+        if os.path.isdir(dbpath+"/pubkeys"):
+            namelist = os.listdir(dbpath+"/pubkeys")
+            for name in namelist:
+                data = file(dbpath+"/pubkeys/"+name).read()
+                for k in openpgp.parsePGPKeys(data):
+                    self.keyring.addKey(k)
         self.is_read = 1
         return 1
 
@@ -973,6 +988,11 @@ class RpmPyDB(RpmDatabase):
             except:
                 printError("%s: Couldn't open PyRPM database" % dbpath)
                 return 0
+        if not os.path.isdir(dbpath+"/pubkeys"):
+            try:
+                os.makedirs(dbpath+"/pubkeys")
+            except IOError:
+                pass
         return 1
 
 
@@ -1296,9 +1316,9 @@ def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
 
 def getRpmDBFactory(source, root=None):
     if   source[:6] == 'pydb:/':
-        return RpmPyDB(source, root)
+        return RpmPyDB(source[6:], root)
     elif source[:7] == 'rpmdb:/':
-        return RpmDB(source, root)
+        return RpmDB(source[7:], root)
     elif source[:7] == 'foodb:/':
         # testbed class
         return FooRpmDB(source, root)

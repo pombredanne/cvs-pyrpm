@@ -16,10 +16,12 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import array, md5, sha, struct
+import array, base64, md5, sha, string, struct
 import Crypto.Hash.MD2, Crypto.Hash.RIPEMD, Crypto.Hash.SHA256
 import Crypto.PublicKey.DSA, Crypto.PublicKey.RSA
 import Crypto.Util.number
+
+import functions
 
 # FIXME: "VERIFY" notes
 # FIXME: "BADFORMAT" notes
@@ -575,9 +577,74 @@ _PGP_packet_types = {
 
 
  # OpenPGP message parsing
+def _decodeArmor(data):
+    """Decode ASCII Armored data.
+
+    Return raw data.  The data type in armor header is ignored.  Armor headers
+    are checked, but their values are ignored."""
+
+    lines = data.splitlines()
+    if (not lines[0].startswith("-----BEGIN PGP ")
+        or not lines[0].endswith("-----")):
+        raise ValueError, "Invalid armor header line %s" % lines[0]
+    header_type = lines[0][15:-5]
+    # Allows invalid multipart specifications
+    if (header_type not in ["MESSAGE", "PUBLIC KEY BLOCK", "PRIVATE KEY BLOCK",
+                            "SIGNATURE"]
+        and not header_type.startswith("MESSAGE, PART ")):
+        raise ValueError, "Unknown armor header line text"
+    lines.pop(0);
+    while lines[0].strip() != '':
+        delim = lines[0].find(": ", 1);
+        if delim == -1:
+            raise ValueError, "Invalid armor header %s" % lines[0]
+        if lines[0][:delim] not in ["Version", "Comment", "MessageID", "Hash",
+                                    "Charset"]:
+            functions.printWarning(1, "Unknown armor header" % lines[0])
+        lines.pop(0)
+    lines.pop(0)
+    for i in xrange(len(lines)):
+        if lines[i] == "-----END PGP " + header_type + "-----":
+            lines = lines[:i]
+            break
+    else:
+        raise ValueError, "Missing armor tail"
+    data = string.join(lines, "")
+    # The checksum seems to be optional; we can detect it by looking at the
+    # string, but that requires filtering out all unwanted bytes.
+    data = [c for c in data
+            if c in ("ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                     "abcdefghijklmnopqrstuvwxyz0123456789+/=")]
+    data = string.join(data, '')
+    # The '=' padding character is never at the start of a 4-character group
+    # in base64; the checksum is after the last group.
+    if len(data) >= 4 + 1 + 4 and len(data) % 4 == 1 and data[-5] == '=':
+        csum = data[-4:]
+        data = data[:-5]
+    else:
+        csum = None
+    data = base64.decodestring(data)
+    if csum is not None:
+        csum = Crypto.Util.number.bytes_to_long(base64.decodestring(csum))
+        # CRC32 based on the code in RFC 2440 p6.1
+        crc = 0xB704CE
+        for b in data:
+            crc ^= ord(b) << 16
+            for i in xrange(8):
+                crc <<= 1
+                if (crc & 0x1000000) != 0:
+                    crc ^= 0x1864CFB
+        crc &= 0xFFFFFF
+        if csum != crc:
+            raise ValueError, "CRC mismatch: %x vs %x" % (csum, crc)
+    return data
+
+
 def parseRawPGPMessage(data):
     """Return a list of PGPPackets parsed from input data."""
 
+    if data.startswith("-----BEGIN"):
+        data = _decodeArmor(data)
     res = []
     start = 0
     while start < len(data):
@@ -782,7 +849,7 @@ class _PublicKey:
             h[uid] = sigs
         for (uid, sigs) in other.user_ids:
             if not h.has_key(uid):
-                sigs = sigs.copy()
+                sigs = sigs[:]
                 self.user_ids.append((uid, sigs))
                 h[uid] = sigs
             else:
@@ -793,7 +860,7 @@ class _PublicKey:
             h[subkey] = sigs
         for (subkey, sigs) in other.subkeys:
             if not h.has_key(subkey):
-                sigs = sigs.copy()
+                sigs = sigs[:]
                 self.subkeys.append((subkey, sigs))
                 h[subkey] = sigs
             else:
@@ -841,15 +908,3 @@ class PGPKeyRing:
                 l = self.by_key_id[key_id]
                 if key not in l:
                     l.append(key)
-
-
-
-if __name__ == "__main__":
-    keyring = PGPKeyRing()
-    keys = parsePGPKeys(file('key').read())
-    for key in keys:
-        keyring.addKey(key)
-    sig = parsePGPSignature(file('sig').read())
-    digest = sig.prepareDigest()
-    digest.update(file('BUGS').read())
-    print sig.verifyDigest(keyring, sig.finishDigest(digest))

@@ -20,8 +20,9 @@
 
 import os.path, sys, struct, pwd, grp, md5, sha, weakref
 from stat import S_ISREG
-from types import DictType
+
 from functions import *
+import openpgp
 
 class RpmData:
     def __init__(self):
@@ -47,10 +48,10 @@ class RpmData:
         return self.data.keys()
 
 ## Faster version (overall performance gain 25%!!!)
-class FastRpmData(DictType):
-    __getitem__ = DictType.get
+class FastRpmData(dict):
+    __getitem__ = dict.get
     def __init__(self):
-        DictType.__init__(self)
+        dict.__init__(self)
         self.hash = int(str(weakref.ref(self)).split()[6][3:-1], 16)
 
     def __repr__(self):
@@ -128,7 +129,8 @@ class RpmUserCache:
 
 
 class RpmPackage(RpmData):
-    def __init__(self, source, verify=None, strict=None, hdronly=None):
+    def __init__(self, source, verify=None, strict=None, hdronly=None,
+                 db=None):
         RpmData.__init__(self)
         self.clear()
         self.source = source
@@ -138,6 +140,7 @@ class RpmPackage(RpmData):
         self.range_signature = (None, None)
         self.range_header = (None, None)
         self.range_payload = (None, None)
+        self.db = db
 
     def clear(self):
         self.io = None
@@ -189,7 +192,19 @@ class RpmPackage(RpmData):
 
         Return 1 if verified, -1 if failed, 0 if unkown."""
         if tag == "dsaheader":
-            return 0 # FIXME: unimplemented
+            if self.db is None:
+                return 0
+            sig = openpgp.parsePGPSignature(self["signature"][tag])
+            digest = sig.prepareDigest()
+            digest.update(RPM_HEADER_INDEX_MAGIC)
+            r = self.__digestImmutableRegion(digest)
+            if r != 1:
+                return r
+            if (sig.verifyDigest(self.db.keyring, sig.finishDigest(digest)) 
+                is not None):
+                return 1
+            # FIXME: "missing key" and "invalid signature" treated equally
+            return 0
         elif tag == "sha1header":
             digest = sha.new(RPM_HEADER_INDEX_MAGIC)
             r = self.__digestImmutableRegion(digest)
@@ -211,8 +226,18 @@ class RpmPackage(RpmData):
                 return 1
             else:
                 return -1
-        elif tag == "pgp":
-            return 0 # FIXME: unimplemented
+        elif tag == "pgp" or tag == "gpg":
+            if self.db is None or self.range_header[0] is None:
+                return 0
+            sig = openpgp.parsePGPSignature(self["signature"][tag])
+            fd = self.io.getFdForRange(self.range_header[0], None)
+            digest = sig.prepareDigest()
+            updateDigestFromFile(digest, fd, None)
+            if (sig.verifyDigest(self.db.keyring, sig.finishDigest(digest))
+                is not None):
+                return 1
+            # FIXME: "missing key" and "invalid signature" treated equally
+            return 0
         elif tag == "md5":
             if self.range_header[0] is None:
                 return 0
@@ -223,8 +248,6 @@ class RpmPackage(RpmData):
                 return 1
             else:
                 return -1
-        elif tag == "gpg":
-            return 0 # FIXME: unimplemented
         # "payloadsize" requires uncompressing payload and adds no value,
         # unimplemented
         # "badsha1_1", "badsha1_2" are legacy, unimplemented.    
@@ -713,12 +736,13 @@ class RpmPackage(RpmData):
         return zip(*deps2)
 
 
-def readRpmPackage(source, verify=None, strict=None, hdronly=None, tags=None):
+def readRpmPackage(source, verify=None, strict=None, hdronly=None, db=None,
+                   tags=None):
     """Read RPM package from source and close it.
 
     tags, if defined, specifies tags to load."""
 
-    pkg = RpmPackage(source, verify, strict, hdronly)
+    pkg = RpmPackage(source, verify, strict, hdronly, db)
     pkg.read(tags = tags)
     pkg.close()
     return pkg
