@@ -171,6 +171,8 @@ class RpmPackage(RpmData):
             return 0
         if not self.__readHeader(tags, ntags):
             return 0
+        if self.verify and self.verifyOneSignature() == -1:
+            return 0
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
@@ -251,6 +253,25 @@ class RpmPackage(RpmData):
         # "payloadsize" requires uncompressing payload and adds no value,
         # unimplemented
         # "badsha1_1", "badsha1_2" are legacy, unimplemented.    
+        return 0
+
+    # [(tag name, needs payload)]
+    __signatureUseOrder = [
+        ("dsaheader", False), ("gpg", True), ("pgp", True),
+        ("sha1header", False), ("md5", False)
+    ]
+
+    def verifyOneSignature(self):
+        """Verify the "best" digest or signature available.
+
+        Return 1 if verified, -1 if failed, 0 if unkown."""
+        
+        tags = [t for (t, payload) in self.__signatureUseOrder
+                if not payload or not self.hdronly]
+        for t in tags:
+            r = self.verifySignatureTag(t)
+            if r != 0:
+                return r
         return 0
 
     def __digestImmutableRegion(self, digest):
