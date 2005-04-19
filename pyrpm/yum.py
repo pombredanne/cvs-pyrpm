@@ -194,7 +194,7 @@ class RpmYum:
                     self.__obsoleteslist.append(pkg)
 
     def __readRpmPackage(self, filename):
-        pkg = RpmPackage(filename)
+        pkg = RpmPackage(filename, db=self.pydb)
         pkg.open()
         pkg.read(tags=rpmconfig.resolvertags)
         pkg.close()

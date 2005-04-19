@@ -227,7 +227,8 @@ class RpmController:
         return 1
 
     def appendFile(self, file):
-        pkg = package.readRpmPackage(file, tags=rpmconfig.resolvertags)
+        pkg = package.readRpmPackage(file, tags=rpmconfig.resolvertags,
+                                     db=self.db)
         self.rpms.append(pkg)
         return 1
 
