@@ -36,8 +36,10 @@ class RpmYum:
         self.confirm = 1
         # Default: No command
         self.command = None
-        # List of repository resolvers
+        # List of repositories
         self.repos = [ ]
+        # List of repository resolvers
+        self.resolvers = [ ]
         # Our database
         self.pydb = None
         # Our list of package names that get installed instead of updated
@@ -66,23 +68,10 @@ class RpmYum:
         repo = RpmRepo(self.config, baseurl)
         repo.read()
         pkg_list = repo.getPkgList()
-        self.__filterExcludes(pkglist, excludes)
-        self.repos.append(resolver)
-
-    def addRepoByDir(self, dirname, excludes):
-        pkg_list = []
-        for f in os.listdir(dirname):
-            fn = "%s/%s" % (dirname, f)
-            if not f.endswith(".rpm") or not os.path.isfile(fn):
-                continue
-            pkg = readRpmPackage(self.config, fn, db=self.pydb,
-                                 tags=self.config.resolvertags)
-            if self.config.ignorearch or \
-               archCompat(pkg["arch"], self.config.machine):
-                pkg_list.append(pkg)
-        self.__filterExcludes(pkglist, excludes)
-        resolver = RpmResolver(self.config, pkg_list)
-        self.repos.append(resolver)
+        self.__filterExcludes(pkg_list, excludes)
+        r = RpmResolver(self.config, pkg_list)
+        self.repos.append(repo)
+        self.resolvers.append(r)
 
     def processArgs(self, args):
         # Create and read db
@@ -122,7 +111,7 @@ class RpmYum:
         # direct filenames or package nevra's with * wildcards
         self.pkgs = []
         repolists = []
-        for repo in self.repos:
+        for repo in self.resolvers:
             repolists.append(repo.getList())
         for f in args:
             if os.path.isfile(f) and f.endswith(".rpm"):
@@ -163,9 +152,9 @@ class RpmYum:
         self.__runDepResolution()
 
     def runCommand(self):
-        for repo in self.repos:
+        for repo in self.resolvers:
             del repo
-        self.repos = []
+        self.resolvers = []
         if len(self.erase_list) > 0:
             self.config.printInfo(0, "Warning: Following packages will be automatically removed:\n")
             for pkg in self.erase_list:
@@ -199,7 +188,7 @@ class RpmYum:
 
     def __generateObsoletesList(self):
         self.__obsoleteslist = []
-        for repo in self.repos:
+        for repo in self.resolvers:
             for pkg in repo.getList():
                 if pkg.has_key("obsoletes"):
                     self.__obsoleteslist.append(pkg)
@@ -246,7 +235,7 @@ class RpmYum:
                 pkg_list = HashList(self.config)
                 for dep in unresolved[pkg]:
                     self.config.printInfo(2, "\t" + depString(dep) + "\n")
-                    for repo in self.repos:
+                    for repo in self.resolvers:
                         for upkg in repo.searchDependency(dep):
                             if upkg in pkg_list:
                                 continue
@@ -265,7 +254,7 @@ class RpmYum:
                         unresolved_deps = 0
                 if found == 0:
                     tmplist = []
-                    for repo in self.repos:
+                    for repo in self.resolvers:
                         tmplist.extend(findPkgByName(pkg["name"], repo.getList()))
                     for upkg in tmplist:
                         if upkg in self.erase_list:
@@ -283,6 +272,7 @@ class RpmYum:
                             self.config.printWarning(0, "Couldn't find update for package %s" \
                                 % pkg.getNEVRA())
                             sys.exit(1)
+#            if reread == 0 and unresolved_deps:
             if unresolved_deps:
                 for pkg in unresolved.keys():
                     if self.autoerase:
