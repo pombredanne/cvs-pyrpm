@@ -21,7 +21,7 @@ import fcntl, types, bsddb, libxml2, urlgrabber.grabber, zlib
 from struct import pack, unpack
 
 from functions import *
-#import openpgp
+import openpgp
 import package
 
 
@@ -785,7 +785,7 @@ class RpmDatabase:
         self.buildroot = buildroot
         self.filenames = {}
         self.pkglist = {}
-#        self.keyring = openpgp.PGPKeyRing()
+        self.keyring = openpgp.PGPKeyRing()
         self.is_read = 0
 
     def setSource(self, source):
