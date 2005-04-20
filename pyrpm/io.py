@@ -21,13 +21,14 @@ import fcntl, types, bsddb, libxml2, urlgrabber.grabber, zlib
 from struct import pack, unpack
 
 from functions import *
-import openpgp
+#import openpgp
 import package
 
 
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
 class PyGZIP:
-    def __init__(self, fd):
+    def __init__(self, config, fd):
+        self.config = config
         self.fd = fd
         self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
         self.crcval = zlib.crc32("")
@@ -41,11 +42,11 @@ class PyGZIP:
     def __readHeader(self):
         magic = self.fd.read(2)
         if magic != '\037\213':
-            printError("Not a gzipped file")
+            self.config.printError("Not a gzipped file")
             #v1 = unpack("!H", magic)
             sys.exit(0)
         if ord(self.fd.read(1)) != 8:
-            printError("Unknown compression method")
+            self.config.printError("Unknown compression method")
             sys.exit(0)
         flag = ord(self.fd.read(1))
         self.fd.read(4+1+1) # Discard modification time, extra flags, OS byte
@@ -104,9 +105,9 @@ class PyGZIP:
                 crc32 = unpack("!I", self.enddata[0:4])
                 isize = unpack("!I", self.enddata[4:8])
                 if crc32 != self.crcval:
-                    printError("CRC check failed.")
+                    self.config.printError("CRC check failed.")
                 if isize != self.length:
-                    printError("Incorrect length of data produced")
+                    self.config.printError("Incorrect length of data produced")
                 break
             decompdata = self.decompobj.decompress(data)
             decomplen = len(decompdata)
@@ -148,7 +149,8 @@ class PyGZIP:
 
 class CPIOFile:
     """ Read ASCII CPIO files. """
-    def __init__(self, fd):
+    def __init__(self, config, fd):
+        self.config = config
         self.fd = fd                    # filedescriptor
         self.lastfilesize = 0
         self.readsize = 0
@@ -201,7 +203,8 @@ class CPIOFile:
 
 class RpmIO:
     """'Virtual' IO Class for RPM packages and data"""
-    def __init__(self, source):
+    def __init__(self, config, source):
+        self.config = config
         self.source = source
 
     def open(self, mode="r"):
@@ -224,8 +227,8 @@ class RpmIO:
         return None
 
 class RpmStreamIO(RpmIO):
-    def __init__(self, source, verify=None, strict=None, hdronly=None):
-        RpmIO.__init__(self, source)
+    def __init__(self, config, source, verify=None, strict=None, hdronly=None):
+        RpmIO.__init__(self, config, source)
         self.fd = None
         self.cpio = None
         self.verify = verify
@@ -286,8 +289,8 @@ class RpmStreamIO(RpmIO):
                 self.hdrdata = None
                 self.hdr = {}
                 self.hdrtype = {}
-                cpiofd = PyGZIP(self.fd)
-                self.cpio = CPIOFile(cpiofd)
+                cpiofd = PyGZIP(self.config, self.fd)
+                self.cpio = CPIOFile(self.config, cpiofd)
                 self.where = 4
                 # Nobody cares about gzipped payload length so far
                 return ("-", (pos, None))
@@ -339,7 +342,7 @@ class RpmStreamIO(RpmIO):
     def __readLead(self):
         leaddata = self._read(96)
         if leaddata[:4] != RPM_HEADER_LEAD_MAGIC:
-            printError("%s: no rpm magic found" % self.source)
+            self.config.printError("%s: no rpm magic found" % self.source)
             return (None, None)
         if self.verify and not self.__verifyLead(leaddata):
             return (None, None)
@@ -361,7 +364,7 @@ class RpmStreamIO(RpmIO):
         # ignore duplicate entries as long as they are identical
         if self.hdr.has_key(tag):
             if self.hdr[tag] != self.__parseTag(index, storedata):
-                printError("%s: tag %d included twice" % (self.source, tag))
+                self.config.printError("%s: tag %d included twice" % (self.source, tag))
         else:
             self.hdr[tag] = self.__parseTag(index, storedata)
             self.hdrtype[tag] = index[1]
@@ -381,7 +384,7 @@ class RpmStreamIO(RpmIO):
             if os.path.basename(self.source)[:len(name)] != name:
                 ret = 0
         if not ret:
-            printError("%s: wrong data in rpm lead" % self.source)
+            self.config.printError("%s: wrong data in rpm lead" % self.source)
         return ret
 
     def __readIndex(self, pad, issig=None):
@@ -415,30 +418,30 @@ class RpmStreamIO(RpmIO):
         if checkSize != storeSize:
             # XXX: add a check for very old rpm versions here, seems this
             # is triggered for a few RHL5.x rpm packages
-            printError("%s: storeSize/checkSize is %d/%d" % (self.source, storeSize, checkSize))
+            self.config.printError("%s: storeSize/checkSize is %d/%d" % (self.source, storeSize, checkSize))
 
     def __verifyTag(self, index, fmt, issig):
         (tag, ttype, offset, count) = index
         if issig:
             if not rpmsigtag.has_key(tag):
-                printError("%s: rpmsigtag has no tag %d" % (self.source, tag))
+                self.config.printError("%s: rpmsigtag has no tag %d" % (self.source, tag))
             else:
                 t = rpmsigtag[tag]
                 if t[1] != None and t[1] != ttype:
-                    printError("%s: sigtag %d has wrong type %d" % (self.source, tag, ttype))
+                    self.config.printError("%s: sigtag %d has wrong type %d" % (self.source, tag, ttype))
                 if t[2] != None and t[2] != count:
-                    printError("%s: sigtag %d has wrong count %d" % (self.source, tag, count))
+                    self.config.printError("%s: sigtag %d has wrong count %d" % (self.source, tag, count))
                 if (t[3] & 1) and self.strict:
-                    printError("%s: tag %d is marked legacy" % (self.source, tag))
+                    self.config.printError("%s: tag %d is marked legacy" % (self.source, tag))
                 if self.issrc:
                     if (t[3] & 4):
-                        printError("%s: tag %d should be for binary rpms" % (self.source, tag))
+                        self.config.printError("%s: tag %d should be for binary rpms" % (self.source, tag))
                 else:
                     if (t[3] & 2):
-                        printError("%s: tag %d should be for src rpms" % (self.source, tag))
+                        self.config.printError("%s: tag %d should be for src rpms" % (self.source, tag))
         else:
             if not rpmtag.has_key(tag):
-                printError("%s: rpmtag has no tag %d" % (self.source, tag))
+                self.config.printError("%s: rpmtag has no tag %d" % (self.source, tag))
             else:
                 t = rpmtag[tag]
                 if t[1] != None and t[1] != ttype:
@@ -449,17 +452,17 @@ class RpmStreamIO(RpmIO):
                         ttype == RPM_STRING: # XXX hardcoded exception
                         pass
                     else:
-                        printError("%s: tag %d has wrong type %d" % (self.source, tag, ttype))
+                        self.config.printError("%s: tag %d has wrong type %d" % (self.source, tag, ttype))
                 if t[2] != None and t[2] != count:
-                    printError("%s: tag %d has wrong count %d" % (self.source, tag, count))
+                    self.config.printError("%s: tag %d has wrong count %d" % (self.source, tag, count))
                 if (t[3] & 1) and self.strict:
-                    printError("%s: tag %d is marked legacy" % (self.source, tag))
+                    self.config.printError("%s: tag %d is marked legacy" % (self.source, tag))
                 if self.issrc:
                     if (t[3] & 4):
-                        printError("%s: tag %d should be for binary rpms" % (self.source, tag))
+                        self.config.printError("%s: tag %d should be for binary rpms" % (self.source, tag))
                 else:
                     if (t[3] & 2):
-                        printError("%s: tag %d should be for src rpms" % (self.source, tag))
+                        self.config.printError("%s: tag %d should be for src rpms" % (self.source, tag))
         if count == 0:
             raiseFatal("%s: zero length tag" % self.source)
         if ttype < 1 or ttype > 9:
@@ -678,8 +681,8 @@ class RpmStreamIO(RpmIO):
 
 
 class RpmFileIO(RpmStreamIO):
-    def __init__(self, source, verify=None, strict=None, hdronly=None):
-        RpmStreamIO.__init__(self, source, verify, strict, hdronly)
+    def __init__(self, config, source, verify=None, strict=None, hdronly=None):
+        RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
         self.issrc = 0
         if source.endswith(".src.rpm") or source.endswith(".nosrc.rpm"):
             self.issrc = 1
@@ -733,8 +736,8 @@ class RpmFileIO(RpmStreamIO):
         return fd
 
 class RpmFtpIO(RpmStreamIO):
-    def __init__(self, source, verify=None, strict=None, hdronly=None):
-        RpmStreamIO.__init__(self, source, verify, strict, hdronly)
+    def __init__(self, config, source, verify=None, strict=None, hdronly=None):
+        RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
         RpmStreamIO.open(self, mode)
@@ -750,13 +753,14 @@ class RpmFtpIO(RpmStreamIO):
 
 
 class RpmHttpIO(RpmStreamIO):
-    def __init__(self, source, verify=None, strict=None, hdronly=None):
-        RpmStreamIO.__init__(self, source, verify, strict, hdronly)
+    def __init__(self, config, source, verify=None, strict=None, hdronly=None):
+        RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
         RpmStreamIO.open(self, mode)
         opts = urlgrabber.grabber.URLGrabberOptions()
-        self.urlg = urlgrabber.grabber.URLGrabberFileObject(self.source, None, opts)
+        self.urlg = urlgrabber.grabber.URLGrabberFileObject(self.source, None, \
+                                                            opts)
         self.fd = self.urlg.fo
         return 1
 
@@ -775,12 +779,13 @@ class RpmHttpIO(RpmStreamIO):
         return None
 
 class RpmDatabase:
-    def __init__(self, source, buildroot=None):
+    def __init__(self, config, source, buildroot=None):
+        self.config = config
         self.source = source
         self.buildroot = buildroot
         self.filenames = {}
         self.pkglist = {}
-        self.keyring = openpgp.PGPKeyRing()
+#        self.keyring = openpgp.PGPKeyRing()
         self.is_read = 0
 
     def setSource(self, source):
@@ -844,8 +849,8 @@ class RpmDatabase:
 
 
 class RpmDB(RpmDatabase):
-    def __init__(self, source, buildroot=None):
-        RpmDatabase.__init__(self, source, buildroot)
+    def __init__(self, config, source, buildroot=None):
+        RpmDatabase.__init__(self, config, source, buildroot)
 
     def read(self):
         if self.is_read:
@@ -853,8 +858,8 @@ class RpmDB(RpmDatabase):
         dbpath = self._getDBPath()
         db = bsddb.hashopen(dbpath+"/Packages", "r")
         for key in db.keys():
-            rpmio = RpmFileIO("dummy")
-            pkg = package.RpmPackage("dummy")
+            rpmio = RpmFileIO(self.config, "dummy")
+            pkg = package.RpmPackage(self.config, "dummy")
             data = db[key]
             val = unpack("i", key)[0]
             if val != 0:
@@ -897,8 +902,8 @@ class RpmDB(RpmDatabase):
 
 
 class RpmPyDB(RpmDatabase):
-    def __init__(self, source, buildroot):
-        RpmDatabase.__init__(self, source, buildroot)
+    def __init__(self, config, source, buildroot):
+        RpmDatabase.__init__(self, config, source, buildroot)
 
     def read(self):
         if self.is_read:
@@ -909,7 +914,7 @@ class RpmPyDB(RpmDatabase):
         namelist = os.listdir(dbpath+"/headers")
         for nevra in namelist:
             src = "pydb:/"+dbpath+"/headers/"+nevra
-            pkg = package.RpmPackage(src)
+            pkg = package.RpmPackage(self.config, src)
             pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "dirindexes", "basenames", "dirnames", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
             pkg.close()
             for filename in pkg["filenames"]:
@@ -938,7 +943,7 @@ class RpmPyDB(RpmDatabase):
         nevra = pkg.getNEVRA()
         if not nowrite:
             src = "pydb:/"+dbpath+"/headers/"+nevra
-            apkg = getRpmIOFactory(src)
+            apkg = getRpmIOFactory(self.config, src)
             if not apkg.write(pkg):
                 return 0
             apkg.close()
@@ -946,8 +951,7 @@ class RpmPyDB(RpmDatabase):
             if not self.filenames.has_key(filename):
                 self.filenames[filename] = []
             if pkg in self.filenames[filename]:
-                printWarning(2, "%s: File '%s' was already in PyDB for package"\
-                    % (nevra, filename))
+                self.config.printWarning(2, "%s: File '%s' was already in PyDB for package" % (nevra, filename))
                 self.filenames[filename].remove(pkg)
             self.filenames[filename].append(pkg)
         if not nowrite and not self.write():
@@ -965,13 +969,13 @@ class RpmPyDB(RpmDatabase):
             try:
                 os.unlink(headerfile)
             except:
-                printWarning(1, "%s: Package not found in PyDB" % nevra)
+                self.config.printWarning(1, "%s: Package not found in PyDB" % nevra)
         for filename in pkg["filenames"]:
             # Check if the filename is in the filenames list and was referenced
             # by the package we want to remove
             if not self.filenames.has_key(filename) or \
                not pkg in self.filenames[filename]:
-                printWarning(1, "%s: File '%s' not found in PyDB during erase"\
+                self.config.printWarning(1, "%s: File '%s' not found in PyDB during erase"\
                     % (nevra, filename))
                 continue
             self.filenames[filename].remove(pkg)
@@ -986,7 +990,7 @@ class RpmPyDB(RpmDatabase):
             try:
                 os.makedirs(dbpath+"/headers")
             except:
-                printError("%s: Couldn't open PyRPM database" % dbpath)
+                self.config.printError("%s: Couldn't open PyRPM database" % dbpath)
                 return 0
         if not os.path.isdir(dbpath+"/pubkeys"):
             try:
@@ -997,8 +1001,8 @@ class RpmPyDB(RpmDatabase):
 
 
 class RpmRepo(RpmDatabase):
-    def __init__(self, source, buildroot=None):
-        RpmDatabase.__init__(self, source, buildroot)
+    def __init__(self, config, source, buildroot=None):
+        RpmDatabase.__init__(self, config, source, buildroot)
         self.flagmap = { None: None,
                          "EQ": RPMSENSE_EQUAL,
                          "LT": RPMSENSE_LESS,
@@ -1036,7 +1040,7 @@ class RpmRepo(RpmDatabase):
         return 1
 
     def __parsePackage(self, node):
-        pkg = package.RpmPackage("dummy")
+        pkg = package.RpmPackage(self.config, "dummy")
         pkg["signature"] = {}
         while node != None:
             if node.type != "element":
@@ -1149,7 +1153,8 @@ class RpmRepo(RpmDatabase):
 
 
 class RpmCompsXML:
-    def __init__(self, source):
+    def __init__(self, config, source):
+        self.config = config
         self.source = source
         self.grouphash = {}
         self.grouphierarchyhash = {}
@@ -1210,7 +1215,7 @@ class RpmCompsXML:
                 if not ret:
                     return 0
             else:
-                printWarning(1, "Unknown entry in comps.xml: %s" % node.name)
+                self.config.printWarning(1, "Unknown entry in comps.xml: %s" % node.name)
                 return 0
             node = node.next
         return 0
@@ -1301,27 +1306,27 @@ class RpmCompsXML:
 #            node = node.next
 
 
-def getRpmIOFactory(source, verify=None, strict=None, hdronly=None):
+def getRpmIOFactory(config, source, verify=None, strict=None, hdronly=None):
     if   source[:5] == 'ftp:/':
-        return RpmFtpIO(source, verify, strict, hdronly)
+        return RpmFtpIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'file:/':
-        return RpmFileIO(source, verify, strict, hdronly)
+        return RpmFileIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'http:/':
-        return RpmHttpIO(source, verify, strict, hdronly)
+        return RpmHttpIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'pydb:/':
-        return RpmFileIO(source[6:], verify, strict, hdronly)
+        return RpmFileIO(config, source[6:], verify, strict, hdronly)
     else:
-        return RpmFileIO(source, verify, strict, hdronly)
+        return RpmFileIO(config, source, verify, strict, hdronly)
     return None
 
-def getRpmDBFactory(source, root=None):
+def getRpmDBFactory(config, source, root=None):
     if   source[:6] == 'pydb:/':
-        return RpmPyDB(source[6:], root)
+        return RpmPyDB(config, source[6:], root)
     elif source[:7] == 'rpmdb:/':
-        return RpmDB(source[7:], root)
+        return RpmDB(config, source[7:], root)
     elif source[:7] == 'foodb:/':
         # testbed class
-        return FooRpmDB(source, root)
+        return FooRpmDB(config, source, root)
 
 ###
 ### this space intentionally left blank
@@ -1329,17 +1334,17 @@ def getRpmDBFactory(source, root=None):
 
 class FooRpmDB(RpmDatabase):
     """testbed for directly accessing /var/lib/rpm/*"""
-    def __init__(self, source, buildroot=None):
-        RpmDatabase.__init__ (self, source, buildroot)
+    def __init__(self, config, source, buildroot=None):
+        RpmDatabase.__init__ (self, config, source, buildroot)
 
     def pkg_from_rpmdb_by_key(self, key):
-        pkg = package.RpmPackage("dummy")
+        pkg = package.RpmPackage(self.config, "dummy")
         data = self.rpmdb[key]
         val = unpack("i", key)[0]
         if val == 0:
             return None
         else:
-            rpmio = RpmFileIO("dummy")
+            rpmio = RpmFileIO(self.config, "dummy")
             (indexNo, storeSize) = unpack("!ii", data[0:8])
             indexdata = data[8:indexNo*16+8]
             storedata = data[indexNo*16+8:]

@@ -25,7 +25,8 @@ from functions import *
 import openpgp
 
 class RpmData:
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         self.data = {}
 
     def __repr__(self):
@@ -50,8 +51,9 @@ class RpmData:
 ## Faster version (overall performance gain 25%!!!)
 class FastRpmData(dict):
     __getitem__ = dict.get
-    def __init__(self):
+    def __init__(self, config):
         dict.__init__(self)
+        self.config = config
         self.hash = int(str(weakref.ref(self)).split()[6][3:-1], 16)
 
     def __repr__(self):
@@ -66,7 +68,8 @@ RpmData = FastRpmData
 class RpmUserCache:
     """If glibc is not yet installed (/sbin/ldconfig is missing), we parse
     /etc/passwd and /etc/group with our own routines."""
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         self.uid = {"root": 0}
         self.gid = {"root": 0}
 
@@ -86,7 +89,7 @@ class RpmUserCache:
     def getUID(self, username):
         if not self.uid.has_key(username):
             if os.path.isfile("/etc/passwd"):
-                if rpmconfig.buildroot == None and \
+                if self.config.buildroot == None and \
                    os.path.isfile("/sbin/ldconfig"):
                     try:
                         pw = pwd.getpwnam(username)
@@ -108,7 +111,7 @@ class RpmUserCache:
     def getGID(self, groupname):
         if not self.gid.has_key(groupname):
             if os.path.isfile("/etc/group"):
-                if rpmconfig.buildroot == None and \
+                if self.config.buildroot == None and \
                    os.path.isfile("/sbin/ldconfig"):
                     try:
                         gr = grp.getgrnam(groupname)
@@ -129,9 +132,10 @@ class RpmUserCache:
 
 
 class RpmPackage(RpmData):
-    def __init__(self, source, verify=None, strict=None, hdronly=None,
+    def __init__(self, config, source, verify=None, strict=None, hdronly=None,
                  db=None):
-        RpmData.__init__(self)
+        RpmData.__init__(self, config)
+        self.config = config
         self.clear()
         self.source = source
         self.verify = verify
@@ -145,15 +149,15 @@ class RpmPackage(RpmData):
     def clear(self):
         self.io = None
         self.header_read = 0
-        self.rpmusercache = RpmUserCache()
+        self.rpmusercache = RpmUserCache(self.config)
 
     def open(self, mode="r"):
         from io import getRpmIOFactory
 
         if self.io != None:
             return 1
-        self.io = getRpmIOFactory(self.source, self.verify, self.strict,
-            self.hdronly)
+        self.io = getRpmIOFactory(self.config, self.source, self.verify,
+                                  self.strict, self.hdronly)
         if not self.io:
             return 0
         if not self.io.open(mode):
@@ -313,7 +317,7 @@ class RpmPackage(RpmData):
             unsignedTags.append(tag)
         if unsignedTags:
             # FIXME: only once per package
-            printWarning(0, "%s: Unsigned tags %s"
+            self.config.printWarning(0, "%s: Unsigned tags %s"
                          % (self.source,
                             [rpmtagname[i] for i in unsignedTags]))
         # In practice region data starts at offset 0, but the original design
@@ -331,20 +335,20 @@ class RpmPackage(RpmData):
         os.umask(022)
         if self["preinprog"] != None or self["postinprog"] != None:
             numPkgs = str(db.getNumPkgs(self["name"])+1)
-        if self["preinprog"] != None and not rpmconfig.noscripts:
+        if self["preinprog"] != None and not self.config.noscripts:
             if not runScript(self["preinprog"], self["prein"], numPkgs):
-                printError("\n%s: Error running pre install script." \
+                self.config.printError("\n%s: Error running pre install script." \
                     % self.getNEVRA())
         if not self.__extract(db):
             return 0
-        if rpmconfig.printhash:
-            printInfo(0, "\n")
+        if self.config.printhash:
+            self.config.printInfo(0, "\n")
         else:
-            printInfo(1, "\n")
+            self.config.printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
-        if self["postinprog"] != None and not rpmconfig.noscripts:
+        if self["postinprog"] != None and not self.config.noscripts:
             if not runScript(self["postinprog"], self["postin"], numPkgs):
-                printError("\n%s: Error running post install script." \
+                self.config.printError("\n%s: Error running post install script." \
                     % self.getNEVRA())
         self.rfilist = None
         return 1
@@ -359,25 +363,25 @@ class RpmPackage(RpmData):
         os.umask(022)
         if self["preunprog"] != None or self["postunprog"] != None:
             numPkgs = str(db.getNumPkgs(self["name"])-1)
-        if self["preunprog"] != None and not rpmconfig.noscripts:
+        if self["preunprog"] != None and not self.config.noscripts:
             if not runScript(self["preunprog"], self["preun"], numPkgs):
-                printError("\n%s: Error running pre uninstall script." \
+                self.config.printError("\n%s: Error running pre uninstall script." \
                     % self.getNEVRA())
         # Remove files starting from the end (reverse process to install)
         nfiles = len(files)
         n = 0
         pos = 0
-        if rpmconfig.printhash:
-            printInfo(0, "\r\t\t\t\t\t\t ")
+        if self.config.printhash:
+            self.config.printInfo(0, "\r\t\t\t\t\t\t ")
         for i in xrange(len(files)-1, -1, -1):
             n += 1
             npos = int(n*30/nfiles)
-            if pos < npos and rpmconfig.printhash:
-                printInfo(0, "#"*(npos-pos))
+            if pos < npos and self.config.printhash:
+                self.config.printInfo(0, "#"*(npos-pos))
             pos = npos
             f = files[i]
             if db.isDuplicate(f):
-                printDebug(1, "File/Dir %s still in db, not removing..." % f)
+                self.config.printDebug(1, "File/Dir %s still in db, not removing..." % f)
                 continue
             if os.path.isdir(f):
                 if os.listdir(f) == []:
@@ -388,22 +392,22 @@ class RpmPackage(RpmData):
                         try:
                             os.unlink(f)
                         except:
-                            printWarning(1, "Couldn't remove dir %s from pkg %s" % (f, self.source))
+                            self.config.printWarning(1, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
                 try:
                     os.unlink(f)
                 except:
                     if not (self["fileflags"][i] & RPMFILE_GHOST):
-                        printWarning(1, "Couldn't remove file %s from pkg %s" \
+                        self.config.printWarning(1, "Couldn't remove file %s from pkg %s" \
                             % (f, self.source))
-        if rpmconfig.printhash:
-            printInfo(0, "\n")
+        if self.config.printhash:
+            self.config.printInfo(0, "\n")
         else:
-            printInfo(1, "\n")
+            self.config.printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
-        if self["postunprog"] != None and not rpmconfig.noscripts:
+        if self["postunprog"] != None and not self.config.noscripts:
             if not runScript(self["postunprog"], self["postun"], numPkgs):
-                printError("\n%s: Error running post uninstall script." \
+                self.config.printError("\n%s: Error running post uninstall script." \
                     % self.getNEVRA())
         return 1
 
@@ -475,13 +479,13 @@ class RpmPackage(RpmData):
         nfiles = len(files)
         n = 0
         pos = 0
-        if rpmconfig.printhash:
-            printInfo(0, "\r\t\t\t\t\t\t ")
+        if self.config.printhash:
+            self.config.printInfo(0, "\r\t\t\t\t\t\t ")
         while filename != None and filename != "EOF" :
             n += 1
             npos = int(n*30/nfiles)
-            if pos < npos and rpmconfig.printhash:
-                printInfo(0, "#"*(npos-pos))
+            if pos < npos and self.config.printhash:
+                self.config.printInfo(0, "#"*(npos-pos))
             pos = npos
             if self.isSourceRPM() and os.path.dirname(filename)=='/':
                 # src.rpm has empty tag "dirnames", but we use absolut paths in
@@ -505,8 +509,8 @@ class RpmPackage(RpmData):
             (filename, cpio, filesize) = self.io.read()
         if nfiles == 0:
             nfiles = 1
-        if rpmconfig.printhash:
-            printInfo(0, "#"*(30-int(30*n/nfiles)))
+        if self.config.printhash:
+            self.config.printInfo(0, "#"*(30-int(30*n/nfiles)))
         return self.__handleRemainingHardlinks()
 
     def __verifyFileInstall(self, rfi, db):
@@ -538,7 +542,7 @@ class RpmPackage(RpmData):
             return 1
         # File should exsist in filesystem but doesn't...
         if not os.path.exists(rfi.filename):
-            printWarning(1, "%s: File doesn't exist" % rfi.filename)
+            self.config.printWarning(1, "%s: File doesn't exist" % rfi.filename)
             return 1
         (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
             = os.stat(rfi.filename)
@@ -568,15 +572,15 @@ class RpmPackage(RpmData):
             if rfi.mode == orfi.mode and rfi.uid == orfi.uid and \
                 rfi.gid == orfi.gid and rfi.filesize == orfi.filesize and \
                 rfi.md5sum == orfi.md5sum:
-                printWarning(2, "\n%s: Same config file between new and installed package, skipping." % self.getNEVRA())
+                self.config.printWarning(2, "\n%s: Same config file between new and installed package, skipping." % self.getNEVRA())
                 continue
             # OK, file in new package is different to some old package and it
             # is editied on disc. Now verify if it is a noreplace or not
             if rfi.flags & RPMFILE_NOREPLACE:
-                printWarning(0, "\n%s: config(noreplace) file found that changed between old and new rpms and has changed on disc, creating new file as %s.rpmnew" %(self.getNEVRA(), rfi.filename))
+                self.config.printWarning(0, "\n%s: config(noreplace) file found that changed between old and new rpms and has changed on disc, creating new file as %s.rpmnew" %(self.getNEVRA(), rfi.filename))
                 rfi.filename += ".rpmnew"
             else:
-                printWarning(0, "\n%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
+                self.config.printWarning(0, "\n%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
                 if os.rename(rfi.filename, rfi.filename+".rpmsave") != None:
                     raiseFatal("\n%s: Edited config file %s couldn't be renamed, aborting." % (self.getNEVRA(), rfi.filename))
             break
@@ -595,7 +599,7 @@ class RpmPackage(RpmData):
             self["filenames"].append(filename)
 
     def __generateFileInfoList(self):
-        self.rpmusercache = RpmUserCache()
+        self.rpmusercache = RpmUserCache(self.config)
         self.rfilist = {}
         for filename in self["filenames"]:
             self.rfilist[filename] = self.getRpmFileInfo(filename)
@@ -677,9 +681,9 @@ class RpmPackage(RpmData):
             rpmflags = self["fileflags"][i]
         if self.has_key("filecolors"):
             rpmfilecolor = self["filecolors"][i]
-        rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid, rpmgid,
-            rpmmtime, rpmfilesize, rpmdev, rpmrdev, rpmmd5sum, rpmflags,
-            rpmfilecolor)
+        rfi = RpmFileInfo(self.config, filename, rpminode, rpmmode, rpmuid,
+                          rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev,
+                          rpmmd5sum, rpmflags, rpmfilecolor)
         return rfi
 
     def getEpoch(self):
@@ -702,8 +706,8 @@ class RpmPackage(RpmData):
 
     def getProvides(self):
         r = self.__getDeps(("providename", "provideflags", "provideversion"))
-        r.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
-        #if rpmconfig.ignore_epoch and self["epoch"] != None:
+        #r.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
+        #if self.config.ignore_epoch and self["epoch"] != None:
         #    r.append( (self["name"], RPMSENSE_EQUAL, "%s-%s" % (self["version"], self["release"])) )
         return r
 
@@ -755,18 +759,5 @@ class RpmPackage(RpmData):
             else:
                 deps2.append(None*deplength)
         return zip(*deps2)
-
-
-def readRpmPackage(source, verify=None, strict=None, hdronly=None, db=None,
-                   tags=None):
-    """Read RPM package from source and close it.
-
-    tags, if defined, specifies tags to load."""
-
-    pkg = RpmPackage(source, verify, strict, hdronly, db)
-    pkg.read(tags = tags)
-    pkg.close()
-    return pkg
-
 
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -116,7 +116,7 @@ def metadataReadPackage(filename):
 
     For convenience only, other metadata* functions work with any RpmPackage
     as long it contains all needed tags."""
-    return package.readRpmPackage("file:/" + filename, verify = None,
+    return package.readRpmPackage(rpmconfig, "file:/" + filename, verify = None,
                                   hdronly = True)
 
 

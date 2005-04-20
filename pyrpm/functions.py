@@ -23,6 +23,7 @@ from tempfile import mkstemp
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE
 from config import rpmconfig
 from base import *
+import package
 
 # Number of bytes to read from file at once when computing digests
 DIGEST_CHUNK = 65536
@@ -311,19 +312,19 @@ def parseBoolean(str):
 
 # Error handling functions
 def printDebug(level, msg):
-    if level <= rpmconfig.debug_level:
+    if level <= rpmconfig.debug:
         sys.stdout.write("Debug: %s\n" % msg)
         sys.stdout.flush()
     return 0
 
 def printInfo(level, msg):
-    if level <= rpmconfig.verbose_level:
+    if level <= rpmconfig.verbose:
         sys.stdout.write(msg)
         sys.stdout.flush()
     return 0
 
 def printWarning(level, msg):
-    if level <= rpmconfig.warning_level:
+    if level <= rpmconfig.warning:
         sys.stdout.write("Warning: %s\n" % msg)
         sys.stdout.flush()
     return 0
@@ -746,5 +747,14 @@ def findPkgByName(pkgname, list):
             return [ ]
         pkglist = __findPkgByName(pkgname, list, 1)
     return pkglist
+
+def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
+                   db=None, tags=None):
+    """Read RPM package from source and close it.
+    tags, if defined, specifies tags to load."""
+    pkg = package.RpmPackage(config, source, verify, strict, hdronly, db)
+    pkg.read(tags = tags)
+    pkg.close()
+    return pkg
 
 # vim:ts=4:sw=4:showmatch:expandtab

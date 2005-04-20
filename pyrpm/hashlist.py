@@ -22,7 +22,8 @@ from types import IntType
 class HashList:
     """ hash list """
 
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         self.list = [ ]
         self.hash = { }
 

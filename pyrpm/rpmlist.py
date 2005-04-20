@@ -18,8 +18,7 @@
 #
 
 from hashlist import HashList
-from config import rpmconfig
-from functions import printWarning, pkgCompare, archCompat, archDuplicate
+from functions import pkgCompare, archCompat, archDuplicate
 from functions import normalizeList
 from base import OP_INSTALL, OP_UPDATE, OP_ERASE, OP_FRESHEN
 
@@ -33,7 +32,8 @@ class RpmList:
     ARCH_INCOMPAT = -6
     # ----
 
-    def __init__(self, installed):
+    def __init__(self, config, installed):
+        self.config = config
         self.clear()
         self.__len__ = self.list.__len__
         for r in installed:
@@ -45,8 +45,8 @@ class RpmList:
     # ----
 
     def clear(self):
-        self.list = HashList()
-        self.installed = HashList()
+        self.list = HashList(self.config)
+        self.installed = HashList(self.config)
         self.installs = [ ]
         self.updates = { }
         self.erases = [ ]
@@ -91,18 +91,18 @@ class RpmList:
             for r in rpms:
                 ret = pkgCompare(r, pkg)
                 if ret > 0: # old_ver > new_ver
-                    if rpmconfig.oldpackage == 0:
+                    if self.config.oldpackage == 0:
                         if self.isInstalled(r):
                             msg = "%s: A newer package is already installed"
                         else:
                             msg = "%s: A newer package was already added"
-                        printWarning(1, msg % pkg.getNEVRA())
+                        self.config.printWarning(1, msg % pkg.getNEVRA())
                         return self.OLD_PACKAGE
                     else:
                         # old package: simulate a new package
                         ret = -1
                 if ret < 0: # old_ver < new_ver
-                    if rpmconfig.exactarch == 1 and \
+                    if self.config.exactarch == 1 and \
                            self.__arch_incompat(pkg, r):
                         return self.ARCH_INCOMPAT
                     
@@ -110,7 +110,7 @@ class RpmList:
                            pkg["arch"] == "noarch" or r["arch"] == "noarch":
                         updates.append(r)
                 else: # ret == 0, old_ver == new_ver
-                    if rpmconfig.exactarch == 1 and \
+                    if self.config.exactarch == 1 and \
                            self.__arch_incompat(pkg, r):
                         return self.ARCH_INCOMPAT
                     
@@ -125,7 +125,7 @@ class RpmList:
                             else:
                                 msg = "%s: Ignoring due to already added %s"
                                 ret = self.ALREADY_ADDED
-                            printWarning(1, msg % (pkg.getNEVRA(),
+                            self.config.printWarning(1, msg % (pkg.getNEVRA(),
                                                    r.getNEVRA()))
                             return ret
                         else:
@@ -136,10 +136,10 @@ class RpmList:
 
         for r in updates:
             if self.isInstalled(r):
-                printWarning(2, "%s was already installed, replacing with %s" \
+                self.config.printWarning(2, "%s was already installed, replacing with %s" \
                                  % (r.getNEVRA(), pkg.getNEVRA()))
             else:
-                printWarning(1, "%s was already added, replacing with %s" \
+                self.config.printWarning(1, "%s was already added, replacing with %s" \
                                  % (r.getNEVRA(), pkg.getNEVRA()))
             if self._pkgUpdate(pkg, r) != self.OK:
                 return self.UPDATE_FAILED
@@ -207,11 +207,11 @@ class RpmList:
     def __install_check(self, r, pkg):
         if r == pkg or r.isEqual(pkg):
             if self.isInstalled(r):
-                printWarning(1, "%s: %s is already installed" % \
+                self.config.printWarning(1, "%s: %s is already installed" % \
                              (pkg.getNEVRA(), r.getNEVRA()))
                 return self.ALREADY_INSTALLED
             else:
-                printWarning(1, "%s: %s was already added" % \
+                self.config.printWarning(1, "%s: %s was already added" % \
                              (pkg.getNEVRA(), r.getNEVRA()))
                 return self.ALREADY_ADDED
         return 1
@@ -219,7 +219,7 @@ class RpmList:
 
     def __arch_incompat(self, pkg, r):
         if pkg["arch"] != r["arch"] and archDuplicate(pkg["arch"], r["arch"]):
-            printWarning(1, "%s does not match arch %s." % \
+            self.config.printWarning(1, "%s does not match arch %s." % \
                          (pkg.getNEVRA(), r["arch"]))
             return 1
         return 0

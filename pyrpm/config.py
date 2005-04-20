@@ -17,16 +17,31 @@
 #
 
 
-import os
+import os, copy, sys
+
+
+class RpmMessageHandler:
+    def __init__(self, config, prefix="", suffix="\n"):
+        self.config = config
+        self.prefix = prefix
+        self.suffix = suffix
+
+    def handle(self, msg):
+        sys.stdout.write("%s%s%s" % (self.prefix, msg, self.suffix))
+        sys.stdout.flush()
 
 
 class RpmConfig:
     def __init__(self):
         (self.sysname, self.nodename, self.release, self.version,
             self.machine) = os.uname()
-        self.debug_level = 0
-        self.warning_level = 0
-        self.verbose_level = 0
+        self.debug = 0
+        self.warning = 0
+        self.verbose = 0
+        self.debug_handler = RpmMessageHandler(self, "Debug: ")
+        self.warning_handler = RpmMessageHandler(self, "Warning: ")
+        self.verbose_handler = RpmMessageHandler(self, "", "")
+        self.error_handler = RpmMessageHandler(self, "Error: ")
         self.printhash = 0
         self.buildroot = None
         self.dbpath = "/var/lib/pyrpm/"
@@ -56,6 +71,26 @@ class RpmConfig:
         self.timer = 0
         self.ldconfig = 0
         self.delayldconfig = 0
+
+    def printDebug(self, level, msg):
+        if self.debug_handler and level <= self.debug:
+            self.debug_handler.handle(msg)
+
+    def printWarning(self, level, msg):
+        if self.warning_handler and level <= self.warning:
+            self.warning_handler.handle(msg)
+
+    def printInfo(self, level, msg):
+        if self.verbose_handler and level <= self.verbose:
+            self.verbose_handler.handle(msg)
+
+    def printError(self, msg):
+        if self.error_handler:
+            self.error_handler.handle(msg)
+
+    def copy(self):
+        return copy.deepcopy(self)
+
 
 # Automatically create a global rpmconfig variable.
 rpmconfig = RpmConfig()

@@ -191,8 +191,8 @@ class RpmDistributionCollection:
         files = self.getArchFilepaths(arch)
         pkgs = []
         for f in files:
-            printDebug(2, "%04d: reading %s" % (len(pkgs), f))
-            pkg = readRpmPackage('file:/'+f, tags = tags)
+            rpmconfig.printDebug(2, "%04d: reading %s" % (len(pkgs), f))
+            pkg = readRpmPackage(rpmconfig, 'file:/'+f, tags = tags)
             pkgs.append(pkg)
         return pkgs
 

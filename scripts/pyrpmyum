@@ -59,7 +59,7 @@ Warning: [group]remove doesn't work yet either, use pyrpminstall -e"""
 #
 
 # Our yum worker object
-yum = RpmYum()
+yum = RpmYum(rpmconfig)
 
 # Argument parsing
 try:
@@ -81,7 +81,7 @@ for (opt, val) in opts:
         usage()
         sys.exit(0)
     elif opt in ["-v", "--verbose"]:
-        rpmconfig.verbose_level += 1
+        rpmconfig.verbose += 1
     elif opt in ["-r", "--root"]:
         rpmconfig.buildroot = val
     elif opt == "-c":
@@ -107,9 +107,9 @@ for (opt, val) in opts:
                    os.path.isfile(val+"/repodata/comps.xml"):
                     rpmconfig.compsfile = val+"/repodata/comps.xml"
     elif opt == "--quiet":
-        rpmconfig.debug_level = 0
-        rpmconfig.warning_level = 0
-        rpmconfig.verbose_level = 0
+        rpmconfig.debug = 0
+        rpmconfig.warning = 0
+        rpmconfig.verbose = 0
         rpmconfig.printhash = 0
     elif opt == "--autoerase":
         yum.setAutoerase(1)
@@ -160,13 +160,13 @@ for (opt, val) in opts:
     elif opt == "--notriggers":
         rpmconfig.notriggers = 1
 
-if rpmconfig.verbose_level > 1:
-    rpmconfig.warning_level = rpmconfig.verbose_level - 1
-if rpmconfig.verbose_level > 2:
-    rpmconfig.warning_level = rpmconfig.verbose_level - 2
+if rpmconfig.verbose > 1:
+    rpmconfig.warning = rpmconfig.verbose - 1
+if rpmconfig.verbose > 2:
+    rpmconfig.warning = rpmconfig.verbose - 2
 
 if not args:
-    printError("No command given")
+    print "No command given"
     usage()
     sys.exit(1)
 

@@ -39,7 +39,7 @@ if not os.path.isdir(pyrpmhdrdir):
 rpmdb = RpmDB(rpmdir)
 rpmdb.read()
 
-l = rpmdb.getPkgList().values()
+l = rpmdb.getPkgList()
 for pkg in l:
     nevra = pkg.getNEVRA()
     pyrpmio = getRpmIOFactory("pydb:/%s%s" % (pyrpmhdrdir, nevra))

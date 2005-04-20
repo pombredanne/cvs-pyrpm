@@ -19,7 +19,6 @@
 
 import os, gc
 from time import clock
-from config import rpmconfig
 import package
 from resolver import *
 from orderer import *
@@ -27,7 +26,8 @@ from orderer import *
 class _Triggers:
     """ enable search of triggers """
     """ triggers of packages can be added and removed by package """
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         self.triggers = {}
 
     def append(self, name, flag, version, tprog, tscript, rpm):
@@ -69,28 +69,28 @@ class _Triggers:
 
 
 class RpmController:
-    def __init__(self, operation, db, buildroot=None):
+    def __init__(self, config, operation, db):
+        self.config = config
         self.operation = operation
         self.db = db
-        self.buildroot = buildroot
         self.rpms = []
         if not self.db.read():
             raiseFatal("Couldn't read database")
 
     def handlePkgs(self, pkglist):
-        if rpmconfig.timer:
+        if self.config.timer:
             time1 = clock()
         for pkg in pkglist:
             self.rpms.append(pkg)
         if len(self.rpms) == 0:
-            printInfo(2, "Nothing to do.\n")
+            self.config.printInfo(2, "Nothing to do.\n")
             return 1
-        if rpmconfig.timer:
-            printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
+        if self.config.timer:
+            self.config.printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
         return 1
 
     def handleFiles(self, filelist):
-        if rpmconfig.timer:
+        if self.config.timer:
             time1 = clock()
         if self.operation == OP_ERASE:
             for filename in filelist:
@@ -99,57 +99,68 @@ class RpmController:
             for filename in filelist:
                 self.appendFile(filename)
         if len(self.rpms) == 0:
-            printInfo(2, "Nothing to do.\n")
+            self.config.printInfo(2, "Nothing to do.\n")
             return 1
-        if rpmconfig.timer:
-            printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
+        if self.config.timer:
+            self.config.printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
         return 1
 
     def getOperations(self, resolver=None):
         if not self.__preprocess():
             return 0
-        if rpmconfig.timer:
+        if self.config.timer:
             time1 = clock()
         if resolver == None:
-            resolver = RpmResolver(self.db.getPkgList(), self.operation)
+            resolver = RpmResolver(self.config, self.db.getPkgList(),
+                                   self.operation)
             for r in self.rpms:
-                resolver.append(r)
+                if   self.operation == OP_INSTALL:
+                    resolver.install(r)
+                elif self.operation == OP_UPDATE:
+                    resolver.update(r)
+                elif self.operation == OP_FRESHEN:
+                    resolver.freshen(r)
+                elif self.operation == OP_ERASE:
+                    resolver.erase(r)
+                else:
+                    self.config.printError("Unknown operation")
         del self.rpms
         if resolver.resolve() != 1:
             sys.exit(1)
-        if rpmconfig.timer:
-            printInfo(0, "resolver took %s seconds\n" % (clock() - time1))
+        if self.config.timer:
+            self.config.printInfo(0, "resolver took %s seconds\n" % (clock() - time1))
             time1 = clock()
-        orderer = RpmOrderer(resolver.installs, resolver.updates, resolver.obsoletes, resolver.erases)
+        orderer = RpmOrderer(self.config, resolver.installs, resolver.updates,
+                             resolver.obsoletes, resolver.erases)
         del resolver
         operations = orderer.order()
-        if rpmconfig.timer:
-            printInfo(0, "orderer took %s seconds\n" % (clock() - time1))
+        if self.config.timer:
+            self.config.printInfo(0, "orderer took %s seconds\n" % (clock() - time1))
         del orderer
-        if not rpmconfig.ignoresize:
-            if rpmconfig.timer:
+        if not self.config.ignoresize:
+            if self.config.timer:
                 time9 = clock()
             mhash = getFreeDiskspace(operations)
-            if rpmconfig.timer:
-                printInfo(0, "getFreeDiskspace took %s seconds\n" % \
+            if self.config.timer:
+                self.config.printInfo(0, "getFreeDiskspace took %s seconds\n" % \
                              (clock() - time9))
             for dev in mhash.keys():
                 if mhash[dev][0] < 31457280:
-                    printInfo(0, "Less than 30MB of diskspace left on device %s for operation" % hex(dev))
+                    self.config.printInfo(0, "Less than 30MB of diskspace left on device %s for operation" % hex(dev))
                     sys.exit(1)
         return operations
 
     def runOperations(self, operations):
         if not operations:
             if operations == []:
-                printError("No updates are necessary.")
+                self.config.printError("No updates are necessary.")
                 sys.exit(0)
-            printError("Errors found during package dependancy checks and ordering.")
+            self.config.printError("Errors found during package dependancy checks and ordering.")
             sys.exit(1)
-        if rpmconfig.test:
-            printError("test run stopped")
+        if self.config.test:
+            self.config.printError("test run stopped")
             sys.exit(0)
-        self.triggerlist = _Triggers()
+        self.triggerlist = _Triggers(self.config)
         i = 0
         for (op, pkg) in operations:
             if op == OP_UPDATE or op == OP_INSTALL:
@@ -183,8 +194,8 @@ class RpmController:
                 subop = operations[:pkgsperfork]
             else:
                 del operations
-                if self.buildroot:
-                    os.chroot(self.buildroot)
+                if self.config.buildroot:
+                    os.chroot(self.config.buildroot)
                 # We're in a buildroot now, reset the buildroot in the db object
                 self.db.setBuildroot(None)
                 while len(subop) > 0:
@@ -200,10 +211,10 @@ class RpmController:
                             opstring = "Erase:   "
                     i += 1
                     progress = "[%d/%d] %s%s" % (i, numops, opstring, pkg.getNEVRA())
-                    if rpmconfig.printhash:
-                        printInfo(0, progress)
+                    if self.config.printhash:
+                        self.config.printInfo(0, progress)
                     else:
-                        printInfo(1, progress)
+                        self.config.printInfo(1, progress)
                     if   op == OP_INSTALL or \
                          op == OP_UPDATE or \
                          op == OP_FRESHEN:
@@ -219,16 +230,16 @@ class RpmController:
                         self.__erasePkgFromDB(pkg)
                     pkg.close()
                     del pkg
-                if rpmconfig.delayldconfig:
-                    rpmconfig.delayldconfig = 0
+                if self.config.delayldconfig:
+                    self.config.delayldconfig = 0
                     runScript("/sbin/ldconfig", force=1)
-                printInfo(2, "number of /sbin/ldconfig calls optimized away: %d\n" % rpmconfig.ldconfig)
+                self.config.printInfo(2, "number of /sbin/ldconfig calls optimized away: %d\n" % self.config.ldconfig)
                 sys.exit(0)
         return 1
 
     def appendFile(self, file):
-        pkg = package.readRpmPackage(file, tags=rpmconfig.resolvertags,
-                                     db=self.db)
+        pkg = readRpmPackage(self.config, file, db=self.db,
+                             tags=self.config.resolvertags)
         self.rpms.append(pkg)
         return 1
 
@@ -240,9 +251,9 @@ class RpmController:
         return 1
 
     def __preprocess(self):
-        if rpmconfig.ignorearch:
+        if self.config.ignorearch:
             return 1
-        filterArchCompat(self.rpms, rpmconfig.machine)
+        filterArchCompat(self.rpms, self.config.machine)
         return 1
 
     def __addPkgToDB(self, pkg, nowrite=None):
@@ -252,7 +263,7 @@ class RpmController:
         return self.db.erasePkg(pkg, nowrite)
 
     def __runTriggerIn(self, pkg):
-        if rpmconfig.notriggers:
+        if self.config.notriggers:
             return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERIN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
@@ -264,19 +275,19 @@ class RpmController:
                 continue
             snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
             if not runScript(prog, script, snumPkgs, tnumPkgs):
-                printError("%s: Error running any trigger in script." % spkg.getNEVRA())
+                self.config.printError("%s: Error running any trigger in script." % spkg.getNEVRA())
                 return 0
         # new-%triggerin
         for (prog, script, spkg) in tlist:
             if spkg != pkg:
                 continue
             if not runScript(prog, script, tnumPkgs, tnumPkgs):
-                printError("%s: Error running new trigger in script." % spkg.getNEVRA())
+                self.config.printError("%s: Error running new trigger in script." % spkg.getNEVRA())
                 return 0
         return 1
 
     def __runTriggerUn(self, pkg):
-        if rpmconfig.notriggers:
+        if self.config.notriggers:
             return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
@@ -287,7 +298,7 @@ class RpmController:
             if spkg != pkg:
                 continue
             if not runScript(prog, script, tnumPkgs, tnumPkgs):
-                printError("%s: Error running old trigger un script." % spkg.getNEVRA())
+                self.config.printError("%s: Error running old trigger un script." % spkg.getNEVRA())
                 return 0
         # any-%triggerun
         for (prog, script, spkg) in tlist:
@@ -295,12 +306,12 @@ class RpmController:
                 continue
             snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
             if not runScript(prog, script, snumPkgs, tnumPkgs):
-                printError("%s: Error running any trigger un script." % spkg.getNEVRA())
+                self.config.printError("%s: Error running any trigger un script." % spkg.getNEVRA())
                 return 0
         return 1
 
     def __runTriggerPostUn(self, pkg):
-        if rpmconfig.notriggers:
+        if self.config.notriggers:
             return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERPOSTUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
@@ -311,14 +322,14 @@ class RpmController:
             if spkg != pkg:
                 continue
             if not runScript(prog, script, tnumPkgs, tnumPkgs):
-                printError("%s: Error running old trigger postun script." % spkg.getNEVRA())
+                self.config.printError("%s: Error running old trigger postun script." % spkg.getNEVRA())
         # any-%triggerpostun
         for (prog, script, spkg) in tlist:
             if spkg == pkg:
                 continue
             snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
             if not runScript(prog, script, snumPkgs, tnumPkgs):
-                printError("%s: Error running any trigger postun script." % spkg.getNEVRA())
+                self.config.printError("%s: Error running any trigger postun script." % spkg.getNEVRA())
                 return 0
         return 1
 

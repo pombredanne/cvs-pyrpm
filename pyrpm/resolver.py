@@ -22,7 +22,6 @@
 """
 
 from stat import S_ISLNK, S_ISDIR
-from config import rpmconfig
 from hashlist import HashList
 from rpmlist import RpmList
 from functions import *
@@ -32,7 +31,8 @@ from functions import *
 class ProvidesList:
     """ enable search of provides """
     """ provides of packages can be added and removed by package """
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         self.provide = { }
 
     def addPkg(self, rpm):
@@ -93,7 +93,8 @@ class ProvidesList:
 class FilenamesList:
     """ enable search of filenames """
     """ filenames of packages can be added and removed by package """
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         self.filename = { }
         self.multi = { }
 
@@ -125,19 +126,19 @@ class RpmResolver(RpmList):
     OBSOLETE_FAILED = -10
     # ----
 
-    def __init__(self, installed, check_installed=0):
-        RpmList.__init__(self, installed)
+    def __init__(self, config, installed, check_installed=0):
+        RpmList.__init__(self, config, installed)
         self.check_installed = check_installed
         self.installed_unresolved = self.getUnresolvedDependencies()
     # ----
 
     def clear(self):
         RpmList.clear(self)
-        self.provides = ProvidesList()
-        self.filenames = FilenamesList()
+        self.provides = ProvidesList(self.config)
+        self.filenames = FilenamesList(self.config)
         self.obsoletes = { }
         self.check_installed = 0
-        self.installed_unresolved = HashList()
+        self.installed_unresolved = HashList(self.config)
     # ----
 
     def _install(self, pkg, no_check=0):
@@ -168,7 +169,7 @@ class RpmResolver(RpmList):
                 fmt = "%s obsoletes installed %s, removing %s"
             else:
                 fmt = "%s obsoletes added %s, removing %s"
-            printWarning(0, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()))
+            self.config.printWarning(0, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()))
             if self._pkgObsolete(pkg, r) != self.OK:
                 return self.OBSOLETE_FAILED
 
@@ -256,29 +257,29 @@ class RpmResolver(RpmList):
                     # do not check installed packages if no packages
                     # are getting removed (by erase, update or obsolete)
                     continue
-                printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
+                self.config.printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
-                if len(resolved) > 0 and rpmconfig.debug_level > 1:
-                    printDebug(2, "%s: resolved dependencies:" % r.getNEVRA())
+                if len(resolved) > 0 and self.config.debug > 1:
+                    self.config.printDebug(2, "%s: resolved dependencies:" % r.getNEVRA())
                     for (u, s) in resolved:
                         s2 = ""
                         for r2 in s:
                             s2 += "%s " % r2.getNEVRA()
-                        printDebug(2, "\t%s: %s" % (depString(u), s2))
+                        self.config.printDebug(2, "\t%s: %s" % (depString(u), s2))
                 if len(unresolved) > 0:
                     no_unresolved = 0
-                    printError("%s: unresolved dependencies:" % r.getNEVRA())
+                    self.config.printError("%s: unresolved dependencies:" % r.getNEVRA())
                     for u in unresolved:
-                        printError("\t%s" % depString(u))
+                        self.config.printError("\t%s" % depString(u))
         return no_unresolved
     # ----
 
     def getResolvedDependencies(self):
         """ Get all resolved dependencies """
-        all_resolved = HashList()
+        all_resolved = HashList(self.config)
         for name in self:
             for r in self[name]:
-                printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
+                self.config.printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(resolved) > 0:
                     if r not in all_resolved:
@@ -289,10 +290,10 @@ class RpmResolver(RpmList):
 
     def getUnresolvedDependencies(self):
         """ Get all unresolved dependencies """
-        all_unresolved = HashList()
+        all_unresolved = HashList(self.config)
         for name in self:
             for r in self[name]:
-                printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
+                self.config.printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(unresolved) > 0:
                     if r not in all_unresolved:
@@ -304,7 +305,7 @@ class RpmResolver(RpmList):
     def getConflicts(self):
         """ Check for conflicts in conflicts and and obsoletes """
 
-        conflicts = HashList()
+        conflicts = HashList(self.config)
 
         if len(self.installs) == 0:
             # no conflicts if there is no new package
@@ -312,7 +313,7 @@ class RpmResolver(RpmList):
 
         for name in self:
             for r in self[name]:
-                printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
+                self.config.printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
                 for c in r["conflicts"] + r["obsoletes"]:
                     s = self.searchDependency(c)
                     if len(s) == 0:
@@ -337,29 +338,29 @@ class RpmResolver(RpmList):
             return self.OK
 
         for pkg in conflicts:
-            printError("%s conflicts with:" % pkg.getNEVRA())
-            if rpmconfig.verbose_level > 1:
+            self.config.printError("%s conflicts with:" % pkg.getNEVRA())
+            if self.config.verbose > 1:
                 for c,r in conflicts[pkg]:
-                    printError("\t'%s' <=> %s" % (depString(c), r.getNEVRA()))
+                    self.config.printError("\t'%s' <=> %s" % (depString(c), r.getNEVRA()))
             else:
                 pkgs = [ ]
                 for c,r in conflicts[pkg]:
                     if r not in pkgs:
-                        printError("\t%s" % r.getNEVRA())
+                        self.config.printError("\t%s" % r.getNEVRA())
                         pkgs.append(r)
         return -1
     # ----
 
     def getFileConflicts(self):
         """ Check for file conflicts """
-        conflicts =  HashList()
+        conflicts =  HashList(self.config)
 
         if len(self.installs) == 0:
             # no conflicts if there is no new package
             return conflicts
         
         for filename in self.filenames.multi.keys():
-            printDebug(1, "Checking for file conflicts for '%s'" % filename)
+            self.config.printDebug(1, "Checking for file conflicts for '%s'" % filename)
             s = [ ]
             self.filenames.search(filename, s)
             for j in xrange(len(s)):
@@ -398,15 +399,15 @@ class RpmResolver(RpmList):
             return self.OK
 
         for pkg in conflicts:
-            printError("%s file conflicts with:" % pkg.getNEVRA())
-            if rpmconfig.verbose_level > 1:
+            self.config.printError("%s file conflicts with:" % pkg.getNEVRA())
+            if self.config.verbose > 1:
                 for f,r in conflicts[pkg]:
-                    printError("\t'%s' <=> %s" % (f, r.getNEVRA()))
+                    self.config.printError("\t'%s' <=> %s" % (f, r.getNEVRA()))
             else:
                 pkgs = [ ]
                 for f,r in conflicts[pkg]:
                     if r not in pkgs:
-                        printError("\t%s" % r.getNEVRA())
+                        self.config.printError("\t%s" % r.getNEVRA())
                         pkgs.append(r)
         return -1
     # ----
@@ -420,12 +421,12 @@ class RpmResolver(RpmList):
         if self.checkDependencies() != 1:
             return -1
 
-        if rpmconfig.noconflicts == 0:
+        if self.config.noconflicts == 0:
             # check for conflicts
             if self.checkConflicts() != 1:
                 return -2
 
-        if rpmconfig.nofileconflicts == 0:
+        if self.config.nofileconflicts == 0:
             # check for file conflicts
             if self.checkFileConflicts() != 1:
                 return -3

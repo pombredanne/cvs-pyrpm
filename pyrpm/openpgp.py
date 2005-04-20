@@ -600,7 +600,7 @@ def _decodeArmor(data):
             raise ValueError, "Invalid armor header %s" % lines[0]
         if lines[0][:delim] not in ["Version", "Comment", "MessageID", "Hash",
                                     "Charset"]:
-            functions.printWarning(1, "Unknown armor header" % lines[0])
+            rpmconfig.printWarning(1, "Unknown armor header" % lines[0])
         lines.pop(0)
     lines.pop(0)
     for i in xrange(len(lines)):

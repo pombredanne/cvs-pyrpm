@@ -22,15 +22,15 @@
 """
 
 from hashlist import HashList
-from config import rpmconfig
 from functions import *
 from resolver import RpmResolver
 
 class _Relation:
     """ Pre and post relations for a package """
-    def __init__(self):
-        self.pre = HashList()
-        self._post = HashList()
+    def __init__(self, config):
+        self.config = config
+        self.pre = HashList(self.config)
+        self._post = HashList(self.config)
     def __str__(self):
         return "%d %d" % (len(self.pre), len(self._post))
 
@@ -38,8 +38,9 @@ class _Relation:
 
 class _Relations:
     """ relations list for packages """
-    def __init__(self):
-        self.list = HashList()
+    def __init__(self, config):
+        self.config = config
+        self.list = HashList(self.config)
         self.__len__ = self.list.__len__
         self.__getitem__ = self.list.__getitem__
         self.has_key = self.list.has_key
@@ -49,7 +50,7 @@ class _Relations:
             return
         i = self.list[pkg]
         if i == None:
-            i = _Relation()
+            i = _Relation(self.config)
             self.list[pkg] = i
         if pre == None:
             return # we have to do nothing more for empty relations
@@ -64,7 +65,7 @@ class _Relations:
                 if pkg not in self.list[p]._post:
                     self.list[p]._post[pkg] = 1
             else:
-                self.list[p] = _Relation()
+                self.list[p] = _Relation(self.config)
                 self.list[p]._post[pkg] = 1
 
     def remove(self, pkg):
@@ -80,10 +81,11 @@ class _Relations:
 # ----------------------------------------------------------------------------
 
 class RpmOrderer:
-    def __init__(self, installs, updates, obsoletes, erases):
+    def __init__(self, config, installs, updates, obsoletes, erases):
         """ rpms is a list of the packages which has to be installed, updated
         or removed. The operation is either OP_INSTALL, OP_UPDATE or
         OP_ERASE. """
+        self.config = config
         self.installs = installs
         self.erases = erases
         self.updates = updates
@@ -121,14 +123,14 @@ class RpmOrderer:
 
     def genRelations(self, rpms, operation):
         """ Generate relations from RpmList """
-        relations = _Relations()
+        relations = _Relations(self.config)
 
         # generate todo list for installs
-        resolver = RpmResolver(rpms, operation)
+        resolver = RpmResolver(self.config, rpms, operation)
 
         for name in resolver:
             for r in resolver[name]:
-                printDebug(1, "Generating relations for %s" % r.getNEVRA())
+                self.config.printDebug(1, "Generating relations for %s" % r.getNEVRA())
                 (unresolved, resolved) = resolver.getPkgDependencies(r)
                 # ignore unresolved, we are only looking at the changes,
                 # therefore not all symbols are resolvable in these changes
@@ -148,18 +150,18 @@ class RpmOrderer:
                     if empty:
                         empty = 0
                 if empty:
-                    printDebug(1, "No relations found for %s, generating empty relations" % \
+                    self.config.printDebug(1, "No relations found for %s, generating empty relations" % \
                                r.getNEVRA())
                     relations.append(r, None, 0)
         del resolver
 
-        if rpmconfig.debug_level > 1:
+        if self.config.debug > 1:
             # print relations
-            printDebug(2, "\t==== relations (%d) ====" % len(relations))
+            self.config.printDebug(2, "\t==== relations (%d) ====" % len(relations))
             for pkg in relations:
                 rel = relations[pkg]
                 pre = ""
-                if rpmconfig.debug_level > 2 and len(rel.pre) > 0:
+                if self.config.debug > 2 and len(rel.pre) > 0:
                     pre = " pre: "
                     for i in xrange(len(rel.pre)):
                         p = rel.pre[i]
@@ -167,9 +169,9 @@ class RpmOrderer:
                         if i > 0: pre += ", "
                         if f == 2: pre += "*"
                         pre += p.getNEVRA()
-                printDebug(2, "\t%d %d %s%s" % (len(rel.pre), len(rel._post),
+                self.config.printDebug(2, "\t%d %d %s%s" % (len(rel.pre), len(rel._post),
                                                 pkg.getNEVRA(), pre))
-            printDebug(2, "\t==== relations ====")
+            self.config.printDebug(2, "\t==== relations ====")
 
         return relations
 
@@ -180,7 +182,7 @@ class RpmOrderer:
             ops = [(OP_ERASE, list[0])]
         else:
             # more than one in list: generate order
-            orderer = RpmOrderer(None, None, None, list)
+            orderer = RpmOrderer(self.config, None, None, None, list)
             ops = orderer.order()
             del orderer
         return ops
@@ -234,13 +236,13 @@ class RpmOrderer:
     # ----
 
     def genCounter(self, loops):
-        counter = HashList()
+        counter = HashList(self.config)
         for w in loops:
             for j in xrange(len(w) - 1):
                 node = w[j]
                 next = w[j+1]
                 if node not in counter:
-                    counter[node] = HashList()
+                    counter[node] = HashList(self.config)
                 if next not in counter[node]:
                     counter[node][next] = 1
                 else:
@@ -265,7 +267,7 @@ class RpmOrderer:
                     max_count = count
 
         if max_count_node:
-            printDebug(1, "Removing requires for %s from %s (%d)" % \
+            self.config.printDebug(1, "Removing requires for %s from %s (%d)" % \
                        (max_count_next.getNEVRA(), max_count_node.getNEVRA(),
                         max_count))
             del relations[max_count_node].pre[max_count_next]
@@ -285,7 +287,7 @@ class RpmOrderer:
                     max_count = count
 
         if max_count_node:
-            printDebug(1, "Zapping requires for %s from %s (%d)" % \
+            self.config.printDebug(1, "Zapping requires for %s from %s (%d)" % \
                        (max_count_next.getNEVRA(), max_count_node.getNEVRA(),
                         max_count))
             del relations[max_count_node].pre[max_count_next]
@@ -344,29 +346,29 @@ class RpmOrderer:
             if next != None:
                 order.append(next)
                 relations.remove(next)
-                printDebug(2, "%d: %s" % (idx, next.getNEVRA()))
+                self.config.printDebug(2, "%d: %s" % (idx, next.getNEVRA()))
                 idx += 1
             else:
-                if rpmconfig.debug_level > 0:
-                    printDebug(1, "-- LOOP --")
-                    printDebug(2, "\n===== remaining packages =====")
+                if self.config.debug > 0:
+                    self.config.printDebug(1, "-- LOOP --")
+                    self.config.printDebug(2, "\n===== remaining packages =====")
                     for pkg2 in relations:
                         rel2 = relations[pkg2]
-                        printDebug(2, "%s" % pkg2.getNEVRA())
+                        self.config.printDebug(2, "%s" % pkg2.getNEVRA())
                         for r in rel2.pre:
                             # print nevra and flag
-                            printDebug(2, "\t%s (%d)" %
+                            self.config.printDebug(2, "\t%s (%d)" %
                                        (r.getNEVRA(), rel2.pre[r]))
-                    printDebug(2, "===== remaining packages =====\n")
+                    self.config.printDebug(2, "===== remaining packages =====\n")
 
                 loops = self.getLoops(relations)
                 if self.breakupLoops(relations, loops) != 1:
-                    printError("Unable to breakup loop.")
+                    self.config.printError("Unable to breakup loop.")
                     return None
 
-        if rpmconfig.debug_level > 1:
+        if self.config.debug > 1:
             for r in last:
-                printDebug(2, "%d: %s" % (idx, r.getNEVRA()))
+                self.config.printDebug(2, "%d: %s" % (idx, r.getNEVRA()))
                 idx += 1
 
         return (order + last)

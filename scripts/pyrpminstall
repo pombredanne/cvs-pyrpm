@@ -82,17 +82,17 @@ def main():
         usage()
         sys.exit(0)
     elif opt in ["-v", "--verbose"]:
-        rpmconfig.verbose_level += 1
+        rpmconfig.verbose += 1
     elif opt in ["-w", "--warning"]:
-        rpmconfig.warning_level += 1
+        rpmconfig.warning += 1
     elif opt in ["-d", "--debug"]:
-        rpmconfig.debug_level += 1
+        rpmconfig.debug += 1
     elif opt in ["-r", "--root"]:
         rpmconfig.buildroot = val
     elif opt == "--quiet":
-        rpmconfig.debug_level = 0
-        rpmconfig.warning_level = 0
-        rpmconfig.verbose_level = 0
+        rpmconfig.debug = 0
+        rpmconfig.warning = 0
+        rpmconfig.verbose = 0
         rpmconfig.printhash = 0
     elif opt == "--version":
         print "pyrpminstall", __version__
@@ -136,8 +136,8 @@ def main():
     usage()
     sys.exit(1)
 
-  pydb = RpmPyDB(rpmconfig.dbpath, rpmconfig.buildroot)
-  control = RpmController(operation, pydb, rpmconfig.buildroot)
+  pydb = RpmPyDB(rpmconfig, rpmconfig.dbpath, rpmconfig.buildroot)
+  control = RpmController(rpmconfig, operation, pydb, rpmconfig.buildroot)
   control.handleFiles(args)
   ops = control.getOperations()
   control.runOperations(ops)

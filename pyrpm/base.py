@@ -17,8 +17,9 @@
 #
 
 class RpmFileInfo:
-    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize, dev,
-        rdev, md5sum, flags, filecolor):
+    def __init__(self, config, filename, inode, mode, uid, gid, mtime, filesize,
+                 dev, rdev, md5sum, flags, filecolor):
+        self.config = config
         self.filename = filename
         self.inode = inode
         self.mode = mode
