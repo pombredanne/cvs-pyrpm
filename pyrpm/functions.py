@@ -661,9 +661,9 @@ def __findPkgByName(pkgname, list, regex=None):
 release and arch. Returns a list of all matching packages, starting with
 best match."""
     pkglist = []
-    tmplist = []
     envra = envraSplit(pkgname)
     if not regex:
+        tmplist = []
         for pkg in list:
             if pkg["name"].find(envra[1]) >= 0:
                 tmplist.append(pkg)
