@@ -33,6 +33,9 @@ class ProvidesList:
     """ provides of packages can be added and removed by package """
     def __init__(self, config):
         self.config = config
+        self.clear()
+
+    def clear(self):
         self.provide = { }
 
     def addPkg(self, rpm):
@@ -95,8 +98,11 @@ class FilenamesList:
     """ filenames of packages can be added and removed by package """
     def __init__(self, config):
         self.config = config
+        self.clear()
+
+    def clear(self):
         self.filename = { }
-        self.multi = { }
+        self.multi = { }        
 
     def addPkg(self, rpm):
         for name in rpm["filenames"]:
@@ -410,6 +416,17 @@ class RpmResolver(RpmList):
                         self.config.printError("\t%s" % r.getNEVRA())
                         pkgs.append(r)
         return -1
+    # ----
+    
+    def reloadDependencies(self):
+        self.provides.clear()
+        self.filenames.clear()
+
+        for name in self:
+            for pkg in self[name]:
+                self.provides.addPkg(pkg)
+                self.filenames.addPkg(pkg)
+
     # ----
 
     def resolve(self):
