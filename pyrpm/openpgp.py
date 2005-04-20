@@ -16,12 +16,19 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import array, base64, md5, sha, string, struct
-import Crypto.Hash.MD2, Crypto.Hash.RIPEMD, Crypto.Hash.SHA256
-import Crypto.PublicKey.DSA, Crypto.PublicKey.RSA
-import Crypto.Util.number
+import array, base64, binascii, md5, sha, string, struct
 
-import functions
+try:
+    import Crypto.Hash.MD2 as MD2, Crypto.Hash.RIPEMD as RIPEMD
+    import Crypto.Hash.SHA256 as SHA256
+    import Crypto.PublicKey.DSA as DSA, Crypto.PublicKey.RSA as RSA
+    import Crypto.Util.number as Util_number
+except ImportError:
+    MD2, RIPEMD, SHA256 = None, None, None
+    DSA, RSA = None, None
+    Util_number = None
+
+import config
 
 # FIXME: "VERIFY" notes
 # FIXME: "BADFORMAT" notes
@@ -55,19 +62,18 @@ _ALG_HASH_SHA384 = 9
 _ALG_HASH_SHA512 = 10
 
 
-# alg: (name, module, ASN.1 prefix)
+# alg: (name, module or None, ASN.1 prefix)
 _hash_alg_data = {
     _ALG_HASH_MD5: ("MD5", md5, "\x30\x20\x30\x0C\x06\x08\x2A\x86" 
                     "\x48\x86\xF7\x0D\x02\x05\x05\x00\x04\x10"),
     _ALG_HASH_SHA1: ("SHA1", sha, "\x30\x21\x30\x09\x06\x05\x2B\x0E"
                      "\x03\x02\x1A\x05\x00\x04\x14"),
-    _ALG_HASH_RIPE_MD160: ("RIPE-MD/160", Crypto.Hash.RIPEMD,
+    _ALG_HASH_RIPE_MD160: ("RIPE-MD/160", RIPEMD,
                            "\x30\x21\x30\x09\x06\x05\x2B\x24" 
                            "\x03\x02\x01\x05\x00\x04\x14"),
-    _ALG_HASH_MD2: ("MD2", Crypto.Hash.MD2, "\x30\x20\x30\x0C\x06\x08\x2A\x86"
+    _ALG_HASH_MD2: ("MD2", MD2, "\x30\x20\x30\x0C\x06\x08\x2A\x86"
                     "\x48\x86\xF7\x0D\x02\x02\x05\x00\x04\x10"),
-    _ALG_HASH_SHA256: ("SHA256", Crypto.Hash.SHA256,
-                       "\x30\x41\x30\x0D\x06\x09\x60\x86" 
+    _ALG_HASH_SHA256: ("SHA256", SHA256, "\x30\x41\x30\x0D\x06\x09\x60\x86" 
                        "\x48\x01\x65\x03\x04\x02\x01\x05\x00\x04\x20"),
     _ALG_HASH_SHA384: ("SHA384", None, "\x30\x41\x30\x0D\x06\x09\x60\x86"
                        "\x48\x01\x65\x03\x04\x02\x02\x05\x00\x04\x30"),
@@ -88,9 +94,14 @@ def _popListHead(list):
  # Algorithm implementations
 def _parseMPI(data):
     """Return a Python long parsed from MPI data and the number of bytes
-    consumed."""
+    consumed.
 
-    (length,) = struct.unpack(">H", data[:2])
+    Raise ValueError on invalid input."""
+
+    try:
+        (length,) = struct.unpack(">H", data[:2])
+    except struct.error:
+        raise ValueError, "Invalid MPI format"
     end = (length + 7) / 8 + 2
     if len(data) < end:
         raise ValueError, "Invalid MPI format"
@@ -102,39 +113,39 @@ def _parseMPI(data):
     # 0...01
     if ord(data[2]) & ~(bit - 1) != bit:
         raise ValueError, "Invalid MPI format"
-    return (Crypto.Util.number.bytes_to_long(data[2 : end]), end)
+    return (Util_number.bytes_to_long(data[2 : end]), end)
 
 
 class _PubkeyAlg:
     """Public key algorithm data handling interface."""
 
     def __init__(self):
-        """Parse public key data from OpenPGP public key packet data area."""
+        """Parse public key data from OpenPGP public key packet data area.
 
-    def verify(self, data, signature):
-        """Verify data with signature from OpenPGP signature packet."""
+        Raise ValueError on invalid input, NotImplementedError if algorithm
+        is not supported."""
+
+    def verify(self, data, value):
+        """Verify value with data from OpenPGP signature packet.
+
+        Return 1 if signature is OK, raise ValueError if data is invalid."""
 
         raise NotImplementedError
-
 
 class _RSAPubkeyAlg(_PubkeyAlg):
     """RSA public key algorithm data handling."""
 
     def __init__(self, data):
-        """Parse public key data from OpenPGP public key packet data area."""
-
         _PubkeyAlg.__init__(self)
         (n, pos) = _parseMPI(data)
         (e, length) = _parseMPI(data[pos:])
         if pos + length != len(data):
             raise ValueError, "Invalid RSA public key data"
-        self.rsa = Crypto.PublicKey.RSA.construct((n, e))
+        if RSA is None:
+            raise NotImplementedError, "python-Crypto not available"
+        self.rsa = RSA.construct((n, e))
     
     def verify(self, data, value):
-        """Verify value with signature data from OpenPGP signature packet.
-
-        Return 1 if signature is OK."""
-
         (sig, length) = _parseMPI(data)
         if length != len(data):
             raise ValueError, "Invalid RSA signature data"
@@ -144,8 +155,6 @@ class _DSAPubkeyAlg(_PubkeyAlg):
     """DSA public key algorithm data handling."""
 
     def __init__(self, data):
-        """Parse public key data from OpenPGP public key packet data area."""
-
         _PubkeyAlg.__init__(self)
         (p, pos) = _parseMPI(data)
         (q, length) = _parseMPI(data[pos:])
@@ -155,15 +164,11 @@ class _DSAPubkeyAlg(_PubkeyAlg):
         (y, length) = _parseMPI(data[pos:])
         if pos + length != len(data):
             raise ValueError, "Invalid DSA public key data"
-        self.dsa = Crypto.PublicKey.DSA.construct((y, g, p, q))
+        if DSA is None:
+            raise NotImplementedError, "python-Crypto not available"
+        self.dsa = DSA.construct((y, g, p, q))
 
     def verify(self, data, value):
-        """Verify value with signature data from OpenPGP signature packet.
-
-        Return 1 if signature is OK."""
-
-        if len(value) != 20:
-            raise ValueError, "Invalid signed data length"
         (r, pos) = _parseMPI(data)
         (s, length) = _parseMPI(data[pos:])
         if pos + length != len(data):
@@ -182,6 +187,11 @@ class _PGPPacket:
     """A single PGP packet."""
 
     def __init__(self, tag, data):
+        """Parse a PGP packet.
+
+        Raise ValueError on invalid input, NotImplementedError on unknown
+        data."""
+
         self.tag = tag
         self.data = data
 
@@ -225,10 +235,14 @@ class _SignaturePacket(_PGPPacket):
 
     def __init__(self, tag, data):
         _PGPPacket.__init__(self, tag, data)
+        if not data:
+            raise ValueError, "Packet too small"
         self.ver = ord(data[0])
         if self.ver == 2 or self.ver == 3:
             self.hashed_sp = {}
             self.unhashed_sp = {}
+            if len(data) < 19:
+                raise ValueError, "Packet too small"
             if ord(data[1]) != 5:
                 raise ValueError, "Invalid hashed material length"
             (self.sigtype, self.hashed_sp["sign_time"],
@@ -237,31 +251,51 @@ class _SignaturePacket(_PGPPacket):
                 = struct.unpack(">BI8s2B2s", data[2:19])
             self.value_start = 19
         elif self.ver == 4:
+            if len(data) < 6:
+                raise ValueError, "Packet too small"
             (self.sigtype, self.pubkey_alg, self.hash_alg, count) \
                            = struct.unpack(">3BH", data[1:6])
             self.hashed_end = 6 + count
+            if len(data) < self.hashed_end + 2:
+                raise ValueError, "Packet too small"
             self.hashed_sp = self.__parseSubpackets(data[6 : self.hashed_end])
-            if not self.hashed_sp.has_key ("sign_time"):
-                raise ValueError, "Signature time not in its hashed data"
+            if "sign_time" not in self.hashed_sp:
+                raise ValueError, "Signature time not in hashed data"
             (count,) = struct.unpack(">H", data[self.hashed_end
                                                 : self.hashed_end + 2])
             unhashed_end = self.hashed_end + 2 + count
+            if len(data) < unhashed_end + 2:
+                raise ValueError, "Packet too small"
             self.unhashed_sp = self.__parseSubpackets(data[self.hashed_end + 2
                                                            : unhashed_end])
             self.hash_16b = data[unhashed_end : unhashed_end + 2]
             self.value_start = unhashed_end + 2
         else:
-            raise ValueError, "Unknown signature version %s" % self.ver
+            raise NotImplementedError, \
+                  "Unknown signature version %s" % self.ver
 
     def __str__(self):
+        if self.sigtype in self.sigtypes:
+            sigtype = self.sigtypes[self.sigtype]
+        else:
+            sigtype = "type %s" % self.sigtype
+        if self.pubkey_alg in _pubkey_alg_data:
+            pubkey_alg = _pubkey_alg_data[self.pubkey_alg][0]
+        else:
+            pubkey_alg = "pubkey %s" % self.pubkey_alg
+        if self.hash_alg in _hash_alg_data:
+            hash_alg = _hash_alg_data[self.hash_alg][0]
+        else:
+            hash_alg = "hash %s" % self.hash_alg
         return ("sig(v%s, %s, %s, %s, hashed %s, unhashed %s)"
-                % (self.ver, self.sigtypes[self.sigtype],
-                   _pubkey_alg_data[self.pubkey_alg][0],
-                   _hash_alg_data[self.hash_alg][0], self.hashed_sp,
+                % (self.ver, sigtype, pubkey_alg, hash_alg, self.hashed_sp,
                    self.unhashed_sp))
 
     def __parseSubpackets(self, data):
-        """Return a hash from parsing subpacket data."""
+        """Return a hash from parsing subpacket data.
+
+        Raise ValueError on invalid data, NotImplementedError on unknown
+        data."""
 
         res = {}
         while data:
@@ -271,112 +305,132 @@ class _SignaturePacket(_PGPPacket):
                 length = len1
             elif len1 < 255:
                 start = 2
+                if len(data) < 2:
+                    raise ValueError, "Not enough data for subpacket"
                 length = ((len1 - 192) << 8) + ord(data[1]) + 192
             else:
                 start = 5
+                if len(data) < 5:
+                    raise ValueError, "Not enough data for subpacket"
                 (length,) = struct.unpack(">I", data[1:5])
             if length == 0 or len(data) < start + length:
                 raise ValueError, "Not enough data for subpacket"
             sptype = ord(data[start]) & 0x7F
             spdata = data[start + 1 : start + length]
-            if sptype == 2:
-                (res["sign_time"],) = struct.unpack(">I", spdata)
-            elif sptype == 3:
-                # Doesn't make sense on a revocation signature
-                (res["expire_time"],) = struct.unpack(">I", spdata)
-            elif sptype == 4:
-                v = ord(spdata[0])
-                if len(spdata) != 1 or v > 1:
-                    raise ValueError, "Invalid exportable flag"
-                res["exportable"] = v
-            elif sptype == 5:
-                res["trust"] = struct.unpack(">2B", spdata)
-            elif sptype == 6:
-                if spdata[-1] != "\0":
-                    raise ValueError, "Invalid regexp"
-                res["regexp"] = spdata[:-1]
-            elif sptype == 7:
-                v = ord(spdata[0])
-                if len(spdata) != 1 or v > 1:
-                    raise ValueError, "Invalid revocable flag"
-                res["revocable"] = v
-            elif sptype == 9:
-                # VERIFY: only on a self-signature
-                (res["key_expire"],) = struct.unpack(">I", spdata)
-            elif sptype == 11:
-                # VERIFY: only on a self-signature
-                res["symmetric_pref"] = array.array("B", spdata).tolist()
-            elif sptype == 12:
-                # VERIFY: only on a self-signature
-                v = struct.unpack(">BB20s", spdata)
-                if (v[0] & 0x80) == 0:
-                    raise ValueError, "Invalid revocation key class"
-                if res.has_key("revocation_key"):
-                    res["revocation_key"].append(v)
-                else:
-                    res["revocation_key"] = [v]
-            elif sptype == 16:
-                if len(spdata) != 8:
-                    raise ValueError, "Invalid key ID length"
-                res["key_id"] = spdata
-            elif sptype == 20:
-                (flags, nl, vl) = struct.unpack(">I2H", spdata[:8])
-                if (flags & 0x7FFFFFF) != 0:
-                    raise NotImplementedError, "Unknown notation flags"
-                if len(spdata) != 8 + nl + vl:
-                    raise ValueError, "Invalid notation lenghts"
-                v = (flags, spdata[8 : 8 + nl], spdata[8 + nl:])
-                if res.has_key("notation"):
-                    res["notation"].append(v)
-                else:
-                    res["notation"] = [v]
-            elif sptype == 21:
-                # VERIFY: only on a self-signature
-                res["hash_pref"] = array.array("B", spdata).tolist()
-            elif sptype == 22:
-                # VERIFY: only on a self-signature
-                res["compress_pref"] = array.array("B", spdata).tolist()
-            elif sptype == 23:
-                # VERIFY: only on a self-signature
-                v = array.array("B", spdata)
-                if len(v) >= 1 and (v[0] & 0x7F) != 0:
-                    raise NotImplementedError, "Unknown key server preferences"
-                for i in xrange(1, len(v)):
-                    if v[i] != 0x00:
+            # Giant try block instead of checking spdata always has the right
+            # length
+            try:
+                if sptype == 2:
+                    (res["sign_time"],) = struct.unpack(">I", spdata)
+                elif sptype == 3:
+                    # Doesn't make sense on a revocation signature
+                    (res["expire_time"],) = struct.unpack(">I", spdata)
+                elif sptype == 4:
+                    if len(spdata) != 1:
+                        raise ValueError, "Invalid exportable flag"
+                    v = ord(spdata[0])
+                    if v > 1:
+                        raise ValueError, "Invalid exportable flag"
+                    res["exportable"] = v
+                elif sptype == 5:
+                    res["trust"] = struct.unpack(">2B", spdata)
+                elif sptype == 6:
+                    if not spdata or spdata[-1] != "\0":
+                        raise ValueError, "Invalid regexp"
+                    res["regexp"] = spdata[:-1]
+                elif sptype == 7:
+                    if len(spdata) != 1:
+                        raise ValueError, "Invalid revocable flag"
+                    v = ord(spdata[0])
+                    if v > 1:
+                        raise ValueError, "Invalid revocable flag"
+                    res["revocable"] = v
+                elif sptype == 9:
+                    # VERIFY: only on a self-signature
+                    (res["key_expire"],) = struct.unpack(">I", spdata)
+                elif sptype == 11:
+                    # VERIFY: only on a self-signature
+                    res["symmetric_pref"] = array.array("B", spdata).tolist()
+                elif sptype == 12:
+                    # VERIFY: only on a self-signature
+                    v = struct.unpack(">BB20s", spdata)
+                    if (v[0] & 0x80) == 0:
+                        raise ValueError, "Invalid revocation key class"
+                    if "revocation_key" in res:
+                        res["revocation_key"].append(v)
+                    else:
+                        res["revocation_key"] = [v]
+                elif sptype == 16:
+                    if len(spdata) != 8:
+                        raise ValueError, "Invalid key ID length"
+                    res["key_id"] = spdata
+                elif sptype == 20:
+                    (flags, nl, vl) = struct.unpack(">I2H", spdata[:8])
+                    if (flags & 0x7FFFFFF) != 0:
+                        raise NotImplementedError, "Unknown notation flags"
+                    if len(spdata) != 8 + nl + vl:
+                        raise ValueError, "Invalid notation lenghts"
+                    v = (flags, spdata[8 : 8 + nl], spdata[8 + nl:])
+                    if "notation" in res:
+                        res["notation"].append(v)
+                    else:
+                        res["notation"] = [v]
+                elif sptype == 21:
+                    # VERIFY: only on a self-signature
+                    res["hash_pref"] = array.array("B", spdata).tolist()
+                elif sptype == 22:
+                    # VERIFY: only on a self-signature
+                    res["compress_pref"] = array.array("B", spdata).tolist()
+                elif sptype == 23:
+                    # VERIFY: only on a self-signature
+                    v = array.array("B", spdata)
+                    if len(v) >= 1 and (v[0] & 0x7F) != 0:
                         raise NotImplementedError, \
                               "Unknown key server preferences"
-                res["ks_flags"] = v
-            elif sptype == 24:
-                res["ks_url"] = spdata
-            elif sptype == 25:
-                # FIXME: implement on display
-                # VERIFY: only on a self-signature
-                v = ord(spdata[0])
-                if len(spdata) != 1 or v > 1:
-                    raise ValueError, "Invalid primary UID flag"
-                res["primary_uid"] = v
-            elif sptype == 26:
-                res["policy_url"] = spdata
-            elif sptype == 27:
-                # VERIFY: only on a self-signature or on certification
-                # signatures
-                res["flags"] = array.array("B", spdata)
-                # VERIFY: flags 0x10, 0x80 only on a self-signature
-                # FIXME: verify flags (may_certify, may_sign)
-            elif sptype == 28:
-                res["user_id"] = spdata
-            elif sptype == 29:
-                res["revocation_reason"] = (ord(spdata[0]), spdata[1:])
-            elif (ord(data[start]) & 0x80) != 0:
-                raise NotImplementedError, \
-                      "Unknown signature subpacket type %s" % sptype
+                    for i in xrange(1, len(v)):
+                        if v[i] != 0x00:
+                            raise NotImplementedError, \
+                                  "Unknown key server preferences"
+                    res["ks_flags"] = v
+                elif sptype == 24:
+                    res["ks_url"] = spdata
+                elif sptype == 25:
+                    # FIXME: implement on display
+                    # VERIFY: only on a self-signature
+                    if len(spdata) != 1:
+                        raise ValueError, "Invalid primary UID flag"
+                    v = ord(spdata[0])
+                    if v > 1:
+                        raise ValueError, "Invalid primary UID flag"
+                    res["primary_uid"] = v
+                elif sptype == 26:
+                    res["policy_url"] = spdata
+                elif sptype == 27:
+                    # VERIFY: only on a self-signature or on certification
+                    # signatures
+                    res["flags"] = array.array("B", spdata)
+                    # VERIFY: flags 0x10, 0x80 only on a self-signature
+                    # FIXME: verify flags (may_certify, may_sign)
+                elif sptype == 28:
+                    res["user_id"] = spdata
+                elif sptype == 29:
+                    if not spdata:
+                        raise ValueError, "Invalid revocation reason"
+                    res["revocation_reason"] = (ord(spdata[0]), spdata[1:])
+                elif (ord(data[start]) & 0x80) != 0:
+                    raise NotImplementedError, \
+                          "Unknown signature subpacket type %s" % sptype
+            except struct.error:
+                raise ValueError, "Invalid subpacket data"
             data = data[start + length:]
         return res
 
     def prepareDigest(self):
-        """Return a digest prepared for hashing data to be signed."""
+        """Return a digest prepared for hashing data to be signed.
 
-        if not _hash_alg_data.has_key(self.hash_alg):
+        Raise NotImplementedError on unknown hash algorithm."""
+
+        if self.hash_alg not in _hash_alg_data:
             raise NotImplementedError, \
                   "Unknown hash algorithm %s" % self.hash_alg
         m = _hash_alg_data[self.hash_alg][1]
@@ -398,71 +452,126 @@ class _SignaturePacket(_PGPPacket):
             raise AssertionError, "Unreachable"
         return digest.digest()
 
-    def __verifyDigestWithPacket(self, packet, digest, flags = FL_CAN_SIGN):
-        """Verify the signature of digest "hash" against a key packet.
+    def __verifyDigestWithPacket(self, packet, alg, digest):
+        """Verify the signature of digest "hash" against a key packet
+        and its _PubkeyAlg.
+
+        Return 1 if the signature is OK, 0 if the key doesn't match the
+        signature, -1 if the signature doesn't match.  Raise ValueError if the
+        signature key contains invalid data, NotImplementedError if public key
+        algorithm is not supported.
 
         The digest should be created using self.prepareDigest() and
-        self.finishDigest().  Return True if the signature is OK."""
-
+        self.finishDigest().  Note that there is no way to 100% reliably detect
+        whether signature verification failed or whether a wrong key was
+        used."""
+        
+        if (packet.pubkey_alg not in _pubkey_alg_data
+            or self.pubkey_alg not in _pubkey_alg_data):
+            raise NotImplementedError, "Unknown public key algorithm"
         key_alg_data = _pubkey_alg_data[packet.pubkey_alg]
         if _pubkey_alg_data[self.pubkey_alg][1] != key_alg_data[1]:
-            raise ValueError, "Signature and key use different algorithms"
+            return 0
         if not key_alg_data[3]:
-            raise ValueError, "Key is not capable of signing"
-        # FIXME: check flags are set on the key (self-signature) we used
+            return 0 # Key is not capable of signing
         if digest[:2] != self.hash_16b:
-            return False
-        if not _pubkey_classes.has_key(self.pubkey_alg):
-            raise NotImplementedError, "Unknown public key algorithm"
-        alg = (_pubkey_classes[self.pubkey_alg]
-               (packet.data[packet.value_start:]))
+            return -1
         if ((self.ver == 2 or self.ver == 3)
             and _pubkey_alg_data[self.pubkey_alg][1] == _ALG_PK_RSA):
             prefix = _hash_alg_data[self.hash_alg][2]
             k = alg.rsa.size() / 8 + 1
             bs = (k - (3 + len(prefix) + len(digest)))
             if bs < 0:
-                return False
+                return 0 # RSA key modulus too small"
             digest = '\x00\x01' + bs * '\xFF' + '\x00' + prefix + digest
-        return alg.verify(self.data[self.value_start:], digest)
-        
+        if self.pubkey_alg == _ALG_PK_DSA and len(digest) != 20:
+            raise ValueError, "Invalid digest type used with DSA"
+        if alg.verify(self.data[self.value_start:], digest):
+            return 1
+        else:
+            return -1
+
+    def __verifyDigestWithKey(self, key, key_id, digest, flags):
+        """Verify the signature of digest of data against a key, using
+        the specified key_id if it is not None.
+
+        Return 1 if signature matches, 0 if we don't know (because we skipped a
+        key or packet matching key_id, -1 if it didn't match (which doesn't
+        mean it is bad).
+
+        Raise ValueError if the signature packet is invalid."""
+
+        if (key.primary_revocation is not None
+            and (self.hashed_sp["sign_time"] >
+                 key.primary_revocation.hashed_sp["sign_time"])):
+            # Signature with a revoked key
+            return -1
+        if key_id is not None:
+            packets = key.keyPacketsWithID(key_id)
+        else:
+            packets = key.keyPackets()
+        result = -1
+        for packet in packets:
+            # FIXME: verify the packet was not revoked
+            if (packet.pubkey_alg not in _pubkey_alg_data
+                or packet.pubkey_alg not in _pubkey_classes):
+                # Unsupported public key algorithm
+                if packet.keyID() == key_id:
+                    result = 0
+                continue
+            try:
+                alg = (_pubkey_classes[packet.pubkey_alg]
+                       (packet.data[packet.value_start:]))
+            except (NotImplementedError, ValueError):
+                # Unsupported or invalid key
+                if packet.keyID() == key_id:
+                    result = 0
+                continue
+            try:
+                r = self.__verifyDigestWithPacket(packet, alg, digest)
+                return 1
+            except NotImplementedError:
+                r = 0;
+            if r == 1:
+                return 1
+            elif r == 0 and packet.keyID() == key_id:
+                result = 0
+        return result
+
     def verifyDigest(self, keyring, digest, flags = FL_CAN_SIGN):
         """Verify the signature of digest of data against a matching key
-        in a keyring, if any.
+        in a keyring, if any, with given key usage flags.
 
-        Return the signing _PublicKey if the signature is OK."""
+        Return (result, key); result is 1 if signature matches, 0 if we don't
+        know, -1 if one valid key with maching ID was found, but its signature
+        didn't match (note that this doesn't 100% imply the signature is bad).
+        Key is the signing _PublicKey if result is 1, None otherwise.
 
-        if self.hashed_sp.has_key("key_id"):
+        Raise ValueError if the signature packet is invalid."""
+
+        if "key_id" in self.hashed_sp:
             key_ids = [self.hashed_sp["key_id"]]
-        elif self.unhashed_sp.has_key("key_id"):
+        elif "key_id" in self.unhashed_sp:
             key_ids = [self.unhashed_sp["key_id"], None]
         else:
             key_ids = [None]
+        result = 0
         for key_id in key_ids:
             if key_id is not None:
-                keys = keyring.by_key_id[key_id]
+                keys = keyring.by_key_id.get(key_id, [])
+                # key_ids always starts with non-None, so this is set to -1
+                # only at start of the first iteration.
+                if len(keys) == 1:
+                    result = -1
             else:
                 keys = keyring.keys.values()
             for key in keys:
-                if (key.primary_revocation is not None
-                    and (self.hashed_sp["sign_time"] >
-                         key.primary_revocation.hashed_sp["sign_time"])):
-                    # Signature with a revoked key
-                    continue
-                if key_id is not None:
-                    packets = key.keyPacketsWithID(key_id)
-                else:
-                    packets = key.keyPackets()
-                # FIXME: verify the packet was not revoked
-                for packet in packets:
-                    # FIXME: catches too much?
-                    try:
-                        if self.__verifyDigestWithPacket(packet, digest,
-                                                         flags):
-                            return key
-                    except ValueError:
-                        pass
-        return None
+                r = self.__verifyDigestWithKey(key, key_id, digest, flags)
+                if r == 1:
+                    return (1, key)
+                if r == 0:
+                    result = 0
+        return (result, None)
         
 
 class _PublicKeyPacket__(_PGPPacket):
@@ -472,16 +581,32 @@ class _PublicKeyPacket__(_PGPPacket):
 
     def __init__(self, tag, data):
         _PGPPacket.__init__(self, tag, data)
+        if not data:
+            raise ValueError, "Packet too small"
         self.ver = ord(data[0])
         if self.ver == 2 or self.ver == 3:
+            if len(data) < 8:
+                raise ValueError, "Packet too small"
             (self.creation_time, self.validity, self.pubkey_alg) = \
                                  struct.unpack(">IHB", data[1:8])
             self.value_start = 8
+            # We only know how to compute the key ID for RSA
+            if (self.pubkey_alg not in _pubkey_alg_data
+                or _pubkey_alg_data[self.pubkey_alg][1] != _ALG_PK_RSA):
+                raise ValueError, ("Version %s %s is not an RSA key"
+                                   % self.ver, self.desc)
+            if len(self.data) < 10:
+                raise ValueError, "Invalid RSA key"
         elif self.ver == 4:
+            if len(data) < 6:
+                raise ValueError, "Packet too small"
             (self.creation_time, self.pubkey_alg) \
                                  = struct.unpack(">IB", data[1:6])
             self.validity = None
             self.value_start = 6
+            # We don't know how to compute key ID for larger packets
+            if len(self.data) > 0xFFFF:
+                raise ValueError, "Key packet too large for key ID computation"
         else:
             raise NotImplementedError, \
                   "Unknown public key version %s" % self.ver
@@ -494,9 +619,9 @@ class _PublicKeyPacket__(_PGPPacket):
             return self.key_id
         if self.ver == 2 or self.ver == 3:
             # We only know how to compute the key ID for RSA
-            if _pubkey_alg_data[self.pubkey_alg][1] != _ALG_PK_RSA:
-                raise ValueError, ("Version %s %s is not an RSA key"
-                                   % self.ver, self.desc)
+            if (self.pubkey_alg not in _pubkey_alg_data
+                or _pubkey_alg_data[self.pubkey_alg][1] != _ALG_PK_RSA):
+                raise AssertionError, "Key is not an RSA key"
             (bits,) = struct.unpack(">H", self.data[8:10])
             bytes = (bits + 7) / 8
             if bytes >= 8:
@@ -506,8 +631,7 @@ class _PublicKeyPacket__(_PGPPacket):
         elif self.ver == 4:
             digest = sha.new('\x99')
             if len(self.data) > 0xFFFF:
-                raise ValueError, \
-                      "Key packet length overflow in key ID computation"
+                raise AssertionError, "Key packet too large"
             digest.update(struct.pack(">H", len(self.data)) + self.data)
             self.key_id = digest.digest()[12:]
         else:
@@ -515,9 +639,13 @@ class _PublicKeyPacket__(_PGPPacket):
         return self.key_id
 
     def __str__(self):
+        if self.pubkey_alg in _pubkey_alg_data:
+            pubkey_alg = _pubkey_alg_data[self.pubkey_alg][0]
+        else:
+            pubkey_alg = "pubkey %s" % self.pubkey_alg
         return ("%s(v%s, %s, %s, %s)"
                 % (self.desc, self.ver, self.creation_time, self.validity,
-                   _pubkey_alg_data[self.pubkey_alg][0]))
+                   pubkey_alg))
                                              
 class _PublicKeyPacket(_PublicKeyPacket__):
     """A public key packet (tag 6)."""
@@ -580,10 +708,14 @@ _PGP_packet_types = {
 def _decodeArmor(data):
     """Decode ASCII Armored data.
 
-    Return raw data.  The data type in armor header is ignored.  Armor headers
-    are checked, but their values are ignored."""
+    Return raw data.  Raise ValueError on invalid or corrupt data.
+
+    The data type in armor header is ignored.  Armor headers are checked, but
+    their values are ignored."""
 
     lines = data.splitlines()
+    if not lines:
+        raise ValueError, "Missing armor header line"
     if (not lines[0].startswith("-----BEGIN PGP ")
         or not lines[0].endswith("-----")):
         raise ValueError, "Invalid armor header line %s" % lines[0]
@@ -594,14 +726,16 @@ def _decodeArmor(data):
         and not header_type.startswith("MESSAGE, PART ")):
         raise ValueError, "Unknown armor header line text"
     lines.pop(0);
-    while lines[0].strip() != '':
+    while lines and lines[0].strip() != '':
         delim = lines[0].find(": ", 1);
         if delim == -1:
             raise ValueError, "Invalid armor header %s" % lines[0]
         if lines[0][:delim] not in ["Version", "Comment", "MessageID", "Hash",
                                     "Charset"]:
-            rpmconfig.printWarning(1, "Unknown armor header" % lines[0])
+            config.rpmconfig.printWarning(1, "Unknown armor header" % lines[0])
         lines.pop(0)
+    if not lines:
+        raise ValueError, "Missing end of armor headers"
     lines.pop(0)
     for i in xrange(len(lines)):
         if lines[i] == "-----END PGP " + header_type + "-----":
@@ -623,9 +757,16 @@ def _decodeArmor(data):
         data = data[:-5]
     else:
         csum = None
-    data = base64.decodestring(data)
+    try:
+        data = base64.decodestring(data)
+    except binascii.Error:
+        raise ValueError, "Invalid base64 data"
     if csum is not None:
-        csum = Crypto.Util.number.bytes_to_long(base64.decodestring(csum))
+        try:
+            csum = base64.decodestring(csum)
+        except binascii.Error:
+            raise ValueError, "Invalid base64 checksum"
+        csum = (ord(csum[0]) << 16) | (ord(csum[1]) << 8) | ord(csum[2])
         # CRC32 based on the code in RFC 2440 p6.1
         crc = 0xB704CE
         for b in data:
@@ -641,7 +782,9 @@ def _decodeArmor(data):
 
 
 def parseRawPGPMessage(data):
-    """Return a list of PGPPackets parsed from input data."""
+    """Return a list of PGPPackets parsed from input data.
+
+    Raise ValueError on invalid data."""
 
     if data.startswith("-----BEGIN"):
         data = _decodeArmor(data)
@@ -656,12 +799,18 @@ def parseRawPGPMessage(data):
             tag = (tag & 0x3C) >> 2
             if ltype == 0:
                 offset = 2
+                if len(data) < start + 1:
+                    raise ValueError, "Not enough data for packet"
                 length = ord(data[start + 1])
             elif ltype == 1:
                 offset = 3
+                if len(data) < start + 3:
+                    raise ValueError, "Not enough data for packet"
                 (length,) = struct.unpack(">H", data[start + 1 : start + 3])
             elif ltype == 2:
                 offset = 5
+                if len(data) < start + 5:
+                    raise ValueError, "Not enough data for packet"
                 (length,) = struct.unpack(">I", data[start + 1 : start + 5])
             elif ltype == 3:
                 offset = 1
@@ -674,9 +823,13 @@ def parseRawPGPMessage(data):
                 length = len1
             elif len1 < 224:
                 offset = 3
+                if len(data) < start + 3:
+                    raise ValueError, "Not enough data for packet"
                 length = ((len1 - 192) << 8) + ord(data[start + 2]) + 192
             elif len1 == 255:
                 offset = 6
+                if len(data) < start + 6:
+                    raise ValueError, "Not enough data for packet"
                 (length,) = struct.unpack(">I", data[start + 2 : start + 6])
             else:
                 # Allowed only for literal/compressed/encrypted data packets
@@ -685,10 +838,7 @@ def parseRawPGPMessage(data):
             raise ValueError, "Not enough data for packet"
         if tag == 0:
             raise ValueError, "Tag 0 is reserved"
-        if _PGP_packet_types.has_key(tag):
-            class_ = _PGP_packet_types[tag]
-        else:
-            class_ = _PGPPacket
+        class_ = _PGP_packet_types.get(tag, _PGPPacket)
         res.append(class_(tag, data[start + offset : start + offset + length]))
         start += offset + length
     return res
@@ -696,7 +846,9 @@ def parseRawPGPMessage(data):
 
 def parsePGPMessage(data):
     """Return a list of PGPPackets (parsed from input data, dropping marker
-    and trust packets."""
+    and trust packets.
+
+    Raise ValueError on invalid data."""
 
     return [packet for packet in parseRawPGPMessage(data)
             if (not isinstance(packet, _MarkerPacket)
@@ -704,7 +856,9 @@ def parsePGPMessage(data):
 
 
 def parsePGPSignature(data):
-    """Return a _SignaturePacket parsed from detached signature on input."""
+    """Return a _SignaturePacket parsed from detached signature on input.
+
+    Raise ValueError on invalid data."""
 
     packets = parsePGPMessage(data)
     if len(packets) != 1 or not isinstance(packets[0], _SignaturePacket):
@@ -718,11 +872,11 @@ def _mergeSigs(dest, src):
     
     s = {}
     for sig in dest:
-        s[sig] = None
+        s[sig.data] = None
     for sig in src:
-        if not s.has_key(sig):
-            dest.append(sig)
-            s[sig] = None
+        if sig.data not in s:
+            dest.append(sig.data)
+            s[sig.data] = None
 
 
 class _PublicKey:
@@ -730,6 +884,8 @@ class _PublicKey:
 
     def __init__(self, packets):
         """Parse a public key from list of packets.
+
+        Raise ValueError on invalid input.
 
         The list of packets should not contain trust packets any more.
         Handled packets are removed from the list."""
@@ -767,12 +923,12 @@ class _PublicKey:
             if isinstance(p, _UserIDPacket):
                 have_uid = True
             uid = p
-            if not h.has_key(uid):
+            if uid.data not in h:
                 sigs = []
                 self.user_ids.append((uid, sigs))
-                h[uid] = sigs
+                h[uid.data] = sigs
             else:
-                sigs = h[uid]
+                sigs = h[uid.data]
             new = []
             p = _popListHead(packets)
             while isinstance(p, _SignaturePacket):
@@ -781,6 +937,7 @@ class _PublicKey:
             _mergeSigs(sigs, new)
         if not have_uid:
             raise ValueError, "Missing User ID packet"
+        del h
 
         self.subkeys = []
         while isinstance(p, _PublicSubkeyPacket):
@@ -812,7 +969,7 @@ class _PublicKey:
         for (uid, _) in self.user_ids:
             # Ignore _UserAttributePackets
             if isinstance(uid, _UserIDPacket):
-                if len(ret) != 0:
+                if ret:
                     ret += "\naka "
                 ret += uid.data
         return ret
@@ -837,38 +994,41 @@ class _PublicKey:
 
         # One revocation is enough
         # VERIFY: ... assuming it is valid
-        if (self.primary_revocation is None
-            or self.primary_revocation.hashed_sp["sign_time"] >
-            other.primary_revocation.hashed_sp["sign_time"]):
+        if (other.primary_revocation is not None
+            and (self.primary_revocation is None
+                 or self.primary_revocation.hashed_sp["sign_time"] >
+                 other.primary_revocation.hashed_sp["sign_time"])):
             self.primary_revocation = other.primary_revocation
         
         _mergeSigs(self.direct_sigs, other.direct_sigs)
 
         h = {}
         for (uid, sigs) in self.user_ids:
-            h[uid] = sigs
+            h[uid.data] = sigs
         for (uid, sigs) in other.user_ids:
-            if not h.has_key(uid):
+            if uid.data not in h:
                 sigs = sigs[:]
                 self.user_ids.append((uid, sigs))
-                h[uid] = sigs
+                h[uid.data] = sigs
             else:
-                _mergeSigs(h[uid], sigs)
+                _mergeSigs(h[uid.data], sigs)
         
         h = {}
         for (subkey, sigs) in self.subkeys:
-            h[subkey] = sigs
+            h[subkey.data] = sigs
         for (subkey, sigs) in other.subkeys:
-            if not h.has_key(subkey):
+            if subkey.data not in h:
                 sigs = sigs[:]
                 self.subkeys.append((subkey, sigs))
-                h[subkey] = sigs
+                h[subkey.data] = sigs
             else:
-                _mergeSigs(h[uid], sigs)
+                _mergeSigs(h[uid.data], sigs)
 
 
 def parsePGPKeys(data):
-    """Return a list of _PublicKeys parsed from input data."""
+    """Return a list of _PublicKeys parsed from input data.
+
+    Raise ValueError on invalid input."""
 
     packets = parsePGPMessage(data)
     keys = []
@@ -895,14 +1055,14 @@ class PGPKeyRing:
     def addKey(self, key):
         """Add a _PublicKey."""
 
-        if self.keys.has_key(key.unique_id):
+        if key.unique_id in self.keys:
             k = self.keys[key.unique_id]
             k.merge(key)
             key = k
         else:
             self.keys[key.unique_id] = key
         for key_id in key.keyIDs():
-            if not self.by_key_id.has_key(key_id):
+            if key_id not in self.by_key_id:
                 self.by_key_id[key_id] = [key]
             else:
                 l = self.by_key_id[key_id]

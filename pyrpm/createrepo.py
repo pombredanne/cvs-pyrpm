@@ -22,7 +22,7 @@
 #
 
 import os, re, stat
-import base, functions, package
+import base, config, functions, package
 
 
 # Files included in primary.xml
@@ -116,8 +116,8 @@ def metadataReadPackage(filename):
 
     For convenience only, other metadata* functions work with any RpmPackage
     as long it contains all needed tags."""
-    return package.readRpmPackage(rpmconfig, "file:/" + filename, verify = None,
-                                  hdronly = True)
+    return package.readRpmPackage(config.rpmconfig, "file:/" + filename,
+                                  verify = None, hdronly = True)
 
 
 def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):

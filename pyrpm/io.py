@@ -219,12 +219,28 @@ class RpmIO:
     def close(self):
         return 0
 
-    def getFdForRange(self, start, len):
-        """Return a Python file object for "package" range [start, start + len)
+    def getRpmFileSize(self):
+        """Return number of bytes of .rpm file representing this package
+        or None if not known."""
 
-        Seek the file object to offset start.  len == None means "until end
-        of package".  Return None if the requested range is not available."""
         return None
+
+    def updateDigestFromRange(self, digest, start, len):
+        """Update digest with data from position start, until EOF or only
+        len bytes.
+
+        Raise NotImplementedError, IOError."""
+
+        raise NotImplementedError
+
+    def updateDigestFromRegion(self, digest, region, header_pos):
+        """Update digest with data from immutable region in header at
+        header_pos (= (start, len)).
+
+        Raise ValueError on invalid header or region == None,
+        NotImplementedError, IOError."""
+
+        raise NotImplementedError
 
 class RpmStreamIO(RpmIO):
     def __init__(self, config, source, verify=None, strict=None, hdronly=None):
@@ -722,18 +738,80 @@ class RpmFileIO(RpmStreamIO):
         self.__closeFile()
         return 1
 
-    def getFdForRange(self, start, len):
+    def __getFdForRange(self, start, length):
+        """Open self.source, seek to start and make sure there are at
+        least length bytes available if len != 0.
+
+        Return the open file. Raise IOError."""
+        
         fd = self.__openFile()
-        try:
-            fd.seek(0, 2)
-            total = fd.tell()
-            if len is not None and start + len > total:
-                raiseFatal("%s: file was truncated" % self.source)
-            fd.seek(start)
-        except:
-            fd.close()
-            return None
+        fd.seek(0, 2)
+        total = fd.tell()
+        if length is None:
+            length = 0
+        if start + length > total:
+            raise IOError, "File was truncated"
+        fd.seek(start)
         return fd
+
+    def getRpmFileSize(self):
+        try:
+            fd = self.__getFdForRange(0, None)
+        except IOError:
+            return None
+        return os.fstat(fd.fileno()).st_size
+
+    def updateDigestFromRange(self, digest, start, len):
+        fd = self.__getFdForRange(start, len)
+        updateDigestFromFile(digest, fd, len)
+
+    def updateDigestFromRegion(self, digest, region, header_pos):
+        if region is None or len(region) != 16:
+            # What was the digest computed from?
+            raise ValueError, "No region"
+        (tag, type_, offset, count) = unpack("!4i", region)
+        # FIXME: other regions than "immutable"?
+        if (tag != 63 or type_ != RPM_BIN or -offset <= 0 or -offset % 16 != 0
+            or count != 16):
+            raise ValueError, "Invalid region"
+        regionIndexEntries = -offset / 16
+        if header_pos[0] is None:
+            raise NotImplementedError
+        fd = self.__getFdForRange(*header_pos)
+        data = fd.read(16)
+        if len(data) != 16:
+            raise ValueError, "Unexpected EOF in header"
+        (totalIndexEntries, totalDataSize) = unpack("!8x2i", data)
+        data = fd.read(16 * totalIndexEntries)
+        if len(data) != 16 * totalIndexEntries:
+            raise ValueError, "Unexpected EOF in header"
+        unsignedTags = []
+        for i in xrange(totalIndexEntries):
+            (tag, type_, offset, count) = \
+                  unpack("!4i", data[i * 16 : (i + 1) * 16])
+            # FIXME: other regions than "immutable"?
+            if tag == 63:
+                break
+            unsignedTags.append(tag)
+        else:
+            raise ValueError, "%s: immutable tag disappeared" % self.source
+        if (type_ != RPM_BIN or count != 16 or
+            i + regionIndexEntries > totalIndexEntries):
+            raise ValueError, "Invalid region tag"
+        digest.update(pack("!2i", regionIndexEntries, offset + 16))
+        digest.update(data[i * 16 : (i + regionIndexEntries) * 16])
+        for i in xrange(i + regionIndexEntries, totalIndexEntries):
+            (tag,) = unpack("!i", data[i * 16 : i * 16 + 4])
+            unsignedTags.append(tag)
+        if unsignedTags:
+            # FIXME: only once per package
+            self.config.printWarning(0, "%s: Unsigned tags %s"
+                                     % (self.source,
+                                        [rpmtagname[i] for i in unsignedTags]))
+        # In practice region data starts at offset 0, but the original design
+        # was proposing concatenated regions etc; where would the data region
+        # start in that case? Lowest offset in region perhaps?
+        updateDigestFromFile(digest, fd, offset + 16)
 
 class RpmFtpIO(RpmStreamIO):
     def __init__(self, config, source, verify=None, strict=None, hdronly=None):
@@ -1375,6 +1453,7 @@ def getRpmDBFactory(config, source, root=None):
     elif source[:7] == 'foodb:/':
         # testbed class
         return FooRpmDB(config, source, root)
+    return None
 
 ###
 ### this space intentionally left blank

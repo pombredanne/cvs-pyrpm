@@ -207,6 +207,8 @@ class RpmYum:
             return self.opresolver.update(pkg)
         elif self.command.endswith("remove"):
             return self.opresolver.erase(pkg)
+        else:
+            raise AssertionError, "Invalid command"
 
     def __runDepResolution(self):
         # Special erase list for unresolvable package dependancies or conflicts

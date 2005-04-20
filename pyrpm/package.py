@@ -196,26 +196,32 @@ class RpmPackage(RpmData):
     def verifySignatureTag(self, tag):
         """Verify digest or signature self["signature"][tag].
 
-        Return 1 if verified, -1 if failed, 0 if unkown."""
+        Return 1 if verified, -1 if failed, 0 if unkown. Raise IOError."""
+        
         if tag == "dsaheader":
             if self.db is None:
                 return 0
-            sig = openpgp.parsePGPSignature(self["signature"][tag])
-            digest = sig.prepareDigest()
-            digest.update(RPM_HEADER_INDEX_MAGIC)
-            r = self.__digestImmutableRegion(digest)
-            if r != 1:
-                return r
-            if (sig.verifyDigest(self.db.keyring, sig.finishDigest(digest)) 
-                is not None):
-                return 1
-            # FIXME: "missing key" and "invalid signature" treated equally
-            return 0
+            try:
+                sig = openpgp.parsePGPSignature(self["signature"][tag])
+                digest = sig.prepareDigest()
+                digest.update(RPM_HEADER_INDEX_MAGIC)
+                self.io.updateDigestFromRegion(digest, self["immutable"],
+                                               self.range_header)
+            except NotImplementedError:
+                return 0
+            except ValueError:
+                return -1
+            return (sig.verifyDigest(self.db.keyring, sig.finishDigest(digest))
+                    [0])
         elif tag == "sha1header":
             digest = sha.new(RPM_HEADER_INDEX_MAGIC)
-            r = self.__digestImmutableRegion(digest)
-            if r != 1:
-                return r
+            try:
+                self.io.updateDigestFromRegion(digest, self["immutable"],
+                                               self.range_header)
+            except NotImplementedError:
+                return 1
+            except ValueError:
+                return -1
             if self["signature"][tag] == digest.hexdigest():
                 return 1
             else:
@@ -223,33 +229,37 @@ class RpmPackage(RpmData):
         elif tag == "size_in_sig":
             if self.range_header[0] is None:
                 return 0
-            fd = self.io.getFdForRange(self.range_header[0]
-                                       + self.range_header[1], None)
-            if fd is None:
+            total = self.io.getRpmFileSize()
+            if total is None:
                 return 0
-            total = os.fstat(fd.fileno()).st_size
-            if self["signature"][tag][0] == total - self.range_header[0]:
+            elif self["signature"][tag][0] == total - self.range_header[0]:
                 return 1
             else:
                 return -1
         elif tag == "pgp" or tag == "gpg":
             if self.db is None or self.range_header[0] is None:
                 return 0
-            sig = openpgp.parsePGPSignature(self["signature"][tag])
-            fd = self.io.getFdForRange(self.range_header[0], None)
-            digest = sig.prepareDigest()
-            updateDigestFromFile(digest, fd, None)
-            if (sig.verifyDigest(self.db.keyring, sig.finishDigest(digest))
-                is not None):
-                return 1
-            # FIXME: "missing key" and "invalid signature" treated equally
-            return 0
+            try:
+                sig = openpgp.parsePGPSignature(self["signature"][tag])
+            except ValueError:
+                return -1
+            try:
+                digest = sig.prepareDigest()
+                self.io.updateDigestFromRange(digest, self.range_header[0],
+                                              None)
+            except NotImplementedError:
+                return 0
+            return (sig.verifyDigest(self.db.keyring, sig.finishDigest(digest))
+                    [0])
         elif tag == "md5":
             if self.range_header[0] is None:
                 return 0
-            fd = self.io.getFdForRange(self.range_header[0], None)
             digest = md5.new()
-            updateDigestFromFile(digest, fd, None)
+            try:
+                self.io.updateDigestFromRange(digest, self.range_header[0],
+                                              None)
+            except NotImplementedError:
+                return 0
             if self["signature"][tag] == digest.digest():
                 return 1
             else:
@@ -268,63 +278,16 @@ class RpmPackage(RpmData):
     def verifyOneSignature(self):
         """Verify the "best" digest or signature available.
 
-        Return 1 if verified, -1 if failed, 0 if unkown."""
+        Return 1 if verified, -1 if failed, 0 if unkown. Raise IOError."""
         
-        tags = [t for (t, payload) in self.__signatureUseOrder
-                if not payload or not self.hdronly]
+        tags = [tag for (tag, payload) in self.__signatureUseOrder
+                if (tag in self["signature"]
+                    and not (payload and self.hdronly))]
         for t in tags:
             r = self.verifySignatureTag(t)
             if r != 0:
                 return r
         return 0
-
-    def __digestImmutableRegion(self, digest):
-        """Update digest with data from immutable header region."""
-
-        immutable = self["immutable"]
-        if immutable is None:
-            # What was the digest computed from?
-            return -1
-        (tag, type_, offset, count) = struct.unpack("!4i", immutable)
-        if (tag != 63 or type_ != RPM_BIN or -offset <= 0 or -offset % 16 != 0
-            or count != 16):
-            return -1
-        regionIndexEntries = -offset / 16
-        if self.range_header[0] is None:
-            return 0
-        fd = self.io.getFdForRange(*self.range_header)
-        if fd is None:
-            return 0
-        data = fd.read(16)
-        (totalIndexEntries, totalDataSize) = struct.unpack("!8x2i", data)
-        data = fd.read(16 * totalIndexEntries)
-        unsignedTags = []
-        for i in xrange(totalIndexEntries):
-            (tag, type_, offset, count) = \
-                  struct.unpack("!4i", data[i * 16 : (i + 1) * 16])
-            if tag == 63:
-                break
-            unsignedTags.append(tag)
-        else:
-            raiseFatal("%s: immutable tag disappeared" % self.source)
-        if (type_ != RPM_BIN or count != 16 or
-            i + regionIndexEntries > totalIndexEntries):
-            return -1
-        digest.update(struct.pack("!2i", regionIndexEntries, offset + 16))
-        digest.update(data[i * 16 : (i + regionIndexEntries) * 16])
-        for i in xrange(i + regionIndexEntries, totalIndexEntries):
-            (tag,) = struct.unpack("!i", data[i * 16 : i * 16 + 4])
-            unsignedTags.append(tag)
-        if unsignedTags:
-            # FIXME: only once per package
-            self.config.printWarning(0, "%s: Unsigned tags %s"
-                         % (self.source,
-                            [rpmtagname[i] for i in unsignedTags]))
-        # In practice region data starts at offset 0, but the original design
-        # was proposing concatenated regions etc; where would the data region
-        # start in that case? Lowest offset in region perhaps?
-        updateDigestFromFile(digest, fd, offset + 16)
-        return 1
 
     def install(self, db=None, tags=None, ntags=None):
         if not self.open():
