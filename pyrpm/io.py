@@ -1001,8 +1001,9 @@ class RpmPyDB(RpmDatabase):
 
 
 class RpmRepo(RpmDatabase):
-    def __init__(self, config, source, buildroot=None):
+    def __init__(self, config, source, buildroot=None, excludes=""):
         RpmDatabase.__init__(self, config, source, buildroot)
+        self.excludes = excludes.split()
         self.flagmap = { None: None,
                          "EQ": RPMSENSE_EQUAL,
                          "LT": RPMSENSE_LESS,
@@ -1026,6 +1027,22 @@ class RpmRepo(RpmDatabase):
             return 0
         return self.__parseNode(root.children)
 
+    def importFilelist(self):
+        if not self.source.startswith("file:/"):
+            filename = self.source
+        else:
+            filename = self.source[5:]
+            if filename[1] == "/":
+                idx = filename[2:].index("/")
+                filename = filename[idx+2:]
+        doc = libxml2.parseFile(filename + "/repodata/filelists.xml.gz")
+        if doc == None:
+            return 0
+        root = doc.getRootElement()
+        if root == None:
+            return 0
+        return self.__parseNode(root.children)
+
     def __parseNode(self, node):
         while node != None:
             if node.type != "element":
@@ -1033,11 +1050,23 @@ class RpmRepo(RpmDatabase):
                 continue
             if node.name == "package" and node.prop("type") == "rpm":
                 pkg = self.__parsePackage(node.children)
-                if not pkg["arch"] == "src":
-                    nevra = pkg.getNEVRA()
-                    self.pkglist[nevra] = pkg
+                if pkg["arch"] == "src" or self.__isExcluded(pkg):
+                    node = node.next
+                    continue
+                self.pkglist[pkg.getNEVRA()] = pkg
+            if node.name == "package" and node.prop("name") != None:
+                self.__parseFilelist(node.children, node.prop("name"), node.prop("arch"))
             node = node.next
         return 1
+
+    def __isExcluded(self, pkg):
+        found = 0
+        for ex in self.excludes:
+            excludes = findPkgByName(ex, [pkg])
+            if len(excludes) > 0:
+                found = 1
+                break
+        return found
 
     def __parsePackage(self, node):
         pkg = package.RpmPackage(self.config, "dummy")
@@ -1151,6 +1180,25 @@ class RpmRepo(RpmDatabase):
             node = node.next
         return plist
 
+    def __parseFilelist(self, node, name, arch):
+        if arch == "src":
+            return 1
+        filelist = []
+        while node != None:
+            if node.type != "element":
+                node = node.next
+                continue
+            if   node.name == "version":
+                version = node.prop("ver")
+                release = node.prop("rel")
+                epoch = node.prop("epoch")
+            elif node.name == "file":
+                filelist.append(node.content)
+            node = node.next
+        nevra = "%s-%s:%s-%s.%s" % (name, epoch, version, release, arch)
+        if self.pkglist.has_key(nevra):
+            self.pkglist[nevra]["filenames"] = filelist
+        return 1
 
 class RpmCompsXML:
     def __init__(self, config, source):

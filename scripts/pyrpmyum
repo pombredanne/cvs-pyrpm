@@ -45,7 +45,7 @@ general options:
 more options:
     [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]
     [--ignoresize] [--ignorearch] [--exactarch]
-    [--noconflicts] [--nofileconflicts]
+    [--noconflicts] [--fileconflicts]
     [--nodeps] [--nodigest] [--nosignature]
     [--noorder] [--noscripts] [--notriggers]
     [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
@@ -58,6 +58,9 @@ Warning: [group]remove doesn't work yet either, use pyrpminstall -e"""
 # Main program
 #
 
+# Disabled fileconflicts per default in yum
+rpmconfig.nofileconflicts = 1
+
 # Our yum worker object
 yum = RpmYum(rpmconfig)
 
@@ -67,7 +70,7 @@ try:
         ["help", "verbose",
          "hash", "version", "quiet", "dbpath=", "root=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
-         "noconflicts", "nofileconflicts", "nodeps", "nodigest", "nosignature",
+         "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
          "installpkgs="])
 except getopt.error, e:
@@ -104,8 +107,8 @@ for (opt, val) in opts:
                     continue
                 yum.addRepo(baseurl, excludes)
                 if rpmconfig.compsfile == None and \
-                   os.path.isfile(val+"/repodata/comps.xml"):
-                    rpmconfig.compsfile = val+"/repodata/comps.xml"
+                   os.path.isfile(baseurl[5:]+"/repodata/comps.xml"):
+                    rpmconfig.compsfile = baseurl[5:]+"/repodata/comps.xml"
     elif opt == "--quiet":
         rpmconfig.debug = 0
         rpmconfig.warning = 0
@@ -143,8 +146,8 @@ for (opt, val) in opts:
         rpmconfig.ignorearch = 1
     elif opt == "--noconflicts":
         rpmconfig.noconflicts = 1
-    elif opt == "--nofileconflicts":
-        rpmconfig.nofileconflicts = 1
+    elif opt == "--fileconflicts":
+        rpmconfig.nofileconflicts = 0
     elif opt == "--nodeps":
         rpmconfig.nodeps = 1
     elif opt == "--nodigest":

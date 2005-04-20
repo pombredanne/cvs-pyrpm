@@ -110,9 +110,9 @@ def main():
         usage()
         sys.exit(0)
 
-    pyrpm.rpmconfig.debug_level = verbose
-    pyrpm.rpmconfig.warning_level = verbose
-    pyrpm.rpmconfig.verbose_level = verbose
+    pyrpm.rpmconfig.debug = verbose
+    pyrpm.rpmconfig.warning = verbose
+    pyrpm.rpmconfig.verbose = verbose
 
     if len(pargs) == 0:
         usage()
