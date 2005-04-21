@@ -522,6 +522,8 @@ class RpmPackage(RpmData):
             return 1
         # File has changed on disc, now check if it has changed between the
         # different packages that share it and the new package
+        # Remember if we have to actually write the file or not.
+        do_write = 0
         for pkg in plist:
             orfi = pkg.getRpmFileInfo(rfi.filename)
             # Is the current file in the filesystem identical to the one in the
@@ -546,8 +548,12 @@ class RpmPackage(RpmData):
                 self.config.printWarning(0, "\n%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
                 if os.rename(rfi.filename, rfi.filename+".rpmsave") != None:
                     raiseFatal("\n%s: Edited config file %s couldn't be renamed, aborting." % (self.getNEVRA(), rfi.filename))
+            # Now we know we have to write either a .rpmnew file or we have
+            # already backed up the old one to .rpmsave and need to write the
+            # new file
+            do_write = 1
             break
-        return 1
+        return do_write
 
     def generateFileNames(self):
         self["filenames"] = []

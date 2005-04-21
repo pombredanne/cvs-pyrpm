@@ -5,9 +5,10 @@ from pyrpm import *
 
 rpms = []
 for i in sys.argv[1:]:
-    rpm = RpmPackage("file:/"+i)
+    rpm = RpmPackage(rpmconfig, "file://"+i)
     rpm.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "filecolors", "fileclass", "classdict", "filedependsx", "filedependsn", "dependsdict"))
     print rpm["requires"]
     for f in rpm["filenames"]:
-        print f 
+	rfi = rpm.getRpmFileInfo(f)
+        print rfi.filename, hex(rfi.flags)
 #    rpms.append(rpm)
