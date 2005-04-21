@@ -1167,7 +1167,7 @@ class RpmRepo(RpmDatabase):
                 elif node.prop("type") == "sha":
                     pkg["signature"]["sha1header"] = node.content
             elif node.name == "location":
-                pkg.source = self.source + node.prop("href")
+                pkg.source = self.source + "/" + node.prop("href")
             elif node.name == "format":
                 self.__parseFormat(node.children, pkg)
             node = node.next
