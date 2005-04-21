@@ -282,7 +282,7 @@ class RpmYum:
 #                                % pkg.getNEVRA())
 #                            sys.exit(1)
             if reread == 0 and unresolved_deps:
-                self.config.printWarning(1, "Importing filelist from repositories due to unresolved dependencies")
+                self.config.printWarning(0, "Importing filelist from repositories due to unresolved dependencies")
                 self.resolvers = []
                 for repo in self.repos:
                     repo.importFilelist()
