@@ -20,8 +20,8 @@
 
 import os.path, sys, struct, pwd, grp, md5, sha, weakref
 from stat import S_ISREG
-
 from functions import *
+from io import getRpmIOFactory
 import openpgp
 
 class RpmData:
@@ -141,19 +141,19 @@ class RpmPackage(RpmData):
         self.verify = verify
         self.strict = strict
         self.hdronly = hdronly
+        self.db = db
+        self.io = None
         self.range_signature = (None, None)
         self.range_header = (None, None)
         self.range_payload = (None, None)
-        self.db = db
 
     def clear(self):
-        self.io = None
+        for k in self.keys():
+            del self[k]
         self.header_read = 0
         self.rpmusercache = RpmUserCache(self.config)
 
     def open(self, mode="r"):
-        from io import getRpmIOFactory
-
         if self.io != None:
             return 1
         self.io = getRpmIOFactory(self.config, self.source, self.verify,
@@ -167,7 +167,7 @@ class RpmPackage(RpmData):
     def close(self):
         if self.io != None:
             self.io.close()
-        self.clear()
+        self.io = None
         return 1
 
     def read(self, tags=None, ntags=None):

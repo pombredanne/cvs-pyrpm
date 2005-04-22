@@ -200,6 +200,8 @@ class RpmController:
                 self.db.setBuildroot(None)
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
+                    pkg.clear()
+                    pkg.read()
                     if   op == OP_INSTALL:
                         opstring = "Install: "
                     elif op == OP_UPDATE or op == OP_FRESHEN:

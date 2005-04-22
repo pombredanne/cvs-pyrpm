@@ -153,8 +153,19 @@ class RpmYum:
         for repo in self.resolvers:
             del repo
         self.resolvers = []
+        if self.command.endswith("remove"):
+            control = RpmController(self.config, OP_ERASE, self.pydb)
+        else:
+            control = RpmController(self.config, OP_UPDATE, self.pydb)
+        ops = control.getOperations(self.opresolver)
+        if len(ops) == 0:
+            self.config.printInfo(0, "Nothing to do.\n")
+            sys.exit(0)
+        self.config.printInfo(0, "The following operations will now be run:\n")
+        for (op, pkg) in ops:
+            self.config.printInfo(0, "\t%s %s\n" % (op, pkg.getNEVRA()))
         if len(self.erase_list) > 0:
-            self.config.printInfo(0, "Warning: Following packages will be automatically removed:\n")
+            self.config.printInfo(0, "Warning: Following packages will be automatically removed from your system:\n")
             for pkg in self.erase_list:
                 self.config.printInfo(0, "\t%s\n" % pkg.getNEVRA())
         if self.confirm:
@@ -164,18 +175,6 @@ class RpmYum:
             else:
                 if choice[0] != "y" and choice[0] != "Y":
                     sys.exit(0)
-        if self.command.endswith("remove"):
-            control = RpmController(self.config, OP_ERASE, self.pydb)
-        else:
-            control = RpmController(self.config, OP_UPDATE, self.pydb)
-        ops = control.getOperations(self.opresolver)
-        i = 0
-        while i < len(ops):
-            (op, pkg) = ops[i]
-            if pkg.has_key("thisisaobsoletespackage"):
-                ops.pop(i)
-                continue
-            i += 1
         control.runOperations(ops)
 
     def __generateObsoletesList(self):

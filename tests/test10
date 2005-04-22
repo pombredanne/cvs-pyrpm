@@ -103,13 +103,13 @@ EOF
 test -n "$3" && cat >> $2/etc/yum.conf <<EOF
 [base]
 name=Fedora Linux Core $1 - \$basearch
-baseurl=file://localhost$FEDORA/$1/\$basearch/os/
+baseurl=file://$FEDORA/$1/\$basearch/os/
 
 EOF
 cat >> $2/etc/yum.conf <<EOF
 [updates]
 name=Fedora Linux Core $1 - \$basearch - Updates
-baseurl=file://localhost$FEDORA/updates/$1/\$basearch/
+baseurl=file://$FEDORA/updates/$1/\$basearch/
 EOF
 }
 
@@ -202,7 +202,7 @@ fi
 fi
 
 # Fedora Core development
-if true ; then
+if false ; then
 doinstall $FEDORA/development/$ARCH/Fedora/RPMS $DATA/FC4-$ARCH
 ln -sf $FEDORA/development/$ARCH/Fedora/RPMS /tmp/n
 doinstall /tmp/n $DATA/FC4-$ARCH-rpm rpm
@@ -221,7 +221,7 @@ done
 fi
 
 # Fedora Core 1/2/3 with pyrpmyum
-if true ; then
+if false ; then
 IN=$DATA/FC1-2-3-$ARCH
 # Install FC1
 doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
@@ -243,10 +243,10 @@ preparechroot $IN
 genyumconf 3 $IN withbase
 { time $PYRPMYUM -c $IN/etc/yum.conf -r $IN install "*"; } 2>&1 | tee $IN.LOG.install
 # Do some funky remove and updates to see if removals and updates work
-{ time $PYRPMYUM -r $IN groupremove base-x; } 2>&1 | tee $IN.LOG.test.1
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupremove base-x; } 2>&1 | tee $IN.LOG.test.1
 { time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupupdate kde-desktop; } 2>&1 | tee $IN.LOG.test.2
 { time $PYRPMYUM -r $IN remove db4; } 2>&1 | tee $IN.LOG.test.3
 { time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update mozilla evolution openoffice.org-writer; } 2>&1 | tee $IN.LOG.test.4
-{ time $PYRPMYUM -r $IN groupremove base; } 2>&1 | tee $IN.LOG.test.5
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupremove base; } 2>&1 | tee $IN.LOG.test.5
 { time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupinstall development-tools; } 2>&1 | tee $IN.LOG.test.6
 fi
