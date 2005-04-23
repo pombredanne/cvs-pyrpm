@@ -1068,3 +1068,5 @@ class PGPKeyRing:
                 l = self.by_key_id[key_id]
                 if key not in l:
                     l.append(key)
+
+# vim:ts=4:sw=4:showmatch:expandtab
