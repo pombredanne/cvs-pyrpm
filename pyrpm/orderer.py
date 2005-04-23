@@ -170,7 +170,7 @@ class RpmOrderer:
         if len(list) == 1:
             return [(OP_ERASE, list[0])]
         # more than one in list: generate order
-        return RpmOrderer(self.config, None, None, None, list).orderer()
+        return RpmOrderer(self.config, None, None, None, list).order()
 
     # ----
 
