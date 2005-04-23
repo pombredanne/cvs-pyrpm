@@ -84,9 +84,8 @@ class RpmController:
             self.rpms.append(pkg)
         if len(self.rpms) == 0:
             self.config.printInfo(2, "Nothing to do.\n")
-            return 1
         if self.config.timer:
-            self.config.printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
+            self.config.printInfo(0, "handlePkgs() took %s seconds\n" % (clock() - time1))
         return 1
 
     def handleFiles(self, filelist):
@@ -100,16 +99,15 @@ class RpmController:
                 self.appendFile(filename)
         if len(self.rpms) == 0:
             self.config.printInfo(2, "Nothing to do.\n")
-            return 1
         if self.config.timer:
             self.config.printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
         return 1
 
     def getOperations(self, resolver=None):
-        if not self.__preprocess():
-            return 0
         if self.config.timer:
             time1 = clock()
+        if not self.__preprocess():
+            return 0
         if resolver == None:
             resolver = RpmResolver(self.config, self.db.getPkgList(),
                                    self.operation)
@@ -139,11 +137,11 @@ class RpmController:
         del orderer
         if not self.config.ignoresize:
             if self.config.timer:
-                time9 = clock()
+                time1 = clock()
             mhash = getFreeDiskspace(operations)
             if self.config.timer:
                 self.config.printInfo(0, "getFreeDiskspace took %s seconds\n" % \
-                             (clock() - time9))
+                             (clock() - time1))
             for dev in mhash.keys():
                 if mhash[dev][0] < 31457280:
                     self.config.printInfo(0, "Less than 30MB of diskspace left on device %s for operation" % hex(dev))
