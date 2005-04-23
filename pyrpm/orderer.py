@@ -22,15 +22,14 @@
 """
 
 from hashlist import HashList
-from functions import *
+from base import *
 from resolver import RpmResolver
 
 class _Relation:
     """ Pre and post relations for a package """
-    def __init__(self, config):
-        self.config = config
-        self.pre = HashList()
-        self._post = HashList()
+    def __init__(self):
+        self.pre = {}
+        self._post = {}
     def __str__(self):
         return "%d %d" % (len(self.pre), len(self._post))
 
@@ -38,8 +37,7 @@ class _Relation:
 
 class _Relations:
     """ relations list for packages """
-    def __init__(self, config):
-        self.config = config
+    def __init__(self):
         self.list = HashList()
         self.__len__ = self.list.__len__
         self.__getitem__ = self.list.__getitem__
@@ -50,23 +48,15 @@ class _Relations:
             return
         i = self.list[pkg]
         if i == None:
-            i = _Relation(self.config)
+            i = _Relation()
             self.list[pkg] = i
         if pre == None:
             return # we have to do nothing more for empty relations
-        if pre not in i.pre:
+        if flag == 2 or pre not in i.pre:
             i.pre[pre] = flag
-        else:
-            # prefer hard requirements, do not overwrite with soft req
-            if flag == 2 and i.pre[pre] == 1:
-                i.pre[pre] = flag
-        for p in i.pre:
-            if p in self.list:
-                if pkg not in self.list[p]._post:
-                    self.list[p]._post[pkg] = 1
-            else:
-                self.list[p] = _Relation(self.config)
-                self.list[p]._post[pkg] = 1
+            if not pre in self.list:
+                self.list[pre] = _Relation()
+            self.list[pre]._post[pkg] = None
 
     def remove(self, pkg):
         rel = self.list[pkg]
@@ -123,7 +113,7 @@ class RpmOrderer:
 
     def genRelations(self, rpms, operation):
         """ Generate relations from RpmList """
-        relations = _Relations(self.config)
+        relations = _Relations()
 
         # generate todo list for installs
         resolver = RpmResolver(self.config, rpms, operation)
@@ -147,8 +137,7 @@ class RpmOrderer:
                         continue
                     for r2 in s:
                         relations.append(r, r2, f)
-                    if empty:
-                        empty = 0
+                    empty = 0
                 if empty:
                     self.config.printDebug(1, "No relations found for %s, generating empty relations" % \
                                r.getNEVRA())
@@ -179,13 +168,9 @@ class RpmOrderer:
 
     def _genEraseOps(self, list):
         if len(list) == 1:
-            ops = [(OP_ERASE, list[0])]
-        else:
-            # more than one in list: generate order
-            orderer = RpmOrderer(self.config, None, None, None, list)
-            ops = orderer.order()
-            del orderer
-        return ops
+            return [(OP_ERASE, list[0])]
+        # more than one in list: generate order
+        return RpmOrderer(self.config, None, None, None, list).orderer()
 
     # ----
 
