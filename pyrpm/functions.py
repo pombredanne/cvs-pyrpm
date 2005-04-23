@@ -753,7 +753,7 @@ def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
     """Read RPM package from source and close it.
     tags, if defined, specifies tags to load."""
     pkg = package.RpmPackage(config, source, verify, strict, hdronly, db)
-    pkg.read(tags = tags)
+    pkg.read(tags=tags)
     pkg.close()
     return pkg
 

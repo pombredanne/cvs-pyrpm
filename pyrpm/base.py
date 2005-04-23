@@ -170,7 +170,6 @@ rpmtag = {
     "conflictname": (1054, RPM_STRING_ARRAY, None, 0),
     "conflictflags": (1053, RPM_INT32, None, 0),
     "conflictversion": (1055, RPM_STRING_ARRAY, None, 0),
-
     # triggers
     "triggername": (1066, RPM_STRING_ARRAY, None, 4),
     "triggerflags": (1068, RPM_INT32, None, 4),

@@ -29,8 +29,8 @@ class _Relation:
     """ Pre and post relations for a package """
     def __init__(self, config):
         self.config = config
-        self.pre = HashList(self.config)
-        self._post = HashList(self.config)
+        self.pre = HashList()
+        self._post = HashList()
     def __str__(self):
         return "%d %d" % (len(self.pre), len(self._post))
 
@@ -40,7 +40,7 @@ class _Relations:
     """ relations list for packages """
     def __init__(self, config):
         self.config = config
-        self.list = HashList(self.config)
+        self.list = HashList()
         self.__len__ = self.list.__len__
         self.__getitem__ = self.list.__getitem__
         self.has_key = self.list.has_key
@@ -87,13 +87,13 @@ class RpmOrderer:
         OP_ERASE. """
         self.config = config
         self.installs = installs
-        self.erases = erases
         self.updates = updates
+        self.obsoletes = obsoletes
+        self.erases = erases
         if self.updates:
             for pkg in self.updates:
                 for p in self.updates[pkg]:
                     self.erases.remove(p)
-        self.obsoletes = obsoletes
         if self.obsoletes:
             for pkg in self.obsoletes:
                 for p in self.obsoletes[pkg]:
@@ -236,13 +236,13 @@ class RpmOrderer:
     # ----
 
     def genCounter(self, loops):
-        counter = HashList(self.config)
+        counter = HashList()
         for w in loops:
             for j in xrange(len(w) - 1):
                 node = w[j]
                 next = w[j+1]
                 if node not in counter:
-                    counter[node] = HashList(self.config)
+                    counter[node] = HashList()
                 if next not in counter[node]:
                     counter[node][next] = 1
                 else:

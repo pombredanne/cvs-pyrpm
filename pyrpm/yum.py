@@ -234,7 +234,7 @@ class RpmYum:
                 # For all other cases we need to find packages in our repos
                 # that resolve the given dependency
                 found = 0
-                pkg_list = HashList(self.config)
+                pkg_list = HashList()
                 for dep in unresolved[pkg]:
                     self.config.printInfo(2, "\t" + depString(dep) + "\n")
                     for repo in self.resolvers:

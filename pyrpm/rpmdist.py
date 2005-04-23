@@ -36,9 +36,9 @@
 #   ... like 'base'..
 #
 
-import ConfigParser, os
-from functions import *
+import os, ConfigParser
 from package import *
+from functions import *
 
 class RpmDistribution:
 

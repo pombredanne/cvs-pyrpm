@@ -72,7 +72,7 @@ try:
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
-         "installpkgs="])
+         "servicehack", "installpkgs="])
 except getopt.error, e:
     print "Error parsing command list arguments: %s" % e
     usage()
@@ -162,6 +162,8 @@ for (opt, val) in opts:
         rpmconfig.noscripts = 1
     elif opt == "--notriggers":
         rpmconfig.notriggers = 1
+    elif opt == "--servicehack":
+        rpmconfig.service = 1
 
 if rpmconfig.verbose > 1:
     rpmconfig.warning = rpmconfig.verbose - 1

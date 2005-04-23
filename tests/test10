@@ -67,10 +67,10 @@ doinstall() {
     sync
     if test x$3 = xrpm ; then
         { time rpm -U --nodigest --nosignature --root=$2 $1/*.rpm; } 2>&1 \
-            | tee $2.LOG.install
+            | tee $2.LOG
     else
         { time $PYRPMYUM -r $2 install $1; } 2>&1 \
-            | tee $2.LOG.install
+            | tee $2.LOG
     fi
     sync
     dokill
@@ -132,7 +132,7 @@ RELEASED=/mnt/raid/redhat/released
 FEDORA=/mnt/raid/fedora
 #FEDORA=/mnt/data/laroche/fedora
 RPMS=RedHat/RPMS
-PYRPMYUM="./pyrpmyum -y --autoerase"
+PYRPMYUM="./pyrpmyum -y --autoerase --servicehack"
 # Specify if updates to newer releases should be done.
 RELEASEUPDATE=1
 
@@ -151,53 +151,53 @@ doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
 fi
 
 # Fedora Core 1
-if false ; then
+if true ; then
 IN=$DATA/FC1-$ARCH
 # Raw FC1 install
 doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
 # Update FC1 to updates
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.update
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.1
 # Update FC1 to testing
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/1/$ARCH ; } 2>&1 | tee $IN.LOG.update.1
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/1/$ARCH ; } 2>&1 | tee $IN.LOG.2
 if test $RELEASEUPDATE = 1 ; then
 # Update FC1 to FC2+updates
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/2/$ARCH/os/Fedora/RPMS $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.update.2
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/2/$ARCH/os/Fedora/RPMS $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.3
 # Update to FC3+updates
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.update.3
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.4
 # Update to FC-development
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.update.4
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.5
 fi
 fi
 
 # Fedora Core 2
-if false ; then
+if true ; then
 IN=$DATA/FC2-$ARCH
 # Raw FC2 install
 doinstall --nodev $FEDORA/2/$ARCH/os/Fedora/RPMS $IN
 # Update FC2 to updates
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.update
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.1
 # Update FC2 to testing
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/2/$ARCH ; } 2>&1 | tee $IN.LOG.update.1
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/2/$ARCH ; } 2>&1 | tee $IN.LOG.2
 if test $RELEASEUPDATE = 1 ; then
 # Update FC2 to FC3+updates
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.update.2
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.3
 # Update to FC-development
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.update.3
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.4
 fi
 fi
 
 # Fedora Core 3
-if false ; then
+if true ; then
 IN=$DATA/FC3-$ARCH
 # Raw FC3 install
 doinstall         $FEDORA/3/$ARCH/os/Fedora/RPMS $IN
 # Update FC3 to updates
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.update
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.1
 # Update FC3 to testing
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/3/$ARCH ; } 2>&1 | tee $IN.LOG.update.1
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/testing/3/$ARCH ; } 2>&1 | tee $IN.LOG.2
 if test $RELEASEUPDATE = 1 ; then
 # Update to FC-development
-{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.update.2
+{ time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.3
 fi
 fi
 
@@ -216,23 +216,23 @@ for i in 1 2 3 ; do
     IN=$DATA/FC$i-$ARCH-rpm
     doinstall $NODEV $FEDORA/$i/$ARCH/os/Fedora/RPMS $IN rpm
     genyumconf $i $IN
-    { time chroot $IN yum update; } 2>&1 | tee $IN.LOG.update
+    { time chroot $IN yum update; } 2>&1 | tee $IN.LOG.1
 done
 fi
 
 # Fedora Core 1/2/3 with pyrpmyum
-if false ; then
+if true ; then
 IN=$DATA/FC1-2-3-$ARCH
 # Install FC1
 doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
 # Update FC1 to updates
-{ time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.update
+{ time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.1
 # Update to FC2 with all updates
 genyumconf 2 $IN withbase
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update; } 2>&1 | tee $IN.LOG.update.1
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update; } 2>&1 | tee $IN.LOG.2
 # Update to FC3 with all updates
 genyumconf 3 $IN withbase
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update; } 2>&1 | tee $IN.LOG.update.2
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update; } 2>&1 | tee $IN.LOG.3
 fi
 
 # Install FC3 with all updates
@@ -241,12 +241,12 @@ IN=$DATA/FC3-removaltests-$ARCH
 cleanchroot $IN
 preparechroot $IN
 genyumconf 3 $IN withbase
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN install "*"; } 2>&1 | tee $IN.LOG.install
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN install "*"; } 2>&1 | tee $IN.LOG
 # Do some funky remove and updates to see if removals and updates work
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupremove base-x; } 2>&1 | tee $IN.LOG.test.1
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupupdate kde-desktop; } 2>&1 | tee $IN.LOG.test.2
-{ time $PYRPMYUM -r $IN remove db4; } 2>&1 | tee $IN.LOG.test.3
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update mozilla evolution openoffice.org-writer; } 2>&1 | tee $IN.LOG.test.4
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupremove base; } 2>&1 | tee $IN.LOG.test.5
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupinstall development-tools; } 2>&1 | tee $IN.LOG.test.6
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupremove base-x; } 2>&1 | tee $IN.LOG.1
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupupdate kde-desktop; } 2>&1 | tee $IN.LOG.2
+{ time $PYRPMYUM -r $IN remove db4; } 2>&1 | tee $IN.LOG.3
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update mozilla evolution openoffice.org-writer; } 2>&1 | tee $IN.LOG.4
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupremove base; } 2>&1 | tee $IN.LOG.5
+{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupinstall development-tools; } 2>&1 | tee $IN.LOG.6
 fi

@@ -36,42 +36,41 @@ class RpmList:
         self.config = config
         self.clear()
         self.__len__ = self.list.__len__
-        for r in installed:
-            self._install(r, 1)
-            if not r["name"] in self.installed:
-                self.installed[r["name"]] = [ ]
-            self.installed[r["name"]].append(r)
         self.__getitem__ = self.list.__getitem__
+        for r in installed:
+            name = r["name"]
+            self._install(r, 1)
+            if not name in self.installed:
+                self.installed[name] = [ ]
+            self.installed[name].append(r)
     # ----
 
     def clear(self):
-        self.list = HashList(self.config)
-        self.installed = HashList(self.config)
+        self.list = HashList()
+        self.installed = HashList()
         self.installs = [ ]
         self.updates = { }
         self.erases = [ ]
     # ----
 
-    #def __getitem__(self, i):
-    #    return self.list[i] # return rpm list
-    # ----
-
     def _install(self, pkg, no_check=0):
-        key = pkg["name"]
-        if no_check == 0 and key in self.list:
-            for r in self.list[key]:
+        name = pkg["name"]
+        if no_check == 0 and name in self.list:
+            for r in self.list[name]:
                 ret = self.__install_check(r, pkg)
-                if ret != 1: return ret
-        if not key in self.list:
-            self.list[key] = [ ]
-        self.list[key].append(pkg)
+                if ret != self.OK:
+                    return ret
+        if not name in self.list:
+            self.list[name] = [ ]
+        self.list[name].append(pkg)
 
         return self.OK
     # ----
 
     def install(self, pkg):
         ret = self._install(pkg)
-        if ret != self.OK:  return ret
+        if ret != self.OK:
+            return ret
 
         if not self.isInstalled(pkg):
             self.installs.append(pkg)
@@ -86,9 +85,7 @@ class RpmList:
 
         updates = [ ]
         if key in self.list:
-            rpms = self.list[key]
-            
-            for r in rpms:
+            for r in self.list[key]:
                 ret = pkgCompare(r, pkg)
                 if ret > 0: # old_ver > new_ver
                     if self.config.oldpackage == 0:
@@ -115,7 +112,8 @@ class RpmList:
                         return self.ARCH_INCOMPAT
                     
                     ret = self.__install_check(r, pkg)
-                    if ret != 1: return ret
+                    if ret != self.OK:
+                        return ret
 
                     if archDuplicate(pkg["arch"], r["arch"]):
                         if archCompat(pkg["arch"], r["arch"]):
@@ -132,7 +130,8 @@ class RpmList:
                             updates.append(r)
 
         ret = self.install(pkg)
-        if ret != self.OK:  return ret
+        if ret != self.OK:
+            return ret
 
         for r in updates:
             if self.isInstalled(r):
@@ -214,7 +213,7 @@ class RpmList:
                 self.config.printWarning(1, "%s: %s was already added" % \
                              (pkg.getNEVRA(), r.getNEVRA()))
                 return self.ALREADY_ADDED
-        return 1
+        return self.OK
     # ----
 
     def __arch_incompat(self, pkg, r):
@@ -243,8 +242,7 @@ class RpmList:
     # ----
 
     def p(self):
-        for name in self:
-            for r in self[name]:
-                print "\t%s" % r.getNEVRA()
+        for r in self.getList():
+            print "\t%s" % r.getNEVRA()
 
 # vim:ts=4:sw=4:showmatch:expandtab

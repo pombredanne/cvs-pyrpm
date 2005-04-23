@@ -144,7 +144,7 @@ class RpmResolver(RpmList):
         self.filenames = FilenamesList(self.config)
         self.obsoletes = { }
         self.check_installed = 0
-        self.installed_unresolved = HashList(self.config)
+        self.installed_unresolved = HashList()
     # ----
 
     def _install(self, pkg, no_check=0):
@@ -282,7 +282,7 @@ class RpmResolver(RpmList):
 
     def getResolvedDependencies(self):
         """ Get all resolved dependencies """
-        all_resolved = HashList(self.config)
+        all_resolved = HashList()
         for name in self:
             for r in self[name]:
                 self.config.printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
@@ -296,7 +296,7 @@ class RpmResolver(RpmList):
 
     def getUnresolvedDependencies(self):
         """ Get all unresolved dependencies """
-        all_unresolved = HashList(self.config)
+        all_unresolved = HashList()
         for name in self:
             for r in self[name]:
                 self.config.printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
@@ -311,7 +311,7 @@ class RpmResolver(RpmList):
     def getConflicts(self):
         """ Check for conflicts in conflicts and and obsoletes """
 
-        conflicts = HashList(self.config)
+        conflicts = HashList()
 
         if len(self.installs) == 0:
             # no conflicts if there is no new package
@@ -359,7 +359,7 @@ class RpmResolver(RpmList):
 
     def getFileConflicts(self):
         """ Check for file conflicts """
-        conflicts =  HashList(self.config)
+        conflicts =  HashList()
 
         if len(self.installs) == 0:
             # no conflicts if there is no new package

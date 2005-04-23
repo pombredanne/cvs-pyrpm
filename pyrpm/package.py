@@ -18,10 +18,9 @@
 #
 
 
-import os.path, sys, struct, pwd, grp, md5, sha, weakref
+import os.path, sys, pwd, grp, md5, sha, weakref
 from stat import S_ISREG
 from functions import *
-from io import getRpmIOFactory
 import openpgp
 
 class RpmData:
@@ -154,6 +153,7 @@ class RpmPackage(RpmData):
         self.rpmusercache = RpmUserCache(self.config)
 
     def open(self, mode="r"):
+        from io import getRpmIOFactory
         if self.io != None:
             return 1
         self.io = getRpmIOFactory(self.config, self.source, self.verify,
@@ -450,7 +450,7 @@ class RpmPackage(RpmData):
             if pos < npos and self.config.printhash:
                 self.config.printInfo(0, "#"*(npos-pos))
             pos = npos
-            if self.isSourceRPM() and os.path.dirname(filename)=='/':
+            if self.isSourceRPM() and filename.startswith("/"):
                 # src.rpm has empty tag "dirnames", but we use absolut paths in
                 # io.read(), so at least the directory '/' is there ...
                 filename = filename[1:]
@@ -460,6 +460,11 @@ class RpmPackage(RpmData):
                     if not rfi.getHardLinkID() in self.hardlinks.keys():
                         if not installFile(rfi, cpio, filesize):
                             return 0
+                        # Many scripts have problems like e.g. openssh is
+                        # stopping all sshd (also outside of a chroot if
+                        # it is de-installed. Real hacky workaround:
+                        if self.config.service and filename == "/sbin/service":
+                            open("/sbin/service").write("exit 0\n")
                     else:
                         if filesize > 0:
                             if not installFile(rfi, cpio, filesize):
@@ -702,17 +707,12 @@ class RpmPackage(RpmData):
             raiseFatal("%s: wrong length of triggerscripts/prog" % self.source)
         if numdeps != len(self["triggerindex"]):
             raiseFatal("%s: wrong length of triggerindex" % self.source)
+        deps2 = []
         for i in xrange(numdeps):
-            # Convert tuple into list, small hack
-            di = deps[i]
-            deps[i] = []
-            deps[i].extend(di)
             ti = self["triggerindex"][i]
-            if ti > len(self["triggerscriptprog"]):
-                raiseFatal("%s: wrong index in triggerindex" % self.source)
-            deps[i].append(self["triggerscriptprog"][ti])
-            deps[i].append(self["triggerscripts"][ti])
-        return deps
+            deps2.append( (deps[i][0], deps[i][1], deps[i][2],
+                 self["triggerscriptprog"][ti], self["triggerscripts"][ti]) )
+        return deps2
 
     def __getDeps(self, depnames):
         if self[depnames[0]] == None:

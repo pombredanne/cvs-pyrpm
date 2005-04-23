@@ -56,13 +56,13 @@ class PyGZIP:
             xlen=xlen+256*ord(self.fd.read(1))
             self.fd.read(xlen)
         if flag & FNAME:
-            # Read and discard a null-terminated string containing the filename
+            # Read and discard a nul-terminated string containing the filename
             while (1):
                 s=self.fd.read(1)
                 if s=='\000':
                     break
         if flag & FCOMMENT:
-            # Read and discard a null-terminated string containing a comment
+            # Read and discard a nul-terminated string containing a comment
             while (1):
                 s=self.fd.read(1)
                 if s=='\000':

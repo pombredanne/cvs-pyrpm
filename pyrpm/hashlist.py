@@ -22,8 +22,7 @@ from types import IntType
 class HashList:
     """ hash list """
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self):
         self.list = [ ]
         self.hash = { }
 
@@ -44,10 +43,8 @@ class HashList:
 
     def __setitem__(self, key, value):
         if not self.hash.has_key(key):
-            self.hash[key] = value
             self.list.append(key)
-        else:
-            self.hash[key] = value
+        self.hash[key] = value
         return value
 
     def __delitem__(self, key):

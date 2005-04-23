@@ -67,10 +67,10 @@ class RpmConfig:
             "obsoleteversion", "conflictname", "conflictflags",
             "conflictversion", "filesizes", "filemodes", "filemd5s",
             "dirindexes", "basenames", "dirnames")
-        self.ignore_epoch = 0
         self.timer = 0
         self.ldconfig = 0
         self.delayldconfig = 0
+        self.service = 0
 
     def printDebug(self, level, msg):
         if self.debug_handler and level <= self.debug:
