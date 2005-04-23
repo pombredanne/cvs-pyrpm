@@ -14,13 +14,13 @@ preparechroot() {
     nodev=
     if test x$1 = x--nodev ; then
         nodev=--nodev
-    	shift
+        shift
     fi
     fuser -k $1/ 2> /dev/null
     dokill
     umount $1/dev
     umount $1/proc
-    mkdir -p $1/{dev,etc/sysconfig,tmp,proc,var/tmp}
+    mkdir -p $1/{dev,etc/sysconfig,tmp,proc,var/tmp,var/run}
     chmod 1777 $1/tmp
     touch $1/etc/fstab
     echo "NETWORKING=yes" > $1/etc/sysconfig/network

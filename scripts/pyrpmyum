@@ -17,7 +17,7 @@
 # Author: Phil Knirsch
 #
 
-import sys, os, getopt, string
+import sys, os, getopt, errno
 
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
@@ -52,6 +52,53 @@ more options:
 
 Warning: Some of the install-options are not evaluated yet
 Warning: [group]remove doesn't work yet either, use pyrpminstall -e"""
+
+def Unlink(lockfile):
+    try:
+        os.unlink(lockfile)
+    except:
+        pass
+
+def tryUnlock(lockfile):
+    if not os.path.exists(lockfile):
+        return 0
+    fd = open(lockfile, 'r')
+    try: oldpid = int(fd.readline())
+    except ValueError:
+        Unlink(lockfile) # bogus data
+    else:
+        try: os.kill(oldpid, 0)
+        except OSError, e:
+            if e[0] == errno.ESRCH:
+                Unlink(lockfile) # pid doesn't exist
+            else:
+                return 1
+        else:
+            return 1
+    return 0
+
+def doLock(filename):
+    try:
+        fd = os.open(filename, os.O_EXCL|os.O_CREAT|os.O_WRONLY, 0666)
+        os.write(fd, str(os.getpid()))
+        os.close(fd)
+    except OSError, msg:
+        if not msg.errno == errno.EEXIST: raise msg
+        return 0
+    return 1
+
+def lockPyrpm():
+    if os.getuid() != 0 or rpmconfig.test:
+        return ""
+    if rpmconfig.buildroot != None:
+        lockfile = rpmconfig.buildroot + "/var/run/pyrpmyum.pid"
+    else:
+        lockfile = "/var/run/pyrpmyum.pid"
+    if tryUnlock(lockfile) == 1:
+        return None
+    if doLock(lockfile) == 0:
+        return None
+    return lockfile
 
 
 #
@@ -124,7 +171,7 @@ for (opt, val) in opts:
     elif opt == "--dbpath":
         rpmconfig.dbpath = val
     elif opt == "--installpkgs":
-        yum.always_install = string.split(val)
+        yum.always_install = val.split()
     elif opt == "--force":
         rpmconfig.force = 1
     elif opt in ["-h", "--hash"]:
@@ -175,9 +222,15 @@ if not args:
     usage()
     sys.exit(1)
 
+lockfile = lockPyrpm()
+if lockfile == None:
+    printError(0, "couldn't lock pyrpmyum")
+    sys.exit(1)
 yum.setCommand(args[0])
 yum.processArgs(args[1:])
 yum.runDepRes()
 yum.runCommand()
+if lockfile:
+    Unlink(lockfile)
 
 # vim:ts=4:sw=4:showmatch:expandtab

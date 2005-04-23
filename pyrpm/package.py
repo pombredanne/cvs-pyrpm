@@ -464,7 +464,7 @@ class RpmPackage(RpmData):
                         # stopping all sshd (also outside of a chroot if
                         # it is de-installed. Real hacky workaround:
                         if self.config.service and filename == "/sbin/service":
-                            open("/sbin/service").write("exit 0\n")
+                            open("/sbin/service", "wb").write("exit 0\n")
                     else:
                         if filesize > 0:
                             if not installFile(rfi, cpio, filesize):

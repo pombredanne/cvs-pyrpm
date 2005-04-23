@@ -18,12 +18,12 @@
 #
 
 
-from functions import *
-from io import *
+from hashlist import HashList
 from resolver import RpmResolver
 from control import RpmController
 from package import RpmPackage
-from hashlist import HashList
+from functions import *
+from io import *
 
 
 class RpmYum:
