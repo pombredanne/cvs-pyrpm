@@ -18,12 +18,11 @@
 #
 
 import sys, os, getopt, errno
-
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
-from pyrpm import *
 from pyrpm import __version__
+from pyrpm import *
 
 def usage():
     print """
@@ -104,133 +103,153 @@ def lockPyrpm():
 #
 # Main program
 #
+def main():
 
-# Disabled fileconflicts per default in yum
-rpmconfig.nofileconflicts = 1
+    # Disabled fileconflicts per default in yum
+    rpmconfig.nofileconflicts = 1
 
-# Our yum worker object
-yum = RpmYum(rpmconfig)
+    # Our yum worker object
+    yum = RpmYum(rpmconfig)
 
-# Argument parsing
-try:
-    opts, args = getopt.getopt(sys.argv[1:], "?vhc:r:y",
+    # Argument parsing
+    try:
+      opts, args = getopt.getopt(sys.argv[1:], "?vhc:r:y",
         ["help", "verbose",
          "hash", "version", "quiet", "dbpath=", "root=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
          "servicehack", "installpkgs="])
-except getopt.error, e:
-    print "Error parsing command list arguments: %s" % e
-    usage()
-    sys.exit(1)
-
-# Argument handling
-for (opt, val) in opts:
-    if   opt in ['-?', "--help"]:
+    except getopt.error, e:
+        print "Error parsing command list arguments: %s" % e
         usage()
-        sys.exit(0)
-    elif opt in ["-v", "--verbose"]:
-        rpmconfig.verbose += 1
-    elif opt in ["-r", "--root"]:
-        rpmconfig.buildroot = val
-    elif opt == "-c":
-        conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], val)
-        for key in conf.vars.keys():
-            if key == "main":
-                pass
-            else:
-                sec = conf[key]
-                if not sec.has_key("baseurl"):
-                    printError("%s: No baseurl for this section in conf file." % key)
-                    sys.exit(1)
-                baseurl = sec["baseurl"]
-                if not sec.has_key("exclude"):
-                    excludes = ""
+        sys.exit(1)
+
+    # Argument handling
+    for (opt, val) in opts:
+        if   opt in ['-?', "--help"]:
+            usage()
+            sys.exit(0)
+        elif opt in ["-v", "--verbose"]:
+            rpmconfig.verbose += 1
+        elif opt in ["-r", "--root"]:
+            rpmconfig.buildroot = val
+        elif opt == "-c":
+            conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], val)
+            for key in conf.vars.keys():
+                if key == "main":
+                    pass
                 else:
-                    excludes = sec["exclude"]
-                if not baseurl.startswith("file:/"):
-                    printWarning(0, "%s: Only file:/ baseurls supported for now." % key)
-                    continue
-                yum.addRepo(baseurl, excludes)
-                if rpmconfig.compsfile == None and \
-                   os.path.isfile(baseurl[5:]+"/repodata/comps.xml"):
-                    rpmconfig.compsfile = baseurl[5:]+"/repodata/comps.xml"
-    elif opt == "--quiet":
-        rpmconfig.debug = 0
-        rpmconfig.warning = 0
-        rpmconfig.verbose = 0
-        rpmconfig.printhash = 0
-    elif opt == "--autoerase":
-        yum.setAutoerase(1)
-    elif opt == "--version":
-        print "pyrpmyum", __version__
-        sys.exit(0)
-    elif opt == "-y":
-        yum.setConfirm(0)
-    elif opt == "--dbpath":
-        rpmconfig.dbpath = val
-    elif opt == "--installpkgs":
-        yum.always_install = val.split()
-    elif opt == "--force":
-        rpmconfig.force = 1
-    elif opt in ["-h", "--hash"]:
-        rpmconfig.printhash = 1
-    elif opt == "--oldpackage":
-        rpmconfig.oldpackage = 1
-    elif opt == "--justdb":
-        rpmconfig.justdb = 1
-        rpmconfig.noscripts = 1
-        rpmconfig.notriggers = 1
-    elif opt == "--test":
-        rpmconfig.test = 1
-        rpmconfig.noscripts = 1
-        rpmconfig.notriggers = 1
-        rpmconfig.timer = 1
-    elif opt == "--ignoresize":
-        rpmconfig.ignoresize = 1
-    elif opt == "--ignorearch":
-        rpmconfig.ignorearch = 1
-    elif opt == "--noconflicts":
-        rpmconfig.noconflicts = 1
-    elif opt == "--fileconflicts":
-        rpmconfig.nofileconflicts = 0
-    elif opt == "--nodeps":
-        rpmconfig.nodeps = 1
-    elif opt == "--nodigest":
-        rpmconfig.nodigest = 1
-    elif opt == "--nofileconflicts":
-        rpmconfig.nofileconflicts = 1
-    elif opt == "--nosignature":
-        rpmconfig.nosignature = 1
-    elif opt == "--noorder":
-        rpmconfig.noorder = 1
-    elif opt == "--noscripts":
-        rpmconfig.noscripts = 1
-    elif opt == "--notriggers":
-        rpmconfig.notriggers = 1
-    elif opt == "--servicehack":
-        rpmconfig.service = 1
+                    sec = conf[key]
+                    if not sec.has_key("baseurl"):
+                        printError("%s: No baseurl for this section in conf file." % key)
+                        sys.exit(1)
+                    baseurl = sec["baseurl"]
+                    if not sec.has_key("exclude"):
+                        excludes = ""
+                    else:
+                        excludes = sec["exclude"]
+                    if not baseurl.startswith("file:/"):
+                        printWarning(0, "%s: Only file:/ baseurls supported for now." % key)
+                        continue
+                    yum.addRepo(baseurl, excludes)
+                    if rpmconfig.compsfile == None and \
+                        os.path.isfile(baseurl[5:]+"/repodata/comps.xml"):
+                        rpmconfig.compsfile = baseurl[5:]+"/repodata/comps.xml"
+        elif opt == "--quiet":
+            rpmconfig.debug = 0
+            rpmconfig.warning = 0
+            rpmconfig.verbose = 0
+            rpmconfig.printhash = 0
+        elif opt == "--autoerase":
+            yum.setAutoerase(1)
+        elif opt == "--version":
+            print "pyrpmyum", __version__
+            sys.exit(0)
+        elif opt == "-y":
+            yum.setConfirm(0)
+        elif opt == "--dbpath":
+            rpmconfig.dbpath = val
+        elif opt == "--installpkgs":
+            yum.always_install = val.split()
+        elif opt == "--force":
+            rpmconfig.force = 1
+        elif opt in ["-h", "--hash"]:
+            rpmconfig.printhash = 1
+        elif opt == "--oldpackage":
+            rpmconfig.oldpackage = 1
+        elif opt == "--justdb":
+            rpmconfig.justdb = 1
+            rpmconfig.noscripts = 1
+            rpmconfig.notriggers = 1
+        elif opt == "--test":
+            rpmconfig.test = 1
+            rpmconfig.noscripts = 1
+            rpmconfig.notriggers = 1
+            rpmconfig.timer = 1
+        elif opt == "--ignoresize":
+            rpmconfig.ignoresize = 1
+        elif opt == "--ignorearch":
+            rpmconfig.ignorearch = 1
+        elif opt == "--noconflicts":
+            rpmconfig.noconflicts = 1
+        elif opt == "--fileconflicts":
+            rpmconfig.nofileconflicts = 0
+        elif opt == "--nodeps":
+            rpmconfig.nodeps = 1
+        elif opt == "--nodigest":
+            rpmconfig.nodigest = 1
+        elif opt == "--nofileconflicts":
+            rpmconfig.nofileconflicts = 1
+        elif opt == "--nosignature":
+            rpmconfig.nosignature = 1
+        elif opt == "--noorder":
+            rpmconfig.noorder = 1
+        elif opt == "--noscripts":
+            rpmconfig.noscripts = 1
+        elif opt == "--notriggers":
+            rpmconfig.notriggers = 1
+        elif opt == "--servicehack":
+            rpmconfig.service = 1
 
-if rpmconfig.verbose > 1:
-    rpmconfig.warning = rpmconfig.verbose - 1
-if rpmconfig.verbose > 2:
-    rpmconfig.warning = rpmconfig.verbose - 2
+    if rpmconfig.verbose > 1:
+        rpmconfig.warning = rpmconfig.verbose - 1
+    if rpmconfig.verbose > 2:
+        rpmconfig.warning = rpmconfig.verbose - 2
 
-if not args:
-    print "No command given"
-    usage()
-    sys.exit(1)
+    if not args:
+        print "No command given"
+        usage()
+        sys.exit(1)
 
-lockfile = lockPyrpm()
-if lockfile == None:
-    printError(0, "couldn't lock pyrpmyum")
-    sys.exit(1)
-yum.setCommand(args[0])
-yum.processArgs(args[1:])
-yum.runDepRes()
-yum.runCommand()
-if lockfile:
-    Unlink(lockfile)
+    lockfile = lockPyrpm()
+    if lockfile == None:
+        printError("couldn't lock pyrpmyum")
+        sys.exit(1)
+    yum.setCommand(args[0])
+    yum.processArgs(args[1:])
+    yum.runDepRes()
+    yum.runCommand()
+    if lockfile:
+        Unlink(lockfile)
+
+if __name__ == '__main__':
+    dohotshot = 0
+    if dohotshot:
+        import tempfile, hotshot, hotshot.stats
+        filename = tempfile.mktemp()
+        prof = hotshot.Profile(filename)
+        try:
+            prof = prof.runcall(main)
+        except SystemExit:
+            pass
+        prof.close()
+        del prof
+        s = hotshot.stats.load(filename)
+        s.strip_dirs().sort_stats('time').print_stats(20)
+        s.strip_dirs().sort_stats('cumulative').print_stats(20)
+        os.unlink(filename)
+    else:
+        main()
 
 # vim:ts=4:sw=4:showmatch:expandtab

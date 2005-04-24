@@ -18,6 +18,7 @@
 #
 
 
+from time import clock
 from hashlist import HashList
 from resolver import RpmResolver
 from control import RpmController
@@ -72,6 +73,8 @@ class RpmYum:
         self.resolvers.append(r)
 
     def processArgs(self, args):
+        if self.config.timer:
+            time1 = clock()
         # Create and read db
         self.pydb = RpmPyDB(self.config, self.config.dbpath,
                             self.config.buildroot)
@@ -136,8 +139,12 @@ class RpmYum:
                         self.pkgs.extend(findPkgByName(f, rlist))
                     if len(self.pkgs) == 0:
                         self.config.printError("Couldn't find package %s, skipping" % f)
+        if self.config.timer:
+            self.config.printInfo(0, "processArgs() took %s seconds\n" % (clock() - time1))
 
     def runDepRes(self):
+        if self.config.timer:
+            time1 = clock()
         # Add packages to be updated  to our operation resolver
         self.pkgs = self.__selectNewestPkgs(self.pkgs)
         for pkg in self.pkgs:
@@ -148,8 +155,12 @@ class RpmYum:
         del self.pkgs
         self.pkgs = []
         self.__runDepResolution()
+        if self.config.timer:
+            self.config.printInfo(0, "runDepRes() took %s seconds\n" % (clock() - time1))
 
     def runCommand(self):
+        if self.config.timer:
+            time1 = clock()
         for repo in self.resolvers:
             del repo
         self.resolvers = []
@@ -175,6 +186,8 @@ class RpmYum:
             else:
                 if choice[0] != "y" and choice[0] != "Y":
                     sys.exit(0)
+        if self.config.timer:
+            self.config.printInfo(0, "runCommand() took %s seconds\n" % (clock() - time1))
         control.runOperations(ops)
 
     def __generateObsoletesList(self):

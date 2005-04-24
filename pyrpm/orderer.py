@@ -89,13 +89,13 @@ class RpmOrderer:
         if operation == OP_ERASE:
             if not isInstallPreReq(flag):
                 if isErasePreReq(flag) or isLegacyPreReq(flag):
-                    return 2  # hard requirement
-                return 1  # soft requirement
+                    return 2    # hard requirement
+                return 1        # soft requirement
         else: # operation: install or update
             if not isErasePreReq(flag):
                 if isInstallPreReq(flag) or isLegacyPreReq(flag):
-                    return 2  # hard requirement
-                return 1  # soft requirement
+                    return 2    # hard requirement
+                return 1        # soft requirement
         return 0
 
     # ----
