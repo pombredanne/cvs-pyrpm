@@ -213,6 +213,8 @@ class YumConf(Conf):
                      "pkgpolicy",
                      )
 
+    MultiLines = ( "baseurl", "mirrorlist" )                   
+
     RepoVarnames = ( "name",
                      "baseurl",
                      "mirrorlist",
@@ -233,15 +235,31 @@ class YumConf(Conf):
 
     Variables = ( "releasever", "arch", "basearch" )
 
-    def __init__(self, releasever, arch, basearch, filename = '/etc/yum.conf'):
+    def __init__(self, releasever, arch, basearch,
+                 chroot = '',
+                 filename = '/etc/yum.conf',
+                 reposdir = '/etc/yum.repos.d',
+                 ):
         """releasever - version of release (e.g. 3 for Fedora Core 3)
         arch - architecure (e.g. i686)
         basearch - base architecture (e.g. i386)
+        chroot - set a chroot to add to all local config filename
+        filename - the base config file
+        reposdir - additional dir to read (glob *.repo)
         """
+        if chroot == None:
+            self.chroot = ''
+        else:
+            self.chroot = chroot
+            
+        if chroot and chroot[-1] != '/':
+            self.chroot += '/'
+
+        self.reposdir = reposdir
         self.releasever = releasever
         self.arch = arch
         self.basearch = basearch
-        self.myfilename = filename
+        self.myfilename = self.chroot + filename
 
         self.stanza_re = re.compile('^\s*\[(?P<stanza>[^\]]*)]\s*(?:;.*)?$', re.I)
         Conf.__init__(self, self.myfilename, '#;', '=', '=',
@@ -258,11 +276,11 @@ class YumConf(Conf):
         """check variablename, if allowed in the config file"""
         if stanza == "main":
             if varname in YumConf.MainVarnames:
-                return 0
+                return True
         else:
             if varname in YumConf.RepoVarnames:
-                return 0
-        return 1
+                return True
+        return False
 
     def read(self):
         """read all config files"""
@@ -270,14 +288,13 @@ class YumConf(Conf):
         self.filename = self.myfilename
         Conf.read(self)
         self.parseFile()
-        repodir = '/etc/yum.repos.d'
         if self.vars.has_key("main") and self.vars["main"].has_key("reposdir"):
-            repodir = self.vars["main"]["reposdir"]
+            self.reposdir = self.chroot + self.vars["main"]["reposdir"]
 
-        if not repodir:
+        if not self.reposdir:
             return
 
-        filenames = glob(repodir + '/*.repo')
+        filenames = glob(self.reposdir + '/*.repo')        
         for filename in filenames:
             self.filename = filename
             Conf.read(self)
@@ -294,13 +311,21 @@ class YumConf(Conf):
             stanzavars = {}
 
             self.nextline()
+            prevname = None
 
             while self.findnextcodeline():
                 v = self.nextEntry()
                 if not v:
-                    break
+                    break                    
 
-                if self.checkVar(stanza, v[0]):
+                if not self.checkVar(stanza, v[0]):                    
+                    if (not v[1]) and (prevname in YumConf.MultiLines):
+                        value = self.extendValue(v[0])                        
+                        stanzavars[prevname].append(value)
+                        self.nextline()
+                        continue
+
+                    #sys.stderr.write("\n++++++%s : %s\n+++++++++\n" % (prevname, str(v)))
                     sys.stderr.write("Bad variable %s in %s\n" \
                                      % (v[0], self.filename))
                     self.nextline()
@@ -308,8 +333,13 @@ class YumConf(Conf):
 
                 name = v[0]
                 value = self.extendValue(v[1])
+                
+                if name in YumConf.MultiLines:
+                    stanzavars[name] = [ value ]
+                else:
+                    stanzavars[name] = value
 
-                stanzavars[name] = value
+                prevname = name
                 self.nextline()
 
             self.vars[stanza] = YumConfSubDict(self, stanza, stanzavars)
@@ -346,7 +376,7 @@ class YumConf(Conf):
 
     def findnextcodeline(self):
         # cannot rename, because of inherited class
-        return self.findnextline('^[\t ]*[\[A-Za-z_]+.*')
+        return self.findnextline('^[\t ]*[\[0-9A-Za-z_]+.*')
 
     def isStanzaDecl(self):
         # return true if the current line is of the form [...]
