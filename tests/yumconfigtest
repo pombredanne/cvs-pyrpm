@@ -22,17 +22,134 @@ class TestYumConf(unittest.TestCase):
         self.removeRoot()
             
         self.dirname = tempfile.mkdtemp()
-        os.system("tar -xzf yum-test.tgz -C %s" % self.dirname)
-	os.system("perl -pi -e 's#reposdir=.*#reposdir=%s/etc/yum.repos.d#g' %s/etc/yum.conf" % (self.dirname, self.dirname))
+        os.mkdir(self.dirname + "/etc")
+        f = open(self.dirname + "/etc/yum.conf", "w")
+        f.write("""
+[main]
+cachedir=/var/cache/yum
+debuglevel=2
+logfile=/var/log/yum.log
+pkgpolicy=newest
+distroverpkg=redhat-release
+tolerant=1
+exactarch=1
+retries=20
+reposdir=/etc/yum.repos.d
+
+[RHEL4 base]
+name=Fedora Core $releasever - $basearch - Base
+baseurl=file:/mnt/raid/trees/RHEL4/i386/
+enabled=0
+
+[FC3 base]
+name=Fedora Core 3 - Base
+baseurl=file:/mnt/raid/fedora/3/i386/os/
+        ftp://download.fedora.redhat.com/pub/fedora/linux/core/development/i386    
+enabled=0
+
+[FC3 updates]
+name=Fedora Core 3 - Updates
+#baseurl=ftp://download.fedora.redhat.com/pub/fedora/linux/core/development/i386
+baseurl=file:/mnt/raid/fedora/updates/3/i386/
+enabled=0
+
+[FC3 updates testing]
+name=Fedora Core 3 - Updates Testing
+#baseurl=ftp://download.fedora.redhat.com/pub/fedora/linux/core/development/i386
+baseurl=file:/mnt/raid/fedora/updates/testing/3/i386/
+enabled=0
+
+
+[development_local]
+name=Fedora Core - Development Tree
+#baseurl=ftp://download.fedora.redhat.com/pub/fedora/linux/core/development/i386
+baseurl=file:/mnt/raid/fedora/development/i386
+enabled=1
+gpgcheck=0
+""")
+        f.close()
+        os.mkdir(self.dirname + "/etc/yum.repos.d")
+        f = open(self.dirname + "/etc/yum.repos.d/all.repo", "w")
+        f.write("""
+[fedora-extras]
+name=Fedora Extras $releasever - $basearch - Extra Packages
+baseurl=http://download.fedora.us/fedora/fedora/3/i386/
+gpgcheck=0
+failovermethod=priority
+enabled=0
+
+
+[development]
+name=Fedora Core $releasever - Development Tree
+#baseurl=http://download.fedora.redhat.com/pub/fedora/linux/core/development/$basearch/
+mirrorlist=http://fedora.redhat.com/download/mirrors/fedora-core-rawhide
+enabled=0
+
+[base]
+name=Fedora Core $releasever - $basearch - Base
+#baseurl=http://download.fedora.redhat.com/pub/fedora/linux/core/$releasever/$basearch/os/
+mirrorlist=http://fedora.redhat.com/download/mirrors/fedora-core-$releasever
+enabled=0
+gpgcheck=1
+
+[updates-released]
+name=Fedora Core $releasever - $basearch - Released Updates
+#baseurl=http://download.fedora.redhat.com/pub/fedora/linux/core/updates/$releasever/$basearch/
+mirrorlist=http://fedora.redhat.com/download/mirrors/updates-released-fc$releasever
+enabled=0
+gpgcheck=1
+
+[updates-testing]
+name=Fedora Core $releasever - $basearch - Test Updates
+#baseurl=http://download.fedora.redhat.com/pub/fedora/linux/core/updates/testing/$releasever/$basearch/
+mirrorlist=1
+    2
+    3
+#   4
+5
+enabled=0
+gpgcheck=1
+# $Id$
+
+[freshrpms]
+name=Fedora Core $releasever - $basearch - Freshrpms
+#baseurl=http://ayo.freshrpms.net/fedora/linux/$releasever/$basearch/freshrpms/
+mirrorlist=http://ayo.freshrpms.net/fedora/linux/3/mirrors-freshrpms
+enabled=0
+gpgcheck=1
+
+[livna-stable]
+name=Livna.org Fedora Compatible Packages (stable)
+baseurl=http://rpm.livna.org/fedora/3/$basearch/RPMS.stable
+gpgcheck=0
+enabled=0
+
+[livna-unstable]
+name=Livna.org Fedora Compatible Packages (unstable)
+baseurl=http://rpm.livna.org/fedora/$releasever/$basearch/RPMS.unstable
+gpgcheck=0
+enabled=0
+
+[livna-testing]
+name=Livna.org Fedora Compatible Packages (testing)
+baseurl=http://rpm.livna.org/fedora/$releasever/$basearch/RPMS.testing
+gpgcheck=0
+enabled=0
+""")
+        f.close()
         
     def testRead(self):
         """YumConf class: basic reading"""
         self.prepareRoot()
         
         conf = yumconfig.YumConf("3", "i686", "i386",
-                       filename = self.dirname + "/etc/yum.conf")
+                                 chroot = self.dirname,
+                                 filename = "/etc/yum.conf",
+                                 reposdir = "/etc/yum.repos.d",
+                                 )        
+        
+        should_be = {'development': {'mirrorlist': ['http://fedora.redhat.com/download/mirrors/fedora-core-rawhide'], 'enabled': '0', 'name': 'Fedora Core 3 - Development Tree'}, 'freshrpms': {'gpgcheck': '1', 'mirrorlist': ['http://ayo.freshrpms.net/fedora/linux/3/mirrors-freshrpms'], 'enabled': '0', 'name': 'Fedora Core 3 - i386 - Freshrpms'}, 'livna-stable': {'gpgcheck': '0', 'enabled': '0', 'name': 'Livna.org Fedora Compatible Packages (stable)', 'baseurl': ['http://rpm.livna.org/fedora/3/i386/RPMS.stable']}, 'FC3 updates testing': {'enabled': '0', 'name': 'Fedora Core 3 - Updates Testing', 'baseurl': ['file:/mnt/raid/fedora/updates/testing/3/i386/']}, 'updates-testing': {'gpgcheck': '1', 'mirrorlist': ['1', '2', '3', '5'], 'enabled': '0', 'name': 'Fedora Core 3 - i386 - Test Updates'}, 'base': {'gpgcheck': '1', 'mirrorlist': ['http://fedora.redhat.com/download/mirrors/fedora-core-3'], 'enabled': '0', 'name': 'Fedora Core 3 - i386 - Base'}, 'fedora-extras': {'gpgcheck': '0', 'enabled': '0', 'name': 'Fedora Extras 3 - i386 - Extra Packages', 'baseurl': ['http://download.fedora.us/fedora/fedora/3/i386/'], 'failovermethod': 'priority'}, 'updates-released': {'gpgcheck': '1', 'mirrorlist': ['http://fedora.redhat.com/download/mirrors/updates-released-fc3'], 'enabled': '0', 'name': 'Fedora Core 3 - i386 - Released Updates'}, 'livna-unstable': {'gpgcheck': '0', 'enabled': '0', 'name': 'Livna.org Fedora Compatible Packages (unstable)', 'baseurl': ['http://rpm.livna.org/fedora/3/i386/RPMS.unstable']}, 'FC3 updates': {'enabled': '0', 'name': 'Fedora Core 3 - Updates', 'baseurl': ['file:/mnt/raid/fedora/updates/3/i386/']}, 'development_local': {'gpgcheck': '0', 'enabled': '1', 'name': 'Fedora Core - Development Tree', 'baseurl': ['file:/mnt/raid/fedora/development/i386']}, 'main': {'retries': '20', 'reposdir': '/etc/yum.repos.d', 'tolerant': '1', 'cachedir': '/var/cache/yum', 'exactarch': '1', 'pkgpolicy': 'newest', 'distroverpkg': 'redhat-release', 'debuglevel': '2', 'logfile': '/var/log/yum.log'}, 'RHEL4 base': {'enabled': '0', 'name': 'Fedora Core 3 - i386 - Base', 'baseurl': ['file:/mnt/raid/trees/RHEL4/i386/']}, 'livna-testing': {'gpgcheck': '0', 'enabled': '0', 'name': 'Livna.org Fedora Compatible Packages (testing)', 'baseurl': ['http://rpm.livna.org/fedora/3/i386/RPMS.testing']}, 'FC3 base': {'enabled': '0', 'name': 'Fedora Core 3 - Base', 'baseurl': ['file:/mnt/raid/fedora/3/i386/os/', 'ftp://download.fedora.redhat.com/pub/fedora/linux/core/development/i386']}}
 
-        should_be = {'livna-testing': {'gpgcheck': '0', 'enabled': '0', 'name': 'Livna.org Fedora Compatible Packages (testing)', 'baseurl': 'http://rpm.livna.org/fedora/3/i386/RPMS.testing'}, 'development': {'mirrorlist': 'http://fedora.redhat.com/download/mirrors/fedora-core-rawhide', 'enabled': '0', 'name': 'Fedora Core 3 - Development Tree'}, 'freshrpms': {'gpgcheck': '1', 'mirrorlist': 'http://ayo.freshrpms.net/fedora/linux/3/mirrors-freshrpms', 'enabled': '0', 'name': 'Fedora Core 3 - i386 - Freshrpms'}, 'livna-stable': {'gpgcheck': '0', 'enabled': '0', 'name': 'Livna.org Fedora Compatible Packages (stable)', 'baseurl': 'http://rpm.livna.org/fedora/3/i386/RPMS.stable'}, 'FC3 updates testing': {'enabled': '0', 'name': 'Fedora Core 3 - Updates Testing', 'baseurl': 'file:/mnt/raid/fedora/updates/testing/3/i386/'}, 'updates-testing': {'gpgcheck': '1', 'mirrorlist': 'http://fedora.redhat.com/download/mirrors/updates-testing-fc3', 'enabled': '0', 'name': 'Fedora Core 3 - i386 - Test Updates'}, 'base': {'gpgcheck': '1', 'mirrorlist': 'http://fedora.redhat.com/download/mirrors/fedora-core-3', 'enabled': '0', 'name': 'Fedora Core 3 - i386 - Base'}, 'fedora-extras': {'gpgcheck': '0', 'enabled': '0', 'name': 'Fedora Extras 3 - i386 - Extra Packages', 'baseurl': 'http://download.fedora.us/fedora/fedora/3/i386/', 'failovermethod': 'priority'}, 'updates-released': {'gpgcheck': '1', 'mirrorlist': 'http://fedora.redhat.com/download/mirrors/updates-released-fc3', 'enabled': '0', 'name': 'Fedora Core 3 - i386 - Released Updates'}, 'livna-unstable': {'gpgcheck': '0', 'enabled': '0', 'name': 'Livna.org Fedora Compatible Packages (unstable)', 'baseurl': 'http://rpm.livna.org/fedora/3/i386/RPMS.unstable'}, 'FC3 updates': {'enabled': '0', 'name': 'Fedora Core 3 - Updates', 'baseurl': 'file:/mnt/raid/fedora/updates/3/i386/'}, 'development_local': {'gpgcheck': '0', 'enabled': '1', 'name': 'Fedora Core - Development Tree', 'baseurl': 'file:/mnt/raid/fedora/development/i386'}, 'main': {'retries': '20', 'reposdir': '%s/etc/yum.repos.d' % self.dirname, 'tolerant': '1', 'cachedir': '/var/cache/yum', 'exactarch': '1', 'pkgpolicy': 'newest', 'distroverpkg': 'redhat-release', 'debuglevel': '2', 'logfile': '/var/log/yum.log'}, 'RHEL4 base': {'enabled': '0', 'name': 'Fedora Core 3 - i386 - Base', 'baseurl': 'file:/mnt/raid/trees/RHEL4/i386/'}, 'FC3 base': {'enabled': '0', 'name': 'Fedora Core 3 - Base', 'baseurl': 'file:/mnt/raid/fedora/3/i386/os/'}}
         self.assertEqual(should_be, conf.vars)
 
 def suite():
