@@ -135,7 +135,7 @@ def main():
         elif opt in ["-r", "--root"]:
             rpmconfig.buildroot = val
         elif opt == "-c":
-            conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], val)
+            conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, val)
             for key in conf.vars.keys():
                 if key == "main":
                     pass

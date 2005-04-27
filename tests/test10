@@ -98,6 +98,7 @@ obsoletes=1
 distroverpkg=fedora-release
 retries=10
 pkgpolicy=newest
+#reposdir=/etc/does-not-exist
 
 EOF
 test -n "$3" && cat >> $2/etc/yum.conf <<EOF
@@ -113,7 +114,7 @@ baseurl=file://$FEDORA/updates/$1/\$basearch/
 EOF
 }
 
-DATA=/mnt/data/laroche
+DATA=/mnt/build/laroche
 ARCH=i386
 
 if test x$1 = xclean ; then
@@ -151,7 +152,7 @@ doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/i386/i386-AS/$RPMS $DATA/4-i386
 fi
 
 # Fedora Core 1
-if true ; then
+if false ; then
 IN=$DATA/FC1-$ARCH
 # Raw FC1 install
 doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
@@ -170,7 +171,7 @@ fi
 fi
 
 # Fedora Core 2
-if true ; then
+if false ; then
 IN=$DATA/FC2-$ARCH
 # Raw FC2 install
 doinstall --nodev $FEDORA/2/$ARCH/os/Fedora/RPMS $IN
@@ -187,7 +188,7 @@ fi
 fi
 
 # Fedora Core 3
-if true ; then
+if false ; then
 IN=$DATA/FC3-$ARCH
 # Raw FC3 install
 doinstall         $FEDORA/3/$ARCH/os/Fedora/RPMS $IN
@@ -229,10 +230,10 @@ doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
 { time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.1
 # Update to FC2 with all updates
 genyumconf 2 $IN withbase
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update; } 2>&1 | tee $IN.LOG.2
+{ time $PYRPMYUM -r $IN -c /etc/yum.conf update; } 2>&1 | tee $IN.LOG.2
 # Update to FC3 with all updates
 genyumconf 3 $IN withbase
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update; } 2>&1 | tee $IN.LOG.3
+{ time $PYRPMYUM -r $IN -c /etc/yum.conf update; } 2>&1 | tee $IN.LOG.3
 fi
 
 # Install FC3 with all updates
@@ -241,12 +242,12 @@ IN=$DATA/FC3-removaltests-$ARCH
 cleanchroot $IN
 preparechroot $IN
 genyumconf 3 $IN withbase
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN install "*"; } 2>&1 | tee $IN.LOG
+{ time $PYRPMYUM -r $IN -c /etc/yum.conf install "*"; } 2>&1 | tee $IN.LOG
 # Do some funky remove and updates to see if removals and updates work
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupremove base-x; } 2>&1 | tee $IN.LOG.1
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupupdate kde-desktop; } 2>&1 | tee $IN.LOG.2
+{ time $PYRPMYUM -r $IN -c /etc/yum.conf groupremove base-x; } 2>&1 | tee $IN.LOG.1
+{ time $PYRPMYUM -r $IN -c /etc/yum.conf groupupdate kde-desktop; } 2>&1 | tee $IN.LOG.2
 { time $PYRPMYUM -r $IN remove db4; } 2>&1 | tee $IN.LOG.3
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN update mozilla evolution openoffice.org-writer; } 2>&1 | tee $IN.LOG.4
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupremove base; } 2>&1 | tee $IN.LOG.5
-{ time $PYRPMYUM -c $IN/etc/yum.conf -r $IN groupinstall development-tools; } 2>&1 | tee $IN.LOG.6
+{ time $PYRPMYUM -r $IN -c /etc/yum.conf update mozilla evolution openoffice.org-writer; } 2>&1 | tee $IN.LOG.4
+{ time $PYRPMYUM -r $IN -c /etc/yum.conf groupremove base; } 2>&1 | tee $IN.LOG.5
+{ time $PYRPMYUM -r $IN -c /etc/yum.conf groupinstall development-tools; } 2>&1 | tee $IN.LOG.6
 fi
