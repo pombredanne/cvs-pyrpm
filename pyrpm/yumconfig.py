@@ -259,7 +259,8 @@ class YumConf(Conf):
         self.releasever = releasever
         self.arch = arch
         self.basearch = basearch
-        self.myfilename = self.chroot + filename
+        # Don't prefix the yum config file with the chroot
+        self.myfilename = filename
 
         self.stanza_re = re.compile('^\s*\[(?P<stanza>[^\]]*)]\s*(?:;.*)?$', re.I)
         Conf.__init__(self, self.myfilename, '#;', '=', '=',

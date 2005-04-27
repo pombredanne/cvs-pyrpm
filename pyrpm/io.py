@@ -17,11 +17,11 @@
 #
 
 
-import fcntl, types, bsddb, libxml2, urlgrabber.grabber, zlib
+import fcntl, types, bsddb, libxml2, urlgrabber.grabber
+import zlib, gzip, sha, md5, string, stat, openpgp
 from struct import pack, unpack
 
 from functions import *
-import openpgp
 import package
 
 
@@ -885,34 +885,22 @@ class RpmDatabase:
         raiseFatal("RpmDatabase::erasePkg() method not implemented")
 
     def getPackage(self, name):
-        if not self.pkglist:
-            if not self.read():
-                return None
         if not self.pkglist.has_key(name):
                 return None
         return self.pkglist[name]
 
     def getPkgList(self):
-        if not self.pkglist:
-            if not self.read():
-                return {}
         return self.pkglist.values()
 
     def isInstalled(self, pkg):
         return pkg in self.pkglist.values()
 
     def isDuplicate(self, file):
-        if not self.pkglist:
-            if not self.read():
-                return 1
         if self.filenames.has_key(file) and len(self.filenames[file]) > 1:
             return 1
         return 0
 
     def getNumPkgs(self, name):
-        if not self.pkglist:
-            if not self.read():
-                return 0
         count = 0
         for pkg in self.pkglist.values():
             if pkg["name"] == name:
@@ -1087,7 +1075,15 @@ class RpmRepo(RpmDatabase):
                          "LT": RPMSENSE_LESS,
                          "GT": RPMSENSE_GREATER,
                          "LE": RPMSENSE_EQUAL | RPMSENSE_LESS,
-                         "GE": RPMSENSE_EQUAL | RPMSENSE_GREATER }
+                         "GE": RPMSENSE_EQUAL | RPMSENSE_GREATER,
+                         RPMSENSE_EQUAL: "EQ",
+                         RPMSENSE_LESS: "LT",
+                         RPMSENSE_GREATER: "GT",
+                         RPMSENSE_EQUAL | RPMSENSE_LESS: "LE",
+                         RPMSENSE_EQUAL | RPMSENSE_GREATER: "GE"}
+        # Files included in primary.xml
+        self._filerc = re.compile('^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$')
+        self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
 
     def read(self):
         if not self.source.startswith("file:/"):
@@ -1104,6 +1100,217 @@ class RpmRepo(RpmDatabase):
         if root == None:
             return 0
         return self.__parseNode(root.children)
+
+    def createRepo(self):
+        self.filerequires = []
+        self.config.printInfo(1, "Pass 1: Parsing package headers for file requires.\n")
+        self.__readDir(self.source, "")
+        if not self.source.startswith("file:/"):
+            filename = self.source
+        else:
+            filename = self.source[5:]
+            if filename[1] == "/":
+                idx = filename[2:].index("/")
+                filename = filename[idx+2:]
+        if not os.path.isdir(filename+"/repodata"):
+            try:
+                os.makedirs(filename+"/repodata")
+            except:
+                self.config.printError("%s: Couldn't open PyRPM database" % filename)
+                return 0
+        pdoc = libxml2.newDoc("1.0")
+        proot = pdoc.newChild(None, "metadata", None)
+        pfd = gzip.GzipFile(filename+"/repodata/primary.xml.gz", "wb")
+        if not pfd:
+            return 0
+        self.config.printInfo(1, "Pass 2: Writing repodata information.\n")
+        pfd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        pfd.write('<metadata xmlns="http://linux.duke.edu/metadata/common" xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="%d">\n' % len(self.getPkgList()))
+        for pkg in self.getPkgList():
+            self.config.printInfo(2, "Processing complete data of package %s.\n" % pkg.getNEVRA())
+            pkg.header_read = 0
+            pkg.open()
+            pkg.read()
+            self.__writePrimary(pfd, proot, pkg)
+            self.__writeFilelists(pfd, proot, pkg)
+            pkg.close()
+            pkg.clear()
+        pfd.write('</metadata>\n')
+        pfd.close()
+        del self.filerequires
+        return 1
+
+    def __escape(self, str):
+        """Return escaped string converted to UTF-8"""
+        if str == None:
+            return ''
+        str = string.replace(str, "&", "&amp;")
+        if isinstance(str, unicode):
+            return str
+        try:
+            x = unicode(str, 'ascii')
+            return str
+        except UnicodeError:
+            encodings = ['utf-8', 'iso-8859-1', 'iso-8859-15', 'iso-8859-2']
+            for enc in encodings:
+                try:
+                    x = unicode(str, enc)
+                except UnicodeError:
+                    pass
+                else:
+                    if x.encode(enc) == str:
+                        return x.encode('utf-8')
+        newstring = ''
+        for char in str:
+            if ord(char) > 127:
+                newstring = newstring + '?'
+            else:
+                newstring = newstring + char
+        return re.sub("\n$", '', newstring)
+
+    def __readDir(self, dir, location):
+        files = os.listdir(dir)
+        for f in files:
+            if os.path.isdir("%s/%s" % (dir, f)):
+                self.__readDir("%s/%s" % (dir, f), "%s%s/" % (location, f))
+            elif f.endswith(".rpm"):
+                pkg = package.RpmPackage(self.config, dir+"/"+f)
+                if not pkg.read(tags=("name", "epoch", "version", "release", "arch", "requirename", "requireflags", "requireversion")):
+                    continue
+                pkg.close()
+                if self.__isExcluded(pkg):
+                    continue
+                for reqname in pkg["requirename"]:
+                    if reqname[0] == "/":
+                        self.filerequires.append(reqname)
+                self.config.printInfo(2, "Adding %s to repo and checking file requires.\n" % pkg.getNEVRA())
+                pkg["yumlocation"] = location+f
+                self.pkglist[pkg.getNEVRA()] = pkg
+
+    def __writePrimary(self, fd, parent, pkg):
+        checksum = self.__getChecksum(pkg)
+        pkg_node = parent.newChild(None, "package", None)
+        pkg_node.newProp('type', 'rpm')
+        pkg_node.newChild(None, 'name', pkg['name'])
+        pkg_node.newChild(None, 'arch', pkg['arch'])
+        tnode = pkg_node.newChild(None, 'version', None)
+        if pkg.has_key('epoch'):
+            tnode.newProp('epoch', str(pkg['epoch'][0]))
+        else:
+            tnode.newProp('epoch', '0')
+        tnode.newProp('ver', pkg['version'])
+        tnode.newProp('rel', pkg['release'])
+        tnode = pkg_node.newChild(None, 'checksum', checksum)
+        tnode.newProp('type', self.config.checksum)
+        tnode.newProp('pkgid', 'YES')
+        pkg_node.newChild(None, 'summary', self.__escape(pkg['summary'][0]))
+        pkg_node.newChild(None, 'description', self.__escape(pkg['description'][0]))
+        pkg_node.newChild(None, 'packager', self.__escape(pkg['packager']))
+        pkg_node.newChild(None, 'url', self.__escape(pkg['url']))
+        tnode = pkg_node.newChild(None, 'time', None)
+        tnode.newProp('file', str(pkg['buildtime'][0]))
+        tnode.newProp('build', str(pkg['buildtime'][0]))
+        tnode = pkg_node.newChild(None, 'size', None)
+        tnode.newProp('package', str(pkg['signature']['size_in_sig'][0]+pkg.range_signature[0]+pkg.range_signature[1]))
+        tnode.newProp('installed', str(pkg['size'][0]))
+        tnode.newProp('archive', str(pkg['signature']['payloadsize'][0]))
+        tnode = pkg_node.newChild(None, 'location', None)
+        tnode.newProp('href', pkg["yumlocation"])
+        fnode = pkg_node.newChild(None, 'format', None)
+        self.__generateFormat(fnode, pkg)
+        output = pkg_node.serialize('UTF-8', self.config.pretty)
+        fd.write(output+"\n")
+        pkg_node.unlinkNode()
+        pkg_node.freeNode()
+        del pkg_node
+
+    def __getChecksum(self, pkg):
+        io = getRpmIOFactory(self.config, pkg.source)
+        data = io._read(65536)
+        if self.config.checksum == "md5":
+            s = md5.new()
+        else:
+            s = sha.new()
+        while len(data) > 0:
+            s.update(data)
+            data = io._read(65536)
+        return s.hexdigest()
+
+    def __generateFormat(self, node, pkg):
+        node.newChild(None, 'rpm:license', self.__escape(pkg['license']))
+        node.newChild(None, 'rpm:vendor', self.__escape(pkg['vendor']))
+        node.newChild(None, 'rpm:group', self.__escape(pkg['group'][0]))
+        node.newChild(None, 'rpm:buildhost', self.__escape(pkg['buildhost']))
+        node.newChild(None, 'rpm:sourcerpm', self.__escape(pkg['sourcerpm']))
+        tnode = node.newChild(None, 'rpm:header-range', None)
+        tnode.newProp('start', str(pkg.range_signature[0] + pkg.range_signature[1]))
+        tnode.newProp('end', str(pkg.range_payload[0]))
+        self.__generateDeps(node, pkg, "provides")
+        self.__generateDeps(node, pkg, "requires")
+        self.__generateDeps(node, pkg, "conflicts")
+        self.__generateDeps(node, pkg, "obsoletes")
+        self.__generateFilelist(node, pkg)
+
+    def __generateDeps(self, node, pkg, name):
+        dnode = node.newChild(None, 'rpm:%s' % name, None)
+        deps = self.__filterDuplicateDeps(pkg[name])
+        for dep in deps:
+            enode = dnode.newChild(None, 'rpm:entry', None)
+            enode.newProp('name', dep[0])
+            if dep[1] != "":
+                if (dep[1] & RPMSENSE_SENSEMASK) != 0:
+                    enode.newProp('flags', self.flagmap[dep[1] & RPMSENSE_SENSEMASK])
+                if isLegacyPreReq(dep[1]) or isInstallPreReq(dep[1]):
+                    enode.newProp('pre', '1')
+            if dep[2] != "":
+                e,v,r = evrSplit(dep[2])
+                enode.newProp('epoch', e)
+                enode.newProp('ver', v)
+                if r != "":
+                    enode.newProp('rel', r)
+
+    def __filterDuplicateDeps(self, deps):
+        fdeps = []
+        for name, flags, version in deps:
+            duplicate = 0
+            for fname, fflags, fversion in fdeps:
+                if name != fname or \
+                   version != fversion or \
+                   (isErasePreReq(flags) or \
+                    isInstallPreReq(flags) or \
+                    isLegacyPreReq(flags)) != \
+                   (isErasePreReq(fflags) or \
+                    isInstallPreReq(fflags) or \
+                    isLegacyPreReq(fflags)) or \
+                   (flags & RPMSENSE_SENSEMASK) != (fflags & RPMSENSE_SENSEMASK):
+                    continue
+                duplicate = 1
+                break
+            if not duplicate:
+                fdeps.append([name, flags, version])
+        return fdeps
+
+    def __generateFilelist(self, node, pkg):
+        files = pkg['filenames']
+        fileflags = pkg['fileflags']
+        filemodes = pkg['filemodes']
+        if files == None or fileflags == None or filemodes == None:
+            return
+        for (fname, mode, flag) in zip(files, filemodes, fileflags):
+            if stat.S_ISDIR(mode):
+                if self._dirrc.match(fname) or fname in self.filerequires:
+                    tnode = node.newChild(None, 'file', self.__escape(fname))
+                    tnode.newProp('type', 'dir')
+            elif self._filerc.match(fname) or fname in self.filerequires:
+                tnode = node.newChild(None, 'file', self.__escape(fname))
+                if flag & RPMFILE_GHOST:
+                    tnode.newProp('type', 'ghost')
+
+    def addPkg(self, pkg, nowrite=None):
+        if pkg["arch"] == "src" or self.__isExcluded(pkg):
+            return 0
+        self.pkglist[pkg.getNEVRA()] = pkg
+        return 1
 
     def importFilelist(self):
         if not self.source.startswith("file:/"):
@@ -1253,7 +1460,11 @@ class RpmRepo(RpmDatabase):
                 if rel != None:
                     ver = "%s-%s" % (ver, rel)
                 plist[0].append(name)
-                plist[1].append(self.flagmap[flags])
+                if node.prop("pre") == "1":
+                    prereq = RPMSENSE_PREREQ
+                else:
+                    prereq = 0
+                plist[1].append(self.flagmap[flags] + prereq)
                 plist[2].append(ver)
             node = node.next
         return plist
@@ -1418,25 +1629,13 @@ class RpmCompsXML:
     def __parseGroupHierarchy(self, node):
         # We don't need grouphierarchies, so don't parse them ;)
         return 1
-#        group = {}
-#        while node != None:
-#            if node.type != "element":
-#                node = node.next
-#                continue
-#            if node.name == "name":
-#                lang = node.prop('lang')
-#                if lang != None:
-#                    group["name:"+lang] = node.content
-#                else:
-#                    name = totext(node.content)
-#            node = node.next
 
 
 def getRpmIOFactory(config, source, verify=None, strict=None, hdronly=None):
     if   source[:5] == 'ftp:/':
         return RpmFtpIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'file:/':
-        return RpmFileIO(config, source, verify, strict, hdronly)
+        return RpmHttpIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'http:/':
         return RpmHttpIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'pydb:/':

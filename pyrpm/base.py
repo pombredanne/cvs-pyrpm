@@ -106,9 +106,9 @@ _ERASE_ONLY_MASK   = _notpre(RPMSENSE_SCRIPT_PREUN | RPMSENSE_SCRIPT_POSTUN)
 def isLegacyPreReq(x):
     return (x & _ALL_REQUIRES_MASK) == RPMSENSE_PREREQ
 def isInstallPreReq(x):
-    return (x & _INSTALL_ONLY_MASK)
+    return (x & _INSTALL_ONLY_MASK) != 0
 def isErasePreReq(x):
-    return (x & _ERASE_ONLY_MASK)
+    return (x & _ERASE_ONLY_MASK) != 0
 
 # RPM file attributes
 RPMFILE_NONE        = 0

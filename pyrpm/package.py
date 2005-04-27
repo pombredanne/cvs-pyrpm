@@ -21,6 +21,7 @@
 import os.path, sys, pwd, grp, md5, sha, weakref
 from stat import S_ISREG
 from functions import *
+from io import getRpmIOFactory
 import openpgp
 
 class RpmData:
@@ -153,7 +154,6 @@ class RpmPackage(RpmData):
         self.rpmusercache = RpmUserCache(self.config)
 
     def open(self, mode="r"):
-        from io import getRpmIOFactory
         if self.io != None:
             return 1
         self.io = getRpmIOFactory(self.config, self.source, self.verify,

@@ -111,6 +111,9 @@ def main():
     # Our yum worker object
     yum = RpmYum(rpmconfig)
 
+    # Default yum config file /etc/yum.conf
+    yumconf = '/etc/yum.conf'
+
     # Argument parsing
     try:
       opts, args = getopt.getopt(sys.argv[1:], "?vhc:r:y",
@@ -135,27 +138,7 @@ def main():
         elif opt in ["-r", "--root"]:
             rpmconfig.buildroot = val
         elif opt == "-c":
-            conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, val)
-            for key in conf.vars.keys():
-                if key == "main":
-                    pass
-                else:
-                    sec = conf[key]
-                    if not sec.has_key("baseurl"):
-                        printError("%s: No baseurl for this section in conf file." % key)
-                        sys.exit(1)
-                    baseurl = sec["baseurl"][0]
-                    if not sec.has_key("exclude"):
-                        excludes = ""
-                    else:
-                        excludes = sec["exclude"]
-                    if not baseurl.startswith("file:/"):
-                        printWarning(0, "%s: Only file:/ baseurls supported for now." % key)
-                        continue
-                    yum.addRepo(baseurl, excludes)
-                    if rpmconfig.compsfile == None and \
-                        os.path.isfile(baseurl[5:]+"/repodata/comps.xml"):
-                        rpmconfig.compsfile = baseurl[5:]+"/repodata/comps.xml"
+            yumconf = val
         elif opt == "--quiet":
             rpmconfig.debug = 0
             rpmconfig.warning = 0
@@ -221,6 +204,29 @@ def main():
         print "No command given"
         usage()
         sys.exit(1)
+
+    # Handle yum config file
+    conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, yumconf, "")
+    for key in conf.vars.keys():
+        if key == "main":
+            pass
+        else:
+            sec = conf[key]
+            if not sec.has_key("baseurl"):
+                printError("%s: No baseurl for this section in conf file." % key)
+                sys.exit(1)
+            baseurl = sec["baseurl"][0]
+            if not sec.has_key("exclude"):
+                excludes = ""
+            else:
+                excludes = sec["exclude"]
+            if not baseurl.startswith("file:/"):
+                printWarning(0, "%s: Only file:/ baseurls supported for now." % key)
+                continue
+            yum.addRepo(baseurl, excludes)
+            if rpmconfig.compsfile == None and \
+                os.path.isfile(baseurl[5:]+"/repodata/comps.xml"):
+                rpmconfig.compsfile = baseurl[5:]+"/repodata/comps.xml"
 
     lockfile = lockPyrpm()
     if lockfile == None:
