@@ -25,8 +25,15 @@ from hashlist import HashList
 from base import *
 from resolver import RpmResolver
 
-PRE=0
-POST=1
+class _Relation:
+    """ Pre and post relations for a package """
+    def __init__(self):
+        self.pre = { }
+        self.post = { }
+    def __str__(self):
+        return "%d %d" % (len(self.pre), len(self.post))
+
+# ----
 
 class _Relations:
     """ relations list for packages """
@@ -41,24 +48,25 @@ class _Relations:
             return
         i = self.list[pkg]
         if i == None:
-            i = ({ }, { })
+            i = _Relation()
             self.list[pkg] = i
         if pre == None:
-            return # we have to do nothing more for empty relations
-        if flag == 2 or pre not in i[PRE]:
-            i[PRE][pre] = flag
+            return # no additional things to do for empty relations
+        if pre not in i.pre or flag == 2:
+            # prefer hard requirements, do not overwrite with soft req
+            i.pre[pre] = flag
             if not pre in self.list:
-                self.list[pre] = ({ }, { })
-            self.list[pre][POST][pkg] = None
+                self.list[pre] = _Relation()
+            self.list[pre].post[pkg] = 1
 
     def remove(self, pkg):
         rel = self.list[pkg]
         # remove all post relations for the matching pre relation packages
-        for r in rel[PRE]:
-            del self.list[r][POST][pkg]
+        for r in rel.pre:
+            del self.list[r].post[pkg]
         # remove all pre relations for the matching post relation packages
-        for r in rel[POST]:
-            del self.list[r][PRE][pkg]
+        for r in rel.post:
+            del self.list[r].pre[pkg]
         del self.list[pkg]
 
 # ----------------------------------------------------------------------------
@@ -71,32 +79,28 @@ class RpmOrderer:
         self.config = config
         self.installs = installs
         self.updates = updates
-        self.obsoletes = obsoletes
         self.erases = erases
         if self.updates:
             for pkg in self.updates:
                 for p in self.updates[pkg]:
-                    self.erases.remove(p)
+                    if p in self.erases:
+                        self.erases.remove(p)
+        self.obsoletes = obsoletes
         if self.obsoletes:
             for pkg in self.obsoletes:
                 for p in self.obsoletes[pkg]:
-                    self.erases.remove(p)
+                    if p in self.erases:
+                        self.erases.remove(p)
 
     # ----
 
     def _operationFlag(self, flag, operation):
         """ Return operation flag or requirement """
-        if operation == OP_ERASE:
-            if not isInstallPreReq(flag):
-                if isErasePreReq(flag) or isLegacyPreReq(flag):
-                    return 2    # hard requirement
-                return 1        # soft requirement
-        else: # operation: install or update
-            if not isErasePreReq(flag):
-                if isInstallPreReq(flag) or isLegacyPreReq(flag):
-                    return 2    # hard requirement
-                return 1        # soft requirement
-        return 0
+        if isLegacyPreReq(flag) or \
+               (operation == OP_ERASE and isErasePreReq(flag)) or \
+               (operation != OP_ERASE and isInstallPreReq(flag)):
+            return 2 # hard requirement
+        return 1 # soft requirement
 
     # ----
 
@@ -105,7 +109,7 @@ class RpmOrderer:
         relations = _Relations()
 
         # generate todo list for installs
-        resolver = RpmResolver(self.config, rpms, operation)
+        resolver = RpmResolver(self.config, rpms)
 
         for name in resolver:
             for r in resolver[name]:
@@ -117,7 +121,8 @@ class RpmOrderer:
                 for ((name, flag, version), s) in resolved:
                     if name.startswith("config("): # drop config requirements
                         continue
-                    # drop requirements which are resolved by the package itself
+                    # drop requirements which are resolved by the package
+                    # itself
                     if r in s:
                         continue
                     f = self._operationFlag(flag, OP_INSTALL)
@@ -138,15 +143,15 @@ class RpmOrderer:
             for pkg in relations:
                 rel = relations[pkg]
                 pre = ""
-                if self.config.debug > 2 and len(rel[PRE]) > 0:
+                if self.config.debug > 2 and len(rel.pre) > 0:
                     pre = " pre: "
-                    for i in xrange(len(rel[PRE])):
-                        p = rel[PRE][i]
-                        f = rel[PRE][p]
+                    for i in xrange(len(rel.pre)):
+                        p = rel.pre[i]
+                        f = rel.pre[p]
                         if i > 0: pre += ", "
                         if f == 2: pre += "*"
                         pre += p.getNEVRA()
-                self.config.printDebug(2, "\t%d %d %s%s" % (len(rel[PRE]), len(rel[POST]),
+                self.config.printDebug(2, "\t%d %d %s%s" % (len(rel.pre), len(rel.post),
                                                 pkg.getNEVRA(), pre))
             self.config.printDebug(2, "\t==== relations ====")
 
@@ -157,6 +162,7 @@ class RpmOrderer:
     def _genEraseOps(self, list):
         if len(list) == 1:
             return [(OP_ERASE, list[0])]
+
         # more than one in list: generate order
         return RpmOrderer(self.config, None, None, None, list).order()
 
@@ -185,7 +191,7 @@ class RpmOrderer:
     def _detectLoops(self, relations, path, pkg, loops, used):
         if pkg in used: return
         used[pkg] = 1
-        for p in relations[pkg][PRE]:
+        for p in relations[pkg].pre:
             if len(path) > 0 and p in path:
                 w = path[path.index(p):] # make shallow copy of loop
                 w.append(pkg)
@@ -234,7 +240,7 @@ class RpmOrderer:
         for node in counter:
             for next in counter[node]:
                 count = counter[node][next]
-                if max_count < count and relations[node][PRE][next] == 1:
+                if max_count < count and relations[node].pre[next] == 1:
                     max_count_node = node
                     max_count_next = next
                     max_count = count
@@ -243,8 +249,8 @@ class RpmOrderer:
             self.config.printDebug(1, "Removing requires for %s from %s (%d)" % \
                        (max_count_next.getNEVRA(), max_count_node.getNEVRA(),
                         max_count))
-            del relations[max_count_node][PRE][max_count_next]
-            del relations[max_count_next][POST][max_count_node]
+            del relations[max_count_node].pre[max_count_next]
+            del relations[max_count_next].post[max_count_node]
             return 1
 
         # breakup hard loop
@@ -263,8 +269,8 @@ class RpmOrderer:
             self.config.printDebug(1, "Zapping requires for %s from %s (%d)" % \
                        (max_count_next.getNEVRA(), max_count_node.getNEVRA(),
                         max_count))
-            del relations[max_count_node][PRE][max_count_next]
-            del relations[max_count_next][POST][max_count_node]
+            del relations[max_count_node].pre[max_count_next]
+            del relations[max_count_next].post[max_count_node]
             return 1
         
         return 0
@@ -277,7 +283,7 @@ class RpmOrderer:
             found = 0
             while i < len(relations):
                 pkg = relations[i]
-                if len(relations[pkg][POST]) == 0:
+                if len(relations[pkg].post) == 0:
                     list.insert(0, pkg)
                     relations.remove(pkg)
                     found = 1
@@ -293,9 +299,9 @@ class RpmOrderer:
         next_post_len = -1
         for pkg in relations:
             rel = relations[pkg]
-            if len(rel[PRE]) == 0 and len(rel[POST]) > next_post_len:
+            if len(rel.pre) == 0 and len(rel.post) > next_post_len:
                 next = pkg
-                next_post_len = len(rel[POST])
+                next_post_len = len(rel.post)
         return next
         
     # ----
@@ -328,10 +334,10 @@ class RpmOrderer:
                     for pkg2 in relations:
                         rel2 = relations[pkg2]
                         self.config.printDebug(2, "%s" % pkg2.getNEVRA())
-                        for r in rel2[PRE]:
+                        for r in rel2.pre:
                             # print nevra and flag
                             self.config.printDebug(2, "\t%s (%d)" %
-                                       (r.getNEVRA(), rel2[PRE][r]))
+                                       (r.getNEVRA(), rel2.pre[r]))
                     self.config.printDebug(2, "===== remaining packages =====\n")
 
                 loops = self.getLoops(relations)
