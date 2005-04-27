@@ -1,0 +1,17 @@
+-----------------------------------------------------
+Update von RHEL3-U2-x86_64 auf RHEL3-U4-x86_64 mittels
+./pyrpmyum -v --test -c ../../yrsc/rhel3-u4-x86_64.conf -r /mnt/data/karsten-rhel3-u2-x86_64 update
+
+ergibt:
+Dependency iteration 4
+Resolving dependencies for openoffice.org-0:1.1.0-16.14.EL.i386
+runDepRes() took 25.69 seconds
+Error: libungif-4.1.0-15.x86_64 conflicts with:
+Error:  libungif-0:4.1.0-15.i386
+Error: libungif-0:4.1.0-15.i386 conflicts with:
+Error:  libungif-4.1.0-15.x86_64
+Error: librsvg2-0:2.2.3-6.x86_64 conflicts with:
+Error:  gtk2-2.2.4-4.0.i386
+#ls ls /mnt/data/karsten-rhel3-u2-x86_64/var/lib/pyrpm/headers/libung*
+/mnt/data/karsten-rhel3-u2-x86_64/var/lib/pyrpm/headers/libungif-4.1.0-15.x86_64  /mnt/data/karsten-rhel3-u2-x86_64/var/lib/pyrpm/headers/libungif-devel-4.1.0-15.x86_64
+-----------------------------------------------------
