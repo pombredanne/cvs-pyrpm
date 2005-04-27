@@ -144,7 +144,7 @@ def main():
                     if not sec.has_key("baseurl"):
                         printError("%s: No baseurl for this section in conf file." % key)
                         sys.exit(1)
-                    baseurl = sec["baseurl"]
+                    baseurl = sec["baseurl"][0]
                     if not sec.has_key("exclude"):
                         excludes = ""
                     else:
