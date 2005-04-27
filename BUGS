@@ -14,4 +14,13 @@ Error: librsvg2-0:2.2.3-6.x86_64 conflicts with:
 Error:  gtk2-2.2.4-4.0.i386
 #ls ls /mnt/data/karsten-rhel3-u2-x86_64/var/lib/pyrpm/headers/libung*
 /mnt/data/karsten-rhel3-u2-x86_64/var/lib/pyrpm/headers/libungif-4.1.0-15.x86_64  /mnt/data/karsten-rhel3-u2-x86_64/var/lib/pyrpm/headers/libungif-devel-4.1.0-15.x86_64
+
+same run with -vvv:
+runDepRes() took 26.4 seconds
+Error: libungif-4.1.0-15.x86_64 conflicts with:
+Error:  'giflib' <=> libungif-0:4.1.0-15.i386
+Error: libungif-0:4.1.0-15.i386 conflicts with:
+Error:  'giflib' <=> libungif-4.1.0-15.x86_64
+Error: librsvg2-0:2.2.3-6.x86_64 conflicts with:
+Error:  'gtk2 < 0:2.2.4-9' <=> gtk2-2.2.4-4.0.i386
 -----------------------------------------------------
