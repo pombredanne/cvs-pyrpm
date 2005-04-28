@@ -28,20 +28,20 @@
 # "--nopayload" to not read in the compressed filedata (payload)
 #
 # Example usage:
-# find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null | xargs -0 ./pyrpm.py
-# locate '*.rpm' | xargs ./pyrpm.py --nodigest --nopayload
-# ./pyrpm.py --strict /mirror/fedora/development/i386/Fedora/RPMS/*.rpm
+# find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null \
+#         | xargs -0 ./oldpyrpm.py [--nodigest --nopayload]
+# locate '*.rpm' | xargs ./oldpyrpm.py [--nodigest --nopayload]
+# ./oldpyrpm.py --strict [--nodigest --nopayload] \
+#         /mirror/fedora/development/i386/Fedora/RPMS/*.rpm
 #
 
 #
 # XXX TODO:
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
 #   and "0" epoch
-# - add support to verify signatures
-#   dsa = self[["dsaheader"]] # header
-#   gpg = self[["gpg"]] # header + payload
 # - how to check some content for correct utf-8 encoding?
 # - check for #% in spec files
+# - streaming read for cpio files
 # things that look less important to implement:
 # - relocatable rpm packages
 # - add streaming support to bzip2 compressed payload
@@ -231,9 +231,9 @@ rpmtag = {
     "filelinktos": (1036, RPM_STRING_ARRAY, None, 0),
     "fileflags": (1037, RPM_INT32, None, 0),
     "fileverifyflags": (1045, RPM_INT32, None, 0),
-    "fileclass": (1141, RPM_INT32, None, 0),
     "filelangs": (1097, RPM_STRING_ARRAY, None, 0),
     "filecolors": (1140, RPM_INT32, None, 0),
+    "fileclass": (1141, RPM_INT32, None, 0),
     "filedependsx": (1143, RPM_INT32, None, 0),
     "filedependsn": (1144, RPM_INT32, None, 0),
     "classdict": (1142, RPM_STRING_ARRAY, None, 0),
@@ -269,8 +269,8 @@ del key
 # Info within the sig header.
 rpmsigtag = {
     # size of gpg/dsaheader sums differ between 64/65(contains '\n')
-    "dsaheader": (267, RPM_BIN, None, 0),
-    "gpg": (1005, RPM_BIN, None, 0),
+    "dsaheader": (267, RPM_BIN, None, 0), # only about header
+    "gpg": (1005, RPM_BIN, None, 0), # header+payload
     "header_signatures": (62, RPM_BIN, 16, 0), # content of this tag is unclear
     "payloadsize": (1007, RPM_INT32, 1, 0),
     "size_in_sig": (1000, RPM_INT32, 1, 0),
@@ -1180,6 +1180,28 @@ def verifyRpm(filename, strict=1, payload=None, nodigest=None):
     return rpm
 
 
+def checkSymlinks(repo):
+    """Check if any two dirs in a repository differ in user/group/mode."""
+    allfiles = {}
+    # collect all directories
+    for rpm in repo:
+        for f in rpm.getFilenames():
+            allfiles[f] = None
+    for rpm in repo:
+        files = rpm.getFilenames()
+        if not files:
+            continue
+        for (f, mode, link) in zip(files, rpm["filemodes"], rpm["filelinktos"]):
+            if not S_ISLNK(mode):
+                continue
+            if not link.startswith("/"):
+                link = "%s/%s" % (os.path.dirname(f), link)
+            link = os.path.normpath(link)
+            if allfiles.has_key(link):
+                continue
+            print "%s has dangling symlink from %s to %s" \
+                % (rpm["name"], f, link)
+
 def checkDirs(repo):
     """Check if any two dirs in a repository differ in user/group/mode."""
     dirs = {}
@@ -1382,6 +1404,7 @@ if __name__ == "__main__":
             del rpm
     if strict:
         checkDirs(repo)
+        checkSymlinks(repo)
         checkProvides(repo)
         #print "ready"
         #time.sleep(30)
