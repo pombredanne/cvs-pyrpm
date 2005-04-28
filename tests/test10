@@ -272,7 +272,7 @@ for ARCH in $ARCHS; do
         # Install RHEL3-U2
         doinstall --nodev $RELEASED/RHEL-3/U2/AS/$ARCH/tree/RedHat/RPMS $in
         # Update to U5
-        { time $PYRPMYUM -r $IN update $RELEASED/RHEL-3/U5/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee $IN.LOG.1
+        { time $PYRPMYUM -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee $IN.LOG.1
     fi
 
 done # ARCHS
