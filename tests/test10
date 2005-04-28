@@ -18,8 +18,8 @@ preparechroot() {
     fi
     fuser -k $1/ 2> /dev/null
     dokill
-    umount $1/dev
-    umount $1/proc
+    umount $1/dev 2> /dev/null
+    umount $1/proc 2> /dev/null
     mkdir -p $1/{dev,etc/sysconfig,tmp,proc,var/tmp,var/run}
     chmod 1777 $1/tmp
     touch $1/etc/fstab
