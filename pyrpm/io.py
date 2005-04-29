@@ -1118,25 +1118,46 @@ class RpmRepo(RpmDatabase):
             except:
                 self.config.printError("%s: Couldn't open PyRPM database" % filename)
                 return 0
-        pdoc = libxml2.newDoc("1.0")
-        proot = pdoc.newChild(None, "metadata", None)
         pfd = gzip.GzipFile(filename+"/repodata/primary.xml.gz", "wb")
         if not pfd:
             return 0
+        ffd = gzip.GzipFile(filename+"/repodata/filelists.xml.gz", "wb")
+        if not ffd:
+            return 0
+        ofd = gzip.GzipFile(filename+"/repodata/other.xml.gz", "wb")
+        if not ffd:
+            return 0
+        pdoc = libxml2.newDoc("1.0")
+        proot = pdoc.newChild(None, "metadata", None)
+        fdoc = libxml2.newDoc("1.0")
+        froot = pdoc.newChild(None, "filelists", None)
+        odoc = libxml2.newDoc("1.0")
+        oroot = pdoc.newChild(None, "filelists", None)
         self.config.printInfo(1, "Pass 2: Writing repodata information.\n")
         pfd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         pfd.write('<metadata xmlns="http://linux.duke.edu/metadata/common" xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="%d">\n' % len(self.getPkgList()))
+        ffd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        ffd.write('<filelists xmlns:rpm="http://linux.duke.edu/filelists" packages="%d">\n' % len(self.getPkgList()))
         for pkg in self.getPkgList():
             self.config.printInfo(2, "Processing complete data of package %s.\n" % pkg.getNEVRA())
             pkg.header_read = 0
             pkg.open()
             pkg.read()
+            # If it is a source rpm change the arch to "src". Only valid
+            # for createRepo, never do this anywhere else. ;)
+            if pkg.isSourceRPM():
+                pkg["arch"] = "src"
+            checksum = self.__getChecksum(pkg)
+            pkg["yumchecksum"] = checksum
             self.__writePrimary(pfd, proot, pkg)
-            self.__writeFilelists(pfd, proot, pkg)
+            self.__writeFilelists(ffd, froot, pkg)
+#            self.__writeOther(ofd, oroot, pkg)
             pkg.close()
             pkg.clear()
         pfd.write('</metadata>\n')
+        ffd.write('</metadata>\n')
         pfd.close()
+        ffd.close()
         del self.filerequires
         return 1
 
@@ -1175,7 +1196,7 @@ class RpmRepo(RpmDatabase):
                 self.__readDir("%s/%s" % (dir, f), "%s%s/" % (location, f))
             elif f.endswith(".rpm"):
                 pkg = package.RpmPackage(self.config, dir+"/"+f)
-                if not pkg.read(tags=("name", "epoch", "version", "release", "arch", "requirename", "requireflags", "requireversion")):
+                if not pkg.read(tags=("name", "epoch", "version", "release", "arch", "sourcerpm", "requirename", "requireflags", "requireversion")):
                     continue
                 pkg.close()
                 if self.__isExcluded(pkg):
@@ -1183,12 +1204,16 @@ class RpmRepo(RpmDatabase):
                 for reqname in pkg["requirename"]:
                     if reqname[0] == "/":
                         self.filerequires.append(reqname)
-                self.config.printInfo(2, "Adding %s to repo and checking file requires.\n" % pkg.getNEVRA())
+                # If it is a source rpm change the arch to "src". Only valid
+                # for createRepo, never do this anywhere else. ;)
+                if pkg.isSourceRPM():
+                    pkg["arch"] = "src"
+                nevra = pkg.getNEVRA()
+                self.config.printInfo(2, "Adding %s to repo and checking file requires.\n" % nevra)
                 pkg["yumlocation"] = location+f
-                self.pkglist[pkg.getNEVRA()] = pkg
+                self.pkglist[nevra] = pkg
 
     def __writePrimary(self, fd, parent, pkg):
-        checksum = self.__getChecksum(pkg)
         pkg_node = parent.newChild(None, "package", None)
         pkg_node.newProp('type', 'rpm')
         pkg_node.newChild(None, 'name', pkg['name'])
@@ -1200,7 +1225,7 @@ class RpmRepo(RpmDatabase):
             tnode.newProp('epoch', '0')
         tnode.newProp('ver', pkg['version'])
         tnode.newProp('rel', pkg['release'])
-        tnode = pkg_node.newChild(None, 'checksum', checksum)
+        tnode = pkg_node.newChild(None, 'checksum', pkg["yumchecksum"])
         tnode.newProp('type', self.config.checksum)
         tnode.newProp('pkgid', 'YES')
         pkg_node.newChild(None, 'summary', self.__escape(pkg['summary'][0]))
@@ -1218,6 +1243,25 @@ class RpmRepo(RpmDatabase):
         tnode.newProp('href', pkg["yumlocation"])
         fnode = pkg_node.newChild(None, 'format', None)
         self.__generateFormat(fnode, pkg)
+        output = pkg_node.serialize('UTF-8', self.config.pretty)
+        fd.write(output+"\n")
+        pkg_node.unlinkNode()
+        pkg_node.freeNode()
+        del pkg_node
+
+    def __writeFilelists(self, fd, parent, pkg):
+        pkg_node = parent.newChild(None, "package", None)
+        pkg_node.newProp('pkgid', pkg["yumchecksum"])
+        pkg_node.newProp('name', pkg["name"])
+        pkg_node.newProp('arch', pkg["arch"])
+        tnode = pkg_node.newChild(None, 'version', None)
+        if pkg.has_key('epoch'):
+            tnode.newProp('epoch', str(pkg['epoch'][0]))
+        else:
+            tnode.newProp('epoch', '0')
+        tnode.newProp('ver', pkg['version'])
+        tnode.newProp('rel', pkg['release'])
+        self.__generateFilelist(pkg_node, pkg, 0)
         output = pkg_node.serialize('UTF-8', self.config.pretty)
         fd.write(output+"\n")
         pkg_node.unlinkNode()
@@ -1245,10 +1289,14 @@ class RpmRepo(RpmDatabase):
         tnode = node.newChild(None, 'rpm:header-range', None)
         tnode.newProp('start', str(pkg.range_signature[0] + pkg.range_signature[1]))
         tnode.newProp('end', str(pkg.range_payload[0]))
-        self.__generateDeps(node, pkg, "provides")
-        self.__generateDeps(node, pkg, "requires")
-        self.__generateDeps(node, pkg, "conflicts")
-        self.__generateDeps(node, pkg, "obsoletes")
+        if len(pkg["provides"]) > 0:
+            self.__generateDeps(node, pkg, "provides")
+        if len(pkg["requires"]) > 0:
+            self.__generateDeps(node, pkg, "requires")
+        if len(pkg["conflicts"]) > 0:
+            self.__generateDeps(node, pkg, "conflicts")
+        if len(pkg["obsoletes"]) > 0:
+            self.__generateDeps(node, pkg, "obsoletes")
         self.__generateFilelist(node, pkg)
 
     def __generateDeps(self, node, pkg, name):
@@ -1290,7 +1338,7 @@ class RpmRepo(RpmDatabase):
                 fdeps.append([name, flags, version])
         return fdeps
 
-    def __generateFilelist(self, node, pkg):
+    def __generateFilelist(self, node, pkg, filter=1):
         files = pkg['filenames']
         fileflags = pkg['fileflags']
         filemodes = pkg['filemodes']
@@ -1298,16 +1346,20 @@ class RpmRepo(RpmDatabase):
             return
         for (fname, mode, flag) in zip(files, filemodes, fileflags):
             if stat.S_ISDIR(mode):
-                if self._dirrc.match(fname) or fname in self.filerequires:
+                if not filter or \
+                   self._dirrc.match(fname) or \
+                   fname in self.filerequires:
                     tnode = node.newChild(None, 'file', self.__escape(fname))
                     tnode.newProp('type', 'dir')
-            elif self._filerc.match(fname) or fname in self.filerequires:
+            elif not filter or \
+                 self._filerc.match(fname) or \
+                 fname in self.filerequires:
                 tnode = node.newChild(None, 'file', self.__escape(fname))
                 if flag & RPMFILE_GHOST:
                     tnode.newProp('type', 'ghost')
 
     def addPkg(self, pkg, nowrite=None):
-        if pkg["arch"] == "src" or self.__isExcluded(pkg):
+        if self.__isExcluded(pkg):
             return 0
         self.pkglist[pkg.getNEVRA()] = pkg
         return 1
@@ -1470,8 +1522,6 @@ class RpmRepo(RpmDatabase):
         return plist
 
     def __parseFilelist(self, node, name, arch):
-        if arch == "src":
-            return 1
         filelist = []
         while node != None:
             if node.type != "element":

@@ -589,6 +589,31 @@ def normalizeList(list):
             h[item] = 1
             i += 1
 
+def orderList(list, arch):
+    """ order list by machine distance and evr """
+    for i in xrange(len(list)):
+        for j in xrange(len(list)):
+            if machineDistance(list[i]["arch"], arch) > \
+               machineDistance(list[j]["arch"], arch):
+                t = list[i]
+                list[i] = list[j]
+                list[j] = t
+                continue
+            if pkgCompare(list[i], list[j]) < 0:
+                t = list[i]
+                list[i] = list[j]
+                list[j] = t
+                continue
+
+def machineDistance(arch1, arch2):
+    """ return machine distance as by arch_compats """
+    if   arch_compats.has_key(arch1) and arch2 in arch_compats[arch1]:
+        return arch_compats[arch1].index(arch2)
+    elif arch_compats.has_key(arch2) and arch1 in arch_compats[arch2]:
+        return arch_compats[arch2].index(arch1)
+    else:
+        return 99   # incompatible archs, distance is very high ;)
+
 def getBuildArchList(list):
     """Returns list of build architectures used in 'list' of packages."""
     archs = []

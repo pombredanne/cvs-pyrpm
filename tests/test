@@ -8,7 +8,7 @@ for i in sys.argv[1:]:
     rpm = RpmPackage(rpmconfig, "file://"+i)
     rpm.read()
 #    rpm.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames", "filecolors", "fileclass", "classdict", "filedependsx", "filedependsn", "dependsdict"))
-    print rpm["buildtime"]
+    print rpm["arch"]
     print rpm["group"]
 #    for f in rpm["filenames"]:
 #	rfi = rpm.getRpmFileInfo(f)

@@ -41,6 +41,8 @@ class RpmYum:
         self.repos = [ ]
         # List of repository resolvers
         self.resolvers = [ ]
+        # Internal list of packages that are have to be erased
+        self.erase_list = []
         # Our database
         self.pydb = None
         # Our list of package names that get installed instead of updated
@@ -96,18 +98,8 @@ class RpmYum:
         else:
             if len(args) == 0:
                 for pkg in self.pydb.getPkgList():
-                    args.append(pkg["name"])
-                for pkg in self.__obsoleteslist:
-                    for u in pkg["obsoletes"]:
-                        s = self.opresolver.searchDependency(u)
-                        if len(s) > 0:
-                            if not pkg in self.opresolver:
-                                self.opresolver.update(pkg)
-                            for ipkg in s:
-                                try:
-                                    args.remove(ipkg["name"])
-                                except:
-                                    pass
+                    if not self.__handleObsoletes(pkg):
+                        args.append(pkg["name"])
         # Look for packages we need/want to install. Arguments can either be
         # direct filenames or package nevra's with * wildcards
         self.pkgs = []
@@ -139,6 +131,8 @@ class RpmYum:
                         self.pkgs.extend(findPkgByName(f, rlist))
                     if len(self.pkgs) == 0:
                         self.config.printError("Couldn't find package %s, skipping" % f)
+        normalizeList(self.pkgs)
+        orderList(self.pkgs, self.config.machine)
         if self.config.timer:
             self.config.printInfo(0, "processArgs() took %s seconds\n" % (clock() - time1))
 
@@ -172,9 +166,9 @@ class RpmYum:
         if len(ops) == 0:
             self.config.printInfo(0, "Nothing to do.\n")
             sys.exit(0)
-        self.config.printInfo(0, "The following operations will now be run:\n")
+        self.config.printInfo(1, "The following operations will now be run:\n")
         for (op, pkg) in ops:
-            self.config.printInfo(0, "\t%s %s\n" % (op, pkg.getNEVRA()))
+            self.config.printInfo(1, "\t%s %s\n" % (op, pkg.getNEVRA()))
         if len(self.erase_list) > 0:
             self.config.printInfo(0, "Warning: Following packages will be automatically removed from your system:\n")
             for pkg in self.erase_list:
@@ -224,7 +218,6 @@ class RpmYum:
 
     def __runDepResolution(self):
         # Special erase list for unresolvable package dependancies or conflicts
-        self.erase_list = []
         unresolved = self.opresolver.getUnresolvedDependencies()
         iteration = 1
         # Mark if we might need to reread the repositories
@@ -236,63 +229,57 @@ class RpmYum:
             self.config.printInfo(1, "Dependency iteration " + str(iteration) + "\n")
             iteration += 1
             unresolved_deps = 1
-            for pkg in unresolved.keys():
-                self.config.printInfo(1, "Resolving dependencies for %s\n" % pkg.getNEVRA())
-                # Remove is the easy case: Just remove all packages that have
-                # unresolved deps ;)
-                if self.command.endswith("remove"):
-                    unresolved_deps = 0
-                    self.opresolver.erase(pkg)
-                    continue
-                # For all other cases we need to find packages in our repos
-                # that resolve the given dependency
-                found = 0
-                pkg_list = HashList()
-                for dep in unresolved[pkg]:
-                    self.config.printInfo(2, "\t" + depString(dep) + "\n")
-                    for repo in self.resolvers:
-                        for upkg in repo.searchDependency(dep):
-                            if upkg in pkg_list:
-                                continue
-                            pkg_list[upkg] = 1
-                # Now add all packages that are not in our erase list or
-                # already in our opresolver to it and check if afterwards
-                # if there are any obsoletes for that package and handle them
-                for upkg in pkg_list:
-                    if upkg in self.erase_list:
+            pkg =  unresolved.keys()[0]
+            self.config.printInfo(1, "Resolving dependencies for %s\n" % pkg.getNEVRA())
+            # Remove is the easy case: Just remove all packages that have
+            # unresolved deps ;)
+            if self.command.endswith("remove"):
+                unresolved_deps = 0
+                self.opresolver.erase(pkg)
+                continue
+            # For all other cases we need to find packages in our repos
+            # that resolve the given dependency
+            pkg_list = [ ]
+            dep = unresolved[pkg][0]
+            self.config.printInfo(2, "\t" + depString(dep) + "\n")
+            for repo in self.resolvers:
+                for upkg in repo.searchDependency(dep):
+                    if upkg in pkg_list:
                         continue
-                    if not upkg in self.opresolver:
-                        ret = self.opresolver.update(upkg)
-                        if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
-                            found = 1
-                            unresolved_deps = 0
-                        self.__handleObsoletes(upkg)
-                    else:
-                        found = 1
+                    pkg_list.append(upkg)
+            # Order the elements of the potential packages by machine
+            # distance and evr
+            orderList(pkg_list, self.config.machine)
+            # Now add the first package that ist not in our erase list or
+            # already in our opresolver to it and check afterwards if
+            # there are any obsoletes for that package and handle them
+            for upkg in pkg_list:
+                if upkg in self.erase_list:
+                    continue
+                if not upkg in self.opresolver:
+                    ret = self.opresolver.update(upkg)
+                    if ret > 0 or ret == RpmResolver.ALREADY_ADDED:
                         unresolved_deps = 0
-                # Ok, we didn't find any package that could fullfill the
-                # missing deps. Now what we do is we look for updates of that
-                # package in all repos and try to update it.
-                if found == 0:
-                    tmplist = []
-                    for repo in self.resolvers:
-                        tmplist.extend(findPkgByName(pkg["name"], repo.getList()))
-                    for upkg in tmplist:
-                        if upkg in self.erase_list or upkg in self.opresolver:
-                            continue
-                        ret = self.opresolver.update(upkg)
-                        if ret > 0:
-                            found = 1
-                            unresolved_deps = 0
                         self.__handleObsoletes(upkg)
-#                    if found == 0:
-#                        if self.autoerase:
-#                            self.config.printWarning(1, "Autoerasing package %s due to missing update package." % pkg.getNEVRA())
-#                            self.__doAutoerase(pkg)
-#                        else:
-#                            self.config.printWarning(0, "Couldn't find update for package %s" \
-#                                % pkg.getNEVRA())
-#                            sys.exit(1)
+                        break
+                else:
+                    unresolved_deps = 0
+            # Ok, we didn't find any package that could fullfill the
+            # missing deps. Now what we do is we look for updates of that
+            # package in all repos and try to update it.
+            if unresolved_deps:
+                tmplist = []
+                for repo in self.resolvers:
+                    tmplist.extend(findPkgByName(pkg["name"], repo.getList()))
+                for upkg in tmplist:
+                    if upkg in self.erase_list or upkg in self.opresolver:
+                        continue
+                    ret = self.opresolver.update(upkg)
+                    if ret > 0:
+                        unresolved_deps = 0
+                        self.__handleObsoletes(upkg)
+            # We had left over unresolved deps. If we didn't load the filelists
+            # from the repositories we do so now and try to do more resolving
             if reread == 0 and unresolved_deps:
                 self.config.printWarning(0, "Importing filelist from repositories due to unresolved dependencies")
                 self.resolvers = []
@@ -304,6 +291,10 @@ class RpmYum:
                 self.opresolver.reloadDependencies()
                 unresolved = self.opresolver.getUnresolvedDependencies()
                 continue
+            # OK, left over unresolved deps, but now we already have the
+            # filelists from the repositories. We can now either:
+            #   - Scrap it as we can't update the system without unresolved deps
+            #   - Erase the packages that had unresolved deps (autoerase option)
             if unresolved_deps:
                 for pkg in unresolved.keys():
                     if self.autoerase:
@@ -318,26 +309,41 @@ class RpmYum:
             unresolved = self.opresolver.getUnresolvedDependencies()
             if not self.autoerase:
                 continue
+            # If we have autoerase enabled do a conflict autoerase session
             self.__handleConflictAutoerases()
             unresolved = self.opresolver.getUnresolvedDependencies()
         if not self.autoerase:
             return 1
+        # Again at the end if we have autoerase enabled remove all conflicting
+        # packages.
         return self.__handleConflictAutoerases()
 
     def __handleObsoletes(self, pkg):
-        found = 1
-        while found:
+        obsoleted = 0
+        while 1:
             found = 0
             for opkg in self.__obsoleteslist:
+                if opkg in self.opresolver or opkg in self.erase_list:
+                    continue
+                if pkg["name"] == opkg["name"] and \
+                   pkgCompare(pkg, opkg) >= 0:
+                    continue
                 for u in opkg["obsoletes"]:
                     s = self.opresolver.searchDependency(u)
-                    if pkg in s:
-                        if not pkg in self.opresolver:
-                            self.opresolver.update(pkg)
-                            found = 1
-                            break
+                    if not pkg in s:
+                            continue
+                    if self.opresolver.update(opkg) > 0:
+                        pkglist.append(opkg)
+                        obsoleted = 1
+                        found = 1
+                        break
                 if found:
                     break
+            if found:
+                pkg = opkg
+            else:
+                break
+        return obsoleted
 
     def __doAutoerase(self, pkg):
         if self.opresolver.updates.has_key(pkg):

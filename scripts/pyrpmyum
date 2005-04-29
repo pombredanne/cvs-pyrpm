@@ -62,11 +62,13 @@ def tryUnlock(lockfile):
     if not os.path.exists(lockfile):
         return 0
     fd = open(lockfile, 'r')
-    try: oldpid = int(fd.readline())
+    try:
+        oldpid = int(fd.readline())
     except ValueError:
         Unlink(lockfile) # bogus data
     else:
-        try: os.kill(oldpid, 0)
+        try:
+            os.kill(oldpid, 0)
         except OSError, e:
             if e[0] == errno.ESRCH:
                 Unlink(lockfile) # pid doesn't exist
@@ -82,7 +84,8 @@ def doLock(filename):
         os.write(fd, str(os.getpid()))
         os.close(fd)
     except OSError, msg:
-        if not msg.errno == errno.EEXIST: raise msg
+        if not msg.errno == errno.EEXIST:
+            raise msg
         return 0
     return 1
 
@@ -93,6 +96,10 @@ def lockPyrpm():
         lockfile = rpmconfig.buildroot + "/var/run/pyrpmyum.pid"
     else:
         lockfile = "/var/run/pyrpmyum.pid"
+    try:
+        makeDirs(lockfile)
+    except:
+        pass
     if tryUnlock(lockfile) == 1:
         return None
     if doLock(lockfile) == 0:
@@ -113,6 +120,9 @@ def main():
 
     # Default yum config file /etc/yum.conf
     yumconf = '/etc/yum.conf'
+
+    # Default is to be a little verbose.
+    rpmconfig.verbose = 1
 
     # Argument parsing
     try:
@@ -205,28 +215,33 @@ def main():
         usage()
         sys.exit(1)
 
-    # Handle yum config file
-    conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, yumconf, "")
-    for key in conf.vars.keys():
-        if key == "main":
-            pass
-        else:
-            sec = conf[key]
-            if not sec.has_key("baseurl"):
-                printError("%s: No baseurl for this section in conf file." % key)
-                sys.exit(1)
-            baseurl = sec["baseurl"][0]
-            if not sec.has_key("exclude"):
-                excludes = ""
+    # Handle yum config file. By default we set the reposdir to "", meaning no
+    # repo dirs. If it is specified in the config file we use that though (as
+    # expected)
+    if os.path.isfile(yumconf):
+        conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, yumconf, "")
+        for key in conf.vars.keys():
+            if key == "main":
+                pass
             else:
-                excludes = sec["exclude"]
-            if not baseurl.startswith("file:/"):
-                printWarning(0, "%s: Only file:/ baseurls supported for now." % key)
-                continue
-            yum.addRepo(baseurl, excludes)
-            if rpmconfig.compsfile == None and \
-                os.path.isfile(baseurl[5:]+"/repodata/comps.xml"):
-                rpmconfig.compsfile = baseurl[5:]+"/repodata/comps.xml"
+                sec = conf[key]
+                if not sec.has_key("baseurl"):
+                    printError("%s: No baseurl for this section in conf file." % key)
+                    sys.exit(1)
+                baseurl = sec["baseurl"][0]
+                if not sec.has_key("exclude"):
+                    excludes = ""
+                else:
+                    excludes = sec["exclude"]
+                if not baseurl.startswith("file:/"):
+                    printWarning(0, "%s: Only file:/ baseurls supported for now." % key)
+                    continue
+                yum.addRepo(baseurl, excludes)
+                if rpmconfig.compsfile == None and \
+                   os.path.isfile(baseurl[5:]+"/repodata/comps.xml"):
+                    rpmconfig.compsfile = baseurl[5:]+"/repodata/comps.xml"
+    else:
+        printWarning(0, "Couldn't find given yum config file, skipping read of repos")
 
     lockfile = lockPyrpm()
     if lockfile == None:
@@ -245,15 +260,12 @@ if __name__ == '__main__':
         import tempfile, hotshot, hotshot.stats
         filename = tempfile.mktemp()
         prof = hotshot.Profile(filename)
-        try:
-            prof = prof.runcall(main)
-        except SystemExit:
-            pass
+        prof = prof.runcall(main)
         prof.close()
         del prof
         s = hotshot.stats.load(filename)
-        s.strip_dirs().sort_stats('time').print_stats(20)
-        s.strip_dirs().sort_stats('cumulative').print_stats(20)
+        s.strip_dirs().sort_stats('time').print_stats(100)
+        s.strip_dirs().sort_stats('cumulative').print_stats(100)
         os.unlink(filename)
     else:
         main()
