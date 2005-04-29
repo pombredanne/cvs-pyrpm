@@ -148,7 +148,7 @@ EXTRAS=/mnt/raid/fedora-extras
 #FEDORA=/mnt/data/laroche/fedora
 RPMS=RedHat/RPMS
 PYRPMYUM="./pyrpmyum -y --autoerase --servicehack --quiet"
-CHECKRPM="./scripts/oldpyrpm.py"
+CHECKRPM="./oldpyrpm.py"
 # Specify if updates to newer releases should be done.
 RELEASEUPDATE=1
 
