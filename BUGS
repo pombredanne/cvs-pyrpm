@@ -24,3 +24,27 @@ Error:  'giflib' <=> libungif-4.1.0-15.x86_64
 Error: librsvg2-0:2.2.3-6.x86_64 conflicts with:
 Error:  'gtk2 < 0:2.2.4-9' <=> gtk2-2.2.4-4.0.i386
 -----------------------------------------------------
+
+./pyrpmyum -y --autoerase --servicehack --quiet --test --fileconflicts --ignoresize -r /mnt/build/laroche/FC3-installtest-x86_64 -c /mnt/build/laroche/FC3-installtest-x86_64/etc/yum.conf install *
+processArgs() took 0.42 seconds
+Traceback (most recent call last):
+  File "./pyrpmyum", line 259, in ?
+    main()
+  File "./pyrpmyum", line 237, in main
+    yum.runDepRes()
+  File "../pyrpm/yum.py", line 157, in runDepRes
+    self.__runDepResolution()
+  File "../pyrpm/yum.py", line 321, in __runDepResolution
+    self.__handleConflictAutoerases()
+  File "../pyrpm/yum.py", line 365, in __handleConflictAutoerases
+    conflicts = self.opresolver.getFileConflicts()
+  File "../pyrpm/resolver.py", line 383, in getFileConflicts
+    if S_ISDIR(fi1.mode) and S_ISDIR(fi2.mode):
+  File "/usr/lib64/python2.4/stat.py", line 46, in S_ISDIR
+    return S_IFMT(mode) == S_IFDIR
+  File "/usr/lib64/python2.4/stat.py", line 30, in S_IFMT
+    return mode & 0170000
+TypeError: unsupported operand type(s) for &: 'NoneType' and 'int'
+
+
+-----------------------------------------------------
