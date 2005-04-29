@@ -109,8 +109,7 @@ class RpmController:
         if not self.__preprocess():
             return 0
         if resolver == None:
-            resolver = RpmResolver(self.config, self.db.getPkgList(),
-                                   self.operation)
+            resolver = RpmResolver(self.config, self.db.getPkgList())
             for r in self.rpms:
                 if   self.operation == OP_INSTALL:
                     resolver.install(r)

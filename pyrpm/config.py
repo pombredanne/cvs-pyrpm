@@ -59,6 +59,7 @@ class RpmConfig:
         self.notriggers = 0
         self.noconflicts = 0
         self.nofileconflicts = 0
+        self.checkinstalled = 0
         self.exactarch = 0
         self.compsfile = None
         self.resolvertags = ("name", "epoch", "version", "release", "arch",

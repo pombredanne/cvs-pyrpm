@@ -132,10 +132,12 @@ class RpmResolver(RpmList):
     OBSOLETE_FAILED = -10
     # ----
 
-    def __init__(self, config, installed, check_installed=0):
+    def __init__(self, config, installed):
         RpmList.__init__(self, config, installed)
-        self.check_installed = check_installed
+        check_installed = self.config.checkinstalled
+        self.config.checkinstalled = 1
         self.installed_unresolved = self.getUnresolvedDependencies()
+        self.config.checkinstalled = check_installed
     # ----
 
     def clear(self):
@@ -143,7 +145,6 @@ class RpmResolver(RpmList):
         self.provides = ProvidesList(self.config)
         self.filenames = FilenamesList(self.config)
         self.obsoletes = { }
-        self.check_installed = 0
         self.installed_unresolved = HashList()
     # ----
 
@@ -243,7 +244,7 @@ class RpmResolver(RpmList):
                 # prefer self dependencies if there are others, too
                 s = [pkg]
             if len(s) == 0: # found nothing
-                if self.check_installed == 0 and \
+                if self.config.checkinstalled == 0 and \
                        pkg in self.installed_unresolved and \
                        u in self.installed_unresolved[pkg]:
                     continue
@@ -258,8 +259,8 @@ class RpmResolver(RpmList):
         no_unresolved = 1
         for name in self:
             for r in self[name]:
-                if self.check_installed == 0 and len(self.erases) == 0 and \
-                       self.isInstalled(r):
+                if self.config.checkinstalled == 0 and \
+                       len(self.erases) == 0 and self.isInstalled(r):
                     # do not check installed packages if no packages
                     # are getting removed (by erase, update or obsolete)
                     continue
@@ -329,9 +330,6 @@ class RpmResolver(RpmList):
                         s.remove(r)
                     for r2 in s:
                         if r.getNEVR() != r2.getNEVR():
-                            #if not (self.check_installed == 0 and \
-                            #        self.isInstalled(c[0]) and \
-                            #        self.isInstalled(c[2])):
                             if r not in conflicts:
                                 conflicts[r] = [ ]
                             conflicts[r].append((c, r2))
@@ -390,7 +388,7 @@ class RpmResolver(RpmList):
                     if fi1.mode != fi2.mode or \
                            fi1.filesize != fi2.filesize or \
                            fi1.md5sum != fi2.md5sum:
-                        if not (self.check_installed == 0 and \
+                        if not (self.config.checkinstalled == 0 and \
                                 self.isInstalled(s[j]) and \
                                 self.isInstalled(s[k])):
                             if s[j] not in conflicts:
