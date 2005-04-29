@@ -326,13 +326,14 @@ for ARCH in $ARCHS; do
 
     # Sanity checks
     if true ; then
+        IN=$DATA/
         set -x
-        $CHECKRPM $FEDORA/3/$ARCH/os/Fedora/RPMS/*.rpm 2>&1 | tee CHECKRPM-FC3
-        $CHECKRPM $FEDORA/updates/3/$ARCH/*.rpm 2>&1 | tee CHECKRPM-FC3-updates
-        $CHECKRPM $FEDORA/updates/testing/3/$ARCH/*.rpm 2>&1 | tee CHECKRPM-FC3-updates-testing
-        $CHECKRPM $EXTRAS/3/$ARCH/*.rpm 2>&1 | tee CHECKRPM-FC3-extras
-        $CHECKRPM $EXTRAS/testing/3/$ARCH/*.rpm 2>&1 | tee CHECKRPM-FC3-extras-testing
-        $CHECKRPM $EXTRAS/development/$ARCH/*.rpm 2>&1 | tee CHECKRPM-FC3-devlopment
+        $CHECKRPM $FEDORA/3/$ARCH/os/Fedora/RPMS/*.rpm 2>&1 | tee $IN/CHECKRPM-FC3
+        $CHECKRPM $FEDORA/updates/3/$ARCH/*.rpm 2>&1 | tee $IN/CHECKRPM-FC3-updates
+        $CHECKRPM $FEDORA/updates/testing/3/$ARCH/*.rpm 2>&1 | tee $IN/CHECKRPM-FC3-updates-testing
+        $CHECKRPM $EXTRAS/3/$ARCH/*.rpm 2>&1 | tee $IN/CHECKRPM-FC3-extras
+        $CHECKRPM $EXTRAS/testing/3/$ARCH/*.rpm 2>&1 | tee $IN/CHECKRPM-FC3-extras-testing
+        $CHECKRPM $EXTRAS/development/$ARCH/*.rpm 2>&1 | tee $IN/CHECKRPM-FC3-devlopment
         set +x
     fi
 
