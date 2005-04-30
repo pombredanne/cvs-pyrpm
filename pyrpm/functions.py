@@ -303,6 +303,8 @@ def getFreeDiskspace(operations):
             if not S_ISREG(filemodes[i]):
                 continue
             dirname = dirnames[dirindexes[i]]
+            while dirname.endswith("/") and len(dirname) > 1:
+                dirname = dirname[:-1]
             dev = freehash[dirhash[dirname]]
             mdev = minfreehash[dirhash[dirname]]
             filesize = ((filesizes[i] / dev[1]) + 1) * dev[1]
