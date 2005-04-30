@@ -273,6 +273,8 @@ def getFreeDiskspace(operations):
         if dirnames == None:
             continue
         for dirname in dirnames:
+            while dirname.endswith("/") and len(dirname) > 1:
+                dirname = dirname[:-1]
             if dirhash.has_key(dirname):
                 continue
             dnames = []
