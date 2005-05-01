@@ -59,7 +59,16 @@
 import os.path, gzip, md5, sha, pwd, grp, re
 from types import StringType, IntType, ListType
 from struct import unpack
-from stat import S_ISREG, S_ISLNK, S_ISDIR
+if None:
+    from stat import S_ISREG, S_ISLNK, S_ISDIR
+else:
+    # optimized routines
+    def S_ISREG(mode):
+        return (mode & 0170000) == 0100000
+    def S_ISLNK(mode):
+        return (mode & 0170000) == 0120000
+    def S_ISDIR(mode):
+        return (mode & 0170000) == 0040000
 
 # rpm tag types
 #RPM_NULL = 0
@@ -784,8 +793,8 @@ class ReadRpm:
         if basenames != None:
             dirnames = self["dirnames"]
             dirindexes = self["dirindexes"]
-            return [ "%s%s" % (dirnames[dirindexes[i]], basenames[i])
-                        for i in xrange(len(basenames)) ]
+            return [ "%s%s" % (dirnames[d], b)
+                        for (d, b) in zip(dirindexes, basenames) ]
         else:
             oldfilenames = self["oldfilenames"]
             if oldfilenames != None:
@@ -1169,9 +1178,9 @@ class RRpm:
         self.triggerpostun = rpm["triggerpostun"]
 
 
-def verifyRpm(filename, strict=1, payload=None, nodigest=None):
+def verifyRpm(filename, verify=1, strict=1, payload=None, nodigest=None):
     """Read in a complete rpm and verify its integrity."""
-    rpm = ReadRpm(filename, 1, strict=strict, nodigest=nodigest)
+    rpm = ReadRpm(filename, verify, strict=strict, nodigest=nodigest)
     if rpm.readHeader():
         return None
     if payload:
@@ -1185,13 +1194,13 @@ def checkSymlinks(repo):
     allfiles = {}
     # collect all directories
     for rpm in repo:
-        for f in rpm.getFilenames():
+        for f in rpm.filenames:
             allfiles[f] = None
     for rpm in repo:
-        files = rpm.getFilenames()
-        if not files:
+        if not rpm.filenames:
             continue
-        for (f, mode, link) in zip(files, rpm["filemodes"], rpm["filelinktos"]):
+        for (f, mode, link) in zip(rpm.filenames, rpm["filemodes"],
+            rpm["filelinktos"]):
             if not S_ISLNK(mode):
                 continue
             if not link.startswith("/"):
@@ -1207,33 +1216,29 @@ def checkDirs(repo):
     dirs = {}
     # collect all directories
     for rpm in repo:
-        files = rpm.getFilenames()
-        if not files:
+        if not rpm.filenames:
             continue
         modes = rpm["filemodes"]
         users = rpm["fileusername"]
         groups = rpm["filegroupname"]
-        for (f, mode, user, group) in zip(files, modes, users, groups):
+        for (f, mode, user, group) in zip(rpm.filenames, modes, users, groups):
+            # check if startup scripts are in wrong directory
             if f.startswith("/etc/init.d"):
                 print "init.d:", rpm.filename, f
+            # collect all directories into "dirs"
             if not S_ISDIR(mode):
                 continue
             dirs.setdefault(f, []).append( (f, user, group, mode,
                 rpm.filename) )
+    # check if all dirs have same user/group/mode
     for d in dirs.values():
         if len(d) < 2:
             continue
-        failed = 0
-        for i in xrange(len(d) - 1):
-            if d[i][1] != d[i + 1][1]:
-                failed = 1
-            if d[i][2] != d[i + 1][2]:
-                failed = 1
-            if d[i][3] != d[i + 1][3]:
-                failed = 1
-        if failed:
-            print "dir check failed for ", d
-
+        (user, group, mode) = (d[0][1], d[0][2], d[0][3])
+        for i in xrange(1, len(d)):
+            if d[i][1] != user or d[i][2] != group or d[i][3] != mode:
+                print "dir check failed for ", d
+                break
 
 dupes = [ ("glibc", "i386"),
           ("nptl-devel", "i386"),
@@ -1244,7 +1249,7 @@ dupes = [ ("glibc", "i386"),
           ("kernel-xen0", "i686"),
           ("kernel-xenU", "i686"),
           ("kernel-devel", "i586") ]
-def checkProvides(repo):
+def checkProvides(repo, checkrequires=1):
     provides = {}
     requires = {}
     for rpm in repo:
@@ -1256,8 +1261,7 @@ def checkProvides(repo):
     for rpm in repo:
         if (rpm["name"], rpm["arch"]) in dupes:
             continue
-        provs = rpm.getProvides()
-        for p in provs:
+        for p in rpm.getProvides():
             if not provides.has_key(p):
                 provides[p] = []
             provides[p].append(rpm)
@@ -1267,15 +1271,13 @@ def checkProvides(repo):
         if len(provides[p]) <= 1:
             continue
         # if no require can match this, ignore duplicates
-        if not requires.has_key(p[0]):
+        if checkrequires and not requires.has_key(p[0]):
             continue
         x = []
         for rpm in provides[p]:
-            if 1:
-                if rpm["name"] not in x:
-                    x.append(rpm["name"])
-            else:
-                x.append(rpm.getFilename())
+            #x.append(rpm.getFilename())
+            if rpm["name"] not in x:
+                x.append(rpm["name"])
         if len(x) <= 1:
             continue
         print p, x
@@ -1366,48 +1368,81 @@ def readHdlist(filename, verify=None):
 #    print rpm.getFilename()
 #rpms = readHdlist("/home/fedora/i386/Fedora/base/hdlist2", 1)
 
-
-if __name__ == "__main__":
-    import sys
-    #import time
+def main():
+    import sys, getopt
     repo = []
-    args = sys.argv[1:]
     strict = 0
     nodigest = 0
     payload = 1
-    if args and args[0] == "--strict":
-        strict = 1
-        args = args[1:]
-    if args and args[0] == "--digest":
-        nodigest = 0
-        args = args[1:]
-    if args and args[0] == "--nodigest":
-        nodigest = 1
-        args = args[1:]
-    if args and args[0] == "--payload":
-        payload = 1
-        args = args[1:]
-    if args and args[0] == "--nopayload":
-        payload = 0
-        args = args[1:]
+    wait = 0
+    verify = 1
+    (opts, args) = getopt.getopt(sys.argv[1:], "?",
+        ["help", "strict", "digest", "nodigest",
+         "payload", "nopayload", "wait", "noverify"])
+    for (opt, val) in opts:
+        if opt in ["-?", "--help"]:
+            print "verify rpm packages"
+            sys.exit(0)
+        elif opt == "--strict":
+            strict = 1
+        elif opt == "--digest":
+            nodigest = 0
+        elif opt == "--nodigest":
+            nodigest = 1
+        elif opt == "--payload":
+            payload = 1
+        elif opt == "--nopayload":
+            payload = 0
+        elif opt == "--wait":
+            wait = 1
+        elif opt == "--noverify":
+            verify = 0
     for a in args:
-        #reporpm = RepoRpm(a)
-        rpm = verifyRpm(a, strict, payload, nodigest)
-        if rpm != None:
+        b = [a]
+        if os.path.isdir(a):
+            b = []
+            for c in os.listdir(a):
+                fn = "%s/%s" % (a, c)
+                if c.endswith(".rpm") and os.path.isfile(fn):
+                    b.append(fn)
+        for a in b:
+            #reporpm = RepoRpm(a)
+            rpm = verifyRpm(a, verify, strict, payload, nodigest)
+            if rpm == None:
+                continue
             #f = rpm["requirename"]
             #if f:
             #    print rpm.getFilename()
             #    print f
-            rrpm = RRpm(rpm)
-            if strict:
+            #rrpm = RRpm(rpm)
+            if strict or wait:
                 repo.append(rpm)
             del rpm
     if strict:
+        for rpm in repo:
+            rpm.filenames = rpm.getFilenames()
         checkDirs(repo)
         checkSymlinks(repo)
-        checkProvides(repo)
-        #print "ready"
-        #time.sleep(30)
-    sys.exit(0)
+        checkProvides(repo, checkrequires=1)
+    if wait:
+        import time
+        print "ready"
+        time.sleep(30)
+
+if __name__ == '__main__':
+    dohotshot = 0
+    if dohotshot:
+        import tempfile, hotshot, hotshot.stats
+        filename = tempfile.mktemp()
+        prof = hotshot.Profile(filename)
+        prof.runcall(main)
+        prof.close()
+        del prof
+        s = hotshot.stats.load(filename)
+        s.strip_dirs().sort_stats('time').print_stats(100)
+        s.strip_dirs().sort_stats('cumulative').print_stats(100)
+        os.unlink(filename)
+    else:
+        main()
 
 # vim:ts=4:sw=4:showmatch:expandtab
