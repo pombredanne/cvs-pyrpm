@@ -57,7 +57,6 @@
 #
 
 import os.path, gzip, md5, sha, pwd, grp, re
-from types import StringType, IntType, ListType
 from struct import unpack
 if None:
     from stat import S_ISREG, S_ISLNK, S_ISDIR
@@ -142,164 +141,183 @@ RPMFILE_POLICY      = (1 << 12)    # from %%policy
 # tagname: (tag, type, how-many, flags:legacy=1,src-only=2,bin-only=4)
 rpmtag = {
     # basic info
-    "name": (1000, RPM_STRING, None, 0),
-    "epoch": (1003, RPM_INT32, 1, 0),
-    "version": (1001, RPM_STRING, None, 0),
-    "release": (1002, RPM_STRING, None, 0),
-    "arch": (1022, RPM_STRING, None, 0),
+    "name": [1000, RPM_STRING, None, 0],
+    "epoch": [1003, RPM_INT32, 1, 0],
+    "version": [1001, RPM_STRING, None, 0],
+    "release": [1002, RPM_STRING, None, 0],
+    "arch": [1022, RPM_STRING, None, 0],
 
     # dependencies: provides, requires, obsoletes, conflicts
-    "providename": (1047, RPM_STRING_ARRAY, None, 0),
-    "provideflags": (1112, RPM_INT32, None, 0),
-    "provideversion": (1113, RPM_STRING_ARRAY, None, 0),
-    "requirename": (1049, RPM_STRING_ARRAY, None, 0),
-    "requireflags": (1048, RPM_INT32, None, 0),
-    "requireversion": (1050, RPM_STRING_ARRAY, None, 0),
-    "obsoletename": (1090, RPM_STRING_ARRAY, None, 4),
-    "obsoleteflags": (1114, RPM_INT32, None, 4),
-    "obsoleteversion": (1115, RPM_STRING_ARRAY, None, 4),
-    "conflictname": (1054, RPM_STRING_ARRAY, None, 0),
-    "conflictflags": (1053, RPM_INT32, None, 0),
-    "conflictversion": (1055, RPM_STRING_ARRAY, None, 0),
+    "providename": [1047, RPM_STRING_ARRAY, None, 0],
+    "provideflags": [1112, RPM_INT32, None, 0],
+    "provideversion": [1113, RPM_STRING_ARRAY, None, 0],
+    "requirename": [1049, RPM_STRING_ARRAY, None, 0],
+    "requireflags": [1048, RPM_INT32, None, 0],
+    "requireversion": [1050, RPM_STRING_ARRAY, None, 0],
+    "obsoletename": [1090, RPM_STRING_ARRAY, None, 4],
+    "obsoleteflags": [1114, RPM_INT32, None, 4],
+    "obsoleteversion": [1115, RPM_STRING_ARRAY, None, 4],
+    "conflictname": [1054, RPM_STRING_ARRAY, None, 0],
+    "conflictflags": [1053, RPM_INT32, None, 0],
+    "conflictversion": [1055, RPM_STRING_ARRAY, None, 0],
     # triggers
-    "triggername": (1066, RPM_STRING_ARRAY, None, 4),
-    "triggerflags": (1068, RPM_INT32, None, 4),
-    "triggerversion": (1067, RPM_STRING_ARRAY, None, 4),
-    "triggerscripts": (1065, RPM_STRING_ARRAY, None, 4),
-    "triggerscriptprog": (1092, RPM_STRING_ARRAY, None, 4),
-    "triggerindex": (1069, RPM_INT32, None, 4),
+    "triggername": [1066, RPM_STRING_ARRAY, None, 4],
+    "triggerflags": [1068, RPM_INT32, None, 4],
+    "triggerversion": [1067, RPM_STRING_ARRAY, None, 4],
+    "triggerscripts": [1065, RPM_STRING_ARRAY, None, 4],
+    "triggerscriptprog": [1092, RPM_STRING_ARRAY, None, 4],
+    "triggerindex": [1069, RPM_INT32, None, 4],
 
     # scripts
-    "prein": (1023, RPM_STRING, None, 4),
-    "preinprog": (1085, RPM_ARGSTRING, None, 4),
-    "postin": (1024, RPM_STRING, None, 4),
-    "postinprog": (1086, RPM_ARGSTRING, None, 4),
-    "preun": (1025, RPM_STRING, None, 4),
-    "preunprog": (1087, RPM_ARGSTRING, None, 4),
-    "postun": (1026, RPM_STRING, None, 4),
-    "postunprog": (1088, RPM_ARGSTRING, None, 4),
-    "verifyscript": (1079, RPM_STRING, None, 4),
-    "verifyscriptprog": (1091, RPM_ARGSTRING, None, 4),
+    "prein": [1023, RPM_STRING, None, 4],
+    "preinprog": [1085, RPM_ARGSTRING, None, 4],
+    "postin": [1024, RPM_STRING, None, 4],
+    "postinprog": [1086, RPM_ARGSTRING, None, 4],
+    "preun": [1025, RPM_STRING, None, 4],
+    "preunprog": [1087, RPM_ARGSTRING, None, 4],
+    "postun": [1026, RPM_STRING, None, 4],
+    "postunprog": [1088, RPM_ARGSTRING, None, 4],
+    "verifyscript": [1079, RPM_STRING, None, 4],
+    "verifyscriptprog": [1091, RPM_ARGSTRING, None, 4],
 
     # addon information:
-    "i18ntable": (100, RPM_STRING_ARRAY, None, 0), # list of available langs
-    "summary": (1004, RPM_I18NSTRING, None, 0),
-    "description": (1005, RPM_I18NSTRING, None, 0),
-    "url": (1020, RPM_STRING, None, 0),
-    "license": (1014, RPM_STRING, None, 0),
-    "rpmversion": (1064, RPM_STRING, None, 0),
-    "sourcerpm": (1044, RPM_STRING, None, 4),
-    "changelogtime": (1080, RPM_INT32, None, 0),
-    "changelogname": (1081, RPM_STRING_ARRAY, None, 0),
-    "changelogtext": (1082, RPM_STRING_ARRAY, None, 0),
-    "prefixes": (1098, RPM_STRING_ARRAY, None, 4), # relocatable rpm packages
-    "optflags": (1122, RPM_STRING, None, 4), # optimization flags for gcc
-    "pubkeys": (266, RPM_STRING_ARRAY, None, 4),
-    "sourcepkgid": (1146, RPM_BIN, 16, 4), # md5 from srpm (header+payload)
-    "immutable": (63, RPM_BIN, 16, 0), # content of this tag is unclear
+    "i18ntable": [100, RPM_STRING_ARRAY, None, 0], # list of available langs
+    "summary": [1004, RPM_I18NSTRING, None, 0],
+    "description": [1005, RPM_I18NSTRING, None, 0],
+    "url": [1020, RPM_STRING, None, 0],
+    "license": [1014, RPM_STRING, None, 0],
+    "rpmversion": [1064, RPM_STRING, None, 0],
+    "sourcerpm": [1044, RPM_STRING, None, 4],
+    "changelogtime": [1080, RPM_INT32, None, 0],
+    "changelogname": [1081, RPM_STRING_ARRAY, None, 0],
+    "changelogtext": [1082, RPM_STRING_ARRAY, None, 0],
+    "prefixes": [1098, RPM_STRING_ARRAY, None, 4], # relocatable rpm packages
+    "optflags": [1122, RPM_STRING, None, 4], # optimization flags for gcc
+    "pubkeys": [266, RPM_STRING_ARRAY, None, 4],
+    "sourcepkgid": [1146, RPM_BIN, 16, 4], # md5 from srpm (header+payload)
+    "immutable": [63, RPM_BIN, 16, 0], # content of this tag is unclear
     # less important information:
-    "buildtime": (1006, RPM_INT32, 1, 0), # time of rpm build
-    "buildhost": (1007, RPM_STRING, None, 0), # hostname where rpm was built
-    "cookie": (1094, RPM_STRING, None, 0), # build host and time
+    "buildtime": [1006, RPM_INT32, 1, 0], # time of rpm build
+    "buildhost": [1007, RPM_STRING, None, 0], # hostname where rpm was built
+    "cookie": [1094, RPM_STRING, None, 0], # build host and time
     # ignored now, successor is comps.xml
     # Code allows hardcoded exception to also have type RPM_STRING
     # for RPMTAG_GROUP==1016.
-    "group": (1016, RPM_I18NSTRING, None, 0),
-    "size": (1009, RPM_INT32, 1, 0),                # sum of all file sizes
-    "distribution": (1010, RPM_STRING, None, 0),
-    "vendor": (1011, RPM_STRING, None, 0),
-    "packager": (1015, RPM_STRING, None, 0),
-    "os": (1021, RPM_STRING, None, 0),              # always "linux"
-    "payloadformat": (1124, RPM_STRING, None, 0),   # "cpio"
-    "payloadcompressor": (1125, RPM_STRING, None, 0),# "gzip" or "bzip2"
-    "payloadflags": (1126, RPM_STRING, None, 0),    # "9"
-    "rhnplatform": (1131, RPM_STRING, None, 4),     # == arch
-    "platform": (1132, RPM_STRING, None, 0),
+    "group": [1016, RPM_I18NSTRING, None, 0],
+    "size": [1009, RPM_INT32, 1, 0],                # sum of all file sizes
+    "distribution": [1010, RPM_STRING, None, 0],
+    "vendor": [1011, RPM_STRING, None, 0],
+    "packager": [1015, RPM_STRING, None, 0],
+    "os": [1021, RPM_STRING, None, 0],              # always "linux"
+    "payloadformat": [1124, RPM_STRING, None, 0],   # "cpio"
+    "payloadcompressor": [1125, RPM_STRING, None, 0],# "gzip" or "bzip2"
+    "payloadflags": [1126, RPM_STRING, None, 0],    # "9"
+    "rhnplatform": [1131, RPM_STRING, None, 4],     # == arch
+    "platform": [1132, RPM_STRING, None, 0],
 
     # rpm source packages:
-    "source": (1018, RPM_STRING_ARRAY, None, 2),
-    "patch": (1019, RPM_STRING_ARRAY, None, 2),
-    "buildarchs": (1089, RPM_STRING_ARRAY, None, 2),
-    "excludearch": (1059, RPM_STRING_ARRAY, None, 2),
-    "exclusivearch": (1061, RPM_STRING_ARRAY, None, 2),
-    "exclusiveos": (1062, RPM_STRING_ARRAY, None, 2), # ['Linux'] or ['linux']
+    "source": [1018, RPM_STRING_ARRAY, None, 2],
+    "patch": [1019, RPM_STRING_ARRAY, None, 2],
+    "buildarchs": [1089, RPM_STRING_ARRAY, None, 2],
+    "excludearch": [1059, RPM_STRING_ARRAY, None, 2],
+    "exclusivearch": [1061, RPM_STRING_ARRAY, None, 2],
+    "exclusiveos": [1062, RPM_STRING_ARRAY, None, 2], # ['Linux'] or ['linux']
 
     # information about files
-    "dirindexes": (1116, RPM_INT32, None, 0),
-    "dirnames": (1118, RPM_STRING_ARRAY, None, 0),
-    "basenames": (1117, RPM_STRING_ARRAY, None, 0),
-    "fileusername": (1039, RPM_STRING_ARRAY, None, 0),
-    "filegroupname": (1040, RPM_STRING_ARRAY, None, 0),
-    "filemodes": (1030, RPM_INT16, None, 0),
-    "filemtimes": (1034, RPM_INT32, None, 0),
-    "filedevices": (1095, RPM_INT32, None, 0),
-    "fileinodes": (1096, RPM_INT32, None, 0),
-    "filesizes": (1028, RPM_INT32, None, 0),
-    "filemd5s": (1035, RPM_STRING_ARRAY, None, 0),
-    "filerdevs": (1033, RPM_INT16, None, 0),
-    "filelinktos": (1036, RPM_STRING_ARRAY, None, 0),
-    "fileflags": (1037, RPM_INT32, None, 0),
-    "fileverifyflags": (1045, RPM_INT32, None, 0),
-    "filelangs": (1097, RPM_STRING_ARRAY, None, 0),
-    "filecolors": (1140, RPM_INT32, None, 0),
-    "fileclass": (1141, RPM_INT32, None, 0),
-    "filedependsx": (1143, RPM_INT32, None, 0),
-    "filedependsn": (1144, RPM_INT32, None, 0),
-    "classdict": (1142, RPM_STRING_ARRAY, None, 0),
-    "dependsdict": (1145, RPM_INT32, None, 0),
+    "dirindexes": [1116, RPM_INT32, None, 0],
+    "dirnames": [1118, RPM_STRING_ARRAY, None, 0],
+    "basenames": [1117, RPM_STRING_ARRAY, None, 0],
+    "fileusername": [1039, RPM_STRING_ARRAY, None, 0],
+    "filegroupname": [1040, RPM_STRING_ARRAY, None, 0],
+    "filemodes": [1030, RPM_INT16, None, 0],
+    "filemtimes": [1034, RPM_INT32, None, 0],
+    "filedevices": [1095, RPM_INT32, None, 0],
+    "fileinodes": [1096, RPM_INT32, None, 0],
+    "filesizes": [1028, RPM_INT32, None, 0],
+    "filemd5s": [1035, RPM_STRING_ARRAY, None, 0],
+    "filerdevs": [1033, RPM_INT16, None, 0],
+    "filelinktos": [1036, RPM_STRING_ARRAY, None, 0],
+    "fileflags": [1037, RPM_INT32, None, 0],
+    "fileverifyflags": [1045, RPM_INT32, None, 0],
+    "filelangs": [1097, RPM_STRING_ARRAY, None, 0],
+    "filecolors": [1140, RPM_INT32, None, 0],
+    "fileclass": [1141, RPM_INT32, None, 0],
+    "filedependsx": [1143, RPM_INT32, None, 0],
+    "filedependsn": [1144, RPM_INT32, None, 0],
+    "classdict": [1142, RPM_STRING_ARRAY, None, 0],
+    "dependsdict": [1145, RPM_INT32, None, 0],
 
     # tags not in Fedora Core development trees anymore:
-    "filecontexts": (1147, RPM_STRING_ARRAY, None, 1), # selinux filecontexts
-    "capability": (1105, RPM_INT32, None, 1),
-    "xpm": (1013, RPM_BIN, None, 1),
-    "gif": (1012, RPM_BIN, None, 1),
+    "filecontexts": [1147, RPM_STRING_ARRAY, None, 1], # selinux filecontexts
+    "capability": [1105, RPM_INT32, None, 1],
+    "xpm": [1013, RPM_BIN, None, 1],
+    "gif": [1012, RPM_BIN, None, 1],
     # bogus RHL5.2 data in XFree86-libs, ash, pdksh
-    "verifyscript2": (15, RPM_STRING, None, 1),
-    "nosource": (1051, RPM_INT32, None, 1),
-    "nopatch": (1052, RPM_INT32, None, 1),
-    "disturl": (1123, RPM_STRING, None, 1),
-    "oldfilenames": (1027, RPM_STRING_ARRAY, None, 1),
-    "archivesize": (1046, RPM_INT32, 1, 1), # only in /var/lib/rpm/Packages
-    "triggerin": (1100, RPM_STRING, None, 5),
-    "triggerun": (1101, RPM_STRING, None, 5),
-    "triggerpostun": (1102, RPM_STRING, None, 5)
+    "verifyscript2": [15, RPM_STRING, None, 1],
+    "nosource": [1051, RPM_INT32, None, 1],
+    "nopatch": [1052, RPM_INT32, None, 1],
+    "disturl": [1123, RPM_STRING, None, 1],
+    "oldfilenames": [1027, RPM_STRING_ARRAY, None, 1],
+    "archivesize": [1046, RPM_INT32, 1, 1], # only in /var/lib/rpm/Packages
+    "triggerin": [1100, RPM_STRING, None, 5],
+    "triggerun": [1101, RPM_STRING, None, 5],
+    "triggerpostun": [1102, RPM_STRING, None, 5]
 }
-# Add a reverse mapping for all tags.
+# Add a reverse mapping for all tags plus the name again.
+for v in rpmtag.keys():
+    rpmtag[v].append(v)
 for v in rpmtag.values():
     rpmtag[v[0]] = v
+    if len(v) != 5:
+        raise ValueError, "rpmtag has wrong entries"
 del v
 
 # Required tags in a header.
-rpmtagrequired = []
-for key in ["name", "version", "release", "arch", "rpmversion"]:
-    rpmtagrequired.append(rpmtag[key][0])
-del key
+rpmtagrequired = ["name", "version", "release", "arch", "rpmversion"]
+
+importanttags = {"name":1, "epoch":1, "version":1, "release":1,
+    "arch":1, "rpmversion":1, "sourcerpm":1, "payloadcompressor":1,
+    "providename":1, "provideflags":1, "provideversion":1,
+    "requirename":1, "requireflags":1, "requireversion":1,
+    "obsoletename":1, "obsoleteflags":1, "obsoleteversion":1,
+    "conflictname":1, "conflictflags":1, "conflictversion":1,
+    "triggername":1, "triggerflags":1, "triggerversion":1,
+    "triggerscripts":1, "triggerscriptprog":1, "triggerindex":1,
+    "prein":1, "preinprog":1, "postin":1, "postinprog":1,
+    "preun":1, "preunprog":1, "postun":1, "postunprog":1,
+    "verifyscript":1, "verifyscriptprog":1,
+    "dirindexes":1, "dirnames":1, "basenames":1,
+    "fileusername":1, "filegroupname":1, "filemodes":1,
+    "filemtimes":1, "filedevices":1, "fileinodes":1, "filesizes":1,
+    "filemd5s":1, "filerdevs":1, "filelinktos":1, "fileflags":1}
+
 
 # Info within the sig header.
 rpmsigtag = {
     # size of gpg/dsaheader sums differ between 64/65(contains '\n')
-    "dsaheader": (267, RPM_BIN, None, 0), # only about header
-    "gpg": (1005, RPM_BIN, None, 0), # header+payload
-    "header_signatures": (62, RPM_BIN, 16, 0), # content of this tag is unclear
-    "payloadsize": (1007, RPM_INT32, 1, 0),
-    "size_in_sig": (1000, RPM_INT32, 1, 0),
-    "sha1header": (269, RPM_STRING, None, 0),
-    "md5": (1004, RPM_BIN, 16, 0),
+    "dsaheader": [267, RPM_BIN, None, 0], # only about header
+    "gpg": [1005, RPM_BIN, None, 0], # header+payload
+    "header_signatures": [62, RPM_BIN, 16, 0], # content of this tag is unclear
+    "payloadsize": [1007, RPM_INT32, 1, 0],
+    "size_in_sig": [1000, RPM_INT32, 1, 0],
+    "sha1header": [269, RPM_STRING, None, 0],
+    "md5": [1004, RPM_BIN, 16, 0],
     # legacy entries in older rpm packages:
-    "pgp": (1002, RPM_BIN, None, 1),
-    "badsha1_1": (264, RPM_STRING, None, 1),
-    "badsha1_2": (265, RPM_STRING, None, 1)
+    "pgp": [1002, RPM_BIN, None, 1],
+    "badsha1_1": [264, RPM_STRING, None, 1],
+    "badsha1_2": [265, RPM_STRING, None, 1]
 }
-# Add a reverse mapping for all tags.
+# Add a reverse mapping for all tags plus the name again.
+for v in rpmsigtag.keys():
+    rpmsigtag[v].append(v)
 for v in rpmsigtag.values():
     rpmsigtag[v[0]] = v
+    if len(v) != 5:
+        raise ValueError, "rpmsigtag has wrong entries"
 del v
 
 # Required tags in a signature header.
-rpmsigtagrequired = []
-for key in ["md5"]:
-    rpmsigtagrequired.append(rpmsigtag[key][0])
-del key
+rpmsigtagrequired = ["md5"]
 
 
 # check arch names against this list
@@ -452,20 +470,33 @@ class CPIO:
             func(filedata, data, filenamehash, devinode)
         return None
 
+class HdrIndex:
+    def __init__(self):
+        self.hash = {}
+        self.__len__ = self.hash.__len__
+        self.__getitem__ = self.hash.get
+        self.__setitem__ = self.hash.__setitem__
+        self.__contains__ = self.hash.__contains__
+        self.has_key = self.hash.has_key
+        self.__repr__ = self.hash.__repr__
+
+    def getOne(self, key):
+        value = self[key]
+        if value != None:
+            return value[0]
+        return value
 
 # limit: does not support all RHL5.x and earlier rpms if verify is enabled
 class ReadRpm:
     """Read (Linux) rpm packages."""
 
-    def __init__(self, filename, verify=None, fd=None, hdronly=None, strict=1,
-        nodigest=None):
+    def __init__(self, filename, verify=None, fd=None, strict=1, nodigest=None):
         self.filename = filename
         self.issrc = 0
         if filename.endswith(".src.rpm") or filename.endswith(".nosrc.rpm"):
             self.issrc = 1
         self.verify = verify # enable/disable more data checking
         self.fd = fd # filedescriptor
-        self.hdronly = hdronly # if only the header is present from a hdlist
         # 1 == check if old tags are included, 0 allows all tags
         # 1 is good for Fedora Core development trees
         self.strict = strict
@@ -491,34 +522,7 @@ class ReadRpm:
     def closeFd(self):
         self.fd = None
 
-    def __repr__(self):
-        return self.hdr.__repr__()
-
-    def __getitem__(self, key):
-        if isinstance(key, StringType):
-            return self.hdr.get(rpmtag[key][0])
-        if isinstance(key, IntType):
-            return self.hdr.get(key)
-        # trick to also look at the sig header
-        if isinstance(key, ListType):
-            if isinstance(key[0], StringType):
-                return self.sig.get(rpmsigtag[key[0]][0])
-            return self.sig.get(key[0])
-        self.raiseErr("wrong arg")
-        return None
-
-    def getOne(self, key):
-        value = self[key]
-        if value != None:
-            return value[0]
-        return value
-
-    def __setitem__(self, key, value):
-        # only limited support compared to __getitem__() from above
-        self.hdr[rpmtag[key][0]] = value
-        return value
-
-    def parseLead(self, leaddata):
+    def __parseLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
             unpack("!4scchh66shh16x", leaddata)
         failed = None
@@ -536,7 +540,7 @@ class ReadRpm:
             print major, minor, rpmtype, arch, name, osnum, sigtype
             self.printErr("wrong data in rpm lead")
 
-    def verifyTag(self, index, fmt, issig):
+    def __verifyTag(self, index, fmt, issig):
         (tag, ttype, offset, count) = index
         if issig:
             if not rpmsigtag.has_key(tag):
@@ -608,7 +612,7 @@ class ReadRpm:
             self.raiseErr("unknown tag header")
         return count
 
-    def verifyIndex(self, fmt, fmt2, indexNo, storeSize, issig):
+    def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, issig):
         checkSize = 0
         for i in xrange(0, indexNo * 16, 16):
             index = unpack("!iiii", fmt[i:i + 16])
@@ -620,17 +624,15 @@ class ReadRpm:
                 checkSize += (4 - (checkSize % 4)) % 4
             elif ttype == RPM_INT64:
                 checkSize += (8 - (checkSize % 8)) % 8
-            checkSize += self.verifyTag(index, fmt2, issig)
+            checkSize += self.__verifyTag(index, fmt2, issig)
         if checkSize != storeSize:
             # XXX: add a check for very old rpm versions here, seems this
             # is triggered for a few RHL5.x rpm packages
             self.printErr("storeSize/checkSize is %d/%d" % (storeSize,
                 checkSize))
 
-    def readIndex(self, pad, issig=None):
+    def __readIndex(self, pad, issig=None):
         data = self.fd.read(16)
-        if not len(data):
-            return None
         (magic, indexNo, storeSize) = unpack("!8sii", data)
         if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
             self.raiseErr("bad index magic")
@@ -640,75 +642,73 @@ class ReadRpm:
         if pad != 1:
             padfmt = self.fd.read((pad - (storeSize % pad)) % pad)
         if self.verify:
-            self.verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
+            self.__verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + \
             len(fmt2) + len(padfmt))
 
-    def parseTag(self, ttype, fmt, offset, count):
-        if ttype == RPM_INT32:
-            return unpack("!%dI" % count, fmt[offset:offset + count * 4])
-        elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
-            data = []
-            for _ in xrange(count):
-                end = fmt.index('\x00', offset)
-                data.append(fmt[offset:end])
-                offset = end + 1
-            return data
-        elif ttype == RPM_STRING:
-            return fmt[offset:fmt.index('\x00', offset)]
-        elif ttype == RPM_CHAR:
-            return unpack("!%dc" % count, fmt[offset:offset + count])
-        elif ttype == RPM_INT8:
-            return unpack("!%dB" % count, fmt[offset:offset + count])
-        elif ttype == RPM_INT16:
-            return unpack("!%dH" % count, fmt[offset:offset + count * 2])
-        elif ttype == RPM_INT64:
-            return unpack("!%dQ" % count, fmt[offset:offset + count * 8])
-        elif ttype == RPM_BIN:
-            return fmt[offset:offset + count]
-        self.raiseErr("unknown tag header")
-        return None
-
-    def parseIndex(self, indexNo, fmt, fmt2, tags=None):
-        # parseIndex() could be implemented as C function for faster speed
-        hdr = {}
+    def __parseIndex(self, indexNo, fmt, fmt2, dorpmtag):
+        hdr = HdrIndex()
+        if len(dorpmtag) == 0:
+            return hdr
         for i in xrange(0, indexNo * 16, 16):
             (tag, ttype, offset, count) = unpack("!4i", fmt[i:i + 16])
-            # support reading only some tags
-            if tags and tags.get(tag) != None:
+            if not dorpmtag.has_key(tag):
                 continue
+            nametag = dorpmtag[tag][4]
+            if ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
+                data = []
+                for _ in xrange(count):
+                    end = fmt2.index('\x00', offset)
+                    data.append(fmt2[offset:end])
+                    offset = end + 1
+            elif ttype == RPM_STRING:
+                data = fmt2[offset:fmt2.index('\x00', offset)]
+            elif ttype == RPM_INT32:
+                data = unpack("!%dI" % count, fmt2[offset:offset + count * 4])
+            elif ttype == RPM_CHAR:
+                data = unpack("!%dc" % count, fmt2[offset:offset + count])
+            elif ttype == RPM_INT8:
+                data = unpack("!%dB" % count, fmt2[offset:offset + count])
+            elif ttype == RPM_INT16:
+                data = unpack("!%dH" % count, fmt2[offset:offset + count * 2])
+            elif ttype == RPM_INT64:
+                data = unpack("!%dQ" % count, fmt2[offset:offset + count * 8])
+            elif ttype == RPM_BIN:
+                data = fmt2[offset:offset + count]
+            else:
+                self.raiseErr("unknown tag header")
+                data = None
             # ignore duplicate entries as long as they are identical
-            if hdr.has_key(tag):
-                if hdr[tag] != self.parseTag(ttype, fmt2, offset, count):
+            if hdr.has_key(nametag):
+                if hdr[nametag] != data:
                     self.printErr("tag %d included twice" % tag)
             else:
-                hdr[tag] = self.parseTag(ttype, fmt2, offset, count)
+                hdr[nametag] = data
         return hdr
 
-    def verifyHeader(self):
-        if self.hdronly:
-            return
-        self.doVerify()
-
-    def parseHeader(self, tags=None, parsesig=None):
-        if (self.verify or parsesig) and not self.hdronly:
-            (sigindexNo, sigstoreSize, sigdata, sigfmt, sigfmt2, size) = \
-                self.sigdata
-            self.sig = self.parseIndex(sigindexNo, sigfmt, sigfmt2)
+    def parseHeader(self, sigdata, sigtags, hdrdata, hdrtags):
+        if (self.verify or sigtags):
+            (sigindexNo, sigstoreSize, sigdata2, sigfmt, sigfmt2, size) = \
+                sigdata
+            self.sig = self.__parseIndex(sigindexNo, sigfmt, sigfmt2, sigtags)
             if self.verify:
                 for i in rpmsigtagrequired:
                     if not self.sig.has_key(i):
-                        self.printErr("sig header is missing: %d" % i)
-        (hdrindexNo, hdrstoreSize, hdrdata, hdrfmt, hdrfmt2, size) = \
-            self.hdrdata
-        self.hdr = self.parseIndex(hdrindexNo, hdrfmt, hdrfmt2, tags)
+                        self.printErr("sig header is missing: %s" % i)
+        (hdrindexNo, hdrstoreSize, hdrdata2, hdrfmt, hdrfmt2, size) = hdrdata
+        self.hdr = self.__parseIndex(hdrindexNo, hdrfmt, hdrfmt2, hdrtags)
+        self.__getitem__ = self.hdr.__getitem__
+        self.__setitem__ = self.hdr.__setitem__
+        self.__contains__ = self.hdr.__contains__
+        self.has_key = self.hdr.has_key
+        self.__repr__ = self.hdr.__repr__
         if self.verify:
             for i in rpmtagrequired:
                 if not self.hdr.has_key(i):
-                    self.printErr("hdr is missing: %d" % i)
-            self.verifyHeader()
+                    self.printErr("hdr is missing: %s" % i)
+            self.doVerify()
 
-    def readHeader(self, parse=1, tags=None, keepdata=None):
+    def readHeader(self, sigtags, hdrtags, keepdata=None):
         if self.openFd():
             return 1
         leaddata = self.fd.read(96)
@@ -716,22 +716,18 @@ class ReadRpm:
             self.printErr("no rpm magic found")
             return 1
         if self.verify:
-            self.parseLead(leaddata)
-        self.sigdata = self.readIndex(8, 1)
-        self.hdrdata = self.readIndex(1)
+            self.__parseLead(leaddata)
+        sigdata = self.__readIndex(8, 1)
+        self.sigdatasize = sigdata[5]
+        hdrdata = self.__readIndex(1)
+        self.hdrdatasize = hdrdata[5]
+        if sigtags or hdrtags:
+            self.parseHeader(sigdata, sigtags, hdrdata, hdrtags)
         if keepdata:
             self.leaddata = leaddata
-        if parse:
-            self.parseHeader(tags)
+            self.sigdata = sigdata
+            self.hdrdata = hdrdata
         return None
-
-    def readHdlist(self, parse=1, tags=None):
-        self.hdrdata = self.readIndex(1)
-        if not self.hdrdata:
-            return None
-        if parse:
-            self.parseHeader(tags)
-        return 1
 
     def verifyCpio(self, filedata, data, filenamehash, devinode):
         # Overall result is that apart from the filename information
@@ -802,7 +798,7 @@ class ReadRpm:
         return []
 
     def readPayload(self, func):
-        self.openFd(96 + self.sigdata[5] + self.hdrdata[5])
+        self.openFd(96 + self.sigdatasize + self.hdrdatasize)
         #import zlib
         #payload = self.fd.read()
         #if payload[:9] != '\037\213\010\000\000\000\000\000\000':
@@ -853,8 +849,8 @@ class ReadRpm:
             fd = gzip.GzipFile(fileobj=self.fd)
         cpiosize = None
         if self.verify:
-            cpiosize = self.getOne(["payloadsize"])
-            archivesize = self.getOne("archivesize")
+            cpiosize = self.sig.getOne("payloadsize")
+            archivesize = self.hdr.getOne("archivesize")
             if archivesize != None:
                 if cpiosize == None:
                     cpiosize = archivesize
@@ -864,9 +860,9 @@ class ReadRpm:
         self.cpiodata = c.readCpio(func, filenamehash, devinode)
         if self.cpiodata == None:
             self.raiseErr("Error reading CPIO payload")
-        self.closeFd()
         for filename in filenamehash.iterkeys():
             self.printErr("file not in cpio: %s" % filename)
+        self.closeFd()
 
     def getSpecfile(self, filenames=None):
         fileflags = self["fileflags"]
@@ -896,7 +892,7 @@ class ReadRpm:
         return "%s-%s-%s.%s.rpm" % (self["name"], self["version"],
             self["release"], self["arch"])
 
-    def getDeps(self, name, flags, version):
+    def __getDeps(self, name, flags, version):
         n = self[name]
         if n == None:
             if self.verify:
@@ -919,7 +915,7 @@ class ReadRpm:
         return zip(n, f, v)
 
     def getProvides(self):
-        provs = self.getDeps("providename", "provideflags", "provideversion")
+        provs = self.__getDeps("providename", "provideflags", "provideversion")
         if self.issrc:
             return provs
         ver = self["rpmversion"]
@@ -935,16 +931,16 @@ class ReadRpm:
         return provs
 
     def getRequires(self):
-        return self.getDeps("requirename", "requireflags", "requireversion")
+        return self.__getDeps("requirename", "requireflags", "requireversion")
 
     def getObsoletes(self):
-        return self.getDeps("obsoletename", "obsoleteflags", "obsoleteversion")
+        return self.__getDeps("obsoletename", "obsoleteflags", "obsoleteversion")
 
     def getConflicts(self):
-        return self.getDeps("conflictname", "conflictflags", "conflictversion")
+        return self.__getDeps("conflictname", "conflictflags", "conflictversion")
 
     def getTriggers(self):
-        deps = self.getDeps("triggername", "triggerflags", "triggerversion")
+        deps = self.__getDeps("triggername", "triggerflags", "triggerversion")
         index = self["triggerindex"]
         scripts = self["triggerscripts"]
         progs = self["triggerscriptprog"]
@@ -991,10 +987,10 @@ class ReadRpm:
                    self["filelinktos"], self["filerdevs"])
 
     def doVerify(self):
-        size_in_sig = self.getOne(["size_in_sig"])
+        size_in_sig = self.sig.getOne("size_in_sig")
         if size_in_sig != None:
             rpmsize = os.stat(self.filename)[6]
-            if rpmsize != 96 + self.sigdata[5] + size_in_sig:
+            if rpmsize != 96 + self.sigdatasize + size_in_sig:
                 self.printErr("wrong size in rpm package")
         filenames = self.getFilenames()
         fileflags = self["fileflags"]
@@ -1150,7 +1146,7 @@ class RRpm:
         self.name = rpm["name"]
         self.version = rpm["version"]
         self.release = rpm["release"]
-        self.epoch = rpm.getOne("epoch")
+        self.epoch = rpm.hdr.getOne("epoch")
         self.dep = (self.name, RPMSENSE_EQUAL, rpm.getEVR())
         self.arch = rpm["arch"]
 
@@ -1178,10 +1174,21 @@ class RRpm:
         self.triggerpostun = rpm["triggerpostun"]
 
 
-def verifyRpm(filename, verify=1, strict=1, payload=None, nodigest=None):
+def verifyRpm(filename, verify, strict, payload, nodigest, small):
     """Read in a complete rpm and verify its integrity."""
     rpm = ReadRpm(filename, verify, strict=strict, nodigest=nodigest)
-    if rpm.readHeader():
+    keepdata = 1
+    hdrtags = rpmtag
+    if nodigest == 1:
+        keepdata = 0
+        if verify == 0:
+            if small:
+                for i in importanttags.keys():
+                    value = rpmtag[i]
+                    importanttags[i] = value
+                    importanttags[value[0]] = value
+                hdrtags = importanttags
+    if rpm.readHeader(rpmsigtag, hdrtags, keepdata):
         return None
     if payload:
         rpm.readPayload(rpm.verifyCpio)
@@ -1306,11 +1313,11 @@ class RepoRpm:
         self.size = stats[6]
         self.mtime = stats[8]
         self.rpm = ReadRpm(filename)
-        if self.rpm.readHeader():
+        if self.rpm.readHeader(rpmsigtag, rpmtag):
             return
         self.rpm.closeFd()
-        self.rangestart = 96 + self.rpm.sigdata[5]
-        self.rangeend = self.rangestart + self.rpm.hdrdata[5] - 1
+        self.rangestart = 96 + self.rpm.sigdatasize
+        self.rangeend = self.rangestart + self.rpm.hdrdatasize - 1
 
         # setup regex objects
         self.filerc = []
@@ -1353,21 +1360,6 @@ class RepoRpm:
                     self.usefuldirs.append(f)
 
 
-
-def readHdlist(filename, verify=None):
-    fd = open(filename, "ro")
-    rpms = []
-    while 1:
-        rpm = ReadRpm(filename, verify, fd, 1)
-        if not rpm.readHdlist():
-            break
-        rpms.append(rpm)
-    return rpms
-#rpms = readHdlist("/home/fedora/i386/Fedora/base/hdlist", 1)
-#for rpm in rpms:
-#    print rpm.getFilename()
-#rpms = readHdlist("/home/fedora/i386/Fedora/base/hdlist2", 1)
-
 def main():
     import sys, getopt
     repo = []
@@ -1376,9 +1368,10 @@ def main():
     payload = 1
     wait = 0
     verify = 1
+    small = 0
     (opts, args) = getopt.getopt(sys.argv[1:], "?",
         ["help", "strict", "digest", "nodigest",
-         "payload", "nopayload", "wait", "noverify"])
+         "payload", "nopayload", "wait", "noverify", "small"])
     for (opt, val) in opts:
         if opt in ["-?", "--help"]:
             print "verify rpm packages"
@@ -1397,6 +1390,8 @@ def main():
             wait = 1
         elif opt == "--noverify":
             verify = 0
+        elif opt == "--small":
+            small = 1
     for a in args:
         b = [a]
         if os.path.isdir(a):
@@ -1407,7 +1402,7 @@ def main():
                     b.append(fn)
         for a in b:
             #reporpm = RepoRpm(a)
-            rpm = verifyRpm(a, verify, strict, payload, nodigest)
+            rpm = verifyRpm(a, verify, strict, payload, nodigest, small)
             if rpm == None:
                 continue
             #f = rpm["requirename"]
@@ -1421,6 +1416,7 @@ def main():
     if strict:
         for rpm in repo:
             rpm.filenames = rpm.getFilenames()
+        del rpm
         checkDirs(repo)
         checkSymlinks(repo)
         checkProvides(repo, checkrequires=1)
