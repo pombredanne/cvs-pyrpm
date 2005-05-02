@@ -38,7 +38,7 @@
 #
 # XXX TODO:
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
-#   and "0" epoch
+#   and "0" epoch (change this for createrepo)
 # - how to check some content for correct utf-8 encoding?
 # - check for #% in spec files
 # - streaming read for cpio files
@@ -862,51 +862,51 @@ class ReadRpm:
         # we should not depend on any data from the cpio header.
         # Data is also stored in rpm tags and the cpio header has
         # been broken in enough details to ignore it.
-        filename = filedata[0]
+        (filename, inode, mode, nlink, mtime, filesize, dev, rdev) = filedata
         i = filenamehash.get(filename)
         if i == None:
             self.printErr("cpio file %s not in rpm header" % filename)
             return
         del filenamehash[filename]
-        isreg = S_ISREG(filedata[2])
-        if isreg and filedata[1] != self["fileinodes"][i]:
+        isreg = S_ISREG(mode)
+        if isreg and inode != self["fileinodes"][i]:
             self.printErr("wrong fileinode for %s" % filename)
-        if self.strict and filedata[2] != self["filemodes"][i]:
+        if self.strict and mode != self["filemodes"][i]:
             self.printErr("wrong filemode for %s" % filename)
         # uid/gid are ignored from cpio
         # device/inode are only set correctly for regular files
-        di = devinode.get("%d:%d" % (filedata[6], filedata[1]))
+        di = devinode.get((dev, inode))
         if di == None:
             pass
             # nlink is only set correctly for hardlinks, so disable this check:
-            #   if filedata[3] != 1:
-            #     self.printErr("wrong number of hardlinks")
+            #if nlink != 1:
+            #    self.printErr("wrong number of hardlinks")
         else:
             # Search for "normpath" to read why hardlinks might not
             # be hardlinks, but only double stored files with "/../"
             # stored in their filename. Broken packages out there...
-            if self.strict and filedata[3] != len(di):
+            if self.strict and nlink != len(di):
                 self.printErr("wrong number of hardlinks %s, %d / %d" % \
-                    (filename, filedata[3], len(di)))
-            #elif filedata[3] > len(di):
-            #   # This case also happens e.g. in RHL6.2: procps-2.0.6-5.i386.rpm
-            #   # where nlinks is greater than the number of actual hardlinks.
+                    (filename, nlink, len(di)))
+            # This case also happens e.g. in RHL6.2: procps-2.0.6-5.i386.rpm
+            # where nlinks is greater than the number of actual hardlinks.
+            #elif nlink > len(di):
             #   self.printErr("wrong number of hardlinks %s, %d / %d" % \
-            #       (filename, filedata[3], len(di)))
-        if filedata[4] != self["filemtimes"][i]:
+            #       (filename, nlink, len(di)))
+        if mtime != self["filemtimes"][i]:
             self.printErr("wrong filemtimes for %s" % filename)
-        if filedata[5] != self["filesizes"][i] and \
-            not (filedata[5] == 0 and filedata[3] > 1):
+        if filesize != self["filesizes"][i] and \
+            not (filesize == 0 and nlink > 1):
             self.printErr("wrong filesize for %s" % filename)
-        if isreg and filedata[6] != self["filedevices"][i]:
+        if isreg and dev != self["filedevices"][i]:
             self.printErr("wrong filedevice for %s" % filename)
-        if self.strict and filedata[7] != self["filerdevs"][i]:
+        if self.strict and rdev != self["filerdevs"][i]:
             self.printErr("wrong filerdevs for %s" % filename)
-        if S_ISLNK(filedata[2]):
+        if S_ISLNK(mode):
             if data.rstrip("\x00") != self["filelinktos"][i]:
                 self.printErr("wrong filelinkto for %s" % filename)
         elif isreg:
-            if not (filedata[5] == 0 and filedata[3] > 1):
+            if not (filesize == 0 and nlink > 1):
                 ctx = md5.new()
                 ctx.update(data)
                 if ctx.hexdigest() != self["filemd5s"][i]:
@@ -927,23 +927,22 @@ class ReadRpm:
 
     def readPayload(self, func):
         self.openFd(96 + self.sigdatasize + self.hdrdatasize)
-        fileflags = self["fileflags"]
-        filedevices = self["filedevices"]
-        fileinodes = self["fileinodes"]
-        filemodes = self["filemodes"]
-        filenames = self.getFilenames()
-        devinode = {} # this will contain hardlinked files
+        devinode = {}     # this will contain hardlinked files
         filenamehash = {} # full filename of all files
-        for i in xrange(len(filenames)):
-            if fileflags[i] & (RPMFILE_GHOST | RPMFILE_EXCLUDE):
-                continue
-            filenamehash[filenames[i]] = i
-            if S_ISREG(filemodes[i]):
-                di = "%d:%d" % (filedevices[i], fileinodes[i])
-                #if not devinode.has_key(di):
-                #    devinode[di] = []
-                #devinode[di].append(i)
-                devinode.setdefault(di, []).append(i)
+        filenames = self.getFilenames()
+        if filenames:
+            for (fn, flag, mode, dev, inode, i) in zip(filenames,
+                self["fileflags"], self["filemodes"], self["filedevices"],
+                self["fileinodes"], xrange(len(self["fileinodes"]))):
+                if flag & (RPMFILE_GHOST | RPMFILE_EXCLUDE):
+                    continue
+                filenamehash[fn] = i
+                if S_ISREG(mode):
+                    #di = (dev, inode)
+                    #if not devinode.has_key(di):
+                    #    devinode[di] = []
+                    #devinode[di].append(i)
+                    devinode.setdefault((dev, inode), []).append(i)
         for di in devinode.keys():
             if len(devinode[di]) <= 1:
                 del devinode[di]
