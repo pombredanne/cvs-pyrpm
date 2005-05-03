@@ -422,10 +422,11 @@ def _xisalnum(chr): return (_xisalpha(chr) or _xisdigit(chr))
 
 # compare two strings
 def stringCompare(str1, str2):
-    if str1 == "" and str2 == "": return 0;
-    elif str1 == "" and str2 != "": return -1;
-    elif str1 != "" and str2 == "": return 1;
-    elif str1 == str2: return 0;
+    if str1 == "":
+        if str2 == "": return 0
+        return -1
+    elif str2 == "":   return 1
+    elif str1 == str2: return 0
 
     i1 = i2 = 0
     while i1 < len(str1) and i2 < len(str2):
@@ -595,19 +596,14 @@ def normalizeList(list):
 
 def orderList(list, arch):
     """ order list by machine distance and evr """
-#    list.sort(lambda 
+    distance = [ machineDistance(l["arch"], arch) for l in list ]
     for i in xrange(len(list)):
-        for j in xrange(i+1, len(list)):
-            if machineDistance(list[i]["arch"], arch) > \
-               machineDistance(list[j]["arch"], arch):
-                t = list[i]
-                list[i] = list[j]
-                list[j] = t
+        for j in xrange(i + 1, len(list)):
+            if distance[i] > distance[j]:
+                (list[i], list[j]) = (list[j], list[i])
                 continue
             if pkgCompare(list[i], list[j]) < 0:
-                t = list[i]
-                list[i] = list[j]
-                list[j] = t
+                (list[i], list[j]) = (list[j], list[i])
                 continue
 
 def machineDistance(arch1, arch2):
