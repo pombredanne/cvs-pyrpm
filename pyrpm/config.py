@@ -67,7 +67,7 @@ class RpmConfig:
             "requireflags", "requireversion", "obsoletename", "obsoleteflags",
             "obsoleteversion", "conflictname", "conflictflags",
             "conflictversion", "filesizes", "filemodes", "filemd5s",
-            "dirindexes", "basenames", "dirnames")
+            "dirindexes", "basenames", "dirnames", "oldfilenames")
         self.timer = 0
         self.ldconfig = 0
         self.delayldconfig = 0

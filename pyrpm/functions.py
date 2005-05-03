@@ -20,7 +20,7 @@
 import os, os.path, sys, resource, re
 from types import TupleType, ListType
 from tempfile import mkstemp
-from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE
+from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from config import rpmconfig
 from base import *
 import package
@@ -184,6 +184,8 @@ def installFile(rfi, infd, size):
         if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
             os.unlink(rfi.filename)
             return 0
+    elif S_ISSOCK(mode):
+        rpmconfig.printError("\n%s: Can't handle UNIX domain socket files." % rfi.filename)
     else:
         raise ValueError, "%s: not a valid filetype" % (oct(mode))
     return 1

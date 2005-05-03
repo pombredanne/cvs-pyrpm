@@ -49,8 +49,7 @@ more options:
     [--noorder] [--noscripts] [--notriggers]
     [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
 
-Warning: Some of the install-options are not evaluated yet
-Warning: [group]remove doesn't work yet either, use pyrpminstall -e"""
+Warning: Some of the install-options are not evaluated yet"""
 
 def Unlink(lockfile):
     try:
@@ -257,7 +256,10 @@ if __name__ == '__main__':
         import tempfile, hotshot, hotshot.stats
         filename = tempfile.mktemp()
         prof = hotshot.Profile(filename)
-        prof = prof.runcall(main)
+        try:
+            prof = prof.runcall(main)
+        except SystemExit:
+            pass
         print "Starting profil statistics. This takes some time..."
         prof.close()
         del prof

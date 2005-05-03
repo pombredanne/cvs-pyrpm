@@ -58,7 +58,6 @@ class RpmData(dict):
         self.config = config
         self.hash = RpmData.__hashcount__
         RpmData.__hashcount__ += 1
-        #self.hash = int(str(weakref.ref(self)).split()[6][3:-1], 16)
 
     def __repr__(self):
         return "FastRpmData: <0x" + str(self.hash) + ">"
@@ -697,9 +696,7 @@ class RpmPackage(RpmData):
 
     def getProvides(self):
         r = self.__getDeps(("providename", "provideflags", "provideversion"))
-        #r.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
-        #if self.config.ignore_epoch and self["epoch"] != None:
-        #    r.append( (self["name"], RPMSENSE_EQUAL, "%s-%s" % (self["version"], self["release"])) )
+        r.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
         return r
 
     def getRequires(self):
@@ -743,19 +740,36 @@ class RpmPackage(RpmData):
                     raiseFatal("%s: wrong length of deps" % self.source)
                 deps2.append(x)
             else:
-                deps2.append(None*deplength)
+                if   rpmtag[d][1] == RPM_STRING or \
+                     rpmtag[d][1] == RPM_BIN or \
+                     rpmtag[d][1] == RPM_STRING_ARRAY or \
+                     rpmtag[d][1] == RPM_I18NSTRING:
+                    deps2.append(deplength*[''])
+                elif rpmtag[d][1] == RPM_INT8 or \
+                     rpmtag[d][1] == RPM_INT16 or \
+                     rpmtag[d][1] == RPM_INT32 or \
+                     rpmtag[d][1] == RPM_INT64:
+                    deps2.append(deplength*[0])
         return zip(*deps2)
 
     def __lt__(self, pkg):
+        if not isinstance(pkg, RpmData):
+            return 0
         return pkgCompare(self, pkg) < 0
 
     def __le__(self, pkg):
+        if not isinstance(pkg, RpmData):
+            return 0
         return pkgCompare(self, pkg) <= 0
 
     def __ge__(self, pkg):
+        if not isinstance(pkg, RpmData):
+            return 1
         return pkgCompare(self, pkg) >= 0
 
     def __gt__(self, pkg):
+        if not isinstance(pkg, RpmData):
+            return 1
         return pkgCompare(self, pkg) > 0
 
 # vim:ts=4:sw=4:showmatch:expandtab

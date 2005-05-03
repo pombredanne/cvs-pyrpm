@@ -63,6 +63,10 @@ def readDir(dir, list):
             rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())
             list.append(pkg)
 
+
+#
+# Put more check functions here
+#
 def checkDirs(list):
     """Check if any two dirs in a repository differ in user/group/mode."""
     dirs = {}
