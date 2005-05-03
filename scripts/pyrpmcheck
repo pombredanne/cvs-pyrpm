@@ -1,0 +1,239 @@
+#!/usr/bin/python
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2004, 2005 Red Hat, Inc.
+#
+# Author: Phil Knirsch
+#
+
+import sys, os, getopt, errno
+PYRPMDIR = ".."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+from pyrpm import __version__
+from pyrpm import *
+
+def usage():
+    print """
+pyrpmcheck [--nodir] [--noprovides] [--nosymlinks] [-h, --help] [-v, --verbose] PACKAGES | DIRS
+
+--help:       This usage ;)
+--nodir:      Deactivates the directory check
+--noprovides: Deactivates the provides check
+--nosymlinks: Deactivates the symlinks check
+"""
+
+
+# Tags which will be read from the rpms. CHANGE HERE IF SOME TESTS NEED MORE
+# tags!!!!
+rtags = ("name", "epoch", "version", "release", "arch", "dirindexes", "dirnames", "basenames", "fileusername", "filegroupname", "filemodes", "filelinktos", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion")
+
+def selectNewestPkgs(list):
+    rethash = {}
+    for pkg in list:
+        key = pkg["name"]+"."+buildarchtranslate[pkg["arch"]]
+        if not rethash.has_key(key):
+            rethash[key] = pkg
+        else:
+            if pkgCompare(rethash[key], pkg) <= 0:
+                rethash[key] = pkg
+    return rethash.values()
+
+def readDir(dir, list):
+    files = os.listdir(dir)
+    for f in files:
+        if os.path.isdir("%s/%s" % (dir, f)):
+            readDir("%s/%s" % (dir, f), list)
+        elif f.endswith(".rpm"):
+            pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
+            if not pkg.read(tags=rtags):
+                continue
+            pkg.close()
+            rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())
+            list.append(pkg)
+
+def checkDirs(list):
+    """Check if any two dirs in a repository differ in user/group/mode."""
+    dirs = {}
+    # collect all directories
+    for rpm in list:
+        if not rpm["filenames"]:
+            continue
+        filenames = rpm["filenames"]
+        modes = rpm["filemodes"]
+        users = rpm["fileusername"]
+        groups = rpm["filegroupname"]
+        for (f, mode, user, group) in zip(filenames, modes, users, groups):
+            # check if startup scripts are in wrong directory
+            if f.startswith("/etc/init.d"):
+                print "init.d:", rpm.source, f
+            # collect all directories into "dirs"
+            if not S_ISDIR(mode):
+                continue
+            dirs.setdefault(f, []).append( (f, user, group, mode,
+                rpm.source) )
+    # check if all dirs have same user/group/mode
+    for d in dirs.values():
+        if len(d) < 2:
+            continue
+        (user, group, mode) = (d[0][1], d[0][2], d[0][3])
+        for i in xrange(1, len(d)):
+            if d[i][1] != user or d[i][2] != group or d[i][3] != mode:
+                print "dir check failed for ", d
+                break
+
+dupes = [ ("glibc", "i386"),
+          ("nptl-devel", "i386"),
+          ("openssl", "i386"),
+          ("kernel", "i586"),
+          ("kernel-smp", "i686"),
+          ("kernel-smp-devel", "i686"),
+          ("kernel-xen0", "i686"),
+          ("kernel-xenU", "i686"),
+          ("kernel-devel", "i586") ]
+def checkProvides(list, checkrequires=1):
+    provides = {}
+    requires = {}
+    for rpm in list:
+        req = rpm.getRequires()
+        for r in req:
+            if not requires.has_key(r[0]):
+                requires[r[0]] = []
+            requires[r[0]].append(rpm.getNEVRA())
+    for rpm in list:
+        if (rpm["name"], rpm["arch"]) in dupes:
+            continue
+        for p in rpm.getProvides():
+            if not provides.has_key(p):
+                provides[p] = []
+            provides[p].append(rpm)
+    print "Duplicate provides:"
+    for p in provides.keys():
+        # only look at duplicate keys
+        if len(provides[p]) <= 1:
+            continue
+        # if no require can match this, ignore duplicates
+        if checkrequires and not requires.has_key(p[0]):
+            continue
+        x = []
+        for rpm in provides[p]:
+            #x.append(rpm.getFilename())
+            if rpm["name"] not in x:
+                x.append(rpm["name"])
+        if len(x) <= 1:
+            continue
+        print p, x
+
+def checkSymlinks(list):
+    """Check if any two dirs in a repository differ in user/group/mode."""
+    allfiles = {}
+    # collect all directories
+    for rpm in list:
+        for f in rpm["filenames"]:
+            allfiles[f] = None
+    for rpm in list:
+        if len(rpm["filenames"]) == 0:
+            continue
+        for (f, mode, link) in zip(rpm["filenames"], rpm["filemodes"],
+            rpm["filelinktos"]):
+            if not S_ISLNK(mode):
+                continue
+            if not link.startswith("/"):
+                link = "%s/%s" % (os.path.dirname(f), link)
+            link = os.path.normpath(link)
+            if allfiles.has_key(link):
+                continue
+            print "%s has dangling symlink from %s to %s" \
+                % (rpm["name"], f, link)
+
+#
+# Main program
+#
+def main():
+    nodir = 0
+    noprovides = 0
+    nosymlinks = 0
+
+    # Argument parsing
+    try:
+      opts, args = getopt.getopt(sys.argv[1:], "?v",
+        ["nodir", "noprovides", "nosymlinks", "help", "verbose"])
+    except getopt.error, e:
+        print "Error parsing command list arguments: %s" % e
+        usage()
+        sys.exit(1)
+
+    # Argument handling
+    for (opt, val) in opts:
+        if   opt in ['-?', "--help"]:
+            usage()
+            sys.exit(0)
+        elif opt in ["-v", "--verbose"]:
+            rpmconfig.verbose += 1
+        elif opt == "--nodir":
+            nodir == 1
+        elif opt == "--noprovides":
+            noprovides == 1
+        elif opt == "--nosymlinks":
+            nosymlinks == 1
+
+    if rpmconfig.verbose > 1:
+        rpmconfig.warning = rpmconfig.verbose - 1
+    if rpmconfig.verbose > 2:
+        rpmconfig.warning = rpmconfig.verbose - 2
+
+    if not args:
+        print "No packages/dirs given"
+        usage()
+        sys.exit(1)
+
+    pkg_list = []
+    for arg in args:
+        if   os.path.isdir(arg):
+            readDir(arg, pkg_list)
+        elif arg.endswith(".rpm"):
+            pkg_list.append(readRpmPackage(rpmconfig, arg, tags=rtags))
+
+    pkg_list = selectNewestPkgs(pkg_list)
+
+    if not nodir:
+        checkDirs(pkg_list)
+    if not noprovides:
+        checkProvides(pkg_list)
+    if not nosymlinks:
+        checkSymlinks(pkg_list)
+
+    sys.exit(0)
+
+if __name__ == '__main__':
+    dohotshot = 0
+    if dohotshot:
+        import tempfile, hotshot, hotshot.stats
+        filename = tempfile.mktemp()
+        prof = hotshot.Profile(filename)
+        try:
+            prof = prof.runcall(main)
+        except SystemExit:
+            pass
+        print "Starting profil statistics. This takes some time..."
+        prof.close()
+        del prof
+        s = hotshot.stats.load(filename)
+        s.strip_dirs().sort_stats('time').print_stats(100)
+        s.strip_dirs().sort_stats('cumulative').print_stats(100)
+        os.unlink(filename)
+    else:
+        main()
+
+# vim:ts=4:sw=4:showmatch:expandtab
