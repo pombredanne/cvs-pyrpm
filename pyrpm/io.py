@@ -1155,7 +1155,7 @@ class RpmRepo(RpmDatabase):
             pkg.close()
             pkg.clear()
         pfd.write('</metadata>\n')
-        ffd.write('</metadata>\n')
+        ffd.write('</filelists>\n')
         pfd.close()
         ffd.close()
         del self.filerequires

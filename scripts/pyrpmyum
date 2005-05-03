@@ -111,12 +111,11 @@ def lockPyrpm():
 # Main program
 #
 def main():
+    # Our yum worker object
+    yum = RpmYum(rpmconfig)
 
     # Disabled fileconflicts per default in yum
     rpmconfig.nofileconflicts = 1
-
-    # Our yum worker object
-    yum = RpmYum(rpmconfig)
 
     # Default yum config file /etc/yum.conf
     yumconf = '/etc/yum.conf'
@@ -192,8 +191,6 @@ def main():
             rpmconfig.nodeps = 1
         elif opt == "--nodigest":
             rpmconfig.nodigest = 1
-        elif opt == "--nofileconflicts":
-            rpmconfig.nofileconflicts = 1
         elif opt == "--nosignature":
             rpmconfig.nosignature = 1
         elif opt == "--noorder":
@@ -261,6 +258,7 @@ if __name__ == '__main__':
         filename = tempfile.mktemp()
         prof = hotshot.Profile(filename)
         prof = prof.runcall(main)
+        print "Starting profil statistics. This takes some time..."
         prof.close()
         del prof
         s = hotshot.stats.load(filename)

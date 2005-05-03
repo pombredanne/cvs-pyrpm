@@ -24,7 +24,7 @@ from functions import *
 from io import getRpmIOFactory
 import openpgp
 
-class RpmData:
+class OldRpmData:
     def __init__(self, config):
         self.config = config
         self.data = {}
@@ -48,13 +48,17 @@ class RpmData:
     def keys(self):
         return self.data.keys()
 
+
 ## Faster version (overall performance gain 25%!!!)
-class FastRpmData(dict):
+class RpmData(dict):
     __getitem__ = dict.get
+    __hashcount__ = 0
     def __init__(self, config):
         dict.__init__(self)
         self.config = config
-        self.hash = int(str(weakref.ref(self)).split()[6][3:-1], 16)
+        self.hash = RpmData.__hashcount__
+        RpmData.__hashcount__ += 1
+        #self.hash = int(str(weakref.ref(self)).split()[6][3:-1], 16)
 
     def __repr__(self):
         return "FastRpmData: <0x" + str(self.hash) + ">"
@@ -62,8 +66,21 @@ class FastRpmData(dict):
     def __hash__(self):
         return self.hash
 
+    def __eq__(self, pkg):
+        if not isinstance(pkg, RpmData):
+            return 0
+        return self.hash == pkg.hash
+
+    def __ne__(self, pkg):
+        if not isinstance(pkg, RpmData):
+            return 1
+        return self.hash != pkg.hash
+
+
 ## Comment out, if you experience strange results
-RpmData = FastRpmData
+# Use OldRpmData if you get into trouble
+#RpmData = OldRpmData
+
 
 class RpmUserCache:
     """If glibc is not yet installed (/sbin/ldconfig is missing), we parse
@@ -728,5 +745,17 @@ class RpmPackage(RpmData):
             else:
                 deps2.append(None*deplength)
         return zip(*deps2)
+
+    def __lt__(self, pkg):
+        return pkgCompare(self, pkg) < 0
+
+    def __le__(self, pkg):
+        return pkgCompare(self, pkg) <= 0
+
+    def __ge__(self, pkg):
+        return pkgCompare(self, pkg) >= 0
+
+    def __gt__(self, pkg):
+        return pkgCompare(self, pkg) > 0
 
 # vim:ts=4:sw=4:showmatch:expandtab

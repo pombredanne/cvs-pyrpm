@@ -115,11 +115,14 @@ class FilenamesList:
     def removePkg(self, rpm):
         for name in rpm["filenames"]:
             f = self.filename[name]
-            if len(f) == 2:
-                del self.multi[name]
-            f.remove(rpm)
-            if len(f) == 0:
-                del self.filename[name]
+            l = len(f)
+            if   l == 1:
+                if f[0] == rpm:
+                    del self.filename[name]
+            elif rpm in f:
+                if l == 2:
+                    del self.multi[name]
+                f.remove(rpm)
 
     def search(self, name, l):
         for r in self.filename.get(name, [ ]):
@@ -176,7 +179,7 @@ class RpmResolver(RpmList):
                 fmt = "%s obsoletes installed %s, removing %s"
             else:
                 fmt = "%s obsoletes added %s, removing %s"
-            self.config.printWarning(0, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()))
+            self.config.printWarning(1, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()))
             if self._pkgObsolete(pkg, r) != self.OK:
                 return self.OBSOLETE_FAILED
 

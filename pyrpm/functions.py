@@ -595,8 +595,9 @@ def normalizeList(list):
 
 def orderList(list, arch):
     """ order list by machine distance and evr """
+#    list.sort(lambda 
     for i in xrange(len(list)):
-        for j in xrange(len(list)):
+        for j in xrange(i+1, len(list)):
             if machineDistance(list[i]["arch"], arch) > \
                machineDistance(list[j]["arch"], arch):
                 t = list[i]
