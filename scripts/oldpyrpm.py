@@ -69,6 +69,10 @@ def S_ISDIR(mode):
     return (mode & 0170000) == 0040000
 
 
+# Optimized routines that use zlib to extract data, since
+# "import gzip" doesn't give good data handling (old code
+# can still easily be enabled to compare performance):
+
 (FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT) = (1, 2, 4, 8, 16)
 class PyGZIP:
     def __init__(self, fd):
@@ -397,6 +401,7 @@ rpmtagrequired = ["name", "version", "release", "arch", "rpmversion"]
 
 importanttags = {"name":1, "epoch":1, "version":1, "release":1,
     "arch":1, "rpmversion":1, "sourcerpm":1, "payloadcompressor":1,
+    "payloadformat":1,
     "providename":1, "provideflags":1, "provideversion":1,
     "requirename":1, "requireflags":1, "requireversion":1,
     "obsoletename":1, "obsoleteflags":1, "obsoleteversion":1,
@@ -545,7 +550,7 @@ class CPIO:
         if self.size != None:
             self.size -= 110
         # CPIO ASCII hex, expanded device numbers (070702 with CRC)
-        if data[0:6] not in ["070701", "070702"]:
+        if data[0:6] not in ("070701", "070702"):
             raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
         filename = self.readDataPad(int(data[94:102], 16), 110).rstrip("\x00")
         if filename == "TRAILER!!!":
@@ -814,28 +819,6 @@ class ReadRpm:
                 hdr[nametag] = data
         return hdr
 
-    def parseHeader(self, sigdata, sigtags, hdrdata, hdrtags):
-        if self.verify or sigtags:
-            (sigindexNo, sigstoreSize, sigdata2, sigfmt, sigfmt2, size) = \
-                sigdata
-            self.sig = self.__parseIndex(sigindexNo, sigfmt, sigfmt2, sigtags)
-            if self.verify:
-                for i in rpmsigtagrequired:
-                    if not self.sig.has_key(i):
-                        self.printErr("sig header is missing: %s" % i)
-        (hdrindexNo, hdrstoreSize, hdrdata2, hdrfmt, hdrfmt2, size) = hdrdata
-        self.hdr = self.__parseIndex(hdrindexNo, hdrfmt, hdrfmt2, hdrtags)
-        self.__getitem__ = self.hdr.__getitem__
-        self.__setitem__ = self.hdr.__setitem__
-        self.__contains__ = self.hdr.__contains__
-        self.has_key = self.hdr.has_key
-        self.__repr__ = self.hdr.__repr__
-        if self.verify:
-            for i in rpmtagrequired:
-                if not self.hdr.has_key(i):
-                    self.printErr("hdr is missing: %s" % i)
-            self.doVerify()
-
     def readHeader(self, sigtags, hdrtags, keepdata=None):
         if self.openFd():
             return 1
@@ -853,8 +836,23 @@ class ReadRpm:
             self.leaddata = leaddata
             self.sigdata = sigdata
             self.hdrdata = hdrdata
-        if sigtags or hdrtags:
-            self.parseHeader(sigdata, sigtags, hdrdata, hdrtags)
+
+        if not sigtags and not hdrtags:
+            return None
+
+        if self.verify or sigtags:
+            (sigindexNo, sigstoreSize, sigdata2, sigfmt, sigfmt2, size) = \
+                sigdata
+            self.sig = self.__parseIndex(sigindexNo, sigfmt, sigfmt2, sigtags)
+        (hdrindexNo, hdrstoreSize, hdrdata2, hdrfmt, hdrfmt2, size) = hdrdata
+        self.hdr = self.__parseIndex(hdrindexNo, hdrfmt, hdrfmt2, hdrtags)
+        self.__getitem__ = self.hdr.__getitem__
+        self.__setitem__ = self.hdr.__setitem__
+        self.__contains__ = self.hdr.__contains__
+        self.has_key = self.hdr.has_key
+        self.__repr__ = self.hdr.__repr__
+        if self.verify:
+            self.doVerify()
         return None
 
     def verifyCpio(self, filedata, data, filenamehash, devinode):
@@ -916,9 +914,8 @@ class ReadRpm:
         basenames = self["basenames"]
         if basenames != None:
             dirnames = self["dirnames"]
-            dirindexes = self["dirindexes"]
             return [ "%s%s" % (dirnames[d], b)
-                        for (d, b) in zip(dirindexes, basenames) ]
+                     for (d, b) in zip(self["dirindexes"], basenames) ]
         else:
             oldfilenames = self["oldfilenames"]
             if oldfilenames != None:
@@ -927,7 +924,7 @@ class ReadRpm:
 
     def readPayload(self, func):
         self.openFd(96 + self.sigdatasize + self.hdrdatasize)
-        devinode = {}     # this will contain hardlinked files
+        devinode = {}     # this will contain possibly hardlinked files
         filenamehash = {} # full filename of all files
         filenames = self.getFilenames()
         if filenames:
@@ -961,16 +958,6 @@ class ReadRpm:
                         self.raiseErr("sizes differ for hardlink")
                     if self["filemd5s"][j] != self["filemd5s"][k]:
                         self.raiseErr("md5s differ for hardlink")
-        if self["payloadcompressor"] == "bzip2":
-            import bz2, cStringIO
-            payload = self.fd.read()
-            fd = cStringIO.StringIO(bz2.decompress(payload))
-        else:
-            #if self["payloadcompressor"] not in [None, "gzip"]:
-            #    return
-            fd = PyGZIP(self.fd)
-            #import gzip
-            #fd = gzip.GzipFile(fileobj=self.fd)
         cpiosize = None
         if self.verify:
             cpiosize = self.sig.getOne("payloadsize")
@@ -980,13 +967,27 @@ class ReadRpm:
                     cpiosize = archivesize
                 elif cpiosize != archivesize:
                     self.printErr("wrong archive size")
+        if self["payloadcompressor"] == "bzip2":
+            import bz2, cStringIO
+            payload = self.fd.read()
+            fd = cStringIO.StringIO(bz2.decompress(payload))
+        elif self["payloadcompressor"] in [None, "gzip"]:
+            fd = PyGZIP(self.fd)
+            #import gzip
+            #fd = gzip.GzipFile(fileobj=self.fd)
+        else:
+            self.printErr("unknown payload compression")
+            return
+        if self["payloadformat"] not in [None, "cpio"]:
+            self.printErr("unknown payload format")
+            # XXX: handel drpm data format
+            return
         c = CPIO(fd, self.issrc, cpiosize, self.verify, self.strict)
         cpiodata = c.readCpio(func, filenamehash, devinode)
         if cpiodata == None:
             self.raiseErr("Error reading CPIO payload")
         for filename in filenamehash.iterkeys():
             self.printErr("file not in cpio: %s" % filename)
-        self.closeFd()
 
     def getSpecfile(self, filenames=None):
         fileflags = self["fileflags"]
@@ -1111,6 +1112,12 @@ class ReadRpm:
                    self["filelinktos"], self["filerdevs"])
 
     def doVerify(self):
+        for i in rpmsigtagrequired:
+            if not self.sig.has_key(i):
+                self.printErr("sig header is missing: %s" % i)
+        for i in rpmtagrequired:
+            if not self.hdr.has_key(i):
+                self.printErr("hdr is missing: %s" % i)
         size_in_sig = self.sig.getOne("size_in_sig")
         if size_in_sig != None:
             rpmsize = os.stat(self.filename)[6]
@@ -1118,9 +1125,10 @@ class ReadRpm:
                 self.printErr("wrong size in rpm package")
         filenames = self.getFilenames()
         fileflags = self["fileflags"]
-        for i in xrange(len(filenames)):
-            if fileflags[i] & RPMFILE_EXCLUDE:
-                self.printErr("exclude flag set in rpm")
+        if fileflags:
+            for flag in fileflags:
+                if flag & RPMFILE_EXCLUDE:
+                    self.printErr("exclude flag set in rpm")
         if self.issrc:
             i = self.getSpecfile(filenames)
             if i == None:
@@ -1143,8 +1151,8 @@ class ReadRpm:
         if self.strict:
             if "," in self["version"] or "," in self["release"]:
                 self.printErr("version contains wrong char")
-        if self["payloadformat"] not in [None, "cpio"]:
-            self.printErr("wrong payload format")
+        if self["payloadformat"] not in [None, "cpio", "drpm"]:
+            self.printErr("wrong payload format %s" % self["payloadformat"])
         if self.strict:
           if self["payloadcompressor"] not in [None, "gzip"]:
             self.printErr("no gzip compressor: %s" % self["payloadcompressor"])
@@ -1209,31 +1217,42 @@ class ReadRpm:
         self.getObsoletes()
         self.getConflicts()
         self.getTriggers()
-        filetags = ["fileusername", "filegroupname", "filemodes", "filemtimes",
-            "filedevices", "fileinodes", "filesizes", "filemd5s", "filerdevs",
-            "filelinktos", "fileflags", "fileverifyflags", "fileclass",
-            "filelangs", "filecolors", "filedependsx", "filedependsn"]
+
+        # check file* tags to be consistent:
+        reqfiletags = ["fileusername", "filegroupname", "filemodes",
+            "filemtimes", "filedevices", "fileinodes", "filesizes",
+            "filemd5s", "filerdevs", "filelinktos", "fileflags"]
+        filetags = ["fileverifyflags", "filelangs", "filecolors", "fileclass",
+            "filedependsx", "filedependsn"]
+        x = self[reqfiletags[0]]
+        lx = None
+        if x != None:
+            lx = len(x)
+            for t in reqfiletags:
+                if self[t] == None or len(self[t]) != lx:
+                    self.printErr("wrong length for tag %s" % t)
+            for t in filetags:
+                if self[t] != None and len(self[t]) != lx:
+                    self.printErr("wrong length for tag %s" % t)
+        else:
+            for t in reqfiletags[:] + filetags[:]:
+                if self[t] != None:
+                    self.printErr("non-None tag %s" % t)
         if self["oldfilenames"]:
-            l = len(self["oldfilenames"])
             if self["dirindexes"] != None or \
                 self["dirnames"] != None or \
                 self["basenames"] != None:
                 self.printErr("new filetag still present")
-            for t in filetags:
-                if self[t] != None and l != len(self[t]):
-                    self.printErr("wrong length for tag %s" % t)
+            if lx != len(self["oldfilenames"]):
+                self.printErr("wrong length for tag oldfilenames")
         elif self["dirindexes"]:
-            l = len(self["dirindexes"])
-            filetags.append("basenames")
-            for t in filetags:
-                if self[t] != None and l != len(self[t]):
-                    self.printErr("wrong length for tag %s" % t)
-        else:
-            for t in filetags:
-                if self[t] != None:
-                    self.printErr("tag %s still present" % t)
+            if len(self["dirindexes"]) != lx or len(self["basenames"]) != lx \
+                or self["dirnames"] == None:
+                self.printErr("wrong length for file* tag")
+
         if self.nodigest:
             return
+
         # sha1 of the header
         sha1header = self.sig["sha1header"]
         if sha1header:
@@ -1255,10 +1274,10 @@ class ReadRpm:
             while data:
                 ctx.update(data)
                 data = self.fd.read(65536)
+            # make sure we re-open this file if we read the payload
             self.closeFd()
             if ctx.digest() != md5sum:
-                self.printErr("wrong md5: %s / %s" % (md5sum,
-                    ctx.hexdigest()))
+                self.printErr("wrong md5: %s / %s" % (md5sum, ctx.hexdigest()))
 
 
 class RRpm:
@@ -1338,10 +1357,8 @@ def checkDirs(repo):
     for rpm in repo:
         if not rpm.filenames:
             continue
-        modes = rpm["filemodes"]
-        users = rpm["fileusername"]
-        groups = rpm["filegroupname"]
-        for (f, mode, user, group) in zip(rpm.filenames, modes, users, groups):
+        for (f, mode, user, group) in zip(rpm.filenames, rpm["filemodes"],
+            rpm["fileusername"], rpm["filegroupname"]):
             # check if startup scripts are in wrong directory
             if f.startswith("/etc/init.d"):
                 print "init.d:", rpm.filename, f
@@ -1445,9 +1462,8 @@ class RepoRpm:
         self.ghostnames = []
         filenames = self.rpm.getFilenames()
         if filenames != []:
-            modes = self.rpm["filemodes"]
-            flags = self.rpm["fileflags"]
-            for (filename, mode, flag) in zip(filenames, modes, flags):
+            for (filename, mode, flag) in zip(filenames, self.rpm["filemodes"],
+                self.rpm["fileflags"]):
                 if S_ISDIR(mode):
                     self.dirnames.append(filename)
                 else:
