@@ -271,18 +271,22 @@ function rhel3u2tou5pyrpmyum() {
     # RHEL-3 U2 update to U5 with pyrpmyum
     IN=$DATA/RHEL3-U2-updatetests-$ARCH
     # Install RHEL3-U2
-    doinstall --nodev $RELEASED/RHEL-3/U2/AS/$ARCH/tree/RedHat/RPMS $IN
+    echo "$PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN install $RELEASED/RHEL-3/U2/AS/$ARCH/tree/RedHat/RPMS" 2>&1 | tee $IN.LOG.1
+    { time $PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN install $RELEASED/RHEL-3/U2/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee -a $IN.LOG.1
     # Update to U5
-    { time $PYRPMYUM -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee $IN.LOG.1
+    echo "$PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS" 2>&1 | tee -a $IN.LOG.1
+    { time $PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee -a $IN.LOG.1
 }
 
 function rhel4tou1pyrpmyum() {
     # RHEL-4 update to U1 with pyrpmyum
     IN=$DATA/RHEL4-updatetests-$ARCH
-    # Install RHEL3-U2
-    doinstall --nodev $RELEASED/RHEL-4/GOLD/AS/$ARCH/tree/RedHat/RPMS $IN
-    # Update to U5
-    { time $PYRPMYUM -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee $IN.LOG.1
+    # Install RHEL4-GOLD
+    echo "$PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN install $RELEASED/RHEL-4/GOLD/AS/$ARCH/tree/RedHat/RPMS" | 2>&1 | tee $IN.LOG.1
+    { time $PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN install $RELEASED/RHEL-4/GOLD/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee -a $IN.LOG.1
+    # Update to U1
+    echo "$PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN update $RELEASED/RHEL-4/U1/AS/$ARCH/tree/RedHat/RPMS" 2>&1 | tee -a $IN.LOG.1
+    { time $PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN update $RELEASED/RHEL-4/U1/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee -a $IN.LOG.1
 }
  
 function fc3extraspyrpmyum() {
@@ -411,7 +415,7 @@ select i in "${TESTS[@]}"; do export selection=$((REPLY-1)); runtest=${TESTFUNCT
 selection=$((selection-1))
 for ARCH in $ARCHS; do
 if [ "$runtest" != "runalltests" ]; then
-    $runtest
+    time $runtest
 else
     for run in `seq 0 $selection`; do
         "${TESTFUNCTIONS[$run]}"
