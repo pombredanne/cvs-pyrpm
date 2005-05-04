@@ -1017,26 +1017,33 @@ class ReadRpm:
         return "%s-%s-%s.%s.rpm" % (self["name"], self["version"],
             self["release"], self["arch"])
 
+    def verifyDeps(self, name, flags, version):
+        n = self[name]
+        f = self[flags]
+        v = self[version]
+        if n == None:
+            if self[flags] != None or self[version] != None:
+                self.printErr("wrong dep data")
+        else:
+            if (f == None and v != None) or (f != None and v == None):
+                self.printErr("wrong dep data")
+            if f == None:
+                f = [None] * len(n)
+            if v == None:
+                v = [None] * len(n)
+            if len(n) != len(f) or len(f) != len(v):
+                self.printErr("wrong length of deps for %s" % name)
+
     def __getDeps(self, name, flags, version):
         n = self[name]
         if n == None:
-            if self.verify:
-                if self[flags] != None or self[version] != None:
-                    self.printErr("wrong dep data")
             return []
         f = self[flags]
         v = self[version]
-        if self.verify:
-            if (f == None and v != None) or \
-               (f != None and v == None):
-                self.printErr("wrong dep data")
         if f == None:
             f = [None] * len(n)
         if v == None:
             v = [None] * len(n)
-        if self.verify:
-            if len(n) != len(f) or len(f) != len(v):
-                self.printErr("wrong length of deps for %s" % name)
         return zip(n, f, v)
 
     def getProvides(self):
@@ -1087,7 +1094,7 @@ class ReadRpm:
         return [(n, f, v, progs.pop(0), scripts.pop(0)) for (n, f, v) in deps]
 
     def buildFileNames(self):
-        """Returns (dir, filename, linksto, flags)."""
+        """This function should go away: Returns (dir, filename, linksto, flags)."""
         if self["filemodes"] == None: # detect empty filelist
             return []
         # XXX We loose the class data here completely, move this stuff
@@ -1212,10 +1219,13 @@ class ReadRpm:
                 if script != None and isCommentOnly(script):
                     self.printErr("empty(2) script: %s" % s)
         # some verify tests are also in these functions:
+        for (n, f, v) in (("providename", "provideflags", "provideversion"),
+            ("requirename", "requireflags", "requireversion"),
+            ("obsoletename", "obsoleteflags", "obsoleteversion"),
+            ("conflictname", "conflictflags", "conflictversion"),
+            ("triggername", "triggerflags", "triggerversion")):
+            self.verifyDeps(n, f, v)
         self.getProvides()
-        self.getRequires()
-        self.getObsoletes()
-        self.getConflicts()
         self.getTriggers()
 
         # check file* tags to be consistent:
