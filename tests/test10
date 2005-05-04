@@ -114,13 +114,6 @@ baseurl=file://$FEDORA/updates/$1/\$basearch/
 EOF
 }
 
-if test x$1 = x--help ; then
-     echo "$0 [--help]                 -   this page"
-    echo "$0 [--arch \"arch1 arch2\"]   -   architectures to test,"
-    echo "                                             currently only i386 and x86_64"
-    exit
-fi
-
 DATA=/mnt/build/laroche
 
 if test x$1 = x--arch ; then
@@ -159,6 +152,7 @@ RELEASEUPDATE=1
 
 function rhel34installtests() {
     doinstall --nodev $RELEASED/RHEL-3/U3/AS/$ARCH/tree/$RPMS $DATA/3-U3-$ARCH
+    echo "Running $FUNCNAME check on $ARCH"
     doinstall --nodev $RELEASED/RHEL-3/U4/AS/$ARCH/tree/$RPMS $DATA/3-U4-$ARCH
     doinstall --nodev /mnt/raid/trees/RHEL3U5/$ARCH/$RPMS $DATA/3-U5-$ARCH
     doinstall $RELEASED/RHEL-4/GOLD/AS/$ARCH/tree/$RPMS $DATA/4-GOLD-$ARCH
@@ -168,6 +162,7 @@ function rhel34installtests() {
 
 function fc1updatespyrpm() {
     # FC1/updates/testing to FC3/devel updates with pyrpmyum
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/FC1-$ARCH
     # Raw FC1 install
     doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
@@ -187,6 +182,7 @@ function fc1updatespyrpm() {
 
 function fc2updatespyrpm() {
     # FC2/updates/testing to FC3/devel updates with pyrpmyum
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/FC2-$ARCH
     # Raw FC2 install
     doinstall --nodev $FEDORA/2/$ARCH/os/Fedora/RPMS $IN
@@ -204,6 +200,7 @@ function fc2updatespyrpm() {
 
 function fc3updatespyrpm() {
     # FC3/updates/testing to devel updates with pyrpmyum
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/FC3-$ARCH
     # Raw FC3 install
     doinstall         $FEDORA/3/$ARCH/os/Fedora/RPMS $IN
@@ -219,6 +216,7 @@ function fc3updatespyrpm() {
 
 function fcdevelreinstallrpm() {
     # FC-devel install with pyrpm, reinstall with rpm
+    echo "Running $FUNCNAME check on $ARCH"
     doinstall $FEDORA/development/$ARCH/Fedora/RPMS $DATA/FC4-$ARCH
     ln -sf $FEDORA/development/$ARCH/Fedora/RPMS /tmp/n
     doinstall /tmp/n $DATA/FC4-$ARCH-rpm rpm
@@ -226,6 +224,7 @@ function fcdevelreinstallrpm() {
 
 function fc123rpminstallyumupdate() {
     # Fedora Core 1/2/3 with /bin/rpm and updates with yum
+    echo "Running $FUNCNAME check on $ARCH"
     NODEV="--nodev"
     for i in 1 2 3 ; do
         test $i = 3 && NODEV=
@@ -238,6 +237,7 @@ function fc123rpminstallyumupdate() {
 
 function fc123yumupdate() {
     # Fedora Core 1/2/3 updates with pyrpmyum
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/FC1-2-3-$ARCH
     # Install FC1
     doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
@@ -253,6 +253,7 @@ function fc123yumupdate() {
 
 function fc3funkyupdates() {
     # Install FC3 with all updates, funky remove and updates with pyrpmyum
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/FC3-removaltests-$ARCH
     cleanchroot $IN
     preparechroot $IN
@@ -269,6 +270,7 @@ function fc3funkyupdates() {
 
 function rhel3u2tou5pyrpmyum() {
     # RHEL-3 U2 update to U5 with pyrpmyum
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/RHEL3-U2-updatetests-$ARCH
     # Install RHEL3-U2
     echo "$PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN install $RELEASED/RHEL-3/U2/AS/$ARCH/tree/RedHat/RPMS" 2>&1 | tee $IN.LOG.1
@@ -280,6 +282,7 @@ function rhel3u2tou5pyrpmyum() {
 
 function rhel4tou1pyrpmyum() {
     # RHEL-4 update to U1 with pyrpmyum
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/RHEL4-updatetests-$ARCH
     # Install RHEL4-GOLD
     echo "$PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN install $RELEASED/RHEL-4/GOLD/AS/$ARCH/tree/RedHat/RPMS" | 2>&1 | tee $IN.LOG.1
@@ -291,6 +294,7 @@ function rhel4tou1pyrpmyum() {
  
 function fc3extraspyrpmyum() {
     # Fedora Core 3 with extras
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/FC3-with-extras-$ARCH
     cleanchroot $IN
     preparechroot $IN
@@ -315,6 +319,7 @@ function fc3extraspyrpmyum() {
 }
 
 function fc3fileconflicts() {
+    echo "Running $FUNCNAME check on $ARCH"
     # FC3 install tests with fileconflicts
     IN=$DATA/FC3-installtest-$ARCH
     cleanchroot $IN
@@ -330,6 +335,7 @@ function fc3fileconflicts() {
 
 function sanitychecks() {
     # Sanity checks
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/
     rm -f $IN/CHECKRPM*
     for i in 1 2 3 development; do
@@ -343,6 +349,7 @@ function sanitychecks() {
 
 function fc123pyrpmyumyummix() {
     # Fedora Core 1/2/3/devel with yum/pyrpmyum
+    echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/FC1-2-3-devel-$ARCH
     cleanchroot $IN
     preparechroot $IN
@@ -410,14 +417,37 @@ TESTFUNCTIONS=("rhel34installtests"
                "fc123pyrpmyumyummix"
                "runalltests"
               )
-select i in "${TESTS[@]}"; do export selection=$((REPLY-1)); runtest=${TESTFUNCTIONS[$((REPLY-1))]}; break; done
 
-selection=$((selection-1))
+if test x$1 = x--help ; then
+    echo "[--help]                 -   this page"
+    echo "[--arch \"arch1 arch2\"]   -   architectures to test,"
+    echo "                                             currently only i386 and x86_64"
+    numtests=${#TESTS[@]}
+    numtests=$((numtests-1))
+
+    for i in `seq 0 $numtests`; do 
+        echo "[--${TESTFUNCTIONS[$i]}]   (${TESTS[$i]})"
+    done
+    exit
+fi
+
+teststorun=""
+while [ "$#" != "0" ]; do
+        teststorun="$teststorun ${1/--/}"
+        shift
+    done
+
+if [ -z "$teststorun" ]; then
+    select i in "${TESTS[@]}"; do export teststorun=${TESTFUNCTIONS[$((REPLY-1))]}; break; done
+fi
+
 for ARCH in $ARCHS; do
-if [ "$runtest" != "runalltests" ]; then
-    time $runtest
+if [ "$teststorun" != "runalltests" ]; then
+    for i in $teststorun; do 
+        time $i
+    done
 else
-    for run in `seq 0 $selection`; do
+    for run in `seq 0 $numtests`; do
         "${TESTFUNCTIONS[$run]}"
     done
 fi
