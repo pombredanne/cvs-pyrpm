@@ -148,7 +148,7 @@ EXTRAS=/mnt/raid/fedora-extras
 #FEDORA=/mnt/data/laroche/fedora
 RPMS=RedHat/RPMS
 PYRPMYUM="./pyrpmyum -y --autoerase --servicehack --quiet"
-CHECKRPM="./oldpyrpm.py"
+CHECKRPM="./pyrpmcheck"
 # Specify if updates to newer releases should be done.
 RELEASEUPDATE=1
 
@@ -157,76 +157,75 @@ RELEASEUPDATE=1
 #doinstall --nodev $RELEASED/RHL-6.2/GOLD/i386/$RPMS $DATA/6.2
 #doinstall --nodev $RELEASED/RHEL-2.1/U6/AS/i386/tree/$RPMS $DATA/2.1-U6-i386
 
-for ARCH in $ARCHS; do
-    if false ; then
+function rhel34installtests() {
     doinstall --nodev $RELEASED/RHEL-3/U3/AS/$ARCH/tree/$RPMS $DATA/3-U3-$ARCH
     doinstall --nodev $RELEASED/RHEL-3/U4/AS/$ARCH/tree/$RPMS $DATA/3-U4-$ARCH
     doinstall --nodev /mnt/raid/trees/RHEL3U5/$ARCH/$RPMS $DATA/3-U5-$ARCH
-    doinstall $RELEASED/RHEL-4/Beta2/AS/$ARCH/tree/$RPMS $DATA/4-Beta2-$ARCH
+    doinstall $RELEASED/RHEL-4/GOLD/AS/$ARCH/tree/$RPMS $DATA/4-GOLD-$ARCH
     doinstall /mnt/raid/trees/RHEL4/$ARCH/$RPMS $DATA/4-trees-$ARCH
     doinstall /mnt/redhat/rel-eng/RHEL4-re1129.0/$ARCH/$ARCH-AS/$RPMS $DATA/4-$ARCH
-    fi
+}
 
-    # Fedora Core 1
-    if false ; then
-        IN=$DATA/FC1-$ARCH
-        # Raw FC1 install
-        doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
-        # Update FC1 to updates
-        { time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.1
-        # Update FC1 to testing
-        { time $PYRPMYUM -r $IN update $FEDORA/updates/testing/1/$ARCH ; } 2>&1 | tee $IN.LOG.2
-        if test $RELEASEUPDATE = 1 ; then
-            # Update FC1 to FC2+updates
-            { time $PYRPMYUM -r $IN upgrade $FEDORA/2/$ARCH/os/Fedora/RPMS $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.3
-            # Update to FC3+updates
-            { time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.4
-            # Update to FC-development
-            { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.5
-        fi
+function fc1updatespyrpm() {
+    # FC1/updates/testing to FC3/devel updates with pyrpmyum
+    IN=$DATA/FC1-$ARCH
+    # Raw FC1 install
+    doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
+    # Update FC1 to updates
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.1
+    # Update FC1 to testing
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/testing/1/$ARCH ; } 2>&1 | tee $IN.LOG.2
+    if test $RELEASEUPDATE = 1 ; then
+        # Update FC1 to FC2+updates
+        { time $PYRPMYUM -r $IN upgrade $FEDORA/2/$ARCH/os/Fedora/RPMS $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.3
+        # Update to FC3+updates
+        { time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.4
+        # Update to FC-development
+        { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.5
     fi
+}
 
-    # Fedora Core 2
-    if false ; then
-        IN=$DATA/FC2-$ARCH
-        # Raw FC2 install
-        doinstall --nodev $FEDORA/2/$ARCH/os/Fedora/RPMS $IN
-        # Update FC2 to updates
-        { time $PYRPMYUM -r $IN update $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.1
-        # Update FC2 to testing
-        { time $PYRPMYUM -r $IN update $FEDORA/updates/testing/2/$ARCH ; } 2>&1 | tee $IN.LOG.2
-        if test $RELEASEUPDATE = 1 ; then
-            # Update FC2 to FC3+updates
-            { time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.3
-            # Update to FC-development
-            { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.4
-        fi
+function fc2updatespyrpm() {
+    # FC2/updates/testing to FC3/devel updates with pyrpmyum
+    IN=$DATA/FC2-$ARCH
+    # Raw FC2 install
+    doinstall --nodev $FEDORA/2/$ARCH/os/Fedora/RPMS $IN
+    # Update FC2 to updates
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/2/$ARCH ; } 2>&1 | tee $IN.LOG.1
+    # Update FC2 to testing
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/testing/2/$ARCH ; } 2>&1 | tee $IN.LOG.2
+    if test $RELEASEUPDATE = 1 ; then
+        # Update FC2 to FC3+updates
+        { time $PYRPMYUM -r $IN upgrade $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.3
+        # Update to FC-development
+        { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.4
     fi
+}
 
-    # Fedora Core 3
-    if false ; then
-        IN=$DATA/FC3-$ARCH
-        # Raw FC3 install
-        doinstall         $FEDORA/3/$ARCH/os/Fedora/RPMS $IN
-        # Update FC3 to updates
-        { time $PYRPMYUM -r $IN update $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.1
-        # Update FC3 to testing
-        { time $PYRPMYUM -r $IN update $FEDORA/updates/testing/3/$ARCH ; } 2>&1 | tee $IN.LOG.2
-        if test $RELEASEUPDATE = 1 ; then
-            # Update to FC-development
-            { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.3
-        fi
+function fc3updatespyrpm() {
+    # FC3/updates/testing to devel updates with pyrpmyum
+    IN=$DATA/FC3-$ARCH
+    # Raw FC3 install
+    doinstall         $FEDORA/3/$ARCH/os/Fedora/RPMS $IN
+    # Update FC3 to updates
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/3/$ARCH ; } 2>&1 | tee $IN.LOG.1
+    # Update FC3 to testing
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/testing/3/$ARCH ; } 2>&1 | tee $IN.LOG.2
+    if test $RELEASEUPDATE = 1 ; then
+        # Update to FC-development
+        { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.3
     fi
+}
 
-    # Fedora Core development
-    if false ; then
-        doinstall $FEDORA/development/$ARCH/Fedora/RPMS $DATA/FC4-$ARCH
-        ln -sf $FEDORA/development/$ARCH/Fedora/RPMS /tmp/n
-        doinstall /tmp/n $DATA/FC4-$ARCH-rpm rpm
-    fi
+function fcdevelreinstallrpm() {
+    # FC-devel install with pyrpm, reinstall with rpm
+    doinstall $FEDORA/development/$ARCH/Fedora/RPMS $DATA/FC4-$ARCH
+    ln -sf $FEDORA/development/$ARCH/Fedora/RPMS /tmp/n
+    doinstall /tmp/n $DATA/FC4-$ARCH-rpm rpm
+}
 
+function fc123rpminstallyumupdate() {
     # Fedora Core 1/2/3 with /bin/rpm and updates with yum
-    if false ; then
     NODEV="--nodev"
     for i in 1 2 3 ; do
         test $i = 3 && NODEV=
@@ -235,106 +234,189 @@ for ARCH in $ARCHS; do
         genyumconf $i $IN
         { time chroot $IN yum update; } 2>&1 | tee $IN.LOG.1
     done
-    fi
+}
 
-    # Fedora Core 1/2/3 with pyrpmyum
-    if false ; then
-        IN=$DATA/FC1-2-3-$ARCH
-        # Install FC1
-        doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
-        # Update FC1 to updates
-        { time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.1
-        # Update to FC2 with all updates
-        genyumconf 2 $IN withbase
-        { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf update; } 2>&1 | tee $IN.LOG.2
-        # Update to FC3 with all updates
-        genyumconf 3 $IN withbase
-        { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf update; } 2>&1 | tee $IN.LOG.3
-    fi
+function fc123yumupdate() {
+    # Fedora Core 1/2/3 updates with pyrpmyum
+    IN=$DATA/FC1-2-3-$ARCH
+    # Install FC1
+    doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
+    # Update FC1 to updates
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.1
+    # Update to FC2 with all updates
+    genyumconf 2 $IN withbase
+    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf update; } 2>&1 | tee $IN.LOG.2
+    # Update to FC3 with all updates
+    genyumconf 3 $IN withbase
+    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf update; } 2>&1 | tee $IN.LOG.3
+}
 
-    # Install FC3 with all updates
-    if false ; then
-        IN=$DATA/FC3-removaltests-$ARCH
-        cleanchroot $IN
-        preparechroot $IN
-        genyumconf 3 $IN withbase
-        { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf install "*"; } 2>&1 | tee $IN.LOG
-        # Do some funky remove and updates to see if removals and updates work
-        { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupremove base-x; } 2>&1 | tee $IN.LOG.1
-        { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupupdate kde-desktop; } 2>&1 | tee $IN.LOG.2
-        { time $PYRPMYUM -r $IN remove db4; } 2>&1 | tee $IN.LOG.3
-        { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf update mozilla evolution openoffice.org-writer; } 2>&1 | tee $IN.LOG.4
-        { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupremove base; } 2>&1 | tee $IN.LOG.5
-        { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupinstall development-tools; } 2>&1 | tee $IN.LOG.6
-    fi
+function fc3funkyupdates() {
+    # Install FC3 with all updates, funky remove and updates with pyrpmyum
+    IN=$DATA/FC3-removaltests-$ARCH
+    cleanchroot $IN
+    preparechroot $IN
+    genyumconf 3 $IN withbase
+    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf install "*"; } 2>&1 | tee $IN.LOG
+    # Do some funky remove and updates to see if removals and updates work
+    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupremove base-x; } 2>&1 | tee $IN.LOG.1
+    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupupdate kde-desktop; } 2>&1 | tee $IN.LOG.2
+    { time $PYRPMYUM -r $IN remove db4; } 2>&1 | tee $IN.LOG.3
+    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf update mozilla evolution openoffice.org-writer; } 2>&1 | tee $IN.LOG.4
+    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupremove base; } 2>&1 | tee $IN.LOG.5
+    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupinstall development-tools; } 2>&1 | tee $IN.LOG.6
+}
 
+function rhel3u2tou5pyrpmyum() {
     # RHEL-3 U2 update to U5 with pyrpmyum
-    if false ; then
-        IN=$DATA/RHEL3-U2-updatetests-$ARCH
-        # Install RHEL3-U2
-        doinstall --nodev $RELEASED/RHEL-3/U2/AS/$ARCH/tree/RedHat/RPMS $IN
-        # Update to U5
-        { time $PYRPMYUM -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee $IN.LOG.1
-    fi
+    IN=$DATA/RHEL3-U2-updatetests-$ARCH
+    # Install RHEL3-U2
+    doinstall --nodev $RELEASED/RHEL-3/U2/AS/$ARCH/tree/RedHat/RPMS $IN
+    # Update to U5
+    { time $PYRPMYUM -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee $IN.LOG.1
+}
+
+function rhel4tou1pyrpmyum() {
     # RHEL-4 update to U1 with pyrpmyum
-    if false ; then
-        IN=$DATA/RHEL4-updatetests-$ARCH
-        # Install RHEL3-U2
-        doinstall --nodev $RELEASED/RHEL-4/GOLD/AS/$ARCH/tree/RedHat/RPMS $IN
-        # Update to U5
-        { time $PYRPMYUM -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee $IN.LOG.1
-    fi
-
+    IN=$DATA/RHEL4-updatetests-$ARCH
+    # Install RHEL3-U2
+    doinstall --nodev $RELEASED/RHEL-4/GOLD/AS/$ARCH/tree/RedHat/RPMS $IN
+    # Update to U5
+    { time $PYRPMYUM -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee $IN.LOG.1
+}
+ 
+function fc3extraspyrpmyum() {
     # Fedora Core 3 with extras
-    if false ; then
-        IN=$DATA/FC3-with-extras-$ARCH
-        cleanchroot $IN
-        preparechroot $IN
-        genyumconf 3 $IN withbase
-        # Raw FC3 install
-        echo "$PYRPMYUM -r $IN -c $IN/etc/yum.conf install \"*\"" | tee $IN.LOG
-        { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf install "*"; } 2>&1 | tee -a $IN.LOG
-        # Install FC3 extras
-        echo "$PYRPMYUM -r $IN -c $IN/etc/doesnotexistyum.conf install $EXTRAS/3/$ARCH/" | tee $IN.LOG.1
-        { time $PYRPMYUM -r $IN -c $IN/etc/doesnotexistyum.conf install $EXTRAS/3/$ARCH/; } 2>&1 | tee -a $IN.LOG.1
-        # Update FC3 to updates
-        echo "$PYRPMYUM -r $IN update $FEDORA/updates/3/$ARCH" | tee $IN.LOG.2
-        { time $PYRPMYUM -r $IN update $FEDORA/updates/3/$ARCH ; } 2>&1 | tee -a $IN.LOG.2
-        # Update FC3 to testing
-        echo "$PYRPMYUM -r $IN update $FEDORA/updates/testing/3/$ARCH $EXTRAS/testing/3/$ARCH" | tee $IN.LOG.3
-        { time $PYRPMYUM -r $IN update $FEDORA/updates/testing/3/$ARCH $EXTRAS/testing/3/$ARCH; } 2>&1 | tee -a $IN.LOG.3
-        if test $RELEASEUPDATE = 1 ; then
-            # Update to FC-development
-            echo "$PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS $EXTRAS/development/$ARCH/" | tee $IN.LOG.4
-            { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS $EXTRAS/development/$ARCH/; } 2>&1 | tee -a $IN.LOG.4
-        fi
+    IN=$DATA/FC3-with-extras-$ARCH
+    cleanchroot $IN
+    preparechroot $IN
+    genyumconf 3 $IN withbase
+    # Raw FC3 install
+    echo "$PYRPMYUM -r $IN -c $IN/etc/yum.conf install \"*\"" | tee $IN.LOG
+    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf install "*"; } 2>&1 | tee -a $IN.LOG
+    # Install FC3 extras
+    echo "$PYRPMYUM -r $IN -c $IN/etc/doesnotexistyum.conf install $EXTRAS/3/$ARCH/" | tee $IN.LOG.1
+    { time $PYRPMYUM -r $IN -c $IN/etc/doesnotexistyum.conf install $EXTRAS/3/$ARCH/; } 2>&1 | tee -a $IN.LOG.1
+    # Update FC3 to updates
+    echo "$PYRPMYUM -r $IN update $FEDORA/updates/3/$ARCH" | tee $IN.LOG.2
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/3/$ARCH ; } 2>&1 | tee -a $IN.LOG.2
+    # Update FC3 to testing
+    echo "$PYRPMYUM -r $IN update $FEDORA/updates/testing/3/$ARCH $EXTRAS/testing/3/$ARCH" | tee $IN.LOG.3
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/testing/3/$ARCH $EXTRAS/testing/3/$ARCH; } 2>&1 | tee -a $IN.LOG.3
+    if test $RELEASEUPDATE = 1 ; then
+        # Update to FC-development
+        echo "$PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS $EXTRAS/development/$ARCH/" | tee $IN.LOG.4
+        { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS $EXTRAS/development/$ARCH/; } 2>&1 | tee -a $IN.LOG.4
     fi
+}
 
-    # Simple install tests
-    if false ; then
-        IN=$DATA/FC3-installtest-$ARCH
-        cleanchroot $IN
-        preparechroot $IN
+function fc3fileconflicts() {
+    # FC3 install tests with fileconflicts
+    IN=$DATA/FC3-installtest-$ARCH
+    cleanchroot $IN
+    preparechroot $IN
 #        genyumconf 3 $IN withbase
-        echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS" | tee $IN.LOG
-        { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS; } 2>&1 | tee -a $IN.LOG
-        echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH" | tee $IN.LOG.1
-        { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH; } 2>&1 | tee -a $IN.LOG.1
-        echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $FEDORA/updates/testing/3/$ARCH" | tee $IN.LOG.2
-        { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $FEDORA/updates/testing/3/$ARCH; } 2>&1 | tee -a $IN.LOG.2
-    fi
+    echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS" | tee $IN.LOG
+    { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS; } 2>&1 | tee -a $IN.LOG
+    echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH" | tee $IN.LOG.1
+    { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH; } 2>&1 | tee -a $IN.LOG.1
+    echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $FEDORA/updates/testing/3/$ARCH" | tee $IN.LOG.2
+    { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $FEDORA/updates/testing/3/$ARCH; } 2>&1 | tee -a $IN.LOG.2
+}
 
+function sanitychecks() {
     # Sanity checks
-    if true ; then
-        IN=$DATA/
-        $CHECKRPM $FEDORA/3/$ARCH/os/Fedora/RPMS/ 2>&1 | tee $IN/CHECKRPM-FC3
-        $CHECKRPM $FEDORA/updates/3/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC3-updates
-        $CHECKRPM $FEDORA/updates/testing/3/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC3-updates-testing
-        $CHECKRPM $EXTRAS/3/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC3-extras
-        $CHECKRPM $EXTRAS/testing/3/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC3-extras-testing
-        $CHECKRPM $EXTRAS/development/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC3-devlopment
-    fi
+    IN=$DATA/
+    rm -f $IN/CHECKRPM*
+    for i in 1 2 3 development; do
+        $CHECKRPM $FEDORA/$i/$ARCH/os/Fedora/RPMS/ 2>&1 | tee $IN/CHECKRPM-FC-$i-$ARCH
+        $CHECKRPM $FEDORA/updates/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-$ARCH
+        $CHECKRPM $FEDORA/updates/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-testing-$ARCH
+        $CHECKRPM $EXTRAS/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-$ARCH
+        $CHECKRPM $EXTRAS/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-testing-$ARCH
+    done
+}
 
-done # ARCHS
+function fc123pyrpmyumyummix() {
+    # Fedora Core 1/2/3/devel with yum/pyrpmyum
+    IN=$DATA/FC1-2-3-devel-$ARCH
+    cleanchroot $IN
+    preparechroot $IN
+    echo "Install FC1" | tee $IN.LOG.1
+    echo "doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN" | tee -a $IN.LOG.1
+    doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN | tee -a $IN.LOG.1
+    genyumconf 1 $IN withbase
+    echo "Update FC1 to updates" | tee -a $IN.LOG.1
+    echo "chroot $IN /usr/bin/yum update" | tee -a $IN.LOG.1
+    { time chroot $IN /usr/bin/yum update; } 2>&1 | tee -a $IN.LOG.1
+
+    echo "Update to FC2 with pyrpmyum" | tee $IN.LOG.2
+    echo "$PYRPMYUM -c /etc/nosuchfile -r $IN update $FEDORA/2/$ARCH/os/Fedora/RPMS" | tee -a $IN.LOG.2
+    { time $PYRPMYUM -c /etc/nosuchfile -r $IN update $FEDORA/2/$ARCH/os/Fedora/RPMS ; } 2>&1 | tee -a $IN.LOG.2
+    echo "Update to FC2  / updates with yum" | tee $IN.LOG.2
+    genyumconf 2 $IN withbase
+    echo "chroot $IN /usr/bin/yum update" | tee -a $IN.LOG.2
+    { time chroot $IN /usr/bin/yum update; } 2>&1 | tee -a $IN.LOG.2
+
+    echo "Update to FC3 with pyrpmyum" | tee $IN.LOG.3
+    echo "$PYRPMYUM -c /etc/nosuchfile -r $IN update $FEDORA/3/$ARCH/os/Fedora/RPMS" | tee -a $IN.LOG.3
+    { time $PYRPMYUM -c /etc/nosuchfile -r $IN update $FEDORA/3/$ARCH/os/Fedora/RPMS ; } 2>&1 | tee -a $IN.LOG.3
+    echo "Update to FC3  / updates with yum" | tee $IN.LOG.3
+    genyumconf 3 $IN withbase
+    echo "chroot $IN /usr/bin/yum update" | tee -a $IN.LOG.3
+    { time chroot $IN /usr/bin/yum update; } 2>&1 | tee -a $IN.LOG.3
+
+    echo "Update to FC-devel with pyrpmyum" | tee $IN.LOG.4
+    echo "$PYRPMYUM -c /etc/nosuchfile -r $IN update $FEDORA/development/$ARCH/Fedora/RPMS" | tee -a $IN.LOG.4
+    { time $PYRPMYUM -c /etc/nosuchfile -r $IN update $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee -a $IN.LOG.4
+}
+
+# These two arrays need to be kept in sync:
+declare -a TESTS
+declare -a TESTFUNCTIONS
+TESTS=( "RHEL3_U3-U5 RHEL4 installtests with pyrpmyum"
+        "FC1/updates/testing to FC3/devel updates with pyrpmyum"
+        "FC2/updates/testing to FC3/devel updates with pyrpmyum"
+        "FC3/updates/testing to FC3/devel updates with pyrpmyum"
+        "FC-devel install with pyrpm, reinstall with rpm"
+        "Fedora Core 1/2/3 with /bin/rpm and updates with yum"
+        "Fedora Core 1/2/3 updates with pyrpmyum"
+        "FC3 with all updates, funky remove and updates with pyrpmyum"
+        "RHEL-3 U2 update to U5 with pyrpmyum"
+        "RHEL-4 update to U1 with pyrpmyum"
+        "Fedora Core 3 with extras"
+        "FC3 install tests with fileconflicts"
+        "Sanity checks"
+        "Fedora Core 1/2/3/devel with yum/pyrpmyum"
+        "run all tests (USE WITH CAUTION)"
+      )
+TESTFUNCTIONS=("rhel34installtests"
+               "fc1updatespyrpm"
+               "fc2updatespyrpm"
+               "fc3updatespyrpm"
+               "fcdevelreinstallrpm"
+               "fc123rpminstallyumupdate"
+               "fc123yumupdate"
+               "fc3funkyupdates"
+               "rhel3u2tou5pyrpmyum"
+               "rhel4tou1pyrpmyum"
+               "fc3extraspyrpmyum"
+               "fc3fileconflicts"
+               "sanitychecks"
+               "fc123pyrpmyumyummix"
+               "runalltests"
+              )
+select i in "${TESTS[@]}"; do export selection=$((REPLY-1)); runtest=${TESTFUNCTIONS[$((REPLY-1))]}; break; done
+
+selection=$((selection-1))
+for ARCH in $ARCHS; do
+if [ "$runtest" != "runalltests" ]; then
+    $runtest
+else
+    for run in `seq 0 $selection`; do
+        "${TESTFUNCTIONS[$run]}"
+    done
+fi
+done
 
 # vim:ts=4:sw=4:showmatch:expandtab
