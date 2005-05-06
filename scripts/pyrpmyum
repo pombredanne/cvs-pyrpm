@@ -215,7 +215,6 @@ def main():
     # repo dirs. If it is specified in the config file we use that though (as
     # expected)
     if os.path.isfile(yumconf):
-        #conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, yumconf)
         conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, yumconf, "")
         for key in conf.vars.keys():
             if key == "main":

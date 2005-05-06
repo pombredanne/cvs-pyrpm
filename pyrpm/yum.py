@@ -180,7 +180,10 @@ class RpmYum:
                     sys.exit(0)
         if self.config.timer:
             self.config.printInfo(0, "runCommand() took %s seconds\n" % (clock() - time1))
-        control.runOperations(ops)
+        if self.config.test:
+            self.config.printError("test run stopped")
+        else:
+            control.runOperations(ops)
 
     def __generateObsoletesList(self):
         self.__obsoleteslist = []

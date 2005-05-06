@@ -154,9 +154,6 @@ class RpmController:
                 sys.exit(0)
             self.config.printError("Errors found during package dependancy checks and ordering.")
             sys.exit(1)
-        if self.config.test:
-            self.config.printError("test run stopped")
-            sys.exit(0)
         self.triggerlist = _Triggers(self.config)
         i = 0
         for (op, pkg) in operations:
@@ -234,7 +231,6 @@ class RpmController:
                     runScript("/sbin/ldconfig", force=1)
                 self.config.printInfo(2, "number of /sbin/ldconfig calls optimized away: %d\n" % self.config.ldconfig)
                 sys.exit(0)
-        return 1
 
     def appendFile(self, file):
         pkg = readRpmPackage(self.config, file, db=self.db,
