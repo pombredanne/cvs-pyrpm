@@ -88,7 +88,7 @@ class PyGZIP:
 
     def __readHeader(self):
         magic = self.fd.read(2)
-        if magic != '\037\213':
+        if magic != "\037\213":
             print "Not a gzipped file"
             sys.exit(0)
         if ord(self.fd.read(1)) != 8:
@@ -98,20 +98,17 @@ class PyGZIP:
         self.fd.read(4+1+1) # Discard modification time, extra flags, OS byte
         if flag & FEXTRA:
             # Read & discard the extra field, if present
-            xlen=ord(self.fd.read(1))
-            xlen=xlen+256*ord(self.fd.read(1))
+            xlen = ord(self.fd.read(1)) + 256 * ord(self.fd.read(1))
             self.fd.read(xlen)
         if flag & FNAME:
             # Read and discard a nul-terminated string containing the filename
-            while (1):
-                s=self.fd.read(1)
-                if s=='\000':
+            while 1:
+                if self.fd.read(1) == "\000":
                     break
         if flag & FCOMMENT:
             # Read and discard a nul-terminated string containing a comment
-            while (1):
-                s=self.fd.read(1)
-                if s=='\000':
+            while 1:
+                if self.fd.read(1) == "\000":
                     break
         if flag & FHCRC:
             self.fd.read(2)      # Read & discard the 16-bit header CRC
@@ -124,7 +121,7 @@ class PyGZIP:
             self.__readHeader()
         data = ""
         size = 2048
-        while bytes == None or self.bufferlen <  bytes:
+        while bytes == None or self.bufferlen < bytes:
             if len(data) >= 8:
                 self.enddata = data[-8:]
             else:
@@ -345,7 +342,7 @@ rpmtag = {
     "buildarchs": [1089, RPM_STRING_ARRAY, None, 2],
     "excludearch": [1059, RPM_STRING_ARRAY, None, 2],
     "exclusivearch": [1061, RPM_STRING_ARRAY, None, 2],
-    "exclusiveos": [1062, RPM_STRING_ARRAY, None, 2], # ['Linux'] or ['linux']
+    "exclusiveos": [1062, RPM_STRING_ARRAY, None, 2], # ["Linux"] or ["linux"]
 
     # information about files
     "dirindexes": [1116, RPM_INT32, None, 0],
@@ -397,7 +394,7 @@ for v in rpmtag.values():
 del v
 
 # Required tags in a header.
-rpmtagrequired = ["name", "version", "release", "arch", "rpmversion"]
+rpmtagrequired = ("name", "version", "release", "arch", "rpmversion")
 
 importanttags = {"name":1, "epoch":1, "version":1, "release":1,
     "arch":1, "rpmversion":1, "sourcerpm":1, "payloadcompressor":1,
@@ -419,7 +416,7 @@ importanttags = {"name":1, "epoch":1, "version":1, "release":1,
 
 # Info within the sig header.
 rpmsigtag = {
-    # size of gpg/dsaheader sums differ between 64/65(contains '\n')
+    # size of gpg/dsaheader sums differ between 64/65(contains "\n")
     "dsaheader": [267, RPM_BIN, None, 0], # only about header
     "gpg": [1005, RPM_BIN, None, 0], # header+payload
     "header_signatures": [62, RPM_BIN, 16, 0], # content of this tag is unclear
@@ -442,16 +439,16 @@ for v in rpmsigtag.values():
 del v
 
 # Required tags in a signature header.
-rpmsigtagrequired = ["md5"]
+rpmsigtagrequired = ("md5")
 
 
 # check arch names against this list
-possible_archs = {'noarch':1, 'i386':1, 'i486':1, 'i586':1, 'i686':1,
-    'athlon':1, 'pentium3':1, 'pentium4':1, 'x86_64':1, 'ia32e':1, 'ia64':1,
-    'alpha':1, 'axp':1, 'sparc':1, 'sparc64':1, 's390':1, 's390x':1, 'ia64':1,
-    'ppc':1, 'ppc64':1, 'ppc64iseries':1, 'ppc64pseries':1, 'ppcpseries':1,
-    'ppciseries':1, 'ppcmac':1, 'ppc8260':1, 'm68k':1,
-    'arm':1, 'armv4l':1, 'mips':1, 'mipseb':1, 'mipsel':1, 'hppa':1, 'sh':1 }
+possible_archs = {"noarch":1, "i386":1, "i486":1, "i586":1, "i686":1,
+    "athlon":1, "pentium3":1, "pentium4":1, "x86_64":1, "ia32e":1, "ia64":1,
+    "alpha":1, "axp":1, "sparc":1, "sparc64":1, "s390":1, "s390x":1, "ia64":1,
+    "ppc":1, "ppc64":1, "ppc64iseries":1, "ppc64pseries":1, "ppcpseries":1,
+    "ppciseries":1, "ppcmac":1, "ppc8260":1, "m68k":1,
+    "arm":1, "armv4l":1, "mips":1, "mipseb":1, "mipsel":1, "hppa":1, "sh":1 }
 
 possible_scripts = {
     None: 1,
@@ -469,9 +466,9 @@ possible_scripts = {
 def isCommentOnly(script):
     """Return 1 is script contains only empty lines or lines
     starting with '#'. """
-    for line in script.split('\n'):
+    for line in script.split("\n"):
         line2 = line.strip()
-        if line2 and line2[0] != '#':
+        if line2 and line2[0] != "#":
             return 0
     return 1
 
@@ -655,17 +652,17 @@ class ReadRpm:
     def closeFd(self):
         self.fd = None
 
-    def __parseLead(self, leaddata):
+    def __verifyLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
             unpack("!4scchh66shh16x", leaddata)
         failed = None
-        if major not in ('\x03', '\x04') or minor != '\x00' or \
+        if major not in ("\x03", "\x04") or minor != "\x00" or \
             sigtype != 5 or rpmtype not in (0, 1):
             failed = 1
         # 21 == darwin
         if osnum not in (1, 21, 255, 256):
             failed = 1
-        name = name.rstrip('\x00')
+        name = name.rstrip("\x00")
         if self.strict:
             if os.path.basename(self.filename)[:len(name)] != name:
                 failed = 1
@@ -673,66 +670,47 @@ class ReadRpm:
             print major, minor, rpmtype, arch, name, osnum, sigtype
             self.printErr("wrong data in rpm lead")
 
-    def __verifyTag(self, index, fmt, issig):
+    def __verifyTag(self, index, fmt, hdrtags):
         (tag, ttype, offset, count) = index
-        if issig:
-            if not rpmsigtag.has_key(tag):
-                self.printErr("rpmsigtag has no tag %d" % tag)
-            else:
-                t = rpmsigtag[tag]
-                if t[1] != None and t[1] != ttype:
-                    self.printErr("sigtag %d has wrong type %d" % (tag, ttype))
-                if t[2] != None and t[2] != count:
-                    self.printErr("sigtag %d has wrong count %d" % (tag, count))
-                if (t[3] & 1) and self.strict:
-                    self.printErr("tag %d is old" % tag)
-                if self.issrc:
-                    if (t[3] & 4):
-                        self.printErr("tag %d should be for binary rpms" % tag)
-                else:
-                    if (t[3] & 2):
-                        self.printErr("tag %d should be for src rpms" % tag)
+        if not hdrtags.has_key(tag):
+            self.printErr("hdrtags has no tag %d" % tag)
         else:
-            if not rpmtag.has_key(tag):
-                self.printErr("rpmtag has no tag %d" % tag)
-            else:
-                t = rpmtag[tag]
-                if t[1] != None and t[1] != ttype:
-                    if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or \
-                        ttype == RPM_STRING_ARRAY):
-                        pass    # special exception case
-                    elif t[0] == 1016 and ttype == RPM_STRING:
-                        pass    # hardcoded exception for RPMTAG_GROUP=1016
-                    else:
-                        self.printErr("tag %d has wrong type %d" % (tag, ttype))
-                if t[2] != None and t[2] != count:
-                    self.printErr("tag %d has wrong count %d" % (tag, count))
-                if (t[3] & 1) and self.strict:
-                    self.printErr("tag %d is old" % tag)
-                if self.issrc:
-                    if (t[3] & 4):
-                        self.printErr("tag %d should be for binary rpms" % tag)
+            t = hdrtags[tag]
+            if t[1] != None and t[1] != ttype:
+                if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or \
+                    ttype == RPM_STRING_ARRAY):
+                    pass    # special exception case
+                elif t[0] == 1016 and ttype == RPM_STRING:
+                    pass    # hardcoded exception for RPMTAG_GROUP=1016
                 else:
-                    if (t[3] & 2):
-                        self.printErr("tag %d should be for src rpms" % tag)
+                    self.printErr("tag %d has wrong type %d" % (tag, ttype))
+            if t[2] != None and t[2] != count:
+                self.printErr("tag %d has wrong count %d" % (tag, count))
+            if (t[3] & 1) and self.strict:
+                self.printErr("tag %d is old" % tag)
+            if self.issrc:
+                if (t[3] & 4):
+                    self.printErr("tag %d should be for binary rpms" % tag)
+            else:
+                if (t[3] & 2):
+                    self.printErr("tag %d should be for src rpms" % tag)
         if count == 0:
             self.raiseErr("zero length tag")
         if ttype < 1 or ttype > 9:
             self.raiseErr("unknown rpmtype %d" % ttype)
         if ttype == RPM_INT32:
             count = count * 4
-        elif ttype == RPM_STRING_ARRAY or \
-            ttype == RPM_I18NSTRING:
+        elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
             size = 0
             for _ in xrange(count):
-                end = fmt.index('\x00', offset) + 1
+                end = fmt.index("\x00", offset) + 1
                 size += end - offset
                 offset = end
             count = size
         elif ttype == RPM_STRING:
             if count != 1:
                 self.raiseErr("tag string count wrong")
-            count = fmt.index('\x00', offset) - offset + 1
+            count = fmt.index("\x00", offset) - offset + 1
         elif ttype == RPM_CHAR or ttype == RPM_INT8:
             pass
         elif ttype == RPM_INT16:
@@ -745,7 +723,7 @@ class ReadRpm:
             self.raiseErr("unknown tag header")
         return count
 
-    def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, issig):
+    def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, hdrtags):
         checkSize = 0
         for i in xrange(0, indexNo * 16, 16):
             index = unpack("!iiii", fmt[i:i + 16])
@@ -757,14 +735,14 @@ class ReadRpm:
                 checkSize += (4 - (checkSize % 4)) % 4
             elif ttype == RPM_INT64:
                 checkSize += (8 - (checkSize % 8)) % 8
-            checkSize += self.__verifyTag(index, fmt2, issig)
+            checkSize += self.__verifyTag(index, fmt2, hdrtags)
         if checkSize != storeSize:
             # XXX: add a check for very old rpm versions here, seems this
             # is triggered for a few RHL5.x rpm packages
             self.printErr("storeSize/checkSize is %d/%d" % (storeSize,
                 checkSize))
 
-    def __readIndex(self, pad, issig=None):
+    def __readIndex(self, pad, hdrtags):
         data = self.fd.read(16)
         (magic, indexNo, storeSize) = unpack("!8sii", data)
         if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
@@ -775,7 +753,7 @@ class ReadRpm:
         if pad != 1:
             padfmt = self.fd.read((pad - (storeSize % pad)) % pad)
         if self.verify:
-            self.__verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
+            self.__verifyIndex(fmt, fmt2, indexNo, storeSize, hdrtags)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + \
             len(fmt2) + len(padfmt))
 
@@ -791,11 +769,11 @@ class ReadRpm:
             if ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
                 data = []
                 for _ in xrange(count):
-                    end = fmt2.index('\x00', offset)
+                    end = fmt2.index("\x00", offset)
                     data.append(fmt2[offset:end])
                     offset = end + 1
             elif ttype == RPM_STRING:
-                data = fmt2[offset:fmt2.index('\x00', offset)]
+                data = fmt2[offset:fmt2.index("\x00", offset)]
             elif ttype == RPM_INT32:
                 data = unpack("!%dI" % count, fmt2[offset:offset + count * 4])
             elif ttype == RPM_CHAR:
@@ -823,14 +801,14 @@ class ReadRpm:
         if self.openFd():
             return 1
         leaddata = self.fd.read(96)
-        if leaddata[:4] != '\xed\xab\xee\xdb':
+        if leaddata[:4] != "\xed\xab\xee\xdb":
             self.printErr("no rpm magic found")
             return 1
         if self.verify:
-            self.__parseLead(leaddata)
-        sigdata = self.__readIndex(8, 1)
+            self.__verifyLead(leaddata)
+        sigdata = self.__readIndex(8, hdrtags)
         self.sigdatasize = sigdata[5]
-        hdrdata = self.__readIndex(1)
+        hdrdata = self.__readIndex(1, hdrtags)
         self.hdrdatasize = hdrdata[5]
         if keepdata:
             self.leaddata = leaddata
@@ -1022,7 +1000,7 @@ class ReadRpm:
         f = self[flags]
         v = self[version]
         if n == None:
-            if self[flags] != None or self[version] != None:
+            if f != None or v != None:
                 self.printErr("wrong dep data")
         else:
             if (f == None and v != None) or (f != None and v == None):
@@ -1192,10 +1170,10 @@ class ReadRpm:
             arch + "-unknown-linux",
             "--target=${TARGET_PLATFORM}", "--target=$TARGET_PLATFORM"):
             self.printErr("unknown arch %s" % self["platform"])
-        if self["exclusiveos"] not in (None, ['Linux'], ['linux']):
+        if self["exclusiveos"] not in (None, ["Linux"], ["linux"]):
             self.printErr("unknown os %s" % self["exclusiveos"])
         if self.strict:
-            if self["buildarchs"] not in (None, ['noarch']):
+            if self["buildarchs"] not in (None, ["noarch"]):
                 self.printErr("bad buildarch: %s" % self["buildarchs"])
             if self["excludearch"] != None:
                 for i in self["excludearch"]:
@@ -1442,8 +1420,8 @@ def evrSplit(evr):
     return (epoch, evr[i + 1:], "")
 
 
-fileglobs = ['.*bin\/.*', '^\/etc\/.*', '^\/usr\/lib\/sendmail$']
-dirglobs = ['.*bin\/.*', '^\/etc\/.*']
+fileglobs = [".*bin\/.*", "^\/etc\/.*", "^\/usr\/lib\/sendmail$"]
+dirglobs = [".*bin\/.*", "^\/etc\/.*"]
 
 class RepoRpm:
     """Read one rpm for createrepo data."""
@@ -1576,7 +1554,7 @@ def main():
         print "ready"
         time.sleep(30)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     dohotshot = 0
     if dohotshot:
         import tempfile, hotshot, hotshot.stats
@@ -1586,8 +1564,8 @@ if __name__ == '__main__':
         prof.close()
         del prof
         s = hotshot.stats.load(filename)
-        s.strip_dirs().sort_stats('time').print_stats(100)
-        s.strip_dirs().sort_stats('cumulative').print_stats(100)
+        s.strip_dirs().sort_stats("time").print_stats(100)
+        s.strip_dirs().sort_stats("cumulative").print_stats(100)
         os.unlink(filename)
     else:
         main()
