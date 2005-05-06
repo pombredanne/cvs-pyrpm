@@ -98,7 +98,8 @@ class PyGZIP:
         self.fd.read(4+1+1) # Discard modification time, extra flags, OS byte
         if flag & FEXTRA:
             # Read & discard the extra field, if present
-            xlen = ord(self.fd.read(1)) + 256 * ord(self.fd.read(1))
+            xlen = ord(self.fd.read(1))
+            xlen += 256 * ord(self.fd.read(1))
             self.fd.read(xlen)
         if flag & FNAME:
             # Read and discard a nul-terminated string containing the filename
@@ -201,9 +202,10 @@ RPM_STRING = 6
 RPM_BIN = 7
 RPM_STRING_ARRAY = 8
 RPM_I18NSTRING = 9
-# new type internal to this tool:
+# new types internal to this tool:
 # RPM_STRING_ARRAY for app + params, otherwise a single RPM_STRING
 RPM_ARGSTRING = 12
+RPM_GROUP = 13
 
 # RPMSENSEFLAGS
 RPMSENSE_ANY        = 0
@@ -322,9 +324,7 @@ rpmtag = {
     "buildhost": [1007, RPM_STRING, None, 0], # hostname where rpm was built
     "cookie": [1094, RPM_STRING, None, 0], # build host and time
     # ignored now, successor is comps.xml
-    # Code allows hardcoded exception to also have type RPM_STRING
-    # for RPMTAG_GROUP==1016.
-    "group": [1016, RPM_I18NSTRING, None, 0],
+    "group": [1016, RPM_GROUP, None, 0],
     "size": [1009, RPM_INT32, 1, 0],                # sum of all file sizes
     "distribution": [1010, RPM_STRING, None, 0],
     "vendor": [1011, RPM_STRING, None, 0],
@@ -677,11 +677,12 @@ class ReadRpm:
         else:
             t = hdrtags[tag]
             if t[1] != None and t[1] != ttype:
-                if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or \
-                    ttype == RPM_STRING_ARRAY):
+                if t[1] == RPM_ARGSTRING and \
+                    (ttype == RPM_STRING or ttype == RPM_STRING_ARRAY):
                     pass    # special exception case
-                elif t[0] == 1016 and ttype == RPM_STRING:
-                    pass    # hardcoded exception for RPMTAG_GROUP=1016
+                elif t[1] == RPM_GROUP and \
+                    (ttype == RPM_STRING or ttype == RPM_I18N_STRING):
+                    pass    # exception for RPMTAG_GROUP
                 else:
                     self.printErr("tag %d has wrong type %d" % (tag, ttype))
             if t[2] != None and t[2] != count:
