@@ -681,7 +681,7 @@ class ReadRpm:
                     (ttype == RPM_STRING or ttype == RPM_STRING_ARRAY):
                     pass    # special exception case
                 elif t[1] == RPM_GROUP and \
-                    (ttype == RPM_STRING or ttype == RPM_I18N_STRING):
+                    (ttype == RPM_STRING or ttype == RPM_I18NSTRING):
                     pass    # exception for RPMTAG_GROUP
                 else:
                     self.printErr("tag %d has wrong type %d" % (tag, ttype))

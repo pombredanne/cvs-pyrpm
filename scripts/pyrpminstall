@@ -140,7 +140,10 @@ def main():
   control = RpmController(rpmconfig, operation, pydb)
   control.handleFiles(args)
   ops = control.getOperations()
-  control.runOperations(ops)
+  if self.config.test:
+    self.config.printError("test run stopped")
+  else:
+    control.runOperations(ops)
 
 if __name__ == '__main__':
     hotshot = 0
@@ -151,7 +154,7 @@ if __name__ == '__main__':
         filename = tempfile.mktemp()
         prof = Profile(filename)
         try:
-            prof = prof.runcall(main)
+            prof.runcall(main)
         except SystemExit:
             pass
         prof.close()
