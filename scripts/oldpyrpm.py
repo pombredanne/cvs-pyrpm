@@ -369,7 +369,8 @@ rpmtag = {
     "dependsdict": [1145, RPM_INT32, None, 0],
 
     # tags not in Fedora Core development trees anymore:
-    "filecontexts": [1147, RPM_STRING_ARRAY, None, 1], # selinux filecontexts
+    # XXX: this tag shows up again, disable the check for now:
+    "filecontexts": [1147, RPM_STRING_ARRAY, None, 0], # selinux filecontexts
     "capability": [1105, RPM_INT32, None, 1],
     "xpm": [1013, RPM_BIN, None, 1],
     "gif": [1012, RPM_BIN, None, 1],
@@ -439,7 +440,7 @@ for v in rpmsigtag.values():
 del v
 
 # Required tags in a signature header.
-rpmsigtagrequired = ("md5")
+rpmsigtagrequired = ("md5",)
 
 
 # check arch names against this list
@@ -807,7 +808,7 @@ class ReadRpm:
             return 1
         if self.verify:
             self.__verifyLead(leaddata)
-        sigdata = self.__readIndex(8, hdrtags)
+        sigdata = self.__readIndex(8, sigtags)
         self.sigdatasize = sigdata[5]
         hdrdata = self.__readIndex(1, hdrtags)
         self.hdrdatasize = hdrdata[5]
