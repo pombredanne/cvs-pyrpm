@@ -382,6 +382,13 @@ function fc123pyrpmyumyummix() {
     { time $PYRPMYUM -c /etc/nosuchfile -r $IN update $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee -a $IN.LOG.4
 }
 
+function showfunction() {
+        echo "Select which source you'd like to see:"
+        PS3="Select which source you'd like to see:"
+        select i in "${TESTS[@]}"; do type ${TESTFUNCTIONS[$((REPLY-1))]}; break; done
+        exit
+}
+
 # These two arrays need to be kept in sync:
 declare -a TESTS
 declare -a TESTFUNCTIONS
@@ -399,7 +406,8 @@ TESTS=( "RHEL3_U3-U5 RHEL4 installtests with pyrpmyum"
         "FC3 install tests with fileconflicts"
         "Sanity checks"
         "Fedora Core 1/2/3/devel with yum/pyrpmyum"
-        "run all tests (USE WITH CAUTION)"
+        "run all tests (USE WITH CAUTION)"          # leave those two as the last two entries
+        "show sources of a test (menu)"             # leave those two as the last two entries
       )
 TESTFUNCTIONS=("rhel34installtests"
                "fc1updatespyrpm"
@@ -415,7 +423,8 @@ TESTFUNCTIONS=("rhel34installtests"
                "fc3fileconflicts"
                "sanitychecks"
                "fc123pyrpmyumyummix"
-               "runalltests"
+               "runalltests"            # leave those two as the last two entries
+               "showfunction"           # leave those two as the last two entries
               )
 
 if test x$1 = x--help ; then
@@ -433,8 +442,13 @@ fi
 
 teststorun=""
 while [ "$#" != "0" ]; do
-        teststorun="$teststorun ${1/--/}"
-        shift
+        if [ "$1" != "--showfunction" ]; then
+            teststorun="$teststorun ${1/--/}"
+            shift
+        else
+            teststorun="showfunction"
+            break
+        fi
     done
 
 if [ -z "$teststorun" ]; then
@@ -444,7 +458,7 @@ fi
 for ARCH in $ARCHS; do
 if [ "$teststorun" != "runalltests" ]; then
     for i in $teststorun; do 
-        time $i
+        $i
     done
 else
     for run in `seq 0 $numtests`; do
