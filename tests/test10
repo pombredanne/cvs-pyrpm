@@ -103,14 +103,14 @@ pkgpolicy=newest
 EOF
 test -n "$3" && cat >> $2/etc/yum.conf <<EOF
 [base]
-name=Fedora Linux Core $1 - \$ARCH
-baseurl=file://$FEDORA/$1/\$ARCH/os/
+name=Fedora Linux Core $1 - $ARCH
+baseurl=file://$FEDORA/$1/$ARCH/os/
 
 EOF
 cat >> $2/etc/yum.conf <<EOF
 [updates]
-name=Fedora Linux Core $1 - \$ARCH - Updates
-baseurl=file://$FEDORA/updates/$1/\$ARCH/
+name=Fedora Linux Core $1 - $ARCH - Updates
+baseurl=file://$FEDORA/updates/$1/$ARCH/
 EOF
 }
 
@@ -140,7 +140,7 @@ FEDORA=/mnt/raid/fedora
 EXTRAS=/mnt/raid/fedora-extras
 #FEDORA=/mnt/data/laroche/fedora
 RPMS=RedHat/RPMS
-PYRPMYUM="./pyrpmyum -y --autoerase --servicehack --quiet"
+PYRPMYUM="./pyrpmyum -y --autoerase --servicehack -v"
 CHECKRPM="./pyrpmcheck"
 # Specify if updates to newer releases should be done.
 RELEASEUPDATE=1
