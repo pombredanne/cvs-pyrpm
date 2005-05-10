@@ -610,12 +610,21 @@ def orderList(list, arch):
 
 def machineDistance(arch1, arch2):
     """ return machine distance as by arch_compats """
+    # Noarch is always very good ;)
+    if arch1 == "noarch" or arch2 == "noarch":
+        return 0
+    # Second best: same arch
+    if arch1 == arch2:
+        return 1
+    # Everything else is determined by the "distance" in the arch_compats
+    # array. If both archs are not compatible we return an insanely high
+    # distance.
     if   arch_compats.has_key(arch1) and arch2 in arch_compats[arch1]:
-        return arch_compats[arch1].index(arch2)
+        return arch_compats[arch1].index(arch2)+2
     elif arch_compats.has_key(arch2) and arch1 in arch_compats[arch2]:
-        return arch_compats[arch2].index(arch1)
+        return arch_compats[arch2].index(arch1)+2
     else:
-        return 99   # incompatible archs, distance is very high ;)
+        return 999   # incompatible archs, distance is very high ;)
 
 def getBuildArchList(list):
     """Returns list of build architectures used in 'list' of packages."""

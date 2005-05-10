@@ -137,7 +137,7 @@ class RpmYum:
     def runDepRes(self):
         if self.config.timer:
             time1 = clock()
-        # Add packages to be updated  to our operation resolver
+        # Add packages to be processed to our operation resolver
         self.pkgs = self.__selectNewestPkgs(self.pkgs)
         for pkg in self.pkgs:
             self.__appendPkg(pkg)
@@ -199,7 +199,11 @@ class RpmYum:
             if not rethash.has_key(key):
                 rethash[key] = pkg
             else:
-                if pkgCompare(rethash[key], pkg) <= 0:
+                ret = pkgCompare(rethash[key], pkg)
+                if   ret < 0:
+                    rethash[key] = pkg
+                elif ret == 0 and \
+                     rethash[key]["arch"] in arch_compats[pkg["arch"]]:
                     rethash[key] = pkg
         return rethash.values()
 
@@ -225,7 +229,7 @@ class RpmYum:
             self.reread = 0
         else:
             self.reread = 1
-        # As long as we have unresolved dependancies and need to handle some
+        # As long as we have unresolved dependencies and need to handle some
         # conflicts continue this loop
         count = 0
         while count < 3:
@@ -279,15 +283,7 @@ class RpmYum:
             # there are any obsoletes for that package and handle them
             # Order the elements of the potential packages by machine
             # distance and evr
-            orderList(pkg_list, self.config.machine)
-            ret = 0
-            for upkg in pkg_list:
-                if upkg in self.opresolver or upkg in self.erase_list:
-                    continue
-                ret = self.opresolver.update(upkg)
-                if ret > 0:
-                    self.__handleObsoletes(upkg)
-                    break
+            ret = self.__handleUpdatePkglist(pkg, pkg_list)
             if ret > 0 :
                 unresolved = self.opresolver.getUnresolvedDependencies()
                 continue
@@ -345,23 +341,37 @@ class RpmYum:
                         if self.__findUpdatePkg(pkg1) > 0:
                             handled_conflict = 1
                             ret = 1
+                    else:
+                        if   self.__findUpdatePkg(pkg1) > 0:
+                            handled_conflict = 1
+                            ret = 1
+                        elif self.__findUpdatePkg(pkg2) > 0:
+                            handled_conflict = 1
+                            ret = 1
+                    if handled_conflict:
+                        break
+                if handled_conflict:
+                    break
             conflicts = self.opresolver.getConflicts()
         if not self.config.nofileconflicts:
-            handled_conflict = 1
+            handled_fileconflict = 1
             conflicts = self.opresolver.getFileConflicts()
-            while len(conflicts) > 0 and handled_conflict:
-                handled_conflict = 0
+            while len(conflicts) > 0 and handled_fileconflict:
+                handled_fileconflict = 0
                 for pkg1 in conflicts:
                     for (c, pkg2) in conflicts[pkg1]:
-                        if c[1] & RPMSENSE_LESS != 0:
-                            if self.__findUpdatePkg(pkg2) > 0:
-                                handled_conflict = 1
-                                ret = 1
-                        elif c[1] & RPMSENSE_GREATER != 0:
-                            if self.__findUpdatePkg(pkg1) > 0:
-                                handled_conflict = 1
-                                ret = 1
-        if not handled_conflict and self.autoerase:
+                        if self.__findUpdatePkg(pkg2) > 0:
+                            handled_fileconflict = 1
+                            ret = 1
+                        elif self.__findUpdatePkg(pkg1) > 0:
+                            handled_fileconflict = 1
+                            ret = 1
+                        if handled_conflict:
+                            break
+                    if handled_conflict:
+                        break
+                conflicts = self.opresolver.getFileConflicts()
+        if not (handled_conflict and handled_fileconflict) and self.autoerase:
             ret = self.__handleConflictAutoerases()
         return ret
 
@@ -372,8 +382,7 @@ class RpmYum:
             for opkg in self.__obsoleteslist:
                 if opkg in self.opresolver or opkg in self.erase_list:
                     continue
-                if pkg["name"] == opkg["name"] and \
-                   pkgCompare(pkg, opkg) >= 0:
+                if pkg["name"] == opkg["name"]:
                     continue
                 for u in opkg["obsoletes"]:
                     s = self.opresolver.searchDependency(u)
@@ -395,12 +404,21 @@ class RpmYum:
         pkg_list = []
         for repo in self.resolvers:
             pkg_list.extend(findPkgByName(pkg["name"], repo.getList()))
+        return self.__handleUpdatePkglist(pkg, pkg_list)
+
+    def __handleUpdatePkglist(self, pkg, pkg_list):
         # Order the elements of the potential packages by machine
         # distance and evr
         orderList(pkg_list, self.config.machine)
         ret = 0
         for upkg in pkg_list:
             if upkg in self.erase_list or upkg in self.opresolver:
+                continue
+            # Only try to update if the package itself or the update package
+            # are noarch or if they are buildarchtranslate compatible
+            if not (upkg["arch"] == "noarch" or \
+                    pkg["arch"] == "noarch" or \
+                    buildarchtranslate[upkg["arch"]] == buildarchtranslate[pkg["arch"]]):
                 continue
             ret = self.opresolver.update(upkg)
             if ret > 0:
@@ -452,8 +470,28 @@ class RpmYum:
                 elif self.pydb.isInstalled(pkg2) and \
                      not pkg2 in self.erase_list:
                     pkg = pkg2
-                else:
+                elif machineDistance(pkg2["arch"], self.config.machine) < \
+                     machineDistance(pkg1["arch"], self.config.machine):
+                    pkg = pkg1
+                elif pkg1.has_key("sourcerpm") and \
+                     pkg2.has_key("sourcerpm") and \
+                     envraSplit(pkg1["sourcerpm"])[1] == envraSplit(pkg2["sourcerpm"])[1]:
+                    (e1, n1, v1, r1, a1) = envraSplit(pkg1["sourcerpm"])
+                    (e2, n2, v2, r2, a2) = envraSplit(pkg2["sourcerpm"])
+                    cmp = labelCompare((e1, v1, r1), (e2, v2, r2))
+                    if   cmp < 0:
+                        pkg = pkg1
+                    elif cmp > 0:
+                        pkg = pkg2
+                    else:
+                        if len(pkg1.getNEVRA()) < len(pkg2.getNEVRA()):
+                            pkg = pkg2
+                        else:
+                            pkg = pkg1
+                elif len(pkg1.getNEVRA()) < len(pkg2.getNEVRA()):
                     pkg = pkg2
+                else:
+                    pkg = pkg1
                 if self.__doAutoerase(pkg):
                     ret = 1
         return ret

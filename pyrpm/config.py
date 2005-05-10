@@ -65,9 +65,9 @@ class RpmConfig:
         self.resolvertags = ("name", "epoch", "version", "release", "arch",
             "providename", "provideflags", "provideversion", "requirename",
             "requireflags", "requireversion", "obsoletename", "obsoleteflags",
-            "obsoleteversion", "conflictname", "conflictflags",
+            "obsoleteversion", "conflictname", "conflictflags", 
             "conflictversion", "filesizes", "filemodes", "filemd5s",
-            "dirindexes", "basenames", "dirnames", "oldfilenames")
+            "dirindexes", "basenames", "dirnames", "oldfilenames", "sourcerpm")
         self.timer = 0
         self.ldconfig = 0
         self.delayldconfig = 0
