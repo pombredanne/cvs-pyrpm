@@ -116,31 +116,15 @@ EOF
 
 DATA=/mnt/build/laroche
 
-if test x$1 = x--arch ; then
-    ARCHS=$2
-    shift
-    shift
-else
-    ARCHS="i386 x86_64"
-fi
-if test x$1 = xclean ; then
-    if test -n "$2" ; then
-        cleanchroot $2
-    else
-        for i in $DATA/* ; do
-            test -d "$i" || continue
-            cleanchroot $i
-        done
-    fi
-    exit 0
-fi
 
 RELEASED=/mnt/raid/redhat/released
 FEDORA=/mnt/raid/fedora
 EXTRAS=/mnt/raid/fedora-extras
+ARCHS="i386 x86_64"
+DIR="$FEDORA"
 #FEDORA=/mnt/data/laroche/fedora
 RPMS=RedHat/RPMS
-PYRPMYUM="./pyrpmyum -y --autoerase --servicehack -v"
+PYRPMYUM="./pyrpmyum -y --autoerase --servicehack --quiet"
 CHECKRPM="./pyrpmcheck"
 # Specify if updates to newer releases should be done.
 RELEASEUPDATE=1
@@ -328,11 +312,10 @@ function fc3extraspyrpmyum() {
     cleanchroot $IN
 }
 
-function fc3fileconflicts() {
+function fileconflicts() {
     echo "Running $FUNCNAME check on $ARCH"
     # Fileconflict tests
 #        genyumconf 3 $IN withbase
-    DIR=$FEDORA
     for i in 1 2 3 4 5 development; do
         if [ -d $DIR/$i/$ARCH/os/Fedora/RPMS ]; then
             RPMDIR="$DIR/$i/$ARCH/os/Fedora/RPMS"
@@ -364,7 +347,7 @@ function sanitychecks() {
     echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/
     rm -f $IN/CHECKRPM*
-    for i in 1 2 3 development; do
+    for i in 1 2 3 4 5 development; do
         $CHECKRPM $FEDORA/$i/$ARCH/os/Fedora/RPMS/ 2>&1 | tee $IN/CHECKRPM-FC-$i-$ARCH
         $CHECKRPM $FEDORA/updates/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-$ARCH
         $CHECKRPM $FEDORA/updates/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-testing-$ARCH
@@ -411,7 +394,6 @@ function fc123pyrpmyumyummix() {
 }
 
 function showfunction() {
-        echo "Select which source you'd like to see:"
         PS3="Select which source you'd like to see:"
         select i in "${TESTS[@]}"; do type ${TESTFUNCTIONS[$((REPLY-1))]}; break; done
         exit
@@ -448,7 +430,7 @@ TESTFUNCTIONS=("rhel34installtests"
                "rhel3u2tou5pyrpmyum"
                "rhel4tou1pyrpmyum"
                "fc3extraspyrpmyum"
-               "fc3fileconflicts"
+               "fileconflicts"
                "sanitychecks"
                "fc123pyrpmyumyummix"
                "runalltests"            # leave those two as the last two entries
@@ -459,6 +441,9 @@ if test x$1 = x--help ; then
     echo "[--help]                 -   this page"
     echo "[--arch \"arch1 arch2\"]   -   architectures to test,"
     echo "                                             currently only i386 and x86_64"
+    echo "[--dir]                  - only valid for fileconflicts and sanitychecks,"
+    echo "                           defines basedir to look for install trees"
+    echo "                           p.e. /mnt/raid/fedora/"
     numtests=${#TESTS[@]}
     numtests=$((numtests-1))
 
@@ -470,12 +455,20 @@ fi
 
 teststorun=""
 while [ "$#" != "0" ]; do
-        if [ "$1" != "--showfunction" ]; then
-            teststorun="$teststorun ${1/--/}"
-            shift
-        else
+        if [ "$1" == "--showfunction" ]; then
             teststorun="showfunction"
             break
+        elif [ "$1" == "--dir" ]; then
+            DIR=$2
+            shift
+            shift
+        elif [ "$1" == "--arch" ]; then
+            ARCHS=$2
+            shift
+            shift
+        else
+            teststorun="$teststorun ${1/--/}"
+            shift
         fi
     done
 
