@@ -229,9 +229,9 @@ function fc123yumupdate() {
     echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/FC1-2-3-$ARCH
     # Install FC1
-    doinstall --nodev $FEDORA/2/$ARCH/os/Fedora/RPMS $IN
+    doinstall --nodev $FEDORA/1/$ARCH/os/Fedora/RPMS $IN
     # Update FC1 to updates
-#    { time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.1
+    { time $PYRPMYUM -r $IN update $FEDORA/updates/1/$ARCH ; } 2>&1 | tee $IN.LOG.1
     # Update to FC2 with all updates
     genyumconf 2 $IN withbase
     { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf update; } 2>&1 | tee $IN.LOG.2
