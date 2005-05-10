@@ -122,15 +122,19 @@ def main():
     # Default is to be a little verbose.
     rpmconfig.verbose = 1
 
+    # Default arch is the uname() found machine arch. Can only be overriden
+    # if --test is specified.
+    arch = None
+
     # Argument parsing
     try:
       opts, args = getopt.getopt(sys.argv[1:], "?vhc:r:y",
-        ["help", "verbose",
+        ["help", "verbose", 
          "hash", "version", "quiet", "dbpath=", "root=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
-         "servicehack", "installpkgs="])
+         "servicehack", "installpkgs=", "arch="])
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
         usage()
@@ -200,11 +204,22 @@ def main():
             rpmconfig.notriggers = 1
         elif opt == "--servicehack":
             rpmconfig.service = 1
+        elif opt == "--arch":
+            arch = val
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1
     if rpmconfig.verbose > 2:
         rpmconfig.warning = rpmconfig.verbose - 2
+
+    if arch != None:
+        if not rpmconfig.test:
+            print "Arch option can only be used for tests"
+            sys.exit(1)
+        if not buildarchtranslate.has_key(arch):
+            print "Unknown arch %s" % arch
+            sys.exit(1)
+        rpmconfig.machine = arch
 
     if not args:
         print "No command given"

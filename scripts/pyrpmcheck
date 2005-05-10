@@ -39,7 +39,7 @@ pyrpmcheck [--nodir] [--noprovides] [--nosymlinks] [-h, --help] [-v, --verbose] 
 # tags!!!!
 rtags = ("name", "epoch", "version", "release", "arch", "dirindexes", "dirnames", "basenames", "fileusername", "filegroupname", "filemodes", "filelinktos", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion")
 
-def selectNewestPkgs(list):
+def selectNewestPkgs(pkglist):
     rethash = {}
     for pkg in list:
         key = pkg["name"]+"."+buildarchtranslate[pkg["arch"]]

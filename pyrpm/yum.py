@@ -181,7 +181,7 @@ class RpmYum:
         if self.config.timer:
             self.config.printInfo(0, "runCommand() took %s seconds\n" % (clock() - time1))
         if self.config.test:
-            self.config.printError("test run stopped")
+            self.config.printInfo(0, "Test run stopped\n")
         else:
             control.runOperations(ops)
 
