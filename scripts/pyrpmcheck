@@ -41,7 +41,7 @@ rtags = ("name", "epoch", "version", "release", "arch", "dirindexes", "dirnames"
 
 def selectNewestPkgs(pkglist):
     rethash = {}
-    for pkg in list:
+    for pkg in pkglist:
         key = pkg["name"]+"."+buildarchtranslate[pkg["arch"]]
         if not rethash.has_key(key):
             rethash[key] = pkg
