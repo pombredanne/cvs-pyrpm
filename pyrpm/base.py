@@ -427,6 +427,7 @@ buildarchtranslate = {
 "alphapca56" : "alpha",
 "alphaev6" : "alpha",
 "alphaev67" : "alpha",
+"alpha" : "alpha",
 
 "sun4c" : "sparc",
 "sun4d" : "sparc",
@@ -434,6 +435,8 @@ buildarchtranslate = {
 "sparcv8" : "sparc",
 "sparcv9" : "sparc",
 "sun4u" : "sparc64",
+"sparc" : "sparc",
+"sparc64" : "sparc64",
 
 "osfmach3_ppc" : "ppc",
 "powerpc" : "ppc",
@@ -443,6 +446,10 @@ buildarchtranslate = {
 "ppc32dy4" : "ppc",
 "ppciseries" : "ppc",
 "ppcpseries" : "ppc",
+"ppc64pseries" : "ppc64",
+"ppc64iseries" : "ppc64",
+"ppc" : "ppc",
+"ppc64" : "ppc64",
 
 "atarist" : "m68kmint",
 "atariste" : "m68kmint",
@@ -451,15 +458,16 @@ buildarchtranslate = {
 "atariclone" : "m68kmint",
 "milan" : "m68kmint",
 "hades" : "m68kmint",
+"m68kmint" : "m68kmint",
 
 "s390" : "s390",
 "s390x" : "s390x",
 
 "ia64" : "ia64",
 
-"x86_64" : "x86_64",
 "amd64" : "x86_64",
 "ia32e" : "x86_64",
+"x86_64" : "x86_64",
 
 "noarch" : "noarch"
 }
