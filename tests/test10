@@ -178,6 +178,7 @@ function fc1updatespyrpm() {
         # Update to FC-development
         { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.5
     fi
+    cleanchroot $IN
 }
 
 function fc2updatespyrpm() {
@@ -196,6 +197,7 @@ function fc2updatespyrpm() {
         # Update to FC-development
         { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.4
     fi
+    cleanchroot $IN
 }
 
 function fc3updatespyrpm() {
@@ -212,6 +214,7 @@ function fc3updatespyrpm() {
         # Update to FC-development
         { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee $IN.LOG.3
     fi
+    cleanchroot $IN
 }
 
 function fcdevelreinstallrpm() {
@@ -220,6 +223,7 @@ function fcdevelreinstallrpm() {
     doinstall $FEDORA/development/$ARCH/Fedora/RPMS $DATA/FC4-$ARCH
     ln -sf $FEDORA/development/$ARCH/Fedora/RPMS /tmp/n
     doinstall /tmp/n $DATA/FC4-$ARCH-rpm rpm
+    cleanchroot $IN
 }
 
 function fc123rpminstallyumupdate() {
@@ -233,6 +237,7 @@ function fc123rpminstallyumupdate() {
         genyumconf $i $IN
         { time chroot $IN yum update; } 2>&1 | tee $IN.LOG.1
     done
+    cleanchroot $IN
 }
 
 function fc123yumupdate() {
@@ -249,6 +254,7 @@ function fc123yumupdate() {
     # Update to FC3 with all updates
     genyumconf 3 $IN withbase
     { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf update; } 2>&1 | tee $IN.LOG.3
+    cleanchroot $IN
 }
 
 function fc3funkyupdates() {
@@ -266,6 +272,7 @@ function fc3funkyupdates() {
     { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf update mozilla evolution openoffice.org-writer; } 2>&1 | tee $IN.LOG.4
     { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupremove base; } 2>&1 | tee $IN.LOG.5
     { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf groupinstall development-tools; } 2>&1 | tee $IN.LOG.6
+    cleanchroot $IN
 }
 
 function rhel3u2tou5pyrpmyum() {
@@ -278,6 +285,7 @@ function rhel3u2tou5pyrpmyum() {
     # Update to U5
     echo "$PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS" 2>&1 | tee -a $IN.LOG.1
     { time $PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN update $RELEASED/RHEL-3/U5/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee -a $IN.LOG.1
+    cleanchroot $IN
 }
 
 function rhel4tou1pyrpmyum() {
@@ -290,6 +298,7 @@ function rhel4tou1pyrpmyum() {
     # Update to U1
     echo "$PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN update $RELEASED/RHEL-4/U1/AS/$ARCH/tree/RedHat/RPMS" 2>&1 | tee -a $IN.LOG.1
     { time $PYRPMYUM -c $IN/etc/doesnotexistyum.conf -r $IN update $RELEASED/RHEL-4/U1/AS/$ARCH/tree/RedHat/RPMS ; } 2>&1 | tee -a $IN.LOG.1
+    cleanchroot $IN
 }
  
 function fc3extraspyrpmyum() {
@@ -316,21 +325,38 @@ function fc3extraspyrpmyum() {
         echo "$PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS $EXTRAS/development/$ARCH/" | tee $IN.LOG.4
         { time $PYRPMYUM -r $IN upgrade $FEDORA/development/$ARCH/Fedora/RPMS $EXTRAS/development/$ARCH/; } 2>&1 | tee -a $IN.LOG.4
     fi
+    cleanchroot $IN
 }
 
 function fc3fileconflicts() {
     echo "Running $FUNCNAME check on $ARCH"
-    # FC3 install tests with fileconflicts
-    IN=$DATA/FC3-installtest-$ARCH
-    cleanchroot $IN
-    preparechroot $IN
+    # Fileconflict tests
 #        genyumconf 3 $IN withbase
-    echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS" | tee $IN.LOG
-    { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS; } 2>&1 | tee -a $IN.LOG
-    echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH" | tee $IN.LOG.1
-    { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH; } 2>&1 | tee -a $IN.LOG.1
-    echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $FEDORA/updates/testing/3/$ARCH" | tee $IN.LOG.2
-    { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $FEDORA/updates/testing/3/$ARCH; } 2>&1 | tee -a $IN.LOG.2
+    DIR=$FEDORA
+    for i in 1 2 3 4 5 development; do
+        if [ -d $DIR/$i/$ARCH/os/Fedora/RPMS ]; then
+            RPMDIR="$DIR/$i/$ARCH/os/Fedora/RPMS"
+        elif [ -d $DIR/$i/$ARCH/Fedora/RPMS ]; then
+            RPMDIR="$DIR/$i/$ARCH/Fedora/RPMS"
+        else
+            echo "No $DIR/$i/$ARCH/os/Fedora/RPMS or $DIR/$i/$ARCH/Fedora/RPMS directories found"
+            continue 
+        fi
+        IN=$DATA/FC${i}-fileconflicts-$ARCH
+        cleanchroot $IN
+        preparechroot $IN
+        echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $RPMDIR" | tee $IN.LOG
+        { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $RPMDIR; } 2>&1 | tee -a $IN.LOG
+        if [ -d $DIR/updates/$i/$ARCH ]; then
+            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $RPMDIR $DIR/updates/$i/$ARCH" | tee -a $IN.LOG
+            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $RPMDIR $DIR/updates/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+        fi
+        if [ -d $DIR/updates/testing/$i/$ARCH ]; then
+            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH" | tee -a $IN.LOG
+            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nonexistentyum.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+        fi
+        cleanchroot $IN
+    done
 }
 
 function sanitychecks() {
@@ -345,6 +371,7 @@ function sanitychecks() {
         $CHECKRPM $EXTRAS/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-$ARCH
         $CHECKRPM $EXTRAS/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-testing-$ARCH
     done
+    cleanchroot $IN
 }
 
 function fc123pyrpmyumyummix() {
@@ -380,6 +407,7 @@ function fc123pyrpmyumyummix() {
     echo "Update to FC-devel with pyrpmyum" | tee $IN.LOG.4
     echo "$PYRPMYUM -c /etc/nosuchfile -r $IN update $FEDORA/development/$ARCH/Fedora/RPMS" | tee -a $IN.LOG.4
     { time $PYRPMYUM -c /etc/nosuchfile -r $IN update $FEDORA/development/$ARCH/Fedora/RPMS ; } 2>&1 | tee -a $IN.LOG.4
+    cleanchroot $IN
 }
 
 function showfunction() {
@@ -403,7 +431,7 @@ TESTS=( "RHEL3_U3-U5 RHEL4 installtests with pyrpmyum"
         "RHEL-3 U2 update to U5 with pyrpmyum"
         "RHEL-4 update to U1 with pyrpmyum"
         "Fedora Core 3 with extras"
-        "FC3 install tests with fileconflicts"
+        "Fileconflict tests"
         "Sanity checks"
         "Fedora Core 1/2/3/devel with yum/pyrpmyum"
         "run all tests (USE WITH CAUTION)"          # leave those two as the last two entries
