@@ -144,14 +144,12 @@ class RpmOrderer:
                 rel = relations[pkg]
                 pre = ""
                 if self.config.debug > 2 and len(rel.pre) > 0:
-                    pre = " pre: "
-                    for i in xrange(len(rel.pre)):
-                        p = rel.pre[i]
-                        f = rel.pre[p]
-                        if i > 0: pre += ", "
-                        if f == 2: pre += "*"
+                    pre = ""
+                    for p in rel.pre:
+                        if len(pre) > 0: pre += ", "
+                        if rel.pre[p] == 2: pre += "*" # prereq
                         pre += p.getNEVRA()
-                self.config.printDebug(2, "\t%d %d %s%s" % (len(rel.pre), len(rel.post),
+                self.config.printDebug(2, "\t%d %d %s pre: %s" % (len(rel.pre), len(rel.post),
                                                 pkg.getNEVRA(), pre))
             self.config.printDebug(2, "\t==== relations ====")
 
