@@ -114,7 +114,8 @@ baseurl=file://$FEDORA/updates/$1/$ARCH/
 EOF
 }
 
-DATA=/mnt/build/laroche
+DATA=/mnt/data/laroche
+#DATA=/tmp/karsten
 
 
 RELEASED=/mnt/raid/redhat/released
@@ -347,13 +348,50 @@ function sanitychecks() {
     echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/
     for i in 1 2 3 4 5 development; do
-        $CHECKRPM $FEDORA/$i/$ARCH/os/Fedora/RPMS/ 2>&1 | tee $IN/CHECKRPM-FC-$i-$ARCH
-        $CHECKRPM $FEDORA/updates/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-$ARCH
-        $CHECKRPM $FEDORA/updates/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-testing-$ARCH
-        $CHECKRPM $EXTRAS/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-$ARCH
-        $CHECKRPM $EXTRAS/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-testing-$ARCH
+        for dist in "RHEL" "FC"; do 
+            for dir in \
+                "$dist-$i/$ARCH/RedHat/RPMS" \
+                "$dist-$i/$ARCH/Fedora/RPMS" \
+                "$dist-$i/GOLD/AS/$ARCH/RedHat/RPMS" \
+                "$dist-$i/GOLD/$ARCH/Fedora/RPMS" \
+                "$dist-$i/GOLD/AS/$ARCH/tree/RedHat/RPMS" \
+                "$dist-$i/GOLD/$ARCH/tree/Fedora/RPMS" \
+                "GOLD/AS/$ARCH/tree/RedHat/RPMS" \
+                "GOLD/$ARCH/tree/Fedora/RPMS" \
+                "$ARCH/$ARCH-AS/RedHat/RPMS" \
+                "$ARCH/RedHat/RPMS" \
+                "$ARCH/Fedora/RPMS" \
+                "$ARCH/tree/RedHat/RPMS" \
+                "$ARCH/tree/Fedora/RPMS" \
+                "RedHat/RPMS" \
+                "Fedora/RPMS" \
+                "$i/$ARCH" \
+                "$i/$ARCH/os/*/RPMS" \
+                "updates/$i/$ARCH" \
+                "updates/testing/$i/$ARCH" \
+                "testing/$i/$ARCH"; do
+                if [ -d "$DIR/$dir" ]; then
+                    if [ "${dir/RedHat/}" != "$dir" ] ; then
+                        logfile=$IN/CHECKRPM-RHEL-${DIR//\//-}
+                        logfile=$logfile-${dir//\//-}-$ARCH
+                    else
+                        logfile=$IN/CHECKRPM-FC-${DIR//\//-}
+                        logfile=$logfile-${dir//\//-}-$ARCH
+                    fi
+                    if [ ! -f "$logfile" ]; then
+                        touch $logfile
+                        echo $logfile
+                        $CHECKRPM --nosymlinks $DIR/$dir 2>&1 | tee $logfile
+                    fi
+                fi
+            done
+        done
+        #$CHECKRPM $DIR/$i/$ARCH/os/Fedora/RPMS/ 2>&1 | tee $IN/CHECKRPM-FC-$i-$ARCH
+        #$CHECKRPM $DIR/updates/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-$ARCH
+        #$CHECKRPM $DIR/updates/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-testing-$ARCH
+        #$CHECKRPM $EXTRAS/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-$ARCH
+        #$CHECKRPM $EXTRAS/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-testing-$ARCH
     done
-    cleanchroot $IN
 }
 
 function fc123pyrpmyumyummix() {
