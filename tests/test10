@@ -346,7 +346,6 @@ function sanitychecks() {
     # Sanity checks
     echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/
-    rm -f $IN/CHECKRPM*
     for i in 1 2 3 4 5 development; do
         $CHECKRPM $FEDORA/$i/$ARCH/os/Fedora/RPMS/ 2>&1 | tee $IN/CHECKRPM-FC-$i-$ARCH
         $CHECKRPM $FEDORA/updates/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-$ARCH
