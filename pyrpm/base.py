@@ -257,6 +257,9 @@ rpmtag = {
     "classdict": (1142, RPM_STRING_ARRAY, None, 0),
     "dependsdict": (1145, RPM_INT32, None, 0),
 
+    # SELinux stuff, needed for some FC4-extras packages
+    "policies": (1150, RPM_STRING_ARRAY, None, 0),
+
     # tags not in Fedora Core development trees anymore:
     "filecontexts": (1147, RPM_STRING_ARRAY, None, 1), # selinux filecontexts
     "capability": (1105, RPM_INT32, None, 1),

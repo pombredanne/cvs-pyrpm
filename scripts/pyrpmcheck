@@ -60,7 +60,7 @@ def readDir(dir, list):
         if os.path.isdir("%s/%s" % (dir, f)):
             readDir("%s/%s" % (dir, f), list)
         elif f.endswith(".rpm"):
-            if f.contains("debuginfo"):
+            if f.find("debuginfo") > 0:
                 continue
             pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
             if not pkg.read(tags=rtags):

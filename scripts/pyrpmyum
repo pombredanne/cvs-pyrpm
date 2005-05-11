@@ -210,7 +210,7 @@ def main():
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1
     if rpmconfig.verbose > 2:
-        rpmconfig.warning = rpmconfig.verbose - 2
+        rpmconfig.debug = rpmconfig.verbose - 2
 
     if arch != None:
         if not rpmconfig.test:

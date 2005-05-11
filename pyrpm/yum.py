@@ -153,9 +153,6 @@ class RpmYum:
     def runCommand(self):
         if self.config.timer:
             time1 = clock()
-        for repo in self.resolvers:
-            del repo
-        self.resolvers = []
         if self.command.endswith("remove"):
             control = RpmController(self.config, OP_ERASE, self.pydb)
         else:
@@ -163,7 +160,7 @@ class RpmYum:
         ops = control.getOperations(self.opresolver)
         if len(ops) == 0:
             self.config.printInfo(0, "Nothing to do.\n")
-            sys.exit(0)
+            return
         self.config.printInfo(1, "The following operations will now be run:\n")
         for (op, pkg) in ops:
             self.config.printInfo(1, "\t%s %s\n" % (op, pkg.getNEVRA()))
@@ -353,8 +350,8 @@ class RpmYum:
                 if handled_conflict:
                     break
             conflicts = self.opresolver.getConflicts()
+        handled_fileconflict = 1
         if not self.config.nofileconflicts:
-            handled_fileconflict = 1
             conflicts = self.opresolver.getFileConflicts()
             while len(conflicts) > 0 and handled_fileconflict:
                 handled_fileconflict = 0
