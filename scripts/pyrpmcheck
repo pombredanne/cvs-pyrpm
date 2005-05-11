@@ -192,11 +192,11 @@ def main():
         elif opt in ["-v", "--verbose"]:
             rpmconfig.verbose += 1
         elif opt == "--nodir":
-            nodir == 1
+            nodir = 1
         elif opt == "--noprovides":
-            noprovides == 1
+            noprovides = 1
         elif opt == "--nosymlinks":
-            nosymlinks == 1
+            nosymlinks = 1
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1
