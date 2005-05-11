@@ -603,9 +603,11 @@ def orderList(list, arch):
         for j in xrange(i + 1, len(list)):
             if distance[i] > distance[j]:
                 (list[i], list[j]) = (list[j], list[i])
+                (distance[i], distance[j]) = (distance[j], distance[i])
                 continue
-            if pkgCompare(list[i], list[j]) < 0:
+            if distance[i] == distance[j] and pkgCompare(list[i], list[j]) < 0:
                 (list[i], list[j]) = (list[j], list[i])
+                (distance[i], distance[j]) = (distance[j], distance[i])
                 continue
 
 def machineDistance(arch1, arch2):
