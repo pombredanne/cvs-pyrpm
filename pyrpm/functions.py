@@ -18,6 +18,8 @@
 
 
 import os, os.path, sys, resource, re
+from urlgrabber import urlgrab
+from urlgrabber.grabber import URLGrabError
 from types import TupleType, ListType
 from tempfile import mkstemp
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
@@ -322,6 +324,24 @@ def getFreeDiskspace(operations):
                 printInfo(1, "%s: Less than 30MB of diskspace left on device %s\n" % (pkg.getNEVRA(), hex(dev)))
     return minfreehash
 
+def cacheLocal(url, subdir):
+    if not url.startswith("http://"):
+        return url
+    if not os.path.isdir("/var/cache/pyrpm/%s" % subdir):
+        os.makedirs("/var/cache/pyrpm/%s" % subdir)
+    try:
+        f = urlgrab(url, "/var/cache/pyrpm/%s/%s" % 
+                    (subdir, os.path.basename(url)),
+                    reget='simple')
+    except URLGrabError, e:
+        # urlgrab fails with invalid range for already completely transfered
+        # files, pretty strange to me to be honest... :)
+        if e[0] == 9:
+            return "/var/cache/pyrpm/%s/%s" % (subdir, os.path.basename(url))
+        else:
+            return None
+    return f
+
 def parseBoolean(str):
     lower = str.lower()
     if lower in ("yes", "true", "1", "on"):
@@ -605,7 +625,7 @@ def orderList(list, arch):
                 (list[i], list[j]) = (list[j], list[i])
                 (distance[i], distance[j]) = (distance[j], distance[i])
                 continue
-            if distance[i] == distance[j] and pkgCompare(list[i], list[j]) < 0:
+            if distance[i] == distance[j] and list[i] < list[j]:
                 (list[i], list[j]) = (list[j], list[i])
                 (distance[i], distance[j]) = (distance[j], distance[i])
                 continue

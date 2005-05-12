@@ -157,8 +157,16 @@ class RpmController:
         self.triggerlist = _Triggers(self.config)
         i = 0
         for (op, pkg) in operations:
-            if op == OP_UPDATE or op == OP_INSTALL:
+            if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
                 self.triggerlist.addPkg(pkg)
+                if pkg.source.startswith("http://"):
+                    if pkg.has_key("yumreponame"):
+                        reponame = pkg["yumreponame"]
+                    else:
+                        reponame = "default"
+                    self.config.printInfo(1, "Caching network package %s\n" % \
+                                          pkg.getNEVRA())
+                    pkg.source = cacheLocal(pkg.source, reponame+"/packages")
         for pkg in self.db.getPkgList():
             self.triggerlist.addPkg(pkg)
         numops = len(operations)

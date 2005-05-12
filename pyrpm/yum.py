@@ -67,8 +67,9 @@ class RpmYum:
         if self.command == "upgrade" or self.command == "groupupgrade":
             self.always_install = [ ]
 
-    def addRepo(self, baseurl, excludes):
-        repo = RpmRepo(self.config, baseurl, self.config.buildroot, excludes)
+    def addRepo(self, baseurl, excludes, reponame):
+        repo = RpmRepo(self.config, baseurl, self.config.buildroot, excludes,
+                       reponame)
         repo.read()
         self.repos.append(repo)
         r = RpmResolver(self.config, repo.getPkgList())
@@ -77,6 +78,7 @@ class RpmYum:
     def processArgs(self, args):
         if self.config.timer:
             time1 = clock()
+        self.erase_list = []
         # Create and read db
         self.pydb = RpmPyDB(self.config, self.config.dbpath,
                             self.config.buildroot)
@@ -144,7 +146,6 @@ class RpmYum:
             if  self.command.endswith("update") or \
                 self.command.endswith("upgrade") :
                 self.__handleObsoletes(pkg)
-        del self.pkgs
         self.pkgs = []
         self.__runDepResolution()
         if self.config.timer:

@@ -244,13 +244,9 @@ def main():
                     excludes = ""
                 else:
                     excludes = sec["exclude"]
-                if not baseurl.startswith("file:/"):
-                    printWarning(0, "%s: Only file:/ baseurls supported for now." % key)
-                    continue
-                yum.addRepo(baseurl, excludes)
-                if rpmconfig.compsfile == None and \
-                   os.path.isfile(baseurl[5:]+"/repodata/comps.xml"):
-                    rpmconfig.compsfile = baseurl[5:]+"/repodata/comps.xml"
+                yum.addRepo(baseurl, excludes, key)
+                if rpmconfig.compsfile == None:
+                    rpmconfig.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
     else:
         printWarning(0, "Couldn't find given yum config file, skipping read of repos")
 

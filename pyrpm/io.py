@@ -17,9 +17,10 @@
 #
 
 
-import fcntl, types, bsddb, libxml2, urlgrabber.grabber
+import fcntl, types, bsddb, libxml2
 import zlib, gzip, sha, md5, string, stat, openpgp
 from struct import pack, unpack
+from urlgrabber import urlopen
 
 from functions import *
 import package
@@ -819,8 +820,7 @@ class RpmFtpIO(RpmStreamIO):
 
     def open(self, mode="r"):
         RpmStreamIO.open(self, mode)
-        urlg = urlgrabber.grabber.URLGrabberFileObject(self.source)
-        self.fd  = urlg.fo
+        self.fd = urlopen(self.source)
         return self.fd != None
 
     def close(self):
@@ -836,19 +836,14 @@ class RpmHttpIO(RpmStreamIO):
 
     def open(self, mode="r"):
         RpmStreamIO.open(self, mode)
-        opts = urlgrabber.grabber.URLGrabberOptions()
-        self.urlg = urlgrabber.grabber.URLGrabberFileObject(self.source, None, \
-                                                            opts)
-        self.fd = self.urlg.fo
-        return 1
+        self.fd = urlopen(self.source)
+        return self.fd != None
 
     def close(self):
         RpmStreamIO.close(self)
-        self.urlg.close()
+        self.fd.close()
+        self.fd = None
         return 1
-
-    def _read(self, nbytes=None):
-        return self.urlg.read(nbytes)
 
     def _write(self, data):
         return 0
@@ -1067,9 +1062,11 @@ class RpmPyDB(RpmDatabase):
 
 
 class RpmRepo(RpmDatabase):
-    def __init__(self, config, source, buildroot=None, excludes=""):
+    def __init__(self, config, source, buildroot=None, excludes="", reponame="default"):
         RpmDatabase.__init__(self, config, source, buildroot)
         self.excludes = excludes.split()
+        self.reponame = reponame
+        self.filelist_imported  = 0
         self.flagmap = { None: None,
                          "EQ": RPMSENSE_EQUAL,
                          "LT": RPMSENSE_LESS,
@@ -1093,7 +1090,11 @@ class RpmRepo(RpmDatabase):
             if filename[1] == "/":
                 idx = filename[2:].index("/")
                 filename = filename[idx+2:]
-        doc = libxml2.parseFile(filename + "/repodata/primary.xml.gz")
+        filename = cacheLocal(filename + "/repodata/primary.xml.gz",
+                              self.reponame)
+        if not filename:
+            return 0
+        doc = libxml2.parseFile(filename)
         if doc == None:
             return 0
         root = doc.getRootElement()
@@ -1365,6 +1366,8 @@ class RpmRepo(RpmDatabase):
         return 1
 
     def importFilelist(self):
+        if self.filelist_imported:
+            return 1
         if not self.source.startswith("file:/"):
             filename = self.source
         else:
@@ -1372,12 +1375,17 @@ class RpmRepo(RpmDatabase):
             if filename[1] == "/":
                 idx = filename[2:].index("/")
                 filename = filename[idx+2:]
-        doc = libxml2.parseFile(filename + "/repodata/filelists.xml.gz")
+        filename = cacheLocal(filename + "/repodata/filelists.xml.gz",
+                              self.reponame)
+        if not filename:
+            return 0
+        doc = libxml2.parseFile(filename)
         if doc == None:
             return 0
         root = doc.getRootElement()
         if root == None:
             return 0
+        self.filelist_imported = 1
         return self.__parseNode(root.children)
 
     def __parseNode(self, node):
@@ -1390,6 +1398,7 @@ class RpmRepo(RpmDatabase):
                 if pkg["arch"] == "src" or self.__isExcluded(pkg):
                     node = node.next
                     continue
+                pkg["yumreponame"] = self.reponame
                 self.pkglist[pkg.getNEVRA()] = pkg
             if node.name == "package" and node.prop("name") != None:
                 self.__parseFilelist(node.children, node.prop("name"), node.prop("arch"))
