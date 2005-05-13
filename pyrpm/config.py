@@ -72,6 +72,8 @@ class RpmConfig:
         self.ldconfig = 0
         self.delayldconfig = 0
         self.service = 0
+        self.yumconf = '/etc/yum.conf'
+        self.arch = None
 
     def printDebug(self, level, msg):
         if self.debug_handler and level <= self.debug:

@@ -17,7 +17,7 @@
 #
 
 
-import os, os.path, sys, resource, re, getopt
+import os, os.path, sys, resource, re, getopt, errno
 from urlgrabber import urlgrab
 from urlgrabber.grabber import URLGrabError
 from types import TupleType, ListType
@@ -396,7 +396,7 @@ def parseYumOptions(argv, yum):
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
-         "servicehack", "installpkgs=", "arch="])
+         "servicehack", "installpkgs=", "arch=", "checkinstalled"])
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
         try:
@@ -474,6 +474,8 @@ def parseYumOptions(argv, yum):
             rpmconfig.service = 1
         elif opt == "--arch":
             rpmconfig.arch = val
+        elif opt == "--checkinstalled":
+            rpmconfig.checkinstalled = 1
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1

@@ -63,15 +63,8 @@ def main():
     # Disabled fileconflicts per default in yum
     rpmconfig.nofileconflicts = 1
 
-    # Default yum config file /etc/yum.conf
-    rpmconfig.yumconf = '/etc/yum.conf'
-
     # Default is to be a little verbose.
     rpmconfig.verbose = 1
-
-    # Default arch is the uname() found machine arch. Can only be overriden
-    # if --test is specified.
-    rpmconfig.arch = None
 
     # Argument parsing
     args = parseYumOptions(sys.argv[1:], yum)
