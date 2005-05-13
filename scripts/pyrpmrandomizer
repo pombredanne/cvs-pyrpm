@@ -17,7 +17,7 @@
 # Author: Phil Knirsch
 #
 
-import sys, os, getopt, errno
+import sys, os, random
 
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
@@ -52,22 +52,6 @@ more options:
 
 Warning: Some of the install-options are not evaluated yet"""
 
-def lockPyrpm():
-    if os.getuid() != 0 or rpmconfig.test:
-        return ""
-    if rpmconfig.buildroot != None:
-        lockfile = rpmconfig.buildroot + "/var/run/pyrpmyum.pid"
-    else:
-        lockfile = "/var/run/pyrpmyum.pid"
-    try:
-        makeDirs(lockfile)
-    except:
-        pass
-    if tryUnlock(lockfile) == 1:
-        return None
-    if doLock(lockfile) == 0:
-        return None
-    return lockfile
 
 #
 # Main program
@@ -92,16 +76,28 @@ def main():
     # Argument parsing
     args = parseYumOptions(sys.argv[1:], yum)
 
-    lockfile = lockPyrpm()
-    if lockfile == None:
-        printError("couldn't lock pyrpmyum")
-        sys.exit(1)
-    yum.setCommand(args[0])
-    yum.processArgs(args[1:])
-    yum.runDepRes()
-    yum.runCommand()
-    if lockfile:
-        unlink(lockfile)
+    # Always use the same random sequence
+    random.seed(12345)
+    count = int(args[0])
+    yum.setCommand("update")
+    while count > 0:
+        yum.processArgs([])
+        resolver = yum.opresolver
+        count -= 1
+        if count % 2:
+            pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgList()
+            pkg = pkglist[random.randrange(0, len(pkglist))]
+            yum.setCommand("update")
+            print "Updating package %s" % pkg.getNEVRA()
+            resolver.update(pkg)
+        else:
+            pkglist = resolver.getList()
+            pkg = pkglist[random.randrange(0, len(pkglist))]
+            yum.setCommand("remove")
+            print "Erasing package %s" % pkg.getNEVRA()
+            resolver.erase(pkg)
+        yum.runDepRes()
+        yum.runCommand()
 
 if __name__ == '__main__':
     dohotshot = 0

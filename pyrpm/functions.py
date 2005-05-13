@@ -17,7 +17,7 @@
 #
 
 
-import os, os.path, sys, resource, re
+import os, os.path, sys, resource, re, getopt
 from urlgrabber import urlgrab
 from urlgrabber.grabber import URLGrabError
 from types import TupleType, ListType
@@ -25,6 +25,7 @@ from tempfile import mkstemp
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from config import rpmconfig
 from base import *
+from yumconfig import YumConf
 import package
 
 # Number of bytes to read from file at once when computing digests
@@ -228,6 +229,43 @@ def createLink(src, dst):
         return 0
     return 1
 
+def tryUnlock(lockfile):
+    if not os.path.exists(lockfile):
+        return 0
+    fd = open(lockfile, 'r')
+    try:
+        oldpid = int(fd.readline())
+    except ValueError:
+        unlink(lockfile) # bogus data
+    else:
+        try:
+            os.kill(oldpid, 0)
+        except OSError, e:
+            if e[0] == errno.ESRCH:
+                unlink(lockfile) # pid doesn't exist
+            else:
+                return 1
+        else:
+            return 1
+    return 0
+
+def doLock(filename):
+    try:
+        fd = os.open(filename, os.O_EXCL|os.O_CREAT|os.O_WRONLY, 0666)
+        os.write(fd, str(os.getpid()))
+        os.close(fd)
+    except OSError, msg:
+        if not msg.errno == errno.EEXIST:
+            raise msg
+        return 0
+    return 1
+
+def unlink(file):
+    try:
+        os.unlink(file)
+    except:
+        pass
+
 def setCloseOnExec():
     import fcntl
     for fd in range(3, resource.getrlimit(resource.RLIMIT_NOFILE)[1]):
@@ -347,6 +385,143 @@ def parseBoolean(str):
     if lower in ("yes", "true", "1", "on"):
         return 1
     return 0
+
+# Parse yum config options. Neede for several yum-like scripts
+def parseYumOptions(argv, yum):
+    # Argument parsing
+    try:
+      opts, args = getopt.getopt(argv, "?vhc:r:y",
+        ["help", "verbose", 
+         "hash", "version", "quiet", "dbpath=", "root=",
+         "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
+         "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
+         "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
+         "servicehack", "installpkgs=", "arch="])
+    except getopt.error, e:
+        print "Error parsing command list arguments: %s" % e
+        try:
+            usage()
+        except:
+            pass
+        sys.exit(1)
+
+    # Argument handling
+    for (opt, val) in opts:
+        if   opt in ['-?', "--help"]:
+            try:
+                usage()
+            except:
+                pass
+            sys.exit(0)
+        elif opt in ["-v", "--verbose"]:
+            rpmconfig.verbose += 1
+        elif opt in ["-r", "--root"]:
+            rpmconfig.buildroot = val
+        elif opt == "-c":
+            rpmconfig.yumconf = val
+        elif opt == "--quiet":
+            rpmconfig.debug = 0
+            rpmconfig.warning = 0
+            rpmconfig.verbose = 0
+            rpmconfig.printhash = 0
+        elif opt == "--autoerase":
+            yum.setAutoerase(1)
+        elif opt == "--version":
+            print "pyrpmyum", __version__
+            sys.exit(0)
+        elif opt == "-y":
+            yum.setConfirm(0)
+        elif opt == "--dbpath":
+            rpmconfig.dbpath = val
+        elif opt == "--installpkgs":
+            yum.always_install = val.split()
+        elif opt == "--force":
+            rpmconfig.force = 1
+        elif opt in ["-h", "--hash"]:
+            rpmconfig.printhash = 1
+        elif opt == "--oldpackage":
+            rpmconfig.oldpackage = 1
+        elif opt == "--justdb":
+            rpmconfig.justdb = 1
+            rpmconfig.noscripts = 1
+            rpmconfig.notriggers = 1
+        elif opt == "--test":
+            rpmconfig.test = 1
+            rpmconfig.noscripts = 1
+            rpmconfig.notriggers = 1
+            rpmconfig.timer = 1
+        elif opt == "--ignoresize":
+            rpmconfig.ignoresize = 1
+        elif opt == "--ignorearch":
+            rpmconfig.ignorearch = 1
+        elif opt == "--noconflicts":
+            rpmconfig.noconflicts = 1
+        elif opt == "--fileconflicts":
+            rpmconfig.nofileconflicts = 0
+        elif opt == "--nodeps":
+            rpmconfig.nodeps = 1
+        elif opt == "--nodigest":
+            rpmconfig.nodigest = 1
+        elif opt == "--nosignature":
+            rpmconfig.nosignature = 1
+        elif opt == "--noorder":
+            rpmconfig.noorder = 1
+        elif opt == "--noscripts":
+            rpmconfig.noscripts = 1
+        elif opt == "--notriggers":
+            rpmconfig.notriggers = 1
+        elif opt == "--servicehack":
+            rpmconfig.service = 1
+        elif opt == "--arch":
+            rpmconfig.arch = val
+
+    if rpmconfig.verbose > 1:
+        rpmconfig.warning = rpmconfig.verbose - 1
+    if rpmconfig.verbose > 2:
+        rpmconfig.debug = rpmconfig.verbose - 2
+
+    if rpmconfig.arch != None:
+        if not rpmconfig.test:
+            print "Arch option can only be used for tests"
+            sys.exit(1)
+        if not buildarchtranslate.has_key(rpmconfig.arch):
+            print "Unknown arch %s" % rpmconfig.arch
+            sys.exit(1)
+        rpmconfig.machine = rpmconfig.arch
+
+    if not args:
+        print "No command given"
+        try:
+            usage()
+        except:
+            pass
+        sys.exit(1)
+
+    # Handle yum config file. By default we set the reposdir to "", meaning no
+    # repo dirs. If it is specified in the config file we use that though (as
+    # expected)
+    if os.path.isfile(rpmconfig.yumconf):
+        conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, rpmconfig.yumconf, "")
+        for key in conf.vars.keys():
+            if key == "main":
+                pass
+            else:
+                sec = conf[key]
+                if not sec.has_key("baseurl"):
+                    printError("%s: No baseurl for this section in conf file." % key)
+                    sys.exit(1)
+                baseurl = sec["baseurl"][0]
+                if not sec.has_key("exclude"):
+                    excludes = ""
+                else:
+                    excludes = sec["exclude"]
+                yum.addRepo(baseurl, excludes, key)
+                if rpmconfig.compsfile == None:
+                    rpmconfig.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
+    else:
+        printWarning(0, "Couldn't find given yum config file, skipping read of repos")
+    return args
+
 
 # Error handling functions
 def printDebug(level, msg):
