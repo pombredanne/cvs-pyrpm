@@ -17,14 +17,14 @@
 #
 
 
-import fcntl, types, bsddb, libxml2
+import fcntl, struct, bsddb, libxml2
 import zlib, gzip, sha, md5, string, stat, openpgp
-from struct import pack, unpack
 from urlgrabber import urlopen
 
 from functions import *
 import package
 
+pack, unpack = struct.pack, struct.unpack
 
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
 class PyGZIP:
@@ -33,48 +33,57 @@ class PyGZIP:
         self.fd = fd
         self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
         self.crcval = zlib.crc32("")
-        self.length = 0
-        self.buffer = []
+        self.length = 0                 # Length of data read so far
+        self.buffer = []                # List of data blocks
         self.bufferlen = 0
-        self.pos = 0
+        self.pos = 0               # Offset of next data to read from buffer[0]
         self.enddata = ""
         self.header_read = 0
 
     def __readHeader(self):
+        """Read gzip header.
+
+        Raise IOError."""
+        
         magic = self.fd.read(2)
         if magic != '\037\213':
-            self.config.printError("Not a gzipped file")
-            #v1 = unpack("!H", magic)
-            sys.exit(0)
-        if ord(self.fd.read(1)) != 8:
-            self.config.printError("Unknown compression method")
-            sys.exit(0)
-        flag = ord(self.fd.read(1))
-        self.fd.read(4+1+1) # Discard modification time, extra flags, OS byte
+            raise IOError("Not a gzipped file")
+        if ord(readExact(self.fd, 1)) != 8:
+            raise IOError("Unknown compression method")
+        flag = ord(readExact(self.fd, 1)) 
+        # Discard modification time, extra flags, OS byte
+        readExact(self.fd, 4+1+1) 
         if flag & FEXTRA:
             # Read & discard the extra field, if present
-            xlen=ord(self.fd.read(1))
-            xlen=xlen+256*ord(self.fd.read(1))
-            self.fd.read(xlen)
+            (xlen,) = unpack("<H", readExact(self.fd, 2))
+            readExact(self.fd, xlen)
         if flag & FNAME:
             # Read and discard a nul-terminated string containing the filename
             while (1):
                 s=self.fd.read(1)
                 if s=='\000':
                     break
+                if not s:
+                    raise IOError, "Unexpected EOF"
         if flag & FCOMMENT:
             # Read and discard a nul-terminated string containing a comment
             while (1):
                 s=self.fd.read(1)
                 if s=='\000':
                     break
+                if not s:
+                    raise IOError, "Unexpected EOF"
         if flag & FHCRC:
-            self.fd.read(2)      # Read & discard the 16-bit header CRC
+            readExact(self.fd, 2)      # Read & discard the 16-bit header CRC
         self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
         self.crcval = zlib.crc32("")
         self.header_read = 1
 
     def read(self, bytes=None):
+        """Decompress up to bytes bytes from input.
+
+        Raise IOError."""
+
         if not self.header_read:
             self.__readHeader()
         data = ""
@@ -103,12 +112,15 @@ class PyGZIP:
             # bytes from the buffer containing the CRC and the file size.  The
             # decompressor is smart and knows when to stop, so feeding it
             # extra data is harmless.
-                crc32 = unpack("!I", self.enddata[0:4])
-                isize = unpack("!I", self.enddata[4:8])
+            	try:
+                    crc32 = unpack("!I", self.enddata[0:4])
+                    isize = unpack("!I", self.enddata[4:8])
+                except struct.error:
+                    raise IOError, "Unexpected EOF"
                 if crc32 != self.crcval:
-                    self.config.printError("CRC check failed.")
+                    raise IOError, "CRC check failed."
                 if isize != self.length:
-                    self.config.printError("Incorrect length of data produced")
+                    raise IOError, "Incorrect length of data produced"
                 break
             decompdata = self.decompobj.decompress(data)
             decomplen = len(decompdata)
@@ -153,24 +165,29 @@ class CPIOFile:
     def __init__(self, config, fd):
         self.config = config
         self.fd = fd                    # filedescriptor
-        self.lastfilesize = 0
-        self.readsize = 0
+        self.lastfilesize = 0           # Length of "current" file data
+        self.readsize = 0       # Number of bytes read from "current" file data
 
     def getNextEntry(self):
+        """Read next header and contents, return (file name, file data length),
+        or (None, None) at EOF.
+
+        Metadata is discarded.  Raise IOError."""
+        
         self.readsize = 0
         # Do padding if necessary for nexty entry
-        self.fd.read((4 - (self.lastfilesize % 4)) % 4)
+        readExact(self.fd, (4 - (self.lastfilesize % 4)) % 4)
         # The cpio header contains 8 byte hex numbers with the following
         # content: magic, inode, mode, uid, gid, nlink, mtime, filesize,
         # devMajor, devMinor, rdevMajor, rdevMinor, namesize, checksum.
-        data = self.fd.read(110)
+        data = readExact(self.fd, 110)
         # CPIO ASCII hex, expanded device numbers (070702 with CRC)
         if data[0:6] not in ["070701", "070702"]:
             raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
         # Read filename and padding.
         filenamesize = int(data[94:102], 16)
-        filename = self.fd.read(filenamesize).rstrip("\x00")
-        self.fd.read((4 - ((110 + filenamesize) % 4)) % 4)
+        filename = readExact(self.fd, filenamesize).rstrip("\x00")
+        readExact(self.fd, (4 - ((110 + filenamesize) % 4)) % 4)
         if filename == "TRAILER!!!": # end of archive detection
             return (None, None)
         # Adjust filename, so that it matches the way the rpm header has
@@ -187,20 +204,27 @@ class CPIOFile:
         return (filename, self.lastfilesize)
 
     def read(self, size):
+        """Return up to size bytes of file data.
+
+        Raise IOError."""
+        
         if size > self.lastfilesize - self.readsize:
             size = self.lastfilesize - self.readsize
         self.readsize += size
-        return self.fd.read(size)
+        return readExact(self.fd, size)
 
     def skipToNextFile(self):
+        """Skip current file data.
+
+        Raise IOError."""
+        
         size = self.lastfilesize - self.readsize
         data = "1"
         while size > 0 and data:
-            data = self.read(65536)
-            if data:
-                size -= len(data)
+            data = self.read(min(size, 65536))
+            size -= len(data)
         if size > 0:
-            raiseFatal("Unable to read from CPIO archive.")
+            raise IOError, "Unexpected EOF from CPIO archive"
 
 class RpmIO:
     """'Virtual' IO Class for RPM packages and data"""
@@ -209,16 +233,38 @@ class RpmIO:
         self.source = source
 
     def open(self, mode="r"):
-        return 0
+        """Open self.source using the specified mode.
+
+        Raise IOError."""
+
+        raise NotImplementedError
 
     def read(self, skip=None):
-        return 0
+        """Read next "entry" from package.
+
+        Return
+        - (tag name, tag value)
+        - (filename, CPIOFile, length)
+        - ("magic", RPM_HEADER_LEAD_MAGIC): lead
+        - ("-", (pos or None if unknown, length)): before sigs/header/payload
+        - ("EOF", 0, 0): after payload
+        Raise ValueError on invalid data, IOError."""
+
+        raise NotImplementedError
 
     def write(self, pkg):
-        return 0
+        """Write a RpmPackage header (without payload!) to self.source.
+
+        Raise IOError, NotImplementedError."""
+        
+        raise NotImplementedError
 
     def close(self):
-        return 0
+        """Close all open files used for reading self.source.
+
+        Raise IOError."""
+
+        pass
 
     def getRpmFileSize(self):
         """Return number of bytes of .rpm file representing this package
@@ -248,28 +294,31 @@ class RpmStreamIO(RpmIO):
         RpmIO.__init__(self, config, source)
         self.fd = None
         self.cpio = None
-        self.verify = verify
-        self.strict = strict
-        self.hdronly = hdronly
+        self.verify = verify            # Verify lead and index entries
+        self.strict = strict # Report legacy tags and packags not named %name
+        self.hdronly = hdronly          # Don't return payload from read()
         self.issrc = 0
         self.where = 0  # 0:lead 1:separator 2:sig 3:header 4:files
         self.idx = 0 # Current index
         self.hdr = {}
-        self.hdrtype = {}
 
     def open(self, mode="r"):
-        return 0
+        """Open self.source using the specified mode, set self.fd to non-None.
+
+        Raise IOError."""
+
+        raise NotImplementedError
 
     def close(self):
         if self.cpio:
             self.cpio = None
-        return 1
 
     def read(self, skip=None):
+        """RpmIO.read(), if (skip) on first call, skip to the delimiter before
+        payload."""
+
         if self.fd == None:
             self.open()
-        if self.fd == None:
-            return (None, None)
         if skip:
             self.__readLead()
             self.__readSig()
@@ -296,6 +345,7 @@ class RpmStreamIO(RpmIO):
                 return ("-", (pos, self.hdrdata[5]))
             v = self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
+            # FIXME: unknown tags?
             return (rpmsigtagname[v[0]], v[1])
         # Read/parse hdr
         if self.where == 3:
@@ -305,17 +355,18 @@ class RpmStreamIO(RpmIO):
                 pos = self._tell()
                 self.hdrdata = None
                 self.hdr = {}
-                self.hdrtype = {}
                 cpiofd = PyGZIP(self.config, self.fd)
                 self.cpio = CPIOFile(self.config, cpiofd)
                 self.where = 4
                 # Nobody cares about gzipped payload length so far
                 return ("-", (pos, None))
-            v =  self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
+            v = self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
+            # FIXME: unknown tags?
             return (rpmtagname[v[0]], v[1])
         # Read/parse data files archive
         if self.where == 4 and not self.hdronly and self.cpio != None:
+            self.cpio.skipToNextFile()
             (filename, filesize) = self.cpio.getNextEntry()
             if filename != None:
                 return (filename, self.cpio, filesize)
@@ -324,8 +375,6 @@ class RpmStreamIO(RpmIO):
     def write(self, pkg):
         if self.fd == None:
             self.open("w+")
-        if self.fd == None:
-            return 0
         lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, pkg.getNEVR()[0:66], rpm_lead_arch[pkg["arch"]], 5)
         (sigindex, sigdata) = self.__generateSig(pkg["signature"])
         (headerindex, headerdata) = self.__generateHeader(pkg)
@@ -334,48 +383,69 @@ class RpmStreamIO(RpmIO):
         self._write(sigdata)
         self._write(headerindex)
         self._write(headerdata)
-        return 1
 
     def _read(self, nbytes=None):
+        """Read up to nbytes data from self.fd.
+
+        Raise IOError."""
+
         if self.fd == None:
             self.open()
-        if self.fd == None:
-            return None
         return self.fd.read(nbytes)
 
     def _write(self, data):
+        """Open self.source for writing if it is not open, write data to it.
+
+        Raise IOError."""
+        
         if self.fd == None:
             self.open("w+")
-        if self.fd == None:
-            return 0
         return self.fd.write(data)
 
     def _tell(self):
+        """Return current file position or None if file is not seekable."""
+
         try:
             return self.fd.tell()
         except IOError:
             return None
 
     def __readLead(self):
-        leaddata = self._read(96)
+        """Read lead.
+
+        self.fd should already be open.  Raise ValueError on invalid data,
+        IOError."""
+        
+        leaddata = readExact(self.fd, 96)
         if leaddata[:4] != RPM_HEADER_LEAD_MAGIC:
-            self.config.printError("%s: no rpm magic found" % self.source)
-            return (None, None)
-        if self.verify and not self.__verifyLead(leaddata):
-            return (None, None)
+            raise ValueError, "no rpm magic found"
+        if self.verify:
+            self.__verifyLead(leaddata)
         return ("magic", leaddata[:4])
 
     def __readSig(self):
+        """Read signature header.
+
+        self.fd should already be open.  Raise ValueError on invalid data,
+        IOError."""
+
         self.hdr = {}
-        self.hdrtype = {}
         self.hdrdata = self.__readIndex(8, 1)
 
     def __readHdr(self):
+        """Read main header.
+        
+        self.fd should already be open.  Raise ValueError on invalid data,
+        IOError."""
+
         self.hdr = {}
-        self.hdrtype = {}
         self.hdrdata = self.__readIndex(1)
 
     def getHeaderByIndex(self, idx, indexdata, storedata):
+        """Parse value of tag idx.
+
+        Return (tag number, tag data).  Raise ValueError on invalid data."""
+
         index = unpack("!4i", indexdata[idx*16:(idx+1)*16])
         tag = index[0]
         # ignore duplicate entries as long as they are identical
@@ -384,46 +454,56 @@ class RpmStreamIO(RpmIO):
                 self.config.printError("%s: tag %d included twice" % (self.source, tag))
         else:
             self.hdr[tag] = self.__parseTag(index, storedata)
-            self.hdrtype[tag] = index[1]
         return (tag, self.hdr[tag])
 
     def __verifyLead(self, leaddata):
+        """Verify RPM lead leaddata.
+
+        Raise ValueError on invalid data."""
+        
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
             unpack("!4scchh66shh16x", leaddata)
-        ret = 1
         if major not in ('\x03', '\x04') or minor != '\x00' or \
             sigtype != 5 or rpmtype not in (0, 1):
-            ret = 0
+            raise ValueError, "Unsupported RPM file format"
         if osnum not in (1, 255, 256):
-            ret = 0
+            raise ValueError, "Package operating system doesn't match"
         name = name.rstrip('\x00')
         if self.strict:
             if os.path.basename(self.source)[:len(name)] != name:
-                ret = 0
-        if not ret:
-            self.config.printError("%s: wrong data in rpm lead" % self.source)
-        return ret
+                raise ValueError, "File name doesn't match package name"
 
     def __readIndex(self, pad, issig=None):
-        data = self._read(16)
-        if len(data) != 16:
-            return None
+        """Read and verify header index and data.
+
+        self.fd should already be open.  Return (number of tags, tag data size,
+        header header, index data, data area, total header size).  Discard data
+        to enforce alignment at least pad.  Raise ValueError on invalid data,
+        IOError."""
+
+        data = readExact(self.fd, 16)
         (magic, indexNo, storeSize) = unpack("!8sii", data)
         if magic != RPM_HEADER_INDEX_MAGIC or indexNo < 1:
-            raiseFatal("%s: bad index magic" % self.source)
-        fmt = self._read(16 * indexNo)
-        fmt2 = self._read(storeSize)
+            raise ValueError, "bad index magic"
+        fmt = readExact(self.fd, 16 * indexNo)
+        fmt2 = readExact(self.fd, storeSize)
         if pad != 1:
-            self._read((pad - (storeSize % pad)) % pad)
+            readExact(self.fd, (pad - (storeSize % pad)) % pad)
         if self.verify:
             self.__verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + len(fmt2))
 
     def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, issig):
+        """Verify header with index fmt (with indexNo entries), data area fmt
+        (of size storeSize).
+
+        Return tag data length.  Raise ValueError on invalid data."""
+        
         checkSize = 0
         for i in xrange(0, indexNo * 16, 16):
             index = unpack("!iiii", fmt[i:i + 16])
             ttype = index[1]
+            # FIXME: this doesn't actually check alignment
             # alignment for some types of data
             if ttype == RPM_INT16:
                 checkSize += (2 - (checkSize % 2)) % 2
@@ -435,55 +515,52 @@ class RpmStreamIO(RpmIO):
         if checkSize != storeSize:
             # XXX: add a check for very old rpm versions here, seems this
             # is triggered for a few RHL5.x rpm packages
-            self.config.printError("%s: storeSize/checkSize is %d/%d" % (self.source, storeSize, checkSize))
+            raise ValueError, \
+                  "storeSize/checkSize is %d/%d" % (storeSize, checkSize)
 
     def __verifyTag(self, index, fmt, issig):
+        """Verify a tag with index entry index in data area fmt.
+
+        Raise ValueError on invalid data; only print error messages on
+        suspicious, but non-fatal errors."""
+        
         (tag, ttype, offset, count) = index
         if issig:
             if not rpmsigtag.has_key(tag):
-                self.config.printError("%s: rpmsigtag has no tag %d" % (self.source, tag))
-            else:
-                t = rpmsigtag[tag]
-                if t[1] != None and t[1] != ttype:
-                    self.config.printError("%s: sigtag %d has wrong type %d" % (self.source, tag, ttype))
-                if t[2] != None and t[2] != count:
-                    self.config.printError("%s: sigtag %d has wrong count %d" % (self.source, tag, count))
-                if (t[3] & 1) and self.strict:
-                    self.config.printError("%s: tag %d is marked legacy" % (self.source, tag))
-                if self.issrc:
-                    if (t[3] & 4):
-                        self.config.printError("%s: tag %d should be for binary rpms" % (self.source, tag))
-                else:
-                    if (t[3] & 2):
-                        self.config.printError("%s: tag %d should be for src rpms" % (self.source, tag))
+                raise ValueError, "rpmsigtag has no tag %d" % tag
+            t = rpmsigtag[tag]
+            if t[1] != None and t[1] != ttype:
+                raise ValueError, "sigtag %d has wrong type %d" % (tag, ttype)
         else:
             if not rpmtag.has_key(tag):
-                self.config.printError("%s: rpmtag has no tag %d" % (self.source, tag))
-            else:
-                t = rpmtag[tag]
-                if t[1] != None and t[1] != ttype:
-                    if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or \
-                        ttype == RPM_STRING_ARRAY):
-                        pass    # special exception case for RPMTAG_GROUP (1016)
-                    elif t[0] == 1016 and \
-                        ttype == RPM_STRING: # XXX hardcoded exception
-                        pass
-                    else:
-                        self.config.printError("%s: tag %d has wrong type %d" % (self.source, tag, ttype))
-                if t[2] != None and t[2] != count:
-                    self.config.printError("%s: tag %d has wrong count %d" % (self.source, tag, count))
-                if (t[3] & 1) and self.strict:
-                    self.config.printError("%s: tag %d is marked legacy" % (self.source, tag))
-                if self.issrc:
-                    if (t[3] & 4):
-                        self.config.printError("%s: tag %d should be for binary rpms" % (self.source, tag))
+                raise ValueError, "rpmtag has no tag %d" % tag
+            t = rpmtag[tag]
+            if t[1] != None and t[1] != ttype:
+                if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or
+                                              ttype == RPM_STRING_ARRAY):
+                    pass    # special exception case for RPMTAG_GROUP (1016)
+                elif t[0] == 1016 and \
+                         ttype == RPM_STRING: # XXX hardcoded exception
+                    pass
                 else:
-                    if (t[3] & 2):
-                        self.config.printError("%s: tag %d should be for src rpms" % (self.source, tag))
+                    raise ValueError, "tag %d has wrong type %d" % (tag, ttype)
+        if t[2] != None and t[2] != count:
+            raise ValueError, "tag %d has wrong count %d" % (tag, count)
+        if (t[3] & 1) and self.strict:
+            self.config.printError("%s: tag %d is marked legacy"
+                                   % (self.source, tag))
+        if self.issrc:
+            if (t[3] & 4):
+                self.config.printError("%s: tag %d should be for binary rpms"
+                                       % (self.source, tag))
+        else:
+            if (t[3] & 2):
+                self.config.printError("%s: tag %d should be for src rpms"
+                                       % (self.source, tag))
         if count == 0:
-            raiseFatal("%s: zero length tag" % self.source)
+            raise ValueError, "zero length tag"
         if ttype < 1 or ttype > 9:
-            raiseFatal("%s: unknown rpmtype %d" % (self.source, ttype))
+            raise ValueError, "unknown rpmtype %d" % ttype
         if ttype == RPM_INT32:
             count = count * 4
         elif ttype == RPM_STRING_ARRAY or \
@@ -496,7 +573,7 @@ class RpmStreamIO(RpmIO):
             count = size
         elif ttype == RPM_STRING:
             if count != 1:
-                raiseFatal("%s: tag string count wrong" % self.source)
+                raise ValueError, "tag string count wrong"
             count = fmt.index('\x00', offset) - offset + 1
         elif ttype == RPM_CHAR or ttype == RPM_INT8:
             pass
@@ -507,194 +584,190 @@ class RpmStreamIO(RpmIO):
         elif ttype == RPM_BIN:
             pass
         else:
-            raiseFatal("%s: unknown tag header" % self.source)
+            raise ValueError, "unknown tag header"
         return count
 
     def __parseTag(self, index, fmt):
-        (tag, ttype, offset, count) = index
-        if ttype == RPM_INT32:
-            return unpack("!%dI" % count, fmt[offset:offset + count * 4])
-        elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
-            data = []
-            for _ in xrange(0, count):
-                end = fmt.index('\x00', offset)
-                data.append(fmt[offset:end])
-                offset = end + 1
-            return data
-        elif ttype == RPM_STRING:
-            return fmt[offset:fmt.index('\x00', offset)]
-        elif ttype == RPM_CHAR:
-            return unpack("!%dc" % count, fmt[offset:offset + count])
-        elif ttype == RPM_INT8:
-            return unpack("!%dB" % count, fmt[offset:offset + count])
-        elif ttype == RPM_INT16:
-            return unpack("!%dH" % count, fmt[offset:offset + count * 2])
-        elif ttype == RPM_INT64:
-            return unpack("!%dQ" % count, fmt[offset:offset + count * 8])
-        elif ttype == RPM_BIN:
-            return fmt[offset:offset + count]
-        raiseFatal("%s: unknown tag type: %d" % (self.source, ttype))
-        return None
+        """Parse value of tag with index from data in fmt.
 
-    def __generateTag(self, ttype, value):
-        # Decided if we have to write out a list or a single element
-        if isinstance(value, types.TupleType) or isinstance(value, types.ListType):
-            count = len(value)
-        else:
-            count = 0
-        # Normally we don't have strings. And strings always need to be '\x0'
-        # terminated.
-        isstring = 0
-        if ttype == RPM_STRING or \
-           ttype == RPM_STRING_ARRAY or\
-           ttype == RPM_I18NSTRING:
-            format = "s"
-            isstring = 1
-        elif ttype == RPM_BIN:
-            format = "s"
-        elif ttype == RPM_CHAR:
-            format = "!c"
-        elif ttype == RPM_INT8:
-            format = "!B"
-        elif ttype == RPM_INT16:
-            format = "!H"
-        elif ttype == RPM_INT32:
-            format = "!I"
-        elif ttype == RPM_INT64:
-            format = "!Q"
-        else:
-            raiseFatal("%s: unknown tag header" % self.source)
-        if count == 0:
-            if format == "s":
-                data = pack("%ds" % (len(value)+isstring), value)
-            else:
-                data = pack(format, value)
-        else:
-            data = ""
-            for i in xrange(0,count):
-                if format == "s":
-                    data += pack("%ds" % (len(value[i])+isstring), value[i])
-                else:
-                    data += pack(format, value[i])
-        # Fix counter. If it was a list, keep the counter.
-        # If it was a single element, use 1 or if it is a RPM_BIN type the
-        # length of the binary data.
-        if count == 0:
-            if ttype == RPM_BIN:
+        Return tag value.  Raise ValueError on invalid data."""
+        
+        (tag, ttype, offset, count) = index
+        try:
+            if ttype == RPM_INT32:
+                return unpack("!%dI" % count, fmt[offset:offset + count * 4])
+            elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
+                data = []
+                for _ in xrange(0, count):
+                    end = fmt.index('\x00', offset)
+                    data.append(fmt[offset:end])
+                    offset = end + 1
+                return data
+            elif ttype == RPM_STRING:
+                return fmt[offset:fmt.index('\x00', offset)]
+            elif ttype == RPM_CHAR:
+                return unpack("!%dc" % count, fmt[offset:offset + count])
+            elif ttype == RPM_INT8:
+                return unpack("!%dB" % count, fmt[offset:offset + count])
+            elif ttype == RPM_INT16:
+                return unpack("!%dH" % count, fmt[offset:offset + count * 2])
+            elif ttype == RPM_INT64:
+                return unpack("!%dQ" % count, fmt[offset:offset + count * 8])
+            elif ttype == RPM_BIN:
+                return fmt[offset:offset + count]
+            raise ValueError, "unknown tag type: %d" % ttype
+        except struct.error:
+            raise ValueError, "Invalid header data"
+
+    class __GeneratedHeader:
+        """A helper for header generation."""
+        
+        def __init__(self, taghash, tagnames, region):
+            """Initialize for creating a header with region tag region.
+
+            taghash is base.rpmsigtag or base.rpmtag, tagnames is the
+            corresponding tag name hash."""
+            
+            self.taghash = taghash
+            self.tagnames = tagnames
+            self.region = region
+            self.store = ""
+            self.offset = 0
+            self.indexlist = []
+
+        def outputHeader(self, header, align):
+            """Return (index data, data area) representing signature header
+            (tag name => tag value), with data area end aligned to align"""
+
+            keys = self.taghash.keys()
+            keys.sort()
+            for tag in keys:
+                if not isinstance(tag, int):
+                    continue
+                # We need to handle region header at the very end...
+                if tag == self.region:
+                    continue
+                key = self.tagnames[tag]
+                # Skip keys we don't have
+                if not header.has_key(key):
+                    continue
+                self.__appendTag(tag, header[key])
+            # Handle hegion header if we have it.
+            key = self.tagnames[self.region]
+            if header.has_key(key):
+                self.__appendTag(self.region, header[key])
+            (index, pad) = self.__generateIndex(align)
+            return (index, self.store+pad)
+
+        def __appendTag(self, tag, value):
+            """Append tag (tag = value)"""
+
+            ttype = self.taghash[tag][1]
+            # Convert back the RPM_ARGSTRING to RPM_STRING
+            if ttype == RPM_ARGSTRING:
+                ttype = RPM_STRING
+            (count, data) = self.__generateTag(ttype, value)
+            pad = self.__alignTag(ttype)
+            self.offset += len(pad)
+            self.indexlist.append((tag, ttype, self.offset, count))
+            self.store += pad + data
+            self.offset += len(data)
+            
+        def __generateTag(self, ttype, value):
+            """Return (tag data, tag count for index header) for value of
+            ttype."""
+            
+            # Decide if we have to write out a list or a single element
+            if isinstance(value, (tuple, list)):
                 count = len(value)
             else:
-                count = 1
-        return (count, data)
+                count = 0
+            # Normally we don't have strings. And strings always need to be
+            # '\x0' terminated.
+            isstring = 0
+            if ttype == RPM_STRING or \
+               ttype == RPM_STRING_ARRAY or\
+               ttype == RPM_I18NSTRING:
+                format = "s"
+                isstring = 1
+            elif ttype == RPM_BIN:
+                format = "s"
+            elif ttype == RPM_CHAR:
+                format = "!c"
+            elif ttype == RPM_INT8:
+                format = "!B"
+            elif ttype == RPM_INT16:
+                format = "!H"
+            elif ttype == RPM_INT32:
+                format = "!I"
+            elif ttype == RPM_INT64:
+                format = "!Q"
+            else:
+                raise NotImplemented, "unknown tag header"
+            if count == 0:
+                if format == "s":
+                    data = pack("%ds" % (len(value)+isstring), value)
+                else:
+                    data = pack(format, value)
+            else:
+                data = ""
+                for i in xrange(0,count):
+                    if format == "s":
+                        data += pack("%ds" % (len(value[i])+isstring), value[i])
+                    else:
+                        data += pack(format, value[i])
+            # Fix counter. If it was a list, keep the counter.
+            # If it was a single element, use 1 or if it is a RPM_BIN type the
+            # length of the binary data.
+            if count == 0:
+                if ttype == RPM_BIN:
+                    count = len(value)
+                else:
+                    count = 1
+            return (count, data)
 
-    def __generateIndex(self, indexlist, store, pad):
-        index = RPM_HEADER_INDEX_MAGIC
-        index += pack("!ii", len(indexlist), len(store))
-        (tag, ttype, offset, count) = indexlist.pop()
-        index += pack("!iiii", tag, ttype, offset, count)
-        for (tag, ttype, offset, count) in indexlist:
+        def __generateIndex(self, pad):
+            """Return (header tags, padding after data area) with data area end
+            aligned to pad."""
+        
+            index = RPM_HEADER_INDEX_MAGIC
+            index += pack("!ii", len(self.indexlist), len(self.store))
+            # Start the header with a region tag
+            # FIXME: only if it is a region tag
+            (tag, ttype, offset, count) = self.indexlist.pop()
             index += pack("!iiii", tag, ttype, offset, count)
-        align = (pad - (len(store) % pad)) % pad
-        return (index, pack("%ds" % align, '\x00'))
+            for (tag, ttype, offset, count) in self.indexlist:
+                index += pack("!iiii", tag, ttype, offset, count)
+            align = (pad - (len(self.store) % pad)) % pad
+            return (index, '\x00' * align)
 
-    def __alignTag(self, ttype, offset):
-        if ttype == RPM_INT16:
-            align = (2 - (offset % 2)) % 2
-        elif ttype == RPM_INT32:
-            align = (4 - (offset % 4)) % 4
-        elif ttype == RPM_INT64:
-            align = (8 - (offset % 8)) % 8
-        else:
-            align = 0
-        return pack("%ds" % align, '\x00')
+        def __alignTag(self, ttype):
+            """Return alignment data for aligning for ttype from offset
+            self.offset."""
+
+            if ttype == RPM_INT16:
+                align = (2 - (self.offset % 2)) % 2
+            elif ttype == RPM_INT32:
+                align = (4 - (self.offset % 4)) % 4
+            elif ttype == RPM_INT64:
+                align = (8 - (self.offset % 8)) % 8
+            else:
+                align = 0
+            return '\x00' * align
 
     def __generateSig(self, header):
-        store = ""
-        offset = 0
-        indexlist = []
-        keys = rpmsigtag.keys()
-        keys.sort()
-        for tag in keys:
-            if not isinstance(tag, types.IntType):
-                continue
-            # We need to handle tag 62 at the very end...
-            if tag == 62:
-                continue
-            key = rpmsigtagname[tag]
-            # Skip keys we don't have
-            if not header.has_key(key):
-                continue
-            value = header[key]
-            ttype = rpmsigtag[tag][1]
-            # Convert back the RPM_ARGSTRING to RPM_STRING
-            if ttype == RPM_ARGSTRING:
-                ttype = RPM_STRING
-            (count, data) = self.__generateTag(ttype, value)
-            pad = self.__alignTag(ttype, offset)
-            offset += len(pad)
-            indexlist.append((tag, ttype, offset, count))
-            store += pad + data
-            offset += len(data)
-        # Handle tag 62 if we have it.
-        tag = 62
-        key = rpmsigtagname[tag]
-        if header.has_key(key):
-            value = header[key]
-            ttype = rpmsigtag[tag][1]
-            # Convert back the RPM_ARGSTRING to RPM_STRING
-            if ttype == RPM_ARGSTRING:
-                ttype = RPM_STRING
-            (count, data) = self.__generateTag(ttype, value)
-            pad = self.__alignTag(ttype, offset)
-            offset += len(pad)
-            indexlist.append((tag, ttype, offset, count))
-            store += pad + data
-            offset += len(data)
-        (index, pad) = self.__generateIndex(indexlist, store, 8)
-        return (index, store+pad)
+        """Return (index data, data area) representing signature header
+        (tag name => tag value)"""
+
+        h = self.__GeneratedHeader(rpmsigtag, rpmsigtagname, 62)
+        return h.outputHeader(header, 8)
 
     def __generateHeader(self, header):
-        store = ""
-        indexlist = []
-        offset = 0
-        keys = rpmtag.keys()
-        keys.sort()
-        for tag in keys:
-            if not isinstance(tag, types.IntType):
-                continue
-            # We need to handle tag 63 at the very end...
-            if tag == 63:
-                continue
-            key = rpmtagname[tag]
-            if not header.has_key(key):
-                continue
-            value = header[key]
-            ttype = rpmtag[tag][1]
-            # Convert back the RPM_ARGSTRING to RPM_STRING
-            if ttype == RPM_ARGSTRING:
-                ttype = RPM_STRING
-            (count, data) = self.__generateTag(ttype, value)
-            pad = self.__alignTag(ttype, offset)
-            offset += len(pad)
-            indexlist.append((tag, ttype, offset, count))
-            store += pad + data
-            offset += len(data)
-        # Handle tag 63 if we have it.
-        tag = 63
-        key = rpmtagname[tag]
-        if header.has_key(key):
-            value = header[key]
-            ttype = rpmtag[tag][1]
-            # Convert back the RPM_ARGSTRING to RPM_STRING
-            if ttype == RPM_ARGSTRING:
-                ttype = RPM_STRING
-            (count, data) = self.__generateTag(ttype, value)
-            pad = self.__alignTag(ttype, offset)
-            offset += len(pad)
-            indexlist.append((tag, ttype, offset, count))
-            store += pad + data
-            offset += len(data)
-        (index, pad) = self.__generateIndex(indexlist, store, 1)
-        return (index, store+pad)
+        """Return (index data, data area) representing signature header
+        (tag name => tag value)"""
+
+        h = self.__GeneratedHeader(rpmtag, rpmtagname, 63)
+        return h.outputHeader(header, 1)
 
 
 class RpmFileIO(RpmStreamIO):
@@ -707,7 +780,7 @@ class RpmFileIO(RpmStreamIO):
     def __openFile(self, mode="r"):
         """Open self.source, mark it close-on-exec.
 
-        Return the opened file."""
+        Return the opened file.  Raise IOError."""
         
         if not self.source.startswith("file:/"):
             filename = self.source
@@ -716,34 +789,25 @@ class RpmFileIO(RpmStreamIO):
             if filename[1] == "/":
                 idx = filename[2:].index("/")
                 filename = filename[idx+2:]
-        try:
-            fd = open(filename, mode)
-            fcntl.fcntl(fd.fileno(), fcntl.F_SETFD, 1)
-            return fd
-        except:
-            raiseFatal("%s: could not open file" % self.source)
-
-    def __closeFile(self):
-        if self.fd:
-            self.fd.close()
-        self.fd = None
+        fd = open(filename, mode)
+        fcntl.fcntl(fd.fileno(), fcntl.F_SETFD, 1)
+        return fd
 
     def open(self, mode="r"):
-        RpmStreamIO.open(self)
         if not self.fd:
             self.fd = self.__openFile(mode)
-        return 1
 
     def close(self):
         RpmStreamIO.close(self)
-        self.__closeFile()
-        return 1
+        if self.fd:
+            self.fd.close()
+            self.fd = None
 
     def __getFdForRange(self, start, length):
         """Open self.source, seek to start and make sure there are at
         least length bytes available if len != 0.
 
-        Return the open file. Raise IOError."""
+        Return the open file.  Raise IOError."""
         
         fd = self.__openFile()
         fd.seek(0, 2)
@@ -819,15 +883,15 @@ class RpmFtpIO(RpmStreamIO):
         RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
-        RpmStreamIO.open(self, mode)
-        self.fd = urlopen(self.source)
-        return self.fd != None
+        try:
+            self.fd = urlopen(self.source)
+        except urlgrabber.grabber.URLGrabError, e:
+            raise IOError, str(e)
 
     def close(self):
         RpmStreamIO.close(self)
         self.fd.close()
         self.fd = None
-        return 1
 
 
 class RpmHttpIO(RpmStreamIO):
@@ -835,18 +899,18 @@ class RpmHttpIO(RpmStreamIO):
         RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
-        RpmStreamIO.open(self, mode)
-        self.fd = urlopen(self.source)
-        return self.fd != None
+        try:
+            self.fd = urlopen(self.source)
+        except urlgrabber.grabber.URLGrabError, e:
+            raise IOError, str(e)
 
     def close(self):
         RpmStreamIO.close(self)
         self.fd.close()
         self.fd = None
-        return 1
 
     def _write(self, data):
-        return 0
+        raise NotImplementedError
 
     def _tell(self):
         return None
@@ -929,7 +993,14 @@ class RpmDB(RpmDatabase):
                 storedata = data[indexNo*16+8:]
                 pkg["signature"] = {}
                 for idx in xrange(0, indexNo):
-                    (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata, storedata)
+                    try:
+                        (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
+                                                               storedata)
+                    except ValueError, e:
+                        # FIXME: different handling?
+                        config.printError("Invalid header entry %s in %s: %s"
+                                          % (idx, key, e))
+                        continue
                     if   tag == 257:
                         pkg["signature"]["size_in_sig"] = tagval
                     elif tag == 261:
@@ -957,7 +1028,6 @@ class RpmDB(RpmDatabase):
                     self.filenames[filename].append(pkg)
                 self.pkglist[nevra] = pkg
                 rpmio.hdr = {}
-                rpmio.hdrtype = {}
         self.is_read = 1
         return 1
 
@@ -1005,7 +1075,10 @@ class RpmPyDB(RpmDatabase):
         if not nowrite:
             src = "pydb:/"+dbpath+"/headers/"+nevra
             apkg = getRpmIOFactory(self.config, src)
-            if not apkg.write(pkg):
+            try:
+                apkg.write(pkg)
+            except IOError:
+                # FIXME: different handling?
                 return 0
             apkg.close()
         for filename in pkg["filenames"]:
@@ -1270,6 +1343,8 @@ class RpmRepo(RpmDatabase):
         del pkg_node
 
     def __getChecksum(self, pkg):
+        # FIXME: raise IOError
+
         io = getRpmIOFactory(self.config, pkg.source)
         data = io._read(65536)
         if self.config.checksum == "md5":
@@ -1735,7 +1810,14 @@ class FooRpmDB(RpmDatabase):
             storedata = data[indexNo*16+8:]
             pkg["signature"] = {}
             for idx in xrange(0, indexNo):
-                (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata, storedata)
+                try:
+                    (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
+                                                           storedata)
+                except ValueError, e:
+                    # FIXME: different handling?
+                    self.config.printError("Invalid header entry %s in %s: %s"
+                                      % (idx, key, e))
+                    continue
                 if   tag == 257:
                     pkg["signature"]["size_in_sig"] = tagval
                 elif tag == 261:
@@ -1748,7 +1830,6 @@ class FooRpmDB(RpmDatabase):
                     else:
                         pkg[rpmtagname[tag]] = tagval
             rpmio.hdr = {}
-            rpmio.hdrtype = {}
             pkg.generateFileNames()
             nevra = pkg.getNEVRA()
             pkg.source = "db:/"+self.source+"/"+nevra

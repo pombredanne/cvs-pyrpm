@@ -284,6 +284,16 @@ def closeAllFDs():
         except:
             pass
 
+def readExact(fd, size):
+    """Read exactly size bytes from fd.
+
+    Raise IOError on I/O error or unexpected EOF."""
+
+    data = fd.read(size)
+    if len(data) != size:
+        raise IOError, "Unexpected EOF"
+    return data
+
 def updateDigestFromFile(digest, fd, bytes = None):
     """Update digest with data from fd, until EOF or only specified bytes."""
 

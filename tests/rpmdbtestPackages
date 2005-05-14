@@ -25,6 +25,5 @@ for key in db.keys():
 			else:
 				print tag, repr(tagval)
 		rpmio.hdr = {}
-		rpmio.hdrtype = {}
 	else:
 		print val, len(data)

@@ -18,7 +18,7 @@
 #
 
 
-import os.path, sys, pwd, grp, md5, sha, weakref
+import os.path, sys, pwd, grp, md5, sha
 from stat import S_ISREG
 from functions import *
 from io import getRpmIOFactory
@@ -176,20 +176,28 @@ class RpmPackage(RpmData):
                                   self.strict, self.hdronly)
         if not self.io:
             return 0
-        if not self.io.open(mode):
+        try:
+            self.io.open(mode)
+        except IOError: # FIXME: different handling?
             return 0
         return 1
 
     def close(self):
+        res = 1
         if self.io != None:
-            self.io.close()
+            try:
+                self.io.close()
+            except IOError:
+                res = 0
         self.io = None
-        return 1
+        return res
 
     def read(self, tags=None, ntags=None):
         if not self.open():
             return 0
-        if not self.__readHeader(tags, ntags):
+        try:
+            self.__readHeader(tags, ntags)
+        except (IOError, ValueError):
             return 0
         if self.verify and self.verifyOneSignature() == -1:
             return 0
@@ -207,7 +215,11 @@ class RpmPackage(RpmData):
             self.close()
         if not self.open("w"):
             return 0
-        return self.io.write(self)
+        try:
+            self.io.write(self)
+        except (IOError, NotImplementedError): # FIXME: different handling?
+            return 0
+        return 1
 
     def verifySignatureTag(self, tag):
         """Verify digest or signature self["signature"][tag].
@@ -235,7 +247,7 @@ class RpmPackage(RpmData):
                 self.io.updateDigestFromRegion(digest, self["immutable"],
                                                self.range_header)
             except NotImplementedError:
-                return 1
+                return 0
             except ValueError:
                 return -1
             if self["signature"][tag] == digest.hexdigest():
@@ -308,7 +320,9 @@ class RpmPackage(RpmData):
     def install(self, db=None, tags=None, ntags=None):
         if not self.open():
             return 0
-        if not self.__readHeader(tags, ntags):
+        try:
+            self.__readHeader(tags, ntags)
+        except (IOError, ValueError):
             return 0
         # Set umask to 022, especially important for scripts
         os.umask(022)
@@ -335,7 +349,9 @@ class RpmPackage(RpmData):
     def erase(self, db=None):
         if not self.open():
             return 0
-        if not self.__readHeader():
+        try:
+            self.__readHeader()
+        except (IOError, ValueError):
             return 0
         files = self["filenames"]
         # Set umask to 022, especially important for scripts
@@ -413,16 +429,17 @@ class RpmPackage(RpmData):
             return self["signature"]["sha1header"] == pkg["signature"]["sha1header"]
         return 0
     def __readHeader(self, tags=None, ntags=None):
+        # FIXME: raise IOError, ValueError
         if self.header_read:
-            return 1
+            return
         (key, value) = self.io.read()
         # Read over lead
-        while key != None and key != "-":
+        while key != "-":
             (key, value) = self.io.read()
         self.range_signature = value
         # Read sig
         (key, value) = self.io.read()
-        while key != None and key != "-":
+        while key != "-":
             if not self.has_key("signature"):
                 self["signature"] = {}
             if tags and key in tags:
@@ -435,7 +452,7 @@ class RpmPackage(RpmData):
         self.range_header = value
         # Read header
         (key, value) = self.io.read()
-        while key != None and key != "-":
+        while key != "-":
             if tags and key in tags:
                 self[key] = value
             elif ntags and not key in ntags:
@@ -446,7 +463,6 @@ class RpmPackage(RpmData):
         self.range_payload = value
         self.generateFileNames()
         self.header_read = 1
-        return 1
 
     def __extract(self, db=None):
         files = self["filenames"]
@@ -454,13 +470,14 @@ class RpmPackage(RpmData):
         # before we actually start extracting files.
         self.__generateFileInfoList()
         self.__generateHardLinkList()
+        # FIXME: IOError, ValueError
         (filename, cpio, filesize) = self.io.read()
         nfiles = len(files)
         n = 0
         pos = 0
         if self.config.printhash:
             self.config.printInfo(0, "\r\t\t\t\t\t\t ")
-        while filename != None and filename != "EOF" :
+        while filename != "EOF":
             n += 1
             npos = int(n*30/nfiles)
             if pos < npos and self.config.printhash:
@@ -490,6 +507,7 @@ class RpmPackage(RpmData):
                 else:
                     cpio.skipToNextFile()
                     self.__removeHardlinks(rfi)
+            # FIXME: ValueError, IOError
             (filename, cpio, filesize) = self.io.read()
         if nfiles == 0:
             nfiles = 1

@@ -36,15 +36,18 @@ rpmdir = "%s/var/lib/rpm" % chrootdir
 if not os.path.isdir(pyrpmhdrdir):
     os.mkdir(pyrpmhdrdir)
 
-rpmdb = RpmDB(rpmdir)
+rpmdb = RpmDB(rpmconfig, rpmdir)
 rpmdb.read()
 
 l = rpmdb.getPkgList()
 for pkg in l:
     nevra = pkg.getNEVRA()
-    pyrpmio = getRpmIOFactory("pydb:/%s%s" % (pyrpmhdrdir, nevra))
-    if not pyrpmio.write(pkg):
-        print "Couldn't write package header %s! Aborting!" % nevra
+    pyrpmio = getRpmIOFactory(rpmconfig, "pydb:/%s%s" % (pyrpmhdrdir, nevra))
+    try:
+        pyrpmio.write(pkg)
+    except IOError, e:
+        sys.stderr.write("Couldn't write package header %s: %s! Aborting!\n"
+                         % (nevra, e))
         sys.exit(1)
 
 # vim:ts=4:sw=4:showmatch:expandtab
