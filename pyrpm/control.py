@@ -96,7 +96,10 @@ class RpmController:
                 self.eraseFile(filename)
         else:
             for filename in filelist:
-                self.appendFile(filename)
+                try:
+                    self.appendFile(filename)
+                except (IOError, ValueError), e:
+                    self.config.printError("%s: %s" % (filename, e))
         if len(self.rpms) == 0:
             self.config.printInfo(2, "Nothing to do.\n")
         if self.config.timer:
@@ -177,8 +180,13 @@ class RpmController:
         for i in xrange(0, numops, pkgsperfork):
             subop = operations[:pkgsperfork]
             for (op, pkg) in subop:
-                pkg.close()
-                pkg.open()
+                try:
+                    pkg.close()
+                    pkg.open()
+                except IOError, e:
+                    self.config.printError("Error reopening %s: %s"
+                                           % (pkg.getNEVRA(), e))
+                    sys.exit(1)
             pid = os.fork()
             if pid != 0:
                 (rpid, status) = os.waitpid(pid, 0)
@@ -191,7 +199,12 @@ class RpmController:
                         self.__addPkgToDB(pkg, nowrite=1)
                     elif op == OP_ERASE:
                         self.__erasePkgFromDB(pkg, nowrite=1)
-                    pkg.close()
+                    try:
+                        pkg.close()
+                    except IOError:
+                        # Shouldn't really happen when pkg is open for reading,
+                        # anyway.
+                        pass
                 operations = operations[pkgsperfork:]
                 subop = operations[:pkgsperfork]
             else:
@@ -203,7 +216,12 @@ class RpmController:
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
                     pkg.clear()
-                    pkg.read()
+                    try:
+                        pkg.read()
+                    except (IOError, ValueError):
+                        self.config.printError("Error rereading %s: %s"
+                                               % (pkg.getNEVRA(), e))
+                        sys.exit(1)
                     if   op == OP_INSTALL:
                         opstring = "Install: "
                     elif op == OP_UPDATE or op == OP_FRESHEN:
@@ -222,17 +240,30 @@ class RpmController:
                     if   op == OP_INSTALL or \
                          op == OP_UPDATE or \
                          op == OP_FRESHEN:
-                        if not pkg.install(self.db):
+                        try:
+                            pkg.install(self.db)
+                        except (IOError, OSError, ValueError), e:
+                            self.config.printError("Error installing %s: %s"
+                                                   % (pkg.getNEVRA(), e))
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
                         self.__addPkgToDB(pkg)
                     elif op == OP_ERASE:
                         self.__runTriggerUn(pkg)
-                        if not pkg.erase(self.db):
+                        try:
+                            pkg.erase(self.db)
+                        except (IOError, ValueError), e:
+                            self.config.printError("Error installing %s: %s"
+                                                   % (pkg.getNEVRA(), e))
                             sys.exit(1)
                         self.__runTriggerPostUn(pkg)
                         self.__erasePkgFromDB(pkg)
-                    pkg.close()
+                    try:
+                        pkg.close()
+                    except IOError:
+                        # Shouldn't really happen when pkg is open for reading,
+                        # anyway.
+                        pass
                     del pkg
                 if self.config.delayldconfig:
                     self.config.delayldconfig = 0
@@ -241,10 +272,13 @@ class RpmController:
                 sys.exit(0)
 
     def appendFile(self, file):
+        """Append file to self.rpms.
+
+        Raise ValueError on invalid data, IOError."""
+
         pkg = readRpmPackage(self.config, file, db=self.db,
                              tags=self.config.resolvertags)
         self.rpms.append(pkg)
-        return 1
 
     def eraseFile(self, file):
         pkgs = findPkgByName(file, self.db.getPkgList())

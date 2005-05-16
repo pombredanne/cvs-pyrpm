@@ -192,7 +192,11 @@ class RpmDistributionCollection:
         pkgs = []
         for f in files:
             rpmconfig.printDebug(2, "%04d: reading %s" % (len(pkgs), f))
-            pkg = readRpmPackage(rpmconfig, 'file:/'+f, tags = tags)
+            try:
+                pkg = readRpmPackage(rpmconfig, 'file:/'+f, tags = tags)
+            except (ValueError, IOError), e:
+                rpmconfig.printError("%s: %s" % (f, e))
+                continue
             pkgs.append(pkg)
         return pkgs
 

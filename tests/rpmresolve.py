@@ -127,11 +127,11 @@ def main():
         r = pyrpm.RpmPackage("file:/"+f)
         try:
             r.read(tags=[ "name", "epoch", "version", "release", "arch" ])
+            r.close()
         except Exception, msg:
             print msg
             print "Loading of %s failed, exiting." % f
             sys.exit(-1)
-        r.close()
         rpms.append(r)
         i += 1
     if verbose > 0 and len(pargs) > 0:
@@ -155,11 +155,11 @@ def main():
             r = pyrpm.RpmPackage("file:/%s%s" % (installed_dir, f))
             try:
                 r.read(tags=tags)
+                r.close()
             except Exception, msg:
                 print msg
                 print "Loading of %s%s failed, ignoring." % (installed_dir, f)
                 continue
-            r.close()
             installed.append(r)
 
         if verbose > 0 and len(list) > 0:
@@ -185,11 +185,11 @@ def main():
         r = rpms.pop(0)
         try:
             r.read(tags=tags)
+            r.close()
         except Exception, msg:
             print msg
             print "Loading of %s failed, exiting." % f
             sys.exit(-1)
-        r.close()
 
         # append
         resolver.append(r)

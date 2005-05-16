@@ -5,15 +5,19 @@ from pyrpm import *
 
 rpms = []
 for i in sys.argv[1:]:
-    pkg = RpmPackage(i)
-    pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "dirindexes", "basenames", "dirnames"))
+    pkg = RpmPackage(rpmconfig, i)
+    try:
+        pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "dirindexes", "basenames", "dirnames"))
 #    pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "filelangs", "dirindexes", "basenames", "dirnames"))
-    pkg.read()
+        pkg.read()
 #    (fname, fdata) = pkg.io.read()
 #    while fname != "EOF":
 #	(fname, fdata) = pkg.io.read()
 #    for i in xrange(len(pkg["filenames"])):
 #        print pkg["filenames"][i], pkg["filemd5s"][i], pkg["filecolors"][i]
-    pkg.close()
+        pkg.close()
+    except (IOError, ValueError), e:
+        sys.stderr.write("%s: %s\n" % (i, e))
+        continue
     rpms.append(pkg)
 #time.sleep(30)

@@ -329,10 +329,10 @@ def doPkgMetadata(cmds):
         try:
             # FIXME: don't open the file twice?
             pkgid = getChecksum(cmds['sumtype'], filename)
-        except MDError, e:
+            hdr = pyrpm.metadataReadPackage(filename)
+        except (IOError, MDError, ValueError), e:
             errorprint('\n%s - %s' % (e, filename))
             continue
-        hdr = pyrpm.metadataReadPackage(filename)
         if not cmds['quiet']:
             if cmds['verbose']:
                 print '%d/%d - %s' % (current, len(files), filename)

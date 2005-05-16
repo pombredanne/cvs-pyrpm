@@ -74,11 +74,17 @@ files = [ "/mnt/raid/fedora/3/i386/os/Fedora/RPMS/gcc-3.4.2-6.fc3.i386.rpm",
 
 for i in files:
     rpm = RpmPackage("file:/"+i)
-    rpm.open()
+    try:
+        rpm.open()
+    except IOError, e:
+        sys.stderr.write("%s: %s\n" % (i, e))
     pid = os.fork()
     if pid != 0:
         os.waitpid(pid, 0)
-        rpm.close()
+        try:
+            rpm.close()
+        except IOError:
+            pass
         continue
     else:
         os.chroot("/mnt/build/pyrpm-fc3-i386/")

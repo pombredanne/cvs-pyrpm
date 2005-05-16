@@ -76,15 +76,24 @@ files.reverse()
 for i in files:
     print i
     rpm = RpmPackage("file:/"+i)
-    rpm.open()
+    try:
+        rpm.open()
+    except IOError, e:
+        sys.stderr.write("%s: %s\n" % (i, e))
     pid = os.fork()
     if pid != 0:
         os.waitpid(pid, 0)
-        rpm.close()
+        try:
+            rpm.close()
+        except IOError:
+            pass
         continue
     else:
         os.chroot("/mnt/build/pyrpm-fc3-i386/")
-        rpm.install()
+        try:
+            rpm.install()
+        except (IOError, OSError, ValueError), e:
+            sys.stderr.write("%s: %s\n" % (i, e))
         sys.exit()
 
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -51,7 +51,7 @@ class OldRpmData:
 
 ## Faster version (overall performance gain 25%!!!)
 class RpmData(dict):
-    __getitem__ = dict.get
+    __getitem__ = dict.get              # Return None if key is not found
     __hashcount__ = 0
     def __init__(self, config):
         dict.__init__(self)
@@ -76,7 +76,6 @@ class RpmData(dict):
         return self.hash != pkg.hash
 
 
-## Comment out, if you experience strange results
 # Use OldRpmData if you get into trouble
 #RpmData = OldRpmData
 
@@ -90,6 +89,10 @@ class RpmUserCache:
         self.gid = {"root": 0}
 
     def __parseFile(self, ugfile):
+        """Parse ugfile.
+
+        Return { name: id }."""
+        
         rethash = {}
         try:
             fp = open(ugfile, "r")
@@ -103,6 +106,8 @@ class RpmUserCache:
         return rethash
 
     def getUID(self, username):
+        """Return UID for username, or 0 if unknown."""
+        
         if not self.uid.has_key(username):
             if os.path.isfile("/etc/passwd"):
                 if self.config.buildroot == None and \
@@ -125,6 +130,8 @@ class RpmUserCache:
         return self.uid[username]
 
     def getGID(self, groupname):
+        """Return GID for groupname, or 0 if unknown."""
+        
         if not self.gid.has_key(groupname):
             if os.path.isfile("/etc/group"):
                 if self.config.buildroot == None and \
@@ -154,72 +161,76 @@ class RpmPackage(RpmData):
         self.config = config
         self.clear()
         self.source = source
-        self.verify = verify
-        self.strict = strict
-        self.hdronly = hdronly
-        self.db = db
+        self.verify = verify    # Verify file format constraints and signatures
+        self.strict = strict # Report legacy tags and packages not named %name*
+        self.hdronly = hdronly          # Don't open the payload
+        self.db = db                    # RpmDatabase
         self.io = None
-        self.range_signature = (None, None)
-        self.range_header = (None, None)
-        self.range_payload = (None, None)
+        # Ranges are (starting position or None, length)
+        self.range_signature = (None, None) # Signature header
+        self.range_header = (None, None) # Main header
+        self.range_payload = (None, None) # Payload; length is always None
 
     def clear(self):
+        """Drop read data, prepare for rereading it."""
+        
         for k in self.keys():
             del self[k]
         self.header_read = 0
         self.rpmusercache = RpmUserCache(self.config)
 
     def open(self, mode="r"):
+        """Open the package if it is not already open.
+
+        Raise IOError."""
+
         if self.io != None:
-            return 1
+            return
         self.io = getRpmIOFactory(self.config, self.source, self.verify,
                                   self.strict, self.hdronly)
-        if not self.io:
-            return 0
-        try:
-            self.io.open(mode)
-        except IOError: # FIXME: different handling?
-            return 0
-        return 1
+        self.io.open(mode)
 
     def close(self):
-        res = 1
+        """Close the package IO.
+
+        Raise IOError."""
+
         if self.io != None:
             try:
                 self.io.close()
-            except IOError:
-                res = 0
-        self.io = None
-        return res
+            finally:
+                self.io = None
 
     def read(self, tags=None, ntags=None):
-        if not self.open():
-            return 0
-        try:
-            self.__readHeader(tags, ntags)
-        except (IOError, ValueError):
-            return 0
+        """Open and read the package.
+
+        Read only specified tags if tags != None, or skip tags in ntags.  In
+        addition, generate self["filenames"], self["provides"],
+        self["requires"], self["obsoletes"], self["conflicts"] and
+        self["triggers"].  Raise ValueError on invalid data, IOError."""
+        
+        self.open()
+        self.__readHeader(tags, ntags)
         if self.verify and self.verifyOneSignature() == -1:
-            return 0
+            raise ValueError, "Signature verification failed."""
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
         self["conflicts"] = self.getConflicts()
         self["triggers"] = self.getTriggers()
-        return 1
 
     def write(self, source=None):
+        """Open and write package to the specified source.
+
+        Use the the original source if source is not specified.  Raise IOError,
+        NotImplementedError."""
+        
         if source != None:
             #origsource = self.source
             self.source = source
             self.close()
-        if not self.open("w"):
-            return 0
-        try:
-            self.io.write(self)
-        except (IOError, NotImplementedError): # FIXME: different handling?
-            return 0
-        return 1
+        self.open("w")
+        self.io.write(self)
 
     def verifySignatureTag(self, tag):
         """Verify digest or signature self["signature"][tag].
@@ -318,12 +329,14 @@ class RpmPackage(RpmData):
         return 0
 
     def install(self, db=None, tags=None, ntags=None):
-        if not self.open():
-            return 0
-        try:
-            self.__readHeader(tags, ntags)
-        except (IOError, ValueError):
-            return 0
+        """Open package, read its header and install it.
+
+        Use RpmDatabase db for getting information, don't modify it.  Run
+        specified scripts, but no triggers.  Raise ValueError on invalid
+        package data, IOError, OSError."""
+        
+        self.open()
+        self.__readHeader(tags, ntags)
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preinprog"] != None or self["postinprog"] != None:
@@ -332,8 +345,8 @@ class RpmPackage(RpmData):
             if not runScript(self["preinprog"], self["prein"], numPkgs):
                 self.config.printError("\n%s: Error running pre install script." \
                     % self.getNEVRA())
-        if not self.__extract(db):
-            return 0
+                # FIXME? shouldn't we fail here?
+        self.__extract(db)
         if self.config.printhash:
             self.config.printInfo(0, "\n")
         else:
@@ -344,15 +357,16 @@ class RpmPackage(RpmData):
                 self.config.printError("\n%s: Error running post install script." \
                     % self.getNEVRA())
         self.rfilist = None
-        return 1
 
     def erase(self, db=None):
-        if not self.open():
-            return 0
-        try:
-            self.__readHeader()
-        except (IOError, ValueError):
-            return 0
+        """Open package, read its header and remove it.
+
+        Use RpmDatabase db for getting information, don't modify it.  Run
+        specified scripts, but no triggers.  Raise ValueError on invalid
+        package data, IOError."""
+        
+        self.open()
+        self.__readHeader()
         files = self["filenames"]
         # Set umask to 022, especially important for scripts
         os.umask(022)
@@ -362,6 +376,7 @@ class RpmPackage(RpmData):
             if not runScript(self["preunprog"], self["preun"], numPkgs):
                 self.config.printError("\n%s: Error running pre uninstall script." \
                     % self.getNEVRA())
+                # FIXME? shouldn't we fail here?
         # Remove files starting from the end (reverse process to install)
         nfiles = len(files)
         n = 0
@@ -382,16 +397,16 @@ class RpmPackage(RpmData):
                 if os.listdir(f) == []:
                     try:
                         os.rmdir(f)
-                    except:
+                    except OSError:
                         # Maybe it's symlink....
                         try:
                             os.unlink(f)
-                        except:
+                        except OSError:
                             self.config.printWarning(1, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
                 try:
                     os.unlink(f)
-                except:
+                except OSError:
                     if not (self["fileflags"][i] & RPMFILE_GHOST):
                         self.config.printWarning(1, "Couldn't remove file %s from pkg %s" \
                             % (f, self.source))
@@ -404,18 +419,25 @@ class RpmPackage(RpmData):
             if not runScript(self["postunprog"], self["postun"], numPkgs):
                 self.config.printError("\n%s: Error running post uninstall script." \
                     % self.getNEVRA())
-        return 1
 
     def isSourceRPM(self):
+        """Return 1 if the package is a SRPM."""
+        
         # XXX: is it right method how detect by header?
         if self["sourcerpm"] == None:
             return 1
         return 0
 
     def isEqual(self, pkg):
+        """Return true if self and pkg have the same NEVRA."""        
+        
         return self.getNEVRA() == pkg.getNEVRA()
 
     def isIdentical(self, pkg):
+        """Return true if self and pkg have the same checksum.
+
+        Use md5, or sha1header if md5 is missing."""
+        
         if not self.isEqual(pkg):
             return 0
         if not self.has_key("signature") or not pkg.has_key("signature"):
@@ -428,8 +450,14 @@ class RpmPackage(RpmData):
            pkg["signature"].has_key("sha1header"):
             return self["signature"]["sha1header"] == pkg["signature"]["sha1header"]
         return 0
+    
     def __readHeader(self, tags=None, ntags=None):
-        # FIXME: raise IOError, ValueError
+        """Read signature header to self["signature"], tag header to self.
+
+        Use only specified tags if tags != None, or skip tags in ntags.
+        Generate self["filenames"].  Raise ValueError on invalid data,
+        IOError."""
+        
         if self.header_read:
             return
         (key, value) = self.io.read()
@@ -465,12 +493,15 @@ class RpmPackage(RpmData):
         self.header_read = 1
 
     def __extract(self, db=None):
+        """Extract files from self.io (positioned at start of payload).
+
+        Raise ValueError on invalid package data, IOError, OSError."""
+
         files = self["filenames"]
         # We don't need those lists earlier, so we create them "on-the-fly"
         # before we actually start extracting files.
         self.__generateFileInfoList()
         self.__generateHardLinkList()
-        # FIXME: IOError, ValueError
         (filename, cpio, filesize) = self.io.read()
         nfiles = len(files)
         n = 0
@@ -491,8 +522,7 @@ class RpmPackage(RpmData):
                 rfi = self.rfilist[filename]
                 if self.__verifyFileInstall(rfi, db):
                     if not rfi.getHardLinkID() in self.hardlinks.keys():
-                        if not installFile(rfi, cpio, filesize):
-                            return 0
+                        installFile(rfi, cpio, filesize)
                         # Many scripts have problems like e.g. openssh is
                         # stopping all sshd (also outside of a chroot if
                         # it is de-installed. Real hacky workaround:
@@ -500,22 +530,24 @@ class RpmPackage(RpmData):
                             open("/sbin/service", "wb").write("exit 0\n")
                     else:
                         if filesize > 0:
-                            if not installFile(rfi, cpio, filesize):
-                                return 0
-                            if not self.__handleHardlinks(rfi):
-                                return 0
+                            installFile(rfi, cpio, filesize)
+                            self.__handleHardlinks(rfi)
                 else:
                     cpio.skipToNextFile()
                     self.__removeHardlinks(rfi)
-            # FIXME: ValueError, IOError
+            # FIXME: else report error?
             (filename, cpio, filesize) = self.io.read()
         if nfiles == 0:
             nfiles = 1
         if self.config.printhash:
             self.config.printInfo(0, "#"*(30-int(30*n/nfiles)))
-        return self.__handleRemainingHardlinks()
+        self.__handleRemainingHardlinks()
 
     def __verifyFileInstall(self, rfi, db):
+        """Return 1 if file with RpmFileInfo rfi should be installed.
+
+        Modify rfi.filename if necessary.  Raise OSError."""
+        
         # No db -> overwrite file ;)
         if not db:
             return 1
@@ -542,7 +574,7 @@ class RpmPackage(RpmData):
                    self["arch"] in arch_compats[pkg["arch"]]:
                     return 0
             return 1
-        # File should exsist in filesystem but doesn't...
+        # File should exist in filesystem but doesn't...
         if not os.path.exists(rfi.filename):
             self.config.printWarning(1, "%s: File doesn't exist" % rfi.filename)
             return 1
@@ -550,11 +582,15 @@ class RpmPackage(RpmData):
             = os.stat(rfi.filename)
         # File on disc is not a regular file -> don't try to calc an md5sum
         if S_ISREG(mode):
-            f = open(rfi.filename)
-            m = md5.new()
-            updateDigestFromFile(m, f)
-            f.close()
-            md5sum = m.hexdigest()
+            try:
+                f = open(rfi.filename)
+                m = md5.new()
+                updateDigestFromFile(m, f)
+                f.close()
+                md5sum = m.hexdigest()
+            except IOError, e:
+                self.config.printWarning(0, "%s: %s" % (rfi.filename, e))
+                md5sum = ''
         # Same file in new rpm as on disk -> just write it.
         if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid \
             and rfi.filesize == filesize and rfi.md5sum == md5sum:
@@ -585,8 +621,13 @@ class RpmPackage(RpmData):
                 rfi.filename += ".rpmnew"
             else:
                 self.config.printWarning(0, "\n%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
-                if os.rename(rfi.filename, rfi.filename+".rpmsave") != None:
-                    raiseFatal("\n%s: Edited config file %s couldn't be renamed, aborting." % (self.getNEVRA(), rfi.filename))
+                try:
+                    os.rename(rfi.filename, rfi.filename+".rpmsave")
+                except OSError, e:
+                    self.config.printError("%s: Can't rename edited config "
+                                           "file %s"
+                                           % (self.getNEVRA(), rfi.filename))
+                    raise
             # Now we know we have to write either a .rpmnew file or we have
             # already backed up the old one to .rpmsave and need to write the
             # new file
@@ -595,6 +636,9 @@ class RpmPackage(RpmData):
         return do_write
 
     def generateFileNames(self):
+        """Generate self["filenames"] from self["oldfilenames"] or
+        self["dirnames"], self["dirindexes"] and self["basenames"]."""
+
         self["filenames"] = []
         if self["oldfilenames"] != None:
             self["filenames"] = self["oldfilenames"]
@@ -607,16 +651,23 @@ class RpmPackage(RpmData):
             self["filenames"].append(filename)
 
     def __generateFileInfoList(self):
+        """Build self.rfilist: {path name: RpmFileInfo}"""
+        
         self.rpmusercache = RpmUserCache(self.config)
         self.rfilist = {}
         for filename in self["filenames"]:
             self.rfilist[filename] = self.getRpmFileInfo(filename)
 
     def __generateHardLinkList(self):
+        """Build self.hardlinks: {"hardlink id": [RpmFileInfo for that id]}
+
+        Only regular files with more than one link are represented in
+        self.hardlinks."""
+        
         self.hardlinks = {}
         for filename in self.rfilist.keys():
             rfi = self.rfilist[filename]
-            if not S_ISREG(rfi.mode):
+            if not S_ISREG(rfi.mode): # FIXME? "if S_ISDIR(...)"
                 continue
             key = rfi.getHardLinkID()
             if not self.hardlinks.has_key(key):
@@ -627,31 +678,39 @@ class RpmPackage(RpmData):
                 del self.hardlinks[key]
 
     def __handleHardlinks(self, rfi):
+        """Create hard links to RpmFileInfo rfi as specified in self.hardlinks.
+
+        Raise OSError."""
+        
         key = rfi.getHardLinkID()
         self.hardlinks[key].remove(rfi)
         for hrfi in self.hardlinks[key]:
             makeDirs(hrfi.filename)
-            if not createLink(rfi.filename, hrfi.filename):
-                return 0
+            createLink(rfi.filename, hrfi.filename)
         del self.hardlinks[key]
-        return 1
 
     def __removeHardlinks(self, rfi):
+        """Drop information about hard links to RpmFileInfo rfi, if any."""
+        
         key = rfi.getHardLinkID()
         if self.hardlinks.has_key(key):
             del self.hardlinks[key]
 
     def __handleRemainingHardlinks(self):
+        """Create empty hard-linked files according to self.hardlinks.
+
+        Raise IOError, OSError."""
+        
         keys = self.hardlinks.keys()
         for key in keys:
             rfi = self.hardlinks[key][0]
-            if not installFile(rfi, 0, 0):
-                return 0
-            if not self.__handleHardlinks(rfi):
-                return 0
-        return 1
+            installFile(rfi, None, 0)
+            self.__handleHardlinks(rfi)
 
     def getRpmFileInfo(self, filename):
+        """Return RpmFileInfo describing filename, or None if this package does
+        not contain filename."""
+        
         try:
             i = self["filenames"].index(filename)
         except:
@@ -695,40 +754,68 @@ class RpmPackage(RpmData):
         return rfi
 
     def getEpoch(self):
+        """Return %epoch as a string, or "0" for unspecified epoch."""
+        
         e = self["epoch"]
         if e == None:
             return "0"
         return str(e[0])
 
     def getEVR(self):
+        """Return [%epoch:]%version-%release."""
+        
         e = self["epoch"]
         if e != None:
             return "%s:%s-%s" % (str(e[0]), self["version"], self["release"])
         return "%s-%s" % (self["version"], self["release"])
 
     def getNEVR(self):
+        """Return %name-[%epoch:]%version-%release."""
+        
         return "%s-%s" % (self["name"], self.getEVR())
 
     def getNEVRA(self):
+        """Return %name-[%epoch:]%version-%release.%arch."""
+        
         return "%s.%s" % (self.getNEVR(), self["arch"])
 
     def getProvides(self):
+        """Return built value for self["provides"] + (%name = EVR).
+
+        Raise ValueError on invalid data."""
+        
         r = self.__getDeps(("providename", "provideflags", "provideversion"))
         r.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
         return r
 
     def getRequires(self):
+        """Return built value for self["requires"].
+
+        Raise ValueError on invalid data."""
+        
         return self.__getDeps(("requirename", "requireflags", "requireversion"))
 
     def getObsoletes(self):
+        """Return built value for self["obsoletes"].
+
+        Raise ValueError on invalid data."""
+        
         return self.__getDeps(("obsoletename", "obsoleteflags",
             "obsoleteversion"))
 
     def getConflicts(self):
+        """Return built value for self["conflicts"].
+
+        Raise ValueError on invalid data."""
+        
         return self.__getDeps(("conflictname", "conflictflags",
             "conflictversion"))
 
     def getTriggers(self):
+        """Return built value for self["triggers"].
+
+        Raise ValueError on invalid data."""
+        
         if self["triggerindex"] == None:
             return self.__getDeps(("triggername", "triggerflags",
                 "triggerversion", "triggerscriptprog", "triggerscripts"))
@@ -736,9 +823,9 @@ class RpmPackage(RpmData):
             "triggerversion"))
         numdeps = len(deps)
         if len(self["triggerscriptprog"]) != len(self["triggerscripts"]):
-            raiseFatal("%s: wrong length of triggerscripts/prog" % self.source)
+            raise ValueError, "wrong length of triggerscripts/prog"
         if numdeps != len(self["triggerindex"]):
-            raiseFatal("%s: wrong length of triggerindex" % self.source)
+            raise ValueError, "wrong length of triggerindex"
         deps2 = []
         for i in xrange(numdeps):
             ti = self["triggerindex"][i]
@@ -747,6 +834,11 @@ class RpmPackage(RpmData):
         return deps2
 
     def __getDeps(self, depnames):
+        """Zip values from tags in list depnames.
+
+        Replace missing values (except for the first tag) with '' or 0.
+        Raise ValueError on invalid data."""
+        
         if self[depnames[0]] == None:
             return []
         deplength = len(self[depnames[0]])
@@ -755,7 +847,8 @@ class RpmPackage(RpmData):
             x = self[d]
             if x != None:
                 if len(x) != deplength:
-                    raiseFatal("%s: wrong length of deps" % self.source)
+                    raise ValueError, \
+                          "Tag lengths of %s and %s differ" % (depnames[0], d)
                 deps2.append(x)
             else:
                 if   rpmtag[d][1] == RPM_STRING or \

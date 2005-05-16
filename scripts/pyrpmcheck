@@ -63,9 +63,12 @@ def readDir(dir, list):
             if f.find("debuginfo") > 0:
                 continue
             pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
-            if not pkg.read(tags=rtags):
+            try:
+                pkg.read(tags=rtags):
+                pkg.close()
+            except (IOError, ValueError), e:
+                rpmconfig.printError("%s: %s\n" % (pkg, e))
                 continue
-            pkg.close()
             rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())
             list.append(pkg)
 
@@ -213,7 +216,10 @@ def main():
         if   os.path.isdir(arg):
             readDir(arg, pkg_list)
         elif arg.endswith(".rpm"):
-            pkg_list.append(readRpmPackage(rpmconfig, arg, tags=rtags))
+            try:
+                pkg_list.append(readRpmPackage(rpmconfig, arg, tags=rtags))
+            except (IOError, ValueError), e:
+                sys.stderr.write("%s: %s\n" % (arg, e))
 
     pkg_list = selectNewestPkgs(pkg_list)
 

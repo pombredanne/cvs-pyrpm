@@ -114,10 +114,12 @@ def _entryNode(parent, ns, dep):
 def metadataReadPackage(filename):
     """Read RPM package filename, without verification or reading the payload.
 
-    For convenience only, other metadata* functions work with any RpmPackage
-    as long it contains all needed tags."""
+    For convenience only, other metadata* functions work with any RpmPackage as
+    long it contains all needed tags.  Raise ValueError on invalid data,
+    IOError."""
+
     return functions.readRpmPackage(config.rpmconfig, "file:/" + filename,
-                                  verify = None, hdronly = True)
+                                    verify = None, hdronly = True)
 
 
 def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):

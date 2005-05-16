@@ -4,8 +4,17 @@ import sys
 from pyrpm import *
 
 for i in sys.argv[1:]:
-    pkg = RpmPackage(i, verify=1)
-    pkg.read()
-    pkg.source = "file://var/tmp/"+i
-    pkg.write()
+    pkg = RpmPackage(rpmconfig, i, verify=1)
+    try:
+        pkg.read()
+    except (IOError, ValueError), e:
+        sys.stderr.write("%s: %s\n" % (i, e))
+        continue
+    pkg.source = "file:///var/tmp/"+i
+    try:
+        pkg.close()
+        pkg.open("w")
+        pkg.write()
+    except (OSError, NotImplementedError), e:
+        sys.stderr.write("%s: %s\n" % (i, e))
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -1,11 +1,15 @@
 #!/usr/bin/python
 
 import sys, os
-from pyrpmlib import *
+from pyrpm import *
 
 for i in sys.argv[1:]:
-    rpm = RpmPackage("file:/"+i)
-    rpm.read(tags="version", ntags="name")
+    rpm = RpmPackage(rpmconfig, "file:/"+i)
+    try:
+        rpm.read(tags="version", ntags="name")
+    except (IOError, ValueError), e:
+        sys.stderr.write("%s: %s\n" % (i, e))
+        continue
 #    if type(rpm["epoch"]) != type(None) and type(rpm["epoch"]) != type(()):
 #        print type(rpm["epoch"])
     print rpm.getNEVRA()

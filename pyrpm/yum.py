@@ -110,8 +110,12 @@ class RpmYum:
             repolists.append(repo.getList())
         for f in args:
             if os.path.isfile(f) and f.endswith(".rpm"):
-                pkg = readRpmPackage(self.config, f, db=self.pydb,
-                                     tags=self.config.resolvertags)
+                try:
+                    pkg = readRpmPackage(self.config, f, db=self.pydb,
+                                         tags=self.config.resolvertags)
+                except (IOError, ValueError), e:
+                    self.config.printError("%s: %s" % (f, e))
+                    sys.exit(1)
                 if self.config.ignorearch or \
                    archCompat(pkg["arch"], self.config.machine):
                     self.pkgs.append(pkg)
@@ -120,8 +124,12 @@ class RpmYum:
                     fn = "%s/%s" % (f, g)
                     if not g.endswith(".rpm") or not os.path.isfile(fn):
                         continue
-                    pkg = readRpmPackage(self.config, fn, db=self.pydb,
-                                         tags=self.config.resolvertags)
+                    try:
+                        pkg = readRpmPackage(self.config, fn, db=self.pydb,
+                                             tags=self.config.resolvertags)
+                    except (IOError, ValueError), e:
+                        self.config.printError("%s: %s" % (fn, e))
+                        sys.exit(1)
                     if self.config.ignorearch or \
                        archCompat(pkg["arch"], self.config.machine):
                         self.pkgs.append(pkg)

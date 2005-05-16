@@ -127,80 +127,81 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
     return 1
 
 def installFile(rfi, infd, size):
+    """Install a file described by RpmFileInfo rfi, with input of given size
+    from CPIOFile infd.
+
+    infd can be None if size == 0.  Raise IOError, OSError."""
+
     mode = rfi.mode
     if S_ISREG(mode):
         makeDirs(rfi.filename)
         (fd, tmpfilename) = mkstemp(dir=os.path.dirname(rfi.filename),
             prefix=rfi.filename + ".")
-        if not fd:
-            return 0
-        data = "1"
-        while size > 0 and data:
-            data = infd.read(65536)
-            if data:
-                size -= len(data)
-                if os.write(fd, data) < 0:
-                    os.close(fd)
-                    os.unlink(tmpfilename)
-                    return 0
-        os.close(fd)
-        if not setFileMods(tmpfilename, rfi.uid, rfi.gid, mode, rfi.mtime):
+        try:
+            try:
+                data = "1"
+                while size > 0 and data:
+                    data = infd.read(65536)
+                    if data:
+                        size -= len(data)
+                        os.write(fd, data)
+            finally:
+                os.close(fd)
+            setFileMods(tmpfilename, rfi.uid, rfi.gid, mode, rfi.mtime)
+        except (IOError, OSError):
             os.unlink(tmpfilename)
-            return 0
-        if os.rename(tmpfilename, rfi.filename) != None:
-            return 0
+            raise
+        os.rename(tmpfilename, rfi.filename)
     elif S_ISDIR(mode):
-        if os.path.isdir(rfi.filename):
-            if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
-                return 0
-            return 1
-        os.makedirs(rfi.filename)
-        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
-            return 0
+        if not os.path.isdir(rfi.filename):
+            os.makedirs(rfi.filename)
+        setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
     elif S_ISLNK(mode):
         data = infd.read(size)
         symlinkfile = data.rstrip("\x00")
         if os.path.islink(rfi.filename) \
             and os.readlink(rfi.filename) == symlinkfile:
-            return 1
+            return
         makeDirs(rfi.filename)
         try:
             os.unlink(rfi.filename)
-        except:
+        except OSError:
             pass
         os.symlink(symlinkfile, rfi.filename)
-        if os.lchown(rfi.filename, rfi.uid, rfi.gid) != None:
-            return 0
+        os.lchown(rfi.filename, rfi.uid, rfi.gid)
     elif S_ISFIFO(mode):
         makeDirs(rfi.filename)
-        if not os.path.exists(rfi.filename) and os.mkfifo(rfi.filename) != None:
-            return 0
-        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
+        if not os.path.exists(rfi.filename):
+            os.mkfifo(rfi.filename)
+        try:
+            setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
+        except OSError:
             os.unlink(rfi.filename)
-            return 0
+            raise
     elif S_ISCHR(mode) or S_ISBLK(mode):
         makeDirs(rfi.filename)
         try:
             os.mknod(rfi.filename, mode, rfi.rdev)
-        except:
-            pass
-        if not setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime):
+        except OSError:
+            pass # FIXME: why?
+        try:
+            setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
+        except OSError:
             os.unlink(rfi.filename)
-            return 0
+            raise
     elif S_ISSOCK(mode):
-        rpmconfig.printError("\n%s: Can't handle UNIX domain socket files." % rfi.filename)
+        raise ValueError("UNIX domain sockets can't be packaged.")
     else:
         raise ValueError, "%s: not a valid filetype" % (oct(mode))
-    return 1
 
 def setFileMods(filename, uid, gid, mode, mtime):
-    try:
-        os.chown(filename, uid, gid)
-        os.chmod(filename, S_IMODE(mode))
-        os.utime(filename, (mtime, mtime))
-    except:
-        return 0
-    return 1
+    """Set owner, group, mode and mtime of filename to the specified values.
+
+    Raise OSError."""
+    
+    os.chown(filename, uid, gid)
+    os.chmod(filename, S_IMODE(mode))
+    os.utime(filename, (mtime, mtime))
 
 def makeDirs(fullname):
     idx = fullname.rfind("/")
@@ -218,16 +219,18 @@ def listRpmDir(dirname):
     return files
 
 def createLink(src, dst):
+    """Create a link from src to dst.
+
+    Raise OSError."""
+    
     try:
         # First try to unlink the defered file
         os.unlink(dst)
-    except:
+    except OSError:
         pass
     # Behave exactly like cpio: If the hardlink fails (because of different
     # partitions), then it has to fail
-    if os.link(src, dst) != None:
-        return 0
-    return 1
+    os.link(src, dst)
 
 def tryUnlock(lockfile):
     if not os.path.exists(lockfile):
@@ -1009,7 +1012,10 @@ def findPkgByName(pkgname, list):
 def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
                    db=None, tags=None):
     """Read RPM package from source and close it.
-    tags, if defined, specifies tags to load."""
+
+    tags, if defined, specifies tags to load.  Raise ValueError on invalid
+    data, IOError."""
+    
     pkg = package.RpmPackage(config, source, verify, strict, hdronly, db)
     pkg.read(tags=tags)
     pkg.close()

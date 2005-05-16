@@ -17,9 +17,8 @@
 #
 
 
-import fcntl, struct, bsddb, libxml2
+import fcntl, struct, bsddb, libxml2, urlgrabber
 import zlib, gzip, sha, md5, string, stat, openpgp
-from urlgrabber import urlopen
 
 from functions import *
 import package
@@ -884,7 +883,7 @@ class RpmFtpIO(RpmStreamIO):
 
     def open(self, mode="r"):
         try:
-            self.fd = urlopen(self.source)
+            self.fd = urlgrabber.urlopen(self.source)
         except urlgrabber.grabber.URLGrabError, e:
             raise IOError, str(e)
 
@@ -900,7 +899,7 @@ class RpmHttpIO(RpmStreamIO):
 
     def open(self, mode="r"):
         try:
-            self.fd = urlopen(self.source)
+            self.fd = urlgrabber.urlopen(self.source)
         except urlgrabber.grabber.URLGrabError, e:
             raise IOError, str(e)
 
@@ -1046,8 +1045,13 @@ class RpmPyDB(RpmDatabase):
         for nevra in namelist:
             src = "pydb:/"+dbpath+"/headers/"+nevra
             pkg = package.RpmPackage(self.config, src)
-            pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "dirindexes", "basenames", "dirnames", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
-            pkg.close()
+            try:
+                pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "dirindexes", "basenames", "dirnames", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
+                pkg.close()
+            except (IOError, ValueError), e:
+                self.config.printWarning(0, "Invalid header %s in database: %s"
+                                         % (nevra, e))
+                continue
             for filename in pkg["filenames"]:
                 if not self.filenames.has_key(filename):
                     self.filenames[filename] = []
@@ -1077,10 +1081,9 @@ class RpmPyDB(RpmDatabase):
             apkg = getRpmIOFactory(self.config, src)
             try:
                 apkg.write(pkg)
+                apkg.close()
             except IOError:
-                # FIXME: different handling?
                 return 0
-            apkg.close()
         for filename in pkg["filenames"]:
             if not self.filenames.has_key(filename):
                 self.filenames[filename] = []
@@ -1199,7 +1202,7 @@ class RpmRepo(RpmDatabase):
         if not ffd:
             return 0
         ofd = gzip.GzipFile(filename+"/repodata/other.xml.gz", "wb")
-        if not ffd:
+        if not ofd:
             return 0
         pdoc = libxml2.newDoc("1.0")
         proot = pdoc.newChild(None, "metadata", None)
@@ -1215,8 +1218,12 @@ class RpmRepo(RpmDatabase):
         for pkg in self.getPkgList():
             self.config.printInfo(2, "Processing complete data of package %s.\n" % pkg.getNEVRA())
             pkg.header_read = 0
-            pkg.open()
-            pkg.read()
+            try:
+                pkg.open()
+                pkg.read()
+            except (IOError, ValueError), e:
+                self.config.printWarning(0, "%s: %s" % (pkg.getNEVRA(), e))
+                continue
             # If it is a source rpm change the arch to "src". Only valid
             # for createRepo, never do this anywhere else. ;)
             if pkg.isSourceRPM():
@@ -1226,7 +1233,10 @@ class RpmRepo(RpmDatabase):
             self.__writePrimary(pfd, proot, pkg)
             self.__writeFilelists(ffd, froot, pkg)
 #            self.__writeOther(ofd, oroot, pkg)
-            pkg.close()
+	    try:
+                pkg.close()
+            except IOError:
+                pass # Should not happen when opening for reading anyway
             pkg.clear()
         pfd.write('</metadata>\n')
         ffd.write('</filelists>\n')
@@ -1269,8 +1279,12 @@ class RpmRepo(RpmDatabase):
             if os.path.isdir("%s/%s" % (dir, f)):
                 self.__readDir("%s/%s" % (dir, f), "%s%s/" % (location, f))
             elif f.endswith(".rpm"):
-                pkg = package.RpmPackage(self.config, dir+"/"+f)
-                if not pkg.read(tags=("name", "epoch", "version", "release", "arch", "sourcerpm", "requirename", "requireflags", "requireversion")):
+                path = dir + "/" + f
+                pkg = package.RpmPackage(self.config, path)
+                try:
+                    pkg.read(tags=("name", "epoch", "version", "release", "arch", "sourcerpm", "requirename", "requireflags", "requireversion"))
+                except (IOError, ValueError), e:
+                    self.config.printWarning(0, "%s: %s" % (path, e)) 
                     continue
                 pkg.close()
                 if self.__isExcluded(pkg):
@@ -1769,7 +1783,7 @@ def getRpmIOFactory(config, source, verify=None, strict=None, hdronly=None):
     if   source[:5] == 'ftp:/':
         return RpmFtpIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'file:/':
-        return RpmHttpIO(config, source, verify, strict, hdronly)
+        return RpmFileIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'http:/':
         return RpmHttpIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'pydb:/':
