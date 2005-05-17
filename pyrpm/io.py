@@ -1042,11 +1042,13 @@ class RpmPyDB(RpmDatabase):
         if not os.path.isdir(dbpath+"/headers"):
             return 1
         namelist = os.listdir(dbpath+"/headers")
+        tags = list(self.config.resolvertags)
+        tags.extend(("filerdevs", "filemtimes", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
         for nevra in namelist:
             src = "pydb:/"+dbpath+"/headers/"+nevra
             pkg = package.RpmPackage(self.config, src)
             try:
-                pkg.read(tags=("name", "epoch", "version", "release", "arch", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "filesizes", "filemodes", "filerdevs", "filemtimes", "filemd5s", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "dirindexes", "basenames", "dirnames", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
+                pkg.read(tags=tags)
                 pkg.close()
             except (IOError, ValueError), e:
                 self.config.printWarning(0, "Invalid header %s in database: %s"

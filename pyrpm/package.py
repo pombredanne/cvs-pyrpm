@@ -450,7 +450,7 @@ class RpmPackage(RpmData):
            pkg["signature"].has_key("sha1header"):
             return self["signature"]["sha1header"] == pkg["signature"]["sha1header"]
         return 0
-    
+
     def __readHeader(self, tags=None, ntags=None):
         """Read signature header to self["signature"], tag header to self.
 
@@ -862,6 +862,16 @@ class RpmPackage(RpmData):
                      rpmtag[d][1] == RPM_INT64:
                     deps2.append(deplength*[0])
         return zip(*deps2)
+
+    def __eq__(self, pkg):
+        if not isinstance(pkg, RpmPackage):
+            return 0
+        return self.isIdentical(pkg)
+
+    def __ne__(self, pkg):
+        if not isinstance(pkg, RpmPackage):
+            return 1
+        return not self.isIdentical(pkg)
 
     def __lt__(self, pkg):
         if not isinstance(pkg, RpmData):
