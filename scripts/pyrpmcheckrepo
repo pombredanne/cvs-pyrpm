@@ -27,8 +27,7 @@ from pyrpm import *
 
 def usage():
     print """
-    Yum install and remove interative test
-    pyrpmrandomizer [options] number of iterations
+    pyrpmcheckrepo [options] repoless|leftover
 
 options:
     [-?, --help] [--version]
@@ -41,7 +40,7 @@ options:
     [--noorder] [--noscripts] [--notriggers]
     [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
 
-Warning: Some of the install-options are not evaluated yet"""
+Warning: Some of the options are not evaluated yet"""
 
 
 #
@@ -63,28 +62,26 @@ def main():
         usage()
         sys.exit(1)
 
-    # Always use the same random sequence
-    random.seed(12345)
-    count = int(args[0])
     yum.setCommand("update")
-    while count > 0:
-        yum.processArgs([])
-        resolver = yum.opresolver
-        count -= 1
-        if count % 2:
-            pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgList()
-            pkg = pkglist[random.randrange(0, len(pkglist))]
-            yum.setCommand("update")
-            print "Updating package %s" % pkg.getNEVRA()
-            resolver.update(pkg)
-        else:
-            pkglist = resolver.getList()
-            pkg = pkglist[random.randrange(0, len(pkglist))]
-            yum.setCommand("remove")
-            print "Erasing package %s" % pkg.getNEVRA()
-            resolver.erase(pkg)
-        yum.runDepRes()
-        yum.runCommand()
+    yum.processArgs([])
+    yum.runDepRes()
+    resolver = yum.opresolver
+    resolver.resolve()
+
+    if args[0] == "repoless":
+        nhash = { }
+        for repo in yum.repos:
+            for pkg in repo.getPkgList():
+                nhash[pkg.getNEVRA()] = 1
+        for pkg in resolver.getList():
+            if not pkg.has_key("epoch"):
+                pkg["epoch"] = (0,)
+            if not nhash.has_key(pkg.getNEVRA()):
+                print "%s: Not found in any repo" % pkg.getNEVRA()
+    elif args[0] == "leftover":
+        for pkg in resolver.getList():
+            if resolver.isInstalled(pkg):
+                print "%s: Leftover package" % pkg.getNEVRA()
 
 if __name__ == '__main__':
     dohotshot = 0

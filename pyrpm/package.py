@@ -863,16 +863,6 @@ class RpmPackage(RpmData):
                     deps2.append(deplength*[0])
         return zip(*deps2)
 
-    def __eq__(self, pkg):
-        if not isinstance(pkg, RpmPackage):
-            return 0
-        return self.isIdentical(pkg)
-
-    def __ne__(self, pkg):
-        if not isinstance(pkg, RpmPackage):
-            return 1
-        return not self.isIdentical(pkg)
-
     def __lt__(self, pkg):
         if not isinstance(pkg, RpmData):
             return 0

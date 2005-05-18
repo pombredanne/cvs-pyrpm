@@ -343,19 +343,21 @@ class RpmYum:
                         if self.__findUpdatePkg(pkg2) > 0:
                             handled_conflict = 1
                             ret = 1
+                            break
                     elif c[1] & RPMSENSE_GREATER != 0:
                         if self.__findUpdatePkg(pkg1) > 0:
                             handled_conflict = 1
                             ret = 1
+                            break
                     else:
                         if   self.__findUpdatePkg(pkg1) > 0:
                             handled_conflict = 1
                             ret = 1
+                            break
                         elif self.__findUpdatePkg(pkg2) > 0:
                             handled_conflict = 1
                             ret = 1
-                    if handled_conflict:
-                        break
+                            break
                 if handled_conflict:
                     break
             conflicts = self.opresolver.getConflicts()
@@ -369,12 +371,12 @@ class RpmYum:
                         if self.__findUpdatePkg(pkg2) > 0:
                             handled_fileconflict = 1
                             ret = 1
+                            break
                         elif self.__findUpdatePkg(pkg1) > 0:
                             handled_fileconflict = 1
                             ret = 1
-                        if handled_conflict:
                             break
-                    if handled_conflict:
+                    if handled_fileconflict:
                         break
                 conflicts = self.opresolver.getFileConflicts()
         if not (handled_conflict and handled_fileconflict) and self.autoerase:

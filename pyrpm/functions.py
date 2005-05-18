@@ -412,20 +412,12 @@ def parseYumOptions(argv, yum):
          "servicehack", "installpkgs=", "arch=", "checkinstalled"])
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
-        try:
-            usage()
-        except:
-            pass
-        sys.exit(1)
+        return None
 
     # Argument handling
     for (opt, val) in opts:
         if   opt in ['-?', "--help"]:
-            try:
-                usage()
-            except:
-                pass
-            sys.exit(0)
+            return None
         elif opt in ["-v", "--verbose"]:
             rpmconfig.verbose += 1
         elif opt in ["-r", "--root"]:
@@ -506,11 +498,7 @@ def parseYumOptions(argv, yum):
 
     if not args:
         print "No command given"
-        try:
-            usage()
-        except:
-            pass
-        sys.exit(1)
+        return None
 
     # Handle yum config file. By default we set the reposdir to "", meaning no
     # repo dirs. If it is specified in the config file we use that though (as
