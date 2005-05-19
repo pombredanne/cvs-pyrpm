@@ -206,7 +206,7 @@ class RpmList:
     def __install_check(self, r, pkg):
         if r == pkg or r.isEqual(pkg):
             if self.isInstalled(r):
-                self.config.printWarning(1, "%s: %s is already installed" % \
+                self.config.printWarning(2, "%s: %s is already installed" % \
                              (pkg.getNEVRA(), r.getNEVRA()))
                 return self.ALREADY_INSTALLED
             else:
