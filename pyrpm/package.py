@@ -24,32 +24,7 @@ from functions import *
 from io import getRpmIOFactory
 import openpgp
 
-class OldRpmData:
-    def __init__(self, config):
-        self.config = config
-        self.data = {}
 
-    def __repr__(self):
-        return self.data.__repr__()
-
-    def __getitem__(self, key):
-        return self.data.get(key)
-
-    def __setitem__(self, key, value):
-        self.data[key] = value
-        return value
-
-    def __delitem__(self, key):
-        del self.data[key]
-
-    def has_key(self, key):
-        return self.data.has_key(key)
-
-    def keys(self):
-        return self.data.keys()
-
-
-## Faster version (overall performance gain 25%!!!)
 class RpmData(dict):
     __getitem__ = dict.get              # Return None if key is not found
     __hashcount__ = 0
@@ -74,10 +49,6 @@ class RpmData(dict):
         if not isinstance(pkg, RpmData):
             return 1
         return self.hash != pkg.hash
-
-
-# Use OldRpmData if you get into trouble
-#RpmData = OldRpmData
 
 
 class RpmUserCache:
@@ -725,6 +696,7 @@ class RpmPackage(RpmData):
         rpmrdev = None
         rpmmd5sum = None
         rpmflags = None
+        rpmverifyflags = None
         rpmfilecolor = None
         if self.has_key("fileinodes"):
             rpminode = self["fileinodes"][i]
@@ -746,11 +718,13 @@ class RpmPackage(RpmData):
             rpmmd5sum = self["filemd5s"][i]
         if self.has_key("fileflags"):
             rpmflags = self["fileflags"][i]
+        if self.has_key("fileverifyflags"):
+            rpmverifyflags = self["fileverifyflags"][i]
         if self.has_key("filecolors"):
             rpmfilecolor = self["filecolors"][i]
         rfi = RpmFileInfo(self.config, filename, rpminode, rpmmode, rpmuid,
                           rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev,
-                          rpmmd5sum, rpmflags, rpmfilecolor)
+                          rpmmd5sum, rpmflags, rpmverifyflags, rpmfilecolor)
         return rfi
 
     def getEpoch(self):

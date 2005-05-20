@@ -136,8 +136,8 @@ RELEASEUPDATE=1
 #doinstall --nodev $RELEASED/RHEL-2.1/U6/AS/i386/tree/$RPMS $DATA/2.1-U6-i386
 
 function rhel34installtests() {
-    doinstall --nodev $RELEASED/RHEL-3/U3/AS/$ARCH/tree/$RPMS $DATA/3-U3-$ARCH
     echo "Running $FUNCNAME check on $ARCH"
+    doinstall --nodev $RELEASED/RHEL-3/U3/AS/$ARCH/tree/$RPMS $DATA/3-U3-$ARCH
     doinstall --nodev $RELEASED/RHEL-3/U4/AS/$ARCH/tree/$RPMS $DATA/3-U4-$ARCH
     doinstall --nodev /mnt/raid/trees/RHEL3U5/$ARCH/$RPMS $DATA/3-U5-$ARCH
     doinstall $RELEASED/RHEL-4/GOLD/AS/$ARCH/tree/$RPMS $DATA/4-GOLD-$ARCH

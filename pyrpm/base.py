@@ -18,7 +18,7 @@
 
 class RpmFileInfo:
     def __init__(self, config, filename, inode, mode, uid, gid, mtime, filesize,
-                 dev, rdev, md5sum, flags, filecolor):
+                 dev, rdev, md5sum, flags, verifyflags, filecolor):
         self.config = config
         self.filename = filename
         self.inode = inode
@@ -31,6 +31,7 @@ class RpmFileInfo:
         self.rdev = rdev
         self.md5sum = md5sum
         self.flags = flags
+        self.verifyflags = flags
         self.filecolor = filecolor
 
     def getHardLinkID(self):
