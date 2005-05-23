@@ -375,7 +375,7 @@ rpmtag = {
     "classdict": [1142, RPM_STRING_ARRAY, None, 0],
     "dependsdict": [1145, RPM_INT32, None, 0],
     # data from files marked with "%policy" in specfiles
-    "policies": (1150, RPM_STRING_ARRAY, None, 0),
+    "policies": [1150, RPM_STRING_ARRAY, None, 0],
     # XXX: this tag shows up again, disable the check for now:
     "filecontexts": [1147, RPM_STRING_ARRAY, None, 0], # selinux filecontexts
 
