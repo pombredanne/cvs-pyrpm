@@ -69,6 +69,14 @@ def S_ISDIR(mode):
     return (mode & 0170000) == 0040000
 
 
+def doRead(fd, size):
+    data = fd.read(size)
+    if len(data) != size:
+        raise IOError, "failed to read data (%d instead of %d)" \
+            % (len(data), size)
+    return data
+
+
 # Optimized routines that use zlib to extract data, since
 # "import gzip" doesn't give good data handling (old code
 # can still easily be enabled to compare performance):
@@ -87,8 +95,7 @@ class PyGZIP:
         self.header_read = 0
 
     def __readHeader(self):
-        magic = self.fd.read(2)
-        if magic != "\037\213":
+        if self.fd.read(2) != "\037\213":
             print "Not a gzipped file"
             sys.exit(0)
         if ord(self.fd.read(1)) != 8:
@@ -367,6 +374,8 @@ rpmtag = {
     "filedependsn": [1144, RPM_INT32, None, 0],
     "classdict": [1142, RPM_STRING_ARRAY, None, 0],
     "dependsdict": [1145, RPM_INT32, None, 0],
+    # data from files marked with "%policy" in specfiles
+    "policies": (1150, RPM_STRING_ARRAY, None, 0),
     # XXX: this tag shows up again, disable the check for now:
     "filecontexts": [1147, RPM_STRING_ARRAY, None, 0], # selinux filecontexts
 
@@ -578,9 +587,9 @@ class CPIO:
         print "%s: %s" % ("cpio-header", err)
 
     def __readDataPad(self, size, pad=0):
-        data = self.fd.read(size)
+        data = doRead(self.fd, size)
         pad = (4 - ((size + pad) % 4)) % 4
-        self.fd.read(pad)
+        doRead(self.fd, pad)
         if self.size != None:
             self.size -= size + pad
         return data
@@ -588,7 +597,7 @@ class CPIO:
     def readEntry(self):
         # (magic, inode, mode, uid, gid, nlink, mtime, filesize,
         # devMajor, devMinor, rdevMajor, rdevMinor, namesize, checksum)
-        data = self.fd.read(110)
+        data = doRead(self.fd, 110)
         if self.size != None:
             self.size -= 110
         # CPIO ASCII hex, expanded device numbers (070702 with CRC)
@@ -789,15 +798,15 @@ class ReadRpm:
                 checkSize))
 
     def __readIndex(self, pad, hdrtags):
-        data = self.fd.read(16)
+        data = doRead(self.fd, 16)
         (magic, indexNo, storeSize) = unpack("!8sii", data)
         if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
             self.raiseErr("bad index magic")
-        fmt = self.fd.read(16 * indexNo)
-        fmt2 = self.fd.read(storeSize)
+        fmt = doRead(self.fd, 16 * indexNo)
+        fmt2 = doRead(self.fd, storeSize)
         padfmt = ""
         if pad != 1:
-            padfmt = self.fd.read((pad - (storeSize % pad)) % pad)
+            padfmt = doRead(self.fd, (pad - (storeSize % pad)) % pad)
         if self.verify:
             self.__verifyIndex(fmt, fmt2, indexNo, storeSize, hdrtags)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + \
@@ -846,7 +855,7 @@ class ReadRpm:
     def readHeader(self, sigtags, hdrtags, keepdata=None):
         if self.__openFd():
             return 1
-        leaddata = self.fd.read(96)
+        leaddata = doRead(self.fd, 96)
         if leaddata[:4] != "\xed\xab\xee\xdb":
             self.printErr("no rpm magic found")
             return 1
