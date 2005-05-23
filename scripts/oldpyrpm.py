@@ -304,13 +304,15 @@ rpmtag = {
     "verifyscriptprog": [1091, RPM_ARGSTRING, None, 4],
 
     # addon information:
+    "rpmversion": [1064, RPM_STRING, None, 0],
+    "payloadformat": [1124, RPM_STRING, None, 0],   # "cpio"
+    "payloadcompressor": [1125, RPM_STRING, None, 0],# "gzip" or "bzip2"
     "i18ntable": [100, RPM_STRING_ARRAY, None, 0], # list of available langs
     "summary": [1004, RPM_I18NSTRING, None, 0],
     "description": [1005, RPM_I18NSTRING, None, 0],
     "url": [1020, RPM_STRING, None, 0],
     "license": [1014, RPM_STRING, None, 0],
-    "rpmversion": [1064, RPM_STRING, None, 0],
-    "sourcerpm": [1044, RPM_STRING, None, 4],
+    "sourcerpm": [1044, RPM_STRING, None, 4], # name of src.rpm for binary rpms
     "changelogtime": [1080, RPM_INT32, None, 0],
     "changelogname": [1081, RPM_STRING_ARRAY, None, 0],
     "changelogtext": [1082, RPM_STRING_ARRAY, None, 0],
@@ -323,15 +325,12 @@ rpmtag = {
     "buildtime": [1006, RPM_INT32, 1, 0], # time of rpm build
     "buildhost": [1007, RPM_STRING, None, 0], # hostname where rpm was built
     "cookie": [1094, RPM_STRING, None, 0], # build host and time
-    # ignored now, successor is comps.xml
-    "group": [1016, RPM_GROUP, None, 0],
+    "group": [1016, RPM_GROUP, None, 0], # comps.xml is used now
     "size": [1009, RPM_INT32, 1, 0],                # sum of all file sizes
     "distribution": [1010, RPM_STRING, None, 0],
     "vendor": [1011, RPM_STRING, None, 0],
     "packager": [1015, RPM_STRING, None, 0],
     "os": [1021, RPM_STRING, None, 0],              # always "linux"
-    "payloadformat": [1124, RPM_STRING, None, 0],   # "cpio"
-    "payloadcompressor": [1125, RPM_STRING, None, 0],# "gzip" or "bzip2"
     "payloadflags": [1126, RPM_STRING, None, 0],    # "9"
     "rhnplatform": [1131, RPM_STRING, None, 4],     # == arch
     "platform": [1132, RPM_STRING, None, 0],
@@ -359,6 +358,7 @@ rpmtag = {
     "filerdevs": [1033, RPM_INT16, None, 0],
     "filelinktos": [1036, RPM_STRING_ARRAY, None, 0],
     "fileflags": [1037, RPM_INT32, None, 0],
+    # less common used data:
     "fileverifyflags": [1045, RPM_INT32, None, 0],
     "filelangs": [1097, RPM_STRING_ARRAY, None, 0],
     "filecolors": [1140, RPM_INT32, None, 0],
@@ -367,10 +367,10 @@ rpmtag = {
     "filedependsn": [1144, RPM_INT32, None, 0],
     "classdict": [1142, RPM_STRING_ARRAY, None, 0],
     "dependsdict": [1145, RPM_INT32, None, 0],
-
-    # tags not in Fedora Core development trees anymore:
     # XXX: this tag shows up again, disable the check for now:
     "filecontexts": [1147, RPM_STRING_ARRAY, None, 0], # selinux filecontexts
+
+    # tags not in Fedora Core development trees anymore:
     "capability": [1105, RPM_INT32, None, 1],
     "xpm": [1013, RPM_BIN, None, 1],
     "gif": [1012, RPM_BIN, None, 1],
@@ -446,7 +446,8 @@ rpmsigtagrequired = ("md5",)
 # check arch names against this list
 possible_archs = {"noarch":1, "i386":1, "i486":1, "i586":1, "i686":1,
     "athlon":1, "pentium3":1, "pentium4":1, "x86_64":1, "ia32e":1, "ia64":1,
-    "alpha":1, "axp":1, "sparc":1, "sparc64":1, "s390":1, "s390x":1, "ia64":1,
+    "alpha":1, "alphaev6":1, "axp":1, "sparc":1, "sparc64":1,
+    "s390":1, "s390x":1, "ia64":1,
     "ppc":1, "ppc64":1, "ppc64iseries":1, "ppc64pseries":1, "ppcpseries":1,
     "ppciseries":1, "ppcmac":1, "ppc8260":1, "m68k":1,
     "arm":1, "armv4l":1, "mips":1, "mipseb":1, "mipsel":1, "hppa":1, "sh":1 }
@@ -474,6 +475,13 @@ def isCommentOnly(script):
     return 1
 
 
+def parseFile(filename):
+    rethash = {}
+    for l in open(filename, "r").readlines():
+        tmp = l.split(":")
+        rethash[tmp[0]] = int(tmp[2])
+    return rethash
+
 class UGid:
     """Store a list of user- and groupnames and transform them in uids/gids."""
 
@@ -492,11 +500,29 @@ class UGid:
             ids.append(self.ugid[name])
         return ids
 
-    def transform(self):
+    def transform(self, chroot):
         pass
 
 class Uid(UGid):
-    def transform(self):
+    def transform(self, chroot):
+        # "uid=0" if no /etc/passwd exists at all.
+        if not os.path.isfile(chroot + "/etc/passwd"):
+            for uid in self.ugid.keys():
+                self.ugid[uid] = 0
+                if uid != "root":
+                    print "warning: user %s not found, using uid 0" % uid
+            return
+        # Parse /etc/passwd if glibc is not yet installed.
+        if chroot or not os.path.isfile(chroot + "/sbin/ldconfig"):
+            uidhash = parseFile(chroot + "/etc/passwd")
+            for uid in self.ugid.keys():
+                if uidhash.has_key(uid):
+                    self.ugid[uid] = uidhash[uid]
+                else:
+                    print "warning: user %s not found, using uid 0" % uid
+                    self.ugid[uid] = 0
+            return
+        # Normal lookup of users via glibc.
         for uid in self.ugid.keys():
             if uid == "root":
                 self.ugid[uid] = 0
@@ -508,7 +534,25 @@ class Uid(UGid):
                     self.ugid[uid] = 0
 
 class Gid(UGid):
-    def transform(self):
+    def transform(self, chroot):
+        # "gid=0" if no /etc/group exists at all.
+        if not os.path.isfile(chroot + "/etc/group"):
+            for gid in self.ugid.keys():
+                self.ugid[gid] = 0
+                if gid != "root":
+                    print "warning: group %s not found, using gid 0" % gid
+            return
+        # Parse /etc/group if glibc is not yet installed.
+        if chroot or not os.path.isfile(chroot + "/sbin/ldconfig"):
+            gidhash = parseFile(chroot + "/etc/group")
+            for gid in self.ugid.keys():
+                if gidhash.has_key(gid):
+                    self.ugid[gid] = gidhash[gid]
+                else:
+                    print "warning: group %s not found, using gid 0" % gid
+                    self.ugid[gid] = 0
+            return
+        # Normal lookup of users via glibc.
         for gid in self.ugid.keys():
             if gid == "root":
                 self.ugid[gid] = 0
@@ -533,7 +577,7 @@ class CPIO:
     def printErr(self, err):
         print "%s: %s" % ("cpio-header", err)
 
-    def readDataPad(self, size, pad=0):
+    def __readDataPad(self, size, pad=0):
         data = self.fd.read(size)
         pad = (4 - ((size + pad) % 4)) % 4
         self.fd.read(pad)
@@ -550,7 +594,7 @@ class CPIO:
         # CPIO ASCII hex, expanded device numbers (070702 with CRC)
         if data[0:6] not in ("070701", "070702"):
             raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
-        filename = self.readDataPad(int(data[94:102], 16), 110).rstrip("\x00")
+        filename = self.__readDataPad(int(data[94:102], 16), 110).rstrip("\x00")
         if filename == "TRAILER!!!":
             return None
         if filename.startswith("./"):
@@ -568,7 +612,7 @@ class CPIO:
             # can be hardlinks or they can be wrongly packaged rpms.
             if self.strict and filename != os.path.normpath(filename):
                 self.printErr("failed: normpath(%s)" % filename)
-        # XXX: Do not even parse the below items, data should always be used
+        # Do not even parse the below items, data should always be used
         # from rpm tags as too many items in the cpio header have been broken
         # in older rpm packages. Maybe leave it for the strict case, delete
         # it otherwise.
@@ -589,7 +633,7 @@ class CPIO:
             files.append(filedata)
             # XXX reading the data should be done with streaming
             # It will then move into verifyCpio()
-            data = self.readDataPad(filedata[5])
+            data = self.__readDataPad(filedata[5])
             func(filedata, data, filenamehash, devinode)
         return None
 
@@ -639,7 +683,7 @@ class ReadRpm:
     def raiseErr(self, err):
         raise ValueError, "%s: %s" % (self.filename, err)
 
-    def openFd(self, offset=None):
+    def __openFd(self, offset=None):
         if not self.fd:
             try:
                 self.fd = open(self.filename, "ro")
@@ -800,7 +844,7 @@ class ReadRpm:
         return hdr
 
     def readHeader(self, sigtags, hdrtags, keepdata=None):
-        if self.openFd():
+        if self.__openFd():
             return 1
         leaddata = self.fd.read(96)
         if leaddata[:4] != "\xed\xab\xee\xdb":
@@ -832,7 +876,7 @@ class ReadRpm:
         self.has_key = self.hdr.has_key
         self.__repr__ = self.hdr.__repr__
         if self.verify:
-            self.doVerify()
+            self.__doVerify()
         return None
 
     def verifyCpio(self, filedata, data, filenamehash, devinode):
@@ -903,7 +947,7 @@ class ReadRpm:
         return []
 
     def readPayload(self, func):
-        self.openFd(96 + self.sigdatasize + self.hdrdatasize)
+        self.__openFd(96 + self.sigdatasize + self.hdrdatasize)
         devinode = {}     # this will contain possibly hardlinked files
         filenamehash = {} # full filename of all files
         filenames = self.getFilenames()
@@ -926,17 +970,20 @@ class ReadRpm:
         # sanity check hardlinks
         if self.verify:
             for hardlinks in devinode.values():
-                for i in xrange(len(hardlinks) - 1):
-                    j = hardlinks[i]
-                    k = hardlinks[i + 1]
+                j = hardlinks[0]
+                mode = self["filemodes"][j]
+                mtime = self["filemtimes"][j]
+                size = self["filesizes"][j]
+                md5 = self["filemd5s"][j]
+                for j in hardlinks[1:]:
                     # dev/inode are already guaranteed to be the same
-                    if self["filemodes"][j] != self["filemodes"][k]:
-                        self.raiseErr("mmodes differ for hardlink")
-                    if self["filemtimes"][j] != self["filemtimes"][k]:
+                    if self["filemodes"][j] != mode:
+                        self.raiseErr("modes differ for hardlink")
+                    if self["filemtimes"][j] != mtime:
                         self.raiseErr("mtimes differ for hardlink")
-                    if self["filesizes"][j] != self["filesizes"][k]:
+                    if self["filesizes"][j] != size:
                         self.raiseErr("sizes differ for hardlink")
-                    if self["filemd5s"][j] != self["filemd5s"][k]:
+                    if self["filemd5s"][j] != md5:
                         self.raiseErr("md5s differ for hardlink")
         cpiosize = None
         if self.verify:
@@ -997,7 +1044,7 @@ class ReadRpm:
         return "%s-%s-%s.%s.rpm" % (self["name"], self["version"],
             self["release"], self["arch"])
 
-    def verifyDeps(self, name, flags, version):
+    def __verifyDeps(self, name, flags, version):
         n = self[name]
         f = self[flags]
         v = self[version]
@@ -1028,28 +1075,20 @@ class ReadRpm:
 
     def getProvides(self):
         provs = self.__getDeps("providename", "provideflags", "provideversion")
-        if self.issrc:
-            return provs
-        ver = self["rpmversion"]
-        # AS2.1 still has compat rpms which need this:
-        if ver != None and ver[:4] < "4.3.":
-            mydep = (self["name"], RPMSENSE_EQUAL, self.getEVR())
-            if mydep not in provs:
-                provs.append(mydep)
-        if self.verify:
-            mydep = (self["name"], RPMSENSE_EQUAL, self.getEVR())
-            if mydep not in provs:
-                self.printErr("no provides for own rpm package, rpm=%s" % ver)
+        if not self.issrc:
+            provs.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
         return provs
 
     def getRequires(self):
         return self.__getDeps("requirename", "requireflags", "requireversion")
 
     def getObsoletes(self):
-        return self.__getDeps("obsoletename", "obsoleteflags", "obsoleteversion")
+        return self.__getDeps("obsoletename", "obsoleteflags",
+            "obsoleteversion")
 
     def getConflicts(self):
-        return self.__getDeps("conflictname", "conflictflags", "conflictversion")
+        return self.__getDeps("conflictname", "conflictflags",
+            "conflictversion")
 
     def getTriggers(self):
         deps = self.__getDeps("triggername", "triggerflags", "triggerversion")
@@ -1074,7 +1113,8 @@ class ReadRpm:
         return [(n, f, v, progs.pop(0), scripts.pop(0)) for (n, f, v) in deps]
 
     def buildFileNames(self):
-        """This function should go away: Returns (dir, filename, linksto, flags)."""
+        """This function should go away: Returns (dir, filename, linksto,
+        flags)."""
         if self["filemodes"] == None: # detect empty filelist
             return []
         # XXX We loose the class data here completely, move this stuff
@@ -1098,7 +1138,7 @@ class ReadRpm:
                    self["filesizes"], self["filemd5s"],
                    self["filelinktos"], self["filerdevs"])
 
-    def doVerify(self):
+    def __doVerify(self):
         for i in rpmsigtagrequired:
             if not self.sig.has_key(i):
                 self.printErr("sig header is missing: %s" % i)
@@ -1204,8 +1244,17 @@ class ReadRpm:
             ("obsoletename", "obsoleteflags", "obsoleteversion"),
             ("conflictname", "conflictflags", "conflictversion"),
             ("triggername", "triggerflags", "triggerversion")):
-            self.verifyDeps(n, f, v)
-        self.getProvides()
+            self.__verifyDeps(n, f, v)
+        if not self.issrc:
+            provs = self.__getDeps("providename", "provideflags",
+                "provideversion")
+            mydep = (self["name"], RPMSENSE_EQUAL, self.getEVR())
+            ver = self["rpmversion"]
+            # AS2.1 still has compat rpms which need this:
+            if ver != None and ver[:4] < "4.3." and mydep not in provs:
+                provs.append(mydep)
+            if mydep not in provs:
+                self.printErr("no provides for own rpm package, rpm=%s" % ver)
         self.getTriggers()
 
         # check file* tags to be consistent:
