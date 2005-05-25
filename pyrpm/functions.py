@@ -504,26 +504,29 @@ def parseYumOptions(argv, yum):
     # repo dirs. If it is specified in the config file we use that though (as
     # expected)
     if os.path.isfile(rpmconfig.yumconf):
-        conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, rpmconfig.yumconf, "")
-        for key in conf.vars.keys():
-            if key == "main":
-                pass
-            else:
-                sec = conf[key]
-                if not sec.has_key("baseurl"):
-                    printError("%s: No baseurl for this section in conf file." % key)
-                    sys.exit(1)
-                baseurl = sec["baseurl"][0]
-                if not sec.has_key("exclude"):
-                    excludes = ""
-                else:
-                    excludes = sec["exclude"]
-                yum.addRepo(baseurl, excludes, key)
-                if rpmconfig.compsfile == None:
-                    rpmconfig.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
+        addRepo(yum, rpmconfig.yumconf)
     else:
-        printWarning(0, "Couldn't find given yum config file, skipping read of repos")
+        printWarning(1, "Couldn't find given yum config file, skipping read of repos")
     return args
+
+def addRepo(yum, file):
+    conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, file, "")
+    for key in conf.vars.keys():
+        if key == "main":
+            pass
+        else:
+            sec = conf[key]
+            if not sec.has_key("baseurl"):
+                printError("%s: No baseurl for this section in conf file." % key)
+                sys.exit(1)
+            baseurl = sec["baseurl"][0]
+            if not sec.has_key("exclude"):
+                excludes = ""
+            else:
+                excludes = sec["exclude"]
+            yum.addRepo(baseurl, excludes, key)
+            if rpmconfig.compsfile == None:
+                rpmconfig.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
 
 
 # Error handling functions

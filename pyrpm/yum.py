@@ -83,8 +83,11 @@ class RpmYum:
         self.pydb = RpmPyDB(self.config, self.config.dbpath,
                             self.config.buildroot)
         self.pydb.read()
-        self.__generateObsoletesList()
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
+        self.runArgs(args)
+
+    def runArgs(self, args):
+        self.__generateObsoletesList()
         # If we do a group operation handle it accordingly
         if self.command.startswith("group"):
             if self.config.compsfile == None:
