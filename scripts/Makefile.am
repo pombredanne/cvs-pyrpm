@@ -1,5 +1,5 @@
-scripts = oldpyrpm.py pyrpmcheck pyrpmcreaterepo pyrpmdb2rpmdb pyrpminstall pyrpmspecinfo pyrpmyum \
-	rpmdb2pyrpmdb
+scripts = oldpyrpm.py pyrpmcheck pyrpmcheckrepo pyrpmcreaterepo pyrpmdb2rpmdb \
+	pyrpminstall pyrpmspecinfo pyrpmyum rpmdb2pyrpmdb
 EXTRA_DIST = $(scripts)
 bin_SCRIPTS = $(scripts)
 
