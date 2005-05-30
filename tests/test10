@@ -114,8 +114,8 @@ baseurl=file://$FEDORA/updates/$1/$ARCH/
 EOF
 }
 
-#DATA=/mnt/data/karsten
-DATA=/mnt/data/laroche
+DATA=/mnt/data/karsten
+#DATA=/mnt/data/laroche
 
 
 RELEASED=/mnt/raid/redhat/released
@@ -302,7 +302,7 @@ function fc3extraspyrpmyum() {
 
 function fileconflicts() {
     echo "Running $FUNCNAME check on $ARCH"
-    PYRPMYUM="./pyrpmyum -y --servicehack --quiet"
+    PYRPMYUM="./pyrpmyum -y --quiet"
     # Fileconflict tests
 #        genyumconf 3 $IN withbase
     for i in 1 2 3 4 5 development; do
@@ -315,19 +315,19 @@ function fileconflicts() {
             continue 
         fi
         IN=$DATA/FC${i}-fileconflicts-$ARCH
-        echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR" | tee $IN.LOG
-        { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR; } 2>&1 | tee -a $IN.LOG
+        echo "$PYRPMYUM --test --arch $ARCH --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR" | tee $IN.LOG
+        { time $PYRPMYUM --test ---arch $ARCH -fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR; } 2>&1 | tee -a $IN.LOG
         if [ -d $DIR/updates/$i/$ARCH ]; then
-            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH" | tee -a $IN.LOG
-            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+            echo "$PYRPMYUM --test ---arch $ARCH -fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH" | tee -a $IN.LOG
+            { time $PYRPMYUM --test ---arch $ARCH -fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
         fi
         if [ -d $DIR/updates/testing/$i/$ARCH ]; then
-            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH" | tee -a $IN.LOG
-            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+            echo "$PYRPMYUM --test ---arch $ARCH -fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH" | tee -a $IN.LOG
+            { time $PYRPMYUM --test ---arch $ARCH -fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
         fi
         if [ -d $DIR/../fedora-extras/$i/$ARCH ]; then
-            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH" | tee -a $IN.LOG
-            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+            echo "$PYRPMYUM --test ---arch $ARCH -fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH" | tee -a $IN.LOG
+            { time $PYRPMYUM --test ---arch $ARCH -fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
         fi
     done
 }
