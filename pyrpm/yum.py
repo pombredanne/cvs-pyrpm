@@ -87,6 +87,8 @@ class RpmYum:
         self.runArgs(args)
 
     def runArgs(self, args):
+        if self.config.timer:
+            time1 = clock()
         self.__generateObsoletesList()
         # If we do a group operation handle it accordingly
         if self.command.startswith("group"):
