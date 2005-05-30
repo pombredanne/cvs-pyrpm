@@ -318,16 +318,16 @@ function fileconflicts() {
         echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR" | tee $IN.LOG
         { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR; } 2>&1 | tee -a $IN.LOG
         if [ -d $DIR/updates/$i/$ARCH ]; then
-            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH" | tee -a $IN.LOG
-            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH" | tee -a $IN.LOG
+            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
         fi
         if [ -d $DIR/updates/testing/$i/$ARCH ]; then
-            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH" | tee -a $IN.LOG
-            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH" | tee -a $IN.LOG
+            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
         fi
         if [ -d $DIR/../fedora-extras/$i/$ARCH ]; then
-            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH" | tee -a $IN.LOG
-            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH" | tee -a $IN.LOG
+            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
         fi
     done
 }
@@ -383,15 +383,15 @@ function fc3todevelupdatecheck() {
     IN=$DATA
     ARCHS=""
     for i in i386 x86_64 ia64 ppc ppc64 s390 s390x; do
-        if [ -d /mnt/raid/fedora/3/$i -a -d /mnt/raid/fedora/development/$i ]; then
+        if [ -d /mnt/raid/fedora/3/$i/os/Fedora/RPMS/ -a -d /mnt/raid/fedora/development/$i ]; then
             logfile=$IN/CHECKUPDATE-FC-devel-$i
-            $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i update /mnt/raid/fedora/development/$i | tee $logfile
+            $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i/os/Fedora/RPMS/ update /mnt/raid/fedora/development/$i | tee $logfile
             if [ -d /mnt/raid/fedora/updates/3/$i ]; then
                 logfile=${logfile}-updates
-                $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i /mnt/raid/fedora/updates/3/$i update /mnt/raid/fedora/development/$i | tee $logfile
+                $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i/os/Fedora/RPMS/ /mnt/raid/fedora/updates/3/$i update /mnt/raid/fedora/development/$i | tee $logfile
                 if [ -d /mnt/raid/fedora/updates/testing/3/$i ]; then
                     logfile=${logfile}-testing
-                    $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i /mnt/raid/fedora/updates/3/$i /mnt/raid/fedora/updates/testing/3/$i update /mnt/raid/fedora/development/$i | tee $logfile
+                    $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i/os/Fedora/RPMS/ /mnt/raid/fedora/updates/3/$i /mnt/raid/fedora/updates/testing/3/$i update /mnt/raid/fedora/development/$i | tee $logfile
                 fi
             fi
         fi
