@@ -179,7 +179,10 @@ class RpmResolver(RpmList):
                 fmt = "%s obsoletes installed %s, removing %s"
             else:
                 fmt = "%s obsoletes added %s, removing %s"
-            self.config.printWarning(1, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()))
+            if self.config.test:
+                self.config.printInfo(0, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()+"\n"))
+            else:
+                self.config.printWarning(1, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()))
             if self._pkgObsolete(pkg, r) != self.OK:
                 return self.OBSOLETE_FAILED
 
