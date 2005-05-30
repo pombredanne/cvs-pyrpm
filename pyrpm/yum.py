@@ -84,6 +84,8 @@ class RpmYum:
                             self.config.buildroot)
         self.pydb.read()
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
+        if self.config.timer:
+            self.config.printInfo(0, "processArgs() took %s seconds\n" % (clock() - time1))
         self.runArgs(args)
 
     def runArgs(self, args):
@@ -147,13 +149,13 @@ class RpmYum:
                     if len(self.pkgs) == 0:
                         self.config.printError("Couldn't find package %s, skipping" % f)
         if self.config.timer:
-            self.config.printInfo(0, "processArgs() took %s seconds\n" % (clock() - time1))
+            self.config.printInfo(0, "runArgs() took %s seconds\n" % (clock() - time1))
 
     def runDepRes(self):
         if self.config.timer:
             time1 = clock()
         # Add packages to be processed to our operation resolver
-        self.pkgs = self.__selectNewestPkgs(self.pkgs)
+        self.pkgs = selectNewestPkgs(self.pkgs)
         for pkg in self.pkgs:
             self.__appendPkg(pkg)
             if  self.command.endswith("update") or \
@@ -202,21 +204,6 @@ class RpmYum:
             for pkg in repo.getList():
                 if pkg.has_key("obsoletes"):
                     self.__obsoleteslist.append(pkg)
-
-    def __selectNewestPkgs(self, pkglist):
-        rethash = {}
-        for pkg in pkglist:
-            key = pkg["name"]+"."+buildarchtranslate[pkg["arch"]]
-            if not rethash.has_key(key):
-                rethash[key] = pkg
-            else:
-                ret = pkgCompare(rethash[key], pkg)
-                if   ret < 0:
-                    rethash[key] = pkg
-                elif ret == 0 and \
-                     rethash[key]["arch"] in arch_compats[pkg["arch"]]:
-                    rethash[key] = pkg
-        return rethash.values()
 
     def __appendPkg(self, pkg):
         if   self.command.endswith("install"):

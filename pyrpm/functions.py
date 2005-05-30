@@ -528,6 +528,41 @@ def addRepo(yum, file):
             if rpmconfig.compsfile == None:
                 rpmconfig.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
 
+def selectNewestPkgs(pkglist):
+    """Filter the newest packages from given list and return new list"""
+    rethash = {}
+    for pkg in pkglist:
+        key1 = pkg["name"]+".noarch"
+        key2 = pkg["name"]+"."+buildarchtranslate[pkg["arch"]]
+        if not rethash.has_key(key1):
+            rethash[key1] = pkg
+            rethash[key2] = pkg
+            continue
+        opkg = rethash[key1]
+        key3 = opkg["name"]+"."+buildarchtranslate[opkg["arch"]]
+        ret = pkgCompare(opkg, pkg)
+        if   ret < 0:
+            try:
+                del rethash[key3]
+            except:
+                pass
+            rethash[key1] = pkg
+            rethash[key2] = pkg
+        elif ret == 0 and \
+             opkg["arch"] in arch_compats[pkg["arch"]]:
+            try:
+                del rethash[key3]
+            except:
+                pass
+            rethash[key1] = pkg
+            rethash[key2] = pkg
+    for key in rethash.keys():
+        if key.endswith(".noarch") and rethash[key]["arch"] != "noarch":
+            try:
+                del rethash[key]
+            except:
+                pass
+    return rethash.values()
 
 # Error handling functions
 def printDebug(level, msg):

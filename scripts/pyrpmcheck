@@ -32,27 +32,13 @@ pyrpmcheck [--nodir] [--noprovides] [--nosymlinks] [-h, --help] [-v, --verbose] 
 --nodir:      Deactivates the directory check
 --noprovides: Deactivates the provides check
 --nosymlinks: Deactivates the symlinks check
+--overlap:    Activates the overlap check for all dirs
 """
 
 
 # Tags which will be read from the rpms. CHANGE HERE IF SOME TESTS NEED MORE
 # tags!!!!
 rtags = ("name", "epoch", "version", "release", "arch", "dirindexes", "dirnames", "basenames", "fileusername", "filegroupname", "filemodes", "filelinktos", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion")
-
-def selectNewestPkgs(pkglist):
-    rethash = {}
-    for pkg in pkglist:
-        key = pkg["name"]+"."+buildarchtranslate[pkg["arch"]]
-        if not rethash.has_key(key):
-            rethash[key] = pkg
-        else:
-            ret = pkgCompare(rethash[key], pkg)
-            if   ret < 0:
-                rethash[key] = pkg
-            elif ret == 0 and \
-                 rethash[key]["arch"] in arch_compats[pkg["arch"]]:
-                rethash[key] = pkg
-    return rethash.values()
 
 def readDir(dir, list):
     files = os.listdir(dir)
@@ -72,10 +58,19 @@ def readDir(dir, list):
             rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())
             list.append(pkg)
 
-
 #
 # Put more check functions here
 #
+def checkOverlap(list):
+    """Check for overlapping packages between different repos."""
+    name_hash = {}
+    for plist in list:
+        for pkg in plist:
+            name = pkg["name"]
+            if name_hash.has_key(name):
+                print "%s: Package in more than one repo" % name
+            name_hash[name] = 1
+
 def checkDirs(list):
     """Check if any two dirs in a repository differ in user/group/mode."""
     dirs = {}
@@ -174,6 +169,7 @@ def checkSymlinks(list):
 # Main program
 #
 def main():
+    nooverlap = 1
     nodir = 0
     noprovides = 0
     nosymlinks = 0
@@ -181,7 +177,7 @@ def main():
     # Argument parsing
     try:
       opts, args = getopt.getopt(sys.argv[1:], "?v",
-        ["nodir", "noprovides", "nosymlinks", "help", "verbose"])
+        ["nodir", "noprovides", "nosymlinks", "overlap", "help", "verbose"])
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
         usage()
@@ -200,6 +196,8 @@ def main():
             noprovides = 1
         elif opt == "--nosymlinks":
             nosymlinks = 1
+        elif opt == "--overlap":
+            nooverlap = 0
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1
@@ -211,16 +209,25 @@ def main():
         usage()
         sys.exit(1)
 
-    pkg_list = []
+    repo_list = []
     for arg in args:
+        repo = []
         if   os.path.isdir(arg):
-            readDir(arg, pkg_list)
+            readDir(arg, repo)
         elif arg.endswith(".rpm"):
             try:
-                pkg_list.append(readRpmPackage(rpmconfig, arg, tags=rtags))
+                repo.append(readRpmPackage(rpmconfig, arg, tags=rtags))
             except (IOError, ValueError), e:
                 sys.stderr.write("%s: %s\n" % (arg, e))
+        repo = selectNewestPkgs(repo)
+        repo_list.append(repo)
 
+    if not nooverlap:
+        checkOverlap(repo_list)
+
+    pkg_list = []
+    for plist in repo_list:
+        pkg_list.extend(plist)
     pkg_list = selectNewestPkgs(pkg_list)
 
     if not nodir:
