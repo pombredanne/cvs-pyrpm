@@ -114,8 +114,8 @@ baseurl=file://$FEDORA/updates/$1/$ARCH/
 EOF
 }
 
+#DATA=/mnt/data/karsten
 DATA=/mnt/data/laroche
-#DATA=/tmp/karsten
 
 
 RELEASED=/mnt/raid/redhat/released
@@ -127,6 +127,7 @@ DIR="$FEDORA"
 RPMS=RedHat/RPMS
 PYRPMYUM="./pyrpmyum -y --autoerase --servicehack --quiet"
 CHECKRPM="./pyrpmcheck"
+CHECKUPDATE="./pyrpmcheckrepo --quiet"
 # Specify if updates to newer releases should be done.
 RELEASEUPDATE=1
 
@@ -288,33 +289,20 @@ function rhel4tou1pyrpmyum() {
  
 function fc3extraspyrpmyum() {
     # Fedora Core 3 with extras
+    PYRPMYUM="./pyrpmyum -y --servicehack --quiet"
     echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/FC3-with-extras-$ARCH
-    cleanchroot $IN
-    preparechroot $IN
-    genyumconf 3 $IN withbase
-    # Raw FC3 install
-    echo "$PYRPMYUM -r $IN -c $IN/etc/yum.conf install \"*\"" | tee $IN.LOG
-    { time $PYRPMYUM -r $IN -c $IN/etc/yum.conf install "*"; } 2>&1 | tee -a $IN.LOG
-    # Install FC3 extras
-    echo "$PYRPMYUM -r $IN -c $IN/etc/nosuchfile.conf install $EXTRAS/3/$ARCH/" | tee $IN.LOG.1
-    { time $PYRPMYUM -r $IN -c $IN/etc/nosuchfile.conf install $EXTRAS/3/$ARCH/; } 2>&1 | tee -a $IN.LOG.1
-    # Update FC3 to updates
-    echo "$PYRPMYUM -r $IN -c $IN/etc/nosuchfile.conf update $FEDORA/updates/3/$ARCH" | tee $IN.LOG.2
-    { time $PYRPMYUM -r $IN -c $IN/etc/nosuchfile.conf update $FEDORA/updates/3/$ARCH ; } 2>&1 | tee -a $IN.LOG.2
-    # Update FC3 to testing
-    echo "$PYRPMYUM -r $IN -c $IN/etc/nosuchfile.conf update $FEDORA/updates/testing/3/$ARCH $EXTRAS/testing/3/$ARCH" | tee $IN.LOG.3
-    { time $PYRPMYUM -r $IN -c $IN/etc/nosuchfile.conf update $FEDORA/updates/testing/3/$ARCH $EXTRAS/testing/3/$ARCH; } 2>&1 | tee -a $IN.LOG.3
-    if test $RELEASEUPDATE = 1 ; then
-        # Update to FC-development
-        echo "$PYRPMYUM -r $IN -c $IN/etc/nosuchfile.conf upgrade $FEDORA/development/$ARCH/Fedora/RPMS $EXTRAS/development/$ARCH/" | tee $IN.LOG.4
-        { time $PYRPMYUM -r $IN -c $IN/etc/nosuchfile.conf upgrade $FEDORA/development/$ARCH/Fedora/RPMS $EXTRAS/development/$ARCH/; } 2>&1 | tee -a $IN.LOG.4
-    fi
-    cleanchroot $IN
+    # --test FC3 install with updates and Extras
+    echo "$PYRPMYUM --test --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $EXTRAS/3/$ARCH" | tee $IN.LOG
+    { time $PYRPMYUM --test --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $EXTRAS/3/$ARCH; } 2>&1 | tee -a $IN.LOG
+    # --test FC3 install with updates, testing and Extras
+    echo "$PYRPMYUM --test --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $FEDORA/testing/3/$ARCH $EXTRAS/3/$ARCH" | tee $IN-testing.LOG
+    { time $PYRPMYUM --test --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update $FEDORA/3/$ARCH/os/Fedora/RPMS $FEDORA/updates/3/$ARCH $FEDORA/testing/3/$ARCH $EXTRAS/3/$ARCH; } 2>&1 | tee -a $IN-testing.LOG
 }
 
 function fileconflicts() {
     echo "Running $FUNCNAME check on $ARCH"
+    PYRPMYUM="./pyrpmyum -y --servicehack --quiet"
     # Fileconflict tests
 #        genyumconf 3 $IN withbase
     for i in 1 2 3 4 5 development; do
@@ -327,8 +315,6 @@ function fileconflicts() {
             continue 
         fi
         IN=$DATA/FC${i}-fileconflicts-$ARCH
-        cleanchroot $IN
-        preparechroot $IN
         echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR" | tee $IN.LOG
         { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR; } 2>&1 | tee -a $IN.LOG
         if [ -d $DIR/updates/$i/$ARCH ]; then
@@ -339,12 +325,15 @@ function fileconflicts() {
             echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH" | tee -a $IN.LOG
             { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
         fi
-        cleanchroot $IN
+        if [ -d $DIR/../fedora-extras/$i/$ARCH ]; then
+            echo "$PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH" | tee -a $IN.LOG
+            { time $PYRPMYUM --test --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+        fi
     done
 }
 
 function sanitychecks() {
-    # Sanity checks
+    # Sanity checks, each directory (FC/updates/Extras) on its own
     echo "Running $FUNCNAME check on $ARCH"
     IN=$DATA/
     for i in 1 2 3 4 5 development; do
@@ -386,12 +375,77 @@ function sanitychecks() {
                 fi
             done
         done
-        #$CHECKRPM $DIR/$i/$ARCH/os/Fedora/RPMS/ 2>&1 | tee $IN/CHECKRPM-FC-$i-$ARCH
-        #$CHECKRPM $DIR/updates/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-$ARCH
-        #$CHECKRPM $DIR/updates/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-updates-testing-$ARCH
-        #$CHECKRPM $EXTRAS/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-$ARCH
-        #$CHECKRPM $EXTRAS/testing/$i/$ARCH/ 2>&1 | tee $IN/CHECKRPM-FC-$i-extras-testing-$ARCH
     done
+}
+
+function fc3todevelupdatecheck() {
+    # Run FC3 to devel updates on all archs
+    IN=$DATA
+    ARCHS=""
+    for i in i386 x86_64 ia64 ppc ppc64 s390 s390x; do
+        if [ -d /mnt/raid/fedora/3/$i -a -d /mnt/raid/fedora/development/$i ]; then
+            logfile=$IN/CHECKUPDATE-FC-devel-$i
+            $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i update /mnt/raid/fedora/development/$i | tee $logfile
+            if [ -d /mnt/raid/fedora/updates/3/$i ]; then
+                logfile=${logfile}-updates
+                $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i /mnt/raid/fedora/updates/3/$i update /mnt/raid/fedora/development/$i | tee $logfile
+                if [ -d /mnt/raid/fedora/updates/testing/3/$i ]; then
+                    logfile=${logfile}-testing
+                    $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i /mnt/raid/fedora/updates/3/$i /mnt/raid/fedora/updates/testing/3/$i update /mnt/raid/fedora/development/$i | tee $logfile
+                fi
+            fi
+        fi
+    done
+}
+
+function fcsanitychecks() {
+    # Sanity checks, FC, FC+Updates, FC+Updates+Testing
+    echo "Running $FUNCNAME check on $ARCH"
+    IN=$DATA/
+    for i in 1 2 3 4 5; do
+        for dir in \
+            "$dist-$i/$ARCH/Fedora/RPMS" \
+            "$dist-$i/GOLD/$ARCH/Fedora/RPMS" \
+            "$dist-$i/GOLD/$ARCH/tree/Fedora/RPMS" \
+            "GOLD/$ARCH/tree/Fedora/RPMS" \
+            "$ARCH/Fedora/RPMS" \
+            "$ARCH/tree/Fedora/RPMS" \
+            "$i/$ARCH/os/Fedora/RPMS" \
+            "Fedora/RPMS"; do
+            if [ -d "$DIR/$dir" ]; then
+                logfile=$IN/CHECKRPM-FC-${DIR//\//-}
+                logfile=$logfile-${dir//\//-}-$ARCH
+                if [ ! -f "$logfile" ]; then
+                    echo "Checking $DIR/$dir" | tee $logfile
+                    $CHECKRPM --nosymlinks $DIR/$dir 2>&1 | tee -a $logfile
+                    if [ -d "$DIR/updates/$i/$ARCH" ]; then
+                        logfile=$IN/CHECKRPM-FC-updates-${DIR//\//-}
+                        logfile=$logfile-${dir//\//-}-$ARCH
+                        if [ ! -f "$logfile" ]; then
+                            echo "Checking $DIR/$dir and $DIR/updates/$i/$ARCH" | tee $logfile
+                            $CHECKRPM --nosymlinks $DIR/$dir $DIR/updates/$i/$ARCH 2>&1 | tee -a $logfile
+                        fi
+                        if [ -d "$DIR/updates/testing/$i/$ARCH" ]; then
+                            logfile=$IN/CHECKRPM-FC-updates-testing-${DIR//\//-}
+                            logfile=$logfile-${dir//\//-}-$ARCH
+                            if [ ! -f "$logfile" ]; then
+                                echo "Checking $DIR/${dir}, $DIR/updates/$i/$ARCH and $DIR/updates/testing/$i/$ARCH" | tee $logfile
+                                $CHECKRPM --nosymlinks $DIR/$dir $DIR/updates/testing/$i/$ARCH 2>&1 | tee -a $logfile
+                            fi
+                        fi
+                    fi
+                fi
+            fi
+        done
+    done
+    if [ -d "$DIR/development" ]; then
+        logfile=$IN/CHECKRPM-FCdevelopment-${DIR//\//-}
+        logfile=$logfile-${dir//\//-}-$ARCH
+        if [ ! -f "$logfile" ]; then
+            echo "Checking $DIR/development" | tee $logfile
+            $CHECKRPM $DIR/development 2>&1 | tee -a $logfile
+        fi
+    fi
 }
 
 function fc123pyrpmyumyummix() {
@@ -451,7 +505,9 @@ TESTS=( "RHEL3_U3-U5 RHEL4 installtests with pyrpmyum"
         "RHEL-4 update to U1 with pyrpmyum"
         "Fedora Core 3 with extras"
         "Fileconflict tests"
-        "Sanity checks"
+        "Sanity checks, each directory (FC/updates/Extras) on its own"
+        "Sanity checks, FC, FC+Updates, FC+Updates+Testing"
+        "Run FC3 to devel updates on all archs"
         "Fedora Core 1/2/3/devel with yum/pyrpmyum"
         "run all tests (USE WITH CAUTION)"          # leave those two as the last two entries
         "show sources of a test (menu)"             # leave those two as the last two entries
@@ -469,6 +525,8 @@ TESTFUNCTIONS=("rhel34installtests"
                "fc3extraspyrpmyum"
                "fileconflicts"
                "sanitychecks"
+               "fcsanitychecks"
+               "fc3todevelupdatecheck"
                "fc123pyrpmyumyummix"
                "runalltests"            # leave those two as the last two entries
                "showfunction"           # leave those two as the last two entries
@@ -484,6 +542,8 @@ if test x$1 = x--help ; then
     echo "[--dir]                  - only valid for fileconflicts and sanitychecks,"
     echo "                           defines basedir to look for install trees"
     echo "                           p.e. /mnt/raid/fedora/"
+    echo "[--checkfedora]          - runs dependency, fileconflicts, symlink and install tests"
+    echo "                           on FC, FC+updates, FC+updates+testing, FC+updates+extras, FC3->devel"
 
     for i in `seq 0 $numtests`; do 
         echo "[--${TESTFUNCTIONS[$i]}]   (${TESTS[$i]})"
@@ -505,6 +565,9 @@ while [ "$#" != "0" ]; do
         elif [ "$1" == "--arch" ]; then
             ARCHS=$2
             shift
+            shift
+        elif [ "$1" == "--checkfedora" ]; then
+            teststorun="fc3extraspyrpmyum fileconflicts fcsanitychecks fc3todevelupdatecheck"
             shift
         else
             teststorun="$teststorun ${1/--/}"
