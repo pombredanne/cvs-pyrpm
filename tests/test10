@@ -328,6 +328,8 @@ function fileconflicts() {
         if [ -d $DIR/../fedora-extras/$i/$ARCH ]; then
             echo "$PYRPMYUM --test --arch $ARCH --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH" | tee -a $IN.LOG
             { time $PYRPMYUM --test --arch $ARCH --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH; } 2>&1 | tee -a $IN.LOG
+            echo "$PYRPMYUM --test --arch $ARCH --overlap --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/../fedora-extras/$i/$ARCH" | tee $IN-overlap.LOG
+            { time $PYRPMYUM --test --arch $ARCH --overlap --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/../fedora-extras/$i/$ARCH; } 2>&1 | tee -a $IN-overlap.LOG
         fi
     done
 }
