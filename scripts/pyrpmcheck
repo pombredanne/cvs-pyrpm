@@ -64,7 +64,7 @@ def readDir(dir, list):
                 continue
             pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
             try:
-                pkg.read(tags=rtags):
+                pkg.read(tags=rtags)
                 pkg.close()
             except (IOError, ValueError), e:
                 rpmconfig.printError("%s: %s\n" % (pkg, e))
