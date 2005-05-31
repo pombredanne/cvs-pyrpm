@@ -1029,6 +1029,7 @@ best match."""
             ("release", constructName([RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
     pkglist.extend(tagsearch(tags, list, regex))
+    normalizeList(pkglist)
     return pkglist
 
 def findPkgByName(pkgname, list):

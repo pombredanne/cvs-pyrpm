@@ -248,6 +248,13 @@ class RpmYum:
             count += 1
         if not ret1 and not ret2:
             return 1
+        unresolved = self.opresolver.getUnresolvedDependencies()
+        self.config.printInfo("Couldn't resolve all dependencies.\n")
+        for pkg in unresolved.keys():
+            self.config.printInfo(1, "Unresolved dependencies for %s\n" %
+                                     pkg.getNEVRA())
+            for dep in unresolved[pkg]:
+                self.config.printInfo(1, "\t" + depString(dep)+"\n")
         sys.exit(1)
 
     def __handleUnresolvedDeps(self):
@@ -256,11 +263,14 @@ class RpmYum:
         # return 0
         if len(unresolved) == 0:
             return 0
-        # Otherwise get first unresolved dep and try to solve it as long as we
-        # have unresolved deps. :)
+        # Otherwise get first unresolved dep and then try to solve it as long
+        # as we # have unresolved deps. If we fail to resolve a dep we try the
+        # next one until only unresolvable deps remain.
+        ppos = 0
+        dpos = 0
         while len(unresolved) > 0:
-            pkg = unresolved.keys()[0]
-            dep = unresolved[pkg][0]
+            pkg = unresolved.keys()[ppos]
+            dep = unresolved[pkg][dpos]
             self.config.printInfo(1, "Dependency iteration %s\n" % 
                                      str(self.iteration))
             self.iteration += 1
@@ -270,14 +280,18 @@ class RpmYum:
             # deps and do the next internal iteration
             if self.__resolveDep(pkg, dep):
                 unresolved = self.opresolver.getUnresolvedDependencies()
+                ppos = 0
+                dpos = 0
                 continue
-            # End of story: We couldn't resolve this dependency, so we print
-            # it and be done with it.
-            self.config.printInfo(1, "Unresolved dependencies for %s\n" %
-                                     pkg.getNEVRA())
-            for dep in unresolved[pkg]:
-                self.config.printInfo(1, "\t" + depString(dep)+"\n")
-            return 0
+            # Try to find next unresolved dep
+            dpos += 1
+            if dpos >= len(unresolved[pkg]):
+                dpos = 0
+                ppos += 1
+                # End of story: There are no more resolvable unresolved deps,
+                # so we end here.
+                if ppos >= len(unresolved.keys()):
+                    return 0
         return 1
 
     def __resolveDep(self, pkg, dep):
