@@ -397,7 +397,7 @@ function fc3todevelupdatecheck() {
     # Run FC3 to devel updates on all archs
     IN=$DATA
     ARCHS=""
-    for i in i386 x86_64 ia64 ppc ppc64 s390 s390x; do
+    for i in i686 x86_64 ia64 ppc ppc64 s390 s390x; do
         if [ -d /mnt/raid/fedora/3/$i/os/Fedora/RPMS/ -a -d /mnt/raid/fedora/development/$i ]; then
             logfile=$IN/CHECKUPDATE-FC-devel-$i
             $CHECKUPDATE -r $IN --arch $i -c $IN/etc/nosuchfile.conf install /mnt/raid/fedora/3/$i/os/Fedora/RPMS/ update /mnt/raid/fedora/development/$i/Fedora/RPMS | tee $logfile
@@ -558,7 +558,7 @@ numtests=$((numtests-1))
 if test x$1 = x--help ; then
     echo "[--help]                 -   this page"
     echo "[--arch \"arch1 arch2\"]   -   architectures to test,"
-    echo "                                             currently only i386 and x86_64"
+    echo "                                             currently only i686 and x86_64"
     echo "[--dir]                  - only valid for fileconflicts and sanitychecks,"
     echo "                           defines basedir to look for install trees"
     echo "                           p.e. /mnt/raid/fedora/"
