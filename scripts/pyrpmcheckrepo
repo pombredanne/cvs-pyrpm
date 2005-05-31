@@ -97,16 +97,20 @@ def main():
 
     instargs = args[1:pos]
     upargs = args[pos+1:]
-    if os.path.isfile(upargs[0]) and not upargs[0].endswith(".rpm"):
-        addRepo(yum, upargs[0])
-        upargs = upargs[1:]
 
     yum.setCommand("update")
     yum.processArgs(instargs)
     yum.runDepRes()
     yum.runCommand()
 
+    if os.path.isfile(upargs[0]) and not upargs[0].endswith(".rpm"):
+        addRepo(yum, upargs[0])
+        upargs = upargs[1:]
+
     installed = yum.opresolver.getList()
+    for pkg in installed:
+        yum.pydb.addPkg(pkg, 1)
+
     yum.opresolver = RpmResolver(rpmconfig, installed)
     yum.runArgs(upargs)
     yum.runDepRes()

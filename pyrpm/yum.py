@@ -180,6 +180,12 @@ class RpmYum:
         self.config.printInfo(1, "The following operations will now be run:\n")
         for (op, pkg) in ops:
             self.config.printInfo(1, "\t%s %s\n" % (op, pkg.getNEVRA()))
+        i = 0
+        while i < len(self.erase_list):
+            if not pkg in self.opresolver.installed:
+                self.erase_list.pop(i)
+            else:
+                i += 1
         if len(self.erase_list) > 0:
             self.config.printInfo(0, "Warning: Following packages will be automatically removed from your system:\n")
             for pkg in self.erase_list:
@@ -245,7 +251,6 @@ class RpmYum:
         sys.exit(1)
 
     def __handleUnresolvedDeps(self):
-        # Special erase list for unresolvable package dependancies or conflicts
         unresolved = self.opresolver.getUnresolvedDependencies()
         # Check special case first: If we don't do any work here anymore
         # return 0
@@ -254,64 +259,16 @@ class RpmYum:
         # Otherwise get first unresolved dep and try to solve it as long as we
         # have unresolved deps. :)
         while len(unresolved) > 0:
+            pkg = unresolved.keys()[0]
+            dep = unresolved[pkg][0]
             self.config.printInfo(1, "Dependency iteration %s\n" % 
                                      str(self.iteration))
             self.iteration += 1
-            pkg = unresolved.keys()[0]
-            self.config.printInfo(1, "Resolving dependencies for %s\n" %
+            self.config.printInfo(1, "Resolving dependency for %s\n" %
                                      pkg.getNEVRA())
-            # Remove is the easy case: Just remove all packages that have
-            # unresolved deps ;)
-            if self.command.endswith("remove"):
-                self.opresolver.erase(pkg)
-                unresolved = self.opresolver.getUnresolvedDependencies()
-                continue
-            # For all other cases we need to find packages in our repos
-            # that resolve the given dependency
-            pkg_list = [ ]
-            dep = unresolved[pkg][0]
-            self.config.printInfo(2, "\t" + depString(dep) + "\n")
-            for repo in self.resolvers:
-                for upkg in repo.searchDependency(dep):
-                    if upkg in pkg_list:
-                        continue
-                    pkg_list.append(upkg)
-            # Now add the first package that ist not in our erase list or
-            # already in our opresolver to it and check afterwards if
-            # there are any obsoletes for that package and handle them
-            # Order the elements of the potential packages by machine
-            # distance and evr
-            ret = self.__handleUpdatePkglist(pkg, pkg_list)
-            if ret > 0 :
-                unresolved = self.opresolver.getUnresolvedDependencies()
-                continue
-            # Ok, we didn't find any package that could fullfill the
-            # missing deps. Now what we do is we look for updates of that
-            # package in all repos and try to update it.
-            ret = self.__findUpdatePkg(pkg)
-            if ret > 0 :
-                unresolved = self.opresolver.getUnresolvedDependencies()
-                continue
-            # We had left over unresolved deps. If we didn't load the filelists
-            # from the repositories we do so now and try to do more resolving
-            if self.reread == 0:
-                self.config.printWarning(1, "Importing filelist from repositories due to unresolved dependencies")
-                self.resolvers = []
-                for repo in self.repos:
-                    repo.importFilelist()
-                    r = RpmResolver(self.config, repo.getPkgList())
-                    self.resolvers.append(r)
-                self.reread = 1
-                self.opresolver.reloadDependencies()
-                unresolved = self.opresolver.getUnresolvedDependencies()
-                continue
-            # OK, left over unresolved deps, but now we already have the
-            # filelists from the repositories. We can now either:
-            #   - Scrap it as we can't update the system without unresolved deps
-            #   - Erase the packages that had unresolved deps (autoerase option)
-            if self.autoerase:
-                self.config.printWarning(1, "Autoerasing package %s due to unresolved symbols." % pkg.getNEVRA())
-                self.__doAutoerase(pkg)
+            # If we were able to resolve this dep in any way we reget the
+            # deps and do the next internal iteration
+            if self.__resolveDep(pkg, dep):
                 unresolved = self.opresolver.getUnresolvedDependencies()
                 continue
             # End of story: We couldn't resolve this dependency, so we print
@@ -322,6 +279,57 @@ class RpmYum:
                 self.config.printInfo(1, "\t" + depString(dep)+"\n")
             return 0
         return 1
+
+    def __resolveDep(self, pkg, dep):
+        # Remove is the easy case: Just remove all packages that have
+        # unresolved deps ;)
+        if self.command.endswith("remove"):
+            self.opresolver.erase(pkg)
+            return 1
+        # For all other cases we need to find packages in our repos
+        # that resolve the given dependency
+        pkg_list = [ ]
+        self.config.printInfo(2, "\t" + depString(dep) + "\n")
+        for repo in self.resolvers:
+            for upkg in repo.searchDependency(dep):
+                if upkg in pkg_list:
+                    continue
+                pkg_list.append(upkg)
+        # Now add the first package that ist not in our erase list or
+        # already in our opresolver to it and check afterwards if
+        # there are any obsoletes for that package and handle them
+        # Order the elements of the potential packages by machine
+        # distance and evr
+        ret = self.__handleUpdatePkglist(pkg, pkg_list)
+        if ret > 0 :
+            return 1
+        # Ok, we didn't find any package that could fullfill the
+        # missing deps. Now what we do is we look for updates of that
+        # package in all repos and try to update it.
+        ret = self.__findUpdatePkg(pkg)
+        if ret > 0 :
+            return 1
+        # We had left over unresolved deps. If we didn't load the filelists
+        # from the repositories we do so now and try to do more resolving
+        if self.reread == 0:
+            self.config.printWarning(1, "Importing filelist from repositories due to unresolved dependencies")
+            self.resolvers = []
+            for repo in self.repos:
+                repo.importFilelist()
+                r = RpmResolver(self.config, repo.getPkgList())
+                self.resolvers.append(r)
+            self.reread = 1
+            self.opresolver.reloadDependencies()
+            return 1
+        # OK, left over unresolved deps, but now we already have the
+        # filelists from the repositories. We can now either:
+        #   - Scrap it as we can't update the system without unresolved deps
+        #   - Erase the packages that had unresolved deps (autoerase option)
+        if self.autoerase:
+            self.config.printWarning(1, "Autoerasing package %s due to unresolved symbols." % pkg.getNEVRA())
+            self.__doAutoerase(pkg)
+            return 1
+        return 0
 
     def __handleConflicts(self):
         ret = 0
