@@ -562,7 +562,11 @@ def selectNewestPkgs(pkglist):
                 del rethash[key]
             except:
                 pass
-    return rethash.values()
+    retlist = []
+    for pkg in pkglist:
+        if pkg in rethash.values():
+            retlist.append(pkg)
+    return retlist
 
 # Error handling functions
 def printDebug(level, msg):
