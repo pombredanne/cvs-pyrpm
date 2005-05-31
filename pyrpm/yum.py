@@ -182,7 +182,7 @@ class RpmYum:
             self.config.printInfo(1, "\t%s %s\n" % (op, pkg.getNEVRA()))
         i = 0
         while i < len(self.erase_list):
-            if not pkg in self.opresolver.installed:
+            if not pkg in self.pydb.getPkgList():
                 self.erase_list.pop(i)
             else:
                 i += 1
