@@ -186,7 +186,7 @@ class RpmResolver(RpmList):
         return self.OK
     # ----
 
-    def _checkConflict(self, pkg, name, flag, version, arch):
+    def _checkConflict(self, pkg, name, flag, version, arch=None):
         s = self.conflicts.search(name, flag, version, arch)
         if len(s) != 0:
             for r in s:
@@ -204,11 +204,11 @@ class RpmResolver(RpmList):
     def update(self, pkg):
         # check conflicts for provides
         for (name, flag, version) in pkg["provides"]:
-            if self._checkConflict(pkg, name, flag, version):
+            if self._checkConflict(pkg, name, flag, version, pkg["arch"]):
                 return self.CONFLICT
         # check conflicts for filenames
         for f in pkg["filenames"]:
-            if self._checkConflict(pkg, f, 0, ""):
+            if self._checkConflict(pkg, f, 0, "", pkg["arch"]):
                 return self.CONFLICT
 
         # get obsoletes
