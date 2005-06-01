@@ -38,25 +38,31 @@ class ProvidesList:
     def clear(self):
         self.provide = { }
 
+    def _addProvide(self, name, flag, version, rpm):
+        if not self.provide.has_key(name):
+            self.provide[name] = [ ]
+        self.provide[name].append((flag, version, rpm))
+
     def addPkg(self, rpm):
         for (name, flag, version) in rpm["provides"]:
-            if not self.provide.has_key(name):
-                self.provide[name] = [ ]
-            self.provide[name].append((flag, version, rpm))
+            self._addProvide(name, flag, version, rpm)
+
+    def _removeProvide(self, name, flag, version, rpm):
+        provide = self.provide[name]
+        i = 0
+        while i < len(provide):
+            p = provide[i]
+            if p[0] == flag and p[1] == version and p[2] == rpm:
+                provide.pop(i)
+                break
+            else:
+                i += 1
+        if len(provide) == 0:
+            del self.provide[name]
 
     def removePkg(self, rpm):
         for (name, flag, version) in rpm["provides"]:
-            provide = self.provide[name]
-            i = 0
-            while i < len(provide):
-                p = provide[i]
-                if p[0] == flag and p[1] == version and p[2] == rpm:
-                    provide.pop(i)
-                    break
-                else:
-                    i += 1
-            if len(provide) == 0:
-                del self.provide[name]
+            self._removeProvide(name, flag, version, rpm)
 
     def search(self, name, flag, version, arch=None):
         if not self.provide.has_key(name):
@@ -90,6 +96,21 @@ class ProvidesList:
                 ret.pop(i)
 
         return ret
+
+# ----------------------------------------------------------------------------
+
+class ConflictsList(ProvidesList):
+    def addPkg(self, rpm):
+        for (name, flag, version) in rpm["conflicts"]:
+            self._addProvide(name, flag, version, rpm)
+        for (name, flag, version) in rpm["obsoletes"]:
+            self._addProvide(name, flag, version, rpm)
+
+    def removePkg(self, rpm):
+        for (name, flag, version) in rpm["conflicts"]:
+            self._removeProvide(name, flag, version, rpm)
+        for (name, flag, version) in rpm["obsoletes"]:
+            self._removeProvide(name, flag, version, rpm)
 
 # ----------------------------------------------------------------------------
 
@@ -133,6 +154,7 @@ class FilenamesList:
 
 class RpmResolver(RpmList):
     OBSOLETE_FAILED = -10
+    CONFLICT = -10
     # ----
 
     def __init__(self, config, installed):
@@ -140,12 +162,14 @@ class RpmResolver(RpmList):
         check_installed = self.config.checkinstalled
         self.config.checkinstalled = 1
         self.installed_unresolved = self.getUnresolvedDependencies()
+        self.installed_conflicts = self.getConflicts()
         self.config.checkinstalled = check_installed
     # ----
 
     def clear(self):
         RpmList.clear(self)
         self.provides = ProvidesList(self.config)
+        self.conflicts = ConflictsList(self.config)
         self.filenames = FilenamesList(self.config)
         self.obsoletes = { }
         self.installed_unresolved = HashList()
@@ -156,12 +180,38 @@ class RpmResolver(RpmList):
         if ret != self.OK:  return ret
 
         self.provides.addPkg(pkg)
+        self.conflicts.addPkg(pkg)
         self.filenames.addPkg(pkg)
         
         return self.OK
     # ----
 
+    def _checkConflict(self, pkg, name, flag, version, arch):
+        s = self.conflicts.search(name, flag, version, arch)
+        if len(s) != 0:
+            for r in s:
+                if self.isInstalled(r):
+                    fmt = "Installed %s conflicts with %s, skipping %s"
+                else:
+                    fmt = "Added %s conflicts with %s, skipping %s"
+                    self.config.printWarning(1, fmt % (r.getNEVRA(),
+                                                       pkg.getNEVRA(),
+                                                       pkg.getNEVRA()))
+            return 1
+        return 0
+    # ----
+
     def update(self, pkg):
+        # check conflicts for provides
+        for (name, flag, version) in pkg["provides"]:
+            if self._checkConflict(pkg, name, flag, version):
+                return self.CONFLICT
+        # check conflicts for filenames
+        for f in pkg["filenames"]:
+            if self._checkConflict(pkg, f, 0, ""):
+                return self.CONFLICT
+
+        # get obsoletes
         obsoletes = [ ]
         for u in pkg["obsoletes"]:
             s = self.searchDependency(u)
@@ -169,6 +219,7 @@ class RpmResolver(RpmList):
                 if r["name"] != pkg["name"]:
                     obsoletes.append(r)
 
+        # update package
         ret = RpmList.update(self, pkg)
         if ret != self.OK:  return ret
 
@@ -194,6 +245,7 @@ class RpmResolver(RpmList):
         if ret != self.OK:  return ret
 
         self.provides.removePkg(pkg)
+        self.conflicts.removePkg(pkg)
         self.filenames.removePkg(pkg)
 
         if pkg in self.obsoletes:
@@ -424,11 +476,13 @@ class RpmResolver(RpmList):
     
     def reloadDependencies(self):
         self.provides.clear()
+        self.conflicts.clear()
         self.filenames.clear()
 
         for name in self:
             for pkg in self[name]:
                 self.provides.addPkg(pkg)
+                self.conflicts.addPkg(pkg)
                 self.filenames.addPkg(pkg)
 
     # ----
