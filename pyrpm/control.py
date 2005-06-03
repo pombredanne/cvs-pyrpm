@@ -23,6 +23,7 @@ import package
 from resolver import *
 from orderer import *
 
+
 class _Triggers:
     """ enable search of triggers """
     """ triggers of packages can be added and removed by package """
@@ -74,6 +75,7 @@ class RpmController:
         self.operation = operation
         self.db = db
         self.rpms = []
+        self.onlysrpms = 1
         if not self.db.read():
             raiseFatal("Couldn't read database")
 
@@ -159,7 +161,10 @@ class RpmController:
             sys.exit(1)
         self.triggerlist = _Triggers(self.config)
         i = 0
+        self.onlysrpms = 1
         for (op, pkg) in operations:
+            if not pkg.isSourceRPM():
+                self.onlysrpms = 0
             if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
                 self.triggerlist.addPkg(pkg)
                 if pkg.source.startswith("http://"):
@@ -210,7 +215,10 @@ class RpmController:
             else:
                 del operations
                 if self.config.buildroot:
-                    os.chroot(self.config.buildroot)
+                    if self.onlysrpms:
+                        os.chdir(self.config.buildroot)
+                    else:
+                        os.chroot(self.config.buildroot)
                 # We're in a buildroot now, reset the buildroot in the db object
                 self.db.setBuildroot(None)
                 while len(subop) > 0:
@@ -294,13 +302,17 @@ class RpmController:
         return 1
 
     def __addPkgToDB(self, pkg, nowrite=None):
-        return self.db.addPkg(pkg, nowrite)
+        if not pkg.isSourceRPM():
+            return self.db.addPkg(pkg, nowrite)
+        return 1
 
     def __erasePkgFromDB(self, pkg, nowrite=None):
-        return self.db.erasePkg(pkg, nowrite)
+        if not pkg.isSourceRPM():
+            return self.db.erasePkg(pkg, nowrite)
+        return 1
 
     def __runTriggerIn(self, pkg):
-        if self.config.notriggers:
+        if self.config.notriggers or pkg.isSourceRPM():
             return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERIN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
@@ -324,7 +336,7 @@ class RpmController:
         return 1
 
     def __runTriggerUn(self, pkg):
-        if self.config.notriggers:
+        if self.config.notriggers or pkg.isSourceRPM():
             return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
@@ -348,7 +360,7 @@ class RpmController:
         return 1
 
     def __runTriggerPostUn(self, pkg):
-        if self.config.notriggers:
+        if self.config.notriggers or pkg.isSourceRPM():
             return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERPOSTUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts

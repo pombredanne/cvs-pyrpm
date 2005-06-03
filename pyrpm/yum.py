@@ -124,6 +124,7 @@ class RpmYum:
                     self.config.printError("%s: %s" % (f, e))
                     sys.exit(1)
                 if self.config.ignorearch or \
+                   pkg.isSourceRPM() or \
                    archCompat(pkg["arch"], self.config.machine):
                     self.pkgs.append(pkg)
             elif os.path.isdir(f):
@@ -138,6 +139,7 @@ class RpmYum:
                         self.config.printError("%s: %s" % (fn, e))
                         sys.exit(1)
                     if self.config.ignorearch or \
+                       pkg.isSourceRPM() or \
                        archCompat(pkg["arch"], self.config.machine):
                         self.pkgs.append(pkg)
             else:
@@ -154,8 +156,17 @@ class RpmYum:
     def runDepRes(self):
         if self.config.timer:
             time1 = clock()
-        # Add packages to be processed to our operation resolver
+        # "fake" Source RPMS to be noarch rpms without any reqs/deps etc.
+        for pkg in self.pkgs:
+            if pkg.isSourceRPM():
+                pkg["arch"] = "noarch"
+                pkg["requires"] = []
+                pkg["provides"] = []
+                pkg["conflicts"] = []
+                pkg["obsoletes"] = []
+        # Filter newest packages
         self.pkgs = selectNewestPkgs(self.pkgs)
+        # Add packages to be processed to our operation resolver
         for pkg in self.pkgs:
             self.__appendPkg(pkg)
             if  self.command.endswith("update") or \

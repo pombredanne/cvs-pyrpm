@@ -477,6 +477,7 @@ class RpmPackage(RpmData):
         nfiles = len(files)
         n = 0
         pos = 0
+        issrc = self.isSourceRPM()
         if self.config.printhash:
             self.config.printInfo(0, "\r\t\t\t\t\t\t ")
         while filename != "EOF":
@@ -485,7 +486,7 @@ class RpmPackage(RpmData):
             if pos < npos and self.config.printhash:
                 self.config.printInfo(0, "#"*(npos-pos))
             pos = npos
-            if self.isSourceRPM() and filename.startswith("/"):
+            if issrc and filename.startswith("/"):
                 # src.rpm has empty tag "dirnames", but we use absolut paths in
                 # io.read(), so at least the directory '/' is there ...
                 filename = filename[1:]
@@ -493,7 +494,7 @@ class RpmPackage(RpmData):
                 rfi = self.rfilist[filename]
                 if self.__verifyFileInstall(rfi, db):
                     if not rfi.getHardLinkID() in self.hardlinks.keys():
-                        installFile(rfi, cpio, filesize)
+                        installFile(rfi, cpio, filesize, not issrc)
                         # Many scripts have problems like e.g. openssh is
                         # stopping all sshd (also outside of a chroot if
                         # it is de-installed. Real hacky workaround:
@@ -501,7 +502,7 @@ class RpmPackage(RpmData):
                             open("/sbin/service", "wb").write("exit 0\n")
                     else:
                         if filesize > 0:
-                            installFile(rfi, cpio, filesize)
+                            installFile(rfi, cpio, filesize, not issrc)
                             self.__handleHardlinks(rfi)
                 else:
                     cpio.skipToNextFile()
@@ -673,9 +674,10 @@ class RpmPackage(RpmData):
         Raise IOError, OSError."""
         
         keys = self.hardlinks.keys()
+        issrc = self.isSourceRPM()
         for key in keys:
             rfi = self.hardlinks[key][0]
-            installFile(rfi, None, 0)
+            installFile(rfi, None, 0, not issrc)
             self.__handleHardlinks(rfi)
 
     def getRpmFileInfo(self, filename):
@@ -751,6 +753,8 @@ class RpmPackage(RpmData):
     def getNEVRA(self):
         """Return %name-[%epoch:]%version-%release.%arch."""
         
+        if self.isSourceRPM():
+            return "%s.src" % self.getNEVR()
         return "%s.%s" % (self.getNEVR(), self["arch"])
 
     def getProvides(self):

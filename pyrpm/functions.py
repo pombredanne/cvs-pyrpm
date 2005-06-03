@@ -126,7 +126,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
         return 0
     return 1
 
-def installFile(rfi, infd, size):
+def installFile(rfi, infd, size, modsflag=True):
     """Install a file described by RpmFileInfo rfi, with input of given size
     from CPIOFile infd.
 
@@ -147,7 +147,8 @@ def installFile(rfi, infd, size):
                         os.write(fd, data)
             finally:
                 os.close(fd)
-            setFileMods(tmpfilename, rfi.uid, rfi.gid, mode, rfi.mtime)
+            if modsflag:
+                setFileMods(tmpfilename, rfi.uid, rfi.gid, mode, rfi.mtime)
         except (IOError, OSError):
             os.unlink(tmpfilename)
             raise
@@ -155,7 +156,8 @@ def installFile(rfi, infd, size):
     elif S_ISDIR(mode):
         if not os.path.isdir(rfi.filename):
             os.makedirs(rfi.filename)
-        setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
+        if modsflag:
+            setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
     elif S_ISLNK(mode):
         data = infd.read(size)
         symlinkfile = data.rstrip("\x00")
@@ -168,7 +170,8 @@ def installFile(rfi, infd, size):
         except OSError:
             pass
         os.symlink(symlinkfile, rfi.filename)
-        os.lchown(rfi.filename, rfi.uid, rfi.gid)
+        if modsflag:
+            os.lchown(rfi.filename, rfi.uid, rfi.gid)
     elif S_ISFIFO(mode):
         makeDirs(rfi.filename)
         if not os.path.exists(rfi.filename):
@@ -185,7 +188,8 @@ def installFile(rfi, infd, size):
         except OSError:
             pass # FIXME: why?
         try:
-            setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
+            if modsflag:
+                setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
         except OSError:
             os.unlink(rfi.filename)
             raise
@@ -383,7 +387,7 @@ def cacheLocal(url, subdir):
     try:
         f = urlgrab(url, "/var/cache/pyrpm/%s/%s" % 
                     (subdir, os.path.basename(url)),
-                    reget='simple')
+                    reget='check_timestamp')
     except URLGrabError, e:
         # urlgrab fails with invalid range for already completely transfered
         # files, pretty strange to me to be honest... :)
