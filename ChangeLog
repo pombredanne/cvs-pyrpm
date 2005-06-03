@@ -1,3 +1,575 @@
+2005-06-03  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.17, pyrpm/__init__.py 1.21: - release 0.23
+
+2005-06-01  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/resolver.py 1.63:
+	[tw] fogor to add arch in _checkConflict calls
+
+	* pyrpm/resolver.py 1.62:
+	[tw] added per package conflict and obsolete check
+
+2005-05-31  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.89, pyrpm/yum.py 1.45:
+	- Moved printing of unresolved deps to correct place
+	- Implemented new depresolution fix that tries to resolve as many deps as
+	  possible before finally failing
+	- Fixed duplicate packages bug in findPkgByName() for regexp and repos
+
+2005-05-31  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.51: arch must be i686 or the tests will fail (Phil)
+
+2005-05-31  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.44:
+	- Use really the installed package list for the autoerase check :)
+
+	* pyrpm/yum.py 1.43, scripts/pyrpmcheckrepo 1.3:
+	- Restructured dep resolution for upcoming fix
+	- Filter out not installed packages from erase_list for autoerase printing
+	- Fixed pyrpmcheckrepo for real repository use
+
+2005-05-31  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.50: collect output in one big logfile
+
+2005-05-31  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.88:
+	- Fixed the reordering problem for selectNewestPkgs()
+
+2005-05-30  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/resolver.py 1.61:
+	- Print out obsoletes for install/update checks using --test
+
+2005-05-30  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.49: check for package overlaps in FC and FE
+
+	* tests/test10 1.48: typos
+
+	* tests/test10 1.47: - remove --servicehack, not required with --test
+	- use --arch for fileconflicts check
+
+2005-05-30  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.87, pyrpm/yum.py 1.42, scripts/pyrpmcheck 1.12:
+	- Separated selectNewestPkgs() and moved it into functions
+	- Fixed selectNewestPkgs() to work correctly with noarch <-> arch switches
+	- Fixed yum to report new correct timings for processArgs() and runArgs()
+	- Added checkOverlap() test to pyrpmcheck, enable with --overlap option
+
+2005-05-30  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.46: fix path, use update instead of install
+
+	* tests/test10 1.45:
+	- add shortcut --checkfedora to run the 4 most important tests on fedora
+	- check installation of FC+updates FC+updates+testing, FC+updates+FE
+	- check fileconflicts, dependencies, symlinks
+	- run update from FC-3 to FC-devel
+
+	* pyrpm/yum.py 1.41: initialize time1
+
+	* scripts/pyrpmcheck 1.11: typo
+
+2005-05-27  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/Makefile.am 1.8: - scripts/Makefile.am:
+	  - add scripts/pyrpmcheckrepo
+
+2005-05-25  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.86, pyrpm/yum.py 1.40, scripts/pyrpmcheckrepo 1.2, tests/test 1.7:
+	- Separated the addRepo() functionality from processYumConf() into an own
+	  function, needed for pyrpmcheckrepo
+	- Split the processArgs() into 2 functions, needed for pyrpmcheckrepo
+	- Rewrote pyrpmcheckrepo sothat it doesn't require a real installation anymore
+	  and can be used to test any arch in memory
+
+2005-05-23  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.16: - fix typo
+
+	* scripts/oldpyrpm.py 1.15: - scripts/oldpyrpm.py:
+	  - check all calls to read data from fds
+	  - add rpmtag for policy data
+
+	* scripts/oldpyrpm.py 1.14: - scripts/oldpyrpm.py:
+	  - move more verify code into doVerify()
+	  - filecontexts reappeard in FC-devel
+	  - add parsing of passwd/group for chroot case
+	  - mark some more functions for internal use only
+
+	* scripts/Makefile.am 1.7: - scripts/Makefile.am: add pyrpmcheck
+
+	* pyrpm/__init__.py 1.20, configure.in 1.16: - release 0.22
+
+2005-05-20  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/base.py 1.31, pyrpm/package.py 1.73, tests/test10 1.44:
+	- Added verifyflags to RpmFileInfo
+	- Removed OldRpmData class, we still have it in CVS if needed
+	- Moved echo in test10 for one test to correct place
+
+2005-05-19  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/rpmlist.py 1.43, tests/test10 1.43:
+	- Fixed warning message in rpmlist for already installed packages (level was too
+	  low)
+	- Fixed wrong use of system /etc/yum.conf for pyrpmyum tests
+	- Fixed the runalltests option (actually works now ;)
+
+2005-05-18  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.85, pyrpm/package.py 1.72, pyrpm/yum.py 1.39, scripts/pyrpmcheckrepo 1.1, scripts/pyrpmrandomizer 1.3, scripts/pyrpmyum 1.40:
+	- Fixed usage() calls for the yum parsing function
+	- Dropped the uneccessary and time consuming eq and ne methods in RpmPackage
+	- Some cleanup in the handleConflicts() method of RpmYum
+	- usage() text cleanups
+	- Added the pyrpmcheckrepo tool with which you can check for repo-less rpms or
+	  leftover rpms
+
+2005-05-17  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/package.py 1.71, pyrpm/config.py 1.27, pyrpm/io.py 1.56:
+	- Included some more essential tags for working package compares in resolvertags
+	- Use resolvertags as a base in the RpmPyDB class now too
+	- Overloaded the eq and ne operators in RpmPackage as we have more "info" there
+	  for proper comparison
+
+2005-05-16  Miloslav Trmac  <mitr@redhat.com>
+
+	* pyrpm/control.py 1.59, pyrpm/createrepo.py 1.9, pyrpm/functions.py 1.84, pyrpm/io.py 1.55, pyrpm/package.py 1.70, pyrpm/rpmdist.py 1.9, pyrpm/yum.py 1.38, scripts/pyrpmcheck 1.10, scripts/pyrpmcreaterepo 1.5, tests/rpmresolve.py 1.8, tests/test 1.6, tests/test2 1.2, tests/test3 1.2, tests/test5 1.2, tests/test6 1.2, tests/test7 1.3, tests/test8 1.2:
+	pyrpm/functions.py:
+	- (installFile, setFileMods, createLink): Convert to raise Exceptions instead
+	  of returning error codes.  All callers changed.
+	pyrpm/io.py:
+	- (GetRpmIOFactory): Use RpmFileIO for 'file:/'
+	pyrpm/package.py:
+	- (RpmPackage): Convert to raise exceptions instead of returning error codes.
+	  All callers changed, adding error handling as needed.
+	- (RpmPackage): Document interfaces.
+	tests/test2, tests/test5, tests/test7, tests/test8:
+	- Update for changed interfaces
+
+2005-05-14  Miloslav Trmac  <mitr@redhat.com>
+
+	* AUTHORS 1.5, pyrpm/functions.py 1.83, pyrpm/io.py 1.54, pyrpm/package.py 1.69, scripts/rpmdb2pyrpmdb 1.6, tests/rpmdbtestPackages 1.2, tests/test4 1.2:
+	pyrpm/io.py:
+	- Convert PyGZIP, CPIOFile, Rpm*IO to raise exceptions instead of returning
+	  error codes.  All callers changed.
+	- Document interfaces of PyGZIP, CPIOFile, Rpm*IO
+	- Remove unused RpmStreamIO.hdrtype.
+	- Don't require the caller to read all input data between calls to
+	  RpmStreamIO.read().
+	- Unify code from RpmStreamIO.__generateSig() and
+	  RpmStreamIO.__generateHeader() in a helper RpmStreamIo.__GeneratedHeader
+	pyrpm/functions.py:
+	- New function readExact()
+	scripts/rpmdb2pyrpmdb, tests/test4:
+	- Update for rpmconfig changes
+	AUTHORS:
+	- Add myself
+
+2005-05-13  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/config.py 1.26, pyrpm/functions.py 1.82, scripts/pyrpmrandomizer 1.2, scripts/pyrpmyum 1.39:
+	- Forgot to import errno in functions
+	- Moved some of the default values from yum and randomizer into config
+	- Added undocumented checkinstalled option for yum
+
+	* pyrpm/functions.py 1.81, scripts/pyrpmrandomizer 1.1, scripts/pyrpmyum 1.38:
+	- Moved the locking functions from pyrpmyum to functions
+	- Extracted the yum command line parsing code into a function for use for all
+	  yum 'compatible' scripts
+	- Added new pyrpmrandomizer for random install and erase tests
+
+2005-05-12  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/control.py 1.58, pyrpm/functions.py 1.80, pyrpm/io.py 1.53, pyrpm/yum.py 1.37, scripts/pyrpmyum 1.37:
+	- Implemented local repodata and package caching via urlgrabber
+	- Fixed possible multi-rereads of the filelist in RpmYum class
+	- Cleaned up some of the IO classes in respect to the use of urlgrabber
+	- RpmRepo has a new additional optional constructor parameter with it's name.
+	  Used only for repo caching atm.
+	- Need to initialize the erase_list in processArgs
+	- Dropped unecessary del of self.pkgs
+
+2005-05-11  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.42:
+	the layout of or trees sucks. Why can't we use a unique layout for all trees ?
+
+2005-05-11  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.79:
+	- Fixed bug in orderList() where the distance elements weren't swapped
+
+2005-05-11  Karsten Hopp  <karsten@redhat.com>
+
+	* scripts/pyrpmcheck 1.9: fix typo
+
+2005-05-11  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/base.py 1.30, pyrpm/yum.py 1.36, scripts/pyrpmcheck 1.8, scripts/pyrpmyum 1.36:
+	- Added policies tag (1150) in headertags (needed by a FE package)
+	- Don't try to be smart and erase the repos and resolvers after runCommand()
+	- Don't sys.exit() if we don't do anything in runOperations, just return ;)
+	- Fixed unitialized variable for nofileconflicts case
+	- Don't run checks on debuginfo packages, but this time correctly ;)
+	- Set the rpmconfig.debug, not rpmconfig.warning twice
+
+2005-05-11  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/orderer.py 1.26: [tw] fixed debug output in genRelations
+
+2005-05-11  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.41:
+	dumb idea to remove all logfiles when running tests on multiple archs
+
+2005-05-10  Phil Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmcheck 1.7:
+	- Ignore debuginfo packages for now, they have zillions of dangling symlinks
+
+	* tests/test10 1.40: - Reverted corrupt checkin for test10
+
+	* pyrpm/base.py 1.29, tests/test10 1.39:
+	- Tiny fixes and additions for arch_compats and buildarchtranslate lists to
+	  support more archs correctly for tests
+
+2005-05-10  Karsten Hopp  <karsten@redhat.com>
+
+	* scripts/pyrpmcheck 1.6:
+	2 separate checkins with a similar fix != fixed
+
+2005-05-10  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.35, scripts/pyrpmcheck 1.5, scripts/pyrpmyum 1.35:
+	- Use printInfo() for Test run end message
+	- Fixed pyrpmcheck selectNewestPkgs() function parameter name :)
+	- pyrpmyum now has a new undocumented option: --arch (only usable for tests)
+
+2005-05-10  Karsten Hopp  <karsten@redhat.com>
+
+	* scripts/pyrpmcheck 1.4: fix variable usage
+
+	* tests/test10 1.38:
+	old --arch handling worked only if --arch was first parameter. --clean not necessary anymore
+
+	* tests/test10 1.37:
+	clean up directories after run. Run tests on all found trees in a given directory (part 1)
+
+2005-05-10  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/config.py 1.25, pyrpm/functions.py 1.78, pyrpm/yum.py 1.34:
+	- Added "sourcerpm" for resolvertags, needed for conflict resolution in yum
+	- Fixed machineDistance() function to prefere noarch and same arch over any
+	  "real" distance.
+	- Fixed some typos
+	- Fixed selecteNewestPkgs() method in yum to always use the newest and
+	  buildarchtranslate highest package.
+	- Split the __findUpdatePkg() methods into __findUpdatePkg() and
+	  __handleUpdatePkglist() as the code was duplicate execept a few lines
+	- Do conflict handling and autoerasing for conflicts now correctly
+	- Don't do obsoletes anymore for packages with the same name, will be done
+	  automatically via updates
+	- For updates always select either to or from a noarch package or to the
+	  closesest buildarchtranslate compatible package.
+	- Do some more fancy conflict resolution
+
+2005-05-09  Phil Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmcheck 1.3:
+	- Fixed selectNewestPkgs() for arch compatible packages
+
+	* tests/test10 1.36: - Fixed obsolete \ for $ARCH in genyumconf
+
+2005-05-09  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.35: use ARCH instead of basearch for yum.conf
+
+	* tests/test10 1.34:
+	add a function to show the sourcecode of a function
+
+2005-05-06  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.13: - scripts/oldpyrpm.py:
+	  - disable check for filecontext, FC-devel has this tag again
+	  - fix sig header checking
+
+	* pyrpm/control.py 1.57, pyrpm/yum.py 1.33, scripts/pyrpmyum 1.34:
+	- check for config.test before calling runOperations()
+
+	* scripts/oldpyrpm.py 1.12, scripts/pyrpminstall 1.18, scripts/pyrpmyum 1.33:
+	- scripts/oldpyrpm.py: fix typo
+
+	* scripts/oldpyrpm.py 1.11:
+	- scripts/olpyrpm.py: more generic solution to check "group" instead of
+	  hardcoding in the exception
+
+	* scripts/oldpyrpm.py 1.10:
+	- scripts/oldpyrpm.py: pass down rpmtag/rpmsigtag als to verifyTag(), so
+	  now this code is fully modular
+
+2005-05-05  Florian La Roche  <laroche@redhat.com>
+
+	* README 1.7, configure.in 1.15, pyrpm/__init__.py 1.19: - release 0.21
+
+2005-05-04  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.33: make it controllable from the commandline
+
+	* tests/test10 1.32: really do RHEL4 tests
+
+	* tests/test10 1.31:
+	move all tests in separate functions, add small menu to select tests
+
+2005-05-04  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.9:
+	- scripts/oldpyrpm.py: separate out verify of dependencies
+
+	* scripts/oldpyrpm.py 1.8:
+	- scripts/oldpyrpm.py: more tests and cleanup
+
+2005-05-03  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/config.py 1.24, pyrpm/functions.py 1.77, pyrpm/package.py 1.68, scripts/pyrpmcheck 1.2, scripts/pyrpmyum 1.32:
+	- Fixed install problems on RHL-6.2 and RHL-5.2. ;)
+	- Added error message for unsupported unix domain socket files (dev in 5.2)
+	- Removed some commented out and unused lines
+	- Fixed the missing instance checks in the RpmPackage comparator methods
+	- Minor usage() comment fix in pyrpmyum (erase has been working for quite some
+	  time)
+
+	* scripts/pyrpmcheck 1.1:
+	- Converted oldpyrm checks into a new script with additional feature of newest
+	  package selection.
+
+2005-05-03  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/functions.py 1.76: - pyrpm/functions.py:
+	  - stringCompare(): slightly regroup checks at the beginning
+	  - orderList(): compute machinedistance only once for all entries
+
+2005-05-03  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/io.py 1.52, pyrpm/package.py 1.67, pyrpm/resolver.py 1.60, pyrpm/yum.py 1.32, scripts/pyrpmyum 1.31, pyrpm/functions.py 1.75:
+	- Small fix/speedup for orderList(). Still need to make a real O(n*log(n))
+	  sorter out of it.
+	- Fixed small closing tag bug in RpmRepo::createRepo()
+	- Renamed FastRpmData to RpmData and renamed original RpmData to OldRpmData
+	  as we now always use the FastRpmData
+	- Improved the hashing method in FastRpmData
+	- Implemented Python comparator methods for RpmData and RpmPackage. pkgCompare()
+	  needs to move into RpmPackage soon.
+	- Small speedup of Filelist::removePkg() method
+	- Dopped normalizeList and orderList() calls on pkg list
+	- Fixed __selectNewestPkgs() to honor the buildarchtranslate compatibility
+	- Completely recoded and restructured the RpmYum::__runDepResolution() code in
+	  order to allow correct multilib, conflict and obsolete handling
+	- Had to fix and adapt __handleConflictAutoerases() and __doConflictAutoerase()
+	  for those changes.
+	- Create our RpmYum object as the first thing in pyrpmyum main()
+	- Dropped --nofileconflicts parsing in pyrpmyum, not needed anymore
+	- Print out a small message for the hotshot profiler when it starts working on
+	  the stats as it takes ages without any output ;)
+
+2005-05-02  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.30:
+	remove set -x, don't use wildchars to avoid 'commandline to long' errors
+
+2005-05-02  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.7: - scripts/oldpyrpm.py:
+	  - way easier to read code for payload/cpio handling
+
+2005-05-01  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.6: - scripts/oldpyrpm.py:
+	  - add PyGZIP from Phil Knirsch
+	  - fix some breakages
+
+	* scripts/oldpyrpm.py 1.5: - scripts/oldpyrpm.py:
+	  - start new way to store data for the header
+	  - faster parseIndex() routine
+	  - make keeping binary hdrdata optional
+
+	* scripts/oldpyrpm.py 1.4: - scripts/oldpyrpm.py:
+	  - add hotshot profiling
+	  - use getopt to parse options
+	  - allow specifying directories instead of all rpm files
+	  - add optimized routines instead of using stat.py
+	  - optimize getFilenames()
+
+2005-04-30  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/functions.py 1.74:
+	- pyrpm/functions.py: getFreeDiskspace(): add second part of stat optim
+
+	* pyrpm/functions.py 1.73: - optimize away a few more stat calls
+
+2005-04-29  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.29: write log files in common directory for tests
+
+	* tests/test10 1.28: wrong path
+
+	* tests/test10 1.27: run sanity checks on rpms
+
+2005-04-29  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/base.py 1.28, pyrpm/functions.py 1.72, pyrpm/io.py 1.51, pyrpm/yum.py 1.31, scripts/pyrpmyum 1.30, tests/test 1.5:
+	- Made arch_compats elements lists instead of tuples  (need list.index())
+	- Implemented new orderList() function that sorts packages by machine distance
+	  and evr
+	- New helper function for machine distance
+	- Implemented filelists.xml writing completely
+	- Fixed handling of src.rpms in createRepo()
+	- Simplified the __runDepRes() inner loop to only resolve 1 dependency and then
+	  recalculate the missing deps again directly afterward.
+	- Made pyrpmyum a little less nosiy when you specify --quiet.
+	- Default verbosity for pyrpmyum is now 1
+	- Use the __handleObsoletes() for update without parameter now too.
+	- Corrected the __handleObsoletes() method to really do what it was supposed to
+	  do.
+	- Small code cleanup for coding guidelines
+	- Automatically try to make the $buildroot/var/run dir for pyrpmyum locking
+	- Fixed the hotshot SystemExit catcher, don't use it because of the forks
+
+2005-04-29  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.26:
+	cleanup code, add FC3+updates+testing+extras check, add fileconflicts check
+
+	* BUGS 1.3: another bug
+
+2005-04-29  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/config.py 1.23, pyrpm/control.py 1.56, pyrpm/resolver.py 1.59:
+	[tw]
+	- config: added checkinstalled as global check
+	- control: fixed RpmResolver initialization
+	- resolver: use RpmConfig::checkinstalled instead of own check_installed
+
+2005-04-28  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.3:
+	- scripts/oldpyrpm.py: add checking for dnagling symlinks
+
+2005-04-28  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.25: shut up umount
+
+	* tests/test10 1.24: typo
+
+	* tests/test10 1.23: add missing subdir
+
+	* tests/test10 1.22:
+	add --help --arch parameters, per default run i386 and x86_64 tests. add RHEL3-U2 to U5 update test
+
+2005-04-27  Phil Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/base.py 1.27, pyrpm/io.py 1.50, pyrpm/package.py 1.66, pyrpm/yumconfig.py 1.12, scripts/pyrpmyum 1.29, tests/test 1.4:
+	- Fixed isInstallPreReq() and isErasePreReq() to really return 0 or 1
+	- Removed autoloading of database in RpmDatabase base class for various methods
+	- Extended flagmaps in RpmRepo for createRepo()
+	- Implemented basic version of createrepo in RpmRepo class. Writing primary.xml
+	  works correctly and can be used to install packages
+	- Use 'pre' flags from repodata, used for orderer
+	- Removed not used code for parseGroupHierarchy() in comps.xml parser
+	- Changed getRpmIOFactory() to return a RpmHttpIO() object now even for files.
+	  Need to rename RpmHttpIO() to RpmUrlIO soon.
+	- Don't prefix the yum config file with the chroot
+	- Fixed pyrpmyum to have a default for the yum.conf file
+	- Fixed YumConf reading to be done after complete argument passing, otherwise
+	  ordering of the args would affect the result.
+	- Misc changes again to tests/test for createrepo stuff
+
+2005-04-27  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/orderer.py 1.25: [tw]
+	 - Using _Relation again, but with hashes not HashLists
+	 - RpmOrderer::_operationFlag: Old flag detection was crap.
+	   - LegacyPreReq is always a PreReq (install and erase)
+	   - isInstallPreReq: install PreReq
+	   - isErasePreReq: erase PreReq
+
+2005-04-27  Karsten Hopp  <karsten@redhat.com>
+
+	* BUGS 1.2: run test with -vvv
+
+	* BUGS 1.1: list of known Bugs
+
+2005-04-27  Phil Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmyum 1.28: - Fixed new multiline usage of baseurl
+
+2005-04-27  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmyum 1.27, tests/test10 1.21:
+	- scripts/pyrpmyum: adapt to new yumconf
+	- tests/test10: first set buildroot on command line
+
+2005-04-25  Harald Hoyer  <harald@redhat.com>
+
+	* tests/Makefile.am 1.5, tests/yum-test.tgz 1.2: removed yum-test.tgz
+
+	* COPYING 1.1, INSTALL 1.1: default files
+
+	* pyrpm/yumconfig.py 1.11: accept multilines for specific variables
+	new __init__ parameters (chroot, reposdir)
+
+	* tests/yumconfigtest 1.4: removed tar file
+	create files on the fly
+	adapted testcase to the new multiline syntax
+
+2005-04-24  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.14, pyrpm/__init__.py 1.18: - release 0.20
+
+	* scripts/pyrpmyum 1.26, pyrpm/orderer.py 1.24, pyrpm/yum.py 1.30:
+	- pyrpm/yum.py: some more timer values
+	- scripts/pyrpmyum: add profiling support
+
+2005-04-23  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/orderer.py 1.23: - pyrpm/orderer.py:
+	  - remove "class _Relation" and add a tuple of hashes instead
+	  - simplify logic to specify hard and soft-requirements
+
+	* pyrpm/control.py 1.55: - pyrpm/control.py: cleanup
+
+	* pyrpm/orderer.py 1.22: - pyrpm/orderer.py: fix typo
+
+	* pyrpm/orderer.py 1.21: - pyrpm/orderer.py:
+	  - use {} instead of HashList() for _Relation()
+	  - do not pass on config if not needed
+	  - optimize some smaller loop items
+
+	* pyrpm/functions.py 1.71, pyrpm/package.py 1.65, pyrpm/yum.py 1.29, scripts/.cvsignore 1.3, scripts/pyrpmyum 1.25, tests/test10 1.20:
+	- print better info about exit status of run scripts
+	- fix writing /sbin/service
+	- first version to lock pypmyum (needs another re-write)
+
+	* NEWS 1.2, README 1.6, configure.in 1.13, doc/INFO 1.2, doc/TODO 1.3, pyrpm/__init__.py 1.17, pyrpm/openpgp.py 1.5:
+	- release 0.19
+
+	* ChangeLog 1.10, pyrpm/base.py 1.26, pyrpm/config.py 1.22, pyrpm/createrepo.py 1.8, pyrpm/functions.py 1.70, pyrpm/hashlist.py 1.16, pyrpm/io.py 1.49, pyrpm/orderer.py 1.20, pyrpm/package.py 1.64, pyrpm/resolver.py 1.58, pyrpm/rpmdist.py 1.8, pyrpm/rpmlist.py 1.42, pyrpm/yum.py 1.28, scripts/oldpyrpm.py 1.2, scripts/pyrpmyum 1.24, tests/test10 1.19:
+	- add "--servicehack" for installs into chroot as e.g. sshd gets stopped
+	  also outside of the chroot on rpm removal
+	- pyrpm/createrepo.py: adapt to current pyrpm
+	- pyrpm/hashlist.py: do not set "config" as first param
+	- tests/test10: use shorter logfiles
+
 2005-04-22  Phil Knirsch  <pknirsch@redhat.com>
 
 	* tests/test10 1.18, pyrpm/package.py 1.63, pyrpm/yum.py 1.27, pyrpm/control.py 1.54:
