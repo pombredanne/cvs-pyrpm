@@ -382,6 +382,7 @@ class RpmStreamIO(RpmIO):
         self._write(sigdata)
         self._write(headerindex)
         self._write(headerdata)
+        return 1
 
     def _read(self, nbytes=None):
         """Read up to nbytes data from self.fd.
