@@ -426,6 +426,9 @@ class RpmResolver(RpmList):
 
         conflicts = HashList()
 
+        if self.config.noconflicts:
+            # conflicts turned off
+            return conflicts
         if self.config.checkinstalled == 0 and len(self.installs) == 0:
             # no conflicts if there is no new package
             return conflicts
@@ -473,8 +476,11 @@ class RpmResolver(RpmList):
 
     def getFileConflicts(self):
         """ Check for file conflicts """
-        conflicts =  HashList()
+        conflicts = HashList()
 
+        if self.config.nofileconflicts:
+            # file conflicts turned off
+            return conflicts
         if self.config.checkinstalled == 0 and len(self.installs) == 0:
             # no conflicts if there is no new package
             return conflicts
