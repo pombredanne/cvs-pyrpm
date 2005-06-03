@@ -264,7 +264,7 @@ class YumConf(Conf):
 
         self.stanza_re = re.compile('^\s*\[(?P<stanza>[^\]]*)]\s*(?:;.*)?$', re.I)
         Conf.__init__(self, self.myfilename, '#;', '=', '=',
-                      merge=1, create_if_missing = 0)
+                      merge=1, create_if_missing=0)
 
     def extendValue(self, value):
         """replaces known $vars in values"""

@@ -447,7 +447,7 @@ class RpmResolver(RpmList):
                         if r.getNEVR() != r2.getNEVR():
                             if self.config.checkinstalled == 0 and \
                                    r in self.installed_conflicts and \
-                                   (c,r2) in self.installed_conflicts[r]:
+                                   (c, r2) in self.installed_conflicts[r]:
                                 continue
                             if r not in conflicts:
                                 conflicts[r] = [ ]
@@ -514,8 +514,8 @@ class RpmResolver(RpmList):
                                 self.isInstalled(s[k])):
                             if self.config.checkinstalled == 0 and \
                                    s[j] in self.installed_file_conflicts and \
-                                   (filename,s[k]) in \
-                                   self.installed_file_conflicts[r]:
+                                   (filename, s[k]) in \
+                                   self.installed_file_conflicts[s[j]]:
                                 continue
                             if s[j] not in conflicts:
                                 conflicts[s[j]] = [ ]
