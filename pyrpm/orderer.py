@@ -139,18 +139,22 @@ class RpmOrderer:
 
         if self.config.debug > 1:
             # print relations
-            self.config.printDebug(2, "\t==== relations (%d) ====" % len(relations))
+            self.config.printDebug(2, "\t==== relations (%d) ==== #pre-relations #post-relations package pre-relation-packages, (*) marks prereq's" % len(relations))
             for pkg in relations:
                 rel = relations[pkg]
                 pre = ""
                 if self.config.debug > 2 and len(rel.pre) > 0:
-                    pre = ""
+                    pre = ": "
                     for p in rel.pre:
-                        if len(pre) > 0: pre += ", "
-                        if rel.pre[p] == 2: pre += "*" # prereq
+                        if len(pre) > 2:
+                            pre += ", "
+                        if rel.pre[p] == 2:
+                            pre += "*" # prereq
                         pre += p.getNEVRA()
-                self.config.printDebug(2, "\t%d %d %s pre: %s" % (len(rel.pre), len(rel.post),
-                                                pkg.getNEVRA(), pre))
+                self.config.printDebug(2, "\t%d %d %s%s" % (len(rel.pre),
+                                                            len(rel.post),
+                                                            pkg.getNEVRA(),
+                                                            pre))
             self.config.printDebug(2, "\t==== relations ====")
 
         return relations
