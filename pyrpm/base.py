@@ -31,7 +31,7 @@ class RpmFileInfo:
         self.rdev = rdev
         self.md5sum = md5sum
         self.flags = flags
-        self.verifyflags = flags
+        self.verifyflags = verifyflags
         self.filecolor = filecolor
 
     def getHardLinkID(self):
