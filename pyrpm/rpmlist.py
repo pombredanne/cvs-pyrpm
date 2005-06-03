@@ -67,7 +67,7 @@ class RpmList:
         return self.OK
     # ----
 
-    def install(self, pkg):
+    def install(self, pkg, operation=OP_INSTALL):
         ret = self._install(pkg)
         if ret != self.OK:
             return ret
@@ -129,7 +129,7 @@ class RpmList:
                         else:
                             updates.append(r)
 
-        ret = self.install(pkg)
+        ret = self.install(pkg, operation=OP_UPDATE)
         if ret != self.OK:
             return ret
 

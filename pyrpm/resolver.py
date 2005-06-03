@@ -145,24 +145,29 @@ class FilenamesList:
                     del self.multi[name]
                 f.remove(rpm)
 
-    def search(self, name, l):
+    def search(self, name):
+        l = [ ]
         for r in self.filename.get(name, [ ]):
             if r not in l:
                 l.append(r)
+        return l
 
 # ----------------------------------------------------------------------------
 
 class RpmResolver(RpmList):
     OBSOLETE_FAILED = -10
-    CONFLICT = -10
+    CONFLICT = -11
+    FILE_CONFLICT = -12
     # ----
 
     def __init__(self, config, installed):
         RpmList.__init__(self, config, installed)
+        # fill in installed_ structures
         check_installed = self.config.checkinstalled
         self.config.checkinstalled = 1
         self.installed_unresolved = self.getUnresolvedDependencies()
         self.installed_conflicts = self.getConflicts()
+        self.installed_file_conflicts = self.getFileConflicts()
         self.config.checkinstalled = check_installed
     # ----
 
@@ -173,6 +178,8 @@ class RpmResolver(RpmList):
         self.filenames = FilenamesList(self.config)
         self.obsoletes = { }
         self.installed_unresolved = HashList()
+        self.installed_conflicts = HashList()
+        self.installed_file_conflicts = HashList()
     # ----
 
     def _install(self, pkg, no_check=0):
@@ -186,31 +193,75 @@ class RpmResolver(RpmList):
         return self.OK
     # ----
 
-    def _checkConflict(self, pkg, name, flag, version, arch=None):
+    def _checkConflict(self, pkg, name, flag, version, arch=None,
+                       operation=OP_INSTALL):
         s = self.conflicts.search(name, flag, version, arch)
+        s += self.conflicts.search(pkg["name"], 0, "", arch)
+        ret = 0
         if len(s) != 0:
             for r in s:
+                if self.config.checkinstalled == 0 and \
+                       pkg in self.installed_conflicts and \
+                       (name,flag,version) in self.installed_conflicts[pkg]:
+                    continue
+                if operation == OP_UPDATE:
+                    if pkg["name"] == r["name"]:
+                        continue
+                else:
+                    if pkg.getNEVR() != r.getNEVR():
+                        continue
+
                 if self.isInstalled(r):
                     fmt = "Installed %s conflicts with %s, skipping %s"
                 else:
                     fmt = "Added %s conflicts with %s, skipping %s"
-                    self.config.printWarning(1, fmt % (r.getNEVRA(),
+                self.config.printWarning(1, fmt % (r.getNEVRA(),
+                                                   pkg.getNEVRA(),
+                                                   pkg.getNEVRA()))
+                ret = 1
+        return ret
+    # ----
+
+    def install(self, pkg, operation=OP_INSTALL):
+        if self.config.noconflicts == 0:
+            # check conflicts for provides
+            for (name, flag, version) in pkg["provides"]:
+                if self._checkConflict(pkg, name, flag, version, pkg["arch"],
+                                       operation):
+                    return self.CONFLICT
+            # check conflicts for filenames
+            for f in pkg["filenames"]:
+                if self._checkConflict(pkg, f, 0, "", pkg["arch"], operation):
+                    return self.CONFLICT
+        if self.config.nofileconflicts == 0:
+            # check for file conflicts
+            for f in pkg["filenames"]:
+                s = self.filenames.search(f)
+                for r in s:
+                    if self.config.checkinstalled == 0 and \
+                           pkg in self.installed_file_conflicts and \
+                           f in self.installed_file_conflicts[pkg]:
+                        continue
+                    if operation == OP_UPDATE:
+                        if pkg["name"] == r["name"]:
+                            continue
+                    else:
+                        if pkg.getNEVR() != r.getNEVR():
+                            continue
+                    if self.isInstalled(r):
+                        fmt = "Installed file %s from %s conflicts with %s, skipping %s"
+                    else:
+                        fmt = "Added file %s from %s conflicts with %s, skipping %s"
+                    self.config.printWarning(1, fmt % (f, r.getNEVRA(),
                                                        pkg.getNEVRA(),
                                                        pkg.getNEVRA()))
-            return 1
-        return 0
+                    return self.FILE_CONFLICT
+
+        ret = RpmList.install(self, pkg, operation)
+        return ret
     # ----
 
     def update(self, pkg):
-        # check conflicts for provides
-        for (name, flag, version) in pkg["provides"]:
-            if self._checkConflict(pkg, name, flag, version, pkg["arch"]):
-                return self.CONFLICT
-        # check conflicts for filenames
-        for f in pkg["filenames"]:
-            if self._checkConflict(pkg, f, 0, "", pkg["arch"]):
-                return self.CONFLICT
-
         # get obsoletes
         obsoletes = [ ]
         for u in pkg["obsoletes"]:
@@ -221,7 +272,8 @@ class RpmResolver(RpmList):
 
         # update package
         ret = RpmList.update(self, pkg)
-        if ret != self.OK:  return ret
+        if ret != self.OK:
+            return ret            
 
         normalizeList(obsoletes)
         for r in obsoletes:
@@ -231,9 +283,11 @@ class RpmResolver(RpmList):
             else:
                 fmt = "%s obsoletes added %s, removing %s"
             if self.config.test:
-                self.config.printInfo(0, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()+"\n"))
+                self.config.printInfo(0, fmt % (pkg.getNEVRA(), r.getNEVRA(),
+                                                r.getNEVRA()+"\n"))
             else:
-                self.config.printWarning(1, fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA()))
+                self.config.printWarning(1, fmt % (pkg.getNEVRA(),
+                                                   r.getNEVRA(), r.getNEVRA()))
             if self._pkgObsolete(pkg, r) != self.OK:
                 return self.OBSOLETE_FAILED
 
@@ -285,7 +339,7 @@ class RpmResolver(RpmList):
         (name, flag, version) = dep
         s = self.provides.search(name, flag, version, arch)
         if name[0] == '/': # all filenames are beginning with a '/'
-            self.filenames.search(name, s)
+            s += self.filenames.search(name)
         return s
     # ----
 
@@ -372,7 +426,7 @@ class RpmResolver(RpmList):
 
         conflicts = HashList()
 
-        if len(self.installs) == 0:
+        if self.config.checkinstalled == 0 and len(self.installs) == 0:
             # no conflicts if there is no new package
             return conflicts
 
@@ -388,6 +442,10 @@ class RpmResolver(RpmList):
                         s.remove(r)
                     for r2 in s:
                         if r.getNEVR() != r2.getNEVR():
+                            if self.config.checkinstalled == 0 and \
+                                   r in self.installed_conflicts and \
+                                   (c,r2) in self.installed_conflicts[r]:
+                                continue
                             if r not in conflicts:
                                 conflicts[r] = [ ]
                             conflicts[r].append((c, r2))
@@ -417,14 +475,13 @@ class RpmResolver(RpmList):
         """ Check for file conflicts """
         conflicts =  HashList()
 
-        if len(self.installs) == 0:
+        if self.config.checkinstalled == 0 and len(self.installs) == 0:
             # no conflicts if there is no new package
             return conflicts
         
         for filename in self.filenames.multi.keys():
             self.config.printDebug(1, "Checking for file conflicts for '%s'" % filename)
-            s = [ ]
-            self.filenames.search(filename, s)
+            s = self.filenames.search(filename)
             for j in xrange(len(s)):
                 fi1 = s[j].getRpmFileInfo(filename)
                 for k in xrange(j+1, len(s)):
@@ -449,6 +506,11 @@ class RpmResolver(RpmList):
                         if not (self.config.checkinstalled == 0 and \
                                 self.isInstalled(s[j]) and \
                                 self.isInstalled(s[k])):
+                            if self.config.checkinstalled == 0 and \
+                                   s[j] in self.installed_file_conflicts and \
+                                   (filename,s[k]) in \
+                                   self.installed_file_conflicts[r]:
+                                continue
                             if s[j] not in conflicts:
                                 conflicts[s[j]] = [ ]
                             conflicts[s[j]].append((filename, s[k]))
@@ -484,7 +546,6 @@ class RpmResolver(RpmList):
                 self.provides.addPkg(pkg)
                 self.conflicts.addPkg(pkg)
                 self.filenames.addPkg(pkg)
-
     # ----
 
     def resolve(self):
