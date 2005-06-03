@@ -104,7 +104,7 @@ class RpmOrderer:
 
     # ----
 
-    def genRelations(self, rpms, operation):
+    def genRelations(self, rpms):
         """ Generate relations from RpmList """
         relations = _Relations()
 
@@ -135,7 +135,6 @@ class RpmOrderer:
                     self.config.printDebug(1, "No relations found for %s, generating empty relations" % \
                                r.getNEVRA())
                     relations.append(r, None, 0)
-        del resolver
 
         if self.config.debug > 1:
             # print relations
@@ -362,7 +361,7 @@ class RpmOrderer:
         # order installs
         if self.installs and len(self.installs) > 0:
             # generate relations
-            relations = self.genRelations(self.installs, OP_INSTALL)
+            relations = self.genRelations(self.installs)
 
             # order package list
             order2 = self._genOrder(relations)
@@ -373,7 +372,7 @@ class RpmOrderer:
         # order erases
         if self.erases and len(self.erases) > 0:
             # generate relations
-            relations = self.genRelations(self.erases, OP_ERASE)
+            relations = self.genRelations(self.erases)
 
             # order package list
             order2 = self._genOrder(relations)
