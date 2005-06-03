@@ -76,16 +76,12 @@ class RpmYum:
         self.resolvers.append(r)
 
     def processArgs(self, args):
-        if self.config.timer:
-            time1 = clock()
         self.erase_list = []
         # Create and read db
         self.pydb = RpmPyDB(self.config, self.config.dbpath,
                             self.config.buildroot)
         self.pydb.read()
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
-        if self.config.timer:
-            self.config.printInfo(0, "processArgs() took %s seconds\n" % (clock() - time1))
         self.runArgs(args)
 
     def runArgs(self, args):
