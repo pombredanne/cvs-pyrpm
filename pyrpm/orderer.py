@@ -104,7 +104,7 @@ class RpmOrderer:
 
     # ----
 
-    def genRelations(self, rpms):
+    def genRelations(self, rpms, operation):
         """ Generate relations from RpmList """
         relations = _Relations()
 
@@ -125,7 +125,7 @@ class RpmOrderer:
                     # itself
                     if r in s:
                         continue
-                    f = self._operationFlag(flag, OP_INSTALL)
+                    f = self._operationFlag(flag, operation)
                     if f == 0: # no hard or soft requirement
                         continue
                     for r2 in s:
@@ -361,7 +361,7 @@ class RpmOrderer:
         # order installs
         if self.installs and len(self.installs) > 0:
             # generate relations
-            relations = self.genRelations(self.installs)
+            relations = self.genRelations(self.installs, OP_INSTALL)
 
             # order package list
             order2 = self._genOrder(relations)
@@ -372,7 +372,7 @@ class RpmOrderer:
         # order erases
         if self.erases and len(self.erases) > 0:
             # generate relations
-            relations = self.genRelations(self.erases)
+            relations = self.genRelations(self.erases, OP_ERASE)
 
             # order package list
             order2 = self._genOrder(relations)
