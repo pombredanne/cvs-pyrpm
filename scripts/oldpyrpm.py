@@ -493,8 +493,6 @@ def stringCompare(str1, str2):
     if str1 == str2: return 0
     lenstr1 = len(str1)
     lenstr2 = len(str2)
-    if not lenstr1: return -1
-    elif not lenstr2: return 1
     i1 = i2 = 0
     while i1 < lenstr1 and i2 < lenstr2:
         # remove leading separators
@@ -502,33 +500,32 @@ def stringCompare(str1, str2):
         while i2 < lenstr2 and not _xisalnum(str2[i2]): i2 += 1
         j1 = i1
         j2 = i2
-        # search for numbers and comprare them
-        while j1 < lenstr1 and _xisdigit(str1[j1]): j1 += 1
-        while j2 < lenstr2 and _xisdigit(str2[j2]): j2 += 1
-        if j1 > i1 or j2 > i1:
+        if _xisdigit(str1[j1]):
+            while j1 < lenstr1 and _xisdigit(str1[j1]): j1 += 1
+            while j2 < lenstr2 and _xisdigit(str2[j2]): j2 += 1
+            isnum = 1
+        else:
+            while j1 < lenstr1 and _xisalpha(str1[j1]): j1 += 1
+            while j2 < lenstr2 and _xisalpha(str2[j2]): j2 += 1
+            isnum = 0
+        if j1 == i1:
+            return -1
+        if j2 == i2:
+            if isnum: return 1
+            return -1
+        if isnum:
+            while i1 < j1 and str1[i1] == '0': i1 += 1
+            while i2 < j2 and str2[i2] == '0': i2 += 1
+            # XXX: the next two lines could get removed?
             x = cmp(j1 - i1, j2 - i2)
             if x: return x
-            while i1 < j1 and i2 < j2:
-                x = cmp(ord(str1[i1]), ord(str2[i2]))
-                if x: return x
-                i1 += 1
-                i2 += 1
-            # found right side
-            if i1 == lenstr1: return -1
-            if i2 == lenstr2: return 1
-        if i2 == lenstr2: return -1
-        # search for alphas and compare them
-        while j1 < lenstr1 and _xisalpha(str1[j1]): j1 += 1
-        while j2 < lenstr2 and _xisalpha(str2[j2]): j2 += 1
-        if j1 > i1 or j2 > i1:
-            x = cmp(str1[i1:j1], str2[i2:j2])
-            if x: return x
-            # found right side
-            i1 = j1
-            i2 = j2
-    # still no difference
-    if i2 == lenstr2: return 0
-    if i1 == lenstr1: return -1
+        x = cmp(str1[i1:j1], str2[i2:j2])
+        if x: return x
+        i1 = j1
+        i2 = j2
+    if i1 == lenstr1:
+        if i2 == lenstr2: return 0
+        return -1
     return 1
 
 
