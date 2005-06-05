@@ -39,7 +39,6 @@
 # XXX TODO:
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
 #   and "0" epoch (change this for createrepo)
-# - how to check some content for correct utf-8 encoding?
 # - check for #% in spec files
 # - streaming read for cpio files
 # things that look less important to implement:
@@ -471,6 +470,12 @@ possible_scripts = {
     "/usr/sbin/glibc_post_upgrade": 1,
     "/usr/sbin/glibc_post_upgrade.i386": 1,
     "/usr/sbin/glibc_post_upgrade.i686": 1,
+    "/usr/sbin/glibc_post_upgrade.ppc": 1,
+    "/usr/sbin/glibc_post_upgrade.ppc64": 1,
+    "/usr/sbin/glibc_post_upgrade.ia64": 1,
+    "/usr/sbin/glibc_post_upgrade.s390": 1,
+    "/usr/sbin/glibc_post_upgrade.s390x": 1,
+    "/usr/sbin/glibc_post_upgrade.x86_64": 1,
     "/usr/sbin/libgcc_post_upgrade": 1 }
 
 
@@ -1251,6 +1256,17 @@ class ReadRpm:
                    self["filelinktos"], self["filerdevs"])
 
     def __doVerify(self):
+        # disable the utf-8 test per default:
+        if self.strict and None:
+            for i in ["summary", "description", "changelogtext"]:
+                if self[i] == None: continue
+                for j in self[i]:
+                    try:
+                        j.decode("utf-8")
+                    except:
+                        self.printErr("not utf-8 in %s" % i)
+                        break
+                        #self.printErr("text: %s" % j)
         for i in rpmsigtagrequired:
             if not self.sig.has_key(i):
                 self.printErr("sig header is missing: %s" % i)
@@ -1293,39 +1309,40 @@ class ReadRpm:
         if self["payloadformat"] not in [None, "cpio", "drpm"]:
             self.printErr("wrong payload format %s" % self["payloadformat"])
         if self.strict:
-          if self["payloadcompressor"] not in [None, "gzip"]:
-            self.printErr("no gzip compressor: %s" % self["payloadcompressor"])
+            if self["payloadcompressor"] not in [None, "gzip"]:
+                self.printErr("no gzip compressor: %s" % \
+                    self["payloadcompressor"])
         else:
-          if self["payloadcompressor"] not in [None, "gzip", "bzip2"]:
-            self.printErr("no gzip/bzip2 compressor: %s" % \
-                self["payloadcompressor"])
-        if self.strict:
-          if self["payloadflags"] not in ["9"]:
+            if self["payloadcompressor"] not in [None, "gzip", "bzip2"]:
+                self.printErr("no gzip/bzip2 compressor: %s" % \
+                    self["payloadcompressor"])
+        if self.strict and self["payloadflags"] not in ["9"]:
             self.printErr("no payload flags: %s" % self["payloadflags"])
         if self.strict and self["os"] not in ["Linux", "linux"]:
             self.printErr("bad os: %s" % self["os"])
         elif self["os"] not in ["Linux", "linux", "darwin"]:
             self.printErr("bad os: %s" % self["os"])
         if self.strict:
-          if self["packager"] not in (None, \
-            "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>"):
-            self.printErr("unknown packager: %s" % self["packager"])
-          if self["vendor"] not in (None, "Red Hat, Inc."):
-            self.printErr("unknown vendor: %s" % self["vendor"])
-          if self["distribution"] not in (None, "Red Hat Linux", "Red Hat FC-3",
-            "Red Hat (FC-3)", "Red Hat (RHEL-3)", "Red Hat (FC-4)"):
-            self.printErr("unknown distribution: %s" % self["distribution"])
+            if self["packager"] not in (None, \
+                "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>"):
+                self.printErr("unknown packager: %s" % self["packager"])
+            if self["vendor"] not in (None, "Red Hat, Inc."):
+                self.printErr("unknown vendor: %s" % self["vendor"])
+            if self["distribution"] not in (None, "Red Hat Linux",
+                "Red Hat FC-3", "Red Hat (FC-3)", "Red Hat (FC-4)",
+                "Red Hat (scratch)", "Red Hat (RHEL-3)", "Red Hat (RHEL-4)"):
+                self.printErr("unknown distribution: %s" % self["distribution"])
         arch = self["arch"]
         if self["rhnplatform"] not in (None, arch):
             self.printErr("unknown arch for rhnplatform")
         if self.strict:
-          if os.path.basename(self.filename) != self.getFilename():
-            self.printErr("bad filename: %s" % self.filename)
-          if self["platform"] not in (None, "", arch + "-redhat-linux-gnu",
-            arch + "-redhat-linux", "--target=${target_platform}",
-            arch + "-unknown-linux",
-            "--target=${TARGET_PLATFORM}", "--target=$TARGET_PLATFORM"):
-            self.printErr("unknown arch %s" % self["platform"])
+            if os.path.basename(self.filename) != self.getFilename():
+                self.printErr("bad filename: %s" % self.filename)
+            if self["platform"] not in (None, "", arch + "-redhat-linux-gnu",
+                arch + "-redhat-linux", "--target=${target_platform}",
+                arch + "-unknown-linux",
+                "--target=${TARGET_PLATFORM}", "--target=$TARGET_PLATFORM"):
+                self.printErr("unknown arch %s" % self["platform"])
         if self["exclusiveos"] not in (None, ["Linux"], ["linux"]):
             self.printErr("unknown os %s" % self["exclusiveos"])
         if self.strict:
@@ -1347,7 +1364,7 @@ class ReadRpm:
                 self.printErr("no prog")
             if self.strict:
                 if not possible_scripts.has_key(prog):
-                    self.raiseErr("unknown prog: %s" % prog)
+                    self.printErr("unknown prog: %s" % prog)
                 if script == None and prog == "/bin/sh":
                     self.printErr("empty script: %s" % s)
                 if script != None and isCommentOnly(script):
