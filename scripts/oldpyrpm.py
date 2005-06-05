@@ -493,7 +493,8 @@ def stringCompare(str1, str2):
     if str1 == str2: return 0
     lenstr1 = len(str1)
     lenstr2 = len(str2)
-    i1 = i2 = 0
+    i1 = 0
+    i2 = 0
     while i1 < lenstr1 and i2 < lenstr2:
         # remove leading separators
         while i1 < lenstr1 and not _xisalnum(str1[i1]): i1 += 1
@@ -508,17 +509,17 @@ def stringCompare(str1, str2):
             while j1 < lenstr1 and _xisalpha(str1[j1]): j1 += 1
             while j2 < lenstr2 and _xisalpha(str2[j2]): j2 += 1
             isnum = 0
-        if j1 == i1:
-            return -1
+        if j1 == i1: return -1
         if j2 == i2:
             if isnum: return 1
             return -1
         if isnum:
             while i1 < j1 and str1[i1] == '0': i1 += 1
             while i2 < j2 and str2[i2] == '0': i2 += 1
-            # XXX: the next two lines could get removed?
-            x = cmp(j1 - i1, j2 - i2)
-            if x: return x
+            if j1 - i1 > j2 - i2: return 1
+            if j2 - i2 > j1 - i1: return -1
+            #x = cmp(j1 - i1, j2 - i2)
+            #if x: return x
         x = cmp(str1[i1:j1], str2[i2:j2])
         if x: return x
         i1 = j1
