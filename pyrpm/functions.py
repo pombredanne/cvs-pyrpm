@@ -544,6 +544,9 @@ def selectNewestPkgs(pkglist):
             continue
         opkg = rethash[key1]
         key3 = opkg["name"]+"."+buildarchtranslate[opkg["arch"]]
+        if key2 != key3:
+            rethash[key2] = pkg
+            continue
         ret = pkgCompare(opkg, pkg)
         if   ret < 0:
             try:
