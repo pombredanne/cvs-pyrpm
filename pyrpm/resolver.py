@@ -112,6 +112,36 @@ class ConflictsList(ProvidesList):
         for (name, flag, version) in rpm["obsoletes"]:
             self._removeProvide(name, flag, version, rpm)
 
+    def search(self, name, flag, version, arch=None):
+        if not self.provide.has_key(name):
+            return [ ]
+        evr = evrSplit(version)
+        ret = [ ]
+        for (f, v, rpm) in self.provide[name]:
+            if rpm in ret:
+                continue
+            if version == "":
+                ret.append(rpm)
+                continue
+            if rangeCompare(flag, evr, f, evrSplit(v)):
+                ret.append(rpm)
+                continue
+
+        if not arch or arch == "noarch":   # all rpms are matching
+            return ret
+
+        # drop all packages which are not arch compatible
+        i = 0
+        while i < len(ret):
+            r = ret[i]
+            if r["arch"] == "noarch" or archDuplicate(r["arch"], arch) or \
+                   archCompat(r["arch"], arch) or archCompat(arch, r["arch"]):
+                i += 1
+            else:
+                ret.pop(i)
+
+        return ret
+
 # ----------------------------------------------------------------------------
 
 class FilenamesList:
@@ -196,7 +226,6 @@ class RpmResolver(RpmList):
     def _checkConflict(self, pkg, name, flag, version, arch=None,
                        operation=OP_INSTALL):
         s = self.conflicts.search(name, flag, version, arch)
-        s += self.conflicts.search(pkg["name"], 0, "", arch)
         ret = 0
         if len(s) != 0:
             for r in s:
@@ -237,6 +266,7 @@ class RpmResolver(RpmList):
             # check for file conflicts
             for f in pkg["filenames"]:
                 s = self.filenames.search(f)
+                fi1 = pkg.getRpmFileInfo(f)
                 for r in s:
                     if self.config.checkinstalled == 0 and \
                            pkg in self.installed_file_conflicts and \
@@ -248,6 +278,14 @@ class RpmResolver(RpmList):
                     else:
                         if pkg.getNEVR() != r.getNEVR():
                             continue
+                    fi2 = r.getRpmFileInfo(f)
+                    # ignore directories
+                    if S_ISDIR(fi1.mode) and S_ISDIR(fi2.mode):
+                        continue
+                    # ignore links
+                    if S_ISLNK(fi1.mode) and S_ISLNK(fi2.mode):
+                        continue
+
                     if self.isInstalled(r):
                         fmt = "Installed file %s from %s conflicts with %s, skipping %s"
                     else:
