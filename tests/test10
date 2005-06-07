@@ -80,7 +80,7 @@ doinstall() {
 run() {
         echo "$1" | tee -a $2
         { time $1; } 2>&1 | tee -a $2
-        cat $2 >> $LOG
+        [ -f $2 ] && cat $2 >> $LOG
 }
 
 genyumconf() {
@@ -139,11 +139,6 @@ CHECKUPDATE="./pyrpmcheckrepo --quiet"
 # Specify if updates to newer releases should be done.
 RELEASEUPDATE=1
 LOG=$DATA/LOG
-
-# Currently non-working:
-#doinstall --nodev $RELEASED/RHL-5.2/GOLD/i386/$RPMS $DATA/5.2
-#doinstall --nodev $RELEASED/RHL-6.2/GOLD/i386/$RPMS $DATA/6.2
-#doinstall --nodev $RELEASED/RHEL-2.1/U6/AS/i386/tree/$RPMS $DATA/2.1-U6-i386
 
 function rhel34installtests() {
     echo "Running $FUNCNAME check on $ARCH"
@@ -309,10 +304,10 @@ function rhelpyrpmyum() {
     echo "Running $FUNCNAME check on $ARCH"
     for dist in 3 4 5; do
         IN=$DATA/RHEL$dist-rhelpyrpmyum-$ARCH
-        for update in U1 U2 U3 U4 U5 U6 U7 U8; do
+        for update in U1 U2 U3 U4 U5 U6 U7 U8 U9; do
             # --test RHEL install with updates
             if [ -d $RELEASED/RHEL-$dist/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS -a -d $UPDATES/RHEL$dist-$update-${ARCH/686/386}-nightly/RedHat/RPMS ]; then
-                run "$PYRPMYUM --test --ignoresize --arch $ARCH -r $IN -c $IN/etc/nosuchfile.conf update $RELEASED/RHEL-$dist/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS $UPDATES/RHEL$dist-$update-$ARCH-nightly/RedHat/RPMS" "$IN.LOG"
+                run "$PYRPMYUM --test --ignoresize --arch $ARCH -r $IN -c $IN/etc/nosuchfile.conf update $RELEASED/RHEL-$dist/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS $UPDATES/RHEL$dist-$update-${ARCH/686/386}-nightly/RedHat/RPMS" "$IN.LOG"
             fi
         done
     done
@@ -323,28 +318,24 @@ function rhfileconflicts() {
     PYRPMYUM="./pyrpmyum -y --quiet"
     # Fileconflict tests
     for i in 3 4 5; do
-        if [ -d $DIR/RHEL-$i/GOLD/AS/$ARCH/tree/Redhat/RPMS ]; then
-            RPMDIR="$DIR/RHEL-$i/GOLD/AS/$ARCH/tree/Redhat/RPMS"
-        elif [ -d $DIR/$i/$ARCH/RedHat/RPMS ]; then
-            RPMDIR="$DIR/$i/$ARCH/RedHat/RPMS"
+        if [ -d $DIR/RHEL-$i/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS ]; then
+            RPMDIR="$DIR/RHEL-$i/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS"
+        elif [ -d $DIR/$i/${ARCH/686/386}/RedHat/RPMS ]; then
+            RPMDIR="$DIR/$i/${ARCH/686/386}/RedHat/RPMS"
+        elif [ -d $RELEASED/RHEL-$i/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS ]; then
+            RPMDIR="$RELEASED/RHEL-$i/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS"
+            echo "No $DIR/RHEL-$i/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS or $DIR/$i/${ARCH/686/386}/RedHat/RPMS directories found"
+            echo "using $RELEASED/RHEL-$i/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS"
         else
-            echo "No $DIR/RHEL-$i/GOLD/AS/$ARCH/tree/Redhat/RPMS or $DIR/$i/$ARCH/RedHat/RPMS directories found"
+            echo "No $DIR/RHEL-$i/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS or $DIR/$i/${ARCH/686/386}/RedHat/RPMS directories found"
             continue 
         fi
         IN=$DATA/RHEL-${i}-fileconflicts-$ARCH
         run "$PYRPMYUM --test --arch $ARCH --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf install $RPMDIR" "$IN.LOG"
-        if [ -d $UPDATES/RHEL$i-$update-$ARCH-nightly/RedHat/RPMS ]; then
-            run "$PYRPMYUM --test --arch $ARCH --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH" "$IN.LOG"
-        fi
-        if [ -d $DIR/updates/testing/$i/$ARCH ]; then
-            run "$PYRPMYUM --test --arch $ARCH --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/updates/testing/$i/$ARCH" "$IN.LOG"
-        fi
-        if [ -d $DIR/../fedora-extras/$i/$ARCH ]; then
-            run "$PYRPMYUM --test --arch $ARCH --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/$ARCH $DIR/../fedora-extras/$i/$ARCH" "$IN.LOG"
-            run "$PYRPMYUM --test --arch $ARCH --overlap --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/../fedora-extras/$i/$ARCH" "$IN-overlap.LOG"
+        if [ -d $UPDATES/RHEL$i-$update-${ARCH/686/386}-nightly/RedHat/RPMS ]; then
+            run "$PYRPMYUM --test --arch $ARCH --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/${ARCH/686/386}" "$IN.LOG"
         fi
     done
-    cat $IN.LOG* >> $LOG
 }
 
 function fcfileconflicts() {
@@ -447,9 +438,9 @@ function fcsanitychecks() {
     IN=$DATA/
     for i in 1 2 3 4 5; do
         for dir in \
-            "$dist-$i/$ARCH/Fedora/RPMS" \
-            "$dist-$i/GOLD/$ARCH/Fedora/RPMS" \
-            "$dist-$i/GOLD/$ARCH/tree/Fedora/RPMS" \
+            "FC-$i/$ARCH/Fedora/RPMS" \
+            "FC-$i/GOLD/$ARCH/Fedora/RPMS" \
+            "FC-$i/GOLD/$ARCH/tree/Fedora/RPMS" \
             "GOLD/$ARCH/tree/Fedora/RPMS" \
             "$ARCH/Fedora/RPMS" \
             "$ARCH/tree/Fedora/RPMS" \
@@ -485,6 +476,40 @@ function fcsanitychecks() {
             run "$CHECKRPM $DIR/development" "$logfile"
         fi
     fi
+}
+
+function rhsanitychecks() {
+    # Sanity checks, RHEL, RHEL+Updates
+    echo "Running $FUNCNAME check on $ARCH"
+    IN=$DATA/
+    for i in 3 4 5; do
+        for dir in \
+            "RHEL-$i/${ARCH/686/386}/RedHat/RPMS" \
+            "RHEL-$i/GOLD/AS/${ARCH/686/386}/RedHat/RPMS" \
+            "RHEL-$i/GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS" \
+            "GOLD/AS/${ARCH/686/386}/tree/RedHat/RPMS" \
+            "${ARCH/686/386}/RedHat/RPMS" \
+            "${ARCH/686/386}/tree/RedHat/RPMS" \
+            "$i/${ARCH/686/386}/os/RedHat/RPMS" \
+            "RedHat/RPMS"; do
+            if [ -d "$DIR/$dir" ]; then
+                logfile=$IN/CHECKRPM-RHEL-${DIR//\//-}
+                logfile=$logfile-${dir//\//-}-$ARCH
+                if [ ! -f "$logfile" ]; then
+                    run "$CHECKRPM --nosymlinks $DIR/$dir" "$logfile"
+                    for update in U1 U2 U3 U4 U5 U6 U7 U8 U9; do
+                        if [ -d "$UPDATES/RHEL$i-$update-${ARCH/686/386}-nightly/RedHat/RPMS" ]; then
+                            logfile=$IN/CHECKRPM-RHEL-updates-$update-${DIR//\//-}
+                            logfile=$logfile-${dir//\//-}-$ARCH
+                            if [ ! -f "$logfile" ]; then
+                                run "$CHECKRPM --nosymlinks $DIR/$dir $UPDATES/RHEL$i-$update-${ARCH/686/386}-nightly/RedHat/RPMS" "$logfile"
+                            fi
+                        fi
+                    done
+                fi
+            fi
+        done
+    done
 }
 
 function fc123pyrpmyumyummix() {
@@ -537,7 +562,8 @@ TESTS=( "RHEL3_U3-U5 RHEL4 installtests with pyrpmyum"
         "RHEL-4 update to U1 with pyrpmyum"
         "Fedora Core 3 with extras"
         "RHEL with updates"
-        "Fileconflict tests"
+        "FC Fileconflict tests"
+        "RHEL Fileconflict tests"
         "Sanity checks, each directory (FC/updates/Extras) on its own"
         "Sanity checks, FC, FC+Updates, FC+Updates+Testing"
         "Run FC3 to devel updates on all archs"
@@ -558,6 +584,7 @@ TESTFUNCTIONS=("rhel34installtests"
                "fc3extraspyrpmyum"
                "rhelpyrpmyum"
                "fcfileconflicts"
+               "rhfileconflicts"
                "sanitychecks"
                "fcsanitychecks"
                "fc3todevelupdatecheck"
@@ -578,6 +605,8 @@ if test x$1 = x--help ; then
     echo "                           p.e. /mnt/raid/fedora/"
     echo "[--checkfedora]          - runs dependency, fcfileconflicts, symlink and install tests"
     echo "                           on FC, FC+updates, FC+updates+testing, FC+updates+extras, FC3->devel"
+    echo "[--checkrhel]            - runs dependency, fcfileconflicts, symlink and install tests"
+    echo "                           on RHEL, RHEL+updates"
 
     for i in `seq 0 $numtests`; do 
         echo "[--${TESTFUNCTIONS[$i]}]   (${TESTS[$i]})"
@@ -604,7 +633,7 @@ while [ "$#" != "0" ]; do
             teststorun="fc3extraspyrpmyum fcfileconflicts fcsanitychecks fc3todevelupdatecheck"
             shift
         elif [ "$1" == "--checkrhel" ]; then
-            teststorun="fc3extraspyrpmyum rhfileconflicts rhsanitychecks"
+            teststorun="rhelpyrpmyum rhfileconflicts rhsanitychecks"
             shift
         else
             teststorun="$teststorun ${1/--/}"
