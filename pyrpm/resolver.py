@@ -357,8 +357,8 @@ class RpmResolver(RpmList):
                    fi1.md5sum == fi2.md5sum:
                 continue
             # ignore ghost files
-            if fi1.flag & base.RPMFILE_GHOST or \
-                   fi2.flag & base.RPMFILE_GHOST:
+            if fi1.flags & base.RPMFILE_GHOST or \
+                   fi2.flags & base.RPMFILE_GHOST:
                 continue
 
             if self.isInstalled(r):
