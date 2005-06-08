@@ -362,7 +362,8 @@ function fcfileconflicts() {
         fi
         if [ -d $DIR/../fedora-extras/$i/${ARCH/686/386} ]; then
             run "$PYRPMYUM --test --arch $ARCH --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/updates/$i/${ARCH/686/386} $DIR/../fedora-extras/$i/${ARCH/686/386}" "$IN.LOG"
-            run "$PYRPMYUM --test --arch $ARCH --overlap --fileconflicts --ignoresize -r $IN -c $IN/etc/nosuchfile.conf update  $RPMDIR $DIR/../fedora-extras/$i/${ARCH/686/386}" "$IN-overlap.LOG"
+            # Not really a fileconflict check, but useful sometimes:
+            #run "$CHECKRPM --overlap $RPMDIR $DIR/../fedora-extras/$i/${ARCH/686/386}" "$IN-overlap.LOG"
         fi
     done
 }
