@@ -237,7 +237,7 @@ class RpmResolver(RpmList):
                     if pkg["name"] == r["name"]:
                         continue
                 else:
-                    if pkg.getNEVR() != r.getNEVR():
+                    if pkg.getNEVR() == r.getNEVR():
                         continue
 
                 if self.isInstalled(r):
