@@ -310,11 +310,11 @@ class RpmResolver(RpmList):
                        (name,flag,version) in self.installed_conflicts[pkg]:
                     continue
                 if self.isInstalled(r):
-                    fmt = "Installed %s conflicts with %s, skipping %s"
+                    fmt = "%s conflicts with already installed %s, skipping %s"
                 else:
-                    fmt = "Added %s conflicts with %s, skipping %s"
-                self.config.printWarning(1, fmt % (r.getNEVRA(),
-                                                   pkg.getNEVRA(),
+                    fmt = "%s conflicts with already added %s, skipping %s"
+                self.config.printWarning(1, fmt % (pkg.getNEVRA(),
+                                                   r.getNEVRA(),
                                                    pkg.getNEVRA()))
                 ret = 1
         return ret
@@ -362,11 +362,11 @@ class RpmResolver(RpmList):
                 continue
 
             if self.isInstalled(r):
-                fmt = "Installed file %s from %s conflicts with %s, skipping %s"
+                fmt = "File %s of %s conflicts with already installed %s, skipping %s"
             else:
-                fmt = "Added file %s from %s conflicts with %s, skipping %s"
-            self.config.printWarning(1, fmt % (filename, r.getNEVRA(),
-                                               pkg.getNEVRA(),
+                fmt = "File %s of %s conflicts with already added %s, skipping %s"
+            self.config.printWarning(1, fmt % (filename, pkg.getNEVRA(),
+                                               r.getNEVRA(),
                                                pkg.getNEVRA()))
             ret = 1
         return ret
