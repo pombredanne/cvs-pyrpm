@@ -1600,9 +1600,13 @@ class RpmRepo(RpmDatabase):
                 name = node.prop("name")
                 flags = node.prop("flags")
                 ver = node.prop("ver")
+                if node.prop("pre") == "1":
+                    prereq = RPMSENSE_PREREQ
+                else:
+                    prereq = 0
                 if ver == None:
                     plist[0].append(name)
-                    plist[1].append(0)
+                    plist[1].append(prereq)
                     plist[2].append("")
                     node = node.next
                     continue
@@ -1613,10 +1617,6 @@ class RpmRepo(RpmDatabase):
                 if rel != None:
                     ver = "%s-%s" % (ver, rel)
                 plist[0].append(name)
-                if node.prop("pre") == "1":
-                    prereq = RPMSENSE_PREREQ
-                else:
-                    prereq = 0
                 plist[1].append(self.flagmap[flags] + prereq)
                 plist[2].append(ver)
             node = node.next
