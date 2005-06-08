@@ -223,35 +223,6 @@ class RpmResolver(RpmList):
         return self.OK
     # ----
 
-    def _checkConflict(self, pkg, name, flag, version, arch=None,
-                       operation=OP_INSTALL):
-        s = self.conflicts.search(name, flag, version, arch)
-        ret = 0
-        if len(s) != 0:
-            if pkg in s:
-                s.remove(pkg)
-            for r in s:
-                if self.config.checkinstalled == 0 and \
-                       pkg in self.installed_conflicts and \
-                       (name,flag,version) in self.installed_conflicts[pkg]:
-                    continue
-                if operation == OP_UPDATE:
-                    if pkg["name"] == r["name"]:
-                        continue
-                else:
-                    if pkg.getNEVR() == r.getNEVR():
-                        continue
-                if self.isInstalled(r):
-                    fmt = "Installed %s conflicts with %s, skipping %s"
-                else:
-                    fmt = "Added %s conflicts with %s, skipping %s"
-                self.config.printWarning(1, fmt % (r.getNEVRA(),
-                                                   pkg.getNEVRA(),
-                                                   pkg.getNEVRA()))
-                ret = 1
-        return ret
-    # ----
-
     def install(self, pkg, operation=OP_INSTALL):
         if self.config.noconflicts == 0:
             # check conflicts for provides
@@ -266,36 +237,7 @@ class RpmResolver(RpmList):
         if self.config.nofileconflicts == 0:
             # check for file conflicts
             for f in pkg["filenames"]:
-                s = self.filenames.search(f)
-                fi1 = pkg.getRpmFileInfo(f)
-                if pkg in s:
-                    s.remove(pkg)
-                for r in s:
-                    if self.config.checkinstalled == 0 and \
-                           pkg in self.installed_file_conflicts and \
-                           f in self.installed_file_conflicts[pkg]:
-                        continue
-                    if operation == OP_UPDATE:
-                        if pkg["name"] == r["name"]:
-                            continue
-                    else:
-                        if pkg.getNEVR() == r.getNEVR():
-                            continue
-                    fi2 = r.getRpmFileInfo(f)
-                    # ignore directories
-                    if S_ISDIR(fi1.mode) and S_ISDIR(fi2.mode):
-                        continue
-                    # ignore links
-                    if S_ISLNK(fi1.mode) and S_ISLNK(fi2.mode):
-                        continue
-
-                    if self.isInstalled(r):
-                        fmt = "Installed file %s from %s conflicts with %s, skipping %s"
-                    else:
-                        fmt = "Added file %s from %s conflicts with %s, skipping %s"
-                    self.config.printWarning(1, fmt % (f, r.getNEVRA(),
-                                                       pkg.getNEVRA(),
-                                                       pkg.getNEVRA()))
+                if self._checkFileConflict(pkg, f, operation):
                     return self.FILE_CONFLICT
 
         ret = RpmList.install(self, pkg, operation)
@@ -347,6 +289,88 @@ class RpmResolver(RpmList):
             del self.obsoletes[pkg]
 
         return self.OK
+    # ----
+
+    def _checkConflict(self, pkg, name, flag, version, arch=None,
+                       operation=OP_INSTALL):
+        s = self.conflicts.search(name, flag, version, arch)
+        ret = 0
+        if len(s) != 0:
+            if pkg in s:
+                s.remove(pkg)
+            for r in s:
+                if operation == OP_UPDATE:
+                    if pkg["name"] == r["name"]:
+                        continue
+                else:
+                    if pkg.getNEVR() == r.getNEVR():
+                        continue
+                if self.config.checkinstalled == 0 and \
+                       pkg in self.installed_conflicts and \
+                       (name,flag,version) in self.installed_conflicts[pkg]:
+                    continue
+                if self.isInstalled(r):
+                    fmt = "Installed %s conflicts with %s, skipping %s"
+                else:
+                    fmt = "Added %s conflicts with %s, skipping %s"
+                self.config.printWarning(1, fmt % (r.getNEVRA(),
+                                                   pkg.getNEVRA(),
+                                                   pkg.getNEVRA()))
+                ret = 1
+        return ret
+    # ----
+
+    def _checkFileConflict(self, pkg, filename, operation=OP_INSTALL):
+        ret = 0
+
+        s = self.filenames.search(filename)
+        if pkg in s:
+            s.remove(pkg)
+        fi1 = pkg.getRpmFileInfo(filename)
+        for r in s:
+            if self.config.checkinstalled == 0 and \
+                   pkg in self.installed_file_conflicts and \
+                   filename in self.installed_file_conflicts[pkg]:
+                continue
+            if operation == OP_UPDATE:
+                if pkg["name"] == r["name"]:
+                    continue
+            else:
+                if pkg.getNEVR() == r.getNEVR() and \
+                       buildarchtranslate[pkg["arch"]] != \
+                       buildarchtranslate[r["arch"]] and \
+                       pkg["arch"] != "noarch" and \
+                       r["arch"] != "noarch":
+                    # do not check packages with the same NEVR which are
+                    # not buildarchtranslate compatible
+                    continue
+            fi2 = r.getRpmFileInfo(filename)
+            # ignore directories
+            if S_ISDIR(fi1.mode) and S_ISDIR(fi2.mode):
+                continue
+            # ignore links
+            if S_ISLNK(fi1.mode) and S_ISLNK(fi2.mode):
+                continue
+            # ignore identical files
+            if fi1.mode == fi2.mode and \
+                   fi1.filesize == fi2.filesize and \
+                   fi1.md5sum == fi2.md5sum:
+                continue
+            # ignore ghost files
+            if fi1.flag & base.RPMFILE_GHOST or \
+                   fi2.flag & base.RPMFILE_GHOST:
+                continue
+
+            if self.isInstalled(r):
+                fmt = "Installed file %s from %s conflicts with %s, skipping %s"
+            else:
+                fmt = "Added file %s from %s conflicts with %s, skipping %s"
+            self.config.printWarning(1, fmt % (filename, r.getNEVRA(),
+                                               pkg.getNEVRA(),
+                                               pkg.getNEVRA()))
+            ret = 1
+        return ret
+
     # ----
 
     def _pkgObsolete(self, pkg, obsolete_pkg):
@@ -485,14 +509,19 @@ class RpmResolver(RpmList):
                     if r in s:
                         s.remove(r)
                     for r2 in s:
-                        if r.getNEVR() != r2.getNEVR():
-                            if self.config.checkinstalled == 0 and \
-                                   r in self.installed_conflicts and \
-                                   (c, r2) in self.installed_conflicts[r]:
-                                continue
-                            if r not in conflicts:
-                                conflicts[r] = [ ]
-                            conflicts[r].append((c, r2))
+                        if self.config.checkinstalled == 0 and \
+                               r2 in self.installed_conflicts and \
+                               c in self.installed_conflicts[pkg]:
+                            continue
+                        if r.getNEVR() == r2.getNEVR():
+                            continue
+                        if self.config.checkinstalled == 0 and \
+                               r in self.installed_conflicts and \
+                               (c, r2) in self.installed_conflicts[r]:
+                            continue
+                        if r not in conflicts:
+                            conflicts[r] = [ ]
+                        conflicts[r].append((c, r2))
         return conflicts
     # ----
 
