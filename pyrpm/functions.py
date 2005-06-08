@@ -533,7 +533,8 @@ def addRepo(yum, file):
                 rpmconfig.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
 
 def selectNewestPkgs(pkglist):
-    """Filter the newest packages from given list and return new list"""
+    """Filter the newest packages from given list and return new list. Honors
+buildarchtranslate and noarch problems."""
     rethash = {}
     for pkg in pkglist:
         key1 = pkg["name"]+".noarch"
@@ -542,25 +543,28 @@ def selectNewestPkgs(pkglist):
             rethash[key1] = pkg
             rethash[key2] = pkg
             continue
-        opkg = rethash[key1]
-        key3 = opkg["name"]+"."+buildarchtranslate[opkg["arch"]]
-        if key2 != key3:
+        if rethash.has_key(key2):
+            opkg = rethash[key2]
+        else:
+            opkg = rethash[key1]
+        if not pkg["arch"] == "noarch" and \
+           not opkg["arch"] == "noarch" and \
+           not archDuplicate(pkg["arch"], opkg["arch"]):
+            if rethash.has_key(key2):
+                raiseFatal("Impossible entry in selectNewestPkgs() found.")
             rethash[key2] = pkg
             continue
+        key3 = opkg["name"]+"."+buildarchtranslate[opkg["arch"]]
         ret = pkgCompare(opkg, pkg)
         if   ret < 0:
-            try:
+            if rethash.has_key(key3):
                 del rethash[key3]
-            except:
-                pass
             rethash[key1] = pkg
             rethash[key2] = pkg
         elif ret == 0 and \
              opkg["arch"] in arch_compats[pkg["arch"]]:
-            try:
+            if rethash.has_key(key3):
                 del rethash[key3]
-            except:
-                pass
             rethash[key1] = pkg
             rethash[key2] = pkg
     for key in rethash.keys():
