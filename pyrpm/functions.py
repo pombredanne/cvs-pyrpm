@@ -554,17 +554,12 @@ buildarchtranslate and noarch problems."""
                 raiseFatal("Impossible entry in selectNewestPkgs() found.")
             rethash[key2] = pkg
             continue
-        key3 = opkg["name"]+"."+buildarchtranslate[opkg["arch"]]
         ret = pkgCompare(opkg, pkg)
         if   ret < 0:
-            if rethash.has_key(key3):
-                del rethash[key3]
             rethash[key1] = pkg
             rethash[key2] = pkg
         elif ret == 0 and \
              opkg["arch"] in arch_compats[pkg["arch"]]:
-            if rethash.has_key(key3):
-                del rethash[key3]
             rethash[key1] = pkg
             rethash[key2] = pkg
     for key in rethash.keys():
