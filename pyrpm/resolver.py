@@ -228,6 +228,8 @@ class RpmResolver(RpmList):
         s = self.conflicts.search(name, flag, version, arch)
         ret = 0
         if len(s) != 0:
+            if pkg in s:
+                s.remove(pkg)
             for r in s:
                 if self.config.checkinstalled == 0 and \
                        pkg in self.installed_conflicts and \
@@ -239,7 +241,6 @@ class RpmResolver(RpmList):
                 else:
                     if pkg.getNEVR() == r.getNEVR():
                         continue
-
                 if self.isInstalled(r):
                     fmt = "Installed %s conflicts with %s, skipping %s"
                 else:
@@ -267,6 +268,8 @@ class RpmResolver(RpmList):
             for f in pkg["filenames"]:
                 s = self.filenames.search(f)
                 fi1 = pkg.getRpmFileInfo(f)
+                if pkg in s:
+                    s.remove(pkg)
                 for r in s:
                     if self.config.checkinstalled == 0 and \
                            pkg in self.installed_file_conflicts and \
@@ -276,7 +279,7 @@ class RpmResolver(RpmList):
                         if pkg["name"] == r["name"]:
                             continue
                     else:
-                        if pkg.getNEVR() != r.getNEVR():
+                        if pkg.getNEVR() == r.getNEVR():
                             continue
                     fi2 = r.getRpmFileInfo(f)
                     # ignore directories
