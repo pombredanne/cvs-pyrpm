@@ -25,6 +25,7 @@ from stat import S_ISLNK, S_ISDIR
 from hashlist import HashList
 from rpmlist import RpmList
 from functions import *
+from base import *
 
 # ----------------------------------------------------------------------------
 
@@ -357,8 +358,8 @@ class RpmResolver(RpmList):
                    fi1.md5sum == fi2.md5sum:
                 continue
             # ignore ghost files
-            if fi1.flags & base.RPMFILE_GHOST or \
-                   fi2.flags & base.RPMFILE_GHOST:
+            if fi1.flags & RPMFILE_GHOST or \
+                   fi2.flags & RPMFILE_GHOST:
                 continue
 
             if self.isInstalled(r):
