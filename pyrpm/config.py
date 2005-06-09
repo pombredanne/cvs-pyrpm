@@ -67,7 +67,7 @@ class RpmConfig:
             "requireflags", "requireversion", "obsoletename", "obsoleteflags",
             "obsoleteversion", "conflictname", "conflictflags",
             "conflictversion", "filesizes", "filemodes", "filemd5s",
-            "fileflags" "dirindexes", "basenames", "dirnames", "oldfilenames",
+            "fileflags", "dirindexes", "basenames", "dirnames", "oldfilenames",
             "sourcerpm", "md5", "sha1header")
         self.timer = 0
         self.ldconfig = 0

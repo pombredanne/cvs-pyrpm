@@ -1044,7 +1044,7 @@ class RpmPyDB(RpmDatabase):
             return 1
         namelist = os.listdir(dbpath+"/headers")
         tags = list(self.config.resolvertags)
-        tags.extend(("filerdevs", "filemtimes", "filelinktos", "fileflags", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
+        tags.extend(("filerdevs", "filemtimes", "filelinktos", "fileusername", "filegroupname", "fileverifyflags", "filedevices", "fileinodes", "preunprog", "preun", "postunprog", "postun", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex"))
         for nevra in namelist:
             src = "pydb:/"+dbpath+"/headers/"+nevra
             pkg = package.RpmPackage(self.config, src)
