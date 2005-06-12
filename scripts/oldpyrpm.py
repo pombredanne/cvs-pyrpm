@@ -1181,6 +1181,12 @@ class ReadRpm:
             return "%d:%s-%s" % (e[0], self["version"], self["release"])
         return "%s-%s" % (self["version"], self["release"])
 
+    def getEpoch(self):
+        e = self["epoch"]
+        if e == None:
+            return "0"
+        return str(e[0])
+
     def getArch(self):
         if self.issrc:
             return "src"
@@ -1582,6 +1588,7 @@ def extractRpm(filename, buildroot, owner=None):
         rpm["filegroupname"] = rpm.gid.addUGids(rpm["filegroupname"])
         rpm.gid.transform(buildroot)
     rpm.readPayload(rpm.extractCpio)
+    rpm.closeFd()
 
 def isBinary(file):
     for i in (".gz", ".tgz", ".taz", ".bz2", ".z", ".Z", ".zip", ".ttf",
@@ -1694,6 +1701,133 @@ def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
         + " | " + sed)
     os.system("rm -rf " + orpm.buildroot + " " + nrpm.buildroot)
     return ret
+
+def cmpRpms(one, two):
+    evr1 = (one.getEpoch(), one["version"], one["release"])
+    evr2 = (two.getEpoch(), two["version"], two["release"])
+    return labelCompare(evr1, evr2)
+
+class RpmTree:
+
+    def __init__(self):
+        self.h = {}
+
+    def addRpm(self, filename):
+        if isinstance(filename, StringType):
+            rpm = ReadRpm(filename)
+            if rpm.readHeader(rpmsigtag, rpmtag):
+                print "Cannot read %s.\n" % filename
+                return None
+            rpm.closeFd()
+        else:
+            rpm = filename
+        na = (rpm["name"], rpm.getArch())
+        if not self.h.has_key(na):
+            self.h[na] = []
+        self.h[na].append(rpm)
+        return rpm
+
+    def addDirectory(self, dirname):
+        files = map(lambda v,dirname=dirname: dirname + '/' + v, os.listdir(dirname))
+        for f in files:
+            if f.endswith(".rpm"):
+                self.addRpm(f)
+
+    def getNames(self):
+        rpmnames = self.h.keys()
+        rpmnames.sort()
+        return rpmnames
+
+    def sortVersions(self):
+        for v in self.h.values():
+            v.sort(cmpRpms)
+
+    def keepNewest(self):
+        for r in self.h.keys():
+            v = self.h[r]
+            newest = v[0]
+            for rpm in v:
+                if cmpRpms(newest, rpm) < 0:
+                    newest = rpm
+            self.h[r] = [newest]
+
+def checkSrpms():
+    r = RpmTree()
+    for d in ("/var/www/html/mirror/rhn/SRPMS",
+        "/var/www/html/mirror/updates-rhel/2.1",
+        "/var/www/html/mirror/updates-rhel/3"):
+        r.addDirectory(d)
+    r.sortVersions()
+    # Remove identical rpms. Use the md5sum to check for
+    # ones where header+payload are the same (then only
+    # the signature will probably be different and only
+    # print a warning about further rpms who might be rebuilt.
+    for v in r.h.values():
+        i = 0
+        while i < len(v) - 1:
+            if cmpRpms(v[i], v[i + 1]) == 0:
+                md5 = v[i].sig["md5"]
+                if md5 != None and md5 == v[i + 1].sig["md5"]:
+                    v.remove(v[i])
+                else:
+                    print "duplicate rpms:", v[i].filename, v[i + 1].filename
+                    v.remove(v[i])
+            i = i + 1
+    # This check needs to be per release/updates:
+    #for v in rpms.values():
+    #    for i in xrange(len(v) - 1):
+    #        if v[i].hdr.getOne("buildtime") > v[i + 1].hdr.getOne("buildtime"):
+    #            print "buildtime inversion:", v[i].filename, v[i + 1].filename
+    for rp in r.getNames():
+        v = r.h[rp]
+        print "%s:" % v[0]["name"]
+        for r in v:
+            print "\t%s" % r.getFilename()
+
+def cmpA(h1, h2):
+    return cmp(h1[0], h2[0])
+
+def checkArch(path):
+    print "Mark the arch where a src.rpm would not get built:\n"
+    arch = ['i386', 'x86_64', 'ia64', 'ppc', 's390', 's390x']
+    r = RpmTree()
+    r.addDirectory(path)
+    r.keepNewest() # Only look at the newest src.rpms.
+    # Print table of archs to look at.
+    for i in xrange(len(arch) + 2):
+        s = ""
+        for a in arch:
+            if len(a) > i:
+                s = "%s%s " % (s, a[i])
+            else:
+                s = s + "  "
+        print "%29s  %s" % ("", s)
+    showrpms = []
+    for rp in r.getNames():
+        srpm = r.h[rp][0]
+        builds = {}
+        showit = 0
+        n = 1
+        nn = 0
+        for a in arch:
+            if srpm.buildOnArch(a):
+                builds[a] = 1
+                nn += n
+            else:
+                builds[a] = 0
+                showit = 1
+            n = n + n
+        if showit:
+            showrpms.append((nn, builds, srpm))
+    showrpms.sort(cmpA)
+    for (dummy, builds, srpm) in showrpms:
+        s = ""
+        for a in arch:
+            if builds[a] == 1:
+                s = "%s  " % s
+            else:
+                s = "%sx " % s
+        print "%29s  %s" % (srpm["name"], s)
 
 
 def checkSymlinks(repo):
@@ -1866,9 +2000,15 @@ def main():
     wait = 0
     verify = 1
     small = 0
+    explode = 0
+    diff = 0
+    extract = 0
+    checksrpms = 0
+    checkarch = 0
     (opts, args) = getopt.getopt(sys.argv[1:], "?",
-        ["help", "strict", "digest", "nodigest",
-         "payload", "nopayload", "wait", "noverify", "small"])
+        ["help", "strict", "digest", "nodigest", "payload", "nopayload",
+         "wait", "noverify", "small", "explode", "diff", "extract",
+         "checksrpms", "checkarch"])
     for (opt, val) in opts:
         if opt in ["-?", "--help"]:
             print "verify rpm packages"
@@ -1889,6 +2029,30 @@ def main():
             verify = 0
         elif opt == "--small":
             small = 1
+        elif opt == "--explode":
+            explode = 1
+        elif opt == "--diff":
+            diff = 1
+        elif opt == "--extract":
+            extract = 1
+        elif opt == "--checksrpms":
+            checksrpms = 1
+        elif opt == "--checkarch":
+            checkarch = 1
+    if diff:
+        diff = diffTwoSrpms(args[0], args[1], explode)
+        if diff != "":
+            print diff
+        return
+    if extract:
+        extractRpm(args[0], args[1])
+        return
+    if checksrpms:
+        checkSrpms()
+        return
+    if checkarch:
+        checkArch(args[0])
+        return
     keepdata = 1
     hdrtags = rpmtag
     if nodigest == 1:
@@ -1947,9 +2111,6 @@ if __name__ == "__main__":
         s.strip_dirs().sort_stats("cumulative").print_stats(100)
         os.unlink(filename)
     else:
-        #extractRpm("/home/fedora/SRPMS/bash-3.0-31.src.rpm", "/home/devel/laroche/rpm/source2/")
-        #print diffTwoSrpms("/home/devel/laroche/rpm/rpms/pyrpm-0.22-1.src.rpm",
-        #    "/home/devel/laroche/rpm/rpms/pyrpm-0.23-1.src.rpm", 1)
         main()
 
 # vim:ts=4:sw=4:showmatch:expandtab
