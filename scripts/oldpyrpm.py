@@ -1170,6 +1170,7 @@ class ReadRpm:
             self.raiseErr("Error reading CPIO payload")
         for filename in filenamehash.iterkeys():
             self.printErr("file not in cpio: %s" % filename)
+        self.closeFd()
 
     def getSpecfile(self, filenames=None):
         fileflags = self["fileflags"]
@@ -1595,7 +1596,6 @@ def extractRpm(filename, buildroot, owner=None):
         rpm.gid = Gid(rpm["filegroupname"])
         rpm.gid.transform(buildroot)
     rpm.readPayload(rpm.extractCpio)
-    rpm.closeFd()
 
 def isBinary(file):
     for i in (".gz", ".tgz", ".taz", ".bz2", ".z", ".Z", ".zip", ".ttf",
@@ -1650,17 +1650,17 @@ def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
             orpm["release"] + " to " + nrpm["version"] + "-" + \
             nrpm["release"] + ".\n"
 
-    orpm.buildroot = mktmp("/tmp/", "A") + "/"
-    nrpm.buildroot = mktmp("/tmp/", "B") + "/"
+    obuildroot = orpm.buildroot = mktmp("/tmp/", "A") + "/"
+    nbuildroot = nrpm.buildroot = mktmp("/tmp/", "B") + "/"
 
-    sed1 = "sed 's#^--- " + orpm.buildroot + "#--- #'"
-    sed2 = "sed 's#^+++ " + nrpm.buildroot + "#+++ #'"
+    sed1 = "sed 's#^--- " + obuildroot + "#--- #'"
+    sed2 = "sed 's#^+++ " + nbuildroot + "#+++ #'"
     sed = sed1 + " | " + sed2
 
-    extractRpm(orpm, orpm.buildroot)
+    extractRpm(orpm, obuildroot)
     ofiles = orpm.getFilenames()
     ospec = orpm.getSpecfile(ofiles)
-    extractRpm(nrpm, nrpm.buildroot)
+    extractRpm(nrpm, nbuildroot)
     nfiles = nrpm.getFilenames()
     nspec = nrpm.getSpecfile(nfiles)
 
@@ -1670,43 +1670,43 @@ def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
         if ofiles[f] not in nfiles:
             if isBinary(ofiles[f]):
                 if explode:
-                    explodeFile(ofiles[f], orpm.buildroot)
+                    explodeFile(ofiles[f], obuildroot)
                 ret = ret + "--- " + ofiles[f] + " is removed\n"
-                os.unlink(orpm.buildroot + ofiles[f])
+                os.unlink(obuildroot + ofiles[f])
             continue
         g = nfiles.index(ofiles[f])
         if orpm["filemd5s"][f] == nrpm["filemd5s"][g] and \
             f != ospec and g != nspec:
-            os.unlink(orpm.buildroot + ofiles[f])
-            os.unlink(nrpm.buildroot + nfiles[g])
+            os.unlink(obuildroot + ofiles[f])
+            os.unlink(nbuildroot + nfiles[g])
     # Search new binary files.
     for f in nfiles:
         if not isBinary(f) or f in ofiles:
             continue
         if explode:
-            explodeFile(f, nrpm.buildroot)
+            explodeFile(f, nbuildroot)
         ret = ret + "--- " + f + " is added\n"
-        os.unlink(nrpm.buildroot + f)
+        os.unlink(nbuildroot + f)
 
     # List all old and new files.
     ret = ret + "old:\n"
-    ret = ret + getoutput("ls -l " + orpm.buildroot)
+    ret = ret + getoutput("ls -l " + obuildroot)
     ret = ret + "\nnew:\n"
-    ret = ret + getoutput("ls -l " + nrpm.buildroot)
+    ret = ret + getoutput("ls -l " + nbuildroot)
     ret = ret + "\n"
 
     # Generate the diff for the spec file first.
     if ospec != None and nspec != None:
-        ospec = orpm.buildroot + ofiles[ospec]
-        nspec = nrpm.buildroot + nfiles[nspec]
+        ospec = obuildroot + ofiles[ospec]
+        nspec = nbuildroot + nfiles[nspec]
         ret = ret + getoutput("diff -u " + ospec + " " + nspec + " | " + sed)
         os.unlink(ospec)
         os.unlink(nspec)
 
     # Diff the rest.
-    ret = ret + getoutput("diff -urN " + orpm.buildroot + " " + nrpm.buildroot \
+    ret = ret + getoutput("diff -urN " + obuildroot + " " + nbuildroot \
         + " | " + sed)
-    os.system("rm -rf " + orpm.buildroot + " " + nrpm.buildroot)
+    os.system("rm -rf " + obuildroot + " " + nbuildroot)
     return ret
 
 def cmpRpms(one, two):
@@ -1736,7 +1736,7 @@ class RpmTree:
         return rpm
 
     def addDirectory(self, dirname):
-        files = map(lambda v,dirname=dirname: dirname + '/' + v, os.listdir(dirname))
+        files = map(lambda v,dirname=dirname: dirname + "/" + v, os.listdir(dirname))
         for f in files:
             if f.endswith(".rpm"):
                 self.addRpm(f)
@@ -1797,7 +1797,7 @@ def cmpA(h1, h2):
 
 def checkArch(path):
     print "Mark the arch where a src.rpm would not get built:\n"
-    arch = ['i386', 'x86_64', 'ia64', 'ppc', 's390', 's390x']
+    arch = ["i386", "x86_64", "ia64", "ppc", "s390", "s390x"]
     r = RpmTree()
     r.addDirectory(path)
     r.keepNewest() # Only look at the newest src.rpms.
