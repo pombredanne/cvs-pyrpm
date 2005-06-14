@@ -1,0 +1,397 @@
+#!/usr/bin/python
+#
+# Script to check the internal integrity and errors in the rpmdb
+# Additional parameters may be given which can be either rpms or dirs which
+# then get scanned for rpms against which the rpms in the rpmdb are compared
+# in the second phase.
+#
+
+
+import sys, os, getopt, errno
+from bsddb import hashopen, btopen
+from binascii import b2a_hex, a2b_hex
+from struct import unpack
+
+PYRPMDIR = ".."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+from pyrpm import __version__
+from pyrpm import *
+
+
+def usage():
+    print """
+pyrpmdbverify [-h, --help] [--dbpath=] PACKAGES | DIRS
+
+--help:    This usage ;)
+--dbpath:  Specifies a different path for the rpmdb. Default is /var/lib/rpm
+"""
+
+# Tags which will be read from the rpms. CHANGE HERE IF SOME TESTS NEED MORE
+# tags!!!!
+rtags = ("name", "epoch", "version", "release", "arch", "sha1header", "sourcerpm")
+def readDir(dir, list):
+    files = os.listdir(dir)
+    for f in files:
+        if os.path.isdir("%s/%s" % (dir, f)):
+            readDir("%s/%s" % (dir, f), list)
+        elif f.endswith(".rpm"):
+            if f.find("debuginfo") > 0:
+                continue
+            pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
+            try:
+                pkg.read(tags=rtags)
+                pkg.close()
+            except (IOError, ValueError), e:
+                rpmconfig.printError("%s: %s\n" % (pkg, e))
+                continue
+            rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())
+            list.append(pkg)
+
+#
+# DB Read functions
+#
+def readDB4(db, func):
+    rethash = {}
+    for key in db.keys():
+        data = db[key]
+        idx = func(key)
+        rethash[idx] = []
+        for i in xrange(0, len(data), 8):
+            rethash[idx].append((unpack("i", data[i+0:i+4])[0], \
+                                 unpack("i", data[i+4:i+8])[0]))
+    return rethash
+
+def readDB4hash(filename, func=lambda x:x):
+    db = hashopen(filename, "r")
+    return readDB4(db, func)
+
+def readDB4btree(filename, func=lambda x:x):
+    db = btopen(filename, "r")
+    return readDB4(db, func)
+
+def readBasenames():
+    global basenames
+    basenames = readDB4hash(dbpath+"/Basenames")
+
+def readConflictname():
+    global conflictname
+    conflictname = readDB4hash(dbpath+"/Conflictname")
+
+def readDirnames():
+    global dirnames
+    dirnames = readDB4btree(dbpath+"/Dirnames")
+
+def readFilemd5s():
+    global filemd5s
+    filemd5s = readDB4hash(dbpath+"/Filemd5s")
+
+def readGroup():
+    global group
+    group = readDB4hash(dbpath+"/Group")
+
+def readInstalltid():
+    global installtid
+    installtid = readDB4btree(dbpath+"/Installtid", lambda x:unpack("i", x)[0])
+
+def readName():
+    global name
+    name = readDB4hash(dbpath+"/Name")
+
+def readPackages():
+    global packages, keyring
+    packages = {}
+    keyring = PGPKeyRing()
+    db = hashopen(dbpath+"/Packages", "r")
+    for key in db.keys():
+        rpmio = RpmFileIO(rpmconfig, "dummy")
+        pkg = RpmPackage(rpmconfig, "dummy")
+        data = db[key]
+        val = unpack("i", key)[0]
+        if val != 0:
+            (indexNo, storeSize) = unpack("!ii", data[0:8])
+            indexdata = data[8:indexNo*16+8]
+            storedata = data[indexNo*16+8:]
+            pkg["signature"] = {}
+            for idx in xrange(0, indexNo):
+                try:
+                    (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
+                                                           storedata)
+                except ValueError, e:
+                    # FIXME: different handling?
+                    config.printError("Invalid header entry %s in %s: %s"
+                                      % (idx, key, e))
+                    continue
+                if   tag == 257:
+                    pkg["signature"]["size_in_sig"] = tagval
+                elif tag == 261:
+                    pkg["signature"]["md5"] = tagval
+                elif tag == 269:
+                    pkg["signature"]["sha1header"] =tagval
+                elif rpmtag.has_key(tag):
+                    if rpmtagname[tag] == "archivesize":
+                        pkg["signature"]["payloadsize"] = tagval
+                    else:
+                        pkg[rpmtagname[tag]] = tagval
+            if pkg["name"].startswith("gpg-pubkey"):
+                keys = parsePGPKeys(pkg["description"])
+                for k in keys:
+                    keyring.addKey(k)
+                pkg["group"] = (pkg["group"],)
+            pkg.generateFileNames()
+            pkg.source = "db:"+dbpath+"/"+pkg.getNEVRA()
+            packages[val] = pkg
+            rpmio.hdr = {}
+
+def readProvidename():
+    global providename
+    providename = readDB4hash(dbpath+"/Providename")
+
+def readProvideversion():
+    global provideversion
+    provideversion = readDB4btree(dbpath+"/Provideversion")
+
+def readRequirename():
+    global requirename
+    requirename = readDB4hash(dbpath+"/Requirename")
+
+def readRequireversion():
+    global requireversion
+    requireversion = readDB4btree(dbpath+"/Requireversion")
+
+def readSha1header():
+    global sha1header
+    sha1header = readDB4hash(dbpath+"/Sha1header")
+
+def readSigmd5():
+    global sigmd5
+    sigmd5 = readDB4hash(dbpath+"/Sigmd5")
+
+def readTriggername():
+    global triggername
+    triggername = readDB4hash(dbpath+"/Triggername")
+
+def readRpmDB():
+    print "Reading rpm database. This might take some time..."
+    readBasenames()
+    readConflictname()
+    readDirnames()
+    readFilemd5s()
+    readGroup()
+    readInstalltid()
+    readName()
+    readPackages()
+    readProvidename()
+    readProvideversion()
+    readRequirename()
+    readRequireversion()
+    readSha1header()
+    readSigmd5()
+    readTriggername()
+
+
+#
+# Verify functions
+#
+def verifyStructure(hash, tag, useidx=True):
+    for key in hash.keys():
+        for (id, idx) in hash[key]:
+            if not id in packages.keys():
+                print "Error %s: Package id %s doesn't exist" % (tag, id)
+                continue
+            if useidx:
+                val = packages[id][tag][idx]
+            else:
+                val = packages[id][tag]
+            if key == "\x00":
+                key = ""
+            if key != val:
+                print "Error %s: %s != %s in package %s" % (tag, key, val, packages[id].getNEVRA())
+
+def verifyReference(hash, tag, id):
+    refhash = packages[id][tag]
+    if not refhash:
+        return
+    for idx in xrange(len(refhash)):
+        key = refhash[idx]
+        if key == '':
+            key = "\x00"
+        # Ugly hacks for rpmlib() requirename...
+        if tag == "requirename":
+            if key.startswith("rpmlib(") or key.startswith("/"):
+                continue
+        if not hash.has_key(key):
+            print "Error packages %s: %s not in %s for package %s" % (tag, key, tag, packages[id].getNEVRA())
+            continue
+        if not (id, idx) in hash[key]:
+            print "Error packages %s: %s not referenced in %s for package %s" % (tag, key, tag, packages[id].getNEVRA())
+
+def verifyBasenames():
+    print "Checking Basename integrity."
+    verifyStructure(basenames, "basenames")
+
+def verifyConflictname():
+    print "Checking Conflictname integrity."
+    verifyStructure(conflictname, "conflictname")
+
+def verifyDirnames():
+    print "Checking Dirnames integrity."
+    verifyStructure(dirnames, "dirnames")
+
+def verifyFilemd5s():
+    print "Checking Filemd5s integrity."
+    tmphash = {}
+    for key in filemd5s.keys():
+        tmphash[b2a_hex(key)] = filemd5s[key]
+    verifyStructure(tmphash, "filemd5s")
+
+def verifyGroup():
+    print "Checking Group integrity."
+    verifyStructure(group, "group")
+
+def verifyInstalltid():
+    print "Checking Installtid integrity."
+    for key in installtid.keys():
+        for (id, idx) in installtid[key]:
+            if not id in packages.keys():
+                print "Error installtid: Package id %s doesn't exist" % id
+                continue
+            val = packages[id]["installtid"][0]
+            if key == "\x00":
+                key = ""
+            if key != val:
+                print "Error installtid: %s != %s in package %s" % (key, val, packages[id].getNEVRA())
+
+def verifyName():
+    print "Checking Name integrity."
+    verifyStructure(name, "name", False)
+
+def verifyPackages():
+    print "Checking Packages integrity."
+    for id in packages.keys():
+        verifyReference(basenames, "basenames", id)
+        verifyReference(conflictname, "conflictname", id)
+        verifyReference(dirnames, "dirnames", id)
+        verifyReference(group, "group", id)
+        verifyReference(providename, "providename", id)
+        verifyReference(provideversion, "provideversion", id)
+        verifyReference(requirename, "requirename", id)
+        verifyReference(requireversion, "requireversion", id)
+        verifyStructure(triggername, "triggername", id)
+
+def verifyProvidename():
+    print "Checking Providename integrity."
+    verifyStructure(providename, "providename")
+
+def verifyProvideversion():
+    print "Checking Provideversion integrity."
+    verifyStructure(provideversion, "provideversion")
+
+def verifyRequirename():
+    print "Checking Requirename integrity."
+    verifyStructure(requirename, "requirename")
+
+def verifyRequireversion():
+    print "Checking Requireversion integrity."
+    verifyStructure(requireversion, "requireversion")
+
+def verifySha1header():
+    print "Checking Sha1header integrity."
+
+def verifySigmd5():
+    print "Skipping Sigmd5 integrity check (no payload)."
+
+def verifyTriggername():
+    print "Checking Triggername integrity."
+    verifyStructure(triggername, "triggername")
+
+def verifyRpmDB():
+    verifyBasenames()
+    verifyConflictname()
+    verifyDirnames()
+    verifyFilemd5s()
+    verifyGroup()
+    verifyInstalltid()
+    verifyName()
+    verifyPackages()
+    verifyProvidename()
+    verifyProvideversion()
+    verifyRequirename()
+    verifyRequireversion()
+    verifySha1header()
+    verifySigmd5()
+    verifyTriggername()
+
+def checkRpmDB(pkglist):
+    print "Checking RpmDB against list of packages."
+    sha1hash = {}
+    for pkg in pkglist:
+        sha1hash[pkg["signature"]["sha1header"]] = pkg
+    for key in packages:
+        pkg = packages[key]
+        if pkg["name"].startswith("gpg-pubkey"):
+            continue
+        if not sha1hash.has_key(pkg["signature"]["sha1header"]):
+            print "Package %s not found in packagelist." % pkg.getNEVRA()
+
+#
+# Main
+#
+def main():
+    global dbpath
+    # Default dbpath is /var/lib/rpm
+    dbpath = "/var/lib/rpm"
+
+    # Argument parsing
+    try:
+      opts, args = getopt.getopt(sys.argv[1:], "?h",
+        ["help", "dbpath="])
+    except getopt.error, e:
+        print "Error parsing command list arguments: %s" % e
+        usage()
+        sys.exit(1)
+
+    # Argument handling
+    for (opt, val) in opts:
+        if   opt in ['-h', "--help"]:
+            usage()
+            sys.exit(0)
+        elif opt == "--dbpath":
+            dbpath = val
+
+    readRpmDB()
+#    verifyRpmDB()
+
+    pkglist = []
+    for arg in args:
+        if   os.path.isdir(arg):
+            readDir(arg, pkglist)
+        elif arg.endswith(".rpm"):
+            try:
+                pkglist.append(readRpmPackage(rpmconfig, arg, tags=rtags))
+            except (IOError, ValueError), e:
+                sys.stderr.write("%s: %s\n" % (arg, e))
+
+    checkRpmDB(pkglist)
+
+if __name__ == '__main__':
+    dohotshot = 0
+    if dohotshot:
+        import tempfile, hotshot, hotshot.stats
+        filename = tempfile.mktemp()
+        prof = hotshot.Profile(filename)
+        try:
+            prof = prof.runcall(main)
+        except SystemExit:
+            pass
+        print "Starting profil statistics. This takes some time..."
+        prof.close()
+        del prof
+        s = hotshot.stats.load(filename)
+        s.strip_dirs().sort_stats('time').print_stats(100)
+        s.strip_dirs().sort_stats('cumulative').print_stats(100)
+        os.unlink(filename)
+    else:
+        main()
+
+# vim:ts=4:sw=4:showmatch:expandtab

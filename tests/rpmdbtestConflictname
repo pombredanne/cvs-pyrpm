@@ -7,7 +7,6 @@ db = bsddb.hashopen("/var/lib/rpm/Conflictname", "r")
 
 for key in db.keys():
 	data = db[key]
-#	val = unpack("i", key)[0]
 	print key, len(data)
-        for i in xrange(0, len(data)/4):
-                print unpack("i", data[4*i:4*i+4])[0]
+        for i in xrange(0, len(data)/8):
+                print "\t", unpack("i", data[8*i:8*i+4]), unpack("i", data[8*i+4:8*i+8])

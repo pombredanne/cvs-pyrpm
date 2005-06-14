@@ -171,6 +171,7 @@ rpmtag = {
     "conflictname": (1054, RPM_STRING_ARRAY, None, 0),
     "conflictflags": (1053, RPM_INT32, None, 0),
     "conflictversion": (1055, RPM_STRING_ARRAY, None, 0),
+
     # triggers
     "triggername": (1066, RPM_STRING_ARRAY, None, 4),
     "triggerflags": (1068, RPM_INT32, None, 4),
@@ -275,7 +276,17 @@ rpmtag = {
     "archivesize": (1046, RPM_INT32, 1, 1), # only in /var/lib/rpm/Packages
     "triggerin": (1100, RPM_STRING, None, 5),
     "triggerun": (1101, RPM_STRING, None, 5),
-    "triggerpostun": (1102, RPM_STRING, None, 5)
+    "triggerpostun": (1102, RPM_STRING, None, 5),
+
+    # install information
+    "install_size_in_sig": (257, RPM_INT32, 1, 0),
+    "install_md5": (261, RPM_BIN, 16, 0),
+    "install_dsaheader": (267, RPM_BIN, 16, 0),
+    "install_sh1header": (269, RPM_STRING, None, 0),
+    "installtime": (1008, RPM_INT32, None, 0),
+    "filestates": (1029, RPM_INT32, None, 0),
+    "installcolor": (1127, RPM_INT32, None, 0),
+    "installtid": (1128, RPM_INT32, None, 0)
 }
 rpmtagname = {}
 # Add a reverse mapping for all tags and a new tag -> name mapping.

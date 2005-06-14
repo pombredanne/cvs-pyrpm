@@ -8,6 +8,6 @@ db = bsddb.hashopen("/var/lib/rpm/Triggername", "r")
 for key in db.keys():
 	data = db[key]
 	print key
-	for i in xrange(0, len(data)/4):
-                print unpack("i", data[4*i:4*i+4])[0]
+	for i in xrange(0, len(data)/8):
+                print "\t", unpack("i", data[8*i:8*i+4]), unpack("i", data[8*i+4:8*i+8])
 

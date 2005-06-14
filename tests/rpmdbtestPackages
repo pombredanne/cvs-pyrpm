@@ -5,7 +5,7 @@ from pyrpm import *
 
 db = bsddb.hashopen("/var/lib/rpm/Packages", "r")
 
-rpmio = RpmFileIO("foo")
+rpmio = RpmFileIO(config, "foo")
 
 for key in db.keys():
 	data = db[key]
