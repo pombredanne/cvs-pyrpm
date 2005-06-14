@@ -599,17 +599,9 @@ class UGid:
     def __init__(self, names=None):
         self.ugid = {}
         if names:
-            self.addUGids(names)
-
-    def addUGids(self, names):
-        # hack: building up a new array of names makes sure the string
-        # is only stored once per uid/gid
-        ids = []
-        for name in names:
-            if not self.ugid.has_key(name):
-                self.ugid[name] = name
-            ids.append(self.ugid[name])
-        return ids
+            for name in names:
+                if not self.ugid.has_key(name):
+                    self.ugid[name] = name
 
     def transform(self, chroot):
         pass
@@ -992,6 +984,19 @@ class ReadRpm:
         self.__repr__ = self.hdr.__repr__
         if self.verify:
             self.__doVerify()
+        # hack: Save a tiny bit of memory by compressing the fileusername
+        # and filegroupname strings to be only stored once. Evil and maybe
+        # this does not make sense at all.
+        for i in ("fileusername", "filegroupname"):
+            if not self[i]:
+                continue
+            y = []
+            z = {}
+            for j in self[i]:
+                if not z.has_key(j):
+                    z[j] = j
+                y.append(z[j])
+            self[i] = y
         return None
 
     def verifyCpio(self, filedata, data, filenamehash, devinode):
@@ -1056,7 +1061,7 @@ class ReadRpm:
             self.printErr("cpio file %s not in rpm header" % filename)
             return
         del filenamehash[filename]
-        #di = devinode.get((dev, inode))
+        #di = devinode.get((dev, inode)) # this needs to be looked at for hardlinks
         mode = self["filemodes"][i]
         mtime = self["filemtimes"][i]
         if self.owner:
@@ -1299,12 +1304,6 @@ class ReadRpm:
         flags)."""
         if self["filemodes"] == None: # detect empty filelist
             return []
-        # XXX We loose the class data here completely, move this stuff
-        # for the non-verify (e.g. extraction) case.
-        uid = Uid()
-        self["fileusername"] = uid.addUGids(self["fileusername"])
-        gid = Gid()
-        self["filegroupname"] = gid.addUGids(self["filegroupname"])
         basenames = self["basenames"]
         oldfilenames = self["oldfilenames"]
         if basenames == None and oldfilenames:
@@ -1395,6 +1394,7 @@ class ReadRpm:
                 self.printErr("unknown vendor: %s" % self["vendor"])
             if self["distribution"] not in (None, "Red Hat Linux",
                 "Red Hat FC-3", "Red Hat (FC-3)", "Red Hat (FC-4)",
+                "Red Hat (FC-5)",
                 "Red Hat (scratch)", "Red Hat (RHEL-3)", "Red Hat (RHEL-4)"):
                 self.printErr("unknown distribution: %s" % self["distribution"])
         arch = self["arch"]
@@ -1581,11 +1581,9 @@ def extractRpm(filename, buildroot, owner=None):
     rpm.buildroot = buildroot
     rpm.owner = owner
     if owner:
-        rpm.uid = Uid()
-        rpm["fileusername"] = rpm.uid.addUGids(rpm["fileusername"])
+        rpm.uid = Uid(rpm["fileusername"])
         rpm.uid.transform(buildroot)
-        rpm.gid = Gid()
-        rpm["filegroupname"] = rpm.gid.addUGids(rpm["filegroupname"])
+        rpm.gid = Gid(rpm["filegroupname"])
         rpm.gid.transform(buildroot)
     rpm.readPayload(rpm.extractCpio)
     rpm.closeFd()
@@ -2099,6 +2097,9 @@ def main():
 
 if __name__ == "__main__":
     dohotshot = 0
+    if len(sys.argv) >= 2 and sys.argv[1] == "--hotshot":
+        dohotshot = 1
+        sys.argv.pop(1)
     if dohotshot:
         import hotshot, hotshot.stats
         filename = tempfile.mktemp()
