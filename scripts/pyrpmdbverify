@@ -203,28 +203,35 @@ def verifyStructure(hash, tag, useidx=True):
                 val = packages[id][tag][idx]
             else:
                 val = packages[id][tag]
+            # Convert empty keys 
             if key == "\x00":
                 key = ""
             if key != val:
                 print "Error %s: %s != %s in package %s" % (tag, key, val, packages[id].getNEVRA())
 
 def verifyReference(hash, tag, id):
-    refhash = packages[id][tag]
+    pkg = packages[id]
+    refhash = pkg[tag]
     if not refhash:
         return
     for idx in xrange(len(refhash)):
         key = refhash[idx]
+        # Convert empty keys 
         if key == '':
             key = "\x00"
-        # Ugly hacks for rpmlib() requirename...
         if tag == "requirename":
-            if key.startswith("rpmlib(") or key.startswith("/"):
+            # Skip rpmlib() requirenames...
+            if key.startswith("rpmlib("):
+                continue
+            # Skip install prereqs, just like rpm does...
+            if isInstallPreReq(pkg["requireflags"][idx]):
                 continue
         if not hash.has_key(key):
-            print "Error packages %s: %s not in %s for package %s" % (tag, key, tag, packages[id].getNEVRA())
+            print "Error packages %s: %s not in %s for package %s" % (tag, key, tag, pkg.getNEVRA())
             continue
         if not (id, idx) in hash[key]:
-            print "Error packages %s: %s not referenced in %s for package %s" % (tag, key, tag, packages[id].getNEVRA())
+            print "Error packages %s: %s not referenced in %s for package %s" % (tag, key, tag, pkg.getNEVRA())
+            continue
 
 def verifyBasenames():
     print "Checking Basename integrity."
@@ -299,7 +306,8 @@ def verifySha1header():
     print "Checking Sha1header integrity."
 
 def verifySigmd5():
-    print "Skipping Sigmd5 integrity check (no payload)."
+    # Skipping Sigmd5 integrity check (no payload in packages ;)
+    pass
 
 def verifyTriggername():
     print "Checking Triggername integrity."
@@ -322,6 +330,22 @@ def verifyRpmDB():
     verifySigmd5()
     verifyTriggername()
 
+def diffPkgs(pkg1, pkg2):
+    ignore_list = ["signature", "obsoletes", "requires", "provides", "conflicts", "triggers", "install_dsaheader", "installtime", "installcolor", "installtid", "filestates"]
+    nevra = pkg1.getNEVRA()
+    for key in pkg1.keys():
+        if key in ignore_list:
+            continue
+        if not pkg2.has_key(key):
+            print "Error: Installed package %s doesn't contain tag %s" % (nevra, key)
+            continue
+        if len(pkg1[key]) != len(pkg2[key]):
+            print "Error: Length of tag %s differ for package %s" % (nevra, key)
+            continue
+        for idx in xrange(len(pkg1[key])):
+            if not pkg1[key][idx] == pkg2[key][idx]:
+                print "Error: Value for %s differ for tag %s at index %s" % (pkg1.getNEVRA(), key, idx)
+
 def checkRpmDB(pkglist):
     print "Checking RpmDB against list of packages."
     sha1hash = {}
@@ -329,10 +353,15 @@ def checkRpmDB(pkglist):
         sha1hash[pkg["signature"]["sha1header"]] = pkg
     for key in packages:
         pkg = packages[key]
-        if pkg["name"].startswith("gpg-pubkey"):
+        if not pkg["signature"].has_key("sha1header"):
+            print "Skipping package %s, no sha1header." % pkg.getNEVRA()
             continue
         if not sha1hash.has_key(pkg["signature"]["sha1header"]):
-            print "Package %s not found in packagelist." % pkg.getNEVRA()
+            print "Skipping package %s,  not found in packagelist." % pkg.getNEVRA()
+            continue
+        opkg = readRpmPackage(rpmconfig, sha1hash[pkg["signature"]["sha1header"]].source)
+        diffPkgs(opkg, pkg)
+        diffPkgs(pkg, opkg)
 
 #
 # Main
@@ -342,10 +371,16 @@ def main():
     # Default dbpath is /var/lib/rpm
     dbpath = "/var/lib/rpm"
 
+    # Do /var/lib/rpm internal cross reference checks
+    internal_check = 1
+
+    # Do /var/lib/rpm/Packages cross ref checks with given rpms
+    external_check = 1
+
     # Argument parsing
     try:
       opts, args = getopt.getopt(sys.argv[1:], "?h",
-        ["help", "dbpath="])
+        ["help", "dbpath=", "nointernal", "noexternal"])
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
         usage()
@@ -358,9 +393,18 @@ def main():
             sys.exit(0)
         elif opt == "--dbpath":
             dbpath = val
+        elif opt == "--nointernal":
+            internal_check = 0
+        elif opt == "--noexternal":
+            external_check = 0
 
     readRpmDB()
-#    verifyRpmDB()
+
+    if internal_check:
+        verifyRpmDB()
+
+    if len(args) == 0 or not external_check:
+        return
 
     pkglist = []
     for arg in args:
