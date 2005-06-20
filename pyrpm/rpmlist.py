@@ -83,7 +83,7 @@ class RpmList:
     def update(self, pkg):
         key = pkg["name"]
 
-        updates = [ ]
+        self.pkg_updates = [ ]
         if key in self.list:
             for r in self.list[key]:
                 ret = pkgCompare(r, pkg)
@@ -94,6 +94,7 @@ class RpmList:
                         else:
                             msg = "%s: A newer package was already added"
                         self.config.printWarning(1, msg % pkg.getNEVRA())
+                        del self.pkg_updates
                         return self.OLD_PACKAGE
                     else:
                         # old package: simulate a new package
@@ -101,18 +102,21 @@ class RpmList:
                 if ret < 0: # old_ver < new_ver
                     if self.config.exactarch == 1 and \
                            self.__arch_incompat(pkg, r):
+                        del self.pkg_updates
                         return self.ARCH_INCOMPAT
                     
                     if archDuplicate(pkg["arch"], r["arch"]) or \
                            pkg["arch"] == "noarch" or r["arch"] == "noarch":
-                        updates.append(r)
+                        self.pkg_updates.append(r)
                 else: # ret == 0, old_ver == new_ver
                     if self.config.exactarch == 1 and \
                            self.__arch_incompat(pkg, r):
+                        del self.pkg_updates
                         return self.ARCH_INCOMPAT
                     
                     ret = self.__install_check(r, pkg)
                     if ret != self.OK:
+                        del self.pkg_updates
                         return ret
 
                     if archDuplicate(pkg["arch"], r["arch"]):
@@ -125,15 +129,17 @@ class RpmList:
                                 ret = self.ALREADY_ADDED
                             self.config.printWarning(1, msg % (pkg.getNEVRA(),
                                                    r.getNEVRA()))
+                            del self.pkg_updates
                             return ret
                         else:
-                            updates.append(r)
+                            self.pkg_updates.append(r)
 
         ret = self.install(pkg, operation=OP_UPDATE)
         if ret != self.OK:
+            del self.pkg_updates
             return ret
 
-        for r in updates:
+        for r in self.pkg_updates:
             if self.isInstalled(r):
                 self.config.printWarning(2, "%s was already installed, replacing with %s" \
                                  % (r.getNEVRA(), pkg.getNEVRA()))
@@ -141,7 +147,10 @@ class RpmList:
                 self.config.printWarning(1, "%s was already added, replacing with %s" \
                                  % (r.getNEVRA(), pkg.getNEVRA()))
             if self._pkgUpdate(pkg, r) != self.OK:
+                del self.pkg_updates
                 return self.UPDATE_FAILED
+
+        del self.pkg_updates
 
         return self.OK
     # ----
