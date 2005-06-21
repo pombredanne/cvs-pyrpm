@@ -21,10 +21,12 @@ from pyrpm import *
 
 def usage():
     print """
-pyrpmdbverify [-h, --help] [--dbpath=] PACKAGES | DIRS
+pyrpmdbverify [-h, --help] [--dbpath=] [PACKAGES | DIRS]
 
 --help:    This usage ;)
 --dbpath:  Specifies a different path for the rpmdb. Default is /var/lib/rpm
+PACKAGES | DIRS: Optional single rpms or directories of rpms against which the
+                 the headers from the rpmdb will be checked against.
 """
 
 # Tags which will be read from the rpms. CHANGE HERE IF SOME TESTS NEED MORE
@@ -98,51 +100,6 @@ def readName():
     global name
     name = readDB4hash(dbpath+"/Name")
 
-def readPackages():
-    global packages, keyring
-    packages = {}
-    keyring = PGPKeyRing()
-    db = hashopen(dbpath+"/Packages", "r")
-    for key in db.keys():
-        rpmio = RpmFileIO(rpmconfig, "dummy")
-        pkg = RpmPackage(rpmconfig, "dummy")
-        data = db[key]
-        val = unpack("i", key)[0]
-        if val != 0:
-            (indexNo, storeSize) = unpack("!ii", data[0:8])
-            indexdata = data[8:indexNo*16+8]
-            storedata = data[indexNo*16+8:]
-            pkg["signature"] = {}
-            for idx in xrange(0, indexNo):
-                try:
-                    (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
-                                                           storedata)
-                except ValueError, e:
-                    # FIXME: different handling?
-                    config.printError("Invalid header entry %s in %s: %s"
-                                      % (idx, key, e))
-                    continue
-                if   tag == 257:
-                    pkg["signature"]["size_in_sig"] = tagval
-                elif tag == 261:
-                    pkg["signature"]["md5"] = tagval
-                elif tag == 269:
-                    pkg["signature"]["sha1header"] =tagval
-                elif rpmtag.has_key(tag):
-                    if rpmtagname[tag] == "archivesize":
-                        pkg["signature"]["payloadsize"] = tagval
-                    else:
-                        pkg[rpmtagname[tag]] = tagval
-            if pkg["name"].startswith("gpg-pubkey"):
-                keys = parsePGPKeys(pkg["description"])
-                for k in keys:
-                    keyring.addKey(k)
-                pkg["group"] = (pkg["group"],)
-            pkg.generateFileNames()
-            pkg.source = "db:"+dbpath+"/"+pkg.getNEVRA()
-            packages[val] = pkg
-            rpmio.hdr = {}
-
 def readProvidename():
     global providename
     providename = readDB4hash(dbpath+"/Providename")
@@ -172,6 +129,7 @@ def readTriggername():
     triggername = readDB4hash(dbpath+"/Triggername")
 
 def readRpmDB():
+    global packages, keyring
     print "Reading rpm database. This might take some time..."
     readBasenames()
     readConflictname()
@@ -180,7 +138,7 @@ def readRpmDB():
     readGroup()
     readInstalltid()
     readName()
-    readPackages()
+    (packages, keyring) = readPackages(dbpath)
     readProvidename()
     readProvideversion()
     readRequirename()
@@ -275,6 +233,7 @@ def verifyName():
 
 def verifyPackages():
     print "Checking Packages integrity."
+    rpmio = RpmFileIO(rpmconfig, "dummy")
     for id in packages.keys():
         verifyReference(basenames, "basenames", id)
         verifyReference(conflictname, "conflictname", id)
@@ -284,7 +243,12 @@ def verifyPackages():
         verifyReference(provideversion, "provideversion", id)
         verifyReference(requirename, "requirename", id)
         verifyReference(requireversion, "requireversion", id)
-        verifyStructure(triggername, "triggername", id)
+        verifyReference(triggername, "triggername", id)
+        (headerindex, headerdata) = rpmio._generateHeader(packages[id], 1, [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
+        if packages[id]["signature"].has_key("sha1header"):
+            if packages[id]["signature"]["sha1header"] != \
+               sha.new(headerindex+headerdata).hexdigest():
+                print "Error packages: Package %s SHA1 header checksum incorrect" % packages[id].getNEVRA()
 
 def verifyProvidename():
     print "Checking Providename integrity."
@@ -303,7 +267,8 @@ def verifyRequireversion():
     verifyStructure(requireversion, "requireversion")
 
 def verifySha1header():
-    print "Checking Sha1header integrity."
+    # Skipping Sha1header integrity check, order of rpm header isn't know
+    pass
 
 def verifySigmd5():
     # Skipping Sigmd5 integrity check (no payload in packages ;)
@@ -340,11 +305,11 @@ def diffPkgs(pkg1, pkg2):
             print "Error: Installed package %s doesn't contain tag %s" % (nevra, key)
             continue
         if len(pkg1[key]) != len(pkg2[key]):
-            print "Error: Length of tag %s differ for package %s" % (nevra, key)
+            print "Error: Length of tag %s differ for package %s: %d != %d" % (key, nevra, len(pkg1[key]), len(pkg2[key]))
             continue
         for idx in xrange(len(pkg1[key])):
             if not pkg1[key][idx] == pkg2[key][idx]:
-                print "Error: Value for %s differ for tag %s at index %s" % (pkg1.getNEVRA(), key, idx)
+                print "Error: Value for package %s differ for tag %s at index %s" % (nevra, key, idx)
 
 def checkRpmDB(pkglist):
     print "Checking RpmDB against list of packages."

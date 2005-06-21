@@ -1,0 +1,151 @@
+#!/usr/bin/python
+#
+# Script to do exactly the same as rpm --rebuilddb but only with our python
+# stuff.
+#
+
+
+import sys, os, getopt, errno
+from bsddb import hashopen, btopen
+from binascii import b2a_hex, a2b_hex
+from struct import unpack
+
+PYRPMDIR = ".."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+from pyrpm import __version__
+from pyrpm import *
+
+
+def usage():
+    print """
+pyrpmdbverify [-h, --help] [--dbpath=] [newdbpath]
+
+--help:    This usage ;)
+--dbpath:  Specifies a different path for the rpmdb. Default is /var/lib/rpm
+newdbpath: Optional path for new rpmdb. Default is ./rpmdb
+"""
+
+#
+# Write rpmdb function
+#
+def writeDB4(db, tag, id, packages, useidx=True, func=lambda x:str(x)):
+    pkg = packages[id]
+    if not pkg.has_key(tag):
+        return
+    for idx in xrange(len(pkg[tag])):
+        if useidx:
+            key = pkg[tag][idx]
+        else:
+            key = pkg[tag]
+        # Convert empty keys, handle filemd5s a little different
+        if key == "":
+            if tag != "filemd5s":
+                key = "\x00"
+        else:
+            key = func(key)
+        if tag == "requirename":
+            # Skip rpmlib() requirenames...
+            if key.startswith("rpmlib("):
+                continue
+            # Skip install prereqs, just like rpm does...
+            if isInstallPreReq(pkg["requireflags"][idx]):
+                continue
+        if not db.has_key(key):
+            db[key] = ""
+        db[key] += pack("ii", id, idx)
+        if not useidx:
+            return
+
+def writeRpmDB(path, packages):
+    if not os.path.isdir(path):
+        os.makedirs(path)
+    basenames_db      = hashopen(path+"/Basenames", "n")
+    conflictname_db   = hashopen(path+"/Conflictname", "n")
+    dirnames_db       = btopen(path+"/Dirnames", "n")
+    filemd5s_db       = hashopen(path+"/Filemd5s", "n")
+    group_db          = hashopen(path+"/Group", "n")
+    installtid_db     = btopen(path+"/Installtid", "n")
+    name_db           = hashopen(path+"/Name", "n")
+    packages_db       = hashopen(path+"/Packages", "n")
+    providename_db    = hashopen(path+"/Providename", "n")
+    provideversion_db = btopen(path+"/Provideversion", "n")
+    requirename_db    = hashopen(path+"/Requirename", "n")
+    requireversion_db = btopen(path+"/Requireversion", "n")
+    sha1header_db     = hashopen(path+"/Sha1header", "n")
+    sigmd5_db         = hashopen(path+"/Sigmd5", "n")
+    triggername_db    = hashopen(path+"/Triggername", "n")
+    rpmio = RpmFileIO(rpmconfig, "dummy")
+    for id in packages.keys():
+        print "Writing rpmdb for package %s" % packages[id].getNEVRA()
+        writeDB4(basenames_db, "basenames", id, packages)
+        writeDB4(conflictname_db, "conflictname", id, packages)
+        writeDB4(dirnames_db, "dirnames", id, packages)
+        writeDB4(filemd5s_db, "filemd5s", id, packages, True, lambda x:a2b_hex(x))
+        writeDB4(group_db, "group", id, packages)
+        writeDB4(installtid_db, "installtid", id, packages, True, lambda x:pack("i", x))
+        writeDB4(name_db, "name", id, packages, False)
+        (headerindex, headerdata) = rpmio._generateHeader(packages[id], 4)
+        packages_db[pack("i", id)] = headerindex[8:]+headerdata
+        writeDB4(providename_db, "providename", id, packages)
+        writeDB4(provideversion_db, "provideversion", id, packages)
+        writeDB4(requirename_db, "requirename", id, packages)
+        writeDB4(requireversion_db, "requireversion", id, packages)
+        writeDB4(sha1header_db, "install_sha1header", id, packages)
+        writeDB4(sigmd5_db, "install_sigmd5", id, packages)
+        writeDB4(triggername_db, "triggername", id, packages)
+
+#
+# Main
+#
+def main():
+    # Default dbpath is /var/lib/rpm
+    dbpath = "/var/lib/rpm"
+
+    # Argument parsing
+    try:
+      opts, args = getopt.getopt(sys.argv[1:], "?h",
+        ["help", "dbpath="])
+    except getopt.error, e:
+        print "Error parsing command list arguments: %s" % e
+        usage()
+        sys.exit(1)
+
+    # Argument handling
+    for (opt, val) in opts:
+        if   opt in ['-h', "--help"]:
+            usage()
+            sys.exit(0)
+        elif opt == "--dbpath":
+            dbpath = val
+
+    (packages, keyring) = readPackages(dbpath)
+
+    if len(args) == 0:
+        outdbpath = "./rpmdb"
+    else:
+        outdbpath = args[0]
+
+    writeRpmDB(outdbpath, packages)
+
+if __name__ == '__main__':
+    dohotshot = 0
+    if dohotshot:
+        import tempfile, hotshot, hotshot.stats
+        filename = tempfile.mktemp()
+        prof = hotshot.Profile(filename)
+        try:
+            prof = prof.runcall(main)
+        except SystemExit:
+            pass
+        print "Starting profil statistics. This takes some time..."
+        prof.close()
+        del prof
+        s = hotshot.stats.load(filename)
+        s.strip_dirs().sort_stats('time').print_stats(100)
+        s.strip_dirs().sort_stats('cumulative').print_stats(100)
+        os.unlink(filename)
+    else:
+        main()
+
+# vim:ts=4:sw=4:showmatch:expandtab

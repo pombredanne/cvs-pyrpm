@@ -23,8 +23,13 @@ from urlgrabber.grabber import URLGrabError
 from types import TupleType, ListType
 from tempfile import mkstemp
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
+from bsddb import hashopen
+from struct import unpack
+
 from config import rpmconfig
 from base import *
+from io import RpmFileIO
+from openpgp import PGPKeyRing
 from yumconfig import YumConf
 import package
 
@@ -573,6 +578,53 @@ buildarchtranslate and noarch problems."""
         if pkg in rethash.values():
             retlist.append(pkg)
     return retlist
+
+#
+# DB Read function
+#
+def readPackages(dbpath):
+    packages = {}
+    keyring = PGPKeyRing()
+    db = hashopen(dbpath+"/Packages", "r")
+    for key in db.keys():
+        rpmio = RpmFileIO(rpmconfig, "dummy", verify=1)
+        pkg = package.RpmPackage(rpmconfig, "dummy")
+        data = db[key]
+        val = unpack("i", key)[0]
+        if val != 0:
+            (indexNo, storeSize) = unpack("!ii", data[0:8])
+            indexdata = data[8:indexNo*16+8]
+            storedata = data[indexNo*16+8:]
+            pkg["signature"] = {}
+            for idx in xrange(0, indexNo):
+                try: 
+                    (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
+                                                           storedata)
+                except ValueError, e:
+                    # FIXME: different handling?
+                    config.printError("Invalid header entry %s in %s: %s"
+                                      % (idx, key, e))
+                    continue
+                if   tag == 257:
+                    pkg["signature"]["size_in_sig"] = tagval
+                elif tag == 261:
+                    pkg["signature"]["md5"] = tagval
+                elif tag == 269:
+                    pkg["signature"]["sha1header"] = tagval
+                if rpmtag.has_key(tag):
+                    if rpmtagname[tag] == "archivesize":
+                        pkg["signature"]["payloadsize"] = tagval
+                    pkg[rpmtagname[tag]] = tagval
+            if pkg["name"].startswith("gpg-pubkey"):
+                keys = parsePGPKeys(pkg["description"])
+                for k in keys:
+                    keyring.addKey(k)
+                pkg["group"] = (pkg["group"],)
+            pkg.generateFileNames()
+            pkg.source = "db:"+dbpath+"/"+pkg.getNEVRA()
+            packages[val] = pkg
+            rpmio.hdr = {}
+    return packages, keyring
 
 # Error handling functions
 def printDebug(level, msg):

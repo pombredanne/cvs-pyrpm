@@ -17,13 +17,12 @@
 #
 
 
-import fcntl, struct, bsddb, libxml2, urlgrabber
+import fcntl, bsddb, libxml2, urlgrabber
 import zlib, gzip, sha, md5, string, stat, openpgp
+from struct import pack, unpack
 
 from functions import *
 import package
-
-pack, unpack = struct.pack, struct.unpack
 
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
 class PyGZIP:
@@ -376,7 +375,7 @@ class RpmStreamIO(RpmIO):
             self.open("w+")
         lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, pkg.getNEVR()[0:66], rpm_lead_arch[pkg["arch"]], 5)
         (sigindex, sigdata) = self.__generateSig(pkg["signature"])
-        (headerindex, headerdata) = self.__generateHeader(pkg)
+        (headerindex, headerdata) = self._generateHeader(pkg)
         self._write(lead)
         self._write(sigindex)
         self._write(sigdata)
@@ -635,24 +634,38 @@ class RpmStreamIO(RpmIO):
             self.offset = 0
             self.indexlist = []
 
-        def outputHeader(self, header, align):
+        def outputHeader(self, header, align, skip_tags):
             """Return (index data, data area) representing signature header
             (tag name => tag value), with data area end aligned to align"""
 
-            keys = self.taghash.keys()
+            install_keys = [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128]
+            keys = self.tagnames.keys()
             keys.sort()
+            # 1st pass: Output sorted non install only tags
             for tag in keys:
-                if not isinstance(tag, int):
+                if tag in skip_tags:
                     continue
-                # We need to handle region header at the very end...
+                # We'll handled the region header at the end...
                 if tag == self.region:
+                    continue
+                # Skip keys only appearing in /var/lib/rpm/Packages
+                if tag in install_keys:
                     continue
                 key = self.tagnames[tag]
                 # Skip keys we don't have
                 if not header.has_key(key):
                     continue
                 self.__appendTag(tag, header[key])
-            # Handle hegion header if we have it.
+            # 2nd pass: Ouput install only tags
+            for tag in install_keys:
+                if tag in skip_tags:
+                    continue
+                key = self.tagnames[tag]
+                # Skip keys we don't have
+                if not header.has_key(key):
+                    continue
+                self.__appendTag(tag, header[key])
+            # Handle region header if we have it at the end.
             key = self.tagnames[self.region]
             if header.has_key(key):
                 self.__appendTag(self.region, header[key])
@@ -730,15 +743,17 @@ class RpmStreamIO(RpmIO):
             """Return (header tags, padding after data area) with data area end
             aligned to pad."""
         
-            index = RPM_HEADER_INDEX_MAGIC
-            index += pack("!ii", len(self.indexlist), len(self.store))
-            # Start the header with a region tag
-            # FIXME: only if it is a region tag
-            (tag, ttype, offset, count) = self.indexlist.pop()
-            index += pack("!iiii", tag, ttype, offset, count)
+            index = ""
             for (tag, ttype, offset, count) in self.indexlist:
-                index += pack("!iiii", tag, ttype, offset, count)
+                # Make sure the region tag is the first one in the index
+                # despite being the last in the store
+                if tag == self.region:
+                    index = pack("!iiii", tag, ttype, offset, count) + index
+                else:
+                    index += pack("!iiii", tag, ttype, offset, count)
             align = (pad - (len(self.store) % pad)) % pad
+            index = RPM_HEADER_INDEX_MAGIC +\
+                    pack("!ii", len(self.indexlist), len(self.store)+align) + index
             return (index, '\x00' * align)
 
         def __alignTag(self, ttype):
@@ -762,12 +777,12 @@ class RpmStreamIO(RpmIO):
         h = self.__GeneratedHeader(rpmsigtag, rpmsigtagname, 62)
         return h.outputHeader(header, 8)
 
-    def __generateHeader(self, header):
+    def _generateHeader(self, header, padding=1, skip_tags=[]):
         """Return (index data, data area) representing signature header
         (tag name => tag value)"""
 
         h = self.__GeneratedHeader(rpmtag, rpmtagname, 63)
-        return h.outputHeader(header, 1)
+        return h.outputHeader(header, padding, skip_tags)
 
 
 class RpmFileIO(RpmStreamIO):

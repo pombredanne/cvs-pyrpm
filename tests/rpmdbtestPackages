@@ -1,9 +1,14 @@
-import bsddb
+import bsddb, sys
 from struct import unpack
 
 from pyrpm import *
 
-db = bsddb.hashopen("/var/lib/rpm/Packages", "r")
+if len(sys.argv) > 1:
+	dbpath = sys.argv[1]
+else:
+	dbpath = "/var/lib/rpm"
+
+db = bsddb.hashopen(dbpath+"/Packages", "r")
 
 rpmio = RpmFileIO(config, "foo")
 
@@ -14,7 +19,7 @@ for key in db.keys():
 		(indexNo, storeSize) = unpack("!ii", data[0:8])
 		indexdata = data[8:indexNo*16+8]
 		storedata = data[indexNo*16+8:]
-		print val, indexNo, storeSize, len(data)
+		print val, indexNo, storeSize
 		for idx in xrange(0, indexNo):
 			(tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata, storedata)
 			if rpmtagname.has_key(tag):

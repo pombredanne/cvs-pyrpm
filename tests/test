@@ -11,10 +11,12 @@ for i in sys.argv[1:]:
     except (IOError, ValueError), e:
         sys.stderr.write("%s: %s\n" % (i, e))
         continue
-    print rpm["provides"]
-    print rpm["requires"]
-    print rpm["fileflags"]
-    for f in rpm["filenames"]:
-	rfi = rpm.getRpmFileInfo(f)
-        print rfi.filename, hex(rfi.flags)
+    for i in xrange(len(rpm["requirename"])):
+        print i, rpm["requirename"][i], hex(rpm["requireflags"][i])
+    print rpm["signature"]["sha1header"]
+    #print rpm["requireflags"]
+#    print rpm["fileflags"]
+#    for f in rpm["filenames"]:
+#	rfi = rpm.getRpmFileInfo(f)
+#        print rfi.filename, hex(rfi.flags)
     rpms.append(rpm)

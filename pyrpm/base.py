@@ -273,7 +273,6 @@ rpmtag = {
     "nopatch": (1052, RPM_INT32, None, 1),
     "disturl": (1123, RPM_STRING, None, 1),
     "oldfilenames": (1027, RPM_STRING_ARRAY, None, 1),
-    "archivesize": (1046, RPM_INT32, 1, 1), # only in /var/lib/rpm/Packages
     "triggerin": (1100, RPM_STRING, None, 5),
     "triggerun": (1101, RPM_STRING, None, 5),
     "triggerpostun": (1102, RPM_STRING, None, 5),
@@ -281,10 +280,15 @@ rpmtag = {
     # install information
     "install_size_in_sig": (257, RPM_INT32, 1, 0),
     "install_md5": (261, RPM_BIN, 16, 0),
+    "install_unknowchecksum": (262, RPM_BIN, None, 0),
+    "install_badsha1_1": (264, RPM_STRING, None, 1),
+    "install_badsha1_2": (265, RPM_STRING, None, 1),
     "install_dsaheader": (267, RPM_BIN, 16, 0),
     "install_sh1header": (269, RPM_STRING, None, 0),
     "installtime": (1008, RPM_INT32, None, 0),
-    "filestates": (1029, RPM_INT32, None, 0),
+    "filestates": (1029, RPM_CHAR, None, 0),
+    "archivesize": (1046, RPM_INT32, 1, 1),
+    "instprefixes": (1099, RPM_STRING_ARRAY, None, 0),
     "installcolor": (1127, RPM_INT32, None, 0),
     "installtid": (1128, RPM_INT32, None, 0)
 }
