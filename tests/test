@@ -13,7 +13,7 @@ for i in sys.argv[1:]:
         continue
     for i in xrange(len(rpm["requirename"])):
         print i, rpm["requirename"][i], hex(rpm["requireflags"][i])
-    print rpm["signature"]["sha1header"]
+    print rpm["signature"]
     #print rpm["requireflags"]
 #    print rpm["fileflags"]
 #    for f in rpm["filenames"]:

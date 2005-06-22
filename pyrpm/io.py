@@ -17,11 +17,12 @@
 #
 
 
-import fcntl, bsddb, libxml2, urlgrabber
-import zlib, gzip, sha, md5, string, stat, openpgp
+import fcntl, bsddb, libxml2, urlgrabber, os, os.path
+import zlib, gzip, sha, md5, string, stat, openpgp, re
 from struct import pack, unpack
 
-from functions import *
+from base import *
+import functions
 import package
 
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
@@ -46,15 +47,15 @@ class PyGZIP:
         magic = self.fd.read(2)
         if magic != '\037\213':
             raise IOError("Not a gzipped file")
-        if ord(readExact(self.fd, 1)) != 8:
+        if ord(functions.readExact(self.fd, 1)) != 8:
             raise IOError("Unknown compression method")
-        flag = ord(readExact(self.fd, 1)) 
+        flag = ord(functions.readExact(self.fd, 1)) 
         # Discard modification time, extra flags, OS byte
-        readExact(self.fd, 4+1+1) 
+        functions.readExact(self.fd, 4+1+1) 
         if flag & FEXTRA:
             # Read & discard the extra field, if present
-            (xlen,) = unpack("<H", readExact(self.fd, 2))
-            readExact(self.fd, xlen)
+            (xlen,) = unpack("<H", functions.readExact(self.fd, 2))
+            functions.readExact(self.fd, xlen)
         if flag & FNAME:
             # Read and discard a nul-terminated string containing the filename
             while (1):
@@ -72,7 +73,7 @@ class PyGZIP:
                 if not s:
                     raise IOError, "Unexpected EOF"
         if flag & FHCRC:
-            readExact(self.fd, 2)      # Read & discard the 16-bit header CRC
+            functions.readExact(self.fd, 2)      # Read & discard the 16-bit header CRC
         self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
         self.crcval = zlib.crc32("")
         self.header_read = 1
@@ -174,18 +175,18 @@ class CPIOFile:
         
         self.readsize = 0
         # Do padding if necessary for nexty entry
-        readExact(self.fd, (4 - (self.lastfilesize % 4)) % 4)
+        functions.readExact(self.fd, (4 - (self.lastfilesize % 4)) % 4)
         # The cpio header contains 8 byte hex numbers with the following
         # content: magic, inode, mode, uid, gid, nlink, mtime, filesize,
         # devMajor, devMinor, rdevMajor, rdevMinor, namesize, checksum.
-        data = readExact(self.fd, 110)
+        data = functions.readExact(self.fd, 110)
         # CPIO ASCII hex, expanded device numbers (070702 with CRC)
         if data[0:6] not in ["070701", "070702"]:
             raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
         # Read filename and padding.
         filenamesize = int(data[94:102], 16)
-        filename = readExact(self.fd, filenamesize).rstrip("\x00")
-        readExact(self.fd, (4 - ((110 + filenamesize) % 4)) % 4)
+        filename = functions.readExact(self.fd, filenamesize).rstrip("\x00")
+        functions.readExact(self.fd, (4 - ((110 + filenamesize) % 4)) % 4)
         if filename == "TRAILER!!!": # end of archive detection
             return (None, None)
         # Adjust filename, so that it matches the way the rpm header has
@@ -209,7 +210,7 @@ class CPIOFile:
         if size > self.lastfilesize - self.readsize:
             size = self.lastfilesize - self.readsize
         self.readsize += size
-        return readExact(self.fd, size)
+        return functions.readExact(self.fd, size)
 
     def skipToNextFile(self):
         """Skip current file data.
@@ -415,7 +416,7 @@ class RpmStreamIO(RpmIO):
         self.fd should already be open.  Raise ValueError on invalid data,
         IOError."""
         
-        leaddata = readExact(self.fd, 96)
+        leaddata = functions.readExact(self.fd, 96)
         if leaddata[:4] != RPM_HEADER_LEAD_MAGIC:
             raise ValueError, "no rpm magic found"
         if self.verify:
@@ -480,14 +481,14 @@ class RpmStreamIO(RpmIO):
         to enforce alignment at least pad.  Raise ValueError on invalid data,
         IOError."""
 
-        data = readExact(self.fd, 16)
+        data = functions.readExact(self.fd, 16)
         (magic, indexNo, storeSize) = unpack("!8sii", data)
         if magic != RPM_HEADER_INDEX_MAGIC or indexNo < 1:
             raise ValueError, "bad index magic"
-        fmt = readExact(self.fd, 16 * indexNo)
-        fmt2 = readExact(self.fd, storeSize)
+        fmt = functions.readExact(self.fd, 16 * indexNo)
+        fmt2 = functions.readExact(self.fd, storeSize)
         if pad != 1:
-            readExact(self.fd, (pad - (storeSize % pad)) % pad)
+            functions.readExact(self.fd, (pad - (storeSize % pad)) % pad)
         if self.verify:
             self.__verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + len(fmt2))
@@ -660,6 +661,9 @@ class RpmStreamIO(RpmIO):
             for tag in install_keys:
                 if tag in skip_tags:
                     continue
+                # Skip tags we don't have
+                if not self.tagnames.has_key(tag):
+                    continue
                 key = self.tagnames[tag]
                 # Skip keys we don't have
                 if not header.has_key(key):
@@ -775,7 +779,7 @@ class RpmStreamIO(RpmIO):
         (tag name => tag value)"""
 
         h = self.__GeneratedHeader(rpmsigtag, rpmsigtagname, 62)
-        return h.outputHeader(header, 8)
+        return h.outputHeader(header, 8, [])
 
     def _generateHeader(self, header, padding=1, skip_tags=[]):
         """Return (index data, data area) representing signature header
@@ -843,7 +847,7 @@ class RpmFileIO(RpmStreamIO):
 
     def updateDigestFromRange(self, digest, start, len):
         fd = self.__getFdForRange(start, len)
-        updateDigestFromFile(digest, fd, len)
+        functions.updateDigestFromFile(digest, fd, len)
 
     def updateDigestFromRegion(self, digest, region, header_pos):
         if region is None or len(region) != 16:
@@ -891,7 +895,7 @@ class RpmFileIO(RpmStreamIO):
         # In practice region data starts at offset 0, but the original design
         # was proposing concatenated regions etc; where would the data region
         # start in that case? Lowest offset in region perhaps?
-        updateDigestFromFile(digest, fd, offset + 16)
+        functions.updateDigestFromFile(digest, fd, offset + 16)
 
 class RpmFtpIO(RpmStreamIO):
     def __init__(self, config, source, verify=None, strict=None, hdronly=None):
@@ -1184,7 +1188,7 @@ class RpmRepo(RpmDatabase):
             if filename[1] == "/":
                 idx = filename[2:].index("/")
                 filename = filename[idx+2:]
-        filename = cacheLocal(filename + "/repodata/primary.xml.gz",
+        filename = functions.cacheLocal(filename + "/repodata/primary.xml.gz",
                               self.reponame)
         if not filename:
             return 0
@@ -1419,7 +1423,7 @@ class RpmRepo(RpmDatabase):
                 if isLegacyPreReq(dep[1]) or isInstallPreReq(dep[1]):
                     enode.newProp('pre', '1')
             if dep[2] != "":
-                e,v,r = evrSplit(dep[2])
+                e,v,r = functions.evrSplit(dep[2])
                 enode.newProp('epoch', e)
                 enode.newProp('ver', v)
                 if r != "":
@@ -1482,7 +1486,7 @@ class RpmRepo(RpmDatabase):
             if filename[1] == "/":
                 idx = filename[2:].index("/")
                 filename = filename[idx+2:]
-        filename = cacheLocal(filename + "/repodata/filelists.xml.gz",
+        filename = functions.cacheLocal(filename + "/repodata/filelists.xml.gz",
                               self.reponame)
         if not filename:
             return 0
@@ -1515,7 +1519,7 @@ class RpmRepo(RpmDatabase):
     def __isExcluded(self, pkg):
         found = 0
         for ex in self.excludes:
-            excludes = findPkgByName(ex, [pkg])
+            excludes = functions.findPkgByName(ex, [pkg])
             if len(excludes) > 0:
                 found = 1
                 break
@@ -1744,7 +1748,7 @@ class RpmCompsXML:
                 else:
                     group["description"] = node.content
             elif node.name == "default":
-                group["default"] = parseBoolean(node.content)
+                group["default"] = functions.parseBoolean(node.content)
             elif node.name == "langonly":
                 group["langonly"] = node.content
             elif node.name == "packagelist":

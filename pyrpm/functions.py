@@ -26,12 +26,13 @@ from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE,
 from bsddb import hashopen
 from struct import unpack
 
+from io import *
+import openpgp
+import yumconfig
+import package
+
 from config import rpmconfig
 from base import *
-from io import RpmFileIO
-from openpgp import PGPKeyRing
-from yumconfig import YumConf
-import package
 
 # Number of bytes to read from file at once when computing digests
 DIGEST_CHUNK = 65536
@@ -519,7 +520,7 @@ def parseYumOptions(argv, yum):
     return args
 
 def addRepo(yum, file):
-    conf = YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, file, "")
+    conf = yumconfig.YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, file, "")
     for key in conf.vars.keys():
         if key == "main":
             pass
@@ -584,7 +585,7 @@ buildarchtranslate and noarch problems."""
 #
 def readPackages(dbpath):
     packages = {}
-    keyring = PGPKeyRing()
+    keyring = openpgp.PGPKeyRing()
     db = hashopen(dbpath+"/Packages", "r")
     for key in db.keys():
         rpmio = RpmFileIO(rpmconfig, "dummy", verify=1)
