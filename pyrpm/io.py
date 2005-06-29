@@ -1194,11 +1194,9 @@ class RpmDB(RpmDatabase):
                 continue
             data = db[key]
             ndata = ""
-            print len(data)
             for i in xrange(0, len(data), 8):
                 if not data[i:i+8] == pack("ii", id, idx):
                     ndata += data[i:i+8]
-            print len(ndata)
             db[key] = ndata
 
     def __writeDB4(self, db, tag, id, pkg, useidx=True, func=lambda x:str(x)):
