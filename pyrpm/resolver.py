@@ -25,6 +25,7 @@ from stat import S_ISLNK, S_ISDIR
 from hashlist import HashList
 from rpmlist import RpmList
 from functions import *
+import base
 
 # ----------------------------------------------------------------------------
 
