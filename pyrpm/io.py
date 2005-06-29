@@ -17,9 +17,10 @@
 #
 
 
-import fcntl, bsddb, libxml2, urlgrabber, os, os.path
+import fcntl, bsddb, libxml2, urlgrabber, os, os.path, time
 import zlib, gzip, sha, md5, string, stat, openpgp, re
 from struct import pack, unpack
+from binascii import b2a_hex, a2b_hex
 
 from base import *
 import functions
@@ -986,21 +987,30 @@ class RpmDatabase:
         return count
 
     def _getDBPath(self):
-        if self.buildroot != None:
-            return self.buildroot + self.source
+        if   self.source[:6] == 'pydb:/':
+            tsource = self.source[6:]
+        elif self.source[:7] == 'rpmdb:/':
+            tsource = self.source[7:]
         else:
-            return self.source
+            tsource = self.source 
+        if self.buildroot != None:
+            return self.buildroot + tsource
+        else:
+            return tsource
 
 
 class RpmDB(RpmDatabase):
     def __init__(self, config, source, buildroot=None):
         RpmDatabase.__init__(self, config, source, buildroot)
+        self.dbopen = False
 
     def read(self):
         if self.is_read:
             return 1
         dbpath = self._getDBPath()
-        db = bsddb.hashopen(dbpath+"/Packages", "r")
+        if not os.path.isdir(dbpath):
+            return 1
+        db = bsddb.hashopen(dbpath+"/Packages", "c")
         for key in db.keys():
             rpmio = RpmFileIO(self.config, "dummy")
             pkg = package.RpmPackage(self.config, "dummy")
@@ -1040,15 +1050,187 @@ class RpmDB(RpmDatabase):
                     continue
                 pkg.generateFileNames()
                 nevra = pkg.getNEVRA()
-                pkg.source = "db:/"+self.source+"/"+nevra
+                pkg.source = "rpmdb:/"+dbpath+"/"+nevra
                 for filename in pkg["filenames"]:
                     if not self.filenames.has_key(filename):
                         self.filenames[filename] = []
                     self.filenames[filename].append(pkg)
                 self.pkglist[nevra] = pkg
+                pkg["provides"] = pkg.getProvides()
+                pkg["requires"] = pkg.getRequires() 
+                pkg["obsoletes"] = pkg.getObsoletes()
+                pkg["conflicts"] = pkg.getConflicts()
+                pkg["triggers"] = pkg.getTriggers()
+                pkg["install_id"] = val
+                pkg.io = rpmio
+                pkg.header_read = 1
                 rpmio.hdr = {}
         self.is_read = 1
         return 1
+
+    def write(self):
+        return 1
+
+    def addPkg(self, pkg, nowrite=None):
+        nevra = pkg.getNEVRA()
+        for filename in pkg["filenames"]:
+            if not self.filenames.has_key(filename):
+                self.filenames[filename] = []
+            if pkg in self.filenames[filename]:
+                self.config.printWarning(2, "%s: File '%s' was already in PyDB for package" % (nevra, filename))
+                self.filenames[filename].remove(pkg)
+            self.filenames[filename].append(pkg)
+        self.pkglist[nevra] = pkg 
+
+        if nowrite:
+            return 1
+
+        self.__openDB4()
+
+        id = 2
+        while id in self.ids:
+            id += 1
+        self.ids.append(id)
+
+        rpmio = RpmFileIO(self.config, "dummy")
+        pkg["install_size_in_sig"] = pkg["signature"]["size_in_sig"]
+        pkg["install_md5"] = pkg["signature"]["md5"]
+        pkg["install_sha1header"] = pkg["signature"]["sha1header"]
+        pkg["installtime"] = int(time.time())
+        pkg["filestates"]= ['\x00']
+        pkg["archivesize"] = pkg["signature"]["payloadsize"]
+        pkg["installcolor"] = [0,]
+        pkg["installtid"] = [self.config.tid, ]
+
+        self.__writeDB4(self.basenames_db, "basenames", id, pkg)
+        self.__writeDB4(self.conflictname_db, "conflictname", id, pkg)
+        self.__writeDB4(self.dirnames_db, "dirnames", id, pkg)
+        self.__writeDB4(self.filemd5s_db, "filemd5s", id, pkg, True, lambda x:a2b_hex(x))
+        self.__writeDB4(self.group_db, "group", id, pkg)
+        self.__writeDB4(self.installtid_db, "installtid", id, pkg, True, lambda x:pack("i", x))
+        self.__writeDB4(self.name_db, "name", id, pkg, False)
+        (headerindex, headerdata) = rpmio._generateHeader(pkg, 4)
+        self.packages_db[pack("i", id)] = headerindex[8:]+headerdata
+        self.__writeDB4(self.providename_db, "providename", id, pkg)
+        self.__writeDB4(self.provideversion_db, "provideversion", id, pkg)
+        self.__writeDB4(self.requirename_db, "requirename", id, pkg)
+        self.__writeDB4(self.requireversion_db, "requireversion", id, pkg)
+        self.__writeDB4(self.sha1header_db, "install_sha1header", id, pkg)
+        self.__writeDB4(self.sigmd5_db, "install_md5", id, pkg)
+        self.__writeDB4(self.triggername_db, "triggername", id, pkg)
+
+    def erasePkg(self, pkg, nowrite=None):
+        nevra = pkg.getNEVRA()
+        for filename in pkg["filenames"]:
+            # Check if the filename is in the filenames list and was referenced
+            # by the package we want to remove
+            if not self.filenames.has_key(filename) or \
+               not pkg in self.filenames[filename]:
+                self.config.printWarning(1, "%s: File '%s' not found in PyDB during erase"\
+                    % (nevra, filename))
+                continue
+        del self.pkglist[nevra]
+
+        if nowrite:
+            return 1
+
+        self.__openDB4()
+
+        if not pkg.has_key("install_id"):
+            return 0
+
+        id = pkg["install_id"]
+
+        self.__removeId(self.basenames_db, "basenames", id, pkg)
+        self.__removeId(self.conflictname_db, "conflictname", id, pkg)
+        self.__removeId(self.dirnames_db, "dirnames", id, pkg)
+        self.__removeId(self.filemd5s_db, "filemd5s", id, pkg, True, lambda x:a2b_hex(x))
+        self.__removeId(self.group_db, "group", id, pkg)
+        self.__removeId(self.installtid_db, "installtid", id, pkg, True, lambda x:pack("i", x))
+        self.__removeId(self.name_db, "name", id, pkg, False)
+        self.__removeId(self.providename_db, "providename", id, pkg)
+        self.__removeId(self.provideversion_db, "provideversion", id, pkg)
+        self.__removeId(self.requirename_db, "requirename", id, pkg)
+        self.__removeId(self.requireversion_db, "requireversion", id, pkg)
+        self.__removeId(self.sha1header_db, "install_sha1header", id, pkg)
+        self.__removeId(self.sigmd5_db, "install_md5", id, pkg)
+        self.__removeId(self.triggername_db, "triggername", id, pkg)
+        del self.packages_db[pack("i", id)]
+        self.ids.remove(id)
+
+    def __openDB4(self):
+        dbpath = self._getDBPath()
+        if not os.path.isdir(dbpath):
+            os.makedirs(dbpath)
+
+        if not self.is_read:
+            self.read()
+
+        if not self.dbopen:
+            self.basenames_db      = bsddb.hashopen(dbpath+"/Basenames", "c")
+            self.conflictname_db   = bsddb.hashopen(dbpath+"/Conflictname", "c")
+            self.dirnames_db       = bsddb.btopen(dbpath+"/Dirnames", "c")
+            self.filemd5s_db       = bsddb.hashopen(dbpath+"/Filemd5s", "c")
+            self.group_db          = bsddb.hashopen(dbpath+"/Group", "c")
+            self.installtid_db     = bsddb.btopen(dbpath+"/Installtid", "c")
+            self.name_db           = bsddb.hashopen(dbpath+"/Name", "c")
+            self.packages_db       = bsddb.hashopen(dbpath+"/Packages", "c")
+            self.providename_db    = bsddb.hashopen(dbpath+"/Providename", "c")
+            self.provideversion_db = bsddb.btopen(dbpath+"/Provideversion", "c")
+            self.requirename_db    = bsddb.hashopen(dbpath+"/Requirename", "c")
+            self.requireversion_db = bsddb.btopen(dbpath+"/Requireversion", "c")
+            self.sha1header_db     = bsddb.hashopen(dbpath+"/Sha1header", "c")
+            self.sigmd5_db         = bsddb.hashopen(dbpath+"/Sigmd5", "c")
+            self.triggername_db    = bsddb.hashopen(dbpath+"/Triggername", "c")
+            self.dbopen            = True
+            self.ids               = map(lambda x:unpack("i", x)[0], self.packages_db.keys())
+
+    def __removeId(self, db, tag, id, pkg, useidx=True, func=lambda x:str(x)):
+        if not pkg.has_key(tag):
+            return
+        for idx in xrange(len(pkg[tag])):
+            key = self.__getKey(tag, idx, pkg, useidx, func)
+            if not db.has_key(key):
+                continue
+            data = db[key]
+            ndata = ""
+            print len(data)
+            for i in xrange(0, len(data), 8):
+                if not data[i:i+8] == pack("ii", id, idx):
+                    ndata += data[i:i+8]
+            print len(ndata)
+            db[key] = ndata
+
+    def __writeDB4(self, db, tag, id, pkg, useidx=True, func=lambda x:str(x)):
+        if not pkg.has_key(tag):
+            return
+        for idx in xrange(len(pkg[tag])):
+            key = self.__getKey(tag, idx, pkg, useidx, func)
+            if tag == "requirename":
+                # Skip rpmlib() requirenames...
+                if key.startswith("rpmlib("):
+                    continue
+                # Skip install prereqs, just like rpm does...
+                if isInstallPreReq(pkg["requireflags"][idx]):
+                    continue
+            if not db.has_key(key):
+                db[key] = ""
+            db[key] += pack("ii", id, idx)
+            if not useidx:
+                return
+
+    def __getKey(self, tag, idx, pkg, useidx, func):
+        if useidx:
+            key = pkg[tag][idx]
+        else:
+            key = pkg[tag]
+        # Convert empty keys, handle filemd5s a little different
+        if key == "":
+            if tag != "filemd5s":
+                key = "\x00"
+        else:
+            key = func(key)
+        return key
 
 
 class RpmPyDB(RpmDatabase):
@@ -1814,87 +1996,13 @@ def getRpmIOFactory(config, source, verify=None, strict=None, hdronly=None):
         return RpmFileIO(config, source, verify, strict, hdronly)
     return None
 
+
 def getRpmDBFactory(config, source, root=None):
     if   source[:6] == 'pydb:/':
         return RpmPyDB(config, source[6:], root)
     elif source[:7] == 'rpmdb:/':
         return RpmDB(config, source[7:], root)
-    elif source[:7] == 'foodb:/':
-        # testbed class
-        return FooRpmDB(config, source, root)
-    return None
+    return RpmDB(config, source, root)
 
-###
-### this space intentionally left blank
-###
-
-class FooRpmDB(RpmDatabase):
-    """testbed for directly accessing /var/lib/rpm/*"""
-    def __init__(self, config, source, buildroot=None):
-        RpmDatabase.__init__ (self, config, source, buildroot)
-
-    def pkg_from_rpmdb_by_key(self, key):
-        pkg = package.RpmPackage(self.config, "dummy")
-        data = self.rpmdb[key]
-        val = unpack("i", key)[0]
-        if val == 0:
-            return None
-        else:
-            rpmio = RpmFileIO(self.config, "dummy")
-            (indexNo, storeSize) = unpack("!ii", data[0:8])
-            indexdata = data[8:indexNo*16+8]
-            storedata = data[indexNo*16+8:]
-            pkg["signature"] = {}
-            for idx in xrange(0, indexNo):
-                try:
-                    (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
-                                                           storedata)
-                except ValueError, e:
-                    # FIXME: different handling?
-                    self.config.printError("Invalid header entry %s in %s: %s"
-                                      % (idx, key, e))
-                    continue
-                if   tag == 257:
-                    pkg["signature"]["size_in_sig"] = tagval
-                elif tag == 261:
-                    pkg["signature"]["md5"] = tagval
-                elif tag == 269:
-                    pkg["signature"]["sha1header"] =tagval
-                elif rpmtag.has_key(tag):
-                    if rpmtagname[tag] == "archivesize":
-                        pkg["signature"]["payloadsize"] = tagval
-                    else:
-                        pkg[rpmtagname[tag]] = tagval
-            rpmio.hdr = {}
-            pkg.generateFileNames()
-            nevra = pkg.getNEVRA()
-            pkg.source = "db:/"+self.source+"/"+nevra
-
-    def read(self):
-        """read RPM db from Berkeley DB files"""
-        if self.is_read:
-            return 1
-        dbpath = self._getDBPath()
-        self.rpmdb = bsddb.hashopen(dbpath+"/Packages", "r")
-        for key in self.rpmdb.keys():
-            pkg = self.pkg_from_rpmdb_by_key (key)
-            if pkg:
-                if not pkg.has_key("arch"):
-                    continue
-                if pkg["name"].startswith("gpg-pubkey"):
-                    continue
-                for filename in pkg["filenames"]:
-                    if not self.filenames.has_key(filename):
-                        self.filenames[filename] = []
-                    self.filenames[filename].append(pkg)
-                nevra = pkg.getNEVRA()
-                self.pkglist[nevra] = pkg
-
-        self.is_read = 1
-        return 1
-
-###
-### this space intentionally left blank
-###
 
 # vim:ts=4:sw=4:showmatch:expandtab

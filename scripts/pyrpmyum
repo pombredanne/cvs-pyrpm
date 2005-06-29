@@ -83,6 +83,10 @@ def main():
     # Argument parsing
     args = parseYumOptions(sys.argv[1:], yum)
 
+    if not args:
+        usage()
+        sys.exit(1)
+
     lockfile = lockPyrpm()
     if lockfile == None:
         printError("couldn't lock pyrpmyum")

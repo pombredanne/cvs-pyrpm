@@ -18,7 +18,7 @@
 #
 
 
-from time import clock
+from time import clock, time
 from hashlist import HashList
 from resolver import RpmResolver
 from control import RpmController
@@ -45,6 +45,8 @@ class RpmYum:
         self.erase_list = []
         # Our database
         self.pydb = None
+        # Our TID
+        self.config.tid = int(time.time())
         # Our list of package names that get installed instead of updated
         self.always_install = ["kernel", "kernel-smp", "kernel-bigmem",
             "kernel-enterprise", "kernel-debug", "kernel-unsupported"]
@@ -78,8 +80,8 @@ class RpmYum:
     def processArgs(self, args):
         self.erase_list = []
         # Create and read db
-        self.pydb = RpmPyDB(self.config, self.config.dbpath,
-                            self.config.buildroot)
+        self.pydb = getRpmDBFactory(self.config, self.config.dbpath,
+                                    self.config.buildroot)
         self.pydb.read()
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
         self.runArgs(args)

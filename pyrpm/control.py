@@ -185,13 +185,15 @@ class RpmController:
         for i in xrange(0, numops, pkgsperfork):
             subop = operations[:pkgsperfork]
             for (op, pkg) in subop:
-                try:
-                    pkg.close()
-                    pkg.open()
-                except IOError, e:
-                    self.config.printError("Error reopening %s: %s"
+                # Don't try to reread packages that come from rpmdb
+                if not (pkg.source.startswith("rpmdb:/")):
+                    try:
+                        pkg.close()
+                        pkg.open()
+                    except IOError, e:
+                        self.config.printError("Error reopening %s: %s"
                                            % (pkg.getNEVRA(), e))
-                    sys.exit(1)
+                        sys.exit(1)
             pid = os.fork()
             if pid != 0:
                 (rpid, status) = os.waitpid(pid, 0)
@@ -223,13 +225,15 @@ class RpmController:
                 self.db.setBuildroot(None)
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
-                    pkg.clear()
-                    try:
-                        pkg.read()
-                    except (IOError, ValueError):
-                        self.config.printError("Error rereading %s: %s"
-                                               % (pkg.getNEVRA(), e))
-                        sys.exit(1)
+                    # Don't try to reread packages that come from rpmdb
+                    if not (pkg.source.startswith("rpmdb:/")):
+                        pkg.clear()
+                        try:
+                            pkg.read()
+                        except (IOError, ValueError), e:
+                            self.config.printError("Error rereading %s: %s"
+                                                   % (pkg.getNEVRA(), e))
+                            sys.exit(1)
                     if   op == OP_INSTALL:
                         opstring = "Install: "
                     elif op == OP_UPDATE or op == OP_FRESHEN:
@@ -261,7 +265,7 @@ class RpmController:
                         try:
                             pkg.erase(self.db)
                         except (IOError, ValueError), e:
-                            self.config.printError("Error installing %s: %s"
+                            self.config.printError("Error erasing %s: %s"
                                                    % (pkg.getNEVRA(), e))
                             sys.exit(1)
                         self.__runTriggerPostUn(pkg)

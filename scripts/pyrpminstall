@@ -45,21 +45,21 @@ def usage():
 
 
 def main():
-  try:
-    opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:", ["install", "upgrade", "freshen", "erase", "help", "verbose", "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=", "force", "ignoresize", "ignorearch", "justdb", "nodeps", "nodigest", "nosignature", "noorder", "noscripts", "notriggers", "oldpackage", "test"])
-  except getopt.error, e:
-    print "Error parsing command list arguments: %s" % e
-    usage()
-    sys.exit(1)
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "iUFe?vwdhr:", ["install", "upgrade", "freshen", "erase", "help", "verbose", "warning", "debug", "hash", "version", "quiet", "dbpath=", "root=", "force", "ignoresize", "ignorearch", "justdb", "nodeps", "nodigest", "nosignature", "noorder", "noscripts", "notriggers", "oldpackage", "test"])
+    except getopt.error, e:
+        print "Error parsing command list arguments: %s" % e
+        usage()
+        sys.exit(1)
 
-  operation = None
-  for (opt, val) in opts:
-    if opt in ["-i", "--install"]:
-        if operation != None:
-            print "Only one operation at a time is allow."
-            usage()
-            sys.exit(1)
-        operation = OP_INSTALL
+    operation = None
+    for (opt, val) in opts:
+        if opt in ["-i", "--install"]:
+            if operation != None:
+                print "Only one operation at a time is allow."
+                usage()
+                sys.exit(1)
+            operation = OP_INSTALL
     elif opt in ["-U", "--upgrade"]:
         if operation != None:
             print "Only one operation at a time is allow."
@@ -131,12 +131,13 @@ def main():
     elif opt == "--notriggers":
         rpmconfig.notriggers = 1
 
-  if not args:
-    print "Error no packages to install"
-    usage()
-    sys.exit(1)
+    if not args:
+        print "Error no packages to install"
+        usage()
+        sys.exit(1)
 
-  pydb = RpmPyDB(rpmconfig, rpmconfig.dbpath, rpmconfig.buildroot)
+  pydb = getRpmDBFactory(rpmconfig, self.config.dbpath, rpmconfig.dbpath,
+                         rpmconfig.buildroot)
   control = RpmController(rpmconfig, operation, pydb)
   control.handleFiles(args)
   ops = control.getOperations()

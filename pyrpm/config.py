@@ -44,7 +44,7 @@ class RpmConfig:
         self.error_handler = RpmMessageHandler(self, "Error: ")
         self.printhash = 0
         self.buildroot = None
-        self.dbpath = "/var/lib/pyrpm/"
+        self.dbpath = "rpmdb://var/lib/rpm/"
         self.force = 0
         self.oldpackage = 0
         self.justdb = 0
