@@ -60,76 +60,76 @@ def main():
                 usage()
                 sys.exit(1)
             operation = OP_INSTALL
-    elif opt in ["-U", "--upgrade"]:
-        if operation != None:
-            print "Only one operation at a time is allow."
+        elif opt in ["-U", "--upgrade"]:
+            if operation != None:
+                print "Only one operation at a time is allow."
+                usage()
+                sys.exit(1)
+            operation = OP_UPDATE
+        elif opt in ["-F", "--freshen"]:
+            if operation != None:
+                print "Only one operation at a time is allow."
+                usage()
+                sys.exit(1)
+            operation = OP_FRESHEN
+        elif opt in ["-e", "--erase"]:
+            if operation != None:
+                print "Only one operation at a time is allow."
+                usage()
+                sys.exit(1)
+            operation = OP_ERASE
+        elif opt in ['-?', "--help"]:
             usage()
-            sys.exit(1)
-        operation = OP_UPDATE
-    elif opt in ["-F", "--freshen"]:
-        if operation != None:
-            print "Only one operation at a time is allow."
-            usage()
-            sys.exit(1)
-        operation = OP_FRESHEN
-    elif opt in ["-e", "--erase"]:
-        if operation != None:
-            print "Only one operation at a time is allow."
-            usage()
-            sys.exit(1)
-        operation = OP_ERASE
-    elif opt in ['-?', "--help"]:
-        usage()
-        sys.exit(0)
-    elif opt in ["-v", "--verbose"]:
-        rpmconfig.verbose += 1
-    elif opt in ["-w", "--warning"]:
-        rpmconfig.warning += 1
-    elif opt in ["-d", "--debug"]:
-        rpmconfig.debug += 1
-    elif opt in ["-r", "--root"]:
-        rpmconfig.buildroot = val
-    elif opt == "--quiet":
-        rpmconfig.debug = 0
-        rpmconfig.warning = 0
-        rpmconfig.verbose = 0
-        rpmconfig.printhash = 0
-    elif opt == "--version":
-        print "pyrpminstall", __version__
-        sys.exit(0)
-    elif opt == "--dbpath":
-        rpmconfig.dbpath = val
-    elif opt == "--force":
-        rpmconfig.force = 1
-    elif opt in ["-h", "--hash"]:
-        rpmconfig.printhash = 1
-    elif opt == "--oldpackage":
-        rpmconfig.oldpackage = 1
-    elif opt == "--justdb":
-        rpmconfig.justdb = 1
-        rpmconfig.noscripts = 1
-        rpmconfig.notriggers = 1
-    elif opt == "--test":
-        rpmconfig.test = 1
-        rpmconfig.timer = 1
-        rpmconfig.noscripts = 1
-        rpmconfig.notriggers = 1
-    elif opt == "--ignoresize":
-        rpmconfig.ignoresize = 1
-    elif opt == "--ignorearch":
-        rpmconfig.ignorearch = 1
-    elif opt == "--nodeps":
-        rpmconfig.nodeps = 1
-    elif opt == "--nodigest":
-        rpmconfig.nodigest = 1
-    elif opt == "--nosignature":
-        rpmconfig.nosignature = 1
-    elif opt == "--noorder":
-        rpmconfig.noorder = 1
-    elif opt == "--noscripts":
-        rpmconfig.noscripts = 1
-    elif opt == "--notriggers":
-        rpmconfig.notriggers = 1
+            sys.exit(0)
+        elif opt in ["-v", "--verbose"]:
+            rpmconfig.verbose += 1
+        elif opt in ["-w", "--warning"]:
+            rpmconfig.warning += 1
+        elif opt in ["-d", "--debug"]:
+            rpmconfig.debug += 1
+        elif opt in ["-r", "--root"]:
+            rpmconfig.buildroot = val
+        elif opt == "--quiet":
+            rpmconfig.debug = 0
+            rpmconfig.warning = 0
+            rpmconfig.verbose = 0
+            rpmconfig.printhash = 0
+        elif opt == "--version":
+            print "pyrpminstall", __version__
+            sys.exit(0)
+        elif opt == "--dbpath":
+            rpmconfig.dbpath = val
+        elif opt == "--force":
+            rpmconfig.force = 1
+        elif opt in ["-h", "--hash"]:
+            rpmconfig.printhash = 1
+        elif opt == "--oldpackage":
+            rpmconfig.oldpackage = 1
+        elif opt == "--justdb":
+            rpmconfig.justdb = 1
+            rpmconfig.noscripts = 1
+            rpmconfig.notriggers = 1
+        elif opt == "--test":
+            rpmconfig.test = 1
+            rpmconfig.timer = 1
+            rpmconfig.noscripts = 1
+            rpmconfig.notriggers = 1
+        elif opt == "--ignoresize":
+            rpmconfig.ignoresize = 1
+        elif opt == "--ignorearch":
+            rpmconfig.ignorearch = 1
+        elif opt == "--nodeps":
+            rpmconfig.nodeps = 1
+        elif opt == "--nodigest":
+            rpmconfig.nodigest = 1
+        elif opt == "--nosignature":
+            rpmconfig.nosignature = 1
+        elif opt == "--noorder":
+            rpmconfig.noorder = 1
+        elif opt == "--noscripts":
+            rpmconfig.noscripts = 1
+        elif opt == "--notriggers":
+            rpmconfig.notriggers = 1
 
     if not args:
         print "Error no packages to install"
