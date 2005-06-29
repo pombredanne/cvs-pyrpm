@@ -1,0 +1,107 @@
+                                   PyRPM
+                                  =======
+
+1. Overview
+-----------
+
+PyRPM is a python module and a collection of scripts that provides the same
+functionality as rpm and yum and is completely written in python. It's built
+from ground up and supports the binary rpms, rpmdb, comps.xml files and
+yum repositories.
+
+The reason for this project was to have a codebase with which we can test and
+verify rpm, rpmdb and yum itself and experiment with new features and
+implementations very quickly. Python is our in-house defacto standard, so using
+python to do rapid prototyping was only logical.
+
+The code itself is still very small, about 6000-7000 lines of code. We're
+constantly looking to improve the code, make it more production ready and 
+remove double functionality.
+
+
+2. Whats in there
+-----------------
+
+PyRPM comes with a small collection of scripts and the pyrpm module itself:
+
+ pyrpmcheck:      Check rpms for various know problems
+ pyrpmcheckrepo:  Simulate an install of a given system followed by an
+                  update to the second repo or rpms
+ pyrpmcreaterepo: Build the yum repodata, but using the pyrpm module
+                  underneath instead of rpmlib
+ pyrpmdb2rpmdb:   Convert a "old" pyrpm database to rpmdb using rpm itself.
+                  Obsolete now with direct rpmdb support in pyrpm
+ pyrpmdbverify:   Check the internal and possibly external consistency of a
+                  rpmdb. See README.rpmdb for more info
+ pyrpminstall:    Install, update and erase packages. Uses very similar command
+                  line options as rpm
+ pyrpmrandomizer: Given a repo tries to install and remove packages trying to
+                  solve all unresolved deps along the way
+ pyrpmrebuilddb:  Rebuilds a rpmdb, same as rpm --rebuilddb
+ pyrpmspecinfo:   Spec file parser tool
+ pyrpmyum:        A yum replacement, can use standard yum config files with
+                  several nifty additional (and dangerous ;) features
+
+
+3. Examples
+-----------
+
+This section contains some examples that we commonly use here to test the code
+and even use it for everyday buildroot setups.
+
+
+Check some common problems with packages and interdependancies for FC Devel:
+ pyrpmcheck /mnt/redhat/fedora/development/i386/Fedora/RPMS
+
+Check if an update from FC4 to FC Devel works or what problems come up:
+  pyrpmcheckrepo -r /mnt/foo install /mnt/raid/fedora/4/i386/os/Fedora/RPMS update /mnt/raid/fedora/development/i386/Fedora/RPMS
+
+Check the rpmdb of the current system with internal cross checks
+  pyrpmdbverify
+
+Same, but this time we use external rpms to verify against, too
+  pyrpmdbverify /mnt/redhat/fedora/development/i386/Fedora/RPMS
+
+Run 10000 install and erase operations in the /mnt/build/test buildroot and
+save the resulting output in /tmp/stresstest
+  pyrpmrandomizer --servicehack -y -v -c fc3-updates-i386.conf -r /mnt/build/test 10000 >&/tmp/stresstest
+
+Install a full FC Devel in /mnt/build/fc-devel-i386 buildroot
+  pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 install "*"
+
+Update kdebase in /mnt/build/fc-devel-i386 buildroot to latest version,
+resolving all dependancies
+  pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 update kdebase
+
+Same, only if we get some unresolvable problems try to remove packages that
+don't fit automatically
+  pyrpmyum -y -v --autoerase -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 update kdebase
+
+Make a dry-run of the above command to be sure that not everything gets
+automatically deleted :)
+  pyrpmyum -y -v --test --autoerase -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 update kdebase
+
+Remove glibc and all depending packages from our buildroot :)
+  pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 remove glibc
+
+
+4. Detailed tool descriptions
+-----------------------------
+
+In order to understand what each of the tools really does this section describes
+the behaviour of the tools in more detail for each tool.
+
+4.x pyrpmdbverify
+-----------------
+
+This tool actually really reads all DB4 files in /var/lib/rpm (or, if you
+use the --dbpath option in that directory) and tries to cross check the entries
+with the rpm header that is found in /var/lib/rpm/Packages. The README.rpmdb
+contains a lot more detail about the structure of rpmdb. Simply put we check
+if for every entry in every file there is a corresponding entry in Packages
+and vice versa. There are some exceptions and special cases, but all know ones
+are handled correctly. The one check that is very unreliable is the SHA1 header
+checksum tests as this test has to rely on a very specific ordering of the
+rpm binary header and about the tags that appear in the original rpm. If those
+assupmtions don't hold this checksum can't be computed correctly.
+

@@ -1,0 +1,18 @@
+                              !!! W A R N I N G !!!
+
+The PyRPM project is by no means meant to be a full replacement of rpm or yum.
+In it's current stat we feel confident that in general it won't break anything,
+but the code isn't production quality yet.
+
+The check scripts can be safely used as they won't modify anything on your
+system, so feel free to use them at your convenience.
+
+We personally have been using the yum replacement very extensively and even
+used it to update our own systems, but that's not even remotely a guarantee
+that it will work on your machine.
+
+Using it to set up buildroots on the other hand should be very safe as this
+all happens in a very contained environment (sandbox principle).
+
+Please let us know of any problems you encounter, if possible with some
+reproducible testcases so we can figure out what might have happend.
