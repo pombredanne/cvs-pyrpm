@@ -1167,6 +1167,13 @@ class RpmDB(RpmDatabase):
             self.read()
 
         if not self.dbopen:
+            # We first need to remove the __db files, otherwise rpm will later
+            # be really upset. :)
+            for i in xrange(9):
+                try:
+                    os.unlink("%s/__db.00%d" % (dbpath, i))
+                except:
+                    pass
             self.basenames_db      = bsddb.hashopen(dbpath+"/Basenames", "c")
             self.conflictname_db   = bsddb.hashopen(dbpath+"/Conflictname", "c")
             self.dirnames_db       = bsddb.btopen(dbpath+"/Dirnames", "c")
