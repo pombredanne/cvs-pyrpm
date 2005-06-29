@@ -136,15 +136,14 @@ def main():
         usage()
         sys.exit(1)
 
-  pydb = getRpmDBFactory(rpmconfig, self.config.dbpath, rpmconfig.dbpath,
-                         rpmconfig.buildroot)
-  control = RpmController(rpmconfig, operation, pydb)
-  control.handleFiles(args)
-  ops = control.getOperations()
-  if self.config.test:
-    self.config.printError("test run stopped")
-  else:
-    control.runOperations(ops)
+    pydb = getRpmDBFactory(rpmconfig, rpmconfig.dbpath, rpmconfig.buildroot)
+    control = RpmController(rpmconfig, operation, pydb)
+    control.handleFiles(args)
+    ops = control.getOperations()
+    if self.config.test:
+        self.config.printError("test run stopped")
+    else:
+        control.runOperations(ops)
 
 if __name__ == '__main__':
     hotshot = 0
