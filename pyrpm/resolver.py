@@ -399,8 +399,8 @@ class RpmResolver(RpmList):
                pkg1_fi.md5sum == fi.md5sum:
             return 0
         # ignore ghost files
-        if pkg1_fi.flag & base.RPMFILE_GHOST or \
-               fi.flag & base.RPMFILE_GHOST:
+        if pkg1_fi.flags & base.RPMFILE_GHOST or \
+               fi.flags & base.RPMFILE_GHOST:
             return 0
 
         return 1
