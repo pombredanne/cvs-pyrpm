@@ -45,8 +45,6 @@ class RpmYum:
         self.erase_list = []
         # Our database
         self.pydb = None
-        # Our TID
-        self.config.tid = int(time.time())
         # Our list of package names that get installed instead of updated
         self.always_install = ["kernel", "kernel-smp", "kernel-bigmem",
             "kernel-enterprise", "kernel-debug", "kernel-unsupported"]

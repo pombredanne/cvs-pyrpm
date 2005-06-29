@@ -17,7 +17,7 @@
 #
 
 
-import os, copy, sys
+import os, copy, sys, time
 
 
 class RpmMessageHandler:
@@ -61,6 +61,7 @@ class RpmConfig:
         self.nofileconflicts = 0
         self.checkinstalled = 0
         self.exactarch = 0
+        self.tid = int(time.time())
         self.compsfile = None
         self.resolvertags = ("name", "epoch", "version", "release", "arch",
             "providename", "provideflags", "provideversion", "requirename",
