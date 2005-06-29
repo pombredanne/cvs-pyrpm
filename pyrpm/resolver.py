@@ -208,7 +208,7 @@ class RpmResolver(RpmList):
         self.installed_conflicts = self.getConflicts()
         self.installed_obsoletes = self.getObsoletes()
         self.installed_file_conflicts = self.getFileConflicts()
-        self.config.checkinstalled = check_installed
+        self.config.checkinstalled = check_installed                
     # ----
 
     def clear(self):
@@ -370,7 +370,7 @@ class RpmResolver(RpmList):
                          operation=OP_INSTALL):
         if self.config.checkinstalled == 0 and \
                pkg1 in self.installed_file_conflicts and \
-               filename in self.installed_file_conflicts[pkg1]:
+               (filename,pkg2) in self.installed_file_conflicts[pkg1]:
             return 0
         if operation == OP_UPDATE and \
                (pkg2 in self.pkg_updates or pkg2 in self.pkg_obsoletes):
