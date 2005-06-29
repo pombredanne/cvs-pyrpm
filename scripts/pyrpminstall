@@ -140,8 +140,8 @@ def main():
     control = RpmController(rpmconfig, operation, pydb)
     control.handleFiles(args)
     ops = control.getOperations()
-    if self.config.test:
-        self.config.printError("test run stopped")
+    if rpmconfig.test:
+        rpmconfig.printError("test run stopped")
     else:
         control.runOperations(ops)
 
