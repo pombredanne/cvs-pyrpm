@@ -170,6 +170,7 @@ def verifyStructure(hash, tag, useidx=True):
 def verifyReference(hash, tag, id):
     pkg = packages[id]
     refhash = pkg[tag]
+    tnamehash = {}
     if not refhash:
         return
     for idx in xrange(len(refhash)):
@@ -184,11 +185,17 @@ def verifyReference(hash, tag, id):
             # Skip install prereqs, just like rpm does...
             if isInstallPreReq(pkg["requireflags"][idx]):
                 continue
+        # Equal Triggernames aren't added multiple times for the same package
+        if tag == "triggername":
+            if tnamehash.has_key(key):
+                continue
+            else:
+                tnamehash[key] = 1
         if not hash.has_key(key):
-            print "Error packages %s: %s not in %s for package %s" % (tag, key, tag, pkg.getNEVRA())
+            print "Error packages %s: %s not found in db for package %s" % (tag, key, pkg.getNEVRA())
             continue
         if not (id, idx) in hash[key]:
-            print "Error packages %s: %s not referenced in %s for package %s" % (tag, key, tag, pkg.getNEVRA())
+            print "Error packages %s: %s not referenced for package %s" % (tag, key, pkg.getNEVRA())
             continue
 
 def verifyBasenames():

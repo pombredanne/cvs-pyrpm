@@ -31,6 +31,7 @@ newdbpath: Optional path for new rpmdb. Default is ./rpmdb
 #
 def writeDB4(db, tag, id, packages, useidx=True, func=lambda x:str(x)):
     pkg = packages[id]
+    tnamehash = {}
     if not pkg.has_key(tag):
         return
     for idx in xrange(len(pkg[tag])):
@@ -51,6 +52,12 @@ def writeDB4(db, tag, id, packages, useidx=True, func=lambda x:str(x)):
             # Skip install prereqs, just like rpm does...
             if isInstallPreReq(pkg["requireflags"][idx]):
                 continue
+        # Equal Triggernames aren't added multiple times for the same package
+        if tag == "triggername":
+            if tnamehash.has_key(key):
+                continue
+            else:
+                tnamehash[key] = 1
         if not db.has_key(key):
             db[key] = ""
         db[key] += pack("ii", id, idx)

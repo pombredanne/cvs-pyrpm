@@ -1010,7 +1010,10 @@ class RpmDB(RpmDatabase):
         dbpath = self._getDBPath()
         if not os.path.isdir(dbpath):
             return 1
-        db = bsddb.hashopen(dbpath+"/Packages", "c")
+        try:
+            db = bsddb.hashopen(dbpath+"/Packages", "c")
+        except:
+            return 1
         for key in db.keys():
             rpmio = RpmFileIO(self.config, "dummy")
             pkg = package.RpmPackage(self.config, "dummy")
