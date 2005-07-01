@@ -3,7 +3,6 @@
 
 1. Overview
 -----------
-
 PyRPM is a python module and a collection of scripts that provides the same
 functionality as rpm and yum and is completely written in python. It's built
 from ground up and supports the binary rpms, rpmdb, comps.xml files and
@@ -14,14 +13,13 @@ verify rpm, rpmdb and yum itself and experiment with new features and
 implementations very quickly. Python is our in-house defacto standard, so using
 python to do rapid prototyping was only logical.
 
-The code itself is still very small, about 6000-7000 lines of code. We're
+The code itself is still very small, about 9000-10000 lines of code. We're
 constantly looking to improve the code, make it more production ready and 
 remove double functionality.
 
 
 2. Whats in there
 -----------------
-
 PyRPM comes with a small collection of scripts and the pyrpm module itself:
 
  pyrpmcheck:      Check rpms for various know problems
@@ -45,7 +43,6 @@ PyRPM comes with a small collection of scripts and the pyrpm module itself:
 
 3. Examples
 -----------
-
 This section contains some examples that we commonly use here to test the code
 and even use it for everyday buildroot setups.
 
@@ -87,13 +84,51 @@ Remove glibc and all depending packages from our buildroot :)
 
 4. Detailed tool descriptions
 -----------------------------
-
 In order to understand what each of the tools really does this section describes
 the behaviour of the tools in more detail for each tool.
 
-4.x pyrpmdbverify
------------------
+4.1 pyrpmcheck
+--------------
+There are currently 4 basic tests in pyrpmcheck. The first checks for all
+packages if any two dirs differ in user/group/mode. The second check looks for
+duplicate provides, meaning if 2 rpms provide the same thing. The third test
+looks for dangling symlinks, that is, symlinks that point to nowhere. The
+last check simply checks if any package names appear in the various given dirs.
+This check is only useful for FC and FC-Extras, as there should be no overlap
+there.
 
+4.2 pyrpmcheckrepo
+------------------
+This tool should actually be renamed (and will so soon) to pyrpmcheckinstall as
+that's what it does. What the tool does it to simulate an installation (just
+like you could do with pyrpmyum --test) and then simulates an update to the
+second set of rpms or repository. A typical test would be to use a FC-3
+or FC-4 yum.conf repo as a install base and then use a FC-devel repo or
+rpm tree as the update tree. The nice thing about the simulation is that it
+doesn't actually perform the installation and so doesn't need any diskspace.
+Additionally you can use the (undocumented ;)) option --arch where you can
+specify and arch you like. The host arch doesn't matter for the simulation
+as the whole code "thinks" it runs under arch. So simulated installs and updates
+for all kinds of archs can be performed this way on one single machine.
+
+4.3 pyrpmcreaterepo
+-------------------
+Here we've take the code from the original createrepo and replaced the rpmlib
+based access to rpm headers with our code. This shows how easy it can be to
+switch from rpmlib to pyrpm. As the rest of the code is unmodified it actually
+produces the same repodata as the original createrepo would.
+
+4.4 pyrpmdb2rpmdb
+-----------------
+As we didn't have rpmdb support in the beginning we had to use our "own"
+database which only consisted of the binary rpm headers saved as files with
+the NEVRA of the packages. This allowed easy manipulation of the database and
+the headers were still readable and usable by rpm itself, so you could build
+a rpmdb using those header files and the --justdb option of rpm. This has now
+become obsolete with the full support of rpmdb.
+
+4.5 pyrpmdbverify
+-----------------
 This tool actually really reads all DB4 files in /var/lib/rpm (or, if you
 use the --dbpath option in that directory) and tries to cross check the entries
 with the rpm header that is found in /var/lib/rpm/Packages. The README.rpmdb
@@ -104,4 +139,71 @@ are handled correctly. The one check that is very unreliable is the SHA1 header
 checksum tests as this test has to rely on a very specific ordering of the
 rpm binary header and about the tags that appear in the original rpm. If those
 assupmtions don't hold this checksum can't be computed correctly.
+
+4.6 pyrpminstall
+----------------
+Simply put this tool allows you to install, update and erase rpms just like
+you would with rpm itself. It supports most of the common options from rpm
+and used the same syntax, too. As it's "only" rpm though there is no depresolver
+in this tool, so if you have any missing dependencies you'll have to fiddle
+them out yourself, just as you had to do with rpm.
+
+4.7 pyrpmrandomizer
+-------------------
+This is our main stresstest tool. With it you can run literally thousands of
+update and erase operations in a buildroot and after several days scan the
+output for any problems. It works simply by alternating between trying to
+select randomly one package from the repository and installing that and 
+selecting a package from the installed ones and removing that, always trying
+to resolve all missing dependencies and conflicts. There are several special
+options which help circumvent some strange problems. The first is --servicehack
+which simply changes /sbin/service to "exit 0" as especially some of the
+postuninstall scripts really misbehave otherwise and you don't need any
+services started or stopped in a buildroot anyway for testing. The second is
+the --autoerase option which i'll describe a little more in detail for
+pyrpmyum.
+
+4.8 pyrpmrebuilddb
+------------------
+Ever had to use rpm --rebuilddb? Well, here is our version of it. It tries to
+do the same thing as rpm where it takes /var/lib/rpm/Packages and rebuilds the
+database with that information. The default path for the new db is ./rpmdb
+so that your original one won't be overwritten.
+
+4.9 pyrpmspecinfo
+-----------------
+As we often have to work with specfiles, too, we've written a small tool with
+which we can extrace the different sections from a specfile in order to use
+that info via pipe in other tools.
+
+4.10 pyrpmyum
+-------------
+Our main workhorse and real puppy. This tool, as the name already suggests is
+basically a yum replacement of sorts. It uses the same command line options as
+yum and uses the same config files, too. It contains a complete depresolver
+and allows complex installs, updates and erases from systems. We have used it
+to install FC1 and then step by step update to FC1-updates, FC2, FC2-updates,
+FC3, FC3-updates and finally FC4. Some of the updates need the --autoerase
+option though because some dependencies just can't be met and packages need
+to be removed in order to fulfill them. The autoerase option tries exactly
+that by semi-intelligently selecting the package that needs to be removed in
+order for the update to work properly without user intervention. For the
+described update chain only about 6-7 packages were deleted up to FC3, and all
+of them would have to be removed manually anyway. But a word of warning here:
+The autoerase option might run amok if things go really wrong our you try to
+update to a completely broken tree and would then try to remove almost all of
+your packages. This has never happend for real trees for us, but just imagine
+a broken repository and things could go really wrong. That's why this option
+isn't directly listed in the help and should only be used for a --test run
+or without the -y option where you get listed separately from the "normal"
+transaction the packages that pyrpmyum would autoerase for you.
+
+4.11 rpmdb2pyrpmdb
+------------------
+The counterpart to pyrpmdb2rpmdb, again rather obsolete like it's brother as
+we now have real rpmdb support. What it actually does is to extract all rpm
+headers from /var/lib/rpm/Packages and then recreates proper rpm header files
+and stores them as files in /var/lib/pyrpm/headers which can afterwards again
+be used by rpm -ivh --justdb /var/lib/pyrpm/headers/* to generate a valid rpm
+database again.
 
