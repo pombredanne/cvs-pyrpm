@@ -39,12 +39,12 @@
 # XXX TODO:
 # - PyGZIP is way faster than existing gzip routines, but still 2 times
 #   slower than a C version. Can further improvements be made?
+# - error handling in PyGZIP
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
 #   and "0" epoch (change this for createrepo)
 # - check for #% in spec files
 # - streaming read for cpio files
 # things that look less important to implement:
-# - relocatable rpm packages
 # - add streaming support to bzip2 compressed payload
 # - lua scripting support
 # possible rpm format changes:
@@ -231,16 +231,11 @@ def doRead(fd, size):
 class PyGZIP:
     def __init__(self, fd):
         self.fd = fd
-        self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
-        self.crcval = zlib.crc32("")
-        self.length = 0
-        self.buffer = []
-        self.bufferlen = 0
-        self.pos = 0
-        self.enddata = ""
-        self.header_read = 0
-
-    def __readHeader(self):
+        self.length = 0 # length of all decompressed data
+        self.buffer = [] # array of decompressed data
+        self.bufferlen = 0 # length of available decompressed data
+        self.pos = 0 # position in current buffer
+        self.enddata = "" # remember last 8 bytes for crc/length check
         if self.fd.read(2) != "\037\213":
             print "Not a gzipped file"
             sys.exit(0)
@@ -248,7 +243,8 @@ class PyGZIP:
             print "Unknown compression method"
             sys.exit(0)
         flag = ord(self.fd.read(1))
-        self.fd.read(4+1+1) # Discard modification time, extra flags, OS byte
+        # Discard modification time(4 bytes), extra flags(1), OS byte(1)
+        self.fd.read(6)
         if flag & FEXTRA:
             # Read & discard the extra field, if present
             xlen = ord(self.fd.read(1))
@@ -256,51 +252,27 @@ class PyGZIP:
             self.fd.read(xlen)
         if flag & FNAME:
             # Read and discard a nul-terminated string containing the filename
-            while 1:
-                if self.fd.read(1) == "\000":
-                    break
+            while self.fd.read(1) != "\000":
+                pass
         if flag & FCOMMENT:
             # Read and discard a nul-terminated string containing a comment
-            while 1:
-                if self.fd.read(1) == "\000":
-                    break
+            while self.fd.read(1) != "\000":
+                pass
         if flag & FHCRC:
             self.fd.read(2)      # Read & discard the 16-bit header CRC
         self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
         self.crcval = zlib.crc32("")
-        self.header_read = 1
 
-    def read(self, bytes=None):
-        if not self.header_read:
-            self.__readHeader()
+    def read(self, bytes):
         data = ""
-        size = 2048
-        while bytes == None or self.bufferlen < bytes:
+        while self.bufferlen < bytes:
             if len(data) >= 8:
                 self.enddata = data[-8:]
             else:
                 self.enddata = self.enddata[:8-len(data)] + data
-            size = bytes - self.bufferlen
-            if size > 65536:
-                size = 32768
-            elif size > 32768:
-                size = 16384
-            elif size > 16384:
-                size = 8192
-            elif size > 8192:
-                size = 4096
-            elif size > 4096:
-                size = 2048
-            else:
-                size = 1024
-            data = self.fd.read(size)
+            data = self.fd.read(32768)
             if data == "":
-            # We've read to the end of the file, so we have to take the last 8
-            # bytes from the buffer containing the CRC and the file size.  The
-            # decompressor is smart and knows when to stop, so feeding it
-            # extra data is harmless.
-                crc32 = unpack("!I", self.enddata[0:4])
-                isize = unpack("!I", self.enddata[4:8])
+                (crc32, isize) = unpack("!II", self.enddata)
                 if crc32 != self.crcval:
                     print "CRC check failed."
                 if isize != self.length:
@@ -312,23 +284,19 @@ class PyGZIP:
             self.bufferlen += decomplen
             self.length += decomplen
             self.crcval = zlib.crc32(decompdata, self.crcval)
-        if bytes == None or self.bufferlen <  bytes:
+        if self.bufferlen < bytes:
             decompdata = self.decompobj.flush()
             decomplen = len(decompdata)
             self.buffer.append(decompdata)
             self.bufferlen += decomplen
-            self.length = self.length + decomplen
+            self.length += decomplen
             self.crcval = zlib.crc32(decompdata, self.crcval)
-        if bytes == None:
-            bytes = self.length
         retdata = ""
         while bytes > 0:
             decompdata = self.buffer[0]
             decomplen = len(decompdata)
-            if bytes+self.pos <= decomplen:
-                tmpdata = decompdata[self.pos:bytes+self.pos]
-                retdata += tmpdata
-                #self.buffer[0] = decompdata[bytes:]
+            if bytes + self.pos <= decomplen:
+                retdata += decompdata[self.pos:bytes + self.pos]
                 self.bufferlen -= bytes
                 self.pos += bytes
                 break
@@ -924,6 +892,7 @@ class ReadRpm:
         self.owner = None # are uid/gid set?
         self.uid = None
         self.gid = None
+        self.relocated = None
         # Further data posibly created later on:
         #self.leaddata = first 96 bytes of lead data
         #self.sigdata = binary blob of signature header
@@ -952,6 +921,14 @@ class ReadRpm:
 
     def closeFd(self):
         self.fd = None
+
+    def relocatedFile(self, filename):
+        for (old, new) in self.relocated:
+            if not filename.startswith(old):
+                continue
+            if filename == old or filename[len(old)] == "/":
+                filename = new + filename[len(old):]
+        return filename
 
     def __verifyLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
@@ -1219,6 +1196,8 @@ class ReadRpm:
         if self.owner:
             uid = self.uid.ugid[user]
             gid = self.gid.ugid[group]
+        if self.relocated:
+            filename = self.relocatedFile(filename)
         filename = "%s%s" % (self.buildroot, filename)
         (dirname, basename) = os.path.split(filename)
         makeDirs(dirname)
@@ -1233,7 +1212,11 @@ class ReadRpm:
                 if di:
                     di.remove(i)
                     for j in di:
-                        fn2 = "%s%s" % (self.buildroot, filenames[j])
+                        if self.relocated:
+                            fn2 = "%s%s" % (self.buildroot,
+                                self.relocatedFile(filenames[j]))
+                        else:
+                            fn2 = "%s%s" % (self.buildroot, filenames[j])
                         (dirname, basename) = os.path.split(fn2)
                         makeDirs(dirname)
                         tmpfilename = mkstemp_link(dirname, basename, filename)
