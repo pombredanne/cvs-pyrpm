@@ -17,7 +17,7 @@
 #
 
 
-import fcntl, bsddb, libxml2, urlgrabber, os, os.path, time
+import fcntl, bsddb, libxml2, os, os.path, time
 import zlib, gzip, sha, md5, string, stat, openpgp, re
 from struct import pack, unpack
 from binascii import b2a_hex, a2b_hex
@@ -903,6 +903,7 @@ class RpmFtpIO(RpmStreamIO):
         RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
+        import urlgrabber
         try:
             self.fd = urlgrabber.urlopen(self.source)
         except urlgrabber.grabber.URLGrabError, e:
@@ -919,6 +920,7 @@ class RpmHttpIO(RpmStreamIO):
         RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
 
     def open(self, mode="r"):
+        import urlgrabber
         try:
             self.fd = urlgrabber.urlopen(self.source)
         except urlgrabber.grabber.URLGrabError, e:

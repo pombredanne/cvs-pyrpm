@@ -18,10 +18,7 @@
 
 
 import os, os.path, sys, resource, re, getopt, errno
-from urlgrabber import urlgrab
-from urlgrabber.grabber import URLGrabError
 from types import TupleType, ListType
-from tempfile import mkstemp
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from bsddb import hashopen
 from struct import unpack
@@ -39,6 +36,7 @@ DIGEST_CHUNK = 65536
 
 # Collection of class indepedant helper functions
 def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
+    from tempfile import mkstemp
     if prog == None:
         prog = "/bin/sh"
     if prog == "/bin/sh" and script == None:
@@ -138,6 +136,7 @@ def installFile(rfi, infd, size, modsflag=True):
 
     infd can be None if size == 0.  Raise IOError, OSError."""
 
+    from tempfile import mkstemp
     mode = rfi.mode
     if S_ISREG(mode):
         makeDirs(rfi.filename)
@@ -386,6 +385,8 @@ def getFreeDiskspace(operations):
     return minfreehash
 
 def cacheLocal(url, subdir):
+    from urlgrabber import urlgrab
+    from urlgrabber.grabber import URLGrabError
     if not url.startswith("http://"):
         return url
     if not os.path.isdir("/var/cache/pyrpm/%s" % subdir):
