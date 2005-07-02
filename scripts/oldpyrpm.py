@@ -229,27 +229,24 @@ def doRead(fd, size):
 
 (FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT) = (1, 2, 4, 8, 16)
 class PyGZIP:
-    def __init__(self, fd):
+    def __init__(self, fd, size):
         self.fd = fd
         self.length = 0 # length of all decompressed data
-        self.buffer = [] # array of decompressed data
-        self.bufferlen = 0 # length of available decompressed data
-        self.pos = 0 # position in current buffer
+        self.length2 = size
         self.enddata = "" # remember last 8 bytes for crc/length check
-        if self.fd.read(2) != "\037\213":
+        self.pos = 0
+        self.data = ""
+        if self.fd.read(3) != "\037\213\010":
             print "Not a gzipped file"
             sys.exit(0)
-        if ord(self.fd.read(1)) != 8:
-            print "Unknown compression method"
-            sys.exit(0)
-        flag = ord(self.fd.read(1))
-        # Discard modification time(4 bytes), extra flags(1), OS byte(1)
-        self.fd.read(6)
+        # flag (1 byte), modification time (4 bytes), extra flags (1), OS (1)
+        data = doRead(self.fd, 7)
+        flag = ord(data[0])
         if flag & FEXTRA:
             # Read & discard the extra field, if present
             xlen = ord(self.fd.read(1))
             xlen += 256 * ord(self.fd.read(1))
-            self.fd.read(xlen)
+            doRead(self.fd, xlen)
         if flag & FNAME:
             # Read and discard a nul-terminated string containing the filename
             while self.fd.read(1) != "\000":
@@ -259,57 +256,50 @@ class PyGZIP:
             while self.fd.read(1) != "\000":
                 pass
         if flag & FHCRC:
-            self.fd.read(2)      # Read & discard the 16-bit header CRC
+            doRead(self.fd, 2)      # Read & discard the 16-bit header CRC
         self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
         self.crcval = zlib.crc32("")
 
     def read(self, bytes):
-        data = ""
-        while self.bufferlen < bytes:
+        decompdata = []
+        obj = self.decompobj
+        while bytes:
+            if self.data:
+                if len(self.data) - self.pos <= bytes:
+                    decompdata.append(self.data[self.pos:])
+                    bytes -= len(self.data) - self.pos
+                    self.data = ""
+                    continue
+                end = self.pos + bytes
+                decompdata.append(self.data[self.pos:end])
+                self.pos = end
+                break
+            data = self.fd.read(32768)
             if len(data) >= 8:
                 self.enddata = data[-8:]
             else:
                 self.enddata = self.enddata[:8-len(data)] + data
-            data = self.fd.read(32768)
-            if data == "":
-                (crc32, isize) = unpack("!II", self.enddata)
-                if crc32 != self.crcval:
-                    print "CRC check failed."
-                if isize != self.length:
-                    print "Incorrect length of data produced"
-                break
-            decompdata = self.decompobj.decompress(data)
-            decomplen = len(decompdata)
-            self.buffer.append(decompdata)
-            self.bufferlen += decomplen
-            self.length += decomplen
-            self.crcval = zlib.crc32(decompdata, self.crcval)
-        if self.bufferlen < bytes:
-            decompdata = self.decompobj.flush()
-            decomplen = len(decompdata)
-            self.buffer.append(decompdata)
-            self.bufferlen += decomplen
-            self.length += decomplen
-            self.crcval = zlib.crc32(decompdata, self.crcval)
-        retdata = ""
-        while bytes > 0:
-            decompdata = self.buffer[0]
-            decomplen = len(decompdata)
-            if bytes + self.pos <= decomplen:
-                retdata += decompdata[self.pos:bytes + self.pos]
-                self.bufferlen -= bytes
-                self.pos += bytes
-                break
-            decomplen -= self.pos
-            bytes -= decomplen
-            self.bufferlen -= decomplen
-            if self.pos != 0:
-                retdata += decompdata[self.pos:]
+            x = obj.decompress(data)
+            self.crcval = zlib.crc32(x, self.crcval)
+            self.length += len(x)
+            if len(x) <= bytes:
+                bytes -= len(x)
+                decompdata.append(x)
             else:
-                retdata += decompdata
-            self.pos = 0
-            self.buffer.pop(0)
-        return retdata
+                decompdata.append(x[:bytes])
+                self.data = x
+                self.pos = bytes
+                break
+        return "".join(decompdata)
+
+    def __del__(self):
+        (crc32, isize) = unpack("2i", self.enddata)
+        if crc32 != self.crcval:
+            print "CRC check failed."
+        if isize != self.length:
+            print "Incorrect length of data produced."
+        if isize != self.length2 and self.length2 != None:
+            print "Incorrect length of data produced."
 
 
 # rpm tag types
@@ -842,18 +832,13 @@ class CPIO:
             int(data[78:86], 16) * 256 + int(data[86:94], 16)]
 
     def readCpio(self, func, filenamehash, devinode, filenames):
-        files = []
         while 1:
             filedata = self.readEntry()
             if filedata == None:
                 if self.size != None and self.size != 0:
                     self.printErr("failed cpiosize check")
-                return files
-            files.append(filedata)
-            # XXX reading the data should be done with streaming
-            # It will then move into verifyCpio()
-            data = self.__readDataPad(filedata[5])
-            func(filedata, data, filenamehash, devinode, filenames)
+                return 1
+            func(filedata, self.__readDataPad, filenamehash, devinode, filenames)
         return None
 
 class HdrIndex:
@@ -1126,12 +1111,13 @@ class ReadRpm:
             self[i] = y
         return None
 
-    def verifyCpio(self, filedata, data, filenamehash, devinode, _):
+    def verifyCpio(self, filedata, read_data, filenamehash, devinode, _):
         # Overall result is that apart from the filename information
         # we should not depend on any data from the cpio header.
         # Data is also stored in rpm tags and the cpio header has
         # been broken in enough details to ignore it.
         (filename, inode, mode, nlink, mtime, filesize, dev, rdev) = filedata
+        data = read_data(filesize)
         fileinfo = filenamehash.get(filename)
         if fileinfo == None:
             self.printErr("cpio file %s not in rpm header" % filename)
@@ -1183,8 +1169,10 @@ class ReadRpm:
                 if ctx.hexdigest() != self["filemd5s"][i]:
                     self.printErr("wrong filemd5s for %s" % filename)
 
-    def extractCpio(self, filedata, data, filenamehash, devinode, filenames):
+    def extractCpio(self, filedata, read_data, filenamehash, devinode,
+            filenames):
         filename = filedata[0]
+        data = read_data(filedata[5])
         fileinfo = filenamehash.get(filename)
         if fileinfo == None:
             self.printErr("cpio file %s not in rpm header" % filename)
@@ -1307,21 +1295,19 @@ class ReadRpm:
                         self.raiseErr("sizes differ for hardlink")
                     if self["filemd5s"][j] != md5:
                         self.raiseErr("md5s differ for hardlink")
-        cpiosize = None
-        if self.verify:
-            cpiosize = self.sig.getOne("payloadsize")
-            archivesize = self.hdr.getOne("archivesize")
-            if archivesize != None:
-                if cpiosize == None:
-                    cpiosize = archivesize
-                elif cpiosize != archivesize:
-                    self.printErr("wrong archive size")
+        cpiosize = self.sig.getOne("payloadsize")
+        archivesize = self.hdr.getOne("archivesize")
+        if archivesize != None:
+            if cpiosize == None:
+                cpiosize = archivesize
+            elif cpiosize != archivesize:
+                self.printErr("wrong archive size")
         if self["payloadcompressor"] == "bzip2":
             import bz2, cStringIO
             payload = self.fd.read()
             fd = cStringIO.StringIO(bz2.decompress(payload))
         elif self["payloadcompressor"] in [None, "gzip"]:
-            fd = PyGZIP(self.fd)
+            fd = PyGZIP(self.fd, cpiosize)
             #import gzip
             #fd = gzip.GzipFile(fileobj=self.fd)
         else:
@@ -1332,8 +1318,7 @@ class ReadRpm:
             # XXX: handel drpm data format
             return
         c = CPIO(fd, self.issrc, cpiosize, self.verify, self.strict)
-        cpiodata = c.readCpio(func, filenamehash, devinode, filenames)
-        if cpiodata == None:
+        if c.readCpio(func, filenamehash, devinode, filenames) == None:
             self.raiseErr("Error reading CPIO payload")
         for filename in filenamehash.iterkeys():
             self.printErr("file not in cpio: %s" % filename)
@@ -2138,7 +2123,7 @@ def main():
                 importanttags[i] = value
                 importanttags[value[0]] = value
             hdrtags = importanttags
-    #for z in xrange(10):
+    #for _ in xrange(50):
     for a in args:
         b = [a]
         if os.path.isdir(a):
