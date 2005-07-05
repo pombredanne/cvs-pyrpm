@@ -229,10 +229,10 @@ def doRead(fd, size):
 
 (FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT) = (1, 2, 4, 8, 16)
 class PyGZIP:
-    def __init__(self, fd, size):
+    def __init__(self, fd, datasize):
         self.fd = fd
         self.length = 0 # length of all decompressed data
-        self.length2 = size
+        self.length2 = datasize
         self.enddata = "" # remember last 8 bytes for crc/length check
         self.pos = 0
         self.data = ""
@@ -501,8 +501,8 @@ rpmtag = {
     "install_md5": [261, RPM_BIN, 16, 0],
     "install_unknownchecksum": [262, RPM_BIN, None, 0],
     "install_dsaheader": [267, RPM_BIN, 16, 0],
-    "install_sh1header": [269, RPM_STRING, None, 0],
-    "installtime": [1008, RPM_INT32, None, 0],
+    "install_sha1header": [269, RPM_STRING, None, 0],
+    "installtime": [1008, RPM_INT32, 1, 0],
     "filestates": [1029, RPM_CHAR, None, 0],
     "instprefixes": [1099, RPM_STRING_ARRAY, None, 0],
     "installcolor": [1127, RPM_INT32, None, 0],
@@ -911,7 +911,9 @@ class ReadRpm:
         for (old, new) in self.relocated:
             if not filename.startswith(old):
                 continue
-            if filename == old or filename[len(old)] == "/":
+            if filename == old:
+                filename = new
+            elif filename[len(old)] == "/":
                 filename = new + filename[len(old):]
         return filename
 
@@ -1897,8 +1899,8 @@ def checkSrpms():
     for rp in r.getNames():
         v = r.h[rp]
         print "%s:" % v[0]["name"]
-        for r in v:
-            print "\t%s" % r.getFilename()
+        for s in v:
+            print "\t%s" % s.getFilename()
 
 def cmpA(h1, h2):
     return cmp(h1[0], h2[0])
