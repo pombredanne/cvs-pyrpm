@@ -158,6 +158,13 @@ def verifyStructure(hash, tag, useidx=True):
                 print "Error %s: Package id %s doesn't exist" % (tag, id)
                 continue
             if useidx:
+                if not packages[id].has_key(tag):
+                    print "Error %s: Tag not found in package %s" % (tag, packages[id].getNEVRA())
+                    continue
+                if len(packages[id][tag]) < idx:
+                    print "Error %s: Index to high for key %s in package %s" % (tag, key, packages[id].getNEVRA())
+                    continue
+                #print key, id, tag, idx, packages[id].getNEVRA()
                 val = packages[id][tag][idx]
             else:
                 val = packages[id][tag]
@@ -192,10 +199,10 @@ def verifyReference(hash, tag, id):
             else:
                 tnamehash[key] = 1
         if not hash.has_key(key):
-            print "Error packages %s: %s not found in db for package %s" % (tag, key, pkg.getNEVRA())
+            print "Error in %s db: %s not found in db for package %s" % (tag, key, pkg.getNEVRA())
             continue
         if not (id, idx) in hash[key]:
-            print "Error packages %s: %s not referenced for package %s" % (tag, key, pkg.getNEVRA())
+            print "Error in %s db: %s not referenced for package %s" % (tag, key, pkg.getNEVRA())
             continue
 
 def verifyBasenames():

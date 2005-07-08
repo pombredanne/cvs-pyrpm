@@ -144,7 +144,10 @@ class RpmPackage(RpmData):
 
     def clear(self):
         """Drop read data, prepare for rereading it."""
-        
+
+        if self.has_key("install_id"):
+            return
+
         for k in self.keys():
             del self[k]
         self.header_read = 0
@@ -154,6 +157,9 @@ class RpmPackage(RpmData):
         """Open the package if it is not already open.
 
         Raise IOError."""
+
+        if self.has_key("install_id"):
+            return
 
         if self.io != None:
             return
@@ -165,6 +171,9 @@ class RpmPackage(RpmData):
         """Close the package IO.
 
         Raise IOError."""
+
+        if self.has_key("install_id"):
+            return
 
         if self.io != None:
             try:
@@ -179,7 +188,7 @@ class RpmPackage(RpmData):
         addition, generate self["filenames"], self["provides"],
         self["requires"], self["obsoletes"], self["conflicts"] and
         self["triggers"].  Raise ValueError on invalid data, IOError."""
-        
+
         self.open()
         self.__readHeader(tags, ntags)
         if self.verify and self.verifyOneSignature() == -1:

@@ -5,7 +5,7 @@ from pyrpm import *
 
 rpms = []
 for i in sys.argv[1:]:
-    rpm = RpmPackage(rpmconfig, "file://"+i)
+    rpm = RpmPackage(rpmconfig, "file://"+i, verify=1)
     try:
         rpm.read()
     except (IOError, ValueError), e:
@@ -13,7 +13,9 @@ for i in sys.argv[1:]:
         continue
     for i in xrange(len(rpm["requirename"])):
         print i, rpm["requirename"][i], hex(rpm["requireflags"][i])
-    print rpm["triggers"]
+    print rpm["postin"]
+    print rpm["postinprog"]
+    print rpm["group"]
     #print rpm["requireflags"]
 #    print rpm["fileflags"]
 #    for f in rpm["filenames"]:

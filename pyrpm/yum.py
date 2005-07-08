@@ -80,6 +80,7 @@ class RpmYum:
         # Create and read db
         self.pydb = getRpmDBFactory(self.config, self.config.dbpath,
                                     self.config.buildroot)
+        self.pydb.open()
         self.pydb.read()
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
         self.runArgs(args)
@@ -210,6 +211,7 @@ class RpmYum:
             self.config.printInfo(0, "Test run stopped\n")
         else:
             control.runOperations(ops)
+        self.pydb.close()
 
     def __generateObsoletesList(self):
         self.__obsoleteslist = []

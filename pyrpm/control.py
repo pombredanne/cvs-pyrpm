@@ -76,6 +76,7 @@ class RpmController:
         self.db = db
         self.rpms = []
         self.onlysrpms = 1
+        self.db.open()
         if not self.db.read():
             raiseFatal("Couldn't read database")
 
@@ -185,15 +186,13 @@ class RpmController:
         for i in xrange(0, numops, pkgsperfork):
             subop = operations[:pkgsperfork]
             for (op, pkg) in subop:
-                # Don't try to reread packages that come from rpmdb
-                if not (pkg.source.startswith("rpmdb:/")):
-                    try:
-                        pkg.close()
-                        pkg.open()
-                    except IOError, e:
-                        self.config.printError("Error reopening %s: %s"
-                                           % (pkg.getNEVRA(), e))
-                        sys.exit(1)
+                try:
+                    pkg.close()
+                    pkg.open()
+                except IOError, e:
+                    self.config.printError("Error reopening %s: %s"
+                                       % (pkg.getNEVRA(), e))
+                    sys.exit(1)
             pid = os.fork()
             if pid != 0:
                 (rpid, status) = os.waitpid(pid, 0)
@@ -223,17 +222,18 @@ class RpmController:
                         os.chroot(self.config.buildroot)
                 # We're in a buildroot now, reset the buildroot in the db object
                 self.db.setBuildroot(None)
+                # Now reopen database
+                self.db.close()
+                self.db.open()
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
-                    # Don't try to reread packages that come from rpmdb
-                    if not (pkg.source.startswith("rpmdb:/")):
-                        pkg.clear()
-                        try:
-                            pkg.read()
-                        except (IOError, ValueError), e:
-                            self.config.printError("Error rereading %s: %s"
-                                                   % (pkg.getNEVRA(), e))
-                            sys.exit(1)
+                    pkg.clear()
+                    try:
+                        pkg.read()
+                    except (IOError, ValueError), e:
+                        self.config.printError("Error rereading %s: %s"
+                                               % (pkg.getNEVRA(), e))
+                        sys.exit(1)
                     if   op == OP_INSTALL:
                         opstring = "Install: "
                     elif op == OP_UPDATE or op == OP_FRESHEN:
@@ -253,7 +253,10 @@ class RpmController:
                          op == OP_UPDATE or \
                          op == OP_FRESHEN:
                         try:
-                            pkg.install(self.db)
+                            if not self.config.justdb:
+                                pkg.install(self.db)
+                            else:
+                                self.config.printInfo(0, "\n")
                         except (IOError, OSError, ValueError), e:
                             self.config.printError("Error installing %s: %s"
                                                    % (pkg.getNEVRA(), e))
@@ -263,7 +266,10 @@ class RpmController:
                     elif op == OP_ERASE:
                         self.__runTriggerUn(pkg)
                         try:
-                            pkg.erase(self.db)
+                            if not self.config.justdb:
+                                pkg.erase(self.db)
+                            else:
+                                self.config.printInfo(0, "\n")
                         except (IOError, ValueError), e:
                             self.config.printError("Error erasing %s: %s"
                                                    % (pkg.getNEVRA(), e))
@@ -282,6 +288,7 @@ class RpmController:
                     runScript("/sbin/ldconfig", force=1)
                 self.config.printInfo(2, "number of /sbin/ldconfig calls optimized away: %d\n" % self.config.ldconfig)
                 sys.exit(0)
+        self.db.close()
 
     def appendFile(self, file):
         """Append file to self.rpms.
@@ -316,7 +323,7 @@ class RpmController:
         return 1
 
     def __runTriggerIn(self, pkg):
-        if self.config.notriggers or pkg.isSourceRPM():
+        if self.config.justdb or self.config.notriggers or pkg.isSourceRPM():
             return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERIN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
@@ -340,7 +347,7 @@ class RpmController:
         return 1
 
     def __runTriggerUn(self, pkg):
-        if self.config.notriggers or pkg.isSourceRPM():
+        if self.config.justdb or self.config.notriggers or pkg.isSourceRPM():
             return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
@@ -364,7 +371,7 @@ class RpmController:
         return 1
 
     def __runTriggerPostUn(self, pkg):
-        if self.config.notriggers or pkg.isSourceRPM():
+        if self.config.justdb or self.config.notriggers or pkg.isSourceRPM():
             return 1
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERPOSTUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts

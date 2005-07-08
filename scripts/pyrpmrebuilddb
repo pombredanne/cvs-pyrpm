@@ -84,6 +84,8 @@ def writeRpmDB(path, packages):
     triggername_db    = hashopen(path+"/Triggername", "n")
     rpmio = RpmFileIO(rpmconfig, "dummy")
     for id in packages.keys():
+        if packages[id]["name"] == "lang":
+            continue
         print "Writing rpmdb for package %s" % packages[id].getNEVRA()
         writeDB4(basenames_db, "basenames", id, packages)
         writeDB4(conflictname_db, "conflictname", id, packages)

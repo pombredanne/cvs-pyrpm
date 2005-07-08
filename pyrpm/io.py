@@ -18,9 +18,10 @@
 
 
 import fcntl, bsddb, libxml2, os, os.path, time
-import zlib, gzip, sha, md5, string, stat, openpgp, re
+import zlib, gzip, sha, md5, string, stat, openpgp, re, sqlite
 from struct import pack, unpack
 from binascii import b2a_hex, a2b_hex
+from types import TupleType
 
 from base import *
 import functions
@@ -937,6 +938,7 @@ class RpmHttpIO(RpmStreamIO):
     def _tell(self):
         return None
 
+
 class RpmDatabase:
     def __init__(self, config, source, buildroot=None):
         self.config = config
@@ -953,6 +955,12 @@ class RpmDatabase:
     def setBuildroot(self, buildroot):
         self.buildroot = buildroot
 
+    def open(self):
+        raiseFatal("RpmDatabase::open() method not implemented")
+
+    def close(self):
+        raiseFatal("RpmDatabase::close() method not implemented")
+
     def read(self):
         raiseFatal("RpmDatabase::read() method not implemented")
 
@@ -962,8 +970,30 @@ class RpmDatabase:
     def addPkg(self, pkg, nowrite=None):
         raiseFatal("RpmDatabase::addPkg() method not implemented")
 
+    def _addPkg(self, pkg):
+        """Internal add of package to lists and hashes"""
+        nevra = pkg.getNEVRA()
+        for filename in pkg["filenames"]:
+            if not self.filenames.has_key(filename):
+                self.filenames[filename] = []
+            self.filenames[filename].append(pkg)
+        self.pkglist[nevra] = pkg
+
     def erasePkg(self, pkg, nowrite=None):
         raiseFatal("RpmDatabase::erasePkg() method not implemented")
+
+    def _erasePkg(self, pkg):
+        """Internal erase of package from lists and hashes"""
+        nevra = pkg.getNEVRA()
+        for filename in pkg["filenames"]:
+            # Check if the filename is in the filenames list and was referenced
+            # by the package we want to remove
+            if not self.filenames.has_key(filename) or \
+               not pkg in self.filenames[filename]:
+                self.config.printWarning(1, "%s: File '%s' not found in PyDB during erase"\
+                    % (nevra, filename))
+                continue
+        del self.pkglist[nevra]
 
     def getPackage(self, name):
         if not self.pkglist.has_key(name):
@@ -1006,6 +1036,12 @@ class RpmDB(RpmDatabase):
         RpmDatabase.__init__(self, config, source, buildroot)
         self.dbopen = False
 
+    def open(self):
+        return 1
+
+    def close(self):
+        return 1
+
     def read(self):
         if self.is_read:
             return 1
@@ -1013,7 +1049,7 @@ class RpmDB(RpmDatabase):
         if not os.path.isdir(dbpath):
             return 1
         try:
-            db = bsddb.hashopen(dbpath+"/Packages", "c")
+            db = bsddb.hashopen(dbpath+"/Packages", "r")
         except:
             return 1
         for key in db.keys():
@@ -1054,20 +1090,15 @@ class RpmDB(RpmDatabase):
                 if not pkg.has_key("arch"):
                     continue
                 pkg.generateFileNames()
-                nevra = pkg.getNEVRA()
-                pkg.source = "rpmdb:/"+dbpath+"/"+nevra
-                for filename in pkg["filenames"]:
-                    if not self.filenames.has_key(filename):
-                        self.filenames[filename] = []
-                    self.filenames[filename].append(pkg)
-                self.pkglist[nevra] = pkg
+                pkg.source = "rpmdb:/"+dbpath+"/"+pkg.getNEVRA()
+                self._addPkg(pkg)
                 pkg["provides"] = pkg.getProvides()
                 pkg["requires"] = pkg.getRequires() 
                 pkg["obsoletes"] = pkg.getObsoletes()
                 pkg["conflicts"] = pkg.getConflicts()
                 pkg["triggers"] = pkg.getTriggers()
                 pkg["install_id"] = val
-                pkg.io = rpmio
+                pkg.io = None
                 pkg.header_read = 1
                 rpmio.hdr = {}
         self.is_read = 1
@@ -1077,15 +1108,7 @@ class RpmDB(RpmDatabase):
         return 1
 
     def addPkg(self, pkg, nowrite=None):
-        nevra = pkg.getNEVRA()
-        for filename in pkg["filenames"]:
-            if not self.filenames.has_key(filename):
-                self.filenames[filename] = []
-            if pkg in self.filenames[filename]:
-                self.config.printWarning(2, "%s: File '%s' was already in PyDB for package" % (nevra, filename))
-                self.filenames[filename].remove(pkg)
-            self.filenames[filename].append(pkg)
-        self.pkglist[nevra] = pkg 
+        self._addPkg(pkg)
 
         if nowrite:
             return 1
@@ -1125,16 +1148,7 @@ class RpmDB(RpmDatabase):
         self.__writeDB4(self.triggername_db, "triggername", id, pkg)
 
     def erasePkg(self, pkg, nowrite=None):
-        nevra = pkg.getNEVRA()
-        for filename in pkg["filenames"]:
-            # Check if the filename is in the filenames list and was referenced
-            # by the package we want to remove
-            if not self.filenames.has_key(filename) or \
-               not pkg in self.filenames[filename]:
-                self.config.printWarning(1, "%s: File '%s' not found in PyDB during erase"\
-                    % (nevra, filename))
-                continue
-        del self.pkglist[nevra]
+        self._erasePkg(pkg)
 
         if nowrite:
             return 1
@@ -1247,6 +1261,12 @@ class RpmPyDB(RpmDatabase):
     def __init__(self, config, source, buildroot):
         RpmDatabase.__init__(self, config, source, buildroot)
 
+    def open(self):
+        return 1
+
+    def close(self):
+        return 1
+
     def read(self):
         if self.is_read:
             return 1
@@ -1298,16 +1318,9 @@ class RpmPyDB(RpmDatabase):
                 apkg.close()
             except IOError:
                 return 0
-        for filename in pkg["filenames"]:
-            if not self.filenames.has_key(filename):
-                self.filenames[filename] = []
-            if pkg in self.filenames[filename]:
-                self.config.printWarning(2, "%s: File '%s' was already in PyDB for package" % (nevra, filename))
-                self.filenames[filename].remove(pkg)
-            self.filenames[filename].append(pkg)
         if not nowrite and not self.write():
             return 0
-        self.pkglist[nevra] = pkg
+        self._addPkg(pkg)
         return 1
 
     def erasePkg(self, pkg, nowrite=None):
@@ -1321,18 +1334,9 @@ class RpmPyDB(RpmDatabase):
                 os.unlink(headerfile)
             except:
                 self.config.printWarning(1, "%s: Package not found in PyDB" % nevra)
-        for filename in pkg["filenames"]:
-            # Check if the filename is in the filenames list and was referenced
-            # by the package we want to remove
-            if not self.filenames.has_key(filename) or \
-               not pkg in self.filenames[filename]:
-                self.config.printWarning(1, "%s: File '%s' not found in PyDB during erase"\
-                    % (nevra, filename))
-                continue
-            self.filenames[filename].remove(pkg)
         if not nowrite and not self.write():
             return 0
-        del self.pkglist[nevra]
+        self._erasePkg(pkg)
         return 1
 
     def __mkDBDirs(self):
@@ -1349,6 +1353,195 @@ class RpmPyDB(RpmDatabase):
             except IOError:
                 pass
         return 1
+
+
+class RpmSQLiteDB(RpmDatabase):
+    def __init__(self, config, source, buildroot=None):
+        RpmDatabase.__init__(self, config, source, buildroot)
+        self.cx = None
+        self.pkgnames = ["name", "epoch", "version", "release", "arch", "prein", "preinprog", "postin", "postinprog", "preun", "preunprog", "postun", "postunprog", "verifyscript", "verifyscriptprog", "url", "license", "rpmversion", "sourcerpm", "optflags", "sourcepkgid", "buildtime", "buildhost", "cookie", "size", "distribution", "vendor", "packager", "os", "payloadformat", "payloadcompressor", "payloadflags", "rhnplatform", "platform", "capability", "xpm", "gif", "verifyscript2", "disturl"]
+        self.tagnames = ["providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex", "i18ntable", "summary", "description", "changelogtime", "changelogname", "changelogtext", "prefixes", "pubkeys", "group", "dirindexes", "dirnames", "basenames", "fileusername", "filegroupname", "filemodes", "filemtimes", "filedevices", "fileinodes", "filesizes", "filemd5s", "filerdevs", "filelinktos", "fileflags", "fileverifyflags", "fileclass", "filelangs", "filecolors", "filedependsx", "filedependsn", "classdict", "dependsdict", "policies", "filecontexts", "oldfilenames"]
+
+    def open(self):
+        if self.cx:
+            return 1
+        dbpath = self._getDBPath()
+        self.cx = sqlite.connect(dbpath+"/rpmdb.sqlite", autocommit=1)
+        return 1
+
+    def close(self):
+        if self.cx:
+            self.cx.close()
+        self.cx = None
+        return 1
+
+    def read(self):
+        if not self.cx or self.is_read:
+            return 1
+        self.__initDB()
+        dbpath = self._getDBPath()
+        cu = self.cx.cursor()
+        cu.execute("begin")
+        cu.execute("select rowid, "+string.join(self.pkgnames, ",")+" from Packages")
+        for row in cu.fetchall():
+            pkg = package.RpmPackage(self.config, "dummy")
+            pkg["install_id"] = row[0]
+            for i in xrange(len(self.pkgnames)):
+                if row[i+1] != None:
+                    if self.pkgnames[i] == "epoch" or \
+                       self.pkgnames[i] == "size":
+                        pkg[self.pkgnames[i]] = [row[i+1],]
+                    else:
+                        pkg[self.pkgnames[i]] = row[i+1]
+            for tag in self.tagnames:
+                self.__readTags(cu, row[0], pkg, tag)
+            pkg.generateFileNames()
+            self._addPkg(pkg)
+            pkg["provides"] = pkg.getProvides()
+            pkg["requires"] = pkg.getRequires() 
+            pkg["obsoletes"] = pkg.getObsoletes()
+            pkg["conflicts"] = pkg.getConflicts()
+            pkg["triggers"] = pkg.getTriggers()
+            pkg.io = None
+            pkg.header_read = 1
+        cu.execute("commit")
+        self.is_read = 1
+        return 1
+
+    def write(self):
+        return 1
+
+    def addPkg(self, pkg, nowrite=None):
+        self._addPkg(pkg)
+        if nowrite:
+            return 1
+        if not self.cx:
+            return 0
+        self.__initDB()
+        cu = self.cx.cursor()
+        cu.execute("begin")
+        taglist = self.pkgnames
+        namelist = []
+        vallist = []
+        valstring = ""
+        for tag in taglist:
+            if not pkg.has_key(tag):
+                continue
+            namelist.append(tag)
+            if valstring == "":
+                valstring = "%s"
+            else:
+                valstring += ", %s"
+            if rpmtag[tag][1] == RPM_BIN:
+                vallist.append(b2a_hex(pkg[tag]))
+            else:
+                if isinstance(pkg[tag], TupleType):
+                    vallist.append(str(pkg[tag][0]))
+                else:
+                    vallist.append(str(pkg[tag]))
+        cu.execute("insert into Packages ("+string.join(namelist, ",")+") values ("+valstring+")", vallist)
+        rowid = cu.lastrowid
+        taglist = self.tagnames
+        for tag in taglist:
+            if not pkg.has_key(tag):
+                continue
+            self.__writeTags(cu, rowid, pkg, tag)
+        cu.execute("commit")
+
+    def erasePkg(self, pkg, nowrite=None):
+        self._erasePkg(pkg)
+        if nowrite:
+            return 1
+        if not self.cx:
+            return 0
+        self.__initDB()
+        cu = self.cx.cursor()
+        cu.execute("begin")
+        cu.execute("delete from Packages where rowid=%d", (pkg["install_id"],))
+        for tag in self.tagnames:
+            cu.execute("delete from %s where id=%d", (tag, pkg["install_id"]))
+        cu.execute("commit")
+
+    def __initDB(self):
+        cu = self.cx.cursor()
+        cu.execute("select tbl_name from sqlite_master where type='table' order by tbl_name")
+        tables = []
+        for row in cu.fetchall():
+            tables.append(row.tbl_name)
+        if tables == []:
+            cu.execute("""
+create table Packages (
+               name text,
+               epoch int,
+               version text,
+               release text,
+               arch text,
+               prein text,
+               preinprog text,
+               postin text,
+               postinprog text,
+               preun text,
+               preunprog text,
+               postun text,
+               postunprog text,
+               verifyscript text,
+               verifyscriptprog text,
+               url text,
+               license text,
+               rpmversion text,
+               sourcerpm text,
+               optflags text,
+               sourcepkgid text,
+               buildtime text,
+               buildhost text,
+               cookie text,
+               size int,
+               distribution text,
+               vendor text,
+               packager text,
+               os text,
+               payloadformat text,
+               payloadcompressor text,
+               payloadflags text,
+               rhnplatform text,
+               platform text,
+               capability int,
+               xpm text,
+               gif text,
+               verifyscript2 text,
+               disturl text)
+""")
+            for tag in self.tagnames:
+                cu.execute("""
+create table %s (
+               id int,
+               idx int,
+               val text,
+               primary key(id, idx))
+""", tag)
+
+    def __readTags(self, cu, rowid, pkg, tag):
+        cu.execute("select val from %s where id=%d order by idx", (tag, rowid))
+        for row in cu.fetchall():
+            if not pkg.has_key(tag):
+                pkg[tag] = []
+            if   rpmtag[tag][1] == RPM_BIN:
+                pkg[tag].append(a2b_hex(row[0]))
+            elif rpmtag[tag][1] == RPM_INT8 or \
+                 rpmtag[tag][1] == RPM_INT16 or \
+                 rpmtag[tag][1] == RPM_INT32 or \
+                 rpmtag[tag][1] == RPM_INT64:
+                pkg[tag].append(int(row[0]))
+            else:
+                pkg[tag].append(row[0])
+
+    def __writeTags(self, cu, rowid, pkg, tag):
+        for idx in xrange(len(pkg[tag])):
+            if rpmtag[tag][1] == RPM_BIN:
+                val = b2a_hex(pkg[tag][idx])
+            else:
+                val = str(pkg[tag][idx])
+            cu.execute("""insert into %s (id, idx, val) values (%d, %d, %s)""", (tag, rowid, idx, val))
 
 
 class RpmRepo(RpmDatabase):
@@ -2012,6 +2205,8 @@ def getRpmDBFactory(config, source, root=None):
         return RpmPyDB(config, source[6:], root)
     elif source[:7] == 'rpmdb:/':
         return RpmDB(config, source[7:], root)
+    elif source[:10] == 'sqlitedb:/':
+        return RpmSQLiteDB(config, source[10:], root)
     return RpmDB(config, source, root)
 
 
