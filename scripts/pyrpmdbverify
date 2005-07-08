@@ -161,10 +161,10 @@ def verifyStructure(hash, tag, useidx=True):
                 if not packages[id].has_key(tag):
                     print "Error %s: Tag not found in package %s" % (tag, packages[id].getNEVRA())
                     continue
-                if len(packages[id][tag]) < idx:
+                if len(packages[id][tag]) <= idx:
                     print "Error %s: Index to high for key %s in package %s" % (tag, key, packages[id].getNEVRA())
                     continue
-                #print key, id, tag, idx, packages[id].getNEVRA()
+                #print key, id, tag, idx, packages[id].getNEVRA(), len(packages[id][tag])
                 val = packages[id][tag][idx]
             else:
                 val = packages[id][tag]
@@ -335,8 +335,9 @@ def checkRpmDB(pkglist):
         if not pkg["signature"].has_key("sha1header"):
             print "Skipping package %s, no sha1header." % pkg.getNEVRA()
             continue
+        # Silently skip packages not found
         if not sha1hash.has_key(pkg["signature"]["sha1header"]):
-            print "Skipping package %s,  not found in packagelist." % pkg.getNEVRA()
+#            print "Skipping package %s, not found in packagelist." % pkg.getNEVRA()
             continue
         opkg = readRpmPackage(rpmconfig, sha1hash[pkg["signature"]["sha1header"]].source)
         diffPkgs(opkg, pkg)
