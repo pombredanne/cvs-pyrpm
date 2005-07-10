@@ -137,11 +137,11 @@ if hasattr(os, "O_NOINHERIT"):
 if hasattr(os, "O_NOFOLLOW"):
     openflags |= os.O_NOFOLLOW
 
-def mkstemp_file(dir, pre):
+def mkstemp_file(dirname, pre):
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dir, pre, name)
+        filename = "%s/%s.%s" % (dirname, pre, name)
         try:
             fd = os.open(filename, openflags, 0600)
             #_set_cloexec(fd)
@@ -152,11 +152,11 @@ def mkstemp_file(dir, pre):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-def mkstemp_link(dir, pre, linkfile):
+def mkstemp_link(dirname, pre, linkfile):
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dir, pre, name)
+        filename = "%s/%s.%s" % (dirname, pre, name)
         try:
             os.link(linkfile, filename)
             return filename
@@ -170,11 +170,11 @@ def mkstemp_link(dir, pre, linkfile):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-def mkstemp_dir(dir, pre):
+def mkstemp_dir(dirname, pre):
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dir, pre, name)
+        filename = "%s/%s.%s" % (dirname, pre, name)
         try:
             os.mkdir(filename)
             return filename
@@ -184,11 +184,11 @@ def mkstemp_dir(dir, pre):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-def mkstemp_symlink(dir, pre, symlinkfile):
+def mkstemp_symlink(dirname, pre, symlinkfile):
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dir, pre, name)
+        filename = "%s/%s.%s" % (dirname, pre, name)
         try:
             os.symlink(symlinkfile, filename)
             return filename
@@ -198,11 +198,11 @@ def mkstemp_symlink(dir, pre, symlinkfile):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-def mkstemp_mkfifo(dir, pre):
+def mkstemp_mkfifo(dirname, pre):
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dir, pre, name)
+        filename = "%s/%s.%s" % (dirname, pre, name)
         try:
             os.mkfifo(filename)
             return filename
@@ -212,11 +212,11 @@ def mkstemp_mkfifo(dir, pre):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-def mkstemp_mknod(dir, pre, mode, rdev):
+def mkstemp_mknod(dirname, pre, mode, rdev):
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dir, pre, name)
+        filename = "%s/%s.%s" % (dirname, pre, name)
         try:
             os.mknod(filename, mode, rdev)
             return filename
@@ -670,13 +670,13 @@ possible_scripts = {
 
 
 # locale independend string methods
-def _xisalpha(chr):
-    return (chr >= "a" and chr <= "z") or (chr >= "A" and chr <= "Z")
-def _xisdigit(chr):
-    return chr >= "0" and chr <= "9"
-def _xisalnum(chr):
-    return (chr >= "a" and chr <= "z") or (chr >= "A" and chr <= "Z") \
-        or (chr >= "0" and chr <= "9")
+def _xisalpha(c):
+    return (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
+def _xisdigit(c):
+    return c >= "0" and c <= "9"
+def _xisalnum(c):
+    return (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") \
+        or (c >= "0" and c <= "9")
 
 # compare two strings, rpm/lib/rpmver.c:rpmvercmp()
 def stringCompare(str1, str2):
@@ -935,7 +935,8 @@ class HdrIndex:
 class ReadRpm:
     """Read (Linux) rpm packages."""
 
-    def __init__(self, filename, verify=None, fd=None, strict=None, nodigest=None):
+    def __init__(self, filename, verify=None, fd=None, strict=None,
+                 nodigest=None):
         self.filename = filename
         self.issrc = 0
         if filename.endswith(".src.rpm") or filename.endswith(".nosrc.rpm"):
@@ -1165,10 +1166,9 @@ class ReadRpm:
             return None
 
         if self.verify or sigtags:
-            (sigindexNo, sigstoreSize, sigdata2, sigfmt, sigfmt2, size) = \
-                sigdata
+            (sigindexNo, _, _, sigfmt, sigfmt2, _) = sigdata
             self.sig = self.__parseIndex(sigindexNo, sigfmt, sigfmt2, sigtags)
-        (hdrindexNo, hdrstoreSize, hdrdata2, hdrfmt, hdrfmt2, size) = hdrdata
+        (hdrindexNo, _, _, hdrfmt, hdrfmt2, _) = hdrdata
         self.hdr = self.__parseIndex(hdrindexNo, hdrfmt, hdrfmt2, hdrtags)
         self.__getitem__ = self.hdr.__getitem__
         self.__delitem__ = self.hdr.__delitem__
@@ -1270,7 +1270,7 @@ class ReadRpm:
         if self.relocated:
             filename = self.relocatedFile(filename)
         filename = "%s%s" % (self.buildroot, filename)
-        (dirname, basename) = os.path.split(filename)
+        dirname = os.path.dirname(filename)
         makeDirs(dirname)
         if S_ISREG(mode):
             di = devinode.get((dev, inode))
@@ -1288,7 +1288,7 @@ class ReadRpm:
                                 self.relocatedFile(filenames[j]))
                         else:
                             fn2 = "%s%s" % (self.buildroot, filenames[j])
-                        (dirname, basename) = os.path.split(fn2)
+                        dirname = os.path.dirname(fn2)
                         makeDirs(dirname)
                         tmpfilename = mkstemp_link(dirname, tmpprefix, filename)
                         if tmpfilename == None:
@@ -1367,7 +1367,7 @@ class ReadRpm:
                 mode = self["filemodes"][j]
                 mtime = self["filemtimes"][j]
                 size = self["filesizes"][j]
-                md5 = self["filemd5s"][j]
+                fmd5 = self["filemd5s"][j]
                 for j in hardlinks[1:]:
                     # dev/inode are already guaranteed to be the same
                     if self["filemodes"][j] != mode:
@@ -1376,7 +1376,7 @@ class ReadRpm:
                         self.raiseErr("mtimes differ for hardlink")
                     if self["filesizes"][j] != size:
                         self.raiseErr("sizes differ for hardlink")
-                    if self["filemd5s"][j] != md5:
+                    if self["filemd5s"][j] != fmd5:
                         self.raiseErr("md5s differ for hardlink")
         cpiosize = self.sig.getOne("payloadsize")
         archivesize = self.hdr.getOne("archivesize")
@@ -1789,10 +1789,10 @@ def extractRpm(filename, buildroot, owner=None):
         rpm.gid.transform(buildroot)
     rpm.readPayload(rpm.extractCpio, extract=1)
 
-def isBinary(file):
+def isBinary(filename):
     for i in (".gz", ".tgz", ".taz", ".bz2", ".z", ".Z", ".zip", ".ttf",
         ".db", ".jar"):
-        if file.endswith(i):
+        if filename.endswith(i):
             return 1
     return 0
 
@@ -1930,7 +1930,7 @@ class RpmTree:
         return rpm
 
     def addDirectory(self, dirname):
-        files = map(lambda v,dirname=dirname: dirname + "/" + v,
+        files = map(lambda v, dirname=dirname: dirname + "/" + v,
             os.listdir(dirname))
         for f in files:
             if f.endswith(".rpm"):
@@ -1954,13 +1954,13 @@ class RpmTree:
                     newest = rpm
             self.h[r] = [newest]
 
-def verifyStructure(packages, hash, tag, useidx=True):
-    for tid in hash.keys():
+def verifyStructure(packages, phash, tag, useidx=True):
+    for tid in phash.keys():
         if not packages.has_key(tid):
             print "Error %s: Package id %s doesn't exist" % (tag, tid)
             continue
         pkgtag = packages[tid][tag]
-        mytag = hash[tid]
+        mytag = phash[tid]
         for idx in mytag.keys():
             key = mytag[idx]
             if useidx:
@@ -1981,8 +1981,8 @@ def verifyStructure(packages, hash, tag, useidx=True):
             # XXX check for them to be empty?
             continue
         if not useidx:
-            if refhash != hash[tid][0]:
-                print "wrong data", refhash, tid, hash[tid]
+            if refhash != phash[tid][0]:
+                print "wrong data", refhash, tid, phash[tid]
         else:
             for idx in xrange(len(refhash)):
                 key = refhash[idx]
@@ -1991,16 +1991,18 @@ def verifyStructure(packages, hash, tag, useidx=True):
                     continue
                 if tag == "filemd5s" and not S_ISREG(pkg["fileflags"][idx]):
                     continue
-                # equal triggernames aren't added multiple times for the same package
+                # equal triggernames aren't added multiple times for
+                # the same package
                 if tag == "triggername":
                     if tnamehash.has_key(key):
                         continue
                     tnamehash[key] = 1
                 try:
-                    if hash[tid][idx] != key:
+                    if phash[tid][idx] != key:
                         print "wrong data"
                 except:
-                    print "Error %s: index %s is not in package %s" % (tag, idx, tid)
+                    print "Error %s: index %s is not in package %s" % (tag,
+                        idx, tid)
 
 def readPackages(dbpath):
     import bsddb, cStringIO
@@ -2125,8 +2127,8 @@ def checkSrpms():
         i = 0
         while i < len(v) - 1:
             if cmpRpms(v[i], v[i + 1]) == 0:
-                md5 = v[i].sig["md5"]
-                if md5 != None and md5 == v[i + 1].sig["md5"]:
+                md5sum = v[i].sig["md5"]
+                if md5sum != None and md5sum == v[i + 1].sig["md5"]:
                     v.remove(v[i])
                 else:
                     print "duplicate rpms:", v[i].filename, v[i + 1].filename
@@ -2418,15 +2420,15 @@ if __name__ == "__main__":
         sys.argv.pop(1)
     if dohotshot:
         import hotshot, hotshot.stats
-        filename = mkstemp_file("/tmp", tmpprefix)[1]
-        prof = hotshot.Profile(filename)
+        htfilename = mkstemp_file("/tmp", tmpprefix)[1]
+        prof = hotshot.Profile(htfilename)
         prof.runcall(main)
         prof.close()
         del prof
-        s = hotshot.stats.load(filename)
+        s = hotshot.stats.load(htfilename)
         s.strip_dirs().sort_stats("time").print_stats(100)
         s.strip_dirs().sort_stats("cumulative").print_stats(100)
-        os.unlink(filename)
+        os.unlink(htfilename)
     else:
         main()
 
