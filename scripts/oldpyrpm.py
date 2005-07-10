@@ -34,12 +34,23 @@
 # ./oldpyrpm.py --strict [--nodigest --nopayload] \
 #         /mirror/fedora/development/i386/Fedora/RPMS/*.rpm
 #
+# Other usages:
+# - Check your rpmdb for consistency (works as non-root readonly):
+#   ./oldpyrpm.py --checkrpmdb
+# - Check a dir with src.rpms which archs are excluded:
+#   ./oldpyrpm.py --checkarch /mirror/fedora/development/SRPMS
+# - Diff two src.rpm packages:
+#   ./oldpyrpm.py [--explode] --diff 1.src.rpm 2.src.rpm
+# - Extract src.rpm or normal rpm packages:
+#   ./oldpyrpm.py [--buildroot=/chroot] --extract *.rpm
+#
 
 #
 # XXX TODO:
 # - PyGZIP is way faster than existing gzip routines, but still 2 times
 #   slower than a C version. Can further improvements be made?
 # - error handling in PyGZIP
+# - Why is bsddb so slow? (Why is reading rpmdb so slow?)
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
 #   and "0" epoch (change this for createrepo)
 # - check for #% in spec files
@@ -60,7 +71,7 @@
 import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
-import os, os.path, md5, sha, pwd, grp, zlib, time, errno
+import os, os.path, md5, sha, pwd, grp, zlib, errno
 from struct import unpack
 from commands import getoutput
 
@@ -89,7 +100,7 @@ if sys.version_info < (2, 3):
             c = self.characters
             choose = self.rng.choice
             letters = [choose(c) for dummy in "123456"]
-            return self.normcase(''.join(letters))
+            return self.normcase("".join(letters))
 
     _name_sequence = None
 
@@ -121,9 +132,9 @@ def S_ISSOCK(mode):
     return (mode & 0170000) == 0140000
 
 openflags = os.O_RDWR | os.O_CREAT | os.O_EXCL
-if hasattr(os, 'O_NOINHERIT'):
+if hasattr(os, "O_NOINHERIT"):
     openflags |= os.O_NOINHERIT
-if hasattr(os, 'O_NOFOLLOW'):
+if hasattr(os, "O_NOFOLLOW"):
     openflags |= os.O_NOFOLLOW
 
 def mkstemp_file(dir, pre):
@@ -215,12 +226,48 @@ def mkstemp_mknod(dir, pre, mode, rdev):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
+# Use this filename prefix for all temp files to be able
+# to search them and delete them again if they are left
+# over from killed processes.
+tmpprefix = "..pyrpm"
+
+def doLnOrCopy(src, dst):
+    dstdir = os.path.dirname(dst)
+    tmp = mkstemp_link(dstdir, tmpprefix, src)
+    if tmp == None:
+        # no hardlink possible, copy the data into a new file
+        (fd, tmp) = mkstemp_file(dstdir, tmpprefix)
+        fsrc = open(src, 'rb')
+        while 1:
+            buf = fsrc.read(16384)
+            if not buf:
+                break
+            os.write(fd, buf)
+        fsrc.close()
+        os.close(fd)
+        # XXX: use setPerms() here
+        st = os.stat(src)
+        os.utime(tmp, (st.st_atime, st.st_mtime))
+        os.chmod(tmp, st.st_mode & 0170000)
+        os.lchown(tmp, st.st_uid, st.st_gid)
+    os.rename(tmp, dst)
+
 def doRead(fd, size):
     data = fd.read(size)
     if len(data) != size:
         raise IOError, "failed to read data (%d instead of %d)" \
             % (len(data), size)
     return data
+
+def getMD5(fpath):
+    fd = open(fpath, "r")
+    ctx = md5.new()
+    while 1:
+        data = fd.read(16384)
+        if not data:
+            break
+        ctx.update(data)
+    return ctx.hexdigest()
 
 
 # Optimized routines that use zlib to extract data, since
@@ -293,7 +340,7 @@ class PyGZIP:
         return "".join(decompdata)
 
     def __del__(self):
-        (crc32, isize) = unpack("2i", self.enddata)
+        (crc32, isize) = unpack("ii", self.enddata)
         if crc32 != self.crcval:
             print "CRC check failed."
         if isize != self.length:
@@ -351,6 +398,31 @@ RPMSENSE_PATCHES    = (1 << 27)
 RPMSENSE_CONFIG     = (1 << 28)
 
 RPMSENSE_SENSEMASK  = 15 # Mask to get senses: serial, less, greater, equal.
+
+
+RPMSENSE_TRIGGER = (RPMSENSE_TRIGGERIN | RPMSENSE_TRIGGERUN \
+    | RPMSENSE_TRIGGERPOSTUN)
+
+_ALL_REQUIRES_MASK  = (RPMSENSE_INTERP | RPMSENSE_SCRIPT_PRE \
+    | RPMSENSE_SCRIPT_POST | RPMSENSE_SCRIPT_PREUN | RPMSENSE_SCRIPT_POSTUN \
+    | RPMSENSE_SCRIPT_VERIFY | RPMSENSE_FIND_REQUIRES | RPMSENSE_SCRIPT_PREP \
+    | RPMSENSE_SCRIPT_BUILD | RPMSENSE_SCRIPT_INSTALL | RPMSENSE_SCRIPT_CLEAN \
+    | RPMSENSE_RPMLIB | RPMSENSE_KEYRING)
+
+def _notpre(x):
+    return (x & ~RPMSENSE_PREREQ)
+
+_INSTALL_ONLY_MASK = _notpre(RPMSENSE_SCRIPT_PRE | RPMSENSE_SCRIPT_POST \
+    | RPMSENSE_RPMLIB | RPMSENSE_KEYRING)
+_ERASE_ONLY_MASK   = _notpre(RPMSENSE_SCRIPT_PREUN | RPMSENSE_SCRIPT_POSTUN)
+
+def isLegacyPreReq(x):
+    return (x & _ALL_REQUIRES_MASK) == RPMSENSE_PREREQ
+def isInstallPreReq(x):
+    return (x & _INSTALL_ONLY_MASK) != 0
+def isErasePreReq(x):
+    return (x & _ERASE_ONLY_MASK) != 0
+
 
 # RPM file attributes
 RPMFILE_NONE        = 0
@@ -838,7 +910,8 @@ class CPIO:
                 if self.size != None and self.size != 0:
                     self.printErr("failed cpiosize check")
                 return 1
-            func(filedata, self.__readDataPad, filenamehash, devinode, filenames)
+            func(filedata, self.__readDataPad, filenamehash, devinode,
+                 filenames)
         return None
 
 class HdrIndex:
@@ -846,6 +919,7 @@ class HdrIndex:
         self.hash = {}
         self.__len__ = self.hash.__len__
         self.__getitem__ = self.hash.get
+        self.__delitem__ = self.hash.__delitem__
         self.__setitem__ = self.hash.__setitem__
         self.__contains__ = self.hash.__contains__
         self.has_key = self.hash.has_key
@@ -1008,9 +1082,14 @@ class ReadRpm:
             self.printErr("storeSize/checkSize is %d/%d" % (storeSize,
                 checkSize))
 
-    def __readIndex(self, pad, hdrtags):
-        data = doRead(self.fd, 16)
-        (magic, indexNo, storeSize) = unpack("!8sii", data)
+    def __readIndex(self, pad, hdrtags, rpmdb=None):
+        if rpmdb:
+            data = doRead(self.fd, 8)
+            (indexNo, storeSize) = unpack("!ii", data)
+            magic = "\x8e\xad\xe8\x01\x00\x00\x00\x00"
+        else:
+            data = doRead(self.fd, 16)
+            (magic, indexNo, storeSize) = unpack("!8sii", data)
         if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
             self.raiseErr("bad index magic")
         fmt = doRead(self.fd, 16 * indexNo)
@@ -1028,7 +1107,7 @@ class ReadRpm:
         if len(dorpmtag) == 0:
             return hdr
         for i in xrange(0, indexNo * 16, 16):
-            (tag, ttype, offset, count) = unpack("!4i", fmt[i:i + 16])
+            (tag, ttype, offset, count) = unpack("!iiii", fmt[i:i + 16])
             if not dorpmtag.has_key(tag):
                 continue
             nametag = dorpmtag[tag][4]
@@ -1041,7 +1120,7 @@ class ReadRpm:
             elif ttype == RPM_STRING:
                 data = fmt2[offset:fmt2.index("\x00", offset)]
             elif ttype == RPM_INT32:
-                data = unpack("!%dI" % count, fmt2[offset:offset + count * 4])
+                data = unpack("!%di" % count, fmt2[offset:offset + count * 4])
             elif ttype == RPM_CHAR:
                 data = unpack("!%dc" % count, fmt2[offset:offset + count])
             elif ttype == RPM_INT8:
@@ -1063,18 +1142,19 @@ class ReadRpm:
                 hdr[nametag] = data
         return hdr
 
-    def readHeader(self, sigtags, hdrtags, keepdata=None):
-        if self.__openFd():
-            return 1
-        leaddata = doRead(self.fd, 96)
-        if leaddata[:4] != "\xed\xab\xee\xdb":
-            self.printErr("no rpm magic found")
-            return 1
-        if self.verify:
-            self.__verifyLead(leaddata)
-        sigdata = self.__readIndex(8, sigtags)
-        self.sigdatasize = sigdata[5]
-        hdrdata = self.__readIndex(1, hdrtags)
+    def readHeader(self, sigtags, hdrtags, keepdata=None, rpmdb=None):
+        if rpmdb == None:
+            if self.__openFd():
+                return 1
+            leaddata = doRead(self.fd, 96)
+            if leaddata[:4] != "\xed\xab\xee\xdb":
+                self.printErr("no rpm magic found")
+                return 1
+            if self.verify:
+                self.__verifyLead(leaddata)
+            sigdata = self.__readIndex(8, sigtags)
+            self.sigdatasize = sigdata[5]
+        hdrdata = self.__readIndex(1, hdrtags, rpmdb)
         self.hdrdatasize = hdrdata[5]
         if keepdata:
             self.leaddata = leaddata
@@ -1091,6 +1171,7 @@ class ReadRpm:
         (hdrindexNo, hdrstoreSize, hdrdata2, hdrfmt, hdrfmt2, size) = hdrdata
         self.hdr = self.__parseIndex(hdrindexNo, hdrfmt, hdrfmt2, hdrtags)
         self.__getitem__ = self.hdr.__getitem__
+        self.__delitem__ = self.hdr.__delitem__
         self.__setitem__ = self.hdr.__setitem__
         self.__contains__ = self.hdr.__contains__
         self.has_key = self.hdr.has_key
@@ -1194,7 +1275,7 @@ class ReadRpm:
         if S_ISREG(mode):
             di = devinode.get((dev, inode))
             if di == None or data:
-                (fd, tmpfilename) = mkstemp_file(dirname, basename)
+                (fd, tmpfilename) = mkstemp_file(dirname, tmpprefix)
                 os.write(fd, data)
                 os.close(fd)
                 setPerms(tmpfilename, uid, gid, mode, mtime)
@@ -1209,9 +1290,9 @@ class ReadRpm:
                             fn2 = "%s%s" % (self.buildroot, filenames[j])
                         (dirname, basename) = os.path.split(fn2)
                         makeDirs(dirname)
-                        tmpfilename = mkstemp_link(dirname, basename, filename)
+                        tmpfilename = mkstemp_link(dirname, tmpprefix, filename)
                         if tmpfilename == None:
-                            (fd, tmpfilename) = mkstemp_file(dirname, basename)
+                            (fd, tmpfilename) = mkstemp_file(dirname, tmpprefix)
                             os.write(fd, data)
                             os.close(fd)
                             setPerms(tmpfilename, uid, gid, mode, mtime)
@@ -1224,16 +1305,16 @@ class ReadRpm:
             #if os.path.islink(filename) \
             #    and os.readlink(filename) == linkto:
             #    return
-            tmpfile = mkstemp_symlink(dirname, basename, linkto)
+            tmpfile = mkstemp_symlink(dirname, tmpprefix, linkto)
             setPerms(tmpfile, uid, gid, None, None)
             os.rename(tmpfile, filename)
         elif S_ISFIFO(mode):
-            tmpfile = mkstemp_mkfifo(dirname, basename)
+            tmpfile = mkstemp_mkfifo(dirname, tmpprefix)
             setPerms(tmpfile, uid, gid, mode, mtime)
             os.rename(tmpfile, filename)
         elif S_ISCHR(mode) or S_ISBLK(mode):
             if self.owner:
-                tmpfile = mkstemp_mknod(dirname, basename, mode, rdev)
+                tmpfile = mkstemp_mknod(dirname, tmpprefix, mode, rdev)
                 setPerms(tmpfile, uid, gid, mode, mtime)
                 os.rename(tmpfile, filename)
             # if not self.owner:  we could give a warning here
@@ -1452,6 +1533,7 @@ class ReadRpm:
 
     def getChangeLog(self, num=-1):
         """ Return the changlog entry in one string. """
+        import time
         ctext = self["changelogtext"]
         if not ctext:
             return ""
@@ -1469,7 +1551,8 @@ class ReadRpm:
         # disable the utf-8 test per default:
         if self.strict and None:
             for i in ["summary", "description", "changelogtext"]:
-                if self[i] == None: continue
+                if self[i] == None:
+                    continue
                 for j in self[i]:
                     try:
                         j.decode("utf-8")
@@ -1605,7 +1688,8 @@ class ReadRpm:
         #        p = self["providename"]
         #        for n in o:
         #            if n not in p:
-        #                self.printErr("might not have a provides for the obsolete: %s" % n)
+        #                self.printErr("might not have a provides for the " + \
+        #                              "obsolete: %s" % n)
 
         # check file* tags to be consistent:
         reqfiletags = ["fileusername", "filegroupname", "filemodes",
@@ -1730,8 +1814,8 @@ def explodeFile(filename, dirname, version):
     #    newdirn = newdirn[:-7]
     while newdirn[-1] in "-_.0123456789":
         newdirn = newdirn[:-1]
-    os.system('cd ' + dirname + ' && tar x' + explode + 'f ' + filename \
-        + '; for i in * ; do test -d "$i" && mv "$i" ' + newdirn + '; done')
+    os.system("cd " + dirname + " && tar x" + explode + "f " + filename \
+        + "; for i in * ; do test -d \"$i\" && mv \"$i\" " + newdirn + "; done")
 
 delim = "--- -----------------------------------------------------" \
     "---------------------\n"
@@ -1760,8 +1844,8 @@ def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
             orpm["release"] + " to " + nrpm["version"] + "-" + \
             nrpm["release"] + ".\n"
 
-    obuildroot = orpm.buildroot = mkstemp_dir("/tmp", "A") + "/"
-    nbuildroot = nrpm.buildroot = mkstemp_dir("/tmp", "B") + "/"
+    obuildroot = orpm.buildroot = mkstemp_dir("/tmp", tmpprefix) + "/"
+    nbuildroot = nrpm.buildroot = mkstemp_dir("/tmp", tmpprefix) + "/"
 
     sed1 = "sed 's#^--- " + obuildroot + "#--- #'"
     sed2 = "sed 's#^+++ " + nbuildroot + "#+++ #'"
@@ -1846,7 +1930,8 @@ class RpmTree:
         return rpm
 
     def addDirectory(self, dirname):
-        files = map(lambda v,dirname=dirname: dirname + "/" + v, os.listdir(dirname))
+        files = map(lambda v,dirname=dirname: dirname + "/" + v,
+            os.listdir(dirname))
         for f in files:
             if f.endswith(".rpm"):
                 self.addRpm(f)
@@ -1869,11 +1954,167 @@ class RpmTree:
                     newest = rpm
             self.h[r] = [newest]
 
+def verifyStructure(packages, hash, tag, useidx=True):
+    for tid in hash.keys():
+        if not packages.has_key(tid):
+            print "Error %s: Package id %s doesn't exist" % (tag, tid)
+            continue
+        pkgtag = packages[tid][tag]
+        mytag = hash[tid]
+        for idx in mytag.keys():
+            key = mytag[idx]
+            if useidx:
+                try:
+                    val = pkgtag[idx]
+                except:
+                    print "Error %s: index %s is not in package" % (tag, idx)
+            else:
+                val = pkgtag
+            if key != val:
+                print "Error %s: %s != %s in package %s" % (tag, key, val,
+                    packages[tid].getFilename())
+    for tid in packages.keys():
+        pkg = packages[tid]
+        refhash = pkg[tag]
+        tnamehash = {}
+        if not refhash:
+            # XXX check for them to be empty?
+            continue
+        if not useidx:
+            if refhash != hash[tid][0]:
+                print "wrong data", refhash, tid, hash[tid]
+        else:
+            for idx in xrange(len(refhash)):
+                key = refhash[idx]
+                if tag == "requirename" and \
+                    isInstallPreReq(pkg["requireflags"][idx]):
+                    continue
+                if tag == "filemd5s" and not S_ISREG(pkg["fileflags"][idx]):
+                    continue
+                # equal triggernames aren't added multiple times for the same package
+                if tag == "triggername":
+                    if tnamehash.has_key(key):
+                        continue
+                    tnamehash[key] = 1
+                try:
+                    if hash[tid][idx] != key:
+                        print "wrong data"
+                except:
+                    print "Error %s: index %s is not in package %s" % (tag, idx, tid)
+
+def readPackages(dbpath):
+    import bsddb, cStringIO
+    packages = {}
+    keyring = None #openpgp.PGPKeyRing()
+    maxtid = None
+    db = bsddb.hashopen(dbpath + "Packages", "r")
+    for (tid, data) in db.iteritems():
+        tid = unpack("i", tid)[0]
+        if tid == 0:
+            maxtid = unpack("i", data)[0]
+            continue
+        fd = cStringIO.StringIO(data)
+        pkg = ReadRpm("rpmdb", fd=fd)
+        pkg.readHeader(None, rpmtag, None, 1)
+        if pkg["name"].startswith("gpg-pubkey"):
+            #for k in openpgp.parsePGPKeys(pkg["description"]):
+            #    keyring.addKey(k)
+            pkg["group"] = (pkg["group"],)
+        packages[tid] = pkg
+    return (packages, keyring, maxtid)
+
+def readDb(filename, dbtype="hash", dotid=None):
+    import bsddb
+    if dbtype == "hash":
+        db = bsddb.hashopen(filename, "r")
+    else:
+        db = bsddb.btopen(filename, "r")
+    rethash = {}
+    for (k, v) in db.iteritems():
+        if dotid:
+            k = unpack("i", k)[0]
+        if k == "\x00":
+            k = ""
+        for i in xrange(0, len(v), 8):
+            (tid, idx) = unpack("ii", v[i:i+8])
+            if not rethash.has_key(tid):
+                rethash[tid] = {}
+            if rethash[tid].has_key(idx):
+                raise ValueError, "%s %d %d" % (k, tid, idx)
+            rethash[tid][idx] = k
+    return rethash
+
+def readRpmdb(dbpath="/var/lib/rpm/"):
+    from binascii import b2a_hex
+    print "Reading rpmdb, this can take some time..."
+    print "Reading Packages..."
+    (packages, keyring, maxtid) = readPackages(dbpath)
+    print "Reading the rest..."
+    basenames = readDb(dbpath + "Basenames")
+    conflictname = readDb(dbpath + "Conflictname")
+    dirnames = readDb(dbpath + "Dirnames", "bt")
+    filemd5s = readDb(dbpath + "Filemd5s")
+    group = readDb(dbpath + "Group")
+    installtid = readDb(dbpath + "Installtid", "bt", 1)
+    name = readDb(dbpath + "Name")
+    providename = readDb(dbpath + "Providename")
+    provideversion = readDb(dbpath + "Provideversion", "bt")
+    pubkeys = readDb(dbpath + "Pubkeys")
+    requirename = readDb(dbpath + "Requirename")
+    requireversion = readDb(dbpath + "Requireversion", "bt")
+    sha1header = readDb(dbpath + "Sha1header")
+    sigmd5 = readDb(dbpath + "Sigmd5")
+    triggername = readDb(dbpath + "Triggername")
+    print "Checking data integrity..."
+    if maxtid != None:
+        for tid in packages.keys():
+            if tid > maxtid:
+                print "wrong tid:", tid
+    verifyStructure(packages, basenames, "basenames")
+    verifyStructure(packages, conflictname, "conflictname")
+    verifyStructure(packages, dirnames, "dirnames")
+    for x in filemd5s.values():
+        for y in x.keys():
+            x[y] = b2a_hex(x[y])
+    verifyStructure(packages, filemd5s, "filemd5s")
+    verifyStructure(packages, group, "group")
+    verifyStructure(packages, installtid, "installtid")
+    verifyStructure(packages, name, "name", False)
+    verifyStructure(packages, providename, "providename")
+    verifyStructure(packages, provideversion, "provideversion")
+    #verifyStructure(packages, pubkeys, "pubkeys")
+    verifyStructure(packages, requirename, "requirename")
+    verifyStructure(packages, requireversion, "requireversion")
+    verifyStructure(packages, sha1header, "install_sha1header", False)
+    verifyStructure(packages, sigmd5, "install_md5", False)
+    verifyStructure(packages, triggername, "triggername")
+    for pkg in packages.values():
+        pkg.sig = HdrIndex()
+        if pkg["install_size_in_sig"] != None:
+            pkg.sig["size_in_sig"] = pkg["install_size_in_sig"]
+            del pkg["install_size_in_sig"]
+        if pkg["install_md5"] != None:
+            pkg.sig["md5"] = pkg["install_md5"]
+            del pkg["install_md5"]
+        if pkg["install_sha1header"] != None:
+            pkg.sig["sha1header"] = pkg["install_sha1header"]
+            del pkg["install_sha1header"]
+        if pkg["archivesize"] != None:
+            pkg.sig["payloadsize"] = pkg["archivesize"]
+            del pkg["archivesize"]
+        #if packages[tid].sig.has_key("sha1header"):
+        #   (headerindex, headerdata) = generateHeader(packages[tid],
+        #   [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
+        #   if packages[tid].sig["sha1header"] != sha.new(headerindex+headerdata).hexdigest():
+        #       print "Error packages: Package %s SHA1 header checksum incorrect" % packages[tid].getFilename()
+
+
 def checkSrpms():
     r = RpmTree()
     for d in ("/var/www/html/mirror/rhn/SRPMS",
         "/var/www/html/mirror/updates-rhel/2.1",
-        "/var/www/html/mirror/updates-rhel/3"):
+        "/var/www/html/mirror/updates-rhel/3",
+        "/var/www/html/mirror/updates-rhel/4"):
         r.addDirectory(d)
     r.sortVersions()
     # Remove identical rpms. Use the md5sum to check for
@@ -2066,10 +2307,12 @@ def main():
     extract = 0
     checksrpms = 0
     checkarch = 0
+    buildroot = ""
+    checkrpmdb = 0
     (opts, args) = getopt.getopt(sys.argv[1:], "?",
         ["help", "strict", "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
-         "checksrpms", "checkarch"])
+         "checksrpms", "checkarch", "checkrpmdb", "buildroot="])
     for (opt, val) in opts:
         if opt in ["-?", "--help"]:
             print "verify rpm packages"
@@ -2100,20 +2343,30 @@ def main():
             checksrpms = 1
         elif opt == "--checkarch":
             checkarch = 1
+        elif opt == "--checkrpmdb":
+            checkrpmdb = 1
+        elif opt == "--buildroot":
+            #if not val.startswith("/"):
+            #    print "buildroot should start with a /"
+            #    return
+            buildroot = os.path.abspath(val)
     if diff:
         diff = diffTwoSrpms(args[0], args[1], explode)
         if diff != "":
             print diff
         return
     if extract:
-        buildroot = os.path.abspath(args[1])
-        extractRpm(args[0], buildroot)
+        for a in args:
+            extractRpm(a, buildroot)
         return
     if checksrpms:
         checkSrpms()
         return
     if checkarch:
         checkArch(args[0])
+        return
+    if checkrpmdb:
+        readRpmdb()
         return
     keepdata = 1
     hdrtags = rpmtag
@@ -2154,6 +2407,7 @@ def main():
         checkSymlinks(repo)
         checkProvides(repo, checkrequires=1)
     if wait:
+        import time
         print "ready"
         time.sleep(30)
 
@@ -2164,7 +2418,7 @@ if __name__ == "__main__":
         sys.argv.pop(1)
     if dohotshot:
         import hotshot, hotshot.stats
-        filename = mkstemp_file("/tmp", "pyrpm_hs")[1]
+        filename = mkstemp_file("/tmp", tmpprefix)[1]
         prof = hotshot.Profile(filename)
         prof.runcall(main)
         prof.close()
