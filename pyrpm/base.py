@@ -82,7 +82,9 @@ class FilenamesList:
 
     def search(self, name):
         l = [ ]
-        dirname = os.path.dirname(name) + "/"
+        dirname = os.path.dirname(name)
+        if dirname[-1] != "/":
+            dirname += "/"
         basename = os.path.basename(name)
         if self.path.has_key(dirname) and \
                self.path[dirname].has_key(basename):
