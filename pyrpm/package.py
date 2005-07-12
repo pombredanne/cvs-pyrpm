@@ -670,7 +670,9 @@ class RpmPackage(RpmData):
             self["dirindexes"] = [ ]
             for filename in self["oldfilenames"]:
                 basename = os.path.basename(filename)
-                dirname = os.path.dirname(filename)+"/"
+                dirname = os.path.dirname(filename)
+                if dirname[-1] != "/":
+                    dirname += "/"
                 try:
                     dirindex = self["dirnames"].index(dirname)
                 except:
