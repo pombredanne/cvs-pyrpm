@@ -49,6 +49,7 @@
 # XXX TODO:
 # - PyGZIP is way faster than existing gzip routines, but still 2 times
 #   slower than a C version. Can further improvements be made?
+#   The C part should offer a class which supports read().
 # - error handling in PyGZIP
 # - Why is bsddb so slow? (Why is reading rpmdb so slow?)
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
@@ -249,7 +250,8 @@ def doLnOrCopy(src, dst):
         st = os.stat(src)
         os.utime(tmp, (st.st_atime, st.st_mtime))
         os.chmod(tmp, st.st_mode & 0170000)
-        os.lchown(tmp, st.st_uid, st.st_gid)
+        if os.geteuid() == 0:
+            os.lchown(tmp, st.st_uid, st.st_gid)
     os.rename(tmp, dst)
 
 def doRead(fd, size):
@@ -444,7 +446,8 @@ RPMFILE_POLICY      = (1 << 12)    # from %%policy
 # List of all rpm tags we care about. We mark older tags which are
 # not anymore in newer rpm packages (Fedora Core development tree) as
 # "legacy".
-# tagname: [tag, type, how-many, flags:legacy=1,src-only=2,bin-only=4]
+# tagname: [tag, type, how-many, flags:legacy=1,
+#           src-only=2,bin-only=4,signed-int=8]
 rpmtag = {
     # basic info
     "name": [1000, RPM_STRING, None, 0],
@@ -496,7 +499,7 @@ rpmtag = {
     "url": [1020, RPM_STRING, None, 0],
     "license": [1014, RPM_STRING, None, 0],
     "sourcerpm": [1044, RPM_STRING, None, 4], # name of src.rpm for binary rpms
-    "changelogtime": [1080, RPM_INT32, None, 0],
+    "changelogtime": [1080, RPM_INT32, None, 8],
     "changelogname": [1081, RPM_STRING_ARRAY, None, 0],
     "changelogtext": [1082, RPM_STRING_ARRAY, None, 0],
     "prefixes": [1098, RPM_STRING_ARRAY, None, 4], # relocatable rpm packages
@@ -505,7 +508,7 @@ rpmtag = {
     "sourcepkgid": [1146, RPM_BIN, 16, 4], # md5 from srpm (header+payload)
     "immutable": [63, RPM_BIN, 16, 0], # content of this tag is unclear
     # less important information:
-    "buildtime": [1006, RPM_INT32, 1, 0], # time of rpm build
+    "buildtime": [1006, RPM_INT32, 1, 8], # time of rpm build
     "buildhost": [1007, RPM_STRING, None, 0], # hostname where rpm was built
     "cookie": [1094, RPM_STRING, None, 0], # build host and time
     "group": [1016, RPM_GROUP, None, 0], # comps.xml is used now
@@ -533,7 +536,7 @@ rpmtag = {
     "fileusername": [1039, RPM_STRING_ARRAY, None, 0],
     "filegroupname": [1040, RPM_STRING_ARRAY, None, 0],
     "filemodes": [1030, RPM_INT16, None, 0],
-    "filemtimes": [1034, RPM_INT32, None, 0],
+    "filemtimes": [1034, RPM_INT32, None, 8],
     "filedevices": [1095, RPM_INT32, None, 0],
     "fileinodes": [1096, RPM_INT32, None, 0],
     "filesizes": [1028, RPM_INT32, None, 0],
@@ -574,7 +577,7 @@ rpmtag = {
     "install_unknownchecksum": [262, RPM_BIN, None, 0],
     "install_dsaheader": [267, RPM_BIN, 16, 0],
     "install_sha1header": [269, RPM_STRING, None, 0],
-    "installtime": [1008, RPM_INT32, 1, 0],
+    "installtime": [1008, RPM_INT32, 1, 8],
     "filestates": [1029, RPM_CHAR, None, 0],
     "instprefixes": [1099, RPM_STRING_ARRAY, None, 0],
     "installcolor": [1127, RPM_INT32, None, 0],
@@ -1121,7 +1124,11 @@ class ReadRpm:
             elif ttype == RPM_STRING:
                 data = fmt2[offset:fmt2.index("\x00", offset)]
             elif ttype == RPM_INT32:
-                data = unpack("!%di" % count, fmt2[offset:offset + count * 4])
+                # distinguish between signed and unsigned ints
+                if dorpmtag[tag][3] & 8:
+                    data = unpack("!%di" % count, fmt2[offset:offset + count * 4])
+                else:
+                    data = unpack("!%dI" % count, fmt2[offset:offset + count * 4])
             elif ttype == RPM_CHAR:
                 data = unpack("!%dc" % count, fmt2[offset:offset + count])
             elif ttype == RPM_INT8:
