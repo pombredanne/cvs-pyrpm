@@ -150,69 +150,6 @@ class ObsoletesList(ConflictsList):
         for (name, flag, version) in rpm["obsoletes"]:
             self._removeProvide(name, flag, version, rpm)
 
-
-# ----------------------------------------------------------------------------
-
-class FilenamesList:
-    """ enable search of filenames """
-    """ filenames of packages can be added and removed by package """
-    def __init__(self, config):
-        self.config = config
-        self.clear()
-
-    def clear(self):
-        self.path = { }
-        self.multi = { }
-
-    def addPkg(self, rpm):
-        if rpm["basenames"] == None:
-            return
-        for i in xrange (len(rpm["basenames"])):
-            dirname = rpm["dirnames"][rpm["dirindexes"][i]]
-
-            if not self.path.has_key(dirname):
-                self.path[dirname] = { }
-
-            basename = rpm["basenames"][i]
-            if not self.path[dirname].has_key(basename):
-                self.path[dirname][basename] = [ ]
-            else:
-                if not self.multi.has_key(dirname):
-                    self.multi[dirname] = { }
-                self.multi[dirname][basename] = 1
-            self.path[dirname][basename].append(rpm)
-
-    def removePkg(self, rpm):
-        if rpm["basenames"] == None:
-            return
-        for i in xrange (len(rpm["basenames"])):
-            dirname = rpm["dirnames"][rpm["dirindexes"][i]]
-
-            if not self.path.has_key(dirname):
-                continue
-            
-            basename = rpm["basenames"][i]
-            if self.path[dirname].has_key(basename):
-                self.path[dirname][basename].remove(rpm)
-
-            if len(self.path[dirname][basename]) == 1:
-                if self.multi.has_key(dirname) and \
-                       self.multi[dirname].has_key(basename):
-                    del self.multi[dirname][basename]
-                    if len(self.multi[dirname]) == 0:
-                        del self.multi[dirname]
-            elif len(self.path[dirname][basename]) == 0:
-                del self.path[dirname][basename]
-
-    def search(self, name):
-        l = [ ]
-        dirname = os.path.dirname(name) + "/"
-        basename = os.path.basename(name)
-        if self.path.has_key(dirname) and \
-               self.path[dirname].has_key(basename):
-            l = self.path[dirname][basename]
-        return l
-
 # ----------------------------------------------------------------------------
 
 class RpmResolver(RpmList):
@@ -237,7 +174,7 @@ class RpmResolver(RpmList):
         RpmList.clear(self)
         self.provides_list = ProvidesList(self.config)
         self.obsoletes_list = ObsoletesList(self.config)
-        self.filenames_list = FilenamesList(self.config)
+        self.filenames_list = base.FilenamesList(self.config)
         self.obsoletes = { }
         self.installed_unresolved = HashList()
         self.installed_conflicts = HashList()
@@ -626,8 +563,10 @@ class RpmResolver(RpmList):
             # no conflicts if there is no new package
             return conflicts
 
-        for dirname in self.filenames_list.multi.keys():
-            for _filename in self.filenames_list.multi[dirname].keys():
+        for dirname in self.filenames_list.path.keys():
+            for _filename in self.filenames_list.path[dirname].keys():
+                if len(self.filenames_list.path[dirname][_filename]) < 2:
+                    continue
                 filename = dirname + _filename
                 self.config.printDebug(1, "Checking for file conflicts for '%s'" % filename)
                 s = self.filenames_list.search(filename)
@@ -639,7 +578,6 @@ class RpmResolver(RpmList):
                         if s[j] not in conflicts:
                             conflicts[s[j]] = [ ]
                         conflicts[s[j]].append((filename, s[k]))
-
 
         return conflicts
     # ----

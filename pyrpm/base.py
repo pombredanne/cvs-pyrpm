@@ -16,6 +16,8 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
+import os.path
+
 class RpmFileInfo:
     def __init__(self, config, filename, inode, mode, uid, gid, mtime, filesize,
                  dev, rdev, md5sum, flags, verifyflags, filecolor):
@@ -36,6 +38,56 @@ class RpmFileInfo:
 
     def getHardLinkID(self):
         return self.inode*65536+self.dev
+
+
+class FilenamesList:
+    """ enable fast search of filenames """
+    """ filenames of packages can be added and removed by package """
+    def __init__(self, config):
+        self.config = config
+        self.clear()
+
+    def clear(self):
+        self.path = { }
+
+    def addPkg(self, pkg):
+        if pkg["basenames"] == None:
+            return
+        for i in xrange (len(pkg["basenames"])):
+            dirname = pkg["dirnames"][pkg["dirindexes"][i]]
+
+            if not self.path.has_key(dirname):
+                self.path[dirname] = { }
+
+            basename = pkg["basenames"][i]
+            if not self.path[dirname].has_key(basename):
+                self.path[dirname][basename] = [ ]
+            self.path[dirname][basename].append(pkg)
+
+    def removePkg(self, pkg):
+        if pkg["basenames"] == None:
+            return
+        for i in xrange (len(pkg["basenames"])):
+            dirname = pkg["dirnames"][pkg["dirindexes"][i]]
+
+            if not self.path.has_key(dirname):
+                continue
+            
+            basename = pkg["basenames"][i]
+            if self.path[dirname].has_key(basename):
+                self.path[dirname][basename].remove(pkg)
+
+            if len(self.path[dirname][basename]) == 0:
+                del self.path[dirname][basename]
+
+    def search(self, name):
+        l = [ ]
+        dirname = os.path.dirname(name) + "/"
+        basename = os.path.basename(name)
+        if self.path.has_key(dirname) and \
+               self.path[dirname].has_key(basename):
+            l = self.path[dirname][basename]
+        return l
 
 # RPM Constants - based from rpmlib.h and elsewhere
 
