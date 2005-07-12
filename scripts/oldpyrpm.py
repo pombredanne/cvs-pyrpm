@@ -1070,7 +1070,7 @@ class ReadRpm:
     def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, hdrtags):
         checkSize = 0
         for i in xrange(0, indexNo * 16, 16):
-            index = unpack("!iiii", fmt[i:i + 16])
+            index = unpack("!IIII", fmt[i:i + 16])
             ttype = index[1]
             # alignment for some types of data
             if ttype == RPM_INT16:
@@ -1089,11 +1089,11 @@ class ReadRpm:
     def __readIndex(self, pad, hdrtags, rpmdb=None):
         if rpmdb:
             data = doRead(self.fd, 8)
-            (indexNo, storeSize) = unpack("!ii", data)
+            (indexNo, storeSize) = unpack("!II", data)
             magic = "\x8e\xad\xe8\x01\x00\x00\x00\x00"
         else:
             data = doRead(self.fd, 16)
-            (magic, indexNo, storeSize) = unpack("!8sii", data)
+            (magic, indexNo, storeSize) = unpack("!8sII", data)
         if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
             self.raiseErr("bad index magic")
         fmt = doRead(self.fd, 16 * indexNo)
@@ -1111,7 +1111,7 @@ class ReadRpm:
         if len(dorpmtag) == 0:
             return hdr
         for i in xrange(0, indexNo * 16, 16):
-            (tag, ttype, offset, count) = unpack("!iiii", fmt[i:i + 16])
+            (tag, ttype, offset, count) = unpack("!IIII", fmt[i:i + 16])
             if not dorpmtag.has_key(tag):
                 continue
             nametag = dorpmtag[tag][4]
@@ -2018,9 +2018,9 @@ def readPackages(dbpath):
     maxtid = None
     db = bsddb.hashopen(dbpath + "Packages", "r")
     for (tid, data) in db.iteritems():
-        tid = unpack("i", tid)[0]
+        tid = unpack("I", tid)[0]
         if tid == 0:
-            maxtid = unpack("i", data)[0]
+            maxtid = unpack("I", data)[0]
             continue
         fd = cStringIO.StringIO(data)
         pkg = ReadRpm("rpmdb", fd=fd)
@@ -2041,11 +2041,11 @@ def readDb(filename, dbtype="hash", dotid=None):
     rethash = {}
     for (k, v) in db.iteritems():
         if dotid:
-            k = unpack("i", k)[0]
+            k = unpack("I", k)[0]
         if k == "\x00":
             k = ""
         for i in xrange(0, len(v), 8):
-            (tid, idx) = unpack("ii", v[i:i+8])
+            (tid, idx) = unpack("II", v[i:i+8])
             if not rethash.has_key(tid):
                 rethash[tid] = {}
             if rethash[tid].has_key(idx):
