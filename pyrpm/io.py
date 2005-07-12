@@ -1035,6 +1035,7 @@ class RpmDB(RpmDatabase):
     def __init__(self, config, source, buildroot=None):
         RpmDatabase.__init__(self, config, source, buildroot)
         self.dbopen = False
+        self.maxid = 0
 
     def open(self):
         return 1
@@ -1056,51 +1057,55 @@ class RpmDB(RpmDatabase):
             rpmio = RpmFileIO(self.config, "dummy")
             pkg = package.RpmPackage(self.config, "dummy")
             data = db[key]
-            val = unpack("i", key)[0]
-            if val != 0:
-                (indexNo, storeSize) = unpack("!ii", data[0:8])
-                indexdata = data[8:indexNo*16+8]
-                storedata = data[indexNo*16+8:]
-                pkg["signature"] = {}
-                for idx in xrange(0, indexNo):
-                    try:
-                        (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
-                                                               storedata)
-                    except ValueError, e:
-                        # FIXME: different handling?
-                        config.printError("Invalid header entry %s in %s: %s"
-                                          % (idx, key, e))
-                        continue
-                    if   tag == 257:
-                        pkg["signature"]["size_in_sig"] = tagval
-                    elif tag == 261:
-                        pkg["signature"]["md5"] = tagval
-                    elif tag == 269:
-                        pkg["signature"]["sha1header"] =tagval
-                    elif rpmtag.has_key(tag):
-                        if rpmtagname[tag] == "archivesize":
-                            pkg["signature"]["payloadsize"] = tagval
-                        else:
-                            pkg[rpmtagname[tag]] = tagval
-                if pkg["name"].startswith("gpg-pubkey"):
-                    keys = openpgp.parsePGPKeys(pkg["description"])
-                    for k in keys:
-                        self.keyring.addKey(k)
+            val = unpack("I", key)[0]
+
+            if val == 0:
+                self.maxid = unpack("I", data)[0]
+                continue
+
+            (indexNo, storeSize) = unpack("!II", data[0:8])
+            indexdata = data[8:indexNo*16+8]
+            storedata = data[indexNo*16+8:]
+            pkg["signature"] = {}
+            for idx in xrange(0, indexNo):
+                try:
+                    (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
+                                                           storedata)
+                except ValueError, e:
+                    # FIXME: different handling?
+                    config.printError("Invalid header entry %s in %s: %s"
+                                      % (idx, key, e))
                     continue
-                if not pkg.has_key("arch"):
-                    continue
-                pkg.generateFileNames()
-                pkg.source = "rpmdb:/"+dbpath+"/"+pkg.getNEVRA()
-                self._addPkg(pkg)
-                pkg["provides"] = pkg.getProvides()
-                pkg["requires"] = pkg.getRequires() 
-                pkg["obsoletes"] = pkg.getObsoletes()
-                pkg["conflicts"] = pkg.getConflicts()
-                pkg["triggers"] = pkg.getTriggers()
-                pkg["install_id"] = val
-                pkg.io = None
-                pkg.header_read = 1
-                rpmio.hdr = {}
+                if   tag == 257:
+                    pkg["signature"]["size_in_sig"] = tagval
+                elif tag == 261:
+                    pkg["signature"]["md5"] = tagval
+                elif tag == 269:
+                    pkg["signature"]["sha1header"] =tagval
+                elif rpmtag.has_key(tag):
+                    if rpmtagname[tag] == "archivesize":
+                        pkg["signature"]["payloadsize"] = tagval
+                    else:
+                        pkg[rpmtagname[tag]] = tagval
+            if pkg["name"].startswith("gpg-pubkey"):
+                keys = openpgp.parsePGPKeys(pkg["description"])
+                for k in keys:
+                    self.keyring.addKey(k)
+                continue
+            if not pkg.has_key("arch"):
+                continue
+            pkg.generateFileNames()
+            pkg.source = "rpmdb:/"+dbpath+"/"+pkg.getNEVRA()
+            self._addPkg(pkg)
+            pkg["provides"] = pkg.getProvides()
+            pkg["requires"] = pkg.getRequires() 
+            pkg["obsoletes"] = pkg.getObsoletes()
+            pkg["conflicts"] = pkg.getConflicts()
+            pkg["triggers"] = pkg.getTriggers()
+            pkg["install_id"] = val
+            pkg.io = None
+            pkg.header_read = 1
+            rpmio.hdr = {}
         self.is_read = 1
         return 1
 
@@ -1115,9 +1120,8 @@ class RpmDB(RpmDatabase):
 
         self.__openDB4()
 
-        id = 2
-        while id in self.ids:
-            id += 1
+        self.maxid += 1
+        id = self.maxid
         self.ids.append(id)
 
         rpmio = RpmFileIO(self.config, "dummy")
@@ -1138,7 +1142,7 @@ class RpmDB(RpmDatabase):
         self.__writeDB4(self.installtid_db, "installtid", id, pkg, True, lambda x:pack("i", x))
         self.__writeDB4(self.name_db, "name", id, pkg, False)
         (headerindex, headerdata) = rpmio._generateHeader(pkg, 4)
-        self.packages_db[pack("i", id)] = headerindex[8:]+headerdata
+        self.packages_db[pack("I", id)] = headerindex[8:]+headerdata
         self.__writeDB4(self.providename_db, "providename", id, pkg)
         self.__writeDB4(self.provideversion_db, "provideversion", id, pkg)
         self.__writeDB4(self.requirename_db, "requirename", id, pkg)
@@ -1146,6 +1150,7 @@ class RpmDB(RpmDatabase):
         self.__writeDB4(self.sha1header_db, "install_sha1header", id, pkg)
         self.__writeDB4(self.sigmd5_db, "install_md5", id, pkg)
         self.__writeDB4(self.triggername_db, "triggername", id, pkg)
+        self.packages_db[pack("I", 0)] = pack("I", self.maxid)
 
     def erasePkg(self, pkg, nowrite=None):
         self._erasePkg(pkg)
@@ -1174,7 +1179,7 @@ class RpmDB(RpmDatabase):
         self.__removeId(self.sha1header_db, "install_sha1header", id, pkg)
         self.__removeId(self.sigmd5_db, "install_md5", id, pkg)
         self.__removeId(self.triggername_db, "triggername", id, pkg)
-        del self.packages_db[pack("i", id)]
+        del self.packages_db[pack("I", id)]
         self.ids.remove(id)
 
     def __openDB4(self):
@@ -1209,7 +1214,7 @@ class RpmDB(RpmDatabase):
             self.sigmd5_db         = bsddb.hashopen(dbpath+"/Sigmd5", "c")
             self.triggername_db    = bsddb.hashopen(dbpath+"/Triggername", "c")
             self.dbopen            = True
-            self.ids               = map(lambda x:unpack("i", x)[0], self.packages_db.keys())
+            self.ids               = map(lambda x:unpack("I", x)[0], self.packages_db.keys())
 
     def __removeId(self, db, tag, id, pkg, useidx=True, func=lambda x:str(x)):
         if not pkg.has_key(tag):
@@ -1221,7 +1226,7 @@ class RpmDB(RpmDatabase):
             data = db[key]
             ndata = ""
             for i in xrange(0, len(data), 8):
-                if not data[i:i+8] == pack("ii", id, idx):
+                if not data[i:i+8] == pack("II", id, idx):
                     ndata += data[i:i+8]
             db[key] = ndata
 
@@ -1232,8 +1237,8 @@ class RpmDB(RpmDatabase):
             key = self.__getKey(tag, idx, pkg, useidx, func)
             if tag == "requirename":
                 # Skip rpmlib() requirenames...
-                if key.startswith("rpmlib("):
-                    continue
+                #if key.startswith("rpmlib("):
+                #    continue
                 # Skip install prereqs, just like rpm does...
                 if isInstallPreReq(pkg["requireflags"][idx]):
                     continue
@@ -1936,6 +1941,8 @@ class RpmRepo(RpmDatabase):
                 self.__parseFormat(node.children, pkg)
             node = node.next
         pkg.header_read = 1
+        pkg.generateFileNames()
+        del pkg["oldfilenames"]
         pkg["provides"] = pkg.getProvides()
         pkg["requires"] = pkg.getRequires()
         pkg["obsoletes"] = pkg.getObsoletes()
@@ -1968,7 +1975,7 @@ class RpmRepo(RpmDatabase):
         return pkg
 
     def __parseFormat(self, node, pkg):
-        pkg["filenames"] = []
+        pkg["oldfilenames"] = []
         while node != None:
             if node.type != "element":
                 node = node.next
@@ -1988,7 +1995,7 @@ class RpmRepo(RpmDatabase):
                 plist = self.__parseDeps(node.children, pkg)
                 pkg["conflictname"], pkg["conflictflags"], pkg["conflictversion"] = plist
             elif node.name == "file":
-                pkg["filenames"].append(node.content)
+                pkg["oldfilenames"].append(node.content)
             node = node.next
 
     def __parseDeps(self, node, pkg):
@@ -2041,7 +2048,9 @@ class RpmRepo(RpmDatabase):
             node = node.next
         nevra = "%s-%s:%s-%s.%s" % (name, epoch, version, release, arch)
         if self.pkglist.has_key(nevra):
-            self.pkglist[nevra]["filenames"] = filelist
+            self.pkglist[nevra]["oldfilenames"] = filelist
+            self.pkglist[nevra].generateFileNames()
+            del self.pkglist[nevra]["oldfilenames"]
         return 1
 
 class RpmCompsXML:

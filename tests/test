@@ -11,14 +11,11 @@ for i in sys.argv[1:]:
     except (IOError, ValueError), e:
         sys.stderr.write("%s: %s\n" % (i, e))
         continue
-    for i in xrange(len(rpm["requirename"])):
-        print i, rpm["requirename"][i], hex(rpm["requireflags"][i])
-    print rpm["postin"]
-    print rpm["postinprog"]
-    print rpm["group"]
-    #print rpm["requireflags"]
-#    print rpm["fileflags"]
-#    for f in rpm["filenames"]:
-#	rfi = rpm.getRpmFileInfo(f)
-#        print rfi.filename, hex(rfi.flags)
+    print rpm["basenames"]
+    print rpm["dirnames"]
+    print rpm["dirindexes"]
+    for f in rpm["filenames"]:
+	rfi = rpm.getRpmFileInfo(f)
+        print f
+        print rfi.filename, hex(rfi.flags)
     rpms.append(rpm)

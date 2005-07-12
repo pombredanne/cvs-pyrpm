@@ -49,7 +49,9 @@ class _RpmFilenamesIterator:
             i = self.pkg["basenames"].index(basename, i)
             if i < 0:
                 break
-            dirname = os.path.dirname(name) + "/"
+            dirname = os.path.dirname(name)
+            if dirname[-1] != "/":
+                dirname += "/"
             if self.pkg["dirnames"][self.pkg["dirindexes"][i]] == dirname:
                 return i
             i += 1
@@ -739,7 +741,7 @@ class RpmPackage(RpmData):
     def getRpmFileInfo(self, filename):
         """Return RpmFileInfo describing filename, or None if this package does
         not contain filename."""
-        
+
         try:
             i = self["filenames"].index(filename)
         except:

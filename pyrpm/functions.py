@@ -363,6 +363,8 @@ def getFreeDiskspace(operations):
         dirindexes = pkg["dirindexes"]
         filesizes = pkg["filesizes"]
         filemodes = pkg["filemodes"]
+        if not dirindexes or not filesizes or not filemodes:
+            continue
         for i in xrange(len(dirindexes)):
             if not S_ISREG(filemodes[i]):
                 continue
