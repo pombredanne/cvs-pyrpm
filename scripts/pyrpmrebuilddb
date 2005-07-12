@@ -46,9 +46,6 @@ def writeDB4(db, tag, id, packages, useidx=True, func=lambda x:str(x)):
         else:
             key = func(key)
         if tag == "requirename":
-            # Skip rpmlib() requirenames...
-            if key.startswith("rpmlib("):
-                continue
             # Skip install prereqs, just like rpm does...
             if isInstallPreReq(pkg["requireflags"][idx]):
                 continue

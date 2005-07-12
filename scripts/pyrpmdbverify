@@ -186,9 +186,6 @@ def verifyReference(hash, tag, id):
         if key == '':
             key = "\x00"
         if tag == "requirename":
-            # Skip rpmlib() requirenames...
-            if key.startswith("rpmlib("):
-                continue
             # Skip install prereqs, just like rpm does...
             if isInstallPreReq(pkg["requireflags"][idx]):
                 continue

@@ -580,13 +580,13 @@ class RpmPackage(RpmData):
         # File is not a regular file -> just do it
         if not S_ISREG(rfi.mode):
             return 1
+        plist = db.filenames.search(rfi.filename)
         # File not already in db -> write it
-        if not db.filenames.has_key(rfi.filename):
+        if len(plist) == 0:
             return 1
         # Don't install ghost files ;)
         if rfi.flags & RPMFILE_GHOST:
             return 0
-        plist = db.filenames[rfi.filename]
         # Not a config file -> always overwrite it, resolver didn't say we
         # had any conflicts ;)
         if rfi.flags & RPMFILE_CONFIG == 0:

@@ -944,7 +944,7 @@ class RpmDatabase:
         self.config = config
         self.source = source
         self.buildroot = buildroot
-        self.filenames = {}
+        self.filenames = FilenamesList(self.config)
         self.pkglist = {}
         self.keyring = openpgp.PGPKeyRing()
         self.is_read = 0
@@ -973,10 +973,7 @@ class RpmDatabase:
     def _addPkg(self, pkg):
         """Internal add of package to lists and hashes"""
         nevra = pkg.getNEVRA()
-        for filename in pkg["filenames"]:
-            if not self.filenames.has_key(filename):
-                self.filenames[filename] = []
-            self.filenames[filename].append(pkg)
+        self.filenames.addPkg(pkg)
         self.pkglist[nevra] = pkg
 
     def erasePkg(self, pkg, nowrite=None):
@@ -984,16 +981,8 @@ class RpmDatabase:
 
     def _erasePkg(self, pkg):
         """Internal erase of package from lists and hashes"""
-        nevra = pkg.getNEVRA()
-        for filename in pkg["filenames"]:
-            # Check if the filename is in the filenames list and was referenced
-            # by the package we want to remove
-            if not self.filenames.has_key(filename) or \
-               not pkg in self.filenames[filename]:
-                self.config.printWarning(1, "%s: File '%s' not found in PyDB during erase"\
-                    % (nevra, filename))
-                continue
-        del self.pkglist[nevra]
+        self.filenames.removePkg(pkg)
+        del self.pkglist[pkg.getNEVRA()]
 
     def getPackage(self, name):
         if not self.pkglist.has_key(name):
@@ -1006,10 +995,14 @@ class RpmDatabase:
     def isInstalled(self, pkg):
         return pkg in self.pkglist.values()
 
-    def isDuplicate(self, file):
-        if self.filenames.has_key(file) and len(self.filenames[file]) > 1:
-            return 1
-        return 0
+    def isDuplicate(self, dirname, filename=None):
+        if filename != None:
+            return len(self.filenames.path[dirname][filename]) > 1
+        tmpdir = os.path.dirname(dirname)
+        if tmpdir[-1] != "/":
+            tmpdir += "/"
+        basename = os.path.basename(dirname)
+        return len(self.filenames.path[tmpdir][basename]) > 1
 
     def getNumPkgs(self, name):
         count = 0
@@ -1291,10 +1284,6 @@ class RpmPyDB(RpmDatabase):
                 self.config.printWarning(0, "Invalid header %s in database: %s"
                                          % (nevra, e))
                 continue
-            for filename in pkg["filenames"]:
-                if not self.filenames.has_key(filename):
-                    self.filenames[filename] = []
-                self.filenames[filename].append(pkg)
             self.pkglist[nevra] = pkg
         if os.path.isdir(dbpath+"/pubkeys"):
             namelist = os.listdir(dbpath+"/pubkeys")
@@ -1588,7 +1577,8 @@ class RpmRepo(RpmDatabase):
         root = doc.getRootElement()
         if root == None:
             return 0
-        return self.__parseNode(root.children)
+        ret = self.__parseNode(root.children)
+        return ret
 
     def createRepo(self):
         self.filerequires = []
@@ -1887,23 +1877,30 @@ class RpmRepo(RpmDatabase):
         if root == None:
             return 0
         self.filelist_imported = 1
-        return self.__parseNode(root.children)
+        ret = self.__parseNode(root.children)
+        return ret
 
     def __parseNode(self, node):
         while node != None:
             if node.type != "element":
+                tmpnode = node
                 node = node.next
+                tmpnode.freeNode()
                 continue
             if node.name == "package" and node.prop("type") == "rpm":
                 pkg = self.__parsePackage(node.children)
                 if pkg["arch"] == "src" or self.__isExcluded(pkg):
+                    tmpnode = node
                     node = node.next
+                    tmpnode.freeNode()
                     continue
                 pkg["yumreponame"] = self.reponame
                 self.pkglist[pkg.getNEVRA()] = pkg
             if node.name == "package" and node.prop("name") != None:
                 self.__parseFilelist(node.children, node.prop("name"), node.prop("arch"))
+            tmpnode = node
             node = node.next
+            tmpnode.freeNode()
         return 1
 
     def __isExcluded(self, pkg):
