@@ -161,34 +161,56 @@ class FilenamesList:
         self.clear()
 
     def clear(self):
-        self.filename = { }
-        self.multi = { }        
+        self.path = { }
+        self.multi = { }
 
     def addPkg(self, rpm):
-        for name in rpm["filenames"]:
-            if not self.filename.has_key(name):
-                self.filename[name] = [ ]
+        if rpm["basenames"] == None:
+            return
+        for i in xrange (len(rpm["basenames"])):
+            dirname = rpm["dirnames"][rpm["dirindexes"][i]]
+
+            if not self.path.has_key(dirname):
+                self.path[dirname] = { }
+
+            basename = rpm["basenames"][i]
+            if not self.path[dirname].has_key(basename):
+                self.path[dirname][basename] = [ ]
             else:
-                self.multi[name] = None
-            self.filename[name].append(rpm)
+                if not self.multi.has_key(dirname):
+                    self.multi[dirname] = { }
+                self.multi[dirname][basename] = 1
+            self.path[dirname][basename].append(rpm)
 
     def removePkg(self, rpm):
-        for name in rpm["filenames"]:
-            f = self.filename[name]
-            l = len(f)
-            if   l == 1:
-                if f[0] == rpm:
-                    del self.filename[name]
-            elif rpm in f:
-                if l == 2:
-                    del self.multi[name]
-                f.remove(rpm)
+        if rpm["basenames"] == None:
+            return
+        for i in xrange (len(rpm["basenames"])):
+            dirname = rpm["dirnames"][rpm["dirindexes"][i]]
+
+            if not self.path.has_key(dirname):
+                continue
+            
+            basename = rpm["basenames"][i]
+            if self.path[dirname].has_key(basename):
+                self.path[dirname][basename].remove(rpm)
+
+            if len(self.path[dirname][basename]) == 1:
+                if self.multi.has_key(dirname) and \
+                       self.multi[dirname].has_key(basename):
+                    del self.multi[dirname][basename]
+                    if len(self.multi[dirname]) == 0:
+                        del self.multi[dirname]
+            elif len(self.path[dirname][basename]) == 0:
+                del self.path[dirname][basename]
 
     def search(self, name):
         l = [ ]
-        for r in self.filename.get(name, [ ]):
-            if r not in l:
-                l.append(r)
+        dirname = os.path.dirname(name) + "/"
+        basename = os.path.basename(name)
+        if self.path.has_key(dirname) and \
+               self.path[dirname].has_key(basename):
+            l = self.path[dirname][basename]
         return l
 
 # ----------------------------------------------------------------------------
@@ -603,18 +625,22 @@ class RpmResolver(RpmList):
         if self.config.checkinstalled == 0 and len(self.installs) == 0:
             # no conflicts if there is no new package
             return conflicts
-        
-        for filename in self.filenames_list.multi.keys():
-            self.config.printDebug(1, "Checking for file conflicts for '%s'" % filename)
-            s = self.filenames_list.search(filename)
-            for j in xrange(len(s)):
-                fi1 = s[j].getRpmFileInfo(filename)
-                for k in xrange(j+1, len(s)):
-                    if not self._hasFileConflict(s[j], s[k], filename, fi1):
-                        continue
-                    if s[j] not in conflicts:
-                        conflicts[s[j]] = [ ]
-                    conflicts[s[j]].append((filename, s[k]))
+
+        for dirname in self.filenames_list.multi.keys():
+            for _filename in self.filenames_list.multi[dirname].keys():
+                filename = dirname + _filename
+                self.config.printDebug(1, "Checking for file conflicts for '%s'" % filename)
+                s = self.filenames_list.search(filename)
+                for j in xrange(len(s)):
+                    fi1 = s[j].getRpmFileInfo(filename)
+                    for k in xrange(j+1, len(s)):
+                        if not self._hasFileConflict(s[j], s[k], filename, fi1):
+                            continue
+                        if s[j] not in conflicts:
+                            conflicts[s[j]] = [ ]
+                        conflicts[s[j]].append((filename, s[k]))
+
+
         return conflicts
     # ----
 

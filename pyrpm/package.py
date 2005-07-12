@@ -25,14 +25,56 @@ from io import getRpmIOFactory
 import openpgp
 
 
+class _RpmFilenamesIterator:
+    def __init__(self, pkg):
+        self.pkg = pkg
+        self.idx = -1
+
+    def __iter__(self):
+        return self
+
+    def __len__(self):
+        if self.pkg["basenames"] != None and self.pkg["dirnames"] != None:
+            return len(self.pkg["basenames"])
+        return 0
+
+    def __getitem__(self, i):
+        return self.pkg["dirnames"][self.pkg["dirindexes"][i]] \
+               + self.pkg["basenames"][i]
+
+    def index(self, name):
+        basename = os.path.basename(name)
+        i = 0
+        while i < len(self.pkg["basenames"]):
+            i = self.pkg["basenames"].index(basename, i)
+            if i < 0:
+                break
+            dirname = os.path.dirname(name) + "/"
+            if self.pkg["dirnames"][self.pkg["dirindexes"][i]] == dirname:
+                return i
+            i += 1
+        raise ValueError
+
+    def next(self):
+        self.idx += 1
+        if not self.pkg.has_key("basenames") or \
+               self.idx == len(self.pkg["basenames"]):
+            raise StopIteration
+        return self[self.idx]
+
+
 class RpmData(dict):
-    __getitem__ = dict.get              # Return None if key is not found
     __hashcount__ = 0
     def __init__(self, config):
         dict.__init__(self)
         self.config = config
         self.hash = RpmData.__hashcount__
         RpmData.__hashcount__ += 1
+
+    def __getitem__(self, item):
+        if item == "filenames":
+            return _RpmFilenamesIterator(self)
+        return dict.get(self, item)
 
     def __repr__(self):
         return "FastRpmData: <0x" + str(self.hash) + ">"
@@ -469,6 +511,7 @@ class RpmPackage(RpmData):
                 self[key] = value
             (key, value) = self.io.read()
         self.range_payload = value
+
         self.generateFileNames()
         self.header_read = 1
 
@@ -617,19 +660,23 @@ class RpmPackage(RpmData):
         return do_write
 
     def generateFileNames(self):
-        """Generate self["filenames"] from self["oldfilenames"] or
-        self["dirnames"], self["dirindexes"] and self["basenames"]."""
-
-        self["filenames"] = []
-        if self["oldfilenames"] != None:
-            self["filenames"] = self["oldfilenames"]
-            return
-        if self["dirnames"] == None or self["dirindexes"] == None:
-            return
-        for i in xrange (len(self["basenames"])):
-            filename = self["dirnames"][self["dirindexes"][i]] \
-                + self["basenames"][i]
-            self["filenames"].append(filename)
+        """Generate basenames, dirnames and dirindexes for old packages from
+        oldfilenames"""
+        if self["oldfilenames"] != None and len(self["oldfilenames"]) > 0:
+            self["basenames"] = [ ]
+            self["dirnames"] = [ ]
+            self["dirindexes"] = [ ]
+            for filename in self["oldfilenames"]:
+                basename = os.path.basename(filename)
+                dirname = os.path.dirname(filename)+"/"
+                try:
+                    dirindex = self["dirnames"].index(dirname)
+                except:
+                    self["dirnames"].append(dirname)
+                    dirindex = self["dirnames"].index(dirname)
+                    
+                self["basenames"].append(basename)
+                self["dirindexes"].append(dirindex)
 
     def __generateFileInfoList(self):
         """Build self.rfilist: {path name: RpmFileInfo}"""
