@@ -57,7 +57,7 @@ def writeDB4(db, tag, id, packages, useidx=True, func=lambda x:str(x)):
                 tnamehash[key] = 1
         if not db.has_key(key):
             db[key] = ""
-        db[key] += pack("ii", id, idx)
+        db[key] += pack("II", id, idx)
         if not useidx:
             return
 
@@ -80,7 +80,10 @@ def writeRpmDB(path, packages):
     sigmd5_db         = hashopen(path+"/Sigmd5", "n")
     triggername_db    = hashopen(path+"/Triggername", "n")
     rpmio = RpmFileIO(rpmconfig, "dummy")
+    maxid = 0
     for id in packages.keys():
+        if maxid < id:
+            maxid = id
         print "Writing rpmdb for package %s" % packages[id].getNEVRA()
         writeDB4(basenames_db, "basenames", id, packages)
         writeDB4(conflictname_db, "conflictname", id, packages)
@@ -90,7 +93,7 @@ def writeRpmDB(path, packages):
         writeDB4(installtid_db, "installtid", id, packages, True, lambda x:pack("i", x))
         writeDB4(name_db, "name", id, packages, False)
         (headerindex, headerdata) = rpmio._generateHeader(packages[id], 4)
-        packages_db[pack("i", id)] = headerindex[8:]+headerdata
+        packages_db[pack("I", id)] = headerindex[8:]+headerdata
         writeDB4(providename_db, "providename", id, packages)
         writeDB4(provideversion_db, "provideversion", id, packages)
         writeDB4(requirename_db, "requirename", id, packages)
@@ -98,6 +101,7 @@ def writeRpmDB(path, packages):
         writeDB4(sha1header_db, "install_sha1header", id, packages)
         writeDB4(sigmd5_db, "install_sigmd5", id, packages)
         writeDB4(triggername_db, "triggername", id, packages)
+    packages_db[pack("I", 0)] = pack("I", self.maxid)
 
 #
 # Main

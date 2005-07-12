@@ -594,9 +594,9 @@ def readPackages(dbpath):
         rpmio = RpmFileIO(rpmconfig, "dummy", verify=1)
         pkg = package.RpmPackage(rpmconfig, "dummy")
         data = db[key]
-        val = unpack("i", key)[0]
+        val = unpack("I", key)[0]
         if val != 0:
-            (indexNo, storeSize) = unpack("!ii", data[0:8])
+            (indexNo, storeSize) = unpack("!II", data[0:8])
             indexdata = data[8:indexNo*16+8]
             storedata = data[indexNo*16+8:]
             pkg["signature"] = {}
