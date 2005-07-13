@@ -143,14 +143,12 @@ class RpmController:
         if not self.config.ignoresize:
             if self.config.timer:
                 time1 = clock()
-            mhash = getFreeDiskspace(operations)
+            ret = getFreeDiskspace(self.config, operations)
             if self.config.timer:
                 self.config.printInfo(0, "getFreeDiskspace took %s seconds\n" % \
                              (clock() - time1))
-            for dev in mhash.keys():
-                if mhash[dev][0] < 31457280:
-                    self.config.printInfo(0, "Less than 30MB of diskspace left on device %s for operation" % hex(dev))
-                    sys.exit(1)
+            if not ret:
+                sys.exit(1)
         return operations
 
     def runOperations(self, operations):

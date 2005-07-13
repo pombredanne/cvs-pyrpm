@@ -324,10 +324,13 @@ def updateDigestFromFile(digest, fd, bytes = None):
 # - no hardlink detection
 # - no information about not-installed files like multilib files, left out
 #   docu files etc
-def getFreeDiskspace(operations):
+def getFreeDiskspace(config, operations):
     freehash = {}
     minfreehash = {}
     dirhash = {}
+    mountpoint = { }
+    ret = 1
+
     if rpmconfig.buildroot:
         br = rpmconfig.buildroot
     else:
@@ -360,6 +363,12 @@ def getFreeDiskspace(operations):
                 statvfs = os.statvfs(devname)
                 freehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
                 minfreehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
+            if not mountpoint.has_key(dev):
+                while len(dirname) > 0:
+                    if os.path.ismount(dirname):
+                        mountpoint[dev] = dirname
+                        break
+                    dirname = os.path.dirname(dirname)
         dirindexes = pkg["dirindexes"]
         filesizes = pkg["filesizes"]
         filemodes = pkg["filemodes"]
@@ -383,8 +392,14 @@ def getFreeDiskspace(operations):
         for dev in minfreehash.keys():
             # Less than 30MB space left on device?
             if minfreehash[dev][0] < 31457280:
-                printInfo(1, "%s: Less than 30MB of diskspace left on device %s\n" % (pkg.getNEVRA(), hex(dev)))
-    return minfreehash
+                config.printInfo(1, "%s: Less than 30MB of diskspace left on %s\n" % (pkg.getNEVRA(), mountpoint[dev]))
+
+    for dev in minfreehash.keys():
+        if minfreehash[dev][0] < 31457280:
+            config.printInfo(0, "Less than 30MB of diskspace left on %s for operation\n" % mountpoint[dev])
+            ret = 0
+
+    return ret
 
 def cacheLocal(url, subdir):
     from urlgrabber import urlgrab
