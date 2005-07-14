@@ -93,8 +93,8 @@ def main():
         sys.exit(1)
     yum.setCommand(args[0])
     yum.processArgs(args[1:])
-    yum.runDepRes()
-    yum.runCommand()
+    if yum.runDepRes():
+        yum.runCommand()
     if lockfile:
         unlink(lockfile)
 

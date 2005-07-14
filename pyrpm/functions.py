@@ -22,6 +22,17 @@ from types import TupleType, ListType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from bsddb import hashopen
 from struct import unpack
+try:
+    from tempfile import mkstemp
+except:
+    print "Error: Couldn't import tempfile python module. Only check scripts available."
+
+try:
+    from urlgrabber import urlgrab
+    from urlgrabber.grabber import URLGrabError
+except:
+    print "Error: Couldn't import urlgrabber python module. Only check scripts available."
+
 
 from io import *
 import openpgp
@@ -36,7 +47,6 @@ DIGEST_CHUNK = 65536
 
 # Collection of class indepedant helper functions
 def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
-    from tempfile import mkstemp
     if prog == None:
         prog = "/bin/sh"
     if prog == "/bin/sh" and script == None:
@@ -401,9 +411,7 @@ def getFreeDiskspace(config, operations):
 
     return ret
 
-def cacheLocal(url, subdir):
-    from urlgrabber import urlgrab
-    from urlgrabber.grabber import URLGrabError
+def cacheLocal(url, subdir, force=0):
     if not url.startswith("http://"):
         return url
     if not os.path.isdir("/var/cache/pyrpm/%s" % subdir):

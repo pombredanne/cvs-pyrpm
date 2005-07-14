@@ -170,9 +170,10 @@ class RpmYum:
                 self.command.endswith("upgrade") :
                 self.__handleObsoletes(pkg)
         self.pkgs = []
-        self.__runDepResolution()
+        ret = self.__runDepResolution()
         if self.config.timer:
             self.config.printInfo(0, "runDepRes() took %s seconds\n" % (clock() - time1))
+        return ret
 
     def runCommand(self):
         if self.config.timer:
@@ -264,7 +265,7 @@ class RpmYum:
                                      pkg.getNEVRA())
             for dep in unresolved[pkg]:
                 self.config.printInfo(1, "\t" + depString(dep)+"\n")
-        sys.exit(1)
+        return 0
 
     def __handleUnresolvedDeps(self):
         unresolved = self.opresolver.getUnresolvedDependencies()

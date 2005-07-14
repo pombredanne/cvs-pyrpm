@@ -83,7 +83,8 @@ def main():
             yum.setCommand("remove")
             print "Erasing package %s" % pkg.getNEVRA()
             resolver.erase(pkg)
-        yum.runDepRes()
+        if not yum.runDepRes():
+            continue
         yum.runCommand()
 
 if __name__ == '__main__':
