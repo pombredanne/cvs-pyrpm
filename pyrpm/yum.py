@@ -18,6 +18,7 @@
 #
 
 
+from gc import collect
 from time import clock, time
 from hashlist import HashList
 from resolver import RpmResolver

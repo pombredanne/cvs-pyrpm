@@ -213,6 +213,7 @@ class RpmController:
                 subop = operations[:pkgsperfork]
             else:
                 del operations
+                gc.collect()
                 if self.config.buildroot:
                     if self.onlysrpms:
                         os.chdir(self.config.buildroot)

@@ -417,9 +417,14 @@ def cacheLocal(url, subdir, force=0):
     if not os.path.isdir("/var/cache/pyrpm/%s" % subdir):
         os.makedirs("/var/cache/pyrpm/%s" % subdir)
     try:
-        f = urlgrab(url, "/var/cache/pyrpm/%s/%s" % 
-                    (subdir, os.path.basename(url)),
-                    reget='check_timestamp')
+        if force:
+            f = urlgrab(url, "/var/cache/pyrpm/%s/%s" % 
+                        (subdir, os.path.basename(url)))
+        else:
+            f = urlgrab(url, "/var/cache/pyrpm/%s/%s" %
+                        (subdir, os.path.basename(url)),
+                        reget='check_timestamp')
+
     except URLGrabError, e:
         # urlgrab fails with invalid range for already completely transfered
         # files, pretty strange to me to be honest... :)

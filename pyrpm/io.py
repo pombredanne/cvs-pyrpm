@@ -1041,6 +1041,7 @@ class RpmDB(RpmDatabase):
     def read(self):
         if self.is_read:
             return 1
+        self.is_read = 1
         dbpath = self._getDBPath()
         if not os.path.isdir(dbpath):
             return 1
@@ -1101,7 +1102,6 @@ class RpmDB(RpmDatabase):
             pkg.io = None
             pkg.header_read = 1
             rpmio.hdr = {}
-        self.is_read = 1
         return 1
 
     def write(self):
@@ -1270,6 +1270,7 @@ class RpmPyDB(RpmDatabase):
     def read(self):
         if self.is_read:
             return 1
+        self.is_read = 1
         dbpath = self._getDBPath()
         if not os.path.isdir(dbpath+"/headers"):
             return 1
@@ -1293,7 +1294,6 @@ class RpmPyDB(RpmDatabase):
                 data = file(dbpath+"/pubkeys/"+name).read()
                 for k in openpgp.parsePGPKeys(data):
                     self.keyring.addKey(k)
-        self.is_read = 1
         return 1
 
     def write(self):
@@ -1374,6 +1374,7 @@ class RpmSQLiteDB(RpmDatabase):
     def read(self):
         if not self.cx or self.is_read:
             return 1
+        self.is_read = 1
         self.__initDB()
         dbpath = self._getDBPath()
         cu = self.cx.cursor()
@@ -1401,7 +1402,6 @@ class RpmSQLiteDB(RpmDatabase):
             pkg.io = None
             pkg.header_read = 1
         cu.execute("commit")
-        self.is_read = 1
         return 1
 
     def write(self):
@@ -1562,6 +1562,7 @@ class RpmRepo(RpmDatabase):
         self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
 
     def read(self):
+        self.is_read = 1
         if not self.source.startswith("file:/"):
             filename = self.source
         else:
@@ -1570,7 +1571,7 @@ class RpmRepo(RpmDatabase):
                 idx = filename[2:].index("/")
                 filename = filename[idx+2:]
         filename = functions.cacheLocal(filename + "/repodata/primary.xml.gz",
-                              self.reponame)
+                              self.reponame, 1)
         if not filename:
             return 0
         reader = libxml2.newTextReaderFilename(filename)
@@ -1596,7 +1597,7 @@ class RpmRepo(RpmDatabase):
                 idx = filename[2:].index("/")
                 filename = filename[idx+2:]
         filename = functions.cacheLocal(filename + "/repodata/filelists.xml.gz",
-                              self.reponame)
+                              self.reponame, 1)
         if not filename:
             return 0
         reader = libxml2.newTextReaderFilename(filename)
