@@ -56,6 +56,7 @@
 #   and "0" epoch (change this for createrepo)
 # - check for #% in spec files
 # - streaming read for cpio files
+# - check OpenGPG signatures
 # things that look less important to implement:
 # - add streaming support to bzip2 compressed payload
 # - lua scripting support
@@ -648,7 +649,7 @@ rpmsigtagrequired = ("md5",)
 possible_archs = {"noarch":1, "i386":1, "i486":1, "i586":1, "i686":1,
     "athlon":1, "pentium3":1, "pentium4":1, "x86_64":1, "ia32e":1, "ia64":1,
     "alpha":1, "alphaev6":1, "axp":1, "sparc":1, "sparc64":1,
-    "s390":1, "s390x":1, "ia64":1,
+    "s390":1, "s390x":1,
     "ppc":1, "ppc64":1, "ppc64iseries":1, "ppc64pseries":1, "ppcpseries":1,
     "ppciseries":1, "ppcmac":1, "ppc8260":1, "m68k":1,
     "arm":1, "armv4l":1, "mips":1, "mipseb":1, "mipsel":1, "hppa":1, "sh":1 }
@@ -881,11 +882,11 @@ class CPIO:
         filename = self.__readDataPad(int(data[94:102], 16), 110).rstrip("\x00")
         if filename == "TRAILER!!!":
             return None
-        if filename.startswith("./"):
+        if filename[:2] == "./":
             filename = filename[1:]
         if not self.issrc and not filename.startswith("/"):
             filename = "%s%s" % ("/", filename)
-        if filename.endswith("/") and len(filename) > 1:
+        if len(filename) > 1 and filename[-1] == "/":
             filename = filename[:-1]
         if self.verify:
             # printconf-0.3.61-4.1.i386.rpm is an example where paths are
@@ -985,7 +986,7 @@ class ReadRpm:
     def closeFd(self):
         self.fd = None
 
-    def relocatedFile(self, filename):
+    def __relocatedFile(self, filename):
         for (old, new) in self.relocated:
             if not filename.startswith(old):
                 continue
@@ -1275,7 +1276,7 @@ class ReadRpm:
             uid = self.uid.ugid[user]
             gid = self.gid.ugid[group]
         if self.relocated:
-            filename = self.relocatedFile(filename)
+            filename = self.__relocatedFile(filename)
         filename = "%s%s" % (self.buildroot, filename)
         dirname = os.path.dirname(filename)
         makeDirs(dirname)
@@ -1292,7 +1293,7 @@ class ReadRpm:
                     for j in di:
                         if self.relocated:
                             fn2 = "%s%s" % (self.buildroot,
-                                self.relocatedFile(filenames[j]))
+                                self.__relocatedFile(filenames[j]))
                         else:
                             fn2 = "%s%s" % (self.buildroot, filenames[j])
                         dirname = os.path.dirname(fn2)
