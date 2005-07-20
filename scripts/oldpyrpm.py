@@ -57,9 +57,14 @@
 # - check for #% in spec files
 # - streaming read for cpio files
 # - check OpenGPG signatures
+# - Python is bad at handling lots of small data and is getting rather
+#   slow. At some point it may make sense to write again a librpm type
+#   thing to have a core part in C and testing/outer decisions in python.
+#   Due to the large data rpm is handling this is kind of tricky.
 # things that look less important to implement:
 # - add streaming support to bzip2 compressed payload
 # - lua scripting support
+# - add suppoprt for drpm (delta rpm) payloadformat
 # possible rpm format changes:
 # - Do not generate filecontexts tags if they are empty, maybe not at all.
 # - "cookie" could go away, the same info is already present.
@@ -1082,8 +1087,7 @@ class ReadRpm:
                 checkSize += (8 - (checkSize % 8)) % 8
             checkSize += self.__verifyTag(index, fmt2, hdrtags)
         if checkSize != storeSize:
-            # XXX: add a check for very old rpm versions here, seems this
-            # is triggered for a few (legacy) RHL5.x rpm packages
+            # Seems this is triggered for a few (legacy) RHL5.x rpm packages.
             self.printErr("storeSize/checkSize is %d/%d" % (storeSize,
                 checkSize))
 
@@ -1406,7 +1410,6 @@ class ReadRpm:
             return
         if self["payloadformat"] not in [None, "cpio"]:
             self.printErr("unknown payload format")
-            # XXX: handel drpm data format
             return
         c = CPIO(fd, self.issrc, cpiosize, self.verify, self.strict)
         if c.readCpio(func, filenamehash, devinode, filenames) == None:
@@ -1963,54 +1966,64 @@ class RpmTree:
             self.h[r] = [newest]
 
 def verifyStructure(packages, phash, tag, useidx=True):
+    # Verify that all data is also present in /var/lib/rpm/Packages.
     for tid in phash.keys():
+        mytag = phash[tid]
         if not packages.has_key(tid):
             print "Error %s: Package id %s doesn't exist" % (tag, tid)
             continue
         pkgtag = packages[tid][tag]
-        mytag = phash[tid]
         for idx in mytag.keys():
-            key = mytag[idx]
             if useidx:
                 try:
                     val = pkgtag[idx]
                 except:
                     print "Error %s: index %s is not in package" % (tag, idx)
             else:
+                if idx != 0:
+                    print "Error %s: index %s out of range" % (tag, idx)
                 val = pkgtag
-            if key != val:
-                print "Error %s: %s != %s in package %s" % (tag, key, val,
+            if mytag[idx] != val:
+                print "Error %s: %s != %s in package %s" % (tag, mytag[idx], val,
                     packages[tid].getFilename())
+    # Go through /var/lib/rpm/Packages and check if data is correctly
+    # copied over to the other files.
     for tid in packages.keys():
         pkg = packages[tid]
         refhash = pkg[tag]
-        tnamehash = {}
         if not refhash:
-            # XXX check for them to be empty?
             continue
+        phashtid = None
+        if phash.has_key(tid):
+            phashtid = phash[tid]
         if not useidx:
-            if refhash != phash[tid][0]:
-                print "wrong data", refhash, tid, phash[tid]
-        else:
-            for idx in xrange(len(refhash)):
-                key = refhash[idx]
-                if tag == "requirename" and \
-                    isInstallPreReq(pkg["requireflags"][idx]):
+            # Single entry with data:
+            if refhash != phashtid[0]:
+                print "wrong data", refhash, tid, phashtid
+            continue
+        tnamehash = {}
+        for idx in xrange(len(refhash)):
+            key = refhash[idx]
+            # requirename only stored if not InstallPreReq
+            if tag == "requirename" and \
+                isInstallPreReq(pkg["requireflags"][idx]):
+                continue
+            # only include filemd5s for regular files
+            if tag == "filemd5s" and not S_ISREG(pkg["fileflags"][idx]):
+                continue
+            # Equal triggernames aren't added multiple times for
+            # the same package. Why??
+            if tag == "triggername":
+                if tnamehash.has_key(key):
                     continue
-                if tag == "filemd5s" and not S_ISREG(pkg["fileflags"][idx]):
-                    continue
-                # equal triggernames aren't added multiple times for
-                # the same package
-                if tag == "triggername":
-                    if tnamehash.has_key(key):
-                        continue
-                    tnamehash[key] = 1
-                try:
-                    if phash[tid][idx] != key:
-                        print "wrong data"
-                except:
-                    print "Error %s: index %s is not in package %s" % (tag,
-                        idx, tid)
+                tnamehash[key] = 1
+            # Real check for the actual data:
+            try:
+                if phashtid[idx] != key:
+                    print "wrong data"
+            except:
+                print "Error %s: index %s is not in package %s" % (tag,
+                    idx, tid)
 
 def readPackages(dbpath):
     import bsddb, cStringIO
@@ -2231,8 +2244,12 @@ def checkDirs(repo):
         for (f, mode, user, group) in zip(rpm.filenames, rpm["filemodes"],
             rpm["fileusername"], rpm["filegroupname"]):
             # check if startup scripts are in wrong directory
-            if f.startswith("/etc/init.d"):
+            if f.startswith("/etc/init.d/"):
                 print "init.d:", rpm.filename, f
+            # output any package having debug stuff included
+            if not rpm.filename.endswith("-debuginfo") and \
+                f.startswith("/usr/lib/debug"):
+                print "debug stuff in normal package:", rpm.filename, f
             # collect all directories into "dirs"
             if not S_ISDIR(mode):
                 continue
