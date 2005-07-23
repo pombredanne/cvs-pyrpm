@@ -696,6 +696,8 @@ def writeHeader(tags, taghash, region, pad=1, skip_tags=None, useinstall=1,
     newrpm=1):
     """Use the data "tags" and change it into a rpmtag header."""
     (offset, store, stags1, stags2, stags3) = (0, [], [], [], [])
+    # Sort by number and also first normal tags, then install_keys tags
+    # and at the end the region tag.
     for tagname in tags.keys():
         tagnum = taghash[tagname][0]
         if tagname == region:
@@ -2289,14 +2291,43 @@ def readRpmdb(dbpath="/var/lib/rpm/"):
             print pkg.getFilename(), \
                 "bad sha1: %s / %s" % (sha1header, ctx.hexdigest())
 
+def sameSrcRpm(a, b):
+    # Packages with the same md5sum for the payload are the same.
+    amd5sum = a.sig["md5"]
+    if amd5sum != None and amd5sum == b.sig["md5"]:
+        return 1
+    # Check if all regular files are the same in both packages.
+    afilemd5s = a["filemd5s"]
+    afilemodes = a["filemodes"]
+    amd5s = []
+    for i in xrange(len(afilemd5s)):
+        if S_ISREG(afilemodes[i]):
+            amd5s.append(afilemd5s[i])
+    bfilemd5s = b["filemd5s"]
+    bfilemodes = b["filemodes"]
+    bmd5s = []
+    for i in xrange(len(bfilemd5s)):
+        if S_ISREG(bfilemodes[i]):
+            bmd5s.append(bfilemd5s[i])
+    for a in amd5s:
+        if a not in bmd5s:
+            return 0
+    for a in bmd5s:
+        if a not in amd5s:
+            return 0
+    return 1
 
 def checkSrpms():
     r = RpmTree()
     for d in ("/var/www/html/mirror/rhn/SRPMS",
         "/var/www/html/mirror/updates-rhel/2.1",
         "/var/www/html/mirror/updates-rhel/3",
-        "/var/www/html/mirror/updates-rhel/4"):
-        r.addDirectory(d)
+        "/var/www/html/mirror/updates-rhel/4",
+        "/mnt/hdb4/data/cAos/3.5/updates/SRPMS",
+        "/mnt/hdb4/data/cAos/4.1/os/SRPMS",
+        "/mnt/hdb4/data/cAos/4.1/updates/SRPMS"):
+        if os.path.isdir(d):
+            r.addDirectory(d)
     r.sortVersions()
     # Remove identical rpms. Use the md5sum to check for
     # ones where header+payload are the same (then only
@@ -2306,8 +2337,7 @@ def checkSrpms():
         i = 0
         while i < len(v) - 1:
             if cmpRpms(v[i], v[i + 1]) == 0:
-                md5sum = v[i].sig["md5"]
-                if md5sum != None and md5sum == v[i + 1].sig["md5"]:
+                if sameSrcRpm(v[i], v[i + 1]):
                     v.remove(v[i])
                 else:
                     print "duplicate rpms:", v[i].filename, v[i + 1].filename
