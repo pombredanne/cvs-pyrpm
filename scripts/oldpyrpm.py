@@ -56,7 +56,15 @@
 #   and "0" epoch (change this for createrepo)
 # - check for #% in spec files
 # - streaming read for cpio files
+# - Try writing the sig header also for older rpm packages.
 # - check OpenGPG signatures
+# - i386 rpm extraction on ia64?
+# - add a special flag for the rpmdb rpmtag additions and check them
+# - While checking rpmdb detect relocated rpm packages instead of
+#   warning about wrong data.
+# - Duplicate tags can be available if a package has been signed twice
+#   or e.g. in the case of relocatable packages for the header in the
+#   rpmdb. Do we need to change data handling for that case?
 # - Python is bad at handling lots of small data and is getting rather
 #   slow. At some point it may make sense to write again a librpm type
 #   thing to have a core part in C and testing/outer decisions in python.
@@ -79,7 +87,7 @@ import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
 import os, os.path, md5, sha, pwd, grp, zlib, errno
-from struct import unpack
+from struct import pack, unpack
 from commands import getoutput
 
 if sys.version_info < (2, 3):
@@ -601,6 +609,12 @@ for v in rpmtag.values():
         raise ValueError, "rpmtag has wrong entries"
 del v
 
+# List of special rpmdb tags, like also visible above.
+install_keys = {"install_size_in_sig":1, "install_md5":1,
+    "install_unknownchecksum":1, "install_dsaheader":1, "install_sha1header":1,
+    "installtime":1, "filestates":1, "instprefixes":1, "installcolor":1,
+    "installtid":1, "install_badsha1_1":1, "install_badsha1_2":1}
+
 # Required tags in a header.
 rpmtagrequired = ("name", "version", "release", "arch", "rpmversion")
 
@@ -677,6 +691,88 @@ possible_scripts = {
     "/usr/sbin/glibc_post_upgrade.x86_64": 1,
     "/usr/sbin/libgcc_post_upgrade": 1 }
 
+
+def writeHeader(tags, taghash, region, pad=1, skip_tags=None, useinstall=1,
+    newrpm=1):
+    """Use the data "tags" and change it into a rpmtag header."""
+    (offset, store, stags1, stags2, stags3) = (0, [], [], [], [])
+    for tagname in tags.keys():
+        tagnum = taghash[tagname][0]
+        if tagname == region:
+            stags3.append(tagnum)
+        elif skip_tags and skip_tags.has_key(tagname):
+            pass
+        elif useinstall and install_keys.has_key(tagname):
+            stags2.append(tagnum)
+        else:
+            stags1.append(tagnum)
+    stags1.sort()
+    stags2.sort()
+    stags1.extend(stags2)
+    if newrpm:
+        stags1.extend(stags3)
+    else:
+        xx = stags1.pop()
+        stags1.extend(stags3)
+        stags1.append(xx)
+    indexdata = []
+    for tagnum in stags1:
+        tagname = taghash[tagnum][4]
+        value = tags[tagname]
+        ttype = taghash[tagnum][1]
+        count = len(value)
+        pad = 0
+        if ttype == RPM_ARGSTRING:
+            if type(value) == type(""):
+                ttype = RPM_STRING
+            else:
+                ttype = RPM_STRING_ARRAY
+        elif ttype == RPM_GROUP:
+            # XXX this should get stored from the reading side if possible
+            ttype = RPM_I18NSTRING
+        if ttype == RPM_INT32:
+            if taghash[tagnum][3] & 8:
+                data = pack("!%di" % count, *value)
+            else:
+                data = pack("!%dI" % count, *value)
+            pad = (4 - (offset % 4)) % 4
+        elif ttype == RPM_STRING:
+            count = 1
+            data = "%s\x00" % value
+        elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
+            #data = ""
+            #for i in xrange(count):
+            #    data += "%s\x00" % value[i]
+            data = "".join( [ "%s\x00" % value[i] for i in xrange(count) ] )
+        elif ttype == RPM_BIN:
+            data = value
+        elif ttype == RPM_INT16:
+            data = pack("!%dH" % count, *value)
+            pad = (2 - (offset % 2)) % 2
+        elif ttype == RPM_INT8:
+            data = pack("!%dB" % count, *value)
+        elif ttype == RPM_INT64:
+            data = pack("!%dQ" % count, *value)
+            pad = (8 - (offset % 8)) % 8
+        elif ttype == RPM_CHAR:
+            data = pack("!%dc" % count, *value)
+        if pad:
+            offset += pad
+            store.append("\x00" * pad)
+        store.append(data)
+        index = pack("!IIII", tagnum, ttype, offset, count)
+        offset += len(data)
+        if tagname == region:
+            indexdata.insert(0, index)
+        else:
+            indexdata.append(index)
+    indexNo = len(stags1)
+    # XXX: Is this used at all?
+    #store.append("\x00" * ((pad - (offset % pad)) % pad))
+    store = "".join(store)
+    indexdata = "".join(indexdata)
+    return (indexNo, len(store), indexdata, store)
+        
 
 # locale independend string methods
 def _xisalpha(c):
@@ -1093,12 +1189,10 @@ class ReadRpm:
 
     def __readIndex(self, pad, hdrtags, rpmdb=None):
         if rpmdb:
-            data = doRead(self.fd, 8)
-            (indexNo, storeSize) = unpack("!II", data)
-            magic = "\x8e\xad\xe8\x01\x00\x00\x00\x00"
+            data = "\x8e\xad\xe8\x01\x00\x00\x00\x00" + doRead(self.fd, 8)
         else:
             data = doRead(self.fd, 16)
-            (magic, indexNo, storeSize) = unpack("!8sII", data)
+        (magic, indexNo, storeSize) = unpack("!8sII", data)
         if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
             self.raiseErr("bad index magic")
         fmt = doRead(self.fd, 16 * indexNo)
@@ -1131,9 +1225,11 @@ class ReadRpm:
             elif ttype == RPM_INT32:
                 # distinguish between signed and unsigned ints
                 if dorpmtag[tag][3] & 8:
-                    data = unpack("!%di" % count, fmt2[offset:offset + count * 4])
+                    data = unpack("!%di" % count,
+                        fmt2[offset:offset + count * 4])
                 else:
-                    data = unpack("!%dI" % count, fmt2[offset:offset + count * 4])
+                    data = unpack("!%dI" % count,
+                        fmt2[offset:offset + count * 4])
             elif ttype == RPM_CHAR:
                 data = unpack("!%dc" % count, fmt2[offset:offset + count])
             elif ttype == RPM_INT8:
@@ -1147,10 +1243,11 @@ class ReadRpm:
             else:
                 self.raiseErr("unknown tag header")
                 data = None
-            # ignore duplicate entries as long as they are identical
-            if hdr.has_key(nametag):
-                if hdr[nametag] != data:
-                    self.printErr("tag %d included twice" % tag)
+            # Ignore duplicate entries as long as they are identical.
+            # They happen for packages signed with several keys or for
+            # relocated packages in the rpmdb.
+            if hdr.has_key(nametag) and hdr[nametag] != data:
+                self.printErr("duplicate tag %d" % tag)
             else:
                 hdr[nametag] = data
         return hdr
@@ -1170,8 +1267,9 @@ class ReadRpm:
         hdrdata = self.__readIndex(1, hdrtags, rpmdb)
         self.hdrdatasize = hdrdata[5]
         if keepdata:
-            self.leaddata = leaddata
-            self.sigdata = sigdata
+            if rpmdb == None:
+                self.leaddata = leaddata
+                self.sigdata = sigdata
             self.hdrdata = hdrdata
 
         if not sigtags and not hdrtags:
@@ -1558,7 +1656,52 @@ class ReadRpm:
                 time.localtime(ctime[i])), cname[i], ctext[i])
         return data
 
+    def __verifyWriteHeader(self, hdrhash, taghash, region, hdrdata, useinstall=1, newrpm=1):
+        (indexNo, storeSize, fmt, fmt2) = writeHeader(hdrhash, taghash, region, useinstall=useinstall, newrpm=newrpm)
+        if indexNo != hdrdata[0]:
+            if taghash == rpmtag:
+                print self.getFilename(), self["rpmversion"], "normal header"
+            else:
+                print self.getFilename(), self["rpmversion"], "sig header"
+            print "wrong number of rpmtag values", indexNo, hdrdata[0]
+        if storeSize != hdrdata[1]:
+            if taghash == rpmtag:
+                print self.getFilename(), self["rpmversion"], "normal header"
+            else:
+                print self.getFilename(), self["rpmversion"], "sig header"
+            print "wrong length of data", storeSize, hdrdata[1]
+        if fmt != hdrdata[3]:
+            if taghash == rpmtag:
+                print self.getFilename(), self["rpmversion"], "normal header"
+            else:
+                print self.getFilename(), self["rpmversion"], "sig header"
+            print "wrong fmt data"
+            print "fmt length:", len(fmt), len(hdrdata[3])
+            for i in xrange(0, indexNo * 16, 16):
+                (tag1, ttype1, offset1, count1) = unpack("!IIII", fmt[i:i + 16])
+                (tag2, ttype2, offset2, count2) = unpack("!IIII", hdrdata[3][i:i + 16])
+                print "tag(%d):" % i, tag1, tag2
+                if tag1 != tag2:
+                    print "tag:", tag1, tag2
+                if ttype1 != ttype2:
+                    print "ttype:", ttype1, ttype2
+                print "offset(%d):" % i, offset1, offset2, "(tag: %s)" % tag1
+                if offset1 != offset2:
+                    print "offset(%d):" % i, offset1, offset2, "(tag: %s)" % tag1
+                if count1 != count2:
+                    print "ttype/count:", ttype1, count1, count2
+        if fmt2 != hdrdata[4]:
+            print "wrong fmt2 data"
+
     def __doVerify(self):
+        self.__verifyWriteHeader(self.hdr.hash, rpmtag,
+            "immutable", self.hdrdata)
+        if self.strict:
+            #newrpm = 1
+            #if self["rpmversion"] in ["4.0.3"]:
+            #    newrpm = 0
+            self.__verifyWriteHeader(self.sig.hash, rpmsigtag,
+                "header_signatures", self.sigdata, 0)
         # disable the utf-8 test per default:
         if self.strict and None:
             for i in ["summary", "description", "changelogtext"]:
@@ -1984,8 +2127,8 @@ def verifyStructure(packages, phash, tag, useidx=True):
                     print "Error %s: index %s out of range" % (tag, idx)
                 val = pkgtag
             if mytag[idx] != val:
-                print "Error %s: %s != %s in package %s" % (tag, mytag[idx], val,
-                    packages[tid].getFilename())
+                print "Error %s: %s != %s in package %s" % (tag, mytag[idx],
+                    val, packages[tid].getFilename())
     # Go through /var/lib/rpm/Packages and check if data is correctly
     # copied over to the other files.
     for tid in packages.keys():
@@ -2038,8 +2181,8 @@ def readPackages(dbpath):
             continue
         fd = cStringIO.StringIO(data)
         pkg = ReadRpm("rpmdb", fd=fd)
-        pkg.readHeader(None, rpmtag, None, 1)
-        if pkg["name"].startswith("gpg-pubkey"):
+        pkg.readHeader(None, rpmtag, 1, 1)
+        if pkg["name"] == "gpg-pubkey":
             #for k in openpgp.parsePGPKeys(pkg["description"]):
             #    keyring.addKey(k)
             pkg["group"] = (pkg["group"],)
@@ -2113,23 +2256,38 @@ def readRpmdb(dbpath="/var/lib/rpm/"):
     verifyStructure(packages, triggername, "triggername")
     for pkg in packages.values():
         pkg.sig = HdrIndex()
-        if pkg["install_size_in_sig"] != None:
-            pkg.sig["size_in_sig"] = pkg["install_size_in_sig"]
-            del pkg["install_size_in_sig"]
-        if pkg["install_md5"] != None:
-            pkg.sig["md5"] = pkg["install_md5"]
-            del pkg["install_md5"]
-        if pkg["install_sha1header"] != None:
-            pkg.sig["sha1header"] = pkg["install_sha1header"]
-            del pkg["install_sha1header"]
         if pkg["archivesize"] != None:
             pkg.sig["payloadsize"] = pkg["archivesize"]
             del pkg["archivesize"]
-        #if packages[tid].sig.has_key("sha1header"):
-        #   (headerindex, headerdata) = generateHeader(packages[tid],
-        #   [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
-        #   if packages[tid].sig["sha1header"] != sha.new(headerindex+headerdata).hexdigest():
-        #       print "Error packages: Package %s SHA1 header checksum incorrect" % packages[tid].getFilename()
+        if 1:
+            sha1header = pkg["install_sha1header"]
+        else:
+            if pkg["install_size_in_sig"] != None:
+                pkg.sig["size_in_sig"] = pkg["install_size_in_sig"]
+                del pkg["install_size_in_sig"]
+            if pkg["install_md5"] != None:
+                pkg.sig["md5"] = pkg["install_md5"]
+                del pkg["install_md5"]
+            if pkg["install_sha1header"] != None:
+                pkg.sig["sha1header"] = pkg["install_sha1header"]
+                del pkg["install_sha1header"]
+            sha1header = pkg.sig["sha1header"]
+        if sha1header == None:
+            if pkg["name"] != "gpg-pubkey":
+                print "package", pkg.getFilename(), \
+                    "does not have a sha1 header"
+            continue
+        (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmtag,
+            "immutable", 1, install_keys, 0)
+        lead = pack("!8sII", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
+            indexNo, storeSize)
+        ctx = sha.new()
+        ctx.update(lead)
+        ctx.update(fmt)
+        ctx.update(fmt2)
+        if ctx.hexdigest() != sha1header:
+            print pkg.getFilename(), \
+                "bad sha1: %s / %s" % (sha1header, ctx.hexdigest())
 
 
 def checkSrpms():
@@ -2398,13 +2556,14 @@ def main():
     keepdata = 1
     hdrtags = rpmtag
     if nodigest == 1:
-        keepdata = 0
-        if verify == 0 and small:
-            for i in importanttags.keys():
-                value = rpmtag[i]
-                importanttags[i] = value
-                importanttags[value[0]] = value
-            hdrtags = importanttags
+        if verify == 0:
+            keepdata = 0
+            if small:
+                for i in importanttags.keys():
+                    value = rpmtag[i]
+                    importanttags[i] = value
+                    importanttags[value[0]] = value
+                hdrtags = importanttags
     #for _ in xrange(50):
     for a in args:
         b = [a]
