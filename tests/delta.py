@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import os, sys, md5, stat, tempfile, gzip, bz2, struct
+import os, sys, md5, stat, tempfile, gzip, bz2, struct, getopt
 from time import clock
 import pyrpm
 
@@ -230,12 +230,12 @@ class RpmDeltaPackage(dict):
      | 4B   :        : g  | 4B   :        : g  | 4B   :        : g  | 
     -+------+--------+----+------+--------+----+------+--------+----+-
     
-    -+-------+---------------+------------+----+------------+
-     | delta | target header | cpio delta : pa | target pkg |
-     | size  | size          |            : dd | header     |
-     +-------+---------------+            : in |            |
-     | 8B    | 8B            |            : g  |            |
-    -+-------+---------------+------------+----+------------+
+    -+-------+---------------+--------------+----+--------------+
+     | delta | target header | cpio delta   : pa | target pkg   |
+     | size  | size          | (compressed) : dd | header       |
+     +-------+---------------+              : in | (compressed) |
+     | 8B    | 8B            |              : g  |              |
+    -+-------+---------------+--------------+----+--------------+
 
     Magic       : 0xedabf000
     Version     : 0x00000001   version: 1
@@ -551,7 +551,7 @@ class RpmDelta:
                     continue
                 (fname, cpio_fd, fsize) = pkg.io.read()
                 cpio_hash[".%s" % fname] = _cpio.fd.tell()
-                if verbose > 0:
+                if self.config.verbose > 0:
                     print " %s\t%s\t offset:%d" % (fsize, fname, 
                                                    cpio_hash[".%s" % fname])
                 _cpio.write("070701", 0, 0, 0, 0, 0, 0, fsize, 0, 0, 0, 0,
@@ -593,11 +593,11 @@ class RpmDelta:
             if fi.flags & pyrpm.RPMFILE_CONFIG:
                 # no config files
                 is_config = 1
-                if verbose > 0:
+                if self.config.verbose > 0:
                     print "%s\t%s\t [config]" % (fi.filesize, filename)
             else:
                 is_config = 0
-                if verbose > 0:
+                if self.config.verbose > 0:
                     print "%s\t%s" % (fi.filesize, filename)
 
             hlid = fi.getHardLinkID()
@@ -625,7 +625,7 @@ class RpmDelta:
 
                         # prelinked? TODO: compare md5
                         if fi.filesize != fsize:
-                            if verbose > 0:
+                            if self.config.verbose > 0:
                                 print "Unprelinking %s" % filename
                             fname = "%s/base/%s" % (self.config.tempdir,
                                                     os.path.basename(filename))
@@ -648,7 +648,7 @@ class RpmDelta:
                         fsize = 0 #fi.filesize
                 else:
                     fsize = 0
-                if verbose > 0:
+                if self.config.verbose > 0:
                     print " %s\t%s\t" % (fsize, filename)
             else:
                 fd2 = source_cpio
@@ -792,9 +792,9 @@ def gunzipFile(file):
 def gzipFile(file):
     target_name = "%s.gz" % file
 
-#    os.system("gzip -9nc '%s' > '%s'" % (file, target_name))
-    os.system("minigzip '%s'" % (file))
-    os.system("gzip -dc '%s' > '%s'" % (target_name, file))
+    os.system("gzip -9nc '%s' > '%s'" % (file, target_name))
+#    os.system("minigzip '%s'" % (file))
+#    os.system("gzip -dc '%s' > '%s'" % (target_name, file))
     
     return target_name
 
@@ -906,26 +906,70 @@ def rm_rf(name):
             os.unlink(name+"/"+file)
     os.rmdir(name)
 
-### main ###
-
-verbose = 0
-quiet = 0
-
-if len(sys.argv) != 4:
-    print """Usage: %s <options> <operation>
+def usage():
+    print """Usage: delta <options> <operation>
 
 OPERATIONS
-  create <from package> <to package>
-  apply <from package> <delta>
+  create <from rpm package> <to rpm package>
+  apply <from rpm package> <delta package>
+  info <delta package>
 
-OPTIONS
-  -h  | --help           print help
-  -v  | --verbose        be verbose, and more, ..
-""" % os.path.basename(sys.argv[0])
-    sys.exit(0)
+GENERAL OPTIONS
+  -h  | --help       print help
+  -v  | --verbose    be verbose, and more, ..
+  -q  | --quiet      be quiet
 
-operation = sys.argv[1]
-verbose = 0
+COMPRESSION OPTIONS
+        --gzip       gzip compression
+        --bzip2      bzip2 compression
+
+DELTA OPTIONS
+        --bsdiff     bsdiff delta (http://www.daemonology.net/bsdiff/)
+        --edelta     edelta delta (http://www.diku.dk/~jacobg/edelta/)
+        --bdelta     bdelta delta (http://sourceforge.net/projects/deltup)
+
+Default options:
+  --gzip --bdelta
+"""
+
+### main ###
+
+quiet = 0
+compression = 0x0401
+
+(opts, args) = getopt.getopt(sys.argv[1:], "hvq",
+                             ["help", "verbose", "quiet", "gzip", "bzip2",
+                              "bsdiff", "edelta", "bdelta"])
+for (opt, val) in opts:
+    if opt in ["-h", "--help"]:
+        usage()
+        sys.exit(1)
+    elif opt in ["-v", "--verbose"]:
+        pyrpm.rpmconfig.verbose += 1
+    elif opt in ["-q", "--quiet"]:
+        quiet = 1
+        pyrpm.rpmconfig.debug = 0
+        pyrpm.rpmconfig.warning = 0
+        pyrpm.rpmconfig.verbose = 0
+        pyrpm.rpmconfig.printhash = 0
+    elif opt == "--gzip":
+        compression = (compression & 0xFF00) + 1
+    elif opt == "--bzip2":
+        compression = (compression & 0xFF00) + 2
+    elif opt == "--edelta":
+        compression = (compression & 0x00FF) + 0x0100
+    elif opt == "--bsdiff":
+        compression = (compression & 0x00FF) + 0x0200
+    elif opt == "--bdelta":
+        compression = (compression & 0x00FF) + 0x0400
+
+if not args or len(args) < 1 or \
+       ((args[0] == "create" or args[0] == "apply") and len(args) != 3) or \
+       (args[0] == "info" and len(args) != 2):
+    usage()
+    sys.exit(1)
+
+operation = args[0]
 
 ### delta ###
 
@@ -934,8 +978,8 @@ pyrpm.rpmconfig.tempdir = tempfile.mkdtemp(prefix="rpmdelta_")
 time1 = clock()
 
 if operation == "create":
-    source_name = sys.argv[2]
-    target_name = sys.argv[3]
+    source_name = args[1]
+    target_name = args[2]
 
     source_pkg = openRPM(source_name)
     if not source_pkg:
@@ -947,13 +991,13 @@ if operation == "create":
     delta_pkg = RpmDelta(pyrpm.rpmconfig).create(source_pkg, target_pkg)
 
     if delta_pkg:
-        delta_pkg.save()
+        delta_pkg.save(compression)
 
     delta_name = delta_pkg["filename"]
 
 elif operation == "apply":
-    source_name = sys.argv[2]
-    delta_name = sys.argv[3]
+    source_name = args[1]
+    delta_name = args[2]
 
     source_pkg = openRPM(source_name)
     if not source_pkg:
@@ -967,6 +1011,14 @@ elif operation == "apply":
     if target_pkg:
         target_pkg.save()
 
+elif operation == "info":
+    delta_name = args[1]
+    delta_pkg = openDelta(delta_name)
+
+    print "%s:" % delta_name
+    print "  source package: %s" % delta_pkg["source_nevra"]
+    print "  target package: %s" % delta_pkg["target_nevra"]
+
 else:
     print "Error: operation %s is not supported" % operation
 
@@ -979,16 +1031,15 @@ time2 = clock() - time1
 if operation == "create":
     delta_size = os.stat(delta_name).st_size
     target_size = os.stat(target_name).st_size
-    if verbose:
+    if pyrpm.rpmconfig.verbose:
         print "%d\t%s" % (delta_size, delta_name)
         print "%d\t%s" % (target_size, target_name)
     if not quiet:
         print "%s:  %.02fs  %.02f%%" % (delta_name, time2, 
                                         100.0 * delta_size / target_size)
 elif operation == "apply":
-    print target_pkg["filename"]
-    os.system("ls -la '%s' '%s' '%s'" % (source_name, delta_name,
-                                         target_pkg["filename"]))
+    if not quiet:
+        print "%s:  %.02fs" % (target_pkg["filename"], time2)
 
 if pyrpm.rpmconfig.tempdir != None and os.path.exists(pyrpm.rpmconfig.tempdir):
     rm_rf(pyrpm.rpmconfig.tempdir)
