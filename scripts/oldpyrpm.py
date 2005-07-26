@@ -51,12 +51,14 @@
 #   slower than a C version. Can further improvements be made?
 #   The C part should offer a class which supports read().
 # - error handling in PyGZIP
-# - Why is bsddb so slow? (Why is reading rpmdb so slow?)
+# - Why is bsddb so slow? (Why is reading rpmdb so slow?) Can we make
+#   small and faster python bindings for bsddb?
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
 #   and "0" epoch (change this for createrepo)
 # - check for #% in spec files
 # - streaming read for cpio files
-# - Try writing the sig header also for older rpm packages.
+# - Try writing the sig header also for older rpm packages. Start with storing
+#   the order they have been written with.
 # - check OpenGPG signatures
 # - i386 rpm extraction on ia64?
 # - add a special flag for the rpmdb rpmtag additions and check them
@@ -65,6 +67,10 @@
 # - Duplicate tags can be available if a package has been signed twice
 #   or e.g. in the case of relocatable packages for the header in the
 #   rpmdb. Do we need to change data handling for that case?
+# - The error case for "--checkrpmdb" might not be too good. E.g. duplicate
+#   entries are moaned about, but then also not verified by adding them
+#   to the hash, so analysing the error case might still involve adding
+#   further custom checks.
 # - Python is bad at handling lots of small data and is getting rather
 #   slow. At some point it may make sense to write again a librpm type
 #   thing to have a core part in C and testing/outer decisions in python.
@@ -72,8 +78,8 @@
 # things that look less important to implement:
 # - add streaming support to bzip2 compressed payload
 # - lua scripting support
-# - add suppoprt for drpm (delta rpm) payloadformat
-# possible rpm format changes:
+# - add support for drpm (delta rpm) payloadformat
+# possible changes for /bin/rpm:
 # - Do not generate filecontexts tags if they are empty, maybe not at all.
 # - "cookie" could go away, the same info is already present.
 # - "rhnplatform" could go away if it is not required.
@@ -742,9 +748,6 @@ def writeHeader(tags, taghash, region, pad=1, skip_tags=None, useinstall=1,
             count = 1
             data = "%s\x00" % value
         elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
-            #data = ""
-            #for i in xrange(count):
-            #    data += "%s\x00" % value[i]
             data = "".join( [ "%s\x00" % value[i] for i in xrange(count) ] )
         elif ttype == RPM_BIN:
             data = value
@@ -774,7 +777,7 @@ def writeHeader(tags, taghash, region, pad=1, skip_tags=None, useinstall=1,
     store = "".join(store)
     indexdata = "".join(indexdata)
     return (indexNo, len(store), indexdata, store)
-        
+
 
 # locale independend string methods
 def _xisalpha(c):
@@ -1046,8 +1049,8 @@ class ReadRpm:
                  nodigest=None):
         self.filename = filename
         self.issrc = 0
-        if filename.endswith(".src.rpm") or filename.endswith(".nosrc.rpm"):
-            self.issrc = 1
+        #if filename.endswith(".src.rpm") or filename.endswith(".nosrc.rpm"):
+        #    self.issrc = 1
         self.verify = verify # enable/disable more data checking
         self.fd = fd # filedescriptor
         # 1 == check if old tags are included, 0 allows all tags
@@ -1262,6 +1265,7 @@ class ReadRpm:
             if leaddata[:4] != "\xed\xab\xee\xdb":
                 self.printErr("no rpm magic found")
                 return 1
+            self.issrc = (leaddata[7] == "\01")
             if self.verify:
                 self.__verifyLead(leaddata)
             sigdata = self.__readIndex(8, sigtags)
@@ -2208,7 +2212,8 @@ def readDb(filename, dbtype="hash", dotid=None):
             if not rethash.has_key(tid):
                 rethash[tid] = {}
             if rethash[tid].has_key(idx):
-                raise ValueError, "%s %d %d" % (k, tid, idx)
+                print "ignoring duplicate idx: %s %d %d" % (k, tid, idx)
+                continue
             rethash[tid][idx] = k
     return rethash
 
@@ -2329,10 +2334,8 @@ def checkSrpms():
         if os.path.isdir(d):
             r.addDirectory(d)
     r.sortVersions()
-    # Remove identical rpms. Use the md5sum to check for
-    # ones where header+payload are the same (then only
-    # the signature will probably be different and only
-    # print a warning about further rpms who might be rebuilt.
+    # Remove identical rpms and print a warning about further rpms
+    # who might add new patches without changing version/release.
     for v in r.h.values():
         i = 0
         while i < len(v) - 1:
