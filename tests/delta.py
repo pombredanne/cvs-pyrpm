@@ -1,7 +1,10 @@
 #!/usr/bin/python
+#
+# (c) 2005 Thomas Woerner <twoerner@redhat.com>
+#
 
 import os, sys, md5, stat, tempfile, gzip, bz2, struct, getopt
-from time import clock
+from time import time
 import pyrpm
 
 
@@ -257,7 +260,6 @@ class RpmDeltaPackage(dict):
 
     """
     MAGIC  = '\xed\xab\xf0\x00'
-    
 
     __getitem__ = dict.get
 
@@ -450,11 +452,13 @@ class RpmDeltaPackage(dict):
 ### RpmDelta class ###
 
 class RpmDelta:
-    def __init__(self, config):
+    def __init__(self, config, compression=None, verify=0):
         self.config = config
         self.tmpdir = self.config.tmpdir
         self.compression = 0x0401 # bdelta, gzip
-        self.verify = 0
+        if compression:
+            self.compression = compression
+        self.verify = verify
         
     def apply(self, source_pkg, delta_pkg):
         # target_pkg = RpmPackage()
@@ -792,7 +796,7 @@ def gunzipFile(file):
 def gzipFile(file):
     target_name = "%s.gz" % file
 
-    os.system("gzip -9nc '%s' > '%s'" % (file, target_name))
+    os.system("gzip --best -nc '%s' > '%s'" % (file, target_name))
 #    os.system("minigzip '%s'" % (file))
 #    os.system("gzip -dc '%s' > '%s'" % (target_name, file))
     
@@ -803,7 +807,8 @@ def TODO_gzipFile(file):
     source_fd = open(file, "r")
 
     target_name = "%s.gz" % file
-    target_fd = gzip.GzipFile(target_name, "wb", 9)
+    fd = open(target_name, "wb")
+    target_fd = gzip.GzipFile(filename="", mode="wbn", fileobj=fd, compresslevel=9)
 
     data = source_fd.read(65536)
     while data:
@@ -812,6 +817,7 @@ def TODO_gzipFile(file):
 
     target_fd.flush()
     target_fd.close()
+    fd.close()
 
     source_fd.close()
 
@@ -918,6 +924,7 @@ GENERAL OPTIONS
   -h  | --help       print help
   -v  | --verbose    be verbose, and more, ..
   -q  | --quiet      be quiet
+  -V  | --verify     verify created delta package
 
 COMPRESSION OPTIONS
         --gzip       gzip compression
@@ -936,16 +943,19 @@ Default options:
 
 quiet = 0
 compression = 0x0401
+verify = 0
 
-(opts, args) = getopt.getopt(sys.argv[1:], "hvq",
-                             ["help", "verbose", "quiet", "gzip", "bzip2",
-                              "bsdiff", "edelta", "bdelta"])
+(opts, args) = getopt.getopt(sys.argv[1:], "hvqV",
+                             ["help", "verbose", "quiet", "verify",
+                              "gzip", "bzip2", "bsdiff", "edelta", "bdelta"])
 for (opt, val) in opts:
     if opt in ["-h", "--help"]:
         usage()
         sys.exit(1)
     elif opt in ["-v", "--verbose"]:
         pyrpm.rpmconfig.verbose += 1
+    elif opt in ["-V", "--verify"]:
+        verify = 1
     elif opt in ["-q", "--quiet"]:
         quiet = 1
         pyrpm.rpmconfig.debug = 0
@@ -975,7 +985,10 @@ operation = args[0]
 
 pyrpm.rpmconfig.tempdir = tempfile.mkdtemp(prefix="rpmdelta_")
 
-time1 = clock()
+time1 = time()
+
+rpmdelta = RpmDelta(pyrpm.rpmconfig, compression=compression,
+                    verify=verify)
 
 if operation == "create":
     source_name = args[1]
@@ -988,7 +1001,8 @@ if operation == "create":
     if not target_pkg:
         sys.exit(-1)
 
-    delta_pkg = RpmDelta(pyrpm.rpmconfig).create(source_pkg, target_pkg)
+    
+    delta_pkg = rpmdelta.create(source_pkg, target_pkg)
 
     if delta_pkg:
         delta_pkg.save(compression)
@@ -1006,7 +1020,7 @@ elif operation == "apply":
     if not delta_pkg:
         sys.exit(-1)
     
-    target_pkg = RpmDelta(pyrpm.rpmconfig).apply(source_pkg, delta_pkg)
+    target_pkg = rpmdelta.apply(source_pkg, delta_pkg)
 
     if target_pkg:
         target_pkg.save()
@@ -1015,14 +1029,34 @@ elif operation == "info":
     delta_name = args[1]
     delta_pkg = openDelta(delta_name)
 
+    if delta_pkg["compression"] & 0x0001: #gzip
+        compression = "gzip"
+    elif delta_pkg["compression"] & 0x0002: #bzip2
+        compression = "bzip2"
+    else:
+        compression = "- unknown -"
+    
+    if delta_pkg["compression"] & 0x0100:
+        diff_utility = "edelta"
+    elif delta_pkg["compression"] & 0x0200:
+        diff_utility = "bsdiff"
+    elif delta_pkg["compression"] & 0x0400:
+        diff_utility = "bdelta"
+    else:
+        diff_utility = "- unknown -"
+
     print "%s:" % delta_name
     print "  source package: %s" % delta_pkg["source_nevra"]
     print "  target package: %s" % delta_pkg["target_nevra"]
+    print "  version       : %d.%d" % (delta_pkg["version"],
+                                       delta_pkg["release"])
+    print "  compression   : %s" % compression
+    print "  diff utility  : %s" % diff_utility
 
 else:
     print "Error: operation %s is not supported" % operation
 
-time2 = clock() - time1
+time2 = time() - time1
 
 #print "------------------------"
 #os.system("ls -la %s" % pyrpm.rpmconfig.tempdir)
