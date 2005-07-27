@@ -46,7 +46,7 @@
 #
 
 #
-# XXX TODO:
+# TODO:
 # - PyGZIP is way faster than existing gzip routines, but still 2 times
 #   slower than a C version. Can further improvements be made?
 #   The C part should offer a class which supports read().
@@ -57,16 +57,22 @@
 #   and "0" epoch (change this for createrepo)
 # - check for #% in spec files
 # - streaming read for cpio files
+# - use setPerms() in doLnOrCopy()
 # - Try writing the sig header also for older rpm packages. Start with storing
 #   the order they have been written with.
+# - Change "strict" and "verify" into "debug" and have one integer specify
+#   debug and output levels. (Maybe also "nodigest" can move in?)
 # - check OpenGPG signatures
 # - i386 rpm extraction on ia64?
-# - add a special flag for the rpmdb rpmtag additions and check them
 # - While checking rpmdb detect relocated rpm packages instead of
 #   warning about wrong data.
 # - Duplicate tags can be available if a package has been signed twice
 #   or e.g. in the case of relocatable packages for the header in the
 #   rpmdb. Do we need to change data handling for that case?
+# - We use S_ISREG(fileflag) to check for regular files before looking
+#   at filemd5s, but filemd5s is only set for regular files, so this
+#   might be optimized a bit. (That code is in no performance critical
+#   path, so could also stay as is.)
 # - The error case for "--checkrpmdb" might not be too good. E.g. duplicate
 #   entries are moaned about, but then also not verified by adding them
 #   to the hash, so analysing the error case might still involve adding
@@ -266,7 +272,6 @@ def doLnOrCopy(src, dst):
             os.write(fd, buf)
         fsrc.close()
         os.close(fd)
-        # XXX: use setPerms() here
         st = os.stat(src)
         os.utime(tmp, (st.st_atime, st.st_mtime))
         os.chmod(tmp, st.st_mode & 0170000)
@@ -590,20 +595,6 @@ rpmtag = {
     "triggerin": [1100, RPM_STRING, None, 5],
     "triggerun": [1101, RPM_STRING, None, 5],
     "triggerpostun": [1102, RPM_STRING, None, 5],
-
-    # install information (in /var/lib/rpm/Packages)
-    "install_size_in_sig": [257, RPM_INT32, 1, 0],
-    "install_md5": [261, RPM_BIN, 16, 0],
-    "install_unknownchecksum": [262, RPM_BIN, None, 0],
-    "install_dsaheader": [267, RPM_BIN, 16, 0],
-    "install_sha1header": [269, RPM_STRING, None, 0],
-    "installtime": [1008, RPM_INT32, 1, 8],
-    "filestates": [1029, RPM_CHAR, None, 0],
-    "instprefixes": [1099, RPM_STRING_ARRAY, None, 0],
-    "installcolor": [1127, RPM_INT32, None, 0],
-    "installtid": [1128, RPM_INT32, None, 0],
-    "install_badsha1_1": [264, RPM_STRING, None, 1],
-    "install_badsha1_2": [265, RPM_STRING, None, 1],
     "archivesize": [1046, RPM_INT32, 1, 1]
 }
 # Add a reverse mapping for all tags plus the name again.
@@ -615,11 +606,33 @@ for v in rpmtag.values():
         raise ValueError, "rpmtag has wrong entries"
 del v
 
+# Additional tags which can be in the rpmdb /var/lib/rpm/Packages.
+rpmdbtag = {
+    "install_size_in_sig": [257, RPM_INT32, 1, 0],
+    "install_md5": [261, RPM_BIN, 16, 0],
+    "install_unknownchecksum": [262, RPM_BIN, None, 0],
+    "install_dsaheader": [267, RPM_BIN, 16, 0],
+    "install_sha1header": [269, RPM_STRING, None, 0],
+    "installtime": [1008, RPM_INT32, 1, 8],
+    "filestates": [1029, RPM_CHAR, None, 0],
+    "instprefixes": [1099, RPM_STRING_ARRAY, None, 0],
+    "installcolor": [1127, RPM_INT32, None, 0],
+    "installtid": [1128, RPM_INT32, None, 0],
+    "install_badsha1_1": [264, RPM_STRING, None, 1],
+    "install_badsha1_2": [265, RPM_STRING, None, 1]
+}
 # List of special rpmdb tags, like also visible above.
-install_keys = {"install_size_in_sig":1, "install_md5":1,
-    "install_unknownchecksum":1, "install_dsaheader":1, "install_sha1header":1,
-    "installtime":1, "filestates":1, "instprefixes":1, "installcolor":1,
-    "installtid":1, "install_badsha1_1":1, "install_badsha1_2":1}
+install_keys = {}
+for v in rpmdbtag.keys():
+    install_keys[v] = 1
+    rpmdbtag[v].append(v)
+for v in rpmdbtag.values():
+    rpmdbtag[v[0]] = v
+    if len(v) != 5:
+        raise ValueError, "rpmdbtag has wrong entries"
+for v in rpmtag.keys():
+    rpmdbtag[v] = rpmtag[v]
+del v
 
 # Required tags in a header.
 rpmtagrequired = ("name", "version", "release", "arch", "rpmversion")
@@ -698,8 +711,7 @@ possible_scripts = {
     "/usr/sbin/libgcc_post_upgrade": 1 }
 
 
-def writeHeader(tags, taghash, region, pad=1, skip_tags=None, useinstall=1,
-    newrpm=1):
+def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
     """Use the data "tags" and change it into a rpmtag header."""
     (offset, store, stags1, stags2, stags3) = (0, [], [], [], [])
     # Sort by number and also first normal tags, then install_keys tags
@@ -717,7 +729,7 @@ def writeHeader(tags, taghash, region, pad=1, skip_tags=None, useinstall=1,
     stags1.sort()
     stags2.sort()
     stags1.extend(stags2)
-    if newrpm:
+    if 1:
         stags1.extend(stags3)
     else:
         xx = stags1.pop()
@@ -731,13 +743,14 @@ def writeHeader(tags, taghash, region, pad=1, skip_tags=None, useinstall=1,
         count = len(value)
         pad = 0
         if ttype == RPM_ARGSTRING:
-            if type(value) == type(""):
+            if isinstance(value, basestring):
                 ttype = RPM_STRING
             else:
                 ttype = RPM_STRING_ARRAY
         elif ttype == RPM_GROUP:
-            # XXX this should get stored from the reading side if possible
             ttype = RPM_I18NSTRING
+            if rpmgroup:
+                ttype = rpmgroup
         if ttype == RPM_INT32:
             if taghash[tagnum][3] & 8:
                 data = pack("!%di" % count, *value)
@@ -772,8 +785,6 @@ def writeHeader(tags, taghash, region, pad=1, skip_tags=None, useinstall=1,
         else:
             indexdata.append(index)
     indexNo = len(stags1)
-    # XXX: Is this used at all?
-    #store.append("\x00" * ((pad - (offset % pad)) % pad))
     store = "".join(store)
     indexdata = "".join(indexdata)
     return (indexNo, len(store), indexdata, store)
@@ -1063,6 +1074,7 @@ class ReadRpm:
         self.uid = None
         self.gid = None
         self.relocated = None
+        self.rpmgroup = None
         # Further data posibly created later on:
         #self.leaddata = first 96 bytes of lead data
         #self.sigdata = binary blob of signature header
@@ -1255,6 +1267,8 @@ class ReadRpm:
                 self.printErr("duplicate tag %d" % tag)
             else:
                 hdr[nametag] = data
+            if nametag == "group":
+                self.rpmgroup = ttype
         return hdr
 
     def readHeader(self, sigtags, hdrtags, keepdata=None, rpmdb=None):
@@ -1662,8 +1676,9 @@ class ReadRpm:
                 time.localtime(ctime[i])), cname[i], ctext[i])
         return data
 
-    def __verifyWriteHeader(self, hdrhash, taghash, region, hdrdata, useinstall=1, newrpm=1):
-        (indexNo, storeSize, fmt, fmt2) = writeHeader(hdrhash, taghash, region, useinstall=useinstall, newrpm=newrpm)
+    def __verifyWriteHeader(self, hdrhash, taghash, region, hdrdata, useinstall, rpmgroup):
+        (indexNo, storeSize, fmt, fmt2) = writeHeader(hdrhash, taghash, region,
+            None, useinstall, rpmgroup)
         if indexNo != hdrdata[0]:
             if taghash == rpmtag:
                 print self.getFilename(), self["rpmversion"], "normal header"
@@ -1685,7 +1700,8 @@ class ReadRpm:
             print "fmt length:", len(fmt), len(hdrdata[3])
             for i in xrange(0, indexNo * 16, 16):
                 (tag1, ttype1, offset1, count1) = unpack("!IIII", fmt[i:i + 16])
-                (tag2, ttype2, offset2, count2) = unpack("!IIII", hdrdata[3][i:i + 16])
+                (tag2, ttype2, offset2, count2) = unpack("!IIII",
+                    hdrdata[3][i:i + 16])
                 print "tag(%d):" % i, tag1, tag2
                 if tag1 != tag2:
                     print "tag:", tag1, tag2
@@ -1693,7 +1709,8 @@ class ReadRpm:
                     print "ttype:", ttype1, ttype2
                 print "offset(%d):" % i, offset1, offset2, "(tag: %s)" % tag1
                 if offset1 != offset2:
-                    print "offset(%d):" % i, offset1, offset2, "(tag: %s)" % tag1
+                    print "offset(%d):" % i, offset1, offset2, "(tag: %s)" \
+                        % tag1
                 if count1 != count2:
                     print "ttype/count:", ttype1, count1, count2
         if fmt2 != hdrdata[4]:
@@ -1701,13 +1718,13 @@ class ReadRpm:
 
     def __doVerify(self):
         self.__verifyWriteHeader(self.hdr.hash, rpmtag,
-            "immutable", self.hdrdata)
+            "immutable", self.hdrdata, 1, self.rpmgroup)
         if self.strict:
             #newrpm = 1
             #if self["rpmversion"] in ["4.0.3"]:
             #    newrpm = 0
             self.__verifyWriteHeader(self.sig.hash, rpmsigtag,
-                "header_signatures", self.sigdata, 0)
+                "header_signatures", self.sigdata, 0, None)
         # disable the utf-8 test per default:
         if self.strict and None:
             for i in ["summary", "description", "changelogtext"]:
@@ -1882,6 +1899,16 @@ class ReadRpm:
             if len(self["dirindexes"]) != lx or len(self["basenames"]) != lx \
                 or self["dirnames"] == None:
                 self.printErr("wrong length for file* tag")
+        fileflags = self["fileflags"]
+        filemd5s = self["filemd5s"]
+        if fileflags:
+            for x in xrange(len(fileflags)):
+                if S_ISREG(fileflags[x]):
+                    if not filemd5s[x]:
+                        self.printErr("missing filemd5sum")
+                    elif filemd5s[x] != "":
+                        print filemd5s[x]
+                        self.printErr("non-regular file has filemd5sum")
 
         if self.nodigest:
             return
@@ -2090,7 +2117,7 @@ class RpmTree:
         return rpm
 
     def addDirectory(self, dirname):
-        files = map(lambda v, dirname=dirname: dirname + "/" + v,
+        files = map(lambda v, dirname=dirname: "%s/%s" % (dirname, v),
             os.listdir(dirname))
         for f in files:
             if f.endswith(".rpm"):
@@ -2159,6 +2186,7 @@ def verifyStructure(packages, phash, tag, useidx=True):
                 continue
             # only include filemd5s for regular files
             if tag == "filemd5s" and not S_ISREG(pkg["fileflags"][idx]):
+            #check could also be: if tag == "filemd5s" and not key:
                 continue
             # Equal triggernames aren't added multiple times for
             # the same package. Why??
@@ -2187,7 +2215,7 @@ def readPackages(dbpath):
             continue
         fd = cStringIO.StringIO(data)
         pkg = ReadRpm("rpmdb", fd=fd)
-        pkg.readHeader(None, rpmtag, 1, 1)
+        pkg.readHeader(None, rpmdbtag, 1, 1)
         if pkg["name"] == "gpg-pubkey":
             #for k in openpgp.parsePGPKeys(pkg["description"]):
             #    keyring.addKey(k)
@@ -2284,8 +2312,8 @@ def readRpmdb(dbpath="/var/lib/rpm/"):
                 print "package", pkg.getFilename(), \
                     "does not have a sha1 header"
             continue
-        (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmtag,
-            "immutable", 1, install_keys, 0)
+        (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
+            "immutable", install_keys, 0, pkg.rpmgroup)
         lead = pack("!8sII", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
             indexNo, storeSize)
         ctx = sha.new()
