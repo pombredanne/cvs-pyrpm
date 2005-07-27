@@ -448,6 +448,8 @@ class RpmPackage(RpmData):
         """Return 1 if the package is a SRPM."""
         
         # XXX: is it right method how detect by header?
+        if self.io:
+            return self.io.issrc
         if self["sourcerpm"] == None:
             return 1
         return 0

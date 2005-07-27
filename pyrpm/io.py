@@ -118,8 +118,8 @@ class PyGZIP:
             # decompressor is smart and knows when to stop, so feeding it
             # extra data is harmless.
             	try:
-                    crc32 = unpack("!I", self.enddata[0:4])
-                    isize = unpack("!I", self.enddata[4:8])
+                    crc32 = unpack("<i", self.enddata[0:4]) # le signed int
+                    isize = unpack("<I", self.enddata[4:8]) # le unsigned int
                 except struct.error:
                     raise IOError, "Unexpected EOF"
                 if crc32 != self.crcval:
@@ -302,7 +302,7 @@ class RpmStreamIO(RpmIO):
         self.verify = verify            # Verify lead and index entries
         self.strict = strict # Report legacy tags and packags not named %name
         self.hdronly = hdronly          # Don't return payload from read()
-        self.issrc = 0
+        self.issrc = 0  # 0:binary rpm 2:source rpm
         self.where = 0  # 0:lead 1:separator 2:sig 3:header 4:files
         self.idx = 0 # Current index
         self.hdr = {}
@@ -380,7 +380,7 @@ class RpmStreamIO(RpmIO):
     def write(self, pkg):
         if self.fd == None:
             self.open("w+")
-        lead = pack("!4scchh66shh16x", RPM_HEADER_LEAD_MAGIC, '\x04', '\x00', 0, 1, pkg.getNEVR()[0:66], rpm_lead_arch[pkg["arch"]], 5)
+        lead = pack("!4s2c2h66s2h16x", RPM_HEADER_LEAD_MAGIC, '\x03', '\x00', 0, 1, pkg.getNEVR()[0:66], rpm_lead_arch[pkg["arch"]], 5)
         (sigindex, sigdata) = self.__generateSig(pkg["signature"])
         (headerindex, headerdata) = self._generateHeader(pkg)
         self._write(lead)
@@ -425,6 +425,7 @@ class RpmStreamIO(RpmIO):
         leaddata = functions.readExact(self.fd, 96)
         if leaddata[:4] != RPM_HEADER_LEAD_MAGIC:
             raise ValueError, "no rpm magic found"
+        self.issrc = (leaddata[7] == "\01")
         if self.verify:
             self.__verifyLead(leaddata)
         return ("magic", leaddata[:4])
@@ -452,7 +453,7 @@ class RpmStreamIO(RpmIO):
 
         Return (tag number, tag data).  Raise ValueError on invalid data."""
 
-        index = unpack("!4i", indexdata[idx*16:(idx+1)*16])
+        index = unpack("!4I", indexdata[idx*16:(idx+1)*16])
         tag = index[0]
         # ignore duplicate entries as long as they are identical
         if self.hdr.has_key(tag):
@@ -468,7 +469,7 @@ class RpmStreamIO(RpmIO):
         Raise ValueError on invalid data."""
         
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
-            unpack("!4scchh66shh16x", leaddata)
+            unpack("!4s2c2h66s2h16x", leaddata)
         if major not in ('\x03', '\x04') or minor != '\x00' or \
             sigtype != 5 or rpmtype not in (0, 1):
             raise ValueError, "Unsupported RPM file format"
@@ -488,7 +489,7 @@ class RpmStreamIO(RpmIO):
         IOError."""
 
         data = functions.readExact(self.fd, 16)
-        (magic, indexNo, storeSize) = unpack("!8sii", data)
+        (magic, indexNo, storeSize) = unpack("!8s2I", data)
         if magic != RPM_HEADER_INDEX_MAGIC or indexNo < 1:
             raise ValueError, "bad index magic"
         fmt = functions.readExact(self.fd, 16 * indexNo)
@@ -507,7 +508,7 @@ class RpmStreamIO(RpmIO):
         
         checkSize = 0
         for i in xrange(0, indexNo * 16, 16):
-            index = unpack("!iiii", fmt[i:i + 16])
+            index = unpack("!4I", fmt[i:i + 16])
             ttype = index[1]
             # FIXME: this doesn't actually check alignment
             # alignment for some types of data
@@ -641,11 +642,10 @@ class RpmStreamIO(RpmIO):
             self.offset = 0
             self.indexlist = []
 
-        def outputHeader(self, header, align, skip_tags):
+        def outputHeader(self, header, align, skip_tags, install_keys=[257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128]):
             """Return (index data, data area) representing signature header
             (tag name => tag value), with data area end aligned to align"""
 
-            install_keys = [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128]
             keys = self.tagnames.keys()
             keys.sort()
             # 1st pass: Output sorted non install only tags
@@ -758,12 +758,12 @@ class RpmStreamIO(RpmIO):
                 # Make sure the region tag is the first one in the index
                 # despite being the last in the store
                 if tag == self.region:
-                    index = pack("!iiii", tag, ttype, offset, count) + index
+                    index = pack("!4I", tag, ttype, offset, count) + index
                 else:
-                    index += pack("!iiii", tag, ttype, offset, count)
+                    index += pack("!4I", tag, ttype, offset, count)
             align = (pad - (len(self.store) % pad)) % pad
             index = RPM_HEADER_INDEX_MAGIC +\
-                    pack("!ii", len(self.indexlist), len(self.store)+align) + index
+                    pack("!2I", len(self.indexlist), len(self.store)+align) + index
             return (index, '\x00' * align)
 
         def __alignTag(self, ttype):
@@ -785,7 +785,7 @@ class RpmStreamIO(RpmIO):
         (tag name => tag value)"""
 
         h = self.__GeneratedHeader(rpmsigtag, rpmsigtagname, 62)
-        return h.outputHeader(header, 8, [])
+        return h.outputHeader(header, 8, [], [])
 
     def _generateHeader(self, header, padding=1, skip_tags=[]):
         """Return (index data, data area) representing signature header
@@ -798,9 +798,6 @@ class RpmStreamIO(RpmIO):
 class RpmFileIO(RpmStreamIO):
     def __init__(self, config, source, verify=None, strict=None, hdronly=None):
         RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
-        self.issrc = 0
-        if source.endswith(".src.rpm") or source.endswith(".nosrc.rpm"):
-            self.issrc = 1
 
     def __openFile(self, mode="r"):
         """Open self.source, mark it close-on-exec.
@@ -859,7 +856,7 @@ class RpmFileIO(RpmStreamIO):
         if region is None or len(region) != 16:
             # What was the digest computed from?
             raise ValueError, "No region"
-        (tag, type_, offset, count) = unpack("!4i", region)
+        (tag, type_, offset, count) = unpack("!4I", region)
         # FIXME: other regions than "immutable"?
         if (tag != 63 or type_ != RPM_BIN or -offset <= 0 or -offset % 16 != 0
             or count != 16):
@@ -871,14 +868,14 @@ class RpmFileIO(RpmStreamIO):
         data = fd.read(16)
         if len(data) != 16:
             raise ValueError, "Unexpected EOF in header"
-        (totalIndexEntries, totalDataSize) = unpack("!8x2i", data)
+        (totalIndexEntries, totalDataSize) = unpack("!8x2I", data)
         data = fd.read(16 * totalIndexEntries)
         if len(data) != 16 * totalIndexEntries:
             raise ValueError, "Unexpected EOF in header"
         unsignedTags = []
         for i in xrange(totalIndexEntries):
             (tag, type_, offset, count) = \
-                  unpack("!4i", data[i * 16 : (i + 1) * 16])
+                  unpack("!4I", data[i * 16 : (i + 1) * 16])
             # FIXME: other regions than "immutable"?
             if tag == 63:
                 break
@@ -888,10 +885,10 @@ class RpmFileIO(RpmStreamIO):
         if (type_ != RPM_BIN or count != 16 or
             i + regionIndexEntries > totalIndexEntries):
             raise ValueError, "Invalid region tag"
-        digest.update(pack("!2i", regionIndexEntries, offset + 16))
+        digest.update(pack("!2I", regionIndexEntries, offset + 16))
         digest.update(data[i * 16 : (i + regionIndexEntries) * 16])
         for i in xrange(i + regionIndexEntries, totalIndexEntries):
-            (tag,) = unpack("!i", data[i * 16 : i * 16 + 4])
+            (tag,) = unpack("!I", data[i * 16 : i * 16 + 4])
             unsignedTags.append(tag)
         if unsignedTags:
             # FIXME: only once per package
@@ -1059,7 +1056,7 @@ class RpmDB(RpmDatabase):
                 self.maxid = unpack("I", data)[0]
                 continue
 
-            (indexNo, storeSize) = unpack("!II", data[0:8])
+            (indexNo, storeSize) = unpack("!2I", data[0:8])
             indexdata = data[8:indexNo*16+8]
             storedata = data[indexNo*16+8:]
             pkg["signature"] = {}
@@ -1221,7 +1218,7 @@ class RpmDB(RpmDatabase):
             data = db[key]
             ndata = ""
             for i in xrange(0, len(data), 8):
-                if not data[i:i+8] == pack("II", id, idx):
+                if not data[i:i+8] == pack("2I", id, idx):
                     ndata += data[i:i+8]
             db[key] = ndata
 
@@ -1239,7 +1236,7 @@ class RpmDB(RpmDatabase):
                     continue
             if not db.has_key(key):
                 db[key] = ""
-            db[key] += pack("ii", id, idx)
+            db[key] += pack("2I", id, idx)
             if not useidx:
                 return
 

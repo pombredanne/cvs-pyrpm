@@ -23,7 +23,7 @@ from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE,
 from bsddb import hashopen
 from struct import unpack
 try:
-    from tempfile import mkstemp
+    from tempfile import mkstemp, mkdtemp, _get_candidate_names, TMP_MAX
 except:
     print "Error: Couldn't import tempfile python module. Only check scripts available."
 
@@ -45,7 +45,80 @@ from base import *
 # Number of bytes to read from file at once when computing digests
 DIGEST_CHUNK = 65536
 
+# Use this filename prefix for all temp files to be able
+# to search them and delete them again if they are left
+# over from killed processes.
+tmpprefix = "..pyrpm"
+
 # Collection of class indepedant helper functions
+def mkstemp_file(dirname, pre):
+    (fd, filename) = mkstemp(prefix=pre, dir=dirname)
+    return (fd, filename)
+
+def mkstemp_dir(dirname, pre):
+    filename = mkdtemp(prefix=pre, dir=dirname)
+    return filename
+
+def mkstemp_link(dirname, pre, linkfile):
+    names = _get_candidate_names()
+    for _ in xrange(TMP_MAX):
+        name = names.next()
+        filename = "%s/%s.%s" % (dirname, pre, name)
+        try:
+            os.link(linkfile, filename)
+            return filename
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                continue # try again
+            # make sure we have a fallback if hardlinks cannot be done
+            # on this partition
+            if e.errno in (errno.EXDEV, errno.EPERM):
+                return None
+            raise
+    raise IOError, (errno.EEXIST, "No usable temporary file name found")
+
+def mkstemp_symlink(dirname, pre, symlinkfile):
+    names = _get_candidate_names()
+    for _ in xrange(TMP_MAX):
+        name = names.next()
+        filename = "%s/%s.%s" % (dirname, pre, name)
+        try:
+            os.symlink(symlinkfile, filename)
+            return filename
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                continue # try again
+            raise
+    raise IOError, (errno.EEXIST, "No usable temporary file name found")
+
+def mkstemp_mkfifo(dirname, pre):
+    names = _get_candidate_names()
+    for _ in xrange(TMP_MAX):
+        name = names.next()
+        filename = "%s/%s.%s" % (dirname, pre, name)
+        try:
+            os.mkfifo(filename)
+            return filename
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                continue # try again
+            raise
+    raise IOError, (errno.EEXIST, "No usable temporary file name found")
+
+def mkstemp_mknod(dirname, pre, mode, rdev):
+    names = _get_candidate_names()
+    for _ in xrange(TMP_MAX):
+        name = names.next()
+        filename = "%s/%s.%s" % (dirname, pre, name)
+        try:
+            os.mknod(filename, mode, rdev)
+            return filename
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                continue # try again
+            raise
+    raise IOError, (errno.EEXIST, "No usable temporary file name found")
+
 def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
     if prog == None:
         prog = "/bin/sh"
@@ -70,7 +143,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
         rpmconfig.delayldconfig = 0
         runScript("/sbin/ldconfig", force=1)
     if script != None:
-        (fd, tmpfilename) = mkstemp(dir="/var/tmp/", prefix="rpm-tmp.")
+        (fd, tmpfilename) = mkstemp_file("/var/tmp/", "rpm-tmp.")
         if fd == None:
             return 0
         # test for open fds:
@@ -150,8 +223,7 @@ def installFile(rfi, infd, size, modsflag=True):
     mode = rfi.mode
     if S_ISREG(mode):
         makeDirs(rfi.filename)
-        (fd, tmpfilename) = mkstemp(dir=os.path.dirname(rfi.filename),
-            prefix=rfi.filename + ".")
+        (fd, tmpfilename) = mkstemp_file(os.path.dirname(rfi.filename), tmpprefix)
         try:
             try:
                 data = "1"
