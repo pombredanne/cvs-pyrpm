@@ -2136,7 +2136,7 @@ class RpmTree:
                     newest = rpm
             self.h[r] = [newest]
 
-def verifyStructure(packages, phash, tag, useidx=True):
+def verifyStructure(packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
     for tid in phash.keys():
         mytag = phash[tid]
@@ -2202,7 +2202,9 @@ def readPackages(dbpath):
     keyring = None #openpgp.PGPKeyRing()
     maxtid = None
     db = bsddb.hashopen(dbpath + "Packages", "r")
-    for (tid, data) in db.iteritems():
+    #for (tid, data) in db.iteritems():
+    for tid in db.keys():
+        data = db[tid]
         tid = unpack("I", tid)[0]
         if tid == 0:
             maxtid = unpack("I", data)[0]
@@ -2224,7 +2226,9 @@ def readDb(filename, dbtype="hash", dotid=None):
     else:
         db = bsddb.btopen(filename, "r")
     rethash = {}
-    for (k, v) in db.iteritems():
+    #for (k, v) in db.iteritems():
+    for k in db.keys():
+        v = db[k]
         if dotid:
             k = unpack("I", k)[0]
         if k == "\x00":
@@ -2274,14 +2278,14 @@ def readRpmdb(dbpath="/var/lib/rpm/"):
     verifyStructure(packages, filemd5s, "filemd5s")
     verifyStructure(packages, group, "group")
     verifyStructure(packages, installtid, "installtid")
-    verifyStructure(packages, name, "name", False)
+    verifyStructure(packages, name, "name", 0)
     verifyStructure(packages, providename, "providename")
     verifyStructure(packages, provideversion, "provideversion")
     #verifyStructure(packages, pubkeys, "pubkeys")
     verifyStructure(packages, requirename, "requirename")
     verifyStructure(packages, requireversion, "requireversion")
-    verifyStructure(packages, sha1header, "install_sha1header", False)
-    verifyStructure(packages, sigmd5, "install_md5", False)
+    verifyStructure(packages, sha1header, "install_sha1header", 0)
+    verifyStructure(packages, sigmd5, "install_md5", 0)
     verifyStructure(packages, triggername, "triggername")
     for pkg in packages.values():
         pkg.sig = HdrIndex()
