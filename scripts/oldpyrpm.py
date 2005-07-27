@@ -55,11 +55,8 @@
 #   small and faster python bindings for bsddb?
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
 #   and "0" epoch (change this for createrepo)
-# - check for #% in spec files
 # - streaming read for cpio files
 # - use setPerms() in doLnOrCopy()
-# - Try writing the sig header also for older rpm packages. Start with storing
-#   the order they have been written with.
 # - Change "strict" and "verify" into "debug" and have one integer specify
 #   debug and output levels. (Maybe also "nodigest" can move in?)
 # - check OpenGPG signatures
@@ -82,6 +79,7 @@
 #   thing to have a core part in C and testing/outer decisions in python.
 #   Due to the large data rpm is handling this is kind of tricky.
 # things that look less important to implement:
+# - check for #% in spec files: grep "#.*%" *.spec (too many hits until now)
 # - add streaming support to bzip2 compressed payload
 # - lua scripting support
 # - add support for drpm (delta rpm) payloadformat
@@ -103,6 +101,9 @@ from struct import pack, unpack
 from commands import getoutput
 
 if sys.version_info < (2, 3):
+    from types import StringType
+    basestring = StringType
+
     TMP_MAX = 10000
     from random import Random
     class _RandomNameSequence:
@@ -1676,7 +1677,8 @@ class ReadRpm:
                 time.localtime(ctime[i])), cname[i], ctext[i])
         return data
 
-    def __verifyWriteHeader(self, hdrhash, taghash, region, hdrdata, useinstall, rpmgroup):
+    def __verifyWriteHeader(self, hdrhash, taghash, region, hdrdata,
+        useinstall, rpmgroup):
         (indexNo, storeSize, fmt, fmt2) = writeHeader(hdrhash, taghash, region,
             None, useinstall, rpmgroup)
         if indexNo != hdrdata[0]:
@@ -1720,9 +1722,6 @@ class ReadRpm:
         self.__verifyWriteHeader(self.hdr.hash, rpmtag,
             "immutable", self.hdrdata, 1, self.rpmgroup)
         if self.strict:
-            #newrpm = 1
-            #if self["rpmversion"] in ["4.0.3"]:
-            #    newrpm = 0
             self.__verifyWriteHeader(self.sig.hash, rpmsigtag,
                 "header_signatures", self.sigdata, 0, None)
         # disable the utf-8 test per default:
@@ -2188,8 +2187,7 @@ def verifyStructure(packages, phash, tag, useidx=True):
             if tag == "filemd5s" and not S_ISREG(pkg["fileflags"][idx]):
             #check could also be: if tag == "filemd5s" and not key:
                 continue
-            # Equal triggernames aren't added multiple times for
-            # the same package. Why??
+            # We only need to store triggernames once per package.
             if tag == "triggername":
                 if tnamehash.has_key(key):
                     continue
