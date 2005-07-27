@@ -368,7 +368,7 @@ class PyGZIP:
         return "".join(decompdata)
 
     def __del__(self):
-        (crc32, isize) = unpack("ii", self.enddata)
+        (crc32, isize) = unpack("<iI", self.enddata)
         if crc32 != self.crcval:
             print "CRC check failed."
         if isize != self.length:
@@ -768,18 +768,16 @@ def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
         elif ttype == RPM_INT16:
             data = pack("!%dH" % count, *value)
             pad = (2 - (offset % 2)) % 2
-        elif ttype == RPM_INT8:
+        elif ttype == RPM_INT8 or ttype == RPM_CHAR:
             data = pack("!%dB" % count, *value)
         elif ttype == RPM_INT64:
             data = pack("!%dQ" % count, *value)
             pad = (8 - (offset % 8)) % 8
-        elif ttype == RPM_CHAR:
-            data = pack("!%dc" % count, *value)
         if pad:
             offset += pad
             store.append("\x00" * pad)
         store.append(data)
-        index = pack("!IIII", tagnum, ttype, offset, count)
+        index = pack("!4I", tagnum, ttype, offset, count)
         offset += len(data)
         if tagname == region:
             indexdata.insert(0, index)
@@ -1117,9 +1115,9 @@ class ReadRpm:
 
     def __verifyLead(self, leaddata):
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
-            unpack("!4scchh66shh16x", leaddata)
+            unpack("!4s2B2H66s2H16x", leaddata)
         failed = None
-        if major not in ("\x03", "\x04") or minor != "\x00" or \
+        if major not in (3, 4) or minor != 0 or \
             sigtype != 5 or rpmtype not in (0, 1):
             failed = 1
         # 21 == darwin
@@ -1190,7 +1188,7 @@ class ReadRpm:
     def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, hdrtags):
         checkSize = 0
         for i in xrange(0, indexNo * 16, 16):
-            index = unpack("!IIII", fmt[i:i + 16])
+            index = unpack("!4I", fmt[i:i + 16])
             ttype = index[1]
             # alignment for some types of data
             if ttype == RPM_INT16:
@@ -1210,7 +1208,7 @@ class ReadRpm:
             data = "\x8e\xad\xe8\x01\x00\x00\x00\x00" + doRead(self.fd, 8)
         else:
             data = doRead(self.fd, 16)
-        (magic, indexNo, storeSize) = unpack("!8sII", data)
+        (magic, indexNo, storeSize) = unpack("!8s2I", data)
         if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
             self.raiseErr("bad index magic")
         fmt = doRead(self.fd, 16 * indexNo)
@@ -1228,7 +1226,7 @@ class ReadRpm:
         if len(dorpmtag) == 0:
             return hdr
         for i in xrange(0, indexNo * 16, 16):
-            (tag, ttype, offset, count) = unpack("!IIII", fmt[i:i + 16])
+            (tag, ttype, offset, count) = unpack("!4I", fmt[i:i + 16])
             if not dorpmtag.has_key(tag):
                 continue
             nametag = dorpmtag[tag][4]
@@ -1248,9 +1246,7 @@ class ReadRpm:
                 else:
                     data = unpack("!%dI" % count,
                         fmt2[offset:offset + count * 4])
-            elif ttype == RPM_CHAR:
-                data = unpack("!%dc" % count, fmt2[offset:offset + count])
-            elif ttype == RPM_INT8:
+            elif ttype == RPM_INT8 or ttype == RPM_CHAR:
                 data = unpack("!%dB" % count, fmt2[offset:offset + count])
             elif ttype == RPM_INT16:
                 data = unpack("!%dH" % count, fmt2[offset:offset + count * 2])
@@ -1280,7 +1276,7 @@ class ReadRpm:
             if leaddata[:4] != "\xed\xab\xee\xdb":
                 self.printErr("no rpm magic found")
                 return 1
-            self.issrc = (leaddata[7] == "\01")
+            self.issrc = (leaddata[7] == "\x01")
             if self.verify:
                 self.__verifyLead(leaddata)
             sigdata = self.__readIndex(8, sigtags)
@@ -1701,8 +1697,8 @@ class ReadRpm:
             print "wrong fmt data"
             print "fmt length:", len(fmt), len(hdrdata[3])
             for i in xrange(0, indexNo * 16, 16):
-                (tag1, ttype1, offset1, count1) = unpack("!IIII", fmt[i:i + 16])
-                (tag2, ttype2, offset2, count2) = unpack("!IIII",
+                (tag1, ttype1, offset1, count1) = unpack("!4I", fmt[i:i + 16])
+                (tag2, ttype2, offset2, count2) = unpack("!4I",
                     hdrdata[3][i:i + 16])
                 print "tag(%d):" % i, tag1, tag2
                 if tag1 != tag2:
@@ -2234,7 +2230,7 @@ def readDb(filename, dbtype="hash", dotid=None):
         if k == "\x00":
             k = ""
         for i in xrange(0, len(v), 8):
-            (tid, idx) = unpack("II", v[i:i+8])
+            (tid, idx) = unpack("2I", v[i:i+8])
             if not rethash.has_key(tid):
                 rethash[tid] = {}
             if rethash[tid].has_key(idx):
@@ -2312,7 +2308,7 @@ def readRpmdb(dbpath="/var/lib/rpm/"):
             continue
         (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
             "immutable", install_keys, 0, pkg.rpmgroup)
-        lead = pack("!8sII", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
+        lead = pack("!8s2I", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
             indexNo, storeSize)
         ctx = sha.new()
         ctx.update(lead)
