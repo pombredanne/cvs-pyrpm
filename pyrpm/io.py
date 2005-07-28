@@ -367,6 +367,12 @@ class RpmStreamIO(RpmIO):
                 return ("-", (pos, None))
             v = self.getHeaderByIndex(self.idx, self.hdrdata[3], self.hdrdata[4])
             self.idx += 1
+            # Correct the 'filemtimes' tag to be a signed integer
+            if v[0] == 1034:    # 1034 == filemtimes tag
+                MAXINT = 1L << 31
+                for i in xrange(len(v[1])):
+                    if v[1][i] >= MAXINT:
+                        v[1][i] -= (MAXINT+MAXINT)
             # FIXME: unknown tags?
             return (rpmtagname[v[0]], v[1])
         # Read/parse data files archive

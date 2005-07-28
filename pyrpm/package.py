@@ -50,7 +50,7 @@ class _RpmFilenamesIterator:
             if i < 0:
                 break
             dirname = os.path.dirname(name)
-            if dirname[-1] != "/":
+            if len(dirname) > 0 and dirname[-1] != "/":
                 dirname += "/"
             if self.pkg["dirnames"][self.pkg["dirindexes"][i]] == dirname:
                 return i
