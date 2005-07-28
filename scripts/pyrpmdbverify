@@ -57,11 +57,16 @@ def readDB4(db, func):
     rethash = {}
     for key in db.keys():
         data = db[key]
-        idx = func(key)
-        rethash[idx] = []
+        tag = func(key)
+        if tag == "\x00":
+            tag = ""
         for i in xrange(0, len(data), 8):
-            rethash[idx].append((unpack("i", data[i+0:i+4])[0], \
-                                 unpack("i", data[i+4:i+8])[0]))
+            (id, idx) = unpack("II", data[i:i+8])
+            if not rethash.has_key(id):
+                rethash[id] = {}
+            if not rethash[id].has_key(idx):
+                rethash[id][idx] = []
+            rethash[id][idx].append(tag)
     return rethash
 
 def readDB4hash(filename, func=lambda x:x):
@@ -135,6 +140,12 @@ def readRpmDB():
     readConflictname()
     readDirnames()
     readFilemd5s()
+    for hash in filemd5s.values():
+        for key in hash.keys():
+                tlist = []
+                for val in hash[key]:
+                    tlist.append(b2a_hex(val))
+                hash[key] = tlist
     readGroup()
     readInstalltid()
     readName()
@@ -152,55 +163,68 @@ def readRpmDB():
 # Verify functions
 #
 def verifyStructure(hash, tag, useidx=True):
-    for key in hash.keys():
-        for (id, idx) in hash[key]:
-            if not id in packages.keys():
-                print "Error %s: Package id %s doesn't exist" % (tag, id)
-                continue
+    # Check db4 files against /var/lib/rpm/Packages
+    for id in hash.keys():
+        if not id in packages.keys():
+            print "Error %s: Package id %s doesn't exist" % (tag, id)
+            continue
+        if not packages[id].has_key(tag):
+            print "Error %s: Tag not found in package %s" % (tag, packages[id].getNEVRA())
+            continue
+        taghash = hash[id]
+        pkghash = packages[id][tag]
+        for idx in taghash.keys():
             if useidx:
-                if not packages[id].has_key(tag):
-                    print "Error %s: Tag not found in package %s" % (tag, packages[id].getNEVRA())
+                if len(pkghash) <= idx:
+                    print "Error %s: Index to high for key %s in package %s" % (tag, str(taghash[idx]), packages[id].getNEVRA())
                     continue
-                if len(packages[id][tag]) <= idx:
-                    print "Error %s: Index to high for key %s in package %s" % (tag, key, packages[id].getNEVRA())
-                    continue
-                #print key, id, tag, idx, packages[id].getNEVRA(), len(packages[id][tag])
-                val = packages[id][tag][idx]
+                val = pkghash[idx]
             else:
-                val = packages[id][tag]
-            # Convert empty keys 
-            if key == "\x00":
-                key = ""
-            if key != val:
-                print "Error %s: %s != %s in package %s" % (tag, key, val, packages[id].getNEVRA())
+                val = pkghash
+            if not val in taghash[idx]:
+                print "Error %s: %s not found in package %s" % (tag, val, packages[id].getNEVRA())
 
-def verifyReference(hash, tag, id):
-    pkg = packages[id]
-    refhash = pkg[tag]
-    tnamehash = {}
-    if not refhash:
-        return
-    for idx in xrange(len(refhash)):
-        key = refhash[idx]
-        # Convert empty keys 
-        if key == '':
-            key = "\x00"
-        if tag == "requirename":
-            # Skip install prereqs, just like rpm does...
-            if isInstallPreReq(pkg["requireflags"][idx]):
-                continue
-        # Equal Triggernames aren't added multiple times for the same package
-        if tag == "triggername":
-            if tnamehash.has_key(key):
-                continue
-            else:
-                tnamehash[key] = 1
-        if not hash.has_key(key):
-            print "Error in %s db: %s not found in db for package %s" % (tag, key, pkg.getNEVRA())
+    # Check /var/lib/rpm/Packages against the db4 files
+    for id in packages.keys():
+        pkg = packages[id]
+        refhash = pkg[tag]
+        tnamehash = {}
+        if not refhash:
             continue
-        if not (id, idx) in hash[key]:
-            print "Error in %s db: %s not referenced for package %s" % (tag, key, pkg.getNEVRA())
+        taghash = None
+        if hash.has_key(id):
+            taghash = hash[id]
+        if not useidx:
+            if   not taghash:
+                print "Error in %s db: No database entries found for package %s" % (tag, pkg.getNEVRA())
+            elif refhash not in taghash[0]:
+                print "Error in %s db: %s not referenced for package %s" % (tag, refhash, pkg.getNEVRA())
             continue
+        for idx in xrange(len(refhash)):
+            val = refhash[idx]
+            if tag == "requirename":
+                # Skip install prereqs, just like rpm does...
+                if isInstallPreReq(pkg["requireflags"][idx]):
+                    continue
+            # only include filemd5s for regular files
+            if tag == "filemd5s" and not S_ISREG(pkg["fileflags"][idx]):
+                continue
+            # Equal Triggernames aren't added multiple times for the same
+            # package
+            if tag == "triggername":
+                if tnamehash.has_key(val):
+                    continue
+                else:
+                    tnamehash[val] = 1
+            if not taghash:
+                print "Error in %s db: No database entries found for package %s" % (tag, pkg.getNEVRA())
+                break
+            if not taghash.has_key(idx):
+                print "Error in %s db: Index %s not found in db for package %s" % (tag, idx, pkg.getNEVRA())
+                continue
+            if not val in taghash[idx]:
+                print "Error in %s db: %s not referenced for package %s" % (tag, val, pkg.getNEVRA())
+                continue
 
 def verifyBasenames():
     print "Checking Basename integrity."
@@ -216,10 +240,7 @@ def verifyDirnames():
 
 def verifyFilemd5s():
     print "Checking Filemd5s integrity."
-    tmphash = {}
-    for key in filemd5s.keys():
-        tmphash[b2a_hex(key)] = filemd5s[key]
-    verifyStructure(tmphash, "filemd5s")
+    verifyStructure(filemd5s, "filemd5s")
 
 def verifyGroup():
     print "Checking Group integrity."
@@ -227,16 +248,7 @@ def verifyGroup():
 
 def verifyInstalltid():
     print "Checking Installtid integrity."
-    for key in installtid.keys():
-        for (id, idx) in installtid[key]:
-            if not id in packages.keys():
-                print "Error installtid: Package id %s doesn't exist" % id
-                continue
-            val = packages[id]["installtid"][0]
-            if key == "\x00":
-                key = ""
-            if key != val:
-                print "Error installtid: %s != %s in package %s" % (key, val, packages[id].getNEVRA())
+    verifyStructure(installtid, "installtid")
 
 def verifyName():
     print "Checking Name integrity."
@@ -246,15 +258,6 @@ def verifyPackages():
     print "Checking Packages integrity."
     rpmio = RpmFileIO(rpmconfig, "dummy")
     for id in packages.keys():
-        verifyReference(basenames, "basenames", id)
-        verifyReference(conflictname, "conflictname", id)
-        verifyReference(dirnames, "dirnames", id)
-        verifyReference(group, "group", id)
-        verifyReference(providename, "providename", id)
-        verifyReference(provideversion, "provideversion", id)
-        verifyReference(requirename, "requirename", id)
-        verifyReference(requireversion, "requireversion", id)
-        verifyReference(triggername, "triggername", id)
         (headerindex, headerdata) = rpmio._generateHeader(packages[id], 1, [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
         if packages[id]["signature"].has_key("sha1header"):
             if packages[id]["signature"]["sha1header"] != \
@@ -406,8 +409,8 @@ if __name__ == '__main__':
         except SystemExit:
             pass
         print "Starting profil statistics. This takes some time..."
-        prof.close()
-        del prof
+#        prof.close()
+#        del prof
         s = hotshot.stats.load(filename)
         s.strip_dirs().sort_stats('time').print_stats(100)
         s.strip_dirs().sort_stats('cumulative').print_stats(100)
