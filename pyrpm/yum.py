@@ -64,9 +64,10 @@ class RpmYum:
         self.command = command.lower()
         if self.command not in self.command_list:
             self.config.printError("Invalid command")
-            sys.exit(1)
+            return 0
         if self.command == "upgrade" or self.command == "groupupgrade":
             self.always_install = [ ]
+        return 1
 
     def addRepo(self, baseurl, excludes, reponame):
         repo = RpmRepo(self.config, baseurl, self.config.buildroot, excludes,
@@ -81,10 +82,14 @@ class RpmYum:
         # Create and read db
         self.pydb = getRpmDBFactory(self.config, self.config.dbpath,
                                     self.config.buildroot)
-        self.pydb.open()
-        self.pydb.read()
+        if not self.pydb:
+            return 0
+        if not self.pydb.open():
+            return 0
+        if not self.pydb.read():
+            return 0
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
-        self.runArgs(args)
+        return self.runArgs(args)
 
     def runArgs(self, args):
         if self.config.timer:
@@ -94,7 +99,7 @@ class RpmYum:
         if self.command.startswith("group"):
             if self.config.compsfile == None:
                 self.config.printError("You need to specify a comps.xml file for group operations")
-                sys.exit(1)
+                return 0
             comps = RpmCompsXML(self.config, self.config.compsfile)
             comps.read()
             pkgs = []
@@ -120,7 +125,7 @@ class RpmYum:
                                          tags=self.config.resolvertags)
                 except (IOError, ValueError), e:
                     self.config.printError("%s: %s" % (f, e))
-                    sys.exit(1)
+                    return 0
                 if self.config.ignorearch or \
                    pkg.isSourceRPM() or \
                    archCompat(pkg["arch"], self.config.machine):
@@ -135,7 +140,7 @@ class RpmYum:
                                              tags=self.config.resolvertags)
                     except (IOError, ValueError), e:
                         self.config.printError("%s: %s" % (fn, e))
-                        sys.exit(1)
+                        return 0
                     if self.config.ignorearch or \
                        pkg.isSourceRPM() or \
                        archCompat(pkg["arch"], self.config.machine):
@@ -150,6 +155,7 @@ class RpmYum:
                         self.config.printError("Couldn't find package %s, skipping" % f)
         if self.config.timer:
             self.config.printInfo(0, "runArgs() took %s seconds\n" % (clock() - time1))
+        return 1
 
     def runDepRes(self):
         if self.config.timer:

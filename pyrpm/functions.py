@@ -219,7 +219,6 @@ def installFile(rfi, infd, size, modsflag=True):
 
     infd can be None if size == 0.  Raise IOError, OSError."""
 
-    from tempfile import mkstemp
     mode = rfi.mode
     if S_ISREG(mode):
         makeDirs(rfi.filename)
@@ -281,7 +280,7 @@ def installFile(rfi, infd, size, modsflag=True):
             os.unlink(rfi.filename)
             raise
     elif S_ISSOCK(mode):
-        raise ValueError("UNIX domain sockets can't be packaged.")
+        raise ValueError("UNIX domain sockets can't be extracted yet.")
     else:
         raise ValueError, "%s: not a valid filetype" % (oct(mode))
 

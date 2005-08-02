@@ -1004,9 +1004,16 @@ class RpmDatabase:
         if filename != None:
             return len(self.filenames.path[dirname][filename]) > 1
         tmpdir = os.path.dirname(dirname)
-        if tmpdir[-1] != "/":
+        if len(tmpdir) > 0 and tmpdir[-1] != "/":
             tmpdir += "/"
         basename = os.path.basename(dirname)
+        if tmpdir == "/etc/init.d/" or tmpdir == "/etc/rc.d/init.d/":
+            dupe = 0
+            if self.filenames.path.has_key("/etc/rc.d/init.d/"):
+                dupe = len(self.filenames.path["/etc/rc.d/init.d/"][basename]) > 1
+            if self.filenames.path.has_key("/etc/init.d/"):
+                dupe = dupe or len(self.filenames.path["/etc/init.d/"][basename]) > 1
+            return dupe
         return len(self.filenames.path[tmpdir][basename]) > 1
 
     def getNumPkgs(self, name):
@@ -1032,6 +1039,7 @@ class RpmDatabase:
 class RpmDB(RpmDatabase):
     def __init__(self, config, source, buildroot=None):
         RpmDatabase.__init__(self, config, source, buildroot)
+        self.zero = pack("I", 0)
         self.dbopen = False
         self.maxid = 0
 
@@ -1118,9 +1126,13 @@ class RpmDB(RpmDatabase):
 
         self.__openDB4()
 
+        try:
+            self.maxid = unpack("I", self.packages_db[self.zero])[0]
+        except:
+            pass
+
         self.maxid += 1
         id = self.maxid
-        self.ids.append(id)
 
         rpmio = RpmFileIO(self.config, "dummy")
         pkg["install_size_in_sig"] = pkg["signature"]["size_in_sig"]
@@ -1148,7 +1160,8 @@ class RpmDB(RpmDatabase):
         self.__writeDB4(self.sha1header_db, "install_sha1header", id, pkg)
         self.__writeDB4(self.sigmd5_db, "install_md5", id, pkg)
         self.__writeDB4(self.triggername_db, "triggername", id, pkg)
-        self.packages_db[pack("I", 0)] = pack("I", self.maxid)
+        self.packages_db[self.zero] = pack("I", self.maxid)
+        return 1
 
     def erasePkg(self, pkg, nowrite=None):
         self._erasePkg(pkg)
@@ -1178,7 +1191,7 @@ class RpmDB(RpmDatabase):
         self.__removeId(self.sigmd5_db, "install_md5", id, pkg)
         self.__removeId(self.triggername_db, "triggername", id, pkg)
         del self.packages_db[pack("I", id)]
-        self.ids.remove(id)
+        return 1
 
     def __openDB4(self):
         dbpath = self._getDBPath()
@@ -1188,31 +1201,33 @@ class RpmDB(RpmDatabase):
         if not self.is_read:
             self.read()
 
-        if not self.dbopen:
-            # We first need to remove the __db files, otherwise rpm will later
-            # be really upset. :)
-            for i in xrange(9):
-                try:
-                    os.unlink("%s/__db.00%d" % (dbpath, i))
-                except:
-                    pass
-            self.basenames_db      = bsddb.hashopen(dbpath+"/Basenames", "c")
-            self.conflictname_db   = bsddb.hashopen(dbpath+"/Conflictname", "c")
-            self.dirnames_db       = bsddb.btopen(dbpath+"/Dirnames", "c")
-            self.filemd5s_db       = bsddb.hashopen(dbpath+"/Filemd5s", "c")
-            self.group_db          = bsddb.hashopen(dbpath+"/Group", "c")
-            self.installtid_db     = bsddb.btopen(dbpath+"/Installtid", "c")
-            self.name_db           = bsddb.hashopen(dbpath+"/Name", "c")
-            self.packages_db       = bsddb.hashopen(dbpath+"/Packages", "c")
-            self.providename_db    = bsddb.hashopen(dbpath+"/Providename", "c")
-            self.provideversion_db = bsddb.btopen(dbpath+"/Provideversion", "c")
-            self.requirename_db    = bsddb.hashopen(dbpath+"/Requirename", "c")
-            self.requireversion_db = bsddb.btopen(dbpath+"/Requireversion", "c")
-            self.sha1header_db     = bsddb.hashopen(dbpath+"/Sha1header", "c")
-            self.sigmd5_db         = bsddb.hashopen(dbpath+"/Sigmd5", "c")
-            self.triggername_db    = bsddb.hashopen(dbpath+"/Triggername", "c")
-            self.dbopen            = True
-            self.ids               = map(lambda x:unpack("I", x)[0], self.packages_db.keys())
+        if self.dbopen:
+            return
+
+        # We first need to remove the __db files, otherwise rpm will later
+        # be really upset. :)
+        for i in xrange(9):
+            try:
+                os.unlink("%s/__db.00%d" % (dbpath, i))
+            except:
+                pass
+        self.basenames_db      = bsddb.hashopen(dbpath+"/Basenames", "c")
+        self.conflictname_db   = bsddb.hashopen(dbpath+"/Conflictname", "c")
+        self.dirnames_db       = bsddb.btopen(dbpath+"/Dirnames", "c")
+        self.filemd5s_db       = bsddb.hashopen(dbpath+"/Filemd5s", "c")
+        self.group_db          = bsddb.hashopen(dbpath+"/Group", "c")
+        self.installtid_db     = bsddb.btopen(dbpath+"/Installtid", "c")
+        self.name_db           = bsddb.hashopen(dbpath+"/Name", "c")
+        self.packages_db       = bsddb.hashopen(dbpath+"/Packages", "c")
+        self.providename_db    = bsddb.hashopen(dbpath+"/Providename", "c")
+        self.provideversion_db = bsddb.btopen(dbpath+"/Provideversion", "c")
+        self.requirename_db    = bsddb.hashopen(dbpath+"/Requirename", "c")
+        self.requireversion_db = bsddb.btopen(dbpath+"/Requireversion", "c")
+        self.sha1header_db     = bsddb.hashopen(dbpath+"/Sha1header", "c")
+        self.sigmd5_db         = bsddb.hashopen(dbpath+"/Sigmd5", "c")
+        self.triggername_db    = bsddb.hashopen(dbpath+"/Triggername", "c")
+        self.dbopen            = True
+        return 1
 
     def __removeId(self, db, tag, id, pkg, useidx=True, func=lambda x:str(x)):
         if not pkg.has_key(tag):
@@ -1230,7 +1245,7 @@ class RpmDB(RpmDatabase):
 
     def __writeDB4(self, db, tag, id, pkg, useidx=True, func=lambda x:str(x)):
         if not pkg.has_key(tag):
-            return
+            return 1
         for idx in xrange(len(pkg[tag])):
             key = self.__getKey(tag, idx, pkg, useidx, func)
             if tag == "requirename":
@@ -1244,7 +1259,8 @@ class RpmDB(RpmDatabase):
                 db[key] = ""
             db[key] += pack("2I", id, idx)
             if not useidx:
-                return
+                return 1
+        return 1
 
     def __getKey(self, tag, idx, pkg, useidx, func):
         if useidx:
@@ -1446,6 +1462,7 @@ class RpmSQLiteDB(RpmDatabase):
                 continue
             self.__writeTags(cu, rowid, pkg, tag)
         cu.execute("commit")
+        return 1
 
     def erasePkg(self, pkg, nowrite=None):
         self._erasePkg(pkg)
@@ -1460,6 +1477,7 @@ class RpmSQLiteDB(RpmDatabase):
         for tag in self.tagnames:
             cu.execute("delete from %s where id=%d", (tag, pkg["install_id"]))
         cu.execute("commit")
+        return 1
 
     def __initDB(self):
         cu = self.cx.cursor()
@@ -2115,7 +2133,15 @@ class RpmCompsXML:
         return str(self.grouphash)
 
     def read(self):
-        doc = libxml2.parseFile (self.source)
+        if not self.source.startswith("file:/"):
+            filename = self.source
+        else:
+            filename = self.source[5:]
+            if filename[1] == "/":
+                idx = filename[2:].index("/")
+                filename = filename[idx+2:]
+        filename = functions.cacheLocal(filename, "", 1)
+        doc = libxml2.parseFile (filename)
         if doc == None:
             return 0
         root = doc.getRootElement()

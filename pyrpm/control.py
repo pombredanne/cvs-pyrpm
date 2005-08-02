@@ -155,7 +155,7 @@ class RpmController:
         if not operations:
             if operations == []:
                 self.config.printError("No updates are necessary.")
-                sys.exit(0)
+                return 1
             self.config.printError("Errors found during package dependancy checks and ordering.")
             sys.exit(1)
         self.triggerlist = _Triggers(self.config)
@@ -200,9 +200,13 @@ class RpmController:
                     if op == OP_INSTALL or \
                        op == OP_UPDATE or \
                        op == OP_FRESHEN:
-                        self.__addPkgToDB(pkg, nowrite=1)
+                        if not self.__addPkgToDB(pkg, nowrite=1):
+                            self.config.printError("Couldn't add package %s to parent database." % pkg.getNEVRA())
+                            return 0
                     elif op == OP_ERASE:
-                        self.__erasePkgFromDB(pkg, nowrite=1)
+                        if not self.__erasePkgFromDB(pkg, nowrite=1):
+                            self.config.printError("Couldn't erase package %s from parent database." % pkg.getNEVRA())
+                            return 0
                     try:
                         pkg.close()
                     except IOError:

@@ -90,13 +90,18 @@ def main():
     lockfile = lockPyrpm()
     if lockfile == None:
         printError("couldn't lock pyrpmyum")
-        sys.exit(1)
-    yum.setCommand(args[0])
-    yum.processArgs(args[1:])
-    if yum.runDepRes():
-        yum.runCommand()
+        return 0
+    if not yum.setCommand(args[0]):
+        return 0
+    if not yum.processArgs(args[1:]):
+        return 0
+    if not yum.runDepRes():
+        return 0
+    if not yum.runCommand():
+        return 0
     if lockfile:
         unlink(lockfile)
+    return 1
 
 if __name__ == '__main__':
     dohotshot = 0
@@ -116,6 +121,7 @@ if __name__ == '__main__':
         s.strip_dirs().sort_stats('cumulative').print_stats(100)
         os.unlink(filename)
     else:
-        main()
+        if not main():
+            sys.exit(1)
 
 # vim:ts=4:sw=4:showmatch:expandtab
