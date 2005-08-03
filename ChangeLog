@@ -1,4 +1,603 @@
+2005-08-02  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmyum 1.43, pyrpm/package.py 1.82, pyrpm/yum.py 1.53, pyrpm/functions.py 1.106, pyrpm/io.py 1.74, pyrpm.spec.in 1.8, pyrpm/control.py 1.65:
+	- Started fixing the sys.exit() calls deep inside nested methods()
+	- Started cleaning up function and method return calls and use of them
+	- Some minor typo fixes
+	- Implemented hack to fix /etc/rc.d/init.d/ <-> /etc/init.d/ problems
+	- Fixed evil bug with incorrect maxid for rpmdb
+	- Small optimization for maxid access
+	- Small code rearangement for better readability
+	- Fixed bug in comps.xml parser, now uses the cacheLocal()
+	- Fixed RpmPackage::erase() method to correctly verify which files need to be
+	  removed and/or renamed to ".rpmsave"
+
+2005-07-28  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/base.py 1.38, pyrpm/io.py 1.73, pyrpm/package.py 1.81:
+	- Fixed a problem with extracting source rpms and the new filenames list
+	  handling
+	- Special cased the filemtimes tag to be a signed integer
+
+	* scripts/pyrpmdbverify 1.8:
+	- Modified the pyrpmdbverify code to use the double hash idea from Florian
+
+2005-07-27  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.45:
+	- scripts/oldpyrpm.py: better work with python-2.2
+
+	* scripts/oldpyrpm.py 1.44: - scripts/oldpyrpm.py:
+	  - fix gzip crc/size calculation (Phil Knirsch)
+	  - adjust all unpack()/pack() format strings
+
+2005-07-27  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.105, pyrpm/io.py 1.72, pyrpm/package.py 1.80:
+	- Added the start of the mktemp stuff
+	- Fixed the crc32 and isize reading to use correct endian
+	- Use the lead information of a rpm to determine if it is a src or binary rpm
+	- Went over all pack() and unpack() calls and harmonized them all
+
+2005-07-27  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.43:
+	- scripts/oldpyrpm.py: work again with python 2.2
+
+	* scripts/oldpyrpm.py 1.42: - scripts/oldpyrpm.py:
+	  - add rpmdbtag to separate tags only in rpmdb
+	  - handel RPM_GROUP better for also writing rpm headers
+	  - check if filemd5s is only set for regular files
+
+2005-07-26  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.41:
+	- scripts/oldpyrpm.py: set ReadRpm.issrc based on rpm lead data
+
+2005-07-26  Thomas Woerner  <twoerner@redhat.com>
+
+	* tests/delta.py 1.3, tests/deltaanalyze.py 1.1, tests/deltagen.py 1.1:
+	[tw]
+	delta.py:
+	- using time.time insated of time.clock
+	- allow to set compression and verify flag at RpmDelta object generation
+	- added verify flag
+	- more information in "info" mode
+	deltagen.py:
+	- new checkin
+	- analyzes two directories and calls delta.py for matching packages (same name
+	  and newer version in second directory)
+	- outputs log file
+	deltaanalyze.py:
+	- new checkin
+	- analyzses log output of deltagen.py and prints summary
+
+2005-07-25  Thomas Woerner  <twoerner@redhat.com>
+
+	* tests/delta.py 1.2: [tw]
+	- using getopt
+	- documentation fixes
+	- added info option
+	- fixed gzipFile function to use gzip for now
+
+	* tests/delta.py 1.1: [tw] first rpmdelta creator and applier
+
+2005-07-23  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.40: - scripts/oldpyrpm.py:
+	  - for two src rpms to be the same, either the payload md5 has
+	    to match or the md5sum of all regular files
+
+	* scripts/oldpyrpm.py 1.39: - scripts/pyrpm.py:
+	  - add writeHeader() to write again rpm headers
+	  - allow checking the sha1 checksum for rpmdb entries
+
+2005-07-20  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.38: - scripts/oldpyrpm.py:
+	  - checkrpmdb: restructure a bit and add comments
+	  - check if /usr/lib/debug is contained in normal packages
+
+	* scripts/oldpyrpm.py 1.37: - scripts/oldpyrpm.py:
+	  - cleanup (ia64 included twice in list, move to internal func)
+
+2005-07-15  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/control.py 1.64, pyrpm/functions.py 1.104, pyrpm/io.py 1.71, pyrpm/yum.py 1.52:
+	- Fixed bug with primary.xml and filelist.xml not being cached correctly.
+	- Fixed bug where the database would get reread for every fork in the child
+	- Some more implicit garbage collection calls. Don't help much, but btn.
+
+2005-07-14  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.51, scripts/pyrpmrandomizer 1.4, scripts/pyrpmyum 1.42, pyrpm/functions.py 1.103, pyrpm/io.py 1.70:
+	- Made the tempfile and urlgrabber imports global again and print an error if
+	  they fail to get imported.
+	- Rearanged the RpmRepo code to reflect method call order
+	- Implemented a new XML parser based on the XMLReaderInterface to save tons of
+	  memory.
+	- Fixed an unecessary sys.exit() in RpmYum class, let the top level app handle
+	  failed dep resolution.
+
+2005-07-13  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/control.py 1.63, pyrpm/functions.py 1.102: [tw]
+	- getFreeDiskspace: using mount point of device for info messages
+	- getFreeDiskspace does no longer return the minfreehash structure, it returnes
+	  a status code
+	- moved all diskspace messages to getFreeDiskspace
+	- control.py: using of new getFreeDiskspace, dropped own diskspace message
+
+2005-07-12  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmrebuilddb 1.6, pyrpm/functions.py 1.101:
+	- Fixed some more signed/unsigned int problems
+	- Fixed missing maxid setting for Packages in pyrpmrebuilddb
+
+	* pyrpm/package.py 1.79, scripts/pyrpmdbverify 1.7, scripts/pyrpmrebuilddb 1.5, pyrpm/io.py 1.69:
+	- Changed the RpmDatabase internal file duplicate handling to use the
+	  FilenamesList class
+	- Free memory from the crappy libxml2 python bindings. Saves tons of memory!
+	- Completely dropped the rpmlib() excludes, don't seem to be present in rpm
+
+2005-07-12  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/package.py 1.78: [tw]
+	- same fix for _RpmFilenamesIterator::index
+
+	* pyrpm/base.py 1.37: [tw]
+	- fixed dirname in FilenamesList::search:
+	  do not append "/" if dirname already ands with a "/"
+
+	* pyrpm/base.py 1.36, pyrpm/resolver.py 1.79: [tw]
+	- moved FilenamesList to base.py
+	- dropped duplicates list in FilenamesList
+	- adapted RpmResolver::getFileConflicts
+
+2005-07-12  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.100, pyrpm/io.py 1.68, pyrpm/package.py 1.77, tests/test 1.13:
+	- Added missing check for unset header tags for yum repos in getFreeDiscspace()
+	- Implemented missing maxid for rpmdb, should fix corrupted rpmdb problems
+	- Fixed several places for pack and unpack and signed and unsigned ints, still
+	  need to do complete review and integrate oldpyrpm fix
+	- Adapted RpmRepo and RpmPackage classes to work with new filenames iterator
+	- Fixed bug in index() method of new filenames iterator
+
+2005-07-12  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.36: - scripts/oldpyrpm.py:
+	  - change most 32bit integers to be unsigned
+
+2005-07-12  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/package.py 1.76, pyrpm/resolver.py 1.78: [tw]
+	package.py
+	- New class iterator _RpmFilenamesIterator, which replaces
+	  RpmPackage["filenames"].
+	- Replaced "RpmData::__getitem__ = dict.get" by ne class function
+	  RpmData::__getitem__, that returns a _RpmFilenamesIterator for
+	  item="filenames", which enables a transparent usage of old code.
+	- Rewritten RpmData::generateFileNames(), which generates basenames, dirnames
+	  and dirindexes for old packages from oldfilenames.
+
+	resolver.py
+	- Adapted FilenamesList, which uses RpmData["basenames"], etc. with a new
+	  internal structure:
+	  File list: Hash(dirname)->Hash(basename)->List(RpmPackage)
+	  Multi list has similar structure.
+	- Usage of new multi list in RpmResolver::getFileConflicts
+
+2005-07-12  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.35: - scripts/oldpyrpm.py:
+	  - distinguish between signed and unsigned RPM_INT32 entries
+
+2005-07-10  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.21, pyrpm/__init__.py 1.25: - release 0.27
+
+	* scripts/oldpyrpm.py 1.34:
+	- scripts/oldpyrpm.py: change things to quiet pylint
+
+	* scripts/oldpyrpm.py 1.33: - scripts/oldpyrpm.py:
+	  - more docu on how to use this script
+	  - use one prefix for all temp files
+	  - add doLnOrCopy()
+	  - add getMD5()
+	  - alllow del of entries in ReadRPM()
+	  - allow parsing of header from rpmdb
+	  - read/verify rpmdb
+	  - allow extracting several rpms and add a "--buildroot" param
+
+2005-07-08  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmdbverify 1.6, scripts/pyrpmrebuilddb 1.4:
+	- Fixed a off-by-one error in the pyrpmdbverify script
+	- Made the pyrpmdbverify less verbose in case of missing packages
+	- Removed a few debug lines in pyrpmrebuilddb
+
+	* pyrpm/control.py 1.62, pyrpm/io.py 1.67, pyrpm/package.py 1.75, pyrpm/yum.py 1.50, scripts/pyrpmdbverify 1.5, scripts/pyrpmrebuilddb 1.3, tests/test 1.12:
+	- Extended the RpmDatabase interface to includ open() and close() methods.
+	  Needed for proper SQLite support.
+	- Fixed the hack to prevent reloading packages from a database. Now RpmPackage
+	  takes care of that itself correctly.
+	- Finally support and honor the --justdb option.
+	- Moved some repeating code from the various database classes to the base class
+	  and made them "protected"
+	- Open the Packages file in RpmDB with "r" instead of "c". Prevents tracebacks
+	  when using it read only as a user.
+	- Implemented the RpmSQLiteDB class with complete read and write support.
+	- Extended the dbfactory to support sqlite.
+	- Added some more checks for the pyrpmdbverify script to avoid tracebacks
+
+2005-07-05  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.32: - scripts/oldpyrpm.py:
+	  - fix names of tags only in rpmdb
+	  - fix for relocated packages
+	  - fix checkSrpms() not working
+
+2005-07-02  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.31: - scripts/oldpyrpm.py:
+	  - PyGZIP:
+	    - keep to Phil's idea, it is faster
+	    - move crc/length check into __del__
+	  - do not collect info about all cpio files
+
+2005-07-01  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.99, pyrpm/io.py 1.66:
+	- Moved all the python 2.3 imports to the places where we actually need them.
+	  Allows commenting out the python 2.3 check for all non-writing scripts.
+
+	* doc/README 1.2: - More docu updates
+
+2005-07-01  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.30: - scripts/oldpyrpm.py:
+	  - support relocatable packages
+	  - first try to speed up the zlib uncompression
+
+	* configure.in 1.20, pyrpm/__init__.py 1.24: - release 0.26
+
+2005-06-30  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/base.py 1.35: - pyrpm/base.py: typo to unused tag?
+
+2005-06-30  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.98, pyrpm/io.py 1.65, scripts/pyrpmdbverify 1.4, scripts/pyrpmrebuilddb 1.2, tests/test 1.11:
+	- Fixed missing openpgp module name in functions:readDB()
+	- For RpmDB:read() do the same as for RpmPyDB. If it fails, don't bail out with
+	  an error. This is needed for quite a few of the test scripts running as
+	  normal users
+	- Fix the wrong triggername error in pyrpmdbverify
+	- Fix the triggername creation in pyrpmrebuilddb
+
+2005-06-29  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.29:
+	- scripts/oldpyrpm.py: sync possible rpm tags
+
+	* doc/Makefile.am 1.4: - docu/Makefile.am: add docu files
+
+	* configure.in 1.19, pyrpm/__init__.py 1.23: - release 0.25
+
+	* scripts/Makefile.am 1.9, tests/Makefile.am 1.6:
+	- add more tests and scripts
+
+	* scripts/oldpyrpm.py 1.28: - scripts/oldpyrpm.py:
+	  - try to always write temp files and only rename at the end
+	  - faster handling of path names via os.path split()
+
+2005-06-29  Philip Knirsch  <pknirsch@redhat.com>
+
+	* doc/README 1.1, doc/README.first 1.1, doc/README.rpmdb 1.1:
+	- Added some start of really important readme files
+
+	* pyrpm/config.py 1.32, pyrpm/yum.py 1.49:
+	- Moved rpmconfig.tid init to the correct place.
+
+2005-06-29  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpminstall 1.22:
+	[tw] - ther is no self.config using rpmconfig. instead
+
+	* pyrpm/resolver.py 1.77:
+	[tw] - fixed installed check in hasFileConflict
+
+	* pyrpm/resolver.py 1.76: [tw] added missing 'import base'
+
+2005-06-29  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/resolver.py 1.75: - It's flags, darn it. :)
+
+2005-06-29  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpminstall 1.21: [tw]
+	- more indent fixes
+	- fixed getRpmDBFactory call
+
+	* scripts/pyrpminstall 1.20: [tw] solved indent block problem
+
+2005-06-29  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/io.py 1.64:
+	- Remove the __db* temp files from rpm if the exist.
+
+	* pyrpm/io.py 1.63:
+	- Ups. Removed debug output from new rpmdb write code. :)
+
+	* pyrpm/config.py 1.31, pyrpm/control.py 1.61, pyrpm/io.py 1.62, pyrpm/yum.py 1.48, scripts/pyrpminstall 1.19, scripts/pyrpmyum 1.41:
+	- BIG CHANGE: Switch default db from pydb to rpmdb!
+	- Fully implemented rpmdb support with read and write of db (install/erase)
+	- Dropped FooDB, not needed anymore
+	- Fixed several problems in the read() method of RpmDB class
+	- Adapted some of the code to support different types of databases
+	- Easy switch via --dbpath or in the config.py
+
+2005-06-22  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.97, pyrpm/io.py 1.61, tests/test 1.10:
+	- Fixed the import loop between functions and io (dang, how i hate python
+	  imports sometimes... :))))
+
+2005-06-21  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/base.py 1.34, pyrpm/functions.py 1.96, pyrpm/io.py 1.60, scripts/pyrpmdbverify 1.3, scripts/pyrpmrebuilddb 1.1, tests/rpmdbtestPackages 1.4, tests/test 1.9:
+	- Added a few more install only tags
+	- Moved the archivesize tag to the install only ones, although i can happen
+	  for 3rd party rpms to appear in binary rpms... crap...
+	- Moved the readPackages() function from the rpmdb scripts to functions as
+	  we need it more than once. Might reuse it for other things later.
+	- Made the RpmStreamIO.__generateHeader() method accessible as we need it
+	  for the pyrpmrebuilddb and pyrpmdbverify scripts
+	- Overworked the outputHeader() method so that it now orders the tags the same
+	  way rpm does
+	- Fixed the generateIndex() method to create an identical index like rpm does
+	- Extended the __generateHeader() method to allow different padding and a list
+	  of tags to skip. Needed for sha1 checksum tests
+	- pyrpmdbverify now also checks the sha1 checksum of the package if possible
+	- Fixed a few typos in pyrpmdbverify
+	- Added a dbpath argument to rpmdbtestPackages
+	- Added pyrpmrebuilddb script with which a rpmdb can be recreated just like
+	  with rpm --rebuilddb
+
+2005-06-20  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/resolver.py 1.74: [tw]
+	 - modified ConflictsList to only look at conflicts
+	 - new ObsoletesList derived from ConflictsList
+	 - renamed provides, conflicts and filenames to provides_list, obsoletes_list
+	   and filenames_list
+	 - replaced conflict check in install with obsolete check (conflicts have to
+	   be checked transaction based)
+	 - dropped fileconflict check in install (same as above)
+	 - renamed obsoletes in update to pkg_obsoletes and made it temporary class
+	   global
+	 - dropped _checkConflict, new function _checkObsoletes (honors pkg_updates
+	   and pkg_obsoletes)
+	 - new functions _getObsoletes, _getConflicts and _hasFileConflict honoring
+	   config.checkinstalled with usage in getConflicts etc
+
+	* pyrpm/rpmlist.py 1.45: [tw]
+	 - RpmList::updates
+	   - renamed updates to pkg_updates and made it temporary class global
+	   - delete pkg_updates on return
+
+	* pyrpm/functions.py 1.95:
+	[tw] - adopted stringCompare function from oldpyrpm
+
+2005-06-19  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.27:
+	- scripts/oldpyrpm.py: complete extractCpio() for all binary/source packages
+
+2005-06-16  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmdbverify 1.2:
+	- Extended the script so that it now can verify the contentes of
+	  /var/lib/rpm/Packages against given real rpms/dirs of rpms
+	- Added 2 options to disable internal and external checks
+	- Handle gpgk-pubkey "packages" correctly
+	- Handle Requirename correctly, doesn't contain names which are install prereqs
+
+2005-06-14  Philip Knirsch  <pknirsch@redhat.com>
+
+	* tests/rpmdbtestConflictname 1.2, tests/rpmdbtestDirnames 1.2, tests/rpmdbtestFilemd5s 1.2, tests/rpmdbtestInstallid 1.2, tests/rpmdbtestPackages 1.3, tests/rpmdbtestSha1header 1.2, tests/rpmdbtestSigmd5 1.2, tests/rpmdbtestTriggername 1.2, pyrpm/base.py 1.33, scripts/pyrpmdbverify 1.1, tests/rpmdbtestBasenames 1.2:
+	- Fixed all rpmdbtest scripts to work with new config parameter style
+	- Added first version of pyrpmdbverify script to check /var/lib/rpm :)
+	- Added missing install tags to base.py
+
+2005-06-14  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.26: - cleanup
+
+	* scripts/oldpyrpm.py 1.25: - scripts/oldpyrpm.py:
+	  - remove class RepoRpm, not useful until now
+	  - cleanup
+
+	* scripts/oldpyrpm.py 1.24: - scripts/oldpyrpm.py:
+	  - always save some memory for fileusername/filegroupname
+	  - allow a first --hotshot arg to enable profiling
+
+2005-06-12  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.23: - scripts/oldpyrpm.py:
+	  - add class RPMTree() to work with collections of rpms
+	  - add checkArch() to mark archs where src.rpms don't build
+
+2005-06-11  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.22: - scripts/oldpyrpm.py:
+	  - add minimal support to extract rpms (works for src.rpm)
+	  - add diffTwoSrpm() to diff two source rpms
+
+2005-06-09  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/config.py 1.30, pyrpm/io.py 1.59, tests/test 1.8:
+	- Gaaahhh!! python concatenates 2 strings without an operater!!! fixed for
+	  fileflags...
+
+	* pyrpm/config.py 1.29: - Added missing "fileflags" to resolvertags
+
+	* pyrpm/resolver.py 1.73: - Fixed missing import for base
+
+2005-06-08  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.94:
+	- Removed uneeded code from selectNewestPkgs() function
+
+	* pyrpm/resolver.py 1.72: - Fix typo (flags instead of flag)
+
+	* pyrpm/functions.py 1.93:
+	- Fixed latest problem with selectNewestPkgs() and multilib
+
+2005-06-08  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/resolver.py 1.71: [tw] better warning messages
+
+	* pyrpm/resolver.py 1.70:
+	[tw] fixed _checkConflicts and _checkFileConflicts
+
+2005-06-08  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/io.py 1.58:
+	- Fixed missing prereq flags for unversioned requires
+
+	* pyrpm/config.py 1.28:
+	- Added "sourcerpm" for resolvertags to correctly identify real srpms
+
+2005-06-08  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.54: overlap tests are done by pyrpmcheck
+
+2005-06-08  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/resolver.py 1.69: - Remove same packages from conflic results
+	- Fix the non-skip for fileconflicts, too
+
+	* pyrpm/resolver.py 1.68: - Fixed wrong not-skip of same NEVR conflicts
+
+2005-06-07  Thomas Woerner  <twoerner@redhat.com>
+
+	* tests/rpmresolve.py 1.9:
+	[tw] - updated rpmresolve.py version, which uses the new resolver
+
+	* tests/rpmgraph.py 1.1: [tw]
+	 - new rpmgraph script
+
+	This program prints a tree for package dependencies if '-i' is not given else
+	it iterates though the normal ordering process and writes the iteration and
+	loop graphs.
+
+2005-06-07  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/test10 1.53: more rhel checks, path fixes, cleanups
+
+	* tests/test10 1.52: - improve logging
+	- add rhel checks
+
+2005-06-07  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.21:
+	- pyrpm/functions.py: stringCompare(): more docu
+
+2005-06-06  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.92:
+	- Fixed bug in selectNewestPkgs() where for multilib the lower lib packages
+	would get filtered out.
+
+2005-06-06  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/resolver.py 1.67: [tw]
+	 - ConflictsList has to use a modified version of ProvidesList::search
+	   - do not check resulting package version against provides and filenames
+	 - do not check dirs and links in RpmResolver::_checkConflict
+
+2005-06-05  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.20:
+	- scripts/oldpyrpm.py: stringCompare(): further cleanup
+
+	* scripts/oldpyrpm.py 1.19:
+	- scripts/oldpyrpm.py: stringCompare(): stay closer to rpm code
+
+	* scripts/oldpyrpm.py 1.18: - scripts/oldpyrpm.py:
+	  - allow checking for correct utf-8 data
+	  - do not trace checking script progs
+
+2005-06-04  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/orderer.py 1.29:
+	[tw] readded operation as second arg for genRelations, it had to be use for the
+	_operationFlag call
+
 2005-06-03  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/__init__.py 1.22, configure.in 1.18: - release 0.24
+
+	* scripts/oldpyrpm.py 1.17: - scripts/oldpyrpm.py:
+	  - add labelCompare()/stringCompare()
+	  - add reading changelog
+	  - allow checking if a rpm can be build for a certain arch
+
+	* pyrpm/functions.py 1.91:
+	- pyrpm/functions.py: speed up stringCompare() by removing unnecessary
+	  tests and e.g. int() -> ord()
+
+	* pyrpm/resolver.py 1.66, pyrpm/yumconfig.py 1.13:
+	- pyrpm/resolver.py: try fixing a bug pychecker complains about
+
+	* pyrpm/orderer.py 1.28:
+	- pyrpm/orderer.py: genRelations() doesn't need a second param, remove it
+
+	* pyrpm/yum.py 1.47: - pyrpm/yum.py: no need to time arg processing
+
+	* pyrpm/base.py 1.32: - pyrpm/base.py: set verifyflags correctly
+
+2005-06-03  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/resolver.py 1.65: [tw]
+	 - disable getConflicts if config.noconflicts
+	 - disable getFileConflicts if config.nofileconflicts
+
+	* pyrpm/resolver.py 1.64, pyrpm/rpmlist.py 1.44: [tw]
+	- RpmResolver
+	  - filenames.search is returning a array instead of using it
+	- RpmList, RpmResolver
+	  - fixed RpmResolver::CONFLICT return value: -11, now
+	  - added RpmResolver::FILE_CONFLICT return code
+	  - new RpmResolver::installed_file_conflicts structure
+	  - extended RpmResolver::_checkConflict, RpmResolver::install and
+	    RpmList::install with an operation
+	  - RpmResolver::_checkConflict is searching for package names, too
+	  - checkinstalled checks in RpmResolver::_checkConflicti,
+	    RpmResolver::install, RpmResolver::getConflicts and
+	    RpmResolver::getFileConflicts
+	  - new NEVRA checks according to RpmResolver::getConflicts
+	  - new RpmResolver::install function for conflict and file-conflict checks
+	  - dropped conflict checks from RpmResolver::udpate
+
+	* pyrpm/orderer.py 1.27:
+	[tw] more verbose debug messages, beautified code
+
+2005-06-03  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/io.py 1.57: - Fixed missing return 1 for RpmStreamIO::write()
+
+	* pyrpm/control.py 1.60, pyrpm/functions.py 1.90, pyrpm/package.py 1.74, pyrpm/yum.py 1.46:
+	- Extended pyrpmy to be able to install srpms now, too. Works only if only
+	  srpms are give. Use the -r dir option to specify the directory where you
+	  want the complete files to be installed. Doesn't honor subdir structure
+	  like with rpmmacros.
+
+2005-06-03  Florian La Roche  <laroche@redhat.com>
+
+	* ChangeLog 1.11: - update ChangeLog
 
 	* configure.in 1.17, pyrpm/__init__.py 1.21: - release 0.23
 
@@ -10,7 +609,7 @@
 	* pyrpm/resolver.py 1.62:
 	[tw] added per package conflict and obsolete check
 
-2005-05-31  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-31  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/functions.py 1.89, pyrpm/yum.py 1.45:
 	- Moved printing of unresolved deps to correct place
@@ -22,7 +621,7 @@
 
 	* tests/test10 1.51: arch must be i686 or the tests will fail (Phil)
 
-2005-05-31  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-31  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/yum.py 1.44:
 	- Use really the installed package list for the autoerase check :)
@@ -36,12 +635,12 @@
 
 	* tests/test10 1.50: collect output in one big logfile
 
-2005-05-31  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-31  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/functions.py 1.88:
 	- Fixed the reordering problem for selectNewestPkgs()
 
-2005-05-30  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-30  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/resolver.py 1.61:
 	- Print out obsoletes for install/update checks using --test
@@ -55,7 +654,7 @@
 	* tests/test10 1.47: - remove --servicehack, not required with --test
 	- use --arch for fileconflicts check
 
-2005-05-30  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-30  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/functions.py 1.87, pyrpm/yum.py 1.42, scripts/pyrpmcheck 1.12:
 	- Separated selectNewestPkgs() and moved it into functions
@@ -82,7 +681,7 @@
 	* scripts/Makefile.am 1.8: - scripts/Makefile.am:
 	  - add scripts/pyrpmcheckrepo
 
-2005-05-25  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-25  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/functions.py 1.86, pyrpm/yum.py 1.40, scripts/pyrpmcheckrepo 1.2, tests/test 1.7:
 	- Separated the addRepo() functionality from processYumConf() into an own
@@ -109,14 +708,14 @@
 
 	* pyrpm/__init__.py 1.20, configure.in 1.16: - release 0.22
 
-2005-05-20  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-20  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/base.py 1.31, pyrpm/package.py 1.73, tests/test10 1.44:
 	- Added verifyflags to RpmFileInfo
 	- Removed OldRpmData class, we still have it in CVS if needed
 	- Moved echo in test10 for one test to correct place
 
-2005-05-19  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-19  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/rpmlist.py 1.43, tests/test10 1.43:
 	- Fixed warning message in rpmlist for already installed packages (level was too
@@ -124,7 +723,7 @@
 	- Fixed wrong use of system /etc/yum.conf for pyrpmyum tests
 	- Fixed the runalltests option (actually works now ;)
 
-2005-05-18  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-18  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/functions.py 1.85, pyrpm/package.py 1.72, pyrpm/yum.py 1.39, scripts/pyrpmcheckrepo 1.1, scripts/pyrpmrandomizer 1.3, scripts/pyrpmyum 1.40:
 	- Fixed usage() calls for the yum parsing function
@@ -134,7 +733,7 @@
 	- Added the pyrpmcheckrepo tool with which you can check for repo-less rpms or
 	  leftover rpms
 
-2005-05-17  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-17  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/package.py 1.71, pyrpm/config.py 1.27, pyrpm/io.py 1.56:
 	- Included some more essential tags for working package compares in resolvertags
@@ -176,7 +775,7 @@
 	AUTHORS:
 	- Add myself
 
-2005-05-13  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-13  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/config.py 1.26, pyrpm/functions.py 1.82, scripts/pyrpmrandomizer 1.2, scripts/pyrpmyum 1.39:
 	- Forgot to import errno in functions
@@ -189,7 +788,7 @@
 	  yum 'compatible' scripts
 	- Added new pyrpmrandomizer for random install and erase tests
 
-2005-05-12  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-12  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.58, pyrpm/functions.py 1.80, pyrpm/io.py 1.53, pyrpm/yum.py 1.37, scripts/pyrpmyum 1.37:
 	- Implemented local repodata and package caching via urlgrabber
@@ -205,7 +804,7 @@
 	* tests/test10 1.42:
 	the layout of or trees sucks. Why can't we use a unique layout for all trees ?
 
-2005-05-11  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-11  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/functions.py 1.79:
 	- Fixed bug in orderList() where the distance elements weren't swapped
@@ -214,7 +813,7 @@
 
 	* scripts/pyrpmcheck 1.9: fix typo
 
-2005-05-11  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-11  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/base.py 1.30, pyrpm/yum.py 1.36, scripts/pyrpmcheck 1.8, scripts/pyrpmyum 1.36:
 	- Added policies tag (1150) in headertags (needed by a FE package)
@@ -233,7 +832,7 @@
 	* tests/test10 1.41:
 	dumb idea to remove all logfiles when running tests on multiple archs
 
-2005-05-10  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-10  Philip Knirsch  <pknirsch@redhat.com>
 
 	* scripts/pyrpmcheck 1.7:
 	- Ignore debuginfo packages for now, they have zillions of dangling symlinks
@@ -249,7 +848,7 @@
 	* scripts/pyrpmcheck 1.6:
 	2 separate checkins with a similar fix != fixed
 
-2005-05-10  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-10  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/yum.py 1.35, scripts/pyrpmcheck 1.5, scripts/pyrpmyum 1.35:
 	- Use printInfo() for Test run end message
@@ -266,7 +865,7 @@
 	* tests/test10 1.37:
 	clean up directories after run. Run tests on all found trees in a given directory (part 1)
 
-2005-05-10  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-10  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/config.py 1.25, pyrpm/functions.py 1.78, pyrpm/yum.py 1.34:
 	- Added "sourcerpm" for resolvertags, needed for conflict resolution in yum
@@ -284,7 +883,7 @@
 	  closesest buildarchtranslate compatible package.
 	- Do some more fancy conflict resolution
 
-2005-05-09  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-09  Philip Knirsch  <pknirsch@redhat.com>
 
 	* scripts/pyrpmcheck 1.3:
 	- Fixed selectNewestPkgs() for arch compatible packages
@@ -339,7 +938,7 @@
 	* scripts/oldpyrpm.py 1.8:
 	- scripts/oldpyrpm.py: more tests and cleanup
 
-2005-05-03  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-03  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/config.py 1.24, pyrpm/functions.py 1.77, pyrpm/package.py 1.68, scripts/pyrpmcheck 1.2, scripts/pyrpmyum 1.32:
 	- Fixed install problems on RHL-6.2 and RHL-5.2. ;)
@@ -359,7 +958,7 @@
 	  - stringCompare(): slightly regroup checks at the beginning
 	  - orderList(): compute machinedistance only once for all entries
 
-2005-05-03  Phil Knirsch  <pknirsch@redhat.com>
+2005-05-03  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/io.py 1.52, pyrpm/package.py 1.67, pyrpm/resolver.py 1.60, pyrpm/yum.py 1.32, scripts/pyrpmyum 1.31, pyrpm/functions.py 1.75:
 	- Small fix/speedup for orderList(). Still need to make a real O(n*log(n))
@@ -425,7 +1024,7 @@
 
 	* tests/test10 1.27: run sanity checks on rpms
 
-2005-04-29  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-29  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/base.py 1.28, pyrpm/functions.py 1.72, pyrpm/io.py 1.51, pyrpm/yum.py 1.31, scripts/pyrpmyum 1.30, tests/test 1.5:
 	- Made arch_compats elements lists instead of tuples  (need list.index())
@@ -476,7 +1075,7 @@
 	* tests/test10 1.22:
 	add --help --arch parameters, per default run i386 and x86_64 tests. add RHEL3-U2 to U5 update test
 
-2005-04-27  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-27  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/base.py 1.27, pyrpm/io.py 1.50, pyrpm/package.py 1.66, pyrpm/yumconfig.py 1.12, scripts/pyrpmyum 1.29, tests/test 1.4:
 	- Fixed isInstallPreReq() and isErasePreReq() to really return 0 or 1
@@ -509,7 +1108,7 @@
 
 	* BUGS 1.1: list of known Bugs
 
-2005-04-27  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-27  Philip Knirsch  <pknirsch@redhat.com>
 
 	* scripts/pyrpmyum 1.28: - Fixed new multiline usage of baseurl
 
@@ -570,7 +1169,7 @@
 	- pyrpm/hashlist.py: do not set "config" as first param
 	- tests/test10: use shorter logfiles
 
-2005-04-22  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-22  Philip Knirsch  <pknirsch@redhat.com>
 
 	* tests/test10 1.18, pyrpm/package.py 1.63, pyrpm/yum.py 1.27, pyrpm/control.py 1.54:
 	- Fixed the correct rereading and clearing of pkgs for repodata
@@ -580,7 +1179,7 @@
 	- Added output for yum.py which operations yum is going to perform now
 	- Minor fixes/changes to test10
 
-2005-04-21  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-21  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/package.py 1.62, scripts/pyrpminstall 1.17, tests/test 1.3:
 	- Fixed bad bug in verifyInstallFile() where sometimes files would get
@@ -615,7 +1214,7 @@
 	    APIs
 	- Misc. pychecker warning fixes
 
-2005-04-20  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-20  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/io.py 1.46, pyrpm/yum.py 1.24, pyrpm/yumconfig.py 1.10, scripts/pyrpmyum 1.23, tests/rpmmulti.py 1.3, tests/rpmresolve.py 1.7, tests/test10 1.16:
 	- Implemented filelist.xml import in RpmRepo class
@@ -647,7 +1246,7 @@
 	- scripts/oldpyrpm.py: add old version of pyrpm script since
 	  it can still be useful for testing rpm packages
 
-2005-04-20  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-20  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/yum.py 1.23: - Fixed small bug in addRepo()
 	- Store the repos now, too as we need them later for reread if we have un-
@@ -657,7 +1256,7 @@
 
 	* pyrpm/io.py 1.45: [tw] - enable openpgp again
 
-2005-04-20  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-20  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/base.py 1.25, pyrpm/config.py 1.21, pyrpm/control.py 1.53, pyrpm/createrepo.py 1.6, pyrpm/functions.py 1.69, pyrpm/hashlist.py 1.15, pyrpm/io.py 1.44, pyrpm/openpgp.py 1.3, pyrpm/orderer.py 1.19, pyrpm/package.py 1.60, pyrpm/resolver.py 1.56, pyrpm/rpmdist.py 1.7, pyrpm/rpmlist.py 1.41, pyrpm/yum.py 1.22, scripts/pyrpminstall 1.16, scripts/pyrpmyum 1.22, scripts/rpmdb2pyrpmdb 1.5:
 	- Huge change due to new RpmMessageHandler class and how we do
@@ -696,7 +1295,7 @@
 	  - RpmPackage::verifySignatureTag(): Handle public key signatures
 	  - readRpmPackage(): New parameter db
 
-2005-04-18  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-18  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/package.py 1.57:
 	- Small hack to convert deps tuple to list again for triggers
@@ -707,7 +1306,7 @@
 	- test/test10: fix updates to newer releases (Phil Knirsch)
 	- test/test10: add ARCH to maybe test this on x86_64
 
-2005-04-18  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-18  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/functions.py 1.67, pyrpm/yum.py 1.20, tests/test10 1.14:
 	- Prefilter the list in findPkgByName() for a big speedup for the update case
@@ -768,7 +1367,7 @@
 	* pyrpm/resolver.py 1.55, pyrpm/rpmlist.py 1.37:
 	[tw] - remove erased packages out of upsates and obsoletes list
 
-2005-04-14  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-14  Philip Knirsch  <pknirsch@redhat.com>
 
 	* tests/test10 1.12: - Reverted wrong fix for shit
 	- Fixed fuser usage, needs to be called after --nodev check
@@ -809,7 +1408,7 @@
 	 - prefilter packages get from the repositories to solve unresolved
 	   depedencies to prevent multiple install attempts of the same packages
 
-2005-04-12  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-12  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.48, pyrpm/package.py 1.51, pyrpm/yum.py 1.14:
 	- Adapted control.py to use new resolver/orderer functionality
@@ -862,7 +1461,7 @@
 	  and reversely appended to this list to make sure that the chance of a#
 	  breakage is small while doing these operations.
 
-2005-04-11  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-11  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/yum.py 1.13:
 	- Fixed bug where obsolete packages weren't discovered correctly anymore
@@ -885,12 +1484,12 @@
 	- temporarely disable special kernel/kernel-smp treatment
 	- more complete test/test10 script
 
-2005-04-09  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-09  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/yum.py 1.11:
 	- resolver._install() doesn't work yet correctly, need to fix on Monday
 
-2005-04-08  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-08  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.47, pyrpm/functions.py 1.63, pyrpm/io.py 1.39, pyrpm/package.py 1.50, pyrpm/yum.py 1.10, tests/test10 1.7:
 	- Extended getFreeDiskspace() to now use operations instead of pkglist
@@ -910,7 +1509,7 @@
 
 	* pyrpm/io.py 1.36: add class FooRPMDB
 
-2005-04-08  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-08  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.46, pyrpm/io.py 1.35, pyrpm/yum.py 1.9, scripts/pyrpminstall 1.15, tests/test10 1.6:
 	- Constructor of RpmController now takes the operation, real db and buildroot
@@ -967,7 +1566,7 @@
 	- made deprecated functions filterArchDuplicates and filterArchList empty
 	- use { } and [ ] instead of {} and []
 
-2005-04-08  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-08  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/package.py 1.49: - Added isEqual() and isIdentical() methods
 
@@ -1007,7 +1606,7 @@
 	* pyrpm/control.py 1.45:
 	[tw] added flush of stdout before operation loop
 
-2005-04-07  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-07  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/yum.py 1.7: - Moved conflict autoeraser into separate method
 	- Called conflict autoeraser after the complete depres run, just to be sure.
@@ -1031,7 +1630,7 @@
 	- release 0.17
 	- cleanup some pychecker warnings
 
-2005-04-06  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-06  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/package.py 1.47:
 	- Fixed multiarch check in RpmPackage::__verfiyInstallFile()
@@ -1041,7 +1640,7 @@
 	* pyrpm/resolver.py 1.50:
 	[tw] - package inherits obsoletes from obsoleted and updated packages
 
-2005-04-06  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-06  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.44, pyrpm/package.py 1.46:
 	- Nagging Thomas change: Added 8 more #es to the output again. :)
@@ -1089,7 +1688,7 @@
 	* pyrpm/resolver.py 1.48:
 	[tw] fixed checkConflicts to use conflicts.keys instead of conflicts
 
-2005-04-05  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-05  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.39, pyrpm/functions.py 1.59, pyrpm/yum.py 1.2:
 	- Don't reappend any packages that have been autoerased
@@ -1109,7 +1708,7 @@
 	 - filterArchCompat, filterArchDuplicates and filterArchList are deprecated,
 	   now
 
-2005-04-05  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-05  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/yum.py 1.1, scripts/pyrpmyum 1.20, pyrpm/base.py 1.24, pyrpm/control.py 1.38, pyrpm/functions.py 1.57, pyrpm/io.py 1.32, pyrpm/package.py 1.43:
 	- Extended RpmFileInfo to have a getHardLinkID() method. Used in RpmPackage
@@ -1159,7 +1758,7 @@
 
 	* pyrpm/__init__.py 1.13: - require Python 2.3 or newer
 
-2005-04-01  Phil Knirsch  <pknirsch@redhat.com>
+2005-04-01  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/config.py 1.18, pyrpm/control.py 1.37, pyrpm/functions.py 1.55, pyrpm/package.py 1.42, pyrpm/resolver.py 1.45, scripts/pyrpmyum 1.17:
 	- Renamed nofileconflictcheck and noconflictcheck to names without check
@@ -1212,7 +1811,7 @@
 
 	* pyrpm/rpmlist.py 1.22: [tw] - added already added check in updates
 
-2005-03-31  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-31  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/io.py 1.30, pyrpm/package.py 1.41, scripts/pyrpmyum 1.15, pyrpm/control.py 1.35:
 	- Fixed progress output for automatic erases for package update
@@ -1550,7 +2149,7 @@
 	- functions.py: remove obsolete string functions
 	- io.py: remove pychecker warnings
 
-2005-03-18  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-18  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/config.py 1.10, pyrpm/control.py 1.27, pyrpm/functions.py 1.35, pyrpm/io.py 1.24, pyrpm/package.py 1.30, scripts/pyrpmyum 1.8:
 	- Extended RpmPyDB to allow memory only add and erase of packages (needed in
@@ -1615,7 +2214,7 @@
 	- pyrpm/functions.py: evrString() and allow evrCompare() to take a tuple as
 	  first arg
 
-2005-03-16  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-16  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.24, pyrpm/functions.py 1.30, pyrpm/package.py 1.26, pyrpm/rpmlist.py 1.16, scripts/pyrpmyum 1.6:
 	- Made # of packages to be installed per fork a variable
@@ -1641,7 +2240,7 @@
 	* scripts/rpmtest/sample-test.conf 1.2, scripts/rpmtest/test_permissions.py 1.1, scripts/rpmtest/page_header.html 1.2:
 	- add permissions conflicts test
 
-2005-03-16  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-16  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.23, pyrpm/functions.py 1.29, pyrpm/package.py 1.25, pyrpm/resolver.py 1.28, pyrpm/rpmlist.py 1.14, scripts/pyrpmyum 1.5:
 	- Switched to RpmController::run() to latest RpmOrderer behaviour
@@ -1720,7 +2319,7 @@
 	* tests/.cvsignore 1.1, scripts/rpmtest/.cvsignore 1.1:
 	Add .cvsignore files
 
-2005-03-14  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-14  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.21, pyrpm/functions.py 1.23, pyrpm/io.py 1.18, pyrpm/package.py 1.22, pyrpm/resolver.py 1.26:
 	- Fix output for various combinations of -v and -h
@@ -1809,7 +2408,7 @@
 	        - pyrpm/resolver.py: - use CP_IS*
 	        - pyrpm/specfile.py: - do not "import sys"
 
-2005-03-11  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-11  Philip Knirsch  <pknirsch@redhat.com>
 
 	* AUTHORS 1.3, FILES 1.4, pyrpm/base.py 1.10, pyrpm/config.py 1.7, pyrpm/control.py 1.18, pyrpm/functions.py 1.17, pyrpm/io.py 1.13, pyrpm/package.py 1.16, scripts/pyrpmyum 1.3, tests/test7 1.2:
 	- Added my email address to authors ;)
@@ -1847,7 +2446,7 @@
 	- new ckeck_installed tag for checkDependencies, getResolvedDependencies and
 	  getUnresolvedDependencies
 
-2005-03-11  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-11  Philip Knirsch  <pknirsch@redhat.com>
 
 	* ChangeLog 1.2, pyrpmlib.py 1.25:
 	- Drop pyrpmlib.py, now that we have a real package
@@ -1856,7 +2455,7 @@
 
 	* pyrpm/functions.py 1.15: -fixed filterArchList()
 
-2005-03-10  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-10  Philip Knirsch  <pknirsch@redhat.com>
 
 	* scripts/pyrpmyum 1.2: - Added path stuff to pyrpmyum
 
@@ -1900,7 +2499,7 @@
 
 	* scripts/pyrpmspecinfo 1.1, pyrpm/specfile.py 1.1: initial check in
 
-2005-03-10  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-10  Philip Knirsch  <pknirsch@redhat.com>
 
 	* Makefile.am 1.6: - Fixed tar creation to exclude all CVS dirs.
 
@@ -1919,14 +2518,14 @@
 	* scripts/rpmresolve 1.2, tests/resolve.sh 1.1, tests/resolve1.sh 1.1, tests/resolve2.sh 1.1, tests/resolve3.sh 1.1, tests/resolve4.sh 1.1, tests/rpmmulti.py 1.1, tests/rpmresolve.py 1.1:
 	[tw] moved test scripts to tests/
 
-2005-03-10  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-10  Philip Knirsch  <pknirsch@redhat.com>
 
 	* Makefile.am 1.3: - Install scripts from scripts/ ;)
 
 	* Makefile.am 1.2, classes.fig 1.3, depresolver.py 1.3, doc/classes.fig 1.1, hashlist.py 1.2, pyrpm.py 1.33, pyrpm.spec.in 1.2, pyrpmdb2rpmdb 1.2, pyrpmdeps 1.2, pyrpminstall 1.2, rpmdeps 1.10, rpmresolve 1.3, rpmresolve.py 1.3, scripts/pyrpmdb2rpmdb 1.1, scripts/pyrpminstall 1.1, scripts/rpmdb2pyrpmdb 1.1, scripts/rpmresolve 1.1, test 1.3, test2 1.7, test3 1.6, test3new 1.2, test4 1.3, test5 1.4, test6 1.3, test7 1.5, test8 1.2, test9 1.3, tests/rpmdbtestBasenames 1.1, tests/rpmdbtestConflictname 1.1, tests/rpmdbtestDirnames 1.1, tests/rpmdbtestFilemd5s 1.1, tests/rpmdbtestInstallid 1.1, tests/rpmdbtestPackages 1.1, tests/rpmdbtestSha1header 1.1, tests/rpmdbtestSigmd5 1.1, tests/rpmdbtestTriggername 1.1, tests/rpmdbtestbtree 1.1, tests/rpmdbtesthash 1.1, tests/test 1.1, tests/test2 1.1, tests/test3 1.1, tests/test3new 1.1, tests/test4 1.1, tests/test5 1.1, tests/test6 1.1, tests/test7 1.1, tests/test8 1.1, tests/test9 1.1:
 	- Major structure cleanup and removal of old cruft
 
-2005-03-09  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-09  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.15, pyrpm/resolver.py 1.15:
 	- Fixed bug where erasePkg() still used self.erase instead of self.rpms
@@ -1964,7 +2563,7 @@
 	- rpmlist is a simple rpmlist, now
 	- all dependency, obsoletes and conflicts stuff went to rpmresolver
 
-2005-03-09  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-09  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/config.py 1.5: - Update with new parameters
 
@@ -1978,7 +2577,7 @@
 	* createrepo/ChangeLog 1.1, createrepo/Makefile 1.1, createrepo/README 1.1, createrepo/bin/Makefile 1.1, createrepo/bin/createrepo 1.1, createrepo/createrepo.spec 1.1, createrepo/docs/Makefile 1.1, createrepo/docs/createrepo.8 1.1, createrepo/dumpMetadata.py 1.1, createrepo/genpkgmetadata.py 1.1:
 	Import createrepo-0.4.2 ported to pyrpm
 
-2005-03-08  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-08  Philip Knirsch  <pknirsch@redhat.com>
 
 	* FILES 1.2, README 1.5, TODO 1.10, pyrpm/config.py 1.4, pyrpm/control.py 1.11, pyrpm/io.py 1.10, pyrpm/package.py 1.13, test7 1.3:
 	- Updated FILES documentation
@@ -2009,7 +2608,7 @@
 
 	* pyrpm/cpio.py 1.5: - cleanup
 
-2005-03-02  Phil Knirsch  <pknirsch@redhat.com>
+2005-03-02  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/base.py 1.7: - Added noarch for buildarchtranslate
 
@@ -2084,7 +2683,7 @@
 
 	* pyrpm/rpmlist.py 1.7: [tw] using N.A as key
 
-2005-02-24  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-24  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/base.py 1.6:
 	- Added buildarchtranslet table for mutlilib handling
@@ -2105,7 +2704,7 @@
 
 	* pyrpm/rpmlist.py 1.6: [tw] - fixed _filenames.multi
 
-2005-02-22  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-22  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/functions.py 1.9:
 	- Fixed small bug in runScript for error cases
@@ -2147,7 +2746,7 @@
 
 	* TODO 1.6: - commit
 
-2005-02-17  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-17  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/base.py 1.5, pyrpm/control.py 1.8, pyrpm/io.py 1.7, pyrpm/package.py 1.10:
 	- Extended the RpmFileInfo to contain the file attribute flags
@@ -2201,7 +2800,7 @@
 	  /bin/sh in postun (which is really really stupid as it has just been
 	  deleted...)
 
-2005-02-11  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-11  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/base.py 1.3, pyrpm/control.py 1.4, pyrpm/functions.py 1.6, pyrpm/io.py 1.4, pyrpm/package.py 1.6, pyrpm/resolver.py 1.5:
 	- Forgot to add noarch to rpm lead headers, fixed.
@@ -2230,7 +2829,7 @@
 	* pyrpm/rpmlist.py 1.4:
 	[tw] only remove obsolete packages for an update, not for an install
 
-2005-02-11  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-11  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/control.py 1.3, pyrpm/cpio.py 1.2, pyrpm/functions.py 1.4, pyrpm/io.py 1.3, pyrpm/package.py 1.5, pyrpm/resolver.py 1.4:
 	- Integrated resolver code from Thomas with my backend and frontend code
@@ -2267,7 +2866,7 @@
 	 - rpmlist
 	 - resolver
 
-2005-02-10  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-10  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpm/package.py 1.3, pyrpm/functions.py 1.2:
 	- Added patch from Karel Zak to allow installations of SRPMS, too.
@@ -2314,7 +2913,7 @@
 	* hashlist.py 1.1: [tw] hashlist
 	 - using hashes for quick searches and lists for simple access
 
-2005-02-07  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-07  Philip Knirsch  <pknirsch@redhat.com>
 
 	* cpio.py 1.17, pyrpm/.cvsignore 1.1, pyrpm/__init__.py 1.1, pyrpm/base.py 1.1, pyrpm/config.py 1.1, pyrpm/control.py 1.1, pyrpm/cpio.py 1.1, pyrpm/functions.py 1.1, pyrpm/io.py 1.1, pyrpm/package.py 1.1, pyrpmlib.py 1.24, rpmconstants.py 1.12, test 1.2, test2 1.6, test3 1.5, test4 1.2, test5 1.3, test6 1.2, ugid.py 1.3:
 	- Restructuring of code into Package and Module form for better modularization
@@ -2324,7 +2923,7 @@
 
 	* cpio.py 1.16: - cpio should be more readable
 
-2005-02-04  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-04  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpmlib.py 1.23:
 	- Removed io from readHeader() in read() in RpmPackage ;)
@@ -2358,7 +2957,7 @@
 
 	* pyrpm.py 1.32, pyrpmlib.py 1.21, rpmconstants.py 1.10: - sync
 
-2005-02-02  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-02  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpmlib.py 1.20, test2 1.4, test3 1.3, test4 1.1, test5 1.1:
 	- Fixed leaking fd in RpmFileIO class
@@ -2374,7 +2973,7 @@
 	- Started changes for read()/write() code for RpmPackage and where the ios come
 	  from (the factory, of course ;).
 
-2005-02-01  Phil Knirsch  <pknirsch@redhat.com>
+2005-02-01  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpmlib.py 1.18: - Use of mkstemp instead of mktemp
 	- Some more corner case handling
@@ -2391,7 +2990,7 @@
 	  with different names, doh).
 	- Nearly finished hardlink generation and handling.
 
-2005-01-31  Phil Knirsch  <pknirsch@redhat.com>
+2005-01-31  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpmlib.py 1.14, test2 1.3, test3 1.2: - Various changes.
 
@@ -2419,7 +3018,7 @@
 
 	* pyrpm.py 1.25: - cleanup
 
-2005-01-27  Phil Knirsch  <pknirsch@redhat.com>
+2005-01-27  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpmlib.py 1.11:
 	- Removed the use of ugid class, we now do it properly with getpwnam() and
@@ -2435,7 +3034,7 @@
 
 	* filetree.py 1.2: - remove file
 
-2005-01-25  Phil Knirsch  <pknirsch@redhat.com>
+2005-01-25  Philip Knirsch  <pknirsch@redhat.com>
 
 	* TODO 1.3, cpio.py 1.14, pyrpmlib.py 1.9, test2 1.1, test3 1.1:
 	- Some minor cleanup (removed unused stuff)
@@ -2443,7 +3042,7 @@
 	- Extended TODO
 	- Added my two testscripts for installation tests
 
-2005-01-21  Phil Knirsch  <pknirsch@redhat.com>
+2005-01-21  Philip Knirsch  <pknirsch@redhat.com>
 
 	* cpio.py 1.13, pyrpmlib.py 1.8, ugid.py 1.2:
 	- Fixed cpio class to normalize the filename/path
@@ -2453,7 +3052,7 @@
 	- Implemented rpm header filemods after installation
 	- Completely rewrote ugid module and used it in rpm head filemods
 
-2005-01-20  Phil Knirsch  <pknirsch@redhat.com>
+2005-01-20  Philip Knirsch  <pknirsch@redhat.com>
 
 	* cpio.py 1.12, pyrpmlib.py 1.7:
 	- Fixed order of chmod/chown/utime calls for cpio file creation
@@ -2462,7 +3061,7 @@
 	* cpio.py 1.11, pyrpmlib.py 1.6: - Handle cpio extraction completely
 	- Handle pre/post in scripts very similar to the way rpm does.
 
-2005-01-18  Phil Knirsch  <pknirsch@redhat.com>
+2005-01-18  Philip Knirsch  <pknirsch@redhat.com>
 
 	* cpio.py 1.10, pyrpmlib.py 1.5: - Extract now works in basic form.
 
@@ -2472,7 +3071,7 @@
 
 	* README 1.3, classes.fig 1.1: [tw] class diagram
 
-2005-01-14  Phil Knirsch  <pknirsch@redhat.com>
+2005-01-14  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpmlib.py 1.4: - Always return a filetree, even if it is empty
 	- Fix hdronly flag in RpmFile
@@ -2510,7 +3109,7 @@
 	     - new evr_split version
 	     - epoch now defaults to "" instead of "0"
 
-2005-01-13  Phil Knirsch  <pknirsch@redhat.com>
+2005-01-13  Philip Knirsch  <pknirsch@redhat.com>
 
 	* pyrpmlib.py 1.1: - First cut of new pyrpmlib using classes and stuff.
 
@@ -2526,7 +3125,7 @@
 
 	* rpmdeps 1.3: [tw] more speedup
 
-2005-01-12  Phil Knirsch  <pknirsch@redhat.com>
+2005-01-12  Philip Knirsch  <pknirsch@redhat.com>
 
 	* cpio.py 1.8, depresolver.py 1.1, pyrpm.py 1.19:
 	- Several structure changes to cpio.py and pyrpm.py
