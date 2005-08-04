@@ -84,7 +84,7 @@ def writeRpmDB(path, packages):
     for id in packages.keys():
         if maxid < id:
             maxid = id
-        print "Writing rpmdb for package %s" % packages[id].getNEVRA()
+        print "Writing rpmdb id %d for package %s" % (id, packages[id].getNEVRA())
         writeDB4(basenames_db, "basenames", id, packages)
         writeDB4(conflictname_db, "conflictname", id, packages)
         writeDB4(dirnames_db, "dirnames", id, packages)
@@ -101,7 +101,7 @@ def writeRpmDB(path, packages):
         writeDB4(sha1header_db, "install_sha1header", id, packages)
         writeDB4(sigmd5_db, "install_sigmd5", id, packages)
         writeDB4(triggername_db, "triggername", id, packages)
-    packages_db[pack("I", 0)] = pack("I", self.maxid)
+    packages_db[pack("I", 0)] = pack("I", maxid)
 
 #
 # Main
