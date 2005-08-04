@@ -366,10 +366,17 @@ class RpmPackage(RpmData):
         if self["preinprog"] != None or self["postinprog"] != None:
             numPkgs = str(db.getNumPkgs(self["name"])+1)
         if self["preinprog"] != None and not self.config.noscripts:
-            if not runScript(self["preinprog"], self["prein"], numPkgs):
+            if self.config.rusage:
+                rusage = []
+            else:
+                rusage = None
+            if not runScript(self["preinprog"], self["prein"], numPkgs, rusage = rusage):
                 self.config.printError("\n%s: Error running pre install script." \
                     % self.getNEVRA())
                 # FIXME? shouldn't we fail here?
+            elif rusage != None and len(rusage):
+                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
+               
         self.__extract(db)
         if self.config.printhash:
             self.config.printInfo(0, "\n")
@@ -377,9 +384,15 @@ class RpmPackage(RpmData):
             self.config.printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None and not self.config.noscripts:
-            if not runScript(self["postinprog"], self["postin"], numPkgs):
+            if self.config.rusage:
+                rusage = []
+            else:
+                rusage = None
+            if not runScript(self["postinprog"], self["postin"], numPkgs, rusage = rusage):
                 self.config.printError("\n%s: Error running post install script." \
                     % self.getNEVRA())
+            elif rusage != None and len(rusage):
+                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "postin", str(rusage[0]), str(rusage[1])))
         self.rfilist = None
 
     def erase(self, db=None):
@@ -397,10 +410,16 @@ class RpmPackage(RpmData):
         if self["preunprog"] != None or self["postunprog"] != None:
             numPkgs = str(db.getNumPkgs(self["name"])-1)
         if self["preunprog"] != None and not self.config.noscripts:
-            if not runScript(self["preunprog"], self["preun"], numPkgs):
+            if self.config.rusage:
+                rusage = []
+            else:
+                rusage = None
+            if not runScript(self["preunprog"], self["preun"], numPkgs, rusage = rusage):
                 self.config.printError("\n%s: Error running pre uninstall script." \
                     % self.getNEVRA())
                 # FIXME? shouldn't we fail here?
+            elif rusage != None and len(rusage):
+                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
         # Generate the rpmfileinfo list, needed for erase verification
         self.__generateFileInfoList()
         # Remove files starting from the end (reverse process to install)
@@ -447,10 +466,16 @@ class RpmPackage(RpmData):
             self.config.printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None and not self.config.noscripts:
-            if not runScript(self["postunprog"], self["postun"], numPkgs):
+            if self.config.rusage:
+                rusage = []
+            else:
+                rusage = None
+            if not runScript(self["postunprog"], self["postun"], numPkgs, rusage = rusage):
                 self.config.printError("\n%s: Error running post uninstall script." \
                     % self.getNEVRA())
-
+            elif rusage != None and len(rusage):
+                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
+ 
     def isSourceRPM(self):
         """Return 1 if the package is a SRPM."""
         

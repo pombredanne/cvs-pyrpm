@@ -18,6 +18,7 @@
 
 
 import os, os.path, sys, resource, re, getopt, errno
+from resource import getrusage, RUSAGE_CHILDREN
 from types import TupleType, ListType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from bsddb import hashopen
@@ -119,7 +120,7 @@ def mkstemp_mknod(dirname, pre, mode, rdev):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
+def runScript(prog=None, script=None, arg1=None, arg2=None, force=None, rusage=None):
     if prog == None:
         prog = "/bin/sh"
     if prog == "/bin/sh" and script == None:
@@ -158,6 +159,10 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
         if arg2 != None:
             args.append(arg2)
     (rfd, wfd) = os.pipe()
+    
+    if rusage != None:
+        rusage_old = getrusage(RUSAGE_CHILDREN)
+        
     pid = os.fork()
     if pid == 0:
         os.close(rfd)
@@ -190,6 +195,12 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None):
         cout = os.read(rfd, 8192)
     os.close(rfd)
     (cpid, status) = os.waitpid(pid, 0)
+
+    if rusage != None:
+        rusage_new = getrusage(RUSAGE_CHILDREN)
+        for i in xrange(len(rusage_new)):
+            rusage.insert(i, rusage_new[i] - rusage_old[i])
+        
     if script != None:
         os.unlink(tmpfilename)
     if status != 0: #or cret != "":
@@ -521,7 +532,7 @@ def parseYumOptions(argv, yum):
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
-         "servicehack", "installpkgs=", "arch=", "checkinstalled"])
+         "servicehack", "installpkgs=", "arch=", "checkinstalled", "rusage"])
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
         return None
@@ -554,6 +565,8 @@ def parseYumOptions(argv, yum):
             yum.always_install = val.split()
         elif opt == "--force":
             rpmconfig.force = 1
+        elif opt == "--rusage":
+            rpmconfig.rusage = 1
         elif opt in ["-h", "--hash"]:
             rpmconfig.printhash = 1
         elif opt == "--oldpackage":

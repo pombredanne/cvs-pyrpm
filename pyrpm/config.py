@@ -46,6 +46,7 @@ class RpmConfig:
         self.buildroot = None
         self.dbpath = "rpmdb://var/lib/rpm/"
         self.force = 0
+        self.rusage = 0
         self.oldpackage = 0
         self.justdb = 0
         self.test = 0
