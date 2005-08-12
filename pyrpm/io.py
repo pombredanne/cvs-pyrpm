@@ -1001,19 +1001,27 @@ class RpmDatabase:
         return pkg in self.pkglist.values()
 
     def isDuplicate(self, dirname, filename=None):
-        if filename != None:
-            return len(self.filenames.path[dirname][filename]) > 1
-        tmpdir = os.path.dirname(dirname)
-        if len(tmpdir) > 0 and tmpdir[-1] != "/":
-            tmpdir += "/"
-        basename = os.path.basename(dirname)
+        if filename == None:
+            tmpdir = os.path.dirname(dirname)
+            if len(tmpdir) > 0 and tmpdir[-1] != "/":
+                tmpdir += "/"
+            basename = os.path.basename(dirname)
+        else:
+            tmpdir = dirname
+            basename = filename
         if tmpdir == "/etc/init.d/" or tmpdir == "/etc/rc.d/init.d/":
             dupe = 0
-            if self.filenames.path.has_key("/etc/rc.d/init.d/"):
+            if self.filenames.path.has_key("/etc/rc.d/init.d/") and \
+               self.filenames.path["/etc/rc.d/init.d/"].has_key(basename):
                 dupe = len(self.filenames.path["/etc/rc.d/init.d/"][basename]) > 1
-            if self.filenames.path.has_key("/etc/init.d/"):
+            if self.filenames.path.has_key("/etc/init.d/") and \
+               self.filenames.path["/etc/init.d/"].has_key(basename):
                 dupe = dupe or len(self.filenames.path["/etc/init.d/"][basename]) > 1
             return dupe
+        if not self.filenames.path.has_key(tmpdir):
+            return 0
+        if not self.filenames.path[tmpdir].has_key(basename):
+            return 0
         return len(self.filenames.path[tmpdir][basename]) > 1
 
     def getNumPkgs(self, name):
@@ -1138,11 +1146,12 @@ class RpmDB(RpmDatabase):
         pkg["install_size_in_sig"] = pkg["signature"]["size_in_sig"]
         pkg["install_md5"] = pkg["signature"]["md5"]
         pkg["install_sha1header"] = pkg["signature"]["sha1header"]
+        pkg["install_dsaheader"] = pkg["signature"]["dsaheader"]
         pkg["installtime"] = int(time.time())
-        pkg["filestates"]= ['\x00']
+        pkg["filestates"]= ['\x00',]
         pkg["archivesize"] = pkg["signature"]["payloadsize"]
         pkg["installcolor"] = [0,]
-        pkg["installtid"] = [self.config.tid, ]
+        pkg["installtid"] = [self.config.tid,]
 
         self.__writeDB4(self.basenames_db, "basenames", id, pkg)
         self.__writeDB4(self.conflictname_db, "conflictname", id, pkg)

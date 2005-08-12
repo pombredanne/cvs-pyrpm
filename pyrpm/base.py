@@ -338,7 +338,7 @@ rpmtag = {
     "install_badsha1_1": (264, RPM_STRING, None, 1),
     "install_badsha1_2": (265, RPM_STRING, None, 1),
     "install_dsaheader": (267, RPM_BIN, 16, 0),
-    "install_sh1header": (269, RPM_STRING, None, 0),
+    "install_sha1header": (269, RPM_STRING, None, 0),
     "installtime": (1008, RPM_INT32, None, 0),
     "filestates": (1029, RPM_CHAR, None, 0),
     "archivesize": (1046, RPM_INT32, 1, 1),
@@ -612,7 +612,7 @@ rpm_lead_arch = {
 "x86_64" : 1,
 "amd64" : 1,
 "ia32e" : 1,
-"noarch" : 0
+"noarch" : 255
 }
 
 # vim:ts=4:sw=4:showmatch:expandtab
