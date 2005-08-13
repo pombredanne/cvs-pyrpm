@@ -60,7 +60,10 @@
 # - Change "strict" and "verify" into "debug" and have one integer specify
 #   debug and output levels. (Maybe also "nodigest" can move in?)
 # - check OpenGPG signatures
-# - i386 rpm extraction on ia64?
+# - Whats the difference between "cookie" and "buildhost" + "buildtime".
+# - Bring extractCpio and verifyCpio closer together again.
+# - i386 rpm extraction on ia64? (This is stored like relocated rpms in
+#   duplicated file tags.)
 # - While checking rpmdb detect relocated rpm packages instead of
 #   warning about wrong data.
 # - Duplicate tags can be available if a package has been signed twice
@@ -78,6 +81,7 @@
 #   slow. At some point it may make sense to write again a librpm type
 #   thing to have a core part in C and testing/outer decisions in python.
 #   Due to the large data rpm is handling this is kind of tricky.
+# - limit: does not support all RHL5.x and earlier rpms if verify is enabled
 # things that look less important to implement:
 # - check for #% in spec files: grep "#.*%" *.spec (too many hits until now)
 # - add streaming support to bzip2 compressed payload
@@ -85,7 +89,6 @@
 # - add support for drpm (delta rpm) payloadformat
 # possible changes for /bin/rpm:
 # - Do not generate filecontexts tags if they are empty, maybe not at all.
-# - "cookie" could go away, the same info is already present.
 # - "rhnplatform" could go away if it is not required.
 # - Can hardlinks go into a new rpm tag? (does not gain much)
 # - Can requires for the same rpm be deleted from the rpm tag header?
@@ -265,7 +268,7 @@ def doLnOrCopy(src, dst):
     if tmp == None:
         # no hardlink possible, copy the data into a new file
         (fd, tmp) = mkstemp_file(dstdir, tmpprefix)
-        fsrc = open(src, 'rb')
+        fsrc = open(src, "rb")
         while 1:
             buf = fsrc.read(16384)
             if not buf:
@@ -380,7 +383,7 @@ class PyGZIP:
 # rpm tag types
 #RPM_NULL = 0
 RPM_CHAR = 1
-RPM_INT8 = 2
+RPM_INT8 = 2 # currently unused
 RPM_INT16 = 3
 RPM_INT32 = 4
 RPM_INT64 = 5 # currently unused
@@ -517,9 +520,9 @@ rpmtag = {
 
     # addon information:
     "rpmversion": [1064, RPM_STRING, None, 0],
-    "payloadformat": [1124, RPM_STRING, None, 0],   # "cpio"
+    "payloadformat": [1124, RPM_STRING, None, 0],    # "cpio"
     "payloadcompressor": [1125, RPM_STRING, None, 0],# "gzip" or "bzip2"
-    "i18ntable": [100, RPM_STRING_ARRAY, None, 0], # list of available langs
+    "i18ntable": [100, RPM_STRING_ARRAY, None, 0],   # list of available langs
     "summary": [1004, RPM_I18NSTRING, None, 0],
     "description": [1005, RPM_I18NSTRING, None, 0],
     "url": [1020, RPM_STRING, None, 0],
@@ -532,7 +535,8 @@ rpmtag = {
     "optflags": [1122, RPM_STRING, None, 4], # optimization flags for gcc
     "pubkeys": [266, RPM_STRING_ARRAY, None, 4],
     "sourcepkgid": [1146, RPM_BIN, 16, 4], # md5 from srpm (header+payload)
-    "immutable": [63, RPM_BIN, 16, 0], # content of this tag is unclear
+    "immutable": [63, RPM_BIN, 16, 0],
+    "immutable1": [61, RPM_BIN, 16, 1],
     # less important information:
     "buildtime": [1006, RPM_INT32, 1, 8], # time of rpm build
     "buildhost": [1007, RPM_STRING, None, 0], # hostname where rpm was built
@@ -609,6 +613,9 @@ del v
 
 # Additional tags which can be in the rpmdb /var/lib/rpm/Packages.
 rpmdbtag = {
+    "origdirindexes": [1119, RPM_INT32, None, 1],
+    "origdirnames": [1121, RPM_STRING_ARRAY, None, 1],
+    "origbasenames": [1120, RPM_STRING_ARRAY, None, 1],
     "install_size_in_sig": [257, RPM_INT32, 1, 0],
     "install_md5": [261, RPM_BIN, 16, 0],
     "install_unknownchecksum": [262, RPM_BIN, None, 0],
@@ -639,8 +646,7 @@ del v
 rpmtagrequired = ("name", "version", "release", "arch", "rpmversion")
 
 importanttags = {"name":1, "epoch":1, "version":1, "release":1,
-    "arch":1, "rpmversion":1, "sourcerpm":1, "payloadcompressor":1,
-    "payloadformat":1,
+    "arch":1, "payloadcompressor":1, "payloadformat":1,
     "providename":1, "provideflags":1, "provideversion":1,
     "requirename":1, "requireflags":1, "requireversion":1,
     "obsoletename":1, "obsoleteflags":1, "obsoleteversion":1,
@@ -661,7 +667,7 @@ rpmsigtag = {
     # size of gpg/dsaheader sums differ between 64/65(contains "\n")
     "dsaheader": [267, RPM_BIN, None, 0], # only about header
     "gpg": [1005, RPM_BIN, None, 0], # header+payload
-    "header_signatures": [62, RPM_BIN, 16, 0], # content of this tag is unclear
+    "header_signatures": [62, RPM_BIN, 16, 0],
     "payloadsize": [1007, RPM_INT32, 1, 0],
     "size_in_sig": [1000, RPM_INT32, 1, 0],
     "sha1header": [269, RPM_STRING, None, 0],
@@ -729,13 +735,8 @@ def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
             stags1.append(tagnum)
     stags1.sort()
     stags2.sort()
+    stags1.extend(stags3)
     stags1.extend(stags2)
-    if 1:
-        stags1.extend(stags3)
-    else:
-        xx = stags1.pop()
-        stags1.extend(stags3)
-        stags1.append(xx)
     indexdata = []
     for tagnum in stags1:
         tagname = taghash[tagnum][4]
@@ -881,6 +882,13 @@ def setPerms(filename, uid, gid, mode, mtime):
     if mtime != None:
         os.utime(filename, (mtime, mtime))
 
+def isUrl(filename):
+    if filename.startswith("http://") or \
+       filename.startswith("ftp://") or \
+       filename.startswith("file://"):
+        return 1
+    return 0
+
 
 def parseFile(filename, requested):
     rethash = {}
@@ -968,12 +976,10 @@ class Gid(UGid):
 class CPIO:
     """Read a cpio archive."""
 
-    def __init__(self, fd, issrc, size=None, verify=None, strict=None):
+    def __init__(self, fd, issrc, size=None):
         self.fd = fd
         self.issrc = issrc
         self.size = size
-        self.verify = verify
-        self.strict = strict
 
     def printErr(self, err):
         print "%s: %s" % ("cpio-header", err)
@@ -986,53 +992,42 @@ class CPIO:
             self.size -= size + pad
         return data
 
-    def readEntry(self):
-        # (magic, inode, mode, uid, gid, nlink, mtime, filesize,
-        # devMajor, devMinor, rdevMajor, rdevMinor, namesize, checksum)
-        data = doRead(self.fd, 110)
-        if self.size != None:
-            self.size -= 110
-        # CPIO ASCII hex, expanded device numbers (070702 with CRC)
-        if data[0:6] not in ("070701", "070702"):
-            raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
-        filename = self.__readDataPad(int(data[94:102], 16), 110).rstrip("\x00")
-        if filename == "TRAILER!!!":
-            return None
-        if filename[:2] == "./":
-            filename = filename[1:]
-        if not self.issrc and not filename.startswith("/"):
-            filename = "%s%s" % ("/", filename)
-        if len(filename) > 1 and filename[-1] == "/":
-            filename = filename[:-1]
-        if self.verify:
-            # printconf-0.3.61-4.1.i386.rpm is an example where paths are
-            # stored like: /usr/share/printconf/tests/../mf.magic
-            # This makes te normapth() check fail and also gives trouble
-            # for the algorithm finding hardlinks as the files are also
-            # included with their normal path. So same dev/inode pairs
-            # can be hardlinks or they can be wrongly packaged rpms.
-            if self.strict and filename != os.path.normpath(filename):
-                self.printErr("failed: normpath(%s)" % filename)
-        # Do not even parse the below items, data should always be used
-        # from rpm tags as too many items in the cpio header have been broken
-        # in older rpm packages. Maybe leave it for the strict case, delete
-        # it otherwise.
-        # (name, inode, mode, nlink, mtime, filesize, dev, rdev)
-        return [filename, int(data[6:14], 16), int(data[14:22], 16),
-            int(data[38:46], 16), int(data[46:54], 16), int(data[54:62], 16),
-            int(data[62:70], 16) * 256 + int(data[70:78], 16),
-            int(data[78:86], 16) * 256 + int(data[86:94], 16)]
-
-    def readCpio(self, func, filenamehash, devinode, filenames):
+    def readCpio(self, func, filenamehash, devinode, filenames, extract):
         while 1:
-            filedata = self.readEntry()
-            if filedata == None:
+            # (magic, inode, mode, uid, gid, nlink, mtime, filesize,
+            # devMajor, devMinor, rdevMajor, rdevMinor, namesize, checksum)
+            data = doRead(self.fd, 110)
+            if self.size != None:
+                self.size -= 110
+            # CPIO ASCII hex, expanded device numbers (070702 with CRC)
+            if data[0:6] not in ("070701", "070702"):
+                raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
+            namesize = int(data[94:102], 16)
+            filename = self.__readDataPad(namesize, 110).rstrip("\x00")
+            if filename == "TRAILER!!!":
                 if self.size != None and self.size != 0:
                     self.printErr("failed cpiosize check")
                 return 1
-            func(filedata, self.__readDataPad, filenamehash, devinode,
-                 filenames)
+            if filename[:2] == "./":
+                filename = filename[1:]
+            if not self.issrc and not filename.startswith("/"):
+                filename = "%s%s" % ("/", filename)
+            if len(filename) > 1 and filename[-1] == "/":
+                filename = filename[:-1]
+            if extract:
+                func(filename, int(data[54:62], 16), self.__readDataPad,
+                    filenamehash, devinode, filenames)
+            else:
+                # (name, inode, mode, nlink, mtime, filesize, dev, rdev)
+                filedata = (filename, int(data[6:14], 16),
+                    long(data[14:22], 16), int(data[38:46], 16),
+                    long(data[46:54], 16), int(data[54:62], 16),
+                    int(data[62:70], 16) * 256 + int(data[70:78], 16),
+                    int(data[78:86], 16) * 256 + int(data[86:94], 16))
+                func(filedata, self.__readDataPad, filenamehash, devinode,
+                    filenames)
         return None
+
 
 class HdrIndex:
     def __init__(self):
@@ -1051,7 +1046,6 @@ class HdrIndex:
             return value[0]
         return value
 
-# limit: does not support all RHL5.x and earlier rpms if verify is enabled
 class ReadRpm:
     """Read (Linux) rpm packages."""
 
@@ -1059,13 +1053,8 @@ class ReadRpm:
                  nodigest=None):
         self.filename = filename
         self.issrc = 0
-        #if filename.endswith(".src.rpm") or filename.endswith(".nosrc.rpm"):
-        #    self.issrc = 1
         self.verify = verify # enable/disable more data checking
         self.fd = fd # filedescriptor
-        # 1 == check if old tags are included, 0 allows all tags
-        # 1 is good for Fedora Core development trees
-        # Using "verbose" instead of "strict" would be best.
         self.strict = strict
         self.nodigest = nodigest # check md5sum/sha1 digests
         self.buildroot = None # do we have a chroot-like start?
@@ -1091,11 +1080,21 @@ class ReadRpm:
 
     def __openFd(self, offset=None):
         if not self.fd:
-            try:
-                self.fd = open(self.filename, "ro")
-            except:
-                self.printErr("could not open file")
-                return 1
+            if isUrl(self.filename):
+                import urlgrabber
+                try:
+                    self.fd = urlgrabber.urlopen(self.filename)
+                #except urlgrabber.grabber.URLGrabError, e:
+                #    raise IOError, str(e)
+                except urlgrabber.grabber.URLGrabError:
+                    self.printErr("could not open file")
+                    return 1
+            else:
+                try:
+                    self.fd = open(self.filename, "ro")
+                except:
+                    self.printErr("could not open file")
+                    return 1
             if offset:
                 self.fd.seek(offset, 1)
         return None
@@ -1228,6 +1227,7 @@ class ReadRpm:
         for i in xrange(0, indexNo * 16, 16):
             (tag, ttype, offset, count) = unpack("!4I", fmt[i:i + 16])
             if not dorpmtag.has_key(tag):
+                #print "unknown tag:", (tag, ttype, offset, count), self.filename
                 continue
             nametag = dorpmtag[tag][4]
             if ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
@@ -1327,7 +1327,9 @@ class ReadRpm:
         # Data is also stored in rpm tags and the cpio header has
         # been broken in enough details to ignore it.
         (filename, inode, mode, nlink, mtime, filesize, dev, rdev) = filedata
-        data = read_data(filesize)
+        data = ""
+        if filesize:
+            data = read_data(filesize)
         fileinfo = filenamehash.get(filename)
         if fileinfo == None:
             self.printErr("cpio file %s not in rpm header" % filename)
@@ -1335,6 +1337,14 @@ class ReadRpm:
         (fn, flag, mode2, mtime2, dev2, inode2, user, group, rdev2,
             linkto, i) = fileinfo
         del filenamehash[filename]
+        # printconf-0.3.61-4.1.i386.rpm is an example where paths are
+        # stored like: /usr/share/printconf/tests/../mf.magic
+        # This makes the normapth() check fail and also gives trouble
+        # for the algorithm finding hardlinks as the files are also
+        # included with their normal path. So same dev/inode pairs
+        # can be hardlinks or they can be wrongly packaged rpms.
+        if self.strict and filename != os.path.normpath(filename):
+            self.printErr("failed: normpath(%s)" % filename)
         isreg = S_ISREG(mode)
         if isreg and inode != inode2:
             self.printErr("wrong fileinode for %s" % filename)
@@ -1377,12 +1387,16 @@ class ReadRpm:
                 ctx = md5.new()
                 ctx.update(data)
                 if ctx.hexdigest() != self["filemd5s"][i]:
-                    self.printErr("wrong filemd5s for %s" % filename)
+                    if self.strict or self["filesizes"][i] != 0:
+                        self.printErr("wrong filemd5s for %s: %s, %s" \
+                            % (filename, ctx.hexdigest(), \
+                            self["filemd5s"][i]))
 
-    def extractCpio(self, filedata, read_data, filenamehash, devinode,
-            filenames):
-        filename = filedata[0]
-        data = read_data(filedata[5])
+    def extractCpio(self, filename, datasize, read_data, filenamehash,
+            devinode, filenames):
+        data = ""
+        if datasize:
+            data = read_data(datasize)
         fileinfo = filenamehash.get(filename)
         if fileinfo == None:
             self.printErr("cpio file %s not in rpm header" % filename)
@@ -1396,7 +1410,8 @@ class ReadRpm:
             gid = self.gid.ugid[group]
         if self.relocated:
             filename = self.__relocatedFile(filename)
-        filename = "%s%s" % (self.buildroot, filename)
+        if self.buildroot:
+            filename = "%s%s" % (self.buildroot, filename)
         dirname = os.path.dirname(filename)
         makeDirs(dirname)
         if S_ISREG(mode):
@@ -1410,11 +1425,11 @@ class ReadRpm:
                 if di:
                     di.remove(i)
                     for j in di:
+                        fn2 = filenames[j]
                         if self.relocated:
-                            fn2 = "%s%s" % (self.buildroot,
-                                self.__relocatedFile(filenames[j]))
-                        else:
-                            fn2 = "%s%s" % (self.buildroot, filenames[j])
+                            fn2 = self.__relocatedFile(fn2)
+                        if self.buildroot:
+                            fn2 = "%s%s" % (self.buildroot, fn2)
                         dirname = os.path.dirname(fn2)
                         makeDirs(dirname)
                         tmpfilename = mkstemp_link(dirname, tmpprefix, filename)
@@ -1444,7 +1459,7 @@ class ReadRpm:
                 tmpfile = mkstemp_mknod(dirname, tmpprefix, mode, rdev)
                 setPerms(tmpfile, uid, gid, mode, mtime)
                 os.rename(tmpfile, filename)
-            # if not self.owner:  we could give a warning here
+            # if not self.owner: we could give a warning here
         elif S_ISSOCK(mode):
             raise ValueError, "UNIX domain sockets can't be packaged."
         else:
@@ -1512,22 +1527,22 @@ class ReadRpm:
                 cpiosize = archivesize
             elif cpiosize != archivesize:
                 self.printErr("wrong archive size")
-        if self["payloadcompressor"] == "bzip2":
-            import bz2, cStringIO
-            payload = self.fd.read()
-            fd = cStringIO.StringIO(bz2.decompress(payload))
-        elif self["payloadcompressor"] in [None, "gzip"]:
+        if self["payloadcompressor"] in [None, "gzip"]:
             fd = PyGZIP(self.fd, cpiosize)
             #import gzip
             #fd = gzip.GzipFile(fileobj=self.fd)
+        elif self["payloadcompressor"] == "bzip2":
+            import bz2, cStringIO
+            payload = self.fd.read()
+            fd = cStringIO.StringIO(bz2.decompress(payload))
         else:
             self.printErr("unknown payload compression")
             return
         if self["payloadformat"] not in [None, "cpio"]:
             self.printErr("unknown payload format")
             return
-        c = CPIO(fd, self.issrc, cpiosize, self.verify, self.strict)
-        if c.readCpio(func, filenamehash, devinode, filenames) == None:
+        c = CPIO(fd, self.issrc, cpiosize)
+        if c.readCpio(func, filenamehash, devinode, filenames, extract) == None:
             self.raiseErr("Error reading CPIO payload")
         for filename in filenamehash.iterkeys():
             self.printErr("file not in cpio: %s" % filename)
@@ -1853,15 +1868,6 @@ class ReadRpm:
             if mydep not in provs:
                 self.printErr("no provides for own rpm package, rpm=%s" % ver)
         self.getTriggers()
-        #if self.strict:
-        #    # check if all obsoletes also have provides
-        #    o = self["obsoletename"]
-        #    if o:
-        #        p = self["providename"]
-        #        for n in o:
-        #            if n not in p:
-        #                self.printErr("might not have a provides for the " + \
-        #                              "obsolete: %s" % n)
 
         # check file* tags to be consistent:
         reqfiletags = ["fileusername", "filegroupname", "filemodes",
@@ -1894,16 +1900,41 @@ class ReadRpm:
             if len(self["dirindexes"]) != lx or len(self["basenames"]) != lx \
                 or self["dirnames"] == None:
                 self.printErr("wrong length for file* tag")
-        fileflags = self["fileflags"]
+        filemodes = self["filemodes"]
         filemd5s = self["filemd5s"]
-        if fileflags:
-            for x in xrange(len(fileflags)):
-                if S_ISREG(fileflags[x]):
+        fileflags = self["fileflags"]
+        if filemodes:
+            for x in xrange(len(filemodes)):
+                if fileflags[x] & (RPMFILE_GHOST | RPMFILE_EXCLUDE):
+                    continue
+                if S_ISREG(filemodes[x]):
                     if not filemd5s[x]:
-                        self.printErr("missing filemd5sum")
-                    elif filemd5s[x] != "":
-                        print filemd5s[x]
-                        self.printErr("non-regular file has filemd5sum")
+                        # There is a kernel bug to not mmap() files with
+                        # size 0. That kernel also builds broken rpms.
+                        if self.strict or self["filesizes"][x] != 0:
+                            self.printErr("missing filemd5sum, %d, %s" % (x,
+                                filenames[x]))
+                elif filemd5s[x] != "":
+                    print filemd5s[x]
+                    self.printErr("non-regular file has filemd5sum")
+        # Verify region headers have sane data. We do not support more than
+        # one region header at this point.
+        for (data, regiontag, indexNo) in ((self["immutable"],
+            rpmtag["immutable"][0], self.hdrdata[0]),
+            (self["immutable1"], rpmtag["immutable1"][0], self.hdrdata[0]),
+            (self.sig["header_signatures"], rpmsigtag["header_signatures"][0],
+            self.sigdata[0])):
+            if data == None:
+                continue
+            (tag, ttype, offset, count) = unpack("!2IiI", data)
+            if tag != regiontag:
+                self.printErr("region has wrong tag")
+            if ttype != RPM_BIN or count != 16:
+                self.printErr("region has wrong type/count")
+            if -offset % 16 != 0:
+                self.printErr("region has wrong offset")
+            if -offset / 16 != indexNo:
+                self.printErr("region only for partial header")
 
         if self.nodigest:
             return
@@ -2013,7 +2044,7 @@ def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
     nrpm = ReadRpm(newsrpm)
     if nrpm.readHeader(rpmsigtag, rpmtag):
         return ret
-    if orpm.sig["md5"] != None and orpm.sig["md5"] == nrpm.sig["md5"]:
+    if sameSrcRpm(orpm, nrpm):
         return ret
 
     ret = ret + delim
@@ -2136,6 +2167,20 @@ class RpmTree:
                     newest = rpm
             self.h[r] = [newest]
 
+    def sort_unify(self):
+        self.sortVersions()
+        # Remove identical rpms and print a warning about further rpms
+        # who might add new patches without changing version/release.
+        for v in self.h.values():
+            i = 0
+            while i < len(v) - 1:
+                if cmpRpms(v[i], v[i + 1]) == 0:
+                    if not sameSrcRpm(v[i], v[i + 1]):
+                        print "duplicate rpms:", v[i].filename, v[i + 1].filename
+                    v.remove(v[i])
+                i = i + 1
+
+
 def verifyStructure(packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
     for tid in phash.keys():
@@ -2199,8 +2244,9 @@ def verifyStructure(packages, phash, tag, useidx=1):
 def readPackages(dbpath):
     import bsddb, cStringIO
     packages = {}
+    pkgdata = {}
     keyring = None #openpgp.PGPKeyRing()
-    maxtid = None
+    maxtid = 0
     db = bsddb.hashopen(dbpath + "Packages", "r")
     #for (tid, data) in db.iteritems():
     for tid in db.keys():
@@ -2217,7 +2263,8 @@ def readPackages(dbpath):
             #    keyring.addKey(k)
             pkg["group"] = (pkg["group"],)
         packages[tid] = pkg
-    return (packages, keyring, maxtid)
+        pkgdata[tid] = data
+    return (packages, keyring, maxtid, pkgdata)
 
 def readDb(filename, dbtype="hash", dotid=None):
     import bsddb
@@ -2243,11 +2290,11 @@ def readDb(filename, dbtype="hash", dotid=None):
             rethash[tid][idx] = k
     return rethash
 
-def readRpmdb(dbpath="/var/lib/rpm/"):
+def readRpmdb(dbpath):
     from binascii import b2a_hex
     print "Reading rpmdb, this can take some time..."
     print "Reading Packages..."
-    (packages, keyring, maxtid) = readPackages(dbpath)
+    (packages, keyring, maxtid, pkgdata) = readPackages(dbpath)
     print "Reading the rest..."
     basenames = readDb(dbpath + "Basenames")
     conflictname = readDb(dbpath + "Conflictname")
@@ -2265,10 +2312,9 @@ def readRpmdb(dbpath="/var/lib/rpm/"):
     sigmd5 = readDb(dbpath + "Sigmd5")
     triggername = readDb(dbpath + "Triggername")
     print "Checking data integrity..."
-    if maxtid != None:
-        for tid in packages.keys():
-            if tid > maxtid:
-                print "wrong tid:", tid
+    for tid in packages.keys():
+        if tid > maxtid:
+            print "wrong tid:", tid
     verifyStructure(packages, basenames, "basenames")
     verifyStructure(packages, conflictname, "conflictname")
     verifyStructure(packages, dirnames, "dirnames")
@@ -2287,7 +2333,48 @@ def readRpmdb(dbpath="/var/lib/rpm/"):
     verifyStructure(packages, sha1header, "install_sha1header", 0)
     verifyStructure(packages, sigmd5, "install_md5", 0)
     verifyStructure(packages, triggername, "triggername")
-    for pkg in packages.values():
+    for tid in packages.keys():
+        pkg = packages[tid]
+        if pkg["name"] == "gpg-pubkey":
+            continue
+        # Check if we could write the rpmdb data again.
+        region = "immutable"
+        if pkg["name"] not in ("IBMJava2-JRE", "j2re"):
+            install_keys["archivesize"] = 1
+        if pkg["name"] in ("j2re"):
+            install_keys["providename"] = 1
+            install_keys["provideflags"] = 1
+            install_keys["provideversion"] = 1
+            install_keys["dirindexes"] = 1
+            install_keys["dirnames"] = 1
+            install_keys["basenames"] = 1
+            region = "immutable1"
+        (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
+            region, None, 1, pkg.rpmgroup)
+        if pkg["name"] not in ("IBMJava2-JRE", "j2re"):
+            del install_keys["archivesize"]
+        if pkg["name"] in ("j2re"):
+            del install_keys["providename"]
+            del install_keys["provideflags"]
+            del install_keys["provideversion"]
+            del install_keys["dirindexes"]
+            del install_keys["dirnames"]
+            del install_keys["basenames"]
+        lead = pack("!2I", indexNo, storeSize)
+        data = "".join([lead, fmt, fmt2])
+        if len(data) % 4 != 0:
+            print "rpmdb header is not aligned to 4"
+        if data != pkgdata[tid]:
+            print pkg["name"], "wrong pkgdata", len(data), len(pkgdata[tid])
+            for i in xrange(0, indexNo * 16, 16):
+                (tag1, ttype1, offset1, count1) = unpack("!4I", fmt[i:i + 16])
+                (tag2, ttype2, offset2, count2) = unpack("!4I",
+                    pkg.hdrdata[3][i:i + 16])
+                if tag1 != tag2 or ttype1 != ttype2 or count1 != count2:
+                    print "tag:", tag1, tag2, i
+                if offset1 != offset2:
+                    print "offset:", offset1, offset2, "tag=", tag1
+        # Check if we can use the sha1 crc to validate the data.
         pkg.sig = HdrIndex()
         if pkg["archivesize"] != None:
             pkg.sig["payloadsize"] = pkg["archivesize"]
@@ -2306,9 +2393,7 @@ def readRpmdb(dbpath="/var/lib/rpm/"):
                 del pkg["install_sha1header"]
             sha1header = pkg.sig["sha1header"]
         if sha1header == None:
-            if pkg["name"] != "gpg-pubkey":
-                print "package", pkg.getFilename(), \
-                    "does not have a sha1 header"
+            print "warning: package", pkg.getFilename(), "does not have a sha1 header"
             continue
         (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
             "immutable", install_keys, 0, pkg.rpmgroup)
@@ -2328,55 +2413,46 @@ def sameSrcRpm(a, b):
     if amd5sum != None and amd5sum == b.sig["md5"]:
         return 1
     # Check if all regular files are the same in both packages.
-    afilemd5s = a["filemd5s"]
-    afilemodes = a["filemodes"]
     amd5s = []
-    for i in xrange(len(afilemd5s)):
-        if S_ISREG(afilemodes[i]):
-            amd5s.append(afilemd5s[i])
-    bfilemd5s = b["filemd5s"]
-    bfilemodes = b["filemodes"]
+    for (md5, name, mode) in zip(a["filemd5s"], a.getFilenames(),
+        a["filemodes"]):
+        if S_ISREG(mode):
+            amd5s.append((md5, name))
+    amd5s.sort()
     bmd5s = []
-    for i in xrange(len(bfilemd5s)):
-        if S_ISREG(bfilemodes[i]):
-            bmd5s.append(bfilemd5s[i])
-    for a in amd5s:
-        if a not in bmd5s:
-            return 0
-    for a in bmd5s:
-        if a not in amd5s:
-            return 0
-    return 1
+    for (md5, name, mode) in zip(b["filemd5s"], b.getFilenames(),
+        b["filemodes"]):
+        if S_ISREG(mode):
+            bmd5s.append((md5, name))
+    bmd5s.sort()
+    return amd5s == bmd5s
 
 def checkSrpms():
-    r = RpmTree()
-    for d in ("/var/www/html/mirror/rhn/SRPMS",
+    directories = [
         "/var/www/html/mirror/updates-rhel/2.1",
         "/var/www/html/mirror/updates-rhel/3",
         "/var/www/html/mirror/updates-rhel/4",
         "/mnt/hdb4/data/cAos/3.5/updates/SRPMS",
         "/mnt/hdb4/data/cAos/4.1/os/SRPMS",
-        "/mnt/hdb4/data/cAos/4.1/updates/SRPMS"):
+        "/mnt/hdb4/data/cAos/4.1/updates/SRPMS"]
+    for d in directories:
+        if not os.path.isdir(d):
+            continue
+        r = RpmTree()
+        r.addDirectory(d)
+        r.sort_unify()
+        for v in r.h.values():
+            for i in xrange(len(v) - 1):
+                if v[i].hdr.getOne("buildtime") > \
+                    v[i + 1].hdr.getOne("buildtime"):
+                    print "buildtime inversion:", v[i].filename, \
+                        v[i + 1].filename
+    directories.append("/var/www/html/mirror/rhn/SRPMS")
+    r = RpmTree()
+    for d in directories:
         if os.path.isdir(d):
             r.addDirectory(d)
-    r.sortVersions()
-    # Remove identical rpms and print a warning about further rpms
-    # who might add new patches without changing version/release.
-    for v in r.h.values():
-        i = 0
-        while i < len(v) - 1:
-            if cmpRpms(v[i], v[i + 1]) == 0:
-                if sameSrcRpm(v[i], v[i + 1]):
-                    v.remove(v[i])
-                else:
-                    print "duplicate rpms:", v[i].filename, v[i + 1].filename
-                    v.remove(v[i])
-            i = i + 1
-    # This check needs to be per release/updates:
-    #for v in rpms.values():
-    #    for i in xrange(len(v) - 1):
-    #        if v[i].hdr.getOne("buildtime") > v[i + 1].hdr.getOne("buildtime"):
-    #            print "buildtime inversion:", v[i].filename, v[i + 1].filename
+    r.sort_unify()
     for rp in r.getNames():
         v = r.h[rp]
         print "%s:" % v[0]["name"]
@@ -2464,7 +2540,7 @@ def checkDirs(repo):
             if f.startswith("/etc/init.d/"):
                 print "init.d:", rpm.filename, f
             # output any package having debug stuff included
-            if not rpm.filename.endswith("-debuginfo") and \
+            if not rpm["name"].endswith("-debuginfo") and \
                 f.startswith("/usr/lib/debug"):
                 print "debug stuff in normal package:", rpm.filename, f
             # collect all directories into "dirs"
@@ -2550,13 +2626,14 @@ def main():
     diff = 0
     extract = 0
     checksrpms = 0
+    rpmdbpath = "/var/lib/rpm/"
     checkarch = 0
     buildroot = ""
     checkrpmdb = 0
     (opts, args) = getopt.getopt(sys.argv[1:], "?",
         ["help", "strict", "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
-         "checksrpms", "checkarch", "checkrpmdb", "buildroot="])
+         "checksrpms", "checkarch", "rpmdbpath=", "checkrpmdb", "buildroot="])
     for (opt, val) in opts:
         if opt in ["-?", "--help"]:
             print "verify rpm packages"
@@ -2587,6 +2664,8 @@ def main():
             checksrpms = 1
         elif opt == "--checkarch":
             checkarch = 1
+        elif opt == "--rpmdbpath":
+            rpmdbpath = val
         elif opt == "--checkrpmdb":
             checkrpmdb = 1
         elif opt == "--buildroot":
@@ -2610,23 +2689,22 @@ def main():
         checkArch(args[0])
         return
     if checkrpmdb:
-        readRpmdb()
+        readRpmdb(rpmdbpath)
         return
     keepdata = 1
     hdrtags = rpmtag
-    if nodigest == 1:
-        if verify == 0:
-            keepdata = 0
-            if small:
-                for i in importanttags.keys():
-                    value = rpmtag[i]
-                    importanttags[i] = value
-                    importanttags[value[0]] = value
-                hdrtags = importanttags
+    if verify == 0 and nodigest == 1:
+        keepdata = 0
+        if small:
+            for i in importanttags.keys():
+                value = rpmtag[i]
+                importanttags[i] = value
+                importanttags[value[0]] = value
+            hdrtags = importanttags
     #for _ in xrange(50):
     for a in args:
         b = [a]
-        if os.path.isdir(a):
+        if not a.endswith(".rpm") and not isUrl(a) and os.path.isdir(a):
             b = []
             for c in os.listdir(a):
                 fn = "%s/%s" % (a, c)
@@ -2647,7 +2725,6 @@ def main():
     if strict:
         for rpm in repo:
             rpm.filenames = rpm.getFilenames()
-        del rpm
         checkDirs(repo)
         checkSymlinks(repo)
         checkProvides(repo, checkrequires=1)
