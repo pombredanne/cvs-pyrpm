@@ -648,7 +648,8 @@ class RpmStreamIO(RpmIO):
             self.offset = 0
             self.indexlist = []
 
-        def outputHeader(self, header, align, skip_tags, install_keys=[257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128]):
+        def outputHeader(self, header, align, skip_tags, install_keys=[257,
+            261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128]):
             """Return (index data, data area) representing signature header
             (tag name => tag value), with data area end aligned to align"""
 
@@ -658,7 +659,7 @@ class RpmStreamIO(RpmIO):
             for tag in keys:
                 if tag in skip_tags:
                     continue
-                # We'll handled the region header at the end...
+                # We'll handle the region header at the end...
                 if tag == self.region:
                     continue
                 # Skip keys only appearing in /var/lib/rpm/Packages
@@ -666,10 +667,13 @@ class RpmStreamIO(RpmIO):
                     continue
                 key = self.tagnames[tag]
                 # Skip keys we don't have
-                if not header.has_key(key):
-                    continue
-                self.__appendTag(tag, header[key])
-            # 2nd pass: Ouput install only tags
+                if header.has_key(key):
+                    self.__appendTag(tag, header[key])
+            # Add region header.
+            key = self.tagnames[self.region]
+            if header.has_key(key):
+                self.__appendTag(self.region, header[key])
+            # 2nd pass: Ouput install only tags.
             for tag in install_keys:
                 if tag in skip_tags:
                     continue
@@ -678,13 +682,8 @@ class RpmStreamIO(RpmIO):
                     continue
                 key = self.tagnames[tag]
                 # Skip keys we don't have
-                if not header.has_key(key):
-                    continue
-                self.__appendTag(tag, header[key])
-            # Handle region header if we have it at the end.
-            key = self.tagnames[self.region]
-            if header.has_key(key):
-                self.__appendTag(self.region, header[key])
+                if header.has_key(key):
+                    self.__appendTag(tag, header[key])
             (index, pad) = self.__generateIndex(align)
             return (index, self.store+pad)
 
@@ -742,7 +741,8 @@ class RpmStreamIO(RpmIO):
                 data = ""
                 for i in xrange(0,count):
                     if format == "s":
-                        data += pack("%ds" % (len(value[i])+isstring), value[i])
+                        data += pack("%ds" % (len(value[i]) + isstring),
+                            value[i])
                     else:
                         data += pack(format, value[i])
             # Fix counter. If it was a list, keep the counter.
@@ -768,8 +768,8 @@ class RpmStreamIO(RpmIO):
                 else:
                     index += pack("!4I", tag, ttype, offset, count)
             align = (pad - (len(self.store) % pad)) % pad
-            index = RPM_HEADER_INDEX_MAGIC +\
-                    pack("!2I", len(self.indexlist), len(self.store)+align) + index
+            index = RPM_HEADER_INDEX_MAGIC + pack("!2I", len(self.indexlist),
+                len(self.store) + align) + index
             return (index, '\x00' * align)
 
         def __alignTag(self, ttype):
