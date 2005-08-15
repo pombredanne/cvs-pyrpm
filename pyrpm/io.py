@@ -97,7 +97,7 @@ class PyGZIP:
             if len(data) >= 8:
                 self.enddata = data[-8:]
             else:
-                self.enddata = self.enddata[:8-len(data)] + data
+                self.enddata = self.enddata[-len(data):] + data
             size = bytes - self.bufferlen
             if size > 65536:
                 size = 32768
@@ -862,7 +862,7 @@ class RpmFileIO(RpmStreamIO):
         if region is None or len(region) != 16:
             # What was the digest computed from?
             raise ValueError, "No region"
-        (tag, type_, offset, count) = unpack("!4I", region)
+        (tag, type_, offset, count) = unpack("!2IiI", region)
         # FIXME: other regions than "immutable"?
         if (tag != 63 or type_ != RPM_BIN or -offset <= 0 or -offset % 16 != 0
             or count != 16):
