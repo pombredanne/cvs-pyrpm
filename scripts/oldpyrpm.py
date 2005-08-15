@@ -60,6 +60,7 @@
 # - Change "strict" and "verify" into "debug" and have one integer specify
 #   debug and output levels. (Maybe also "nodigest" can move in?)
 # - check OpenGPG signatures
+# - allow src.rpm selectioin based on OpenGPG signature. Prefer GPG signed.
 # - Whats the difference between "cookie" and "buildhost" + "buildtime".
 # - Bring extractCpio and verifyCpio closer together again.
 # - i386 rpm extraction on ia64? (This is stored like relocated rpms in
@@ -307,8 +308,9 @@ def getMD5(fpath):
 
 (FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT) = (1, 2, 4, 8, 16)
 class PyGZIP:
-    def __init__(self, fd, datasize):
+    def __init__(self, fd, datasize, filename):
         self.fd = fd
+        self.filename = filename
         self.length = 0 # length of all decompressed data
         self.length2 = datasize
         self.enddata = "" # remember last 8 bytes for crc/length check
@@ -356,7 +358,7 @@ class PyGZIP:
             if len(data) >= 8:
                 self.enddata = data[-8:]
             else:
-                self.enddata = self.enddata[:8-len(data)] + data
+                self.enddata = self.enddata[-len(data):] + data
             x = obj.decompress(data)
             self.crcval = zlib.crc32(x, self.crcval)
             self.length += len(x)
@@ -371,13 +373,18 @@ class PyGZIP:
         return "".join(decompdata)
 
     def __del__(self):
+        data = self.fd.read(8)
+        if len(data) >= 8:
+            self.enddata = data[-8:]
+        else:
+            self.enddata = self.enddata[-len(data):] + data
         (crc32, isize) = unpack("<iI", self.enddata)
         if crc32 != self.crcval:
-            print "CRC check failed."
+            print self.filename, "CRC check failed:", crc32, self.crcval
         if isize != self.length:
-            print "Incorrect length of data produced."
+            print self.filename, "Incorrect length of data produced:", isize, self.length
         if isize != self.length2 and self.length2 != None:
-            print "Incorrect length of data produced."
+            print self.filename, "Incorrect length of data produced:", self.length2
 
 
 # rpm tag types
@@ -536,7 +543,6 @@ rpmtag = {
     "pubkeys": [266, RPM_STRING_ARRAY, None, 4],
     "sourcepkgid": [1146, RPM_BIN, 16, 4], # md5 from srpm (header+payload)
     "immutable": [63, RPM_BIN, 16, 0],
-    "immutable1": [61, RPM_BIN, 16, 1],
     # less important information:
     "buildtime": [1006, RPM_INT32, 1, 8], # time of rpm build
     "buildhost": [1007, RPM_STRING, None, 0], # hostname where rpm was built
@@ -627,7 +633,8 @@ rpmdbtag = {
     "installcolor": [1127, RPM_INT32, None, 0],
     "installtid": [1128, RPM_INT32, None, 0],
     "install_badsha1_1": [264, RPM_STRING, None, 1],
-    "install_badsha1_2": [265, RPM_STRING, None, 1]
+    "install_badsha1_2": [265, RPM_STRING, None, 1],
+    "immutable1": [61, RPM_BIN, 16, 1]
 }
 # List of special rpmdb tags, like also visible above.
 install_keys = {}
@@ -1528,7 +1535,7 @@ class ReadRpm:
             elif cpiosize != archivesize:
                 self.printErr("wrong archive size")
         if self["payloadcompressor"] in [None, "gzip"]:
-            fd = PyGZIP(self.fd, cpiosize)
+            fd = PyGZIP(self.fd, cpiosize, self.filename)
             #import gzip
             #fd = gzip.GzipFile(fileobj=self.fd)
         elif self["payloadcompressor"] == "bzip2":
@@ -1921,7 +1928,7 @@ class ReadRpm:
         # one region header at this point.
         for (data, regiontag, indexNo) in ((self["immutable"],
             rpmtag["immutable"][0], self.hdrdata[0]),
-            (self["immutable1"], rpmtag["immutable1"][0], self.hdrdata[0]),
+            (self["immutable1"], rpmdbtag["immutable1"][0], self.hdrdata[0]),
             (self.sig["header_signatures"], rpmsigtag["header_signatures"][0],
             self.sigdata[0])):
             if data == None:
