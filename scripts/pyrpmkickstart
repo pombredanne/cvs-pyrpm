@@ -960,6 +960,9 @@ if ks["post"] and len(ks["post"]["script"]) > 0:
         (rpid, status) = os.waitpid(pid, 0)
         if status != 0 and ks["post"].has_key("erroronfail"):
             print "ERROR: post script failed"
+            if umount_all(tempdir+"/") == 0:
+                if not nocleanup:
+                    rm_rf(tempdir)
     else:
         if not ks["post"].has_key("nochroot"):
             os.chroot(buildroot)
