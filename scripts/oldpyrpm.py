@@ -47,33 +47,32 @@
 
 #
 # TODO:
-# - PyGZIP is way faster than existing gzip routines, but still 2 times
-#   slower than a C version. Can further improvements be made?
-#   The C part should offer a class which supports read().
-# - error handling in PyGZIP
-# - Why is bsddb so slow? (Why is reading rpmdb so slow?) Can we make
-#   small and faster python bindings for bsddb?
-# - evrSplit(): 'epoch = ""' would make a distinction between missing
-#   and "0" epoch (change this for createrepo)
-# - streaming read for cpio files
-# - use setPerms() in doLnOrCopy()
-# - Change "strict" and "verify" into "debug" and have one integer specify
-#   debug and output levels. (Maybe also "nodigest" can move in?)
 # - check OpenGPG signatures
-# - allow src.rpm selectioin based on OpenGPG signature. Prefer GPG signed.
-# - Whats the difference between "cookie" and "buildhost" + "buildtime".
+# - allow src.rpm selection based on OpenGPG signature. Prefer GPG signed.
 # - Bring extractCpio and verifyCpio closer together again.
 # - i386 rpm extraction on ia64? (This is stored like relocated rpms in
 #   duplicated file tags.)
-# - While checking rpmdb detect relocated rpm packages instead of
-#   warning about wrong data.
-# - Duplicate tags can be available if a package has been signed twice
-#   or e.g. in the case of relocatable packages for the header in the
-#   rpmdb. Do we need to change data handling for that case?
+# - Better error handling in PyGZIP.
+# - streaming read for cpio files (not high prio item)
+# - use setPerms() in doLnOrCopy()
+# - Change "strict" and "verify" into "debug" and have one integer specify
+#   debug and output levels. (Maybe also "nodigest" can move in?)
+# - limit: does not support all RHL5.x and earlier rpms if verify is enabled
+# - Whats the difference between "cookie" and "buildhost" + "buildtime".
+# - evrSplit(): 'epoch = ""' would make a distinction between missing
+#   and "0" epoch (push this change into createrepo)
+# things to be noted, probably not getting fixed:
+# - PyGZIP is way faster than existing gzip routines, but still 2 times
+#   slower than a C version. Can further improvements be made?
+#   The C part should offer a class which supports read().
+# - Why is bsddb so slow? (Why is reading rpmdb so slow?) Can we make
+#   small and faster python bindings for bsddb? Nothing found for this.
 # - We use S_ISREG(fileflag) to check for regular files before looking
 #   at filemd5s, but filemd5s is only set for regular files, so this
 #   might be optimized a bit. (That code is in no performance critical
-#   path, so could also stay as is.)
+#   path, so could also stay as is.) Also note that some kernels have
+#   bugs to not mmap() files with size 0 and then rpm is writing wrong
+#   filemd5s for those.
 # - The error case for "--checkrpmdb" might not be too good. E.g. duplicate
 #   entries are moaned about, but then also not verified by adding them
 #   to the hash, so analysing the error case might still involve adding
@@ -82,8 +81,7 @@
 #   slow. At some point it may make sense to write again a librpm type
 #   thing to have a core part in C and testing/outer decisions in python.
 #   Due to the large data rpm is handling this is kind of tricky.
-# - limit: does not support all RHL5.x and earlier rpms if verify is enabled
-# things that look less important to implement:
+# things that look even less important to implement:
 # - check for #% in spec files: grep "#.*%" *.spec (too many hits until now)
 # - add streaming support to bzip2 compressed payload
 # - lua scripting support
@@ -648,6 +646,15 @@ for v in rpmdbtag.values():
 for v in rpmtag.keys():
     rpmdbtag[v] = rpmtag[v]
 del v
+# These entries have the same ID as entries already in the list
+# to store duplicate tags that get written to the rpmdb for
+# relocated packages or ia64 compat packages (i386 on ia64).
+rpmdbtag["dirindexes2"] = [1116, RPM_INT32, None, 0, "dirindexes2"]
+rpmdbtag["dirnames2"] = [1118, RPM_STRING_ARRAY, None, 0, "dirnames2"]
+rpmdbtag["basenames2"] = [1117, RPM_STRING_ARRAY, None, 0, "basenames2"]
+install_keys["dirindexes2"] = 1
+install_keys["dirnames2"] = 1
+install_keys["basenames2"] = 1
 
 # Required tags in a header.
 rpmtagrequired = ("name", "version", "release", "arch", "rpmversion")
@@ -733,20 +740,19 @@ def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
     for tagname in tags.keys():
         tagnum = taghash[tagname][0]
         if tagname == region:
-            stags3.append(tagnum)
+            stags3.append((tagnum, tagname))
         elif skip_tags and skip_tags.has_key(tagname):
             pass
         elif useinstall and install_keys.has_key(tagname):
-            stags2.append(tagnum)
+            stags2.append((tagnum, tagname))
         else:
-            stags1.append(tagnum)
+            stags1.append((tagnum, tagname))
     stags1.sort()
     stags2.sort()
     stags1.extend(stags3)
     stags1.extend(stags2)
     indexdata = []
-    for tagnum in stags1:
-        tagname = taghash[tagnum][4]
+    for (tagnum, tagname) in stags1:
         value = tags[tagname]
         ttype = taghash[tagnum][1]
         count = len(value)
@@ -1264,15 +1270,23 @@ class ReadRpm:
             else:
                 self.raiseErr("unknown tag header")
                 data = None
+            if nametag == "group":
+                self.rpmgroup = ttype
             # Ignore duplicate entries as long as they are identical.
             # They happen for packages signed with several keys or for
             # relocated packages in the rpmdb.
-            if hdr.has_key(nametag) and hdr[nametag] != data:
-                self.printErr("duplicate tag %d" % tag)
-            else:
-                hdr[nametag] = data
-            if nametag == "group":
-                self.rpmgroup = ttype
+            if hdr.has_key(nametag):
+                if nametag == "dirindexes":
+                    nametag = "dirindexes2"
+                elif nametag == "dirnames":
+                    nametag = "dirnames2"
+                elif nametag == "basenames":
+                    nametag = "basenames2"
+                else:
+                    if self.strict or hdr[nametag] != data:
+                        self.printErr("duplicate tag %d" % tag)
+                    continue
+            hdr[nametag] = data
         return hdr
 
     def readHeader(self, sigtags, hdrtags, keepdata=None, rpmdb=None):
@@ -2195,7 +2209,14 @@ def verifyStructure(packages, phash, tag, useidx=1):
         if not packages.has_key(tid):
             print "Error %s: Package id %s doesn't exist" % (tag, tid)
             continue
-        pkgtag = packages[tid][tag]
+        if tag == "dirindexes" and packages[tid]["dirindexes2"] != None:
+            pkgtag = packages[tid]["dirindexes2"]
+        elif tag == "dirnames" and packages[tid]["dirnames2"] != None:
+            pkgtag = packages[tid]["dirnames2"]
+        elif tag == "basenames" and packages[tid]["basenames2"] != None:
+            pkgtag = packages[tid]["basenames2"]
+        else:
+            pkgtag = packages[tid][tag]
         for idx in mytag.keys():
             if useidx:
                 try:
@@ -2213,7 +2234,14 @@ def verifyStructure(packages, phash, tag, useidx=1):
     # copied over to the other files.
     for tid in packages.keys():
         pkg = packages[tid]
-        refhash = pkg[tag]
+        if tag == "dirindexes" and pkg["dirindexes2"] != None:
+            refhash = pkg["dirindexes2"]
+        elif tag == "dirnames" and pkg["dirnames2"] != None:
+            refhash = pkg["dirnames2"]
+        elif tag == "basenames" and pkg["basenames2"] != None:
+            refhash = pkg["basenames2"]
+        else:
+            refhash = pkg[tag]
         if not refhash:
             continue
         phashtid = None
@@ -2373,6 +2401,10 @@ def readRpmdb(dbpath):
             print "rpmdb header is not aligned to 4"
         if data != pkgdata[tid]:
             print pkg["name"], "wrong pkgdata", len(data), len(pkgdata[tid])
+            if fmt != pkg.hdrdata[3]:
+                print "wrong fmt"
+            if fmt2 != pkg.hdrdata[4]:
+                print "wrong fmt2", len(fmt2), len(pkg.hdrdata[4])
             for i in xrange(0, indexNo * 16, 16):
                 (tag1, ttype1, offset1, count1) = unpack("!4I", fmt[i:i + 16])
                 (tag2, ttype2, offset2, count2) = unpack("!4I",
