@@ -528,6 +528,8 @@ def umount(what):
     if failed == 1:
         print "ERROR: Umount of '%s' failed" % what
 
+    return failed
+
 def umount_all(dir):
     # umount target dir and included mount points
     mounted = [ ]
@@ -545,8 +547,12 @@ def umount_all(dir):
     mounted.sort()
     mounted.reverse()
 
+    failed = 0
     for dir in mounted:
-        umount(dir)
+        if umount(dir) == 1:
+            failed = 1
+
+    return failed
 
 #################################### main ####################################
 
@@ -651,9 +657,9 @@ try:
     mount(source, source_dir, fstype="nfs")
 except Exception, msg:
     print msg
-    umount_all(tempdir+"/")
-    if not nocleanup:
-        rm_rf(tempdir)
+    if umount_all(tempdir+"/") == 0:
+        if not nocleanup:
+            rm_rf(tempdir)
     sys.exit(1)
 
 # format target
@@ -684,9 +690,9 @@ if ks.has_key("install"):
             print "About to format '/' filesystem on %s" % target
             choice = raw_input("Is this ok [y/N]: ")
             if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
-                umount_all(tempdir+"/")
-                if not nocleanup:
-                    rm_rf(tempdir)
+                if umount_all(tempdir+"/") == 0:
+                    if not nocleanup:
+                        rm_rf(tempdir)
                 sys.exit(1)
 
         print "Formatting '/' filesystem on %s" % target
@@ -711,9 +717,9 @@ try:
         mount(target, target_dir, fstype=ks["partition"]["/"]["fstype"])
 except Exception, msg:
     print msg
-    umount_all(tempdir+"/")
-    if not nocleanup:
-        rm_rf(tempdir)
+    if umount_all(tempdir+"/") == 0:
+        if not nocleanup:
+            rm_rf(tempdir)
     sys.exit(1)
 
 buildroot = target_dir
@@ -794,9 +800,9 @@ if ks["pre"] and len(ks["pre"]["script"]) > 0:
         (rpid, status) = os.waitpid(pid, 0)
         if status != 0 and ks["pre"].has_key("erroronfail"):
             print "ERROR: Pre script failed, aborting."
-            umount_all(tempdir+"/")
-            if not nocleanup:
-                rm_rf(tempdir)
+            if umount_all(tempdir+"/") == 0:
+                if not nocleanup:
+                    rm_rf(tempdir)
     else:
         if not ks["pre"].has_key("nochroot"):
             os.chroot(buildroot)
@@ -979,9 +985,9 @@ if xen:
     fd.close()
 
 # umount source_dir, target_dir and included mount points
-umount_all(tempdir+"/")
-if not nocleanup:
-    rm_rf(tempdir)
+if umount_all(tempdir+"/") == 0:
+    if not nocleanup:
+        rm_rf(tempdir)
 
 sys.exit(0)
 
