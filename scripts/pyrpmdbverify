@@ -7,7 +7,7 @@
 #
 
 
-import sys, os, getopt
+import sys, os, getopt, errno
 from bsddb import hashopen, btopen
 from binascii import b2a_hex, a2b_hex
 from struct import unpack
@@ -31,15 +31,14 @@ PACKAGES | DIRS: Optional single rpms or directories of rpms against which the
 
 # Tags which will be read from the rpms. CHANGE HERE IF SOME TESTS NEED MORE
 # tags!!!!
-rtags = {"name":1, "epoch":1, "version":1, "release":1, "arch":1,
-    "sha1header":1, "sourcerpm":1}
-
+rtags = ("name", "epoch", "version", "release", "arch", "sha1header", "sourcerpm")
 def readDir(dir, list):
-    for f in os.listdir(dir):
+    files = os.listdir(dir)
+    for f in files:
         if os.path.isdir("%s/%s" % (dir, f)):
             readDir("%s/%s" % (dir, f), list)
         elif f.endswith(".rpm"):
-            if f.find("-debuginfo-") > 0:
+            if f.find("debuginfo") > 0:
                 continue
             pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
             try:
