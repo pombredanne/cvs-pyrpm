@@ -2205,13 +2205,21 @@ class RpmTree:
                 i = i + 1
 
 
+def getSwappedEndian():
+    num = unpack("=I", "1234")[0]
+    if num == 1234:
+        return "<"
+    return ">"
+
 def verifyStructure(printcontent, packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
     for tid in phash.keys():
         mytag = phash[tid]
         if not packages.has_key(tid):
             #XXX: add a required/musthave param above
-            #print "Error %s: Package id %s doesn't exist" % (tag, tid)
+            print "Error %s: Package id %s doesn't exist" % (tag, tid)
+            if printcontent:
+                print tag, mytag
             continue
         if tag == "dirindexes" and packages[tid]["dirindexes2"] != None:
             pkgtag = packages[tid]["dirindexes2"]
@@ -2685,7 +2693,7 @@ def main():
     (opts, args) = getopt.getopt(sys.argv[1:], "?",
         ["help", "strict", "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
-         "checksrpms", "checkarch", "rpmdbpath=", "swapendian=",
+         "checksrpms", "checkarch", "rpmdbpath=", "swapendian",
          "printcontent", "checkrpmdb", "buildroot="])
     for (opt, val) in opts:
         if opt in ["-?", "--help"]:
@@ -2722,7 +2730,7 @@ def main():
             if rpmdbpath[-1:] != "/":
                 rpmdbpath += "/"
         elif opt == "--swapendian":
-            swapendian = val
+            swapendian = getSwappedEndian()
         elif opt == "--printcontent":
             printcontent = 1
         elif opt == "--checkrpmdb":
