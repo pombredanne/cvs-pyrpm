@@ -48,6 +48,7 @@
 #
 # TODO:
 # - check install_badsha1_2 if available
+# - allow a --rebuilddb into a new directory and a diff between two rpmdb
 # - check OpenGPG signatures
 # - allow src.rpm selection based on OpenGPG signature. Prefer GPG signed.
 # - Bring extractCpio and verifyCpio closer together again.
@@ -2717,6 +2718,8 @@ def main():
             checkarch = 1
         elif opt == "--rpmdbpath":
             rpmdbpath = val
+            if rpmdbpath[-1:] != "/":
+                rpmdbpath += "/"
         elif opt == "--swapendian":
             swapendian = val
         elif opt == "--checkrpmdb":
