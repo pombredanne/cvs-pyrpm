@@ -2429,26 +2429,20 @@ def readRpmdb(dbpath, swapendian):
             pkg.sig["payloadsize"] = pkg["archivesize"]
             if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
                 del pkg["archivesize"]
-        if 1:
-            sha1header = pkg["install_sha1header"]
-        else:
-            if pkg["install_size_in_sig"] != None:
-                pkg.sig["size_in_sig"] = pkg["install_size_in_sig"]
-                del pkg["install_size_in_sig"]
-            if pkg["install_md5"] != None:
-                pkg.sig["md5"] = pkg["install_md5"]
-                del pkg["install_md5"]
-            if pkg["install_sha1header"] != None:
-                pkg.sig["sha1header"] = pkg["install_sha1header"]
-                del pkg["install_sha1header"]
-            sha1header = pkg.sig["sha1header"]
-        if sha1header == None:
+        sha1header = pkg["install_sha1header"]
+        install_badsha1_2 = pkg["install_badsha1_2"]
+        if sha1header == None: # and install_badsha1_2 == None:
             print "warning: package", pkg.getFilename(), "does not have a sha1 header"
             continue
         (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
             region, install_keys, 0, pkg.rpmgroup)
         lead = pack("!8s2I", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
             indexNo, storeSize)
+        if sha1header == None:
+            sha1header = install_badsha1_2
+            #lead = convert(lead)
+            #fmt = convert(fmt)
+            #fmt2 = convert(fmt2)
         ctx = sha.new()
         ctx.update(lead)
         ctx.update(fmt)
