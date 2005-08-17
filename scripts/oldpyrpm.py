@@ -2263,6 +2263,9 @@ def verifyStructure(printcontent, packages, phash, tag, useidx=1):
         tnamehash = {}
         for idx in xrange(len(refhash)):
             key = refhash[idx]
+            # Only one group entry is copied over.
+            if tag == "group" and idx > 0:
+                continue
             # requirename only stored if not InstallPreReq
             if tag == "requirename" and \
                 isInstallPreReq(pkg["requireflags"][idx]):
