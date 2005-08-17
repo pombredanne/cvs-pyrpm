@@ -1,6 +1,6 @@
 scripts = oldpyrpm.py pyrpmcheck pyrpmcheckrepo pyrpmcreaterepo pyrpmdb2rpmdb \
-	pyrpmdbverify pyrpminstall pyrpmrandomizer pyrpmrebuilddb \
-	pyrpmspecinfo pyrpmyum rpmdb2pyrpmdb
+	pyrpmdbverify pyrpminstall pyrpmkickstart pyrpmrandomizer \
+	pyrpmrebuilddb pyrpmspecinfo pyrpmyum rpmdb2pyrpmdb
 EXTRA_DIST = $(scripts)
 bin_SCRIPTS = $(scripts)
 
