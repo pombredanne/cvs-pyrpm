@@ -36,7 +36,8 @@
 #
 # Other usages:
 # - Check your rpmdb for consistency (works as non-root readonly):
-#   ./oldpyrpm.py [--swapendian=">"] [--rpmdbpath=/var/lib/rpm/] --checkrpmdb
+#   ./oldpyrpm.py [--swapendian=">"] [--rpmdbpath=/var/lib/rpm/] \
+#       [--printcontent] --checkrpmdb
 # - Check a dir with src.rpms which archs are excluded:
 #   ./oldpyrpm.py --checkarch /mirror/fedora/development/SRPMS
 # - Diff two src.rpm packages:
@@ -2204,7 +2205,7 @@ class RpmTree:
                 i = i + 1
 
 
-def verifyStructure(packages, phash, tag, useidx=1):
+def verifyStructure(printcontent, packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
     for tid in phash.keys():
         mytag = phash[tid]
@@ -2226,7 +2227,8 @@ def verifyStructure(packages, phash, tag, useidx=1):
                     val = pkgtag[idx]
                 except:
                     print "Error %s: index %s is not in package" % (tag, idx)
-                    #print mytag[idx]
+                    if printcontent:
+                        print mytag[idx]
             else:
                 if idx != 0:
                     print "Error %s: index %s out of range" % (tag, idx)
@@ -2281,7 +2283,8 @@ def verifyStructure(packages, phash, tag, useidx=1):
             except:
                 print "Error %s: index %s is not in package %s" % (tag,
                     idx, tid)
-                #print key, phashtid
+                if printcontent:
+                    print key, phashtid
 
 def readPackages(dbpath, swapendian):
     import bsddb, cStringIO
@@ -2332,7 +2335,7 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
             rethash[tid][idx] = k
     return rethash
 
-def readRpmdb(dbpath, swapendian):
+def readRpmdb(dbpath, swapendian, printcontent):
     from binascii import b2a_hex
     print "Reading rpmdb, this can take some time..."
     print "Reading Packages..."
@@ -2360,24 +2363,24 @@ def readRpmdb(dbpath, swapendian):
     for tid in packages.keys():
         if tid > maxtid:
             print "wrong tid:", tid
-    verifyStructure(packages, basenames, "basenames")
-    verifyStructure(packages, conflictname, "conflictname")
-    verifyStructure(packages, dirnames, "dirnames")
+    verifyStructure(printcontent, packages, basenames, "basenames")
+    verifyStructure(printcontent, packages, conflictname, "conflictname")
+    verifyStructure(printcontent, packages, dirnames, "dirnames")
     for x in filemd5s.values():
         for y in x.keys():
             x[y] = b2a_hex(x[y])
-    verifyStructure(packages, filemd5s, "filemd5s")
-    verifyStructure(packages, group, "group")
-    verifyStructure(packages, installtid, "installtid")
-    verifyStructure(packages, name, "name", 0)
-    verifyStructure(packages, providename, "providename")
-    verifyStructure(packages, provideversion, "provideversion")
-    #verifyStructure(packages, pubkeys, "pubkeys")
-    verifyStructure(packages, requirename, "requirename")
-    verifyStructure(packages, requireversion, "requireversion")
-    verifyStructure(packages, sha1header, "install_sha1header", 0)
-    verifyStructure(packages, sigmd5, "install_md5", 0)
-    verifyStructure(packages, triggername, "triggername")
+    verifyStructure(printcontent, packages, filemd5s, "filemd5s")
+    verifyStructure(printcontent, packages, group, "group")
+    verifyStructure(printcontent, packages, installtid, "installtid")
+    verifyStructure(printcontent, packages, name, "name", 0)
+    verifyStructure(printcontent, packages, providename, "providename")
+    verifyStructure(printcontent, packages, provideversion, "provideversion")
+    #verifyStructure(printcontent, packages, pubkeys, "pubkeys")
+    verifyStructure(printcontent, packages, requirename, "requirename")
+    verifyStructure(printcontent, packages, requireversion, "requireversion")
+    verifyStructure(printcontent, packages, sha1header, "install_sha1header", 0)
+    verifyStructure(printcontent, packages, sigmd5, "install_md5", 0)
+    verifyStructure(printcontent, packages, triggername, "triggername")
     for tid in packages.keys():
         pkg = packages[tid]
         if pkg["name"] == "gpg-pubkey":
@@ -2674,12 +2677,13 @@ def main():
     checkarch = 0
     buildroot = ""
     swapendian = ""
+    printcontent = 0
     checkrpmdb = 0
     (opts, args) = getopt.getopt(sys.argv[1:], "?",
         ["help", "strict", "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
-         "checksrpms", "checkarch", "rpmdbpath=", "swapendian=", "checkrpmdb",
-         "buildroot="])
+         "checksrpms", "checkarch", "rpmdbpath=", "swapendian=",
+         "printcontent", "checkrpmdb", "buildroot="])
     for (opt, val) in opts:
         if opt in ["-?", "--help"]:
             print "verify rpm packages"
@@ -2716,6 +2720,8 @@ def main():
                 rpmdbpath += "/"
         elif opt == "--swapendian":
             swapendian = val
+        elif opt == "--printcontent":
+            printcontent = 1
         elif opt == "--checkrpmdb":
             checkrpmdb = 1
         elif opt == "--buildroot":
@@ -2739,7 +2745,7 @@ def main():
         checkArch(args[0])
         return
     if checkrpmdb:
-        readRpmdb(rpmdbpath, swapendian)
+        readRpmdb(rpmdbpath, swapendian, printcontent)
         return
     keepdata = 1
     hdrtags = rpmtag
