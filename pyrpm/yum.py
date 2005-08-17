@@ -38,6 +38,8 @@ class RpmYum:
         self.confirm = 1
         # Default: No command
         self.command = None
+        # List of packages to be installed/updated/removed
+        self.pkgs = []
         # List of repositories
         self.repos = [ ]
         # List of repository resolvers
@@ -114,7 +116,6 @@ class RpmYum:
                         args.append(pkg["name"])
         # Look for packages we need/want to install. Arguments can either be
         # direct filenames or package nevra's with * wildcards
-        self.pkgs = []
         repolists = []
         for repo in self.resolvers:
             repolists.append(repo.getList())
@@ -177,7 +178,9 @@ class RpmYum:
                 self.command.endswith("upgrade") :
                 self.__handleObsoletes(pkg)
         self.pkgs = []
-        ret = self.__runDepResolution()
+        ret = 1
+        if not self.config.nodeps:
+            ret = self.__runDepResolution()
         if self.config.timer:
             self.config.printInfo(0, "runDepRes() took %s seconds\n" % (clock() - time1))
         return ret

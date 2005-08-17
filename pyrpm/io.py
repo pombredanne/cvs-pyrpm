@@ -1143,13 +1143,18 @@ class RpmDB(RpmDatabase):
         id = self.maxid
 
         rpmio = RpmFileIO(self.config, "dummy")
-        pkg["install_size_in_sig"] = pkg["signature"]["size_in_sig"]
-        pkg["install_md5"] = pkg["signature"]["md5"]
-        pkg["install_sha1header"] = pkg["signature"]["sha1header"]
-        pkg["install_dsaheader"] = pkg["signature"]["dsaheader"]
+        if pkg["signature"].has_key("size_in_sig"):
+            pkg["install_size_in_sig"] = pkg["signature"]["size_in_sig"]
+        if pkg["signature"].has_key("md5"):
+            pkg["install_md5"] = pkg["signature"]["md5"]
+        if pkg["signature"].has_key("sha1header"):
+            pkg["install_sha1header"] = pkg["signature"]["sha1header"]
+        if pkg["signature"].has_key("dsaheader"):
+            pkg["install_dsaheader"] = pkg["signature"]["dsaheader"]
+        if pkg["signature"].has_key("payloadsize"):
+            pkg["archivesize"] = pkg["signature"]["payloadsize"]
         pkg["installtime"] = int(time.time())
         pkg["filestates"]= ['\x00',]
-        pkg["archivesize"] = pkg["signature"]["payloadsize"]
         pkg["installcolor"] = [0,]
         pkg["installtid"] = [self.config.tid,]
 

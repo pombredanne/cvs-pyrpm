@@ -128,7 +128,7 @@ class RpmController:
                 else:
                     self.config.printError("Unknown operation")
         del self.rpms
-        if resolver.resolve() != 1:
+        if not self.config.nodeps and resolver.resolve() != 1:
             sys.exit(1)
         if self.config.timer:
             self.config.printInfo(0, "resolver took %s seconds\n" % (clock() - time1))

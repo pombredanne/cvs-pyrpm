@@ -24,9 +24,9 @@ for key in db.keys():
 			(tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata, storedata)
 			if rpmtagname.has_key(tag):
 				if rpmtagname[tag] == "name":
-					print rpmtagname[tag], tagval
+					print tag, rpmtagname[tag], tagval
 				else:
-					print rpmtagname[tag]
+					print tag, rpmtagname[tag]
 			else:
 				print tag, repr(tagval)
 		rpmio.hdr = {}

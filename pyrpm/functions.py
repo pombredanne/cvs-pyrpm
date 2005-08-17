@@ -732,6 +732,7 @@ def readPackages(dbpath):
                         pkg["signature"]["payloadsize"] = tagval
                     pkg[rpmtagname[tag]] = tagval
             if pkg["name"].startswith("gpg-pubkey"):
+                continue
                 keys = openpgp.parsePGPKeys(pkg["description"])
                 for k in keys:
                     keyring.addKey(k)

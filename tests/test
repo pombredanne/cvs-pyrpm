@@ -5,7 +5,7 @@ from pyrpm import *
 
 rpms = []
 for i in sys.argv[1:]:
-    rpm = RpmPackage(rpmconfig, "file://"+i, verify=1)
+    rpm = RpmPackage(rpmconfig, "file://"+i, verify=0)
     try:
         rpm.read()
     except (IOError, ValueError), e:
