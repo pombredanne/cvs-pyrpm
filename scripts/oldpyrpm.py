@@ -36,8 +36,8 @@
 #
 # Other usages:
 # - Check your rpmdb for consistency (works as non-root readonly):
-#   ./oldpyrpm.py [--rpmdbpath=/var/lib/rpm/] \
-#       [--verbose|-v|--quiet|-q] --checkrpmdb
+#   ./oldpyrpm.py [--verbose|-v|--quiet|-q] \
+#                 [--rpmdbpath=/var/lib/rpm/] --checkrpmdb
 #   The check of the rpmdb database is read-only and can be done
 #   as normal user (non-root). Apart from the OpenGPG keys in
 #   "Pubkeys", all data is stored in "Packages" and then also
@@ -48,12 +48,6 @@
 #   normal header data (the signature header cannot be checked).
 #   Increasing the verbose level also prints content data, specifying
 #   "--quiet" will skip informational messages.
-# - Check a dir with src.rpms which archs are excluded:
-#   ./oldpyrpm.py --checkarch /mirror/fedora/development/SRPMS
-# - Diff two src.rpm packages:
-#   ./oldpyrpm.py [--explode] --diff 1.src.rpm 2.src.rpm
-# - Extract src.rpm or normal rpm packages:
-#   ./oldpyrpm.py [--buildroot=/chroot] --extract *.rpm
 #
 
 #
@@ -95,10 +89,10 @@
 #   thing to have a core part in C and testing/outer decisions in python.
 #   Due to the large data rpm is handling this is kind of tricky.
 # things that look even less important to implement:
+# - add support for drpm (delta rpm) payloadformat
 # - check for #% in spec files: grep "#.*%" *.spec (too many hits until now)
 # - add streaming support to bzip2 compressed payload
 # - lua scripting support
-# - add support for drpm (delta rpm) payloadformat
 # possible changes for /bin/rpm:
 # - Do not generate filecontexts tags if they are empty, maybe not at all.
 # - "rhnplatform" could go away if it is not required.
@@ -113,7 +107,6 @@ if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
 import os, os.path, md5, sha, pwd, grp, zlib, errno
 from struct import pack, unpack
-from commands import getoutput
 
 if sys.version_info < (2, 3):
     from types import StringType
@@ -2068,6 +2061,8 @@ delim = "--- -----------------------------------------------------" \
     "---------------------\n"
 
 def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
+    from commands import getoutput
+
     ret = ""
     # If they are identical don't output anything.
     if oldsrpm == newsrpm:
@@ -2699,8 +2694,31 @@ def evrSplit(evr):
     return (epoch, evr[i + 1:], "")
 
 
+def usage():
+    prog = sys.argv[0]
+    print "To check your rpm database:"
+    print prog, "[--verbose|-v|--quiet|-q] [--rpmdbpath=/var/lib/rpm/] " \
+        + "--checkrpmdb"
+    print
+    print "Check a directory with rpm packages:"
+    print prog, "[--strict] [--nopayload] [--nodigest] " \
+        + "/mirror/fedora/development/i386/Fedora/RPMS"
+    print
+    print "Diff two src.rpm packages:"
+    print prog, "[--explode] --diff 1.src.rpm 2.src.rpm"
+    print
+    print "Extract src.rpm or normal rpm packages:"
+    print prog, "[--buildroot=/chroot] --extract *.rpm"
+    print
+    print "Check src packages on which arch they would be excluded:"
+    print prog, "--checkarch /mirror/fedora/development/SRPMS"
+    print
+
 def main():
     import getopt
+    if len(sys.argv) <= 1:
+        usage()
+        sys.exit(0)
     verbose = 2
     repo = []
     strict = 0
@@ -2716,17 +2734,16 @@ def main():
     rpmdbpath = "/var/lib/rpm/"
     checkarch = 0
     buildroot = ""
-    swapendian = ""
     checkrpmdb = 0
-    (opts, args) = getopt.getopt(sys.argv[1:], "qv?",
+    (opts, args) = getopt.getopt(sys.argv[1:], "hqv?",
         ["help", "verbose", "quiet", "strict", "digest", "nodigest", "payload",
          "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
          "checksrpms", "checkarch", "rpmdbpath=",
          "checkrpmdb", "buildroot="])
     for (opt, val) in opts:
-        if opt in ("-?", "--help"):
-            print "verify rpm packages"
+        if opt in ("-?", "-h", "--help"):
+            usage()
             sys.exit(0)
         elif opt in ("-v", "--verbose"):
             verbose += 1
