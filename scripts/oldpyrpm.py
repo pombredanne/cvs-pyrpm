@@ -36,7 +36,7 @@
 #
 # Other usages:
 # - Check your rpmdb for consistency (works as non-root readonly):
-#   ./oldpyrpm.py --checkrpmdb
+#   ./oldpyrpm.py [--swapendian=">"] [--rpmdbpath=/var/lib/rpm/] --checkrpmdb
 # - Check a dir with src.rpms which archs are excluded:
 #   ./oldpyrpm.py --checkarch /mirror/fedora/development/SRPMS
 # - Diff two src.rpm packages:
@@ -47,6 +47,7 @@
 
 #
 # TODO:
+# - check install_badsha1_2 if available
 # - check OpenGPG signatures
 # - allow src.rpm selection based on OpenGPG signature. Prefer GPG signed.
 # - Bring extractCpio and verifyCpio closer together again.
@@ -2207,7 +2208,8 @@ def verifyStructure(packages, phash, tag, useidx=1):
     for tid in phash.keys():
         mytag = phash[tid]
         if not packages.has_key(tid):
-            print "Error %s: Package id %s doesn't exist" % (tag, tid)
+            #XXX: add a required/musthave param above
+            #print "Error %s: Package id %s doesn't exist" % (tag, tid)
             continue
         if tag == "dirindexes" and packages[tid]["dirindexes2"] != None:
             pkgtag = packages[tid]["dirindexes2"]
@@ -2223,6 +2225,7 @@ def verifyStructure(packages, phash, tag, useidx=1):
                     val = pkgtag[idx]
                 except:
                     print "Error %s: index %s is not in package" % (tag, idx)
+                    #print mytag[idx]
             else:
                 if idx != 0:
                     print "Error %s: index %s out of range" % (tag, idx)
@@ -2249,8 +2252,10 @@ def verifyStructure(packages, phash, tag, useidx=1):
             phashtid = phash[tid]
         if not useidx:
             # Single entry with data:
-            if refhash != phashtid[0]:
-                print "wrong data", refhash, tid, phashtid
+            if phashtid != None and refhash != phashtid[0]:
+                print "wrong data in packages for", pkg["name"], tid, tag
+            #elif phashtid == None:
+            #    print "no data in packages for", pkg["name"], tid, tag
             continue
         tnamehash = {}
         for idx in xrange(len(refhash)):
@@ -2275,8 +2280,9 @@ def verifyStructure(packages, phash, tag, useidx=1):
             except:
                 print "Error %s: index %s is not in package %s" % (tag,
                     idx, tid)
+                #print key, phashtid
 
-def readPackages(dbpath):
+def readPackages(dbpath, swapendian):
     import bsddb, cStringIO
     packages = {}
     pkgdata = {}
@@ -2286,9 +2292,9 @@ def readPackages(dbpath):
     #for (tid, data) in db.iteritems():
     for tid in db.keys():
         data = db[tid]
-        tid = unpack("I", tid)[0]
+        tid = unpack("%sI" % swapendian, tid)[0]
         if tid == 0:
-            maxtid = unpack("I", data)[0]
+            maxtid = unpack("%sI" % swapendian, data)[0]
             continue
         fd = cStringIO.StringIO(data)
         pkg = ReadRpm("rpmdb", fd=fd)
@@ -2301,7 +2307,7 @@ def readPackages(dbpath):
         pkgdata[tid] = data
     return (packages, keyring, maxtid, pkgdata)
 
-def readDb(filename, dbtype="hash", dotid=None):
+def readDb(swapendian, filename, dbtype="hash", dotid=None):
     import bsddb
     if dbtype == "hash":
         db = bsddb.hashopen(filename, "r")
@@ -2312,11 +2318,11 @@ def readDb(filename, dbtype="hash", dotid=None):
     for k in db.keys():
         v = db[k]
         if dotid:
-            k = unpack("I", k)[0]
+            k = unpack("%sI" % swapendian, k)[0]
         if k == "\x00":
             k = ""
         for i in xrange(0, len(v), 8):
-            (tid, idx) = unpack("2I", v[i:i+8])
+            (tid, idx) = unpack("%s2I" % swapendian, v[i:i+8])
             if not rethash.has_key(tid):
                 rethash[tid] = {}
             if rethash[tid].has_key(idx):
@@ -2325,27 +2331,30 @@ def readDb(filename, dbtype="hash", dotid=None):
             rethash[tid][idx] = k
     return rethash
 
-def readRpmdb(dbpath):
+def readRpmdb(dbpath, swapendian):
     from binascii import b2a_hex
     print "Reading rpmdb, this can take some time..."
     print "Reading Packages..."
-    (packages, keyring, maxtid, pkgdata) = readPackages(dbpath)
+    (packages, keyring, maxtid, pkgdata) = readPackages(dbpath, swapendian)
     print "Reading the rest..."
-    basenames = readDb(dbpath + "Basenames")
-    conflictname = readDb(dbpath + "Conflictname")
-    dirnames = readDb(dbpath + "Dirnames", "bt")
-    filemd5s = readDb(dbpath + "Filemd5s")
-    group = readDb(dbpath + "Group")
-    installtid = readDb(dbpath + "Installtid", "bt", 1)
-    name = readDb(dbpath + "Name")
-    providename = readDb(dbpath + "Providename")
-    provideversion = readDb(dbpath + "Provideversion", "bt")
-    pubkeys = readDb(dbpath + "Pubkeys")
-    requirename = readDb(dbpath + "Requirename")
-    requireversion = readDb(dbpath + "Requireversion", "bt")
-    sha1header = readDb(dbpath + "Sha1header")
-    sigmd5 = readDb(dbpath + "Sigmd5")
-    triggername = readDb(dbpath + "Triggername")
+    if sys.version_info < (2, 3):
+        print "If you use python-2.2 you can get the harmless output:", \
+            "'Python bsddb: close errno 13 in dealloc'."
+    basenames = readDb(swapendian, dbpath + "Basenames")
+    conflictname = readDb(swapendian, dbpath + "Conflictname")
+    dirnames = readDb(swapendian, dbpath + "Dirnames", "bt")
+    filemd5s = readDb(swapendian, dbpath + "Filemd5s")
+    group = readDb(swapendian, dbpath + "Group")
+    installtid = readDb(swapendian, dbpath + "Installtid", "bt", 1)
+    name = readDb(swapendian, dbpath + "Name")
+    providename = readDb(swapendian, dbpath + "Providename")
+    provideversion = readDb(swapendian, dbpath + "Provideversion", "bt")
+    pubkeys = readDb(swapendian, dbpath + "Pubkeys")
+    requirename = readDb(swapendian, dbpath + "Requirename")
+    requireversion = readDb(swapendian, dbpath + "Requireversion", "bt")
+    sha1header = readDb(swapendian, dbpath + "Sha1header")
+    sigmd5 = readDb(swapendian, dbpath + "Sigmd5")
+    triggername = readDb(swapendian, dbpath + "Triggername")
     print "Checking data integrity..."
     for tid in packages.keys():
         if tid > maxtid:
@@ -2374,21 +2383,21 @@ def readRpmdb(dbpath):
             continue
         # Check if we could write the rpmdb data again.
         region = "immutable"
-        if pkg["name"] not in ("IBMJava2-JRE", "j2re"):
+        if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
             install_keys["archivesize"] = 1
-        if pkg["name"] in ("j2re"):
+        if pkg["immutable1"] != None:
+            region = "immutable1"
             install_keys["providename"] = 1
             install_keys["provideflags"] = 1
             install_keys["provideversion"] = 1
             install_keys["dirindexes"] = 1
             install_keys["dirnames"] = 1
             install_keys["basenames"] = 1
-            region = "immutable1"
         (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
             region, None, 1, pkg.rpmgroup)
-        if pkg["name"] not in ("IBMJava2-JRE", "j2re"):
+        if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
             del install_keys["archivesize"]
-        if pkg["name"] in ("j2re"):
+        if pkg["immutable1"] != None:
             del install_keys["providename"]
             del install_keys["provideflags"]
             del install_keys["provideversion"]
@@ -2400,7 +2409,7 @@ def readRpmdb(dbpath):
         if len(data) % 4 != 0:
             print "rpmdb header is not aligned to 4"
         if data != pkgdata[tid]:
-            print pkg["name"], "wrong pkgdata", len(data), len(pkgdata[tid])
+            print pkg["name"], "wrong pkgdata", len(data), len(pkgdata[tid]), pkg["rpmversion"]
             if fmt != pkg.hdrdata[3]:
                 print "wrong fmt"
             if fmt2 != pkg.hdrdata[4]:
@@ -2417,7 +2426,8 @@ def readRpmdb(dbpath):
         pkg.sig = HdrIndex()
         if pkg["archivesize"] != None:
             pkg.sig["payloadsize"] = pkg["archivesize"]
-            del pkg["archivesize"]
+            if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
+                del pkg["archivesize"]
         if 1:
             sha1header = pkg["install_sha1header"]
         else:
@@ -2435,7 +2445,7 @@ def readRpmdb(dbpath):
             print "warning: package", pkg.getFilename(), "does not have a sha1 header"
             continue
         (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
-            "immutable", install_keys, 0, pkg.rpmgroup)
+            region, install_keys, 0, pkg.rpmgroup)
         lead = pack("!8s2I", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
             indexNo, storeSize)
         ctx = sha.new()
@@ -2668,11 +2678,13 @@ def main():
     rpmdbpath = "/var/lib/rpm/"
     checkarch = 0
     buildroot = ""
+    swapendian = ""
     checkrpmdb = 0
     (opts, args) = getopt.getopt(sys.argv[1:], "?",
         ["help", "strict", "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
-         "checksrpms", "checkarch", "rpmdbpath=", "checkrpmdb", "buildroot="])
+         "checksrpms", "checkarch", "rpmdbpath=", "swapendian=", "checkrpmdb",
+         "buildroot="])
     for (opt, val) in opts:
         if opt in ["-?", "--help"]:
             print "verify rpm packages"
@@ -2705,6 +2717,8 @@ def main():
             checkarch = 1
         elif opt == "--rpmdbpath":
             rpmdbpath = val
+        elif opt == "--swapendian":
+            swapendian = val
         elif opt == "--checkrpmdb":
             checkrpmdb = 1
         elif opt == "--buildroot":
@@ -2728,7 +2742,7 @@ def main():
         checkArch(args[0])
         return
     if checkrpmdb:
-        readRpmdb(rpmdbpath)
+        readRpmdb(rpmdbpath, swapendian)
         return
     keepdata = 1
     hdrtags = rpmtag
