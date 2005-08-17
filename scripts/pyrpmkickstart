@@ -22,7 +22,7 @@
 import os, sys, md5, stat, tempfile, string, time, stat, getopt, types
 import rhpl.diskutil as diskutil
 
-PYRPMDIR = ".."
+PYRPMDIR = os.path.abspath("..")
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 
@@ -264,10 +264,15 @@ class KickstartConfig(dict):
                 else:
                     print "'%s' is unsupported" % line
             elif in_packages:
+                if len(args) == 1:
+                    # there was no space as delimiter
+                    args = [ line[:1], line[1:] ]
+                    opt = line
+
                 if not self["packages"]:
                     self["packages"] = { }
                 if len(args) > 1:
-                    if opt == "@":
+                    if opt[0] == "@":
                         if not self["packages"].has_key("groups"):
                             self["packages"]["groups"] = [ ]
                         if not args[1] in self["packages"]["groups"]:
@@ -278,7 +283,7 @@ class KickstartConfig(dict):
                     if not self["packages"].has_key("drop"):
                         self["packages"]["drop"] = [ ]
                     if not line in self["packages"]["drop"]:
-                        self["packages"]["drop"].append(opt[1:])
+                        self["packages"]["drop"].append(args[1])
                 else:
                     if not self["packages"].has_key("add"):
                         self["packages"]["add"] = [ ]
@@ -554,6 +559,12 @@ def umount_all(dir):
 
     return failed
 
+def check_dir(buildroot, dir):
+    if not os.path.exists(buildroot+dir):
+        print "ERROR: Directory '%s' does not exist." % dir
+        return 0
+    return 1
+
 #################################### main ####################################
 
 verbose = 0
@@ -563,7 +574,7 @@ nocleanup = 0
 confirm = 1
 
 def usage():
-    print """Usage: ks-install <options> <file> [<disk image> | <device>]
+    print """Usage: pyrpmkickstart <options> <file> [<disk image> | <device>]
 
 OPTIONS
   -h  | --help       Print help.
@@ -640,7 +651,7 @@ if not ks.has_key("install"):
 # create temp dir
 
 try:
-    tempdir = tempfile.mkdtemp(prefix="ks-install_")
+    tempdir = tempfile.mkdtemp(prefix="pyrpmkickstart_")
 except Exception, msg:
     print msg
     sys.exit(1)
@@ -741,7 +752,15 @@ comps.read()
 pkgs = [ ]
 for group in ks["packages"]["groups"]:
     pkgs.extend(comps.getPackageNames(group))
+
+# everything install
+if "everything" in ks["packages"]["groups"]:
+    for group in comps.grouphash.keys():
+        if comps.grouphash[group].has_key("packagelist"):
+            pkgs.extend(comps.grouphash[group]["packagelist"])
+
 del comps
+   
 
 # add and remove packages from default list
 if ks["packages"].has_key("drop"):
@@ -813,9 +832,7 @@ if ks["pre"] and len(ks["pre"]["script"]) > 0:
         sys.exit(0)
 
 
-# install
-print "working.."
-# YUM
+# configure yum
 os.mkdir("%s/yum.cache" % tempdir)
 os.mkdir("%s/yum.repos.d" % tempdir)
 yum_conf = tempdir+"/yum.conf"
@@ -836,15 +853,40 @@ fd.write("[dist]\n")
 fd.write("name=dist\n")
 fd.write("baseurl=file:%s/source\n" % tempdir)
 fd.close()
+
+# yum
+yum = "PYTHONPATH=%s %s/scripts/pyrpmyum --servicehack -y -c '%s' -r '%s'" % \
+      (PYRPMDIR, PYRPMDIR, yum_conf, buildroot)
+if not ks["packages"].has_key("resolvedeps") or \
+       (ks["packages"].has_key("ignoredeps") and \
+        ks["packages"].has_key("ignoremissing")):
+    yum += " --nodeps"
 if ks.has_key("install"):
-    operation = "install"
+    yum += " install "
 elif ks.has_key("update"):
-    operation = "uptdate"
-command="%s/scripts/pyrpmyum --servicehack -y -c '%s' -r '%s' %s %s" % \
-         (PYRPMDIR, yum_conf, buildroot, operation,
-          string.join(pkgs))
-print command
-os.system(command)
+#    if ks["packages"].has_key("resolvedeps"):
+#        yum += " --autoerase "
+    yum += " update "
+yum += string.join(pkgs)
+#print yum
+pid = os.fork()
+if pid != 0:
+    (rpid, status) = os.waitpid(pid, 0)
+    if status != 0:
+        print "ERROR: Installation failed, aborting."
+else:
+    os.system(yum)
+    sys.exit(0)
+
+
+# check system dirs
+if not check_dir(buildroot, "/etc") or \
+       not check_dir(buildroot, "/etc/sysconfig"):
+    print "Aborting."
+    if umount_all(tempdir+"/") == 0:
+        if not nocleanup:
+            rm_rf(tempdir)
+    sys.exit(0)
 
 # run kudzu
 print "Running kudzu"
@@ -852,7 +894,7 @@ pid = os.fork()
 if pid != 0:
     (rpid, status) = os.waitpid(pid, 0)
     if status != 0:
-        sys.exit(1)
+        print "ERROR: kudzu failed."
 else:
     os.chroot(buildroot)
     pyrpm.runScript("/usr/sbin/kudzu")
@@ -865,7 +907,7 @@ if ks["authconfig"]:
     if pid != 0:
         (rpid, status) = os.waitpid(pid, 0)
         if status != 0:
-            sys.exit(1)
+            print "ERROR: authconfig failed"
     else:
         os.chroot(buildroot)
         authconfig = "/usr/bin/authconfig --kickstart --nostart"
@@ -877,14 +919,14 @@ if ks["authconfig"]:
         pyrpm.runScript(script=authconfig)
         sys.exit(0)
 
-if not os.path.exists(buildroot+"/etc"):
-    os.mkdir(buildroot+"/etc")
-    if not os.path.exists(buildroot+"/etc/sysconfig"):
-        os.mkdir(buildroot+"/etc/sysconfig")
-
-    # /etc/sysconfig/clock
-    if ks["timezone"]:
+# /etc/sysconfig/clock
+if ks["timezone"]:
+    print "Configuring timezone"
+    try:
         fd = open(buildroot+"/etc/sysconfig/clock", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/clock' failed:", msg
+    else:
         zone = ks["timezone"].keys()[0]
         fd.write('ZONE="%s"\n' % zone)
         if ks["timezone"][zone].has_key("utc"):
@@ -894,13 +936,19 @@ if not os.path.exists(buildroot+"/etc"):
         fd.write('ARC=false\n')
         fd.close()
 
-    # /etc/sysconfig/desktop
+# /etc/sysconfig/desktop
+print "Configuring desktop"
+try:
     fd = open(buildroot+"/etc/sysconfig/desktop", "w")
     fd.write('DESKTOP="GNOME"\n')
     fd.close()
+except Exception, msg:
+    print "ERROR: Configuration of '/etc/sysconfig/desktop' failed:", msg
 
-    # /etc/sysconfig/i18n
-    if ks["langsupport"]:
+# /etc/sysconfig/i18n
+if ks["langsupport"]:
+    print "Configuring languages"
+    try:
         fd = open(buildroot+"/etc/sysconfig/i18n", "w")
         if len(ks["langsupport"]) > 1:
             lang = ""
@@ -918,39 +966,49 @@ if not os.path.exists(buildroot+"/etc"):
             fd.write('LANG="%s"\n' % ks["langsupport"].keys()[0])
         fd.write('SYSFONT="latarcyrheb-sun16"\n')
         fd.close()
-    
-    # /etc/sysconfig/installinfo
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/i18n' failed:", msg
+
+# /etc/sysconfig/installinfo
+print "Configuring installinfo"
+try:
     fd = open(buildroot+"/etc/sysconfig/installinfo", "w")
     fd.write('INSTALLMETHOD=nfs\n')
     fd.close()
+except Exception, msg:
+    print "ERROR: Configuration of '/etc/sysconfig/installinfo' failed:", msg
 
-    # /etc/sysconfig/keyboard
-    if ks["keyboard"]:
+# /etc/sysconfig/keyboard
+if ks["keyboard"]:
+    print "Configuring keyboard"
+    try:
         fd = open(buildroot+"/etc/sysconfig/keyboard", "w")
         fd.write('KEYBOARDTYPE="pc"\n')
         fd.write('KEYTABLE="%s"\n' % ks["keyboard"])
         fd.close()
-
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/keyboard' failed: ", msg
 
 # setup networking
 if ks["network"]:
     print "Configuring network"
-    if not os.path.exists(buildroot+"/etc/sysconfig"):
-        os.mkdir(buildroot+"/etc/sysconfig")
-    fd = open(buildroot+"/etc/sysconfig/network", "w")
-    fd.write("NETWORKING=yes\nHOSTNAME=localhost.localdomain\n")
-    fd.close()
-    if not os.path.exists(buildroot+"/etc/sysconfig/network-scripts"):
-        os.mkdir(buildroot+"/etc/sysconfig/network-scripts")
-    if ks["network"].has_key("device") and \
-           ks["network"].has_key("bootproto"):
-        fd = open(buildroot+"/etc/sysconfig/network-scripts/ifcfg-%s" % \
-                  ks["network"]["device"], "w")
-        fd.write("DEVICE=%s\n" % ks["network"]["device"])
-        fd.write("BOOTPROTO=%s\n" % ks["network"]["bootproto"])
-        fd.write("ONBOOT=yes\n")
-        fd.write("TYPE=Ethernet\n")
-        fd.close()        
+    try:
+        fd = open(buildroot+"/etc/sysconfig/network", "w")
+        fd.write("NETWORKING=yes\nHOSTNAME=localhost.localdomain\n")
+        fd.close()
+        if not os.path.exists(buildroot+"/etc/sysconfig/network-scripts"):
+            os.mkdir(buildroot+"/etc/sysconfig/network-scripts")
+        if ks["network"].has_key("device") and \
+               ks["network"].has_key("bootproto"):
+            fd = open(buildroot+"/etc/sysconfig/network-scripts/ifcfg-%s" % \
+                      ks["network"]["device"], "w")
+            fd.write("DEVICE=%s\n" % ks["network"]["device"])
+            fd.write("BOOTPROTO=%s\n" % ks["network"]["bootproto"])
+            fd.write("ONBOOT=yes\n")
+            fd.write("TYPE=Ethernet\n")
+            fd.close()        
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/network' failed:", msg
 
 # run post script
 if ks["post"] and len(ks["post"]["script"]) > 0:
@@ -973,19 +1031,23 @@ if ks["post"] and len(ks["post"]["script"]) > 0:
         sys.exit(0)
 
 if xen:
-    fd = open("xen.conf", "w")
-    fd.write('kernel = "/boot/vmlinuz-VERSION"\n')
-    fd.write('ramdisk = "/boot/initrd-VERSION.img"\n')
-    fd.write('memory = 128\n')
-    fd.write('name = "xen"\n')
-    fd.write('nics = 1\n')
-    if install_image:
-        fd.write('disk = [ "file:%s,sda1,r" ]\n' % target)
-    if install_device:
-        fd.write('disk = [ "phy:%s,sda1,r" ]\n' % target)
-    fd.write('root = "/dev/sda1"\n')
-    fd.write('extra = "ro"\n')
-    fd.close()
+    print "Writing xen.conf"
+    try:
+        fd = open("xen.conf", "w")
+        fd.write('kernel = "/boot/vmlinuz-VERSION"\n')
+        fd.write('ramdisk = "/boot/initrd-VERSION.img"\n')
+        fd.write('memory = 128\n')
+        fd.write('name = "xen"\n')
+        fd.write('nics = 1\n')
+        if install_image:
+            fd.write('disk = [ "file:%s,sda1,r" ]\n' % target)
+        if install_device:
+            fd.write('disk = [ "phy:%s,sda1,r" ]\n' % target)
+        fd.write('root = "/dev/sda1"\n')
+        fd.write('extra = "ro"\n')
+        fd.close()
+    except Exception, msg:
+        print "ERROR: Configuration of 'xen.conf' failed:", msg
 
 # umount source_dir, target_dir and included mount points
 if umount_all(tempdir+"/") == 0:
