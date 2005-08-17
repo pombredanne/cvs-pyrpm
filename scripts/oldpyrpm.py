@@ -2215,12 +2215,6 @@ class RpmTree:
                 i = i + 1
 
 
-def getSwappedEndian():
-    num = unpack("=I", "1234")[0]
-    if num == 1234:
-        return "<"
-    return ">"
-
 def verifyStructure(verbose, packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
     for tid in phash.keys():
@@ -2314,12 +2308,12 @@ def readPackages(dbpath, verbose):
     pkgdata = {}
     keyring = None #openpgp.PGPKeyRing()
     maxtid = 0
-    # Read the tid value and try to guess if this needs
-    # to be converted from another endian machine:
+    # Read the db4/hash file to determine byte order / endianness
+    # as well as maybe host order:
+    swapendian = ""
     data = open(dbpath + "Packages", "ro").read(16)
     if len(data) == 16:
         if unpack("=I", data[12:16])[0] == 0x00061561:
-            swapendian = ""
             if verbose > 2:
                 print "checking rpmdb with same endian order"
         else:
