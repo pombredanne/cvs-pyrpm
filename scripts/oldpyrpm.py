@@ -36,7 +36,7 @@
 #
 # Other usages:
 # - Check your rpmdb for consistency (works as non-root readonly):
-#   ./oldpyrpm.py [--swapendian] [--rpmdbpath=/var/lib/rpm/] \
+#   ./oldpyrpm.py [--rpmdbpath=/var/lib/rpm/] \
 #       [--verbose|-v|--quiet|-q] --checkrpmdb
 #   The check of the rpmdb database is read-only and can be done
 #   as normal user (non-root). Apart from the OpenGPG keys in
@@ -2308,12 +2308,29 @@ def verifyStructure(verbose, packages, phash, tag, useidx=1):
                 if verbose > 2:
                     print key, phashtid
 
-def readPackages(dbpath, swapendian):
+def readPackages(dbpath, verbose):
     import bsddb, cStringIO
     packages = {}
     pkgdata = {}
     keyring = None #openpgp.PGPKeyRing()
     maxtid = 0
+    # Read the tid value and try to guess if this needs
+    # to be converted from another endian machine:
+    data = open(dbpath + "Packages", "ro").read(16)
+    if len(data) == 16:
+        if unpack("=I", data[12:16])[0] == 0x00061561:
+            swapendian = ""
+            if verbose > 2:
+                print "checking rpmdb with same endian order"
+        else:
+            if pack("=H", 0xdead) == "\xde\xad":
+                swapendian = "<"
+                if verbose:
+                    print "big-endian machine reading little-endian rpmdb"
+            else:
+                swapendian = ">"
+                if verbose:
+                    print "little-endian machine reading big-endian rpmdb"
     db = bsddb.hashopen(dbpath + "Packages", "r")
     #for (tid, data) in db.iteritems():
     for tid in db.keys():
@@ -2331,7 +2348,7 @@ def readPackages(dbpath, swapendian):
             pkg["group"] = (pkg["group"],)
         packages[tid] = pkg
         pkgdata[tid] = data
-    return (packages, keyring, maxtid, pkgdata)
+    return (packages, keyring, maxtid, pkgdata, swapendian)
 
 def readDb(swapendian, filename, dbtype="hash", dotid=None):
     import bsddb
@@ -2357,12 +2374,13 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
             rethash[tid][idx] = k
     return rethash
 
-def readRpmdb(dbpath, swapendian, verbose):
+def readRpmdb(dbpath, verbose):
     from binascii import b2a_hex
     if verbose:
         print "Reading rpmdb, this can take some time..."
         print "Reading Packages..."
-    (packages, keyring, maxtid, pkgdata) = readPackages(dbpath, swapendian)
+    (packages, keyring, maxtid, pkgdata, swapendian) = readPackages(dbpath,
+        verbose)
     if verbose:
         print "Reading the rest..."
     if verbose and sys.version_info < (2, 3):
@@ -2710,7 +2728,7 @@ def main():
         ["help", "verbose", "quiet", "strict", "digest", "nodigest", "payload",
          "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
-         "checksrpms", "checkarch", "rpmdbpath=", "swapendian",
+         "checksrpms", "checkarch", "rpmdbpath=",
          "checkrpmdb", "buildroot="])
     for (opt, val) in opts:
         if opt in ("-?", "--help"):
@@ -2750,8 +2768,6 @@ def main():
             rpmdbpath = val
             if rpmdbpath[-1:] != "/":
                 rpmdbpath += "/"
-        elif opt == "--swapendian":
-            swapendian = getSwappedEndian()
         elif opt == "--checkrpmdb":
             checkrpmdb = 1
         elif opt == "--buildroot":
@@ -2775,7 +2791,7 @@ def main():
         checkArch(args[0])
         return
     if checkrpmdb:
-        readRpmdb(rpmdbpath, swapendian, verbose)
+        readRpmdb(rpmdbpath, verbose)
         return
     keepdata = 1
     hdrtags = rpmtag
