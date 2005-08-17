@@ -36,8 +36,18 @@
 #
 # Other usages:
 # - Check your rpmdb for consistency (works as non-root readonly):
-#   ./oldpyrpm.py [--swapendian=">"] [--rpmdbpath=/var/lib/rpm/] \
-#       [--printcontent] --checkrpmdb
+#   ./oldpyrpm.py [--swapendian] [--rpmdbpath=/var/lib/rpm/] \
+#       [--verbose|-v|--quiet|-q] --checkrpmdb
+#   The check of the rpmdb database is read-only and can be done
+#   as normal user (non-root). Apart from the OpenGPG keys in
+#   "Pubkeys", all data is stored in "Packages" and then also
+#   copied over into other db4 files. "--checkrpmdb" is doing a
+#   check between data in "Packages" and the other files, then
+#   it checks if our own write routine would come up writing the
+#   same data again and it tries to verify the sha1 crc of the
+#   normal header data (the signature header cannot be checked).
+#   Increasing the verbose level also prints content data, specifying
+#   "--quiet" will skip informational messages.
 # - Check a dir with src.rpms which archs are excluded:
 #   ./oldpyrpm.py --checkarch /mirror/fedora/development/SRPMS
 # - Diff two src.rpm packages:
@@ -2211,14 +2221,13 @@ def getSwappedEndian():
         return "<"
     return ">"
 
-def verifyStructure(printcontent, packages, phash, tag, useidx=1):
+def verifyStructure(verbose, packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
     for tid in phash.keys():
         mytag = phash[tid]
         if not packages.has_key(tid):
-            #XXX: add a required/musthave param above
             print "Error %s: Package id %s doesn't exist" % (tag, tid)
-            if printcontent:
+            if verbose > 2:
                 print tag, mytag
             continue
         if tag == "dirindexes" and packages[tid]["dirindexes2"] != None:
@@ -2235,7 +2244,7 @@ def verifyStructure(printcontent, packages, phash, tag, useidx=1):
                     val = pkgtag[idx]
                 except:
                     print "Error %s: index %s is not in package" % (tag, idx)
-                    if printcontent:
+                    if verbose > 2:
                         print mytag[idx]
             else:
                 if idx != 0:
@@ -2265,8 +2274,10 @@ def verifyStructure(printcontent, packages, phash, tag, useidx=1):
             # Single entry with data:
             if phashtid != None and refhash != phashtid[0]:
                 print "wrong data in packages for", pkg["name"], tid, tag
-            #elif phashtid == None:
-            #    print "no data in packages for", pkg["name"], tid, tag
+            elif phashtid == None:
+                print "no data in packages for", pkg["name"], tid, tag
+                if verbose > 2:
+                    print "refhash:", refhash
             continue
         tnamehash = {}
         for idx in xrange(len(refhash)):
@@ -2294,7 +2305,7 @@ def verifyStructure(printcontent, packages, phash, tag, useidx=1):
             except:
                 print "Error %s: index %s is not in package %s" % (tag,
                     idx, tid)
-                if printcontent:
+                if verbose > 2:
                     print key, phashtid
 
 def readPackages(dbpath, swapendian):
@@ -2346,13 +2357,15 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
             rethash[tid][idx] = k
     return rethash
 
-def readRpmdb(dbpath, swapendian, printcontent):
+def readRpmdb(dbpath, swapendian, verbose):
     from binascii import b2a_hex
-    print "Reading rpmdb, this can take some time..."
-    print "Reading Packages..."
+    if verbose:
+        print "Reading rpmdb, this can take some time..."
+        print "Reading Packages..."
     (packages, keyring, maxtid, pkgdata) = readPackages(dbpath, swapendian)
-    print "Reading the rest..."
-    if sys.version_info < (2, 3):
+    if verbose:
+        print "Reading the rest..."
+    if verbose and sys.version_info < (2, 3):
         print "If you use python-2.2 you can get the harmless output:", \
             "'Python bsddb: close errno 13 in dealloc'."
     basenames = readDb(swapendian, dbpath + "Basenames")
@@ -2370,28 +2383,29 @@ def readRpmdb(dbpath, swapendian, printcontent):
     sha1header = readDb(swapendian, dbpath + "Sha1header")
     sigmd5 = readDb(swapendian, dbpath + "Sigmd5")
     triggername = readDb(swapendian, dbpath + "Triggername")
-    print "Checking data integrity..."
+    if verbose:
+        print "Checking data integrity..."
     for tid in packages.keys():
         if tid > maxtid:
             print "wrong tid:", tid
-    verifyStructure(printcontent, packages, basenames, "basenames")
-    verifyStructure(printcontent, packages, conflictname, "conflictname")
-    verifyStructure(printcontent, packages, dirnames, "dirnames")
+    verifyStructure(verbose, packages, basenames, "basenames")
+    verifyStructure(verbose, packages, conflictname, "conflictname")
+    verifyStructure(verbose, packages, dirnames, "dirnames")
     for x in filemd5s.values():
         for y in x.keys():
             x[y] = b2a_hex(x[y])
-    verifyStructure(printcontent, packages, filemd5s, "filemd5s")
-    verifyStructure(printcontent, packages, group, "group")
-    verifyStructure(printcontent, packages, installtid, "installtid")
-    verifyStructure(printcontent, packages, name, "name", 0)
-    verifyStructure(printcontent, packages, providename, "providename")
-    verifyStructure(printcontent, packages, provideversion, "provideversion")
-    #verifyStructure(printcontent, packages, pubkeys, "pubkeys")
-    verifyStructure(printcontent, packages, requirename, "requirename")
-    verifyStructure(printcontent, packages, requireversion, "requireversion")
-    verifyStructure(printcontent, packages, sha1header, "install_sha1header", 0)
-    verifyStructure(printcontent, packages, sigmd5, "install_md5", 0)
-    verifyStructure(printcontent, packages, triggername, "triggername")
+    verifyStructure(verbose, packages, filemd5s, "filemd5s")
+    verifyStructure(verbose, packages, group, "group")
+    verifyStructure(verbose, packages, installtid, "installtid")
+    verifyStructure(verbose, packages, name, "name", 0)
+    verifyStructure(verbose, packages, providename, "providename")
+    verifyStructure(verbose, packages, provideversion, "provideversion")
+    #verifyStructure(verbose, packages, pubkeys, "pubkeys")
+    verifyStructure(verbose, packages, requirename, "requirename")
+    verifyStructure(verbose, packages, requireversion, "requireversion")
+    verifyStructure(verbose, packages, sha1header, "install_sha1header", 0)
+    verifyStructure(verbose, packages, sigmd5, "install_md5", 0)
+    verifyStructure(verbose, packages, triggername, "triggername")
     for tid in packages.keys():
         pkg = packages[tid]
         if pkg["name"] == "gpg-pubkey":
@@ -2437,7 +2451,7 @@ def readRpmdb(dbpath, swapendian, printcontent):
                     print "tag:", tag1, tag2, i
                 if offset1 != offset2:
                     print "offset:", offset1, offset2, "tag=", tag1
-        # Check if we can use the sha1 crc to validate the data.
+        # Verify the sha1 crc of the normal header data. (Signature data left out.)
         pkg.sig = HdrIndex()
         if pkg["archivesize"] != None:
             pkg.sig["payloadsize"] = pkg["archivesize"]
@@ -2464,6 +2478,8 @@ def readRpmdb(dbpath, swapendian, printcontent):
         if ctx.hexdigest() != sha1header:
             print pkg.getFilename(), \
                 "bad sha1: %s / %s" % (sha1header, ctx.hexdigest())
+    if verbose:
+        print "Done."
 
 def sameSrcRpm(a, b):
     # Packages with the same md5sum for the payload are the same.
@@ -2673,6 +2689,7 @@ def evrSplit(evr):
 
 def main():
     import getopt
+    verbose = 2
     repo = []
     strict = 0
     nodigest = 0
@@ -2688,17 +2705,21 @@ def main():
     checkarch = 0
     buildroot = ""
     swapendian = ""
-    printcontent = 0
     checkrpmdb = 0
-    (opts, args) = getopt.getopt(sys.argv[1:], "?",
-        ["help", "strict", "digest", "nodigest", "payload", "nopayload",
+    (opts, args) = getopt.getopt(sys.argv[1:], "qv?",
+        ["help", "verbose", "quiet", "strict", "digest", "nodigest", "payload",
+         "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
          "checksrpms", "checkarch", "rpmdbpath=", "swapendian",
-         "printcontent", "checkrpmdb", "buildroot="])
+         "checkrpmdb", "buildroot="])
     for (opt, val) in opts:
-        if opt in ["-?", "--help"]:
+        if opt in ("-?", "--help"):
             print "verify rpm packages"
             sys.exit(0)
+        elif opt in ("-v", "--verbose"):
+            verbose += 1
+        elif opt in ("-q", "--quiet"):
+            verbose = 0
         elif opt == "--strict":
             strict = 1
         elif opt == "--digest":
@@ -2731,8 +2752,6 @@ def main():
                 rpmdbpath += "/"
         elif opt == "--swapendian":
             swapendian = getSwappedEndian()
-        elif opt == "--printcontent":
-            printcontent = 1
         elif opt == "--checkrpmdb":
             checkrpmdb = 1
         elif opt == "--buildroot":
@@ -2756,7 +2775,7 @@ def main():
         checkArch(args[0])
         return
     if checkrpmdb:
-        readRpmdb(rpmdbpath, swapendian, printcontent)
+        readRpmdb(rpmdbpath, swapendian, verbose)
         return
     keepdata = 1
     hdrtags = rpmtag
