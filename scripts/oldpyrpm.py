@@ -19,20 +19,7 @@
 
 #
 # Read .rpm packages from python. Implemented completely in python without
-# using the rpmlib C library. Extensive checks have been added and this
-# script can be used to check the binary packages for unusual format/content.
-#
-# Possible options:
-# "--strict" should only be used for the Fedora Core development tree
-# "--nodigest" to skip sha1/md5sum check for header+payload
-# "--nopayload" to not read in the compressed filedata (payload)
-#
-# Example usage:
-# find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null \
-#         | xargs -0 ./oldpyrpm.py [--nodigest --nopayload]
-# locate '*.rpm' | xargs ./oldpyrpm.py [--nodigest --nopayload]
-# ./oldpyrpm.py --strict [--nodigest --nopayload] \
-#         /mirror/fedora/development/i386/Fedora/RPMS/*.rpm
+# using the rpmlib C library.
 #
 # Other usages:
 # - Check your rpmdb for consistency (works as non-root readonly):
@@ -386,9 +373,11 @@ class PyGZIP:
         if crc32 != self.crcval:
             print self.filename, "CRC check failed:", crc32, self.crcval
         if isize != self.length:
-            print self.filename, "Incorrect length of data produced:", isize, self.length
+            print self.filename, "Incorrect length of data produced:", \
+                isize, self.length
         if isize != self.length2 and self.length2 != None:
-            print self.filename, "Incorrect length of data produced:", self.length2
+            print self.filename, "Incorrect length of data produced:", \
+                self.length2
 
 
 # rpm tag types
@@ -2321,22 +2310,28 @@ def readPackages(dbpath, verbose):
                 if verbose:
                     print "little-endian machine reading big-endian rpmdb"
     db = bsddb.hashopen(dbpath + "Packages", "r")
-    #for (tid, data) in db.iteritems():
-    for tid in db.keys():
-        data = db[tid]
+    try:
+        (tid, data) = db.first()
+    except:
+        return (packages, keyring, maxtid, pkgdata, swapendian)
+    while 1:
         tid = unpack("%sI" % swapendian, tid)[0]
         if tid == 0:
             maxtid = unpack("%sI" % swapendian, data)[0]
-            continue
-        fd = cStringIO.StringIO(data)
-        pkg = ReadRpm("rpmdb", fd=fd)
-        pkg.readHeader(None, rpmdbtag, 1, 1)
-        if pkg["name"] == "gpg-pubkey":
-            #for k in openpgp.parsePGPKeys(pkg["description"]):
-            #    keyring.addKey(k)
-            pkg["group"] = (pkg["group"],)
-        packages[tid] = pkg
-        pkgdata[tid] = data
+        else:
+            fd = cStringIO.StringIO(data)
+            pkg = ReadRpm("rpmdb", fd=fd)
+            pkg.readHeader(None, rpmdbtag, 1, 1)
+            if pkg["name"] == "gpg-pubkey":
+                #for k in openpgp.parsePGPKeys(pkg["description"]):
+                #    keyring.addKey(k)
+                pkg["group"] = (pkg["group"],)
+            packages[tid] = pkg
+            pkgdata[tid] = data
+        try:
+            (tid, data) = db.next()
+        except:
+            break
     return (packages, keyring, maxtid, pkgdata, swapendian)
 
 def readDb(swapendian, filename, dbtype="hash", dotid=None):
@@ -2346,9 +2341,11 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
     else:
         db = bsddb.btopen(filename, "r")
     rethash = {}
-    #for (k, v) in db.iteritems():
-    for k in db.keys():
-        v = db[k]
+    try:
+        (k, v) = db.first()
+    except:
+        return rethash
+    while 1:
         if dotid:
             k = unpack("%sI" % swapendian, k)[0]
         if k == "\x00":
@@ -2361,6 +2358,10 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
                 print "ignoring duplicate idx: %s %d %d" % (k, tid, idx)
                 continue
             rethash[tid][idx] = k
+        try:
+            (k, v) = db.next()
+        except:
+            break
     return rethash
 
 def readRpmdb(dbpath, verbose):
@@ -2445,7 +2446,8 @@ def readRpmdb(dbpath, verbose):
         if len(data) % 4 != 0:
             print "rpmdb header is not aligned to 4"
         if data != pkgdata[tid]:
-            print pkg["name"], "wrong pkgdata", len(data), len(pkgdata[tid]), pkg["rpmversion"]
+            print pkg["name"], "wrong pkgdata", len(data), len(pkgdata[tid]), \
+                pkg["rpmversion"]
             if fmt != pkg.hdrdata[3]:
                 print "wrong fmt"
             if fmt2 != pkg.hdrdata[4]:
@@ -2458,7 +2460,8 @@ def readRpmdb(dbpath, verbose):
                     print "tag:", tag1, tag2, i
                 if offset1 != offset2:
                     print "offset:", offset1, offset2, "tag=", tag1
-        # Verify the sha1 crc of the normal header data. (Signature data left out.)
+        # Verify the sha1 crc of the normal header data. (Signature
+        # data does not have an extra crc.)
         pkg.sig = HdrIndex()
         if pkg["archivesize"] != None:
             pkg.sig["payloadsize"] = pkg["archivesize"]
@@ -2467,7 +2470,8 @@ def readRpmdb(dbpath, verbose):
         sha1header = pkg["install_sha1header"]
         install_badsha1_2 = pkg["install_badsha1_2"]
         if sha1header == None: # and install_badsha1_2 == None:
-            print "warning: package", pkg.getFilename(), "does not have a sha1 header"
+            print "warning: package", pkg.getFilename(), \
+                "does not have a sha1 header"
             continue
         (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
             region, install_keys, 0, pkg.rpmgroup)
@@ -2696,13 +2700,23 @@ def evrSplit(evr):
 
 def usage():
     prog = sys.argv[0]
+    print
     print "To check your rpm database:"
     print prog, "[--verbose|-v|--quiet|-q] [--rpmdbpath=/var/lib/rpm/] " \
         + "--checkrpmdb"
     print
-    print "Check a directory with rpm packages:"
-    print prog, "[--strict] [--nopayload] [--nodigest] " \
-        + "/mirror/fedora/development/i386/Fedora/RPMS"
+    print "Verify and sanity check rpm packages:"
+    print prog, "[--strict] [--nopayload] [--nodigest] \\"
+    print "    /mirror/fedora/development/i386/Fedora/RPMS"
+    print "find /mirror/ -name \"*.rpm\" -type f -print0 2>/dev/null \\"
+    print "    | xargs -0", prog, "[--nodigest] [--nopayload]"
+    print "locate '*.rpm' | xargs", prog, "[--nodigest] [--nopayload]"
+    print "Options for this are:"
+    print "    \"--strict\": add additional checks for the Fedora Core" \
+        + " development tree"
+    print "    \"--nodigest\": do not verify sha1/md5sum for header+payload"
+    print "    \"--nopayload\": do not read in the compressed cpio" \
+        + " filedata (payload)"
     print
     print "Diff two src.rpm packages:"
     print prog, "[--explode] --diff 1.src.rpm 2.src.rpm"
