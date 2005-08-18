@@ -46,6 +46,10 @@ class KickstartConfig(dict):
             return None
         return dict.__getitem__(self, item)
 
+    def clear(self):
+        for key in self.keys():
+            del self[key]
+
     def parse(self, filename):
         self["filename"] = filename
         try:
@@ -56,7 +60,6 @@ class KickstartConfig(dict):
         in_packages = 0
         in_post = 0
         in_pre = 0
-        in_include = 0
         fd = [ _fd ]
         open_files = [ filename ]
         while 1:
@@ -81,38 +84,36 @@ class KickstartConfig(dict):
 
             if opt == "%packages":
                 self.parseSimple(opt[1:], args[1:],
-                                    [ "resolvedeps", "ignoredeps",
-                                      "ignoremissing" ])
+                                 [ "resolvedeps", "ignoredeps",
+                                   "ignoremissing" ])
                 in_packages = 1
                 in_post = 0
                 in_pre = 0
-                continue
-            if opt == "%post":
+            elif opt == "%post":
                 self.parseSimple(opt[1:], args[1:],
-                                    [ "nochroot", "interpreter=",
-                                      "erroronfail" ])
+                                 [ "nochroot", "interpreter=",
+                                   "erroronfail" ])
                 in_packages = 0
                 in_post = 1
                 in_pre = 0
-                continue
-            if opt == "%pre":
+            elif opt == "%pre":
                 self.parseSimple(opt[1:], args[1:],
-                                    [ "erroronfail", "interpreter=" ])
+                                 [ "erroronfail", "interpreter=" ])
                 in_packages = 0
                 in_post = 0
                 in_pre = 1
-                continue
-            if opt == "%include":
+            elif opt == "%include":
                 if len(args) == 2:
                     try:
                         _fd = open(args[1], "r")
                     except:
-                        raise IOError, "Unable to open '%s'" % args[1]
-                    if args[1] in open_files:
-                        raise ValueError, "Include loop detected for '%s'" % \
-                              args[1]
-                    fd.insert(0, _fd)
-                    open_files.append(args[1])
+                        print "Unable to open '%s', ignoring." % args[1]
+                    else:
+                        if args[1] in open_files:
+                            raise ValueError, \
+                                  "Include loop detected for '%s'" % args[1]
+                        fd.insert(0, _fd)
+                        open_files.append(args[1])
                 else:
                     raise ValueError, "Error in line '%s'" % line
 
@@ -147,13 +148,20 @@ class KickstartConfig(dict):
                                      { "useshadow": "enableshadow" })
                 elif opt == "bootloader":
                     self.parseSimple(opt, args[1:],
-                                     [ "append:", "driveorder", "location:",
+                                     [ "append:", "driveorder:", "location:",
                                        "password:", "md5pass:", "lba32",
                                        "upgrade" ])
+                    if self["bootloader"].has_key("driveorder"):
+                        order = string.split(self["bootloader"]["driveorder"],
+                                             ",")
+                        self["bootloader"]["driveorder"] = order
                 elif opt == "clearpart":
                     self.parseSimple(opt, args[1:],
                                      [ "all", "drives:", "initlabel", "linux",
                                        "none" ])
+                    if self["clearpart"].has_key("drives"):
+                        order = string.split(self["bootloader"]["drives"], ",")
+                        self["bootloader"]["drives"] = order
                 elif opt == "device":
                     (_dict, _args) = self.parseArgs(opt, args[1:], [ "opts:" ])
                     if len(_args) != 2:
@@ -209,7 +217,9 @@ class KickstartConfig(dict):
                 elif opt == "firstboot":
                     self.parseSimple(opt, args[1:],
                                      [ "enable", "enabled", "disable",
-                                       "disabled", "reconfig" ])
+                                       "disabled", "reconfig" ],
+                                     { "enable": "enabled",
+                                       "disable": "disabled" })
                 elif opt == "harddrive":
                     self.parseSimple(opt, args[1:],
                                      [ "partition:", "dir:" ])
@@ -227,11 +237,11 @@ class KickstartConfig(dict):
                 # TODO: logvol
                 elif opt == "network":
                     self.parseSimple(opt, args[1:],
-                                     [ "bootproto=", "device=", "ip=",
-                                       "gateway=", "nameserver=", "nodns",
-                                       "netmask=", "hostname=", "ethtool=",
-                                       "essid=", "wepkey=", "onboot=",
-                                       "class=" ])
+                                     [ "bootproto:", "device:", "ip:",
+                                       "gateway:", "nameserver:", "nodns",
+                                       "netmask:", "hostname:", "ethtool:",
+                                       "essid:", "wepkey:", "onboot:",
+                                       "class:" ])
                 elif opt == "nfs":
                     self.parseSimple(opt, args[1:],
                                      [ "server:", "dir:" ])
@@ -271,14 +281,11 @@ class KickstartConfig(dict):
 
                 if not self["packages"]:
                     self["packages"] = { }
-                if len(args) > 1:
-                    if opt[0] == "@":
-                        if not self["packages"].has_key("groups"):
-                            self["packages"]["groups"] = [ ]
-                        if not args[1] in self["packages"]["groups"]:
-                            self["packages"]["groups"].append(args[1])
-                    else:
-                        print "'%s' is unsupported" % line
+                if opt[0] == "@":
+                    if not self["packages"].has_key("groups"):
+                        self["packages"]["groups"] = [ ]
+                    if not args[1] in self["packages"]["groups"]:
+                        self["packages"]["groups"].append(args[1])
                 elif opt[0] == "-":
                     if not self["packages"].has_key("drop"):
                         self["packages"]["drop"] = [ ]
@@ -298,14 +305,84 @@ class KickstartConfig(dict):
                     self["pre"]["script"] = ""
                 self["pre"]["script"] += line+"\n"
 
-        ret = 0
+        self.verify()
+
+
+    def verify(self):
         for tag in self.REQUIRED_TAGS:
             if not self[tag]:
                 raise ValueError, "ERROR: %s is required." % tag
 
+        if not self.has_key("install") and self.has_key("update"):
+            raise ValueError, "ERROR: No operation defined"
+
         if self.has_key("install") and not self.has_key("partition"):
             raise ValueError, \
-                  "ERROR: partition has to be set for an installation."
+                  "ERROR: Partition has to be set for an installation."
+
+        if self["authconfig"].has_key("enablenis"):
+            if not self["authconfig"].has_key("nisdomain"):
+                raise ValueError, "nisdomain not set"
+            if not self["authconfig"].has_key("nisserver"):
+                raise ValueError, "nisserver not set"
+        if self["authconfig"].has_key("enableldap"):
+            if not self["authconfig"].has_key("ldapserver"):
+                raise ValueError, "ldapserver not set"
+            if not self["authconfig"].has_key("ldapbasedn"):
+                raise ValueError, "ldapbasedn not set"
+        if self["authconfig"].has_key("enablekrb5"):
+            if not self["authconfig"].has_key("krb5realm"):
+                raise ValueError, "krb5realm not set"
+            if not self["authconfig"].has_key("krb5kdc"):
+                raise ValueError, "krb5kdc not set"
+            if not self["authconfig"].has_key("krb5adminserver"):
+                raise ValueError, "krb5adminserver not set"
+        if self["authconfig"].has_key("enablehesiod"):
+            if not self["authconfig"].has_key("hesiodlhs"):
+                raise ValueError, "hesiodlhs not set"
+            if not self["authconfig"].has_key("hesiodrhs"):
+                raise ValueError, "hesiodrhs not set"
+        if self["authconfig"].has_key("enablesmbauth"):
+            if not self["authconfig"].has_key("smbservers"):
+                raise ValueError, "smbservers not set"
+            if not self["authconfig"].has_key("smbworkgroup"):
+                raise ValueError, "smbworkgroup not set"
+
+        if self["bootloader"].has_key("password") and \
+               self["bootloader"].has_key("md5pass"):
+            raise ValueError, "bootloader: password and md5pass set"
+
+        if self["clearpart"]:
+            if self["clearpart"].has_key("none") and \
+                   len(self["clearpart"]) != 1:
+                raise ValueError, "clearpart: none mixed with other tags."
+
+        if self["device"] and self["device"].keys() not in [ "scsi", "eth" ]:
+            raise ValueError, "device: type not valid."
+
+        if self["firstboot"] and self["firstboot"].has_key("enabled") and \
+               self["firstboot"].has_key("disabled"):
+            raise ValueError, "firstboot: enabled and disabled."
+
+        if not self["cdrom"] and not self["harddrive"] and \
+               not self["nfs"] and not self["url"]:
+            raise ValueError, "No installation method specified."
+
+        if self["harddrive"]:
+            if not self["harddrive"].has_key("partition"):
+                raise ValueError, "harddrive: partition not set."
+            if not self["harddrive"].has_key("dir"):
+                raise ValueError, "harddrive: dir not set."
+
+        if self["nfs"]:
+            if not self["nfs"].has_key("server"):
+                raise ValueError, "nfs: server not set."
+            if not self["nfs"].has_key("dir"):
+                raise ValueError, "nfs: dir not set."
+
+        if self["url"]:
+            if not self["url"].has_key("url"):
+                raise ValueError, "url not set."
 
     def parseArgs(self, tag, argv, allowed_args, replace_tags=None):
         dict = { }
@@ -649,15 +726,34 @@ if not ks.has_key("install"):
     sys.exit(1)
 
 # create temp dir
-
 try:
     tempdir = tempfile.mkdtemp(prefix="pyrpmkickstart_")
 except Exception, msg:
     print msg
     sys.exit(1)
-    
 source_dir = tempdir+"/source"
 target_dir = tempdir+"/target"
+    
+# run pre script
+if ks["pre"] and len(ks["pre"]["script"]) > 0:
+    print "Running pre script"
+    pid = os.fork()
+    if pid != 0:
+        (rpid, status) = os.waitpid(pid, 0)
+        if status != 0 and ks["pre"].has_key("erroronfail"):
+            print "ERROR: Pre script failed, aborting."
+            if not nocleanup:
+                rm_rf(tempdir)
+    else:
+        interpreter = "bin/sh"
+        if ks["pre"].has_key("interpreter"):
+            interpreter = ks["pre"]["interpreter"]
+        pyrpm.runScript(interpreter, ks["pre"]["script"])
+        sys.exit(0)
+
+# parse file again
+ks.clear()
+ks.parse(ks_file)
 
 ### mounting ###
 
@@ -810,27 +906,6 @@ if not os.path.exists(buildroot+"/etc"):
     fd = open(buildroot+"/etc/modprobe.conf", "w")
     fd.close()
 
-pre_failed = 0
-# run pre script
-if ks["pre"] and len(ks["pre"]["script"]) > 0:
-    print "Running pre script"
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0 and ks["pre"].has_key("erroronfail"):
-            print "ERROR: Pre script failed, aborting."
-            if umount_all(tempdir+"/") == 0:
-                if not nocleanup:
-                    rm_rf(tempdir)
-    else:
-        if not ks["pre"].has_key("nochroot"):
-            os.chroot(buildroot)
-        interpreter = "bin/sh"
-        if ks["pre"].has_key("interpreter"):
-            interpreter = ks["pre"]["interpreter"]
-        pyrpm.runScript(interpreter, ks["pre"]["script"])
-        sys.exit(0)
-
 
 # configure yum
 os.mkdir("%s/yum.cache" % tempdir)
@@ -950,20 +1025,15 @@ if ks["langsupport"]:
     print "Configuring languages"
     try:
         fd = open(buildroot+"/etc/sysconfig/i18n", "w")
-        if len(ks["langsupport"]) > 1:
-            lang = ""
-            supported = ""
-            for l in ks["langsupport"].keys():
-                if ks["langsupport"][l].has_key("default"):
-                    lang = l
-                else:
-                    if len(supported) > 0:
-                        supported += ":"
-                    supported += l
-            fd.write('LANG="%s"\n' % lang)
-            fd.write('SUPPORTED="%s"\n' % supported)
+        if ks["langsupport"].has_key("default"):
+            fd.write('LANG="%s"\n' % ks["langsupport"]["default"])
+            if ks["langsupport"].has_key("supported") and \
+                   len(ks["langsupport"]["supported"]) > 0:
+                fd.write('SUPPORTED="%s"\n' % \
+                         string.join(ks["langsupport"]["supported"], ":"))
         else:
-            fd.write('LANG="%s"\n' % ks["langsupport"].keys()[0])
+            fd.write('LANG="%s"\n' % \
+                     string.join(ks["langsupport"]["supported"], ":"))
         fd.write('SYSFONT="latarcyrheb-sun16"\n')
         fd.close()
     except Exception, msg:
