@@ -1,6 +1,22 @@
 #!/usr/bin/python
 #
-# (c) 2005 Thomas Woerner <twoerner@redhat.com>
+# (c) 2005 Red Hat, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2004, 2005 Red Hat, Inc.
+#
+# AUTHOR: Thomas Woerner <twoerner@redhat.com>
 #
 
 import os, sys, md5, stat, tempfile, gzip, bz2, struct, getopt
@@ -195,7 +211,7 @@ class RpmPackage(dict):
         pkg.close()
 
         target_fd = open(name, "ab")
-        print "tell=%d" % target_fd.tell()
+#        print "tell=%d" % target_fd.tell()
 
         gz_cpio = gzipFile(self["cpio"])
         gz_cpio_size = os.stat(gz_cpio).st_size
@@ -206,6 +222,13 @@ class RpmPackage(dict):
                 data = fd.read(65536)
             else:
                 data = fd.read(gz_cpio_size - size)
+#            if size == 0:
+#                tmp_data = data[12:]
+#                data = struct.pack("!cccccccccccc",
+#                                   '\x1F', '\x8B', '\x08', '\x00',
+#                                   '\x00', '\x00', '\x00', '\x00',
+#                                   '\x00', '\x03', '\xD4', '\xBD')
+#                data += tmp_data
             target_fd.write(data)
             size += len(data)
         fd.close()
@@ -297,30 +320,30 @@ class RpmDeltaPackage(dict):
         size = struct.unpack("!I", data)[0]
         self["source_nevra"] = pyrpm.readExact(self.fd, size-1)
         pyrpm.readExact(self.fd, 1)
-        print "'%s'" % self["source_nevra"]
+#        print "'%s'" % self["source_nevra"]
         self._readPadding(size)
 
         data = pyrpm.readExact(self.fd, 4)
         size = struct.unpack("!I", data)[0]
         self["source_sha1"] = pyrpm.readExact(self.fd, size-1)
         pyrpm.readExact(self.fd, 1)
-        print self["source_sha1"]
+#        print self["source_sha1"]
         self._readPadding(size)
 
         data = pyrpm.readExact(self.fd, 4)
         size = struct.unpack("!I", data)[0]
         self["target_nevra"] = pyrpm.readExact(self.fd, size-1)
         pyrpm.readExact(self.fd, 1)
-        print "'%s'" % self["target_nevra"]
+#        print "'%s'" % self["target_nevra"]
         self._readPadding(size)
 
         data = pyrpm.readExact(self.fd, 8)
         self["delta_size"] = struct.unpack("!Q", data)[0]
-        print self["delta_size"]
+#        print self["delta_size"]
         
         data = pyrpm.readExact(self.fd, 8)
         self["target_header_size"] = struct.unpack("!Q", data)[0]
-        print self["target_header_size"]
+#        print self["target_header_size"]
 
 
         # read delta
@@ -793,7 +816,7 @@ def gunzipFile(file):
 
     return target_name
 
-def gzipFile(file):
+def EXT_gzipFile(file):
     target_name = "%s.gz" % file
 
     os.system("gzip --best -nc '%s' > '%s'" % (file, target_name))
@@ -802,7 +825,7 @@ def gzipFile(file):
     
     return target_name
 
-def TODO_gzipFile(file):
+def gzipFile(file):
     # TODO: -n flag
     source_fd = open(file, "r")
 
