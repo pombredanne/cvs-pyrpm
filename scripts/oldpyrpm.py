@@ -1708,6 +1708,11 @@ class ReadRpm:
         useinstall, rpmgroup):
         (indexNo, storeSize, fmt, fmt2) = writeHeader(hdrhash, taghash, region,
             None, useinstall, rpmgroup)
+        if (indexNo, storeSize, fmt, fmt2) != (hdrdata[0], hdrdata[1], hdrdata[3], hdrdata[4]):
+            print self.getFilename(), self["rpmversion"], \
+                "writeHeader() would write a different normal header"
+        return
+
         if indexNo != hdrdata[0]:
             if taghash == rpmtag:
                 print self.getFilename(), self["rpmversion"], "normal header"
