@@ -1769,6 +1769,16 @@ class ReadRpm:
         for i in rpmtagrequired:
             if not self.hdr.has_key(i):
                 self.printErr("hdr is missing: %s" % i)
+        region = "immutable"
+        if self[region] == None:
+            region = "immutable1"
+        if self[region] != None:
+            (tag, ttype, offset, count) = unpack("!4I", self.hdrdata[3][0:16])
+            if tag == rpmtag[region][0]:
+                if offset + 16 != self.hdrdata[1]:
+                    self.printErr("wrong length of tag header detected")
+            else:
+                self.printErr("region tag not at the beginning of the header")
         size_in_sig = self.sig.getOne("size_in_sig")
         if size_in_sig != None:
             rpmsize = os.stat(self.filename)[6]
@@ -1949,8 +1959,10 @@ class ReadRpm:
                 self.printErr("region has wrong type/count")
             if -offset % 16 != 0:
                 self.printErr("region has wrong offset")
-            if -offset / 16 != indexNo:
-                self.printErr("region only for partial header")
+            if regiontag != rpmsigtag["header_signatures"][0] and \
+                -offset / 16 != indexNo:
+                self.printErr("region tag %s only for partial header: %d, %d" \
+                    % (regiontag, indexNo, -offset / 16))
 
         if self.nodigest:
             return
