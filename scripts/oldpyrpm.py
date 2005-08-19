@@ -2750,7 +2750,7 @@ def main():
     import getopt
     if len(sys.argv) <= 1:
         usage()
-        sys.exit(0)
+        return 0
     verbose = 2
     repo = []
     strict = 0
@@ -2776,7 +2776,7 @@ def main():
     for (opt, val) in opts:
         if opt in ("-?", "-h", "--help"):
             usage()
-            sys.exit(0)
+            return 0
         elif opt in ("-v", "--verbose"):
             verbose += 1
         elif opt in ("-q", "--quiet"):
@@ -2895,6 +2895,8 @@ if __name__ == "__main__":
         s.strip_dirs().sort_stats("cumulative").print_stats(100)
         os.unlink(htfilename)
     else:
-        main()
+        ret = main()
+        if ret != None:
+            sys.exit(ret)
 
 # vim:ts=4:sw=4:showmatch:expandtab
