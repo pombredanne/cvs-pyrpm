@@ -213,7 +213,7 @@ class YumConf(Conf):
                      "pkgpolicy",
                      )
 
-    MultiLines = ( "baseurl", "mirrorlist" )                   
+    MultiLines = ( "baseurl", "mirrorlist" )
 
     RepoVarnames = ( "name",
                      "baseurl",
@@ -251,7 +251,7 @@ class YumConf(Conf):
             self.chroot = ''
         else:
             self.chroot = chroot
-            
+
         if chroot and chroot[-1] != '/':
             self.chroot += '/'
 
@@ -295,7 +295,7 @@ class YumConf(Conf):
         if not self.reposdir:
             return
 
-        filenames = glob(self.reposdir + '/*.repo')        
+        filenames = glob(self.reposdir + '/*.repo')
         for filename in filenames:
             self.filename = filename
             Conf.read(self)
@@ -317,11 +317,11 @@ class YumConf(Conf):
             while self.findnextcodeline():
                 v = self.nextEntry()
                 if not v:
-                    break                    
+                    break
 
-                if not self.checkVar(stanza, v[0]):                    
+                if not self.checkVar(stanza, v[0]):
                     if (not v[1]) and (prevname in YumConf.MultiLines):
-                        value = self.extendValue(v[0])                        
+                        value = self.extendValue(v[0])
                         stanzavars[prevname].append(value)
                         self.nextline()
                         continue
@@ -334,7 +334,7 @@ class YumConf(Conf):
 
                 name = v[0]
                 value = self.extendValue(v[1])
-                
+
                 if name in YumConf.MultiLines:
                     stanzavars[name] = [ value ]
                 else:
@@ -424,4 +424,4 @@ if __name__ == '__main__':
         print "key:", confkey
     sys.exit(0)
 
-# vim:ts=8:sw=4:showmatch:expandtab
+# vim:ts=4:sw=4:showmatch:expandtab

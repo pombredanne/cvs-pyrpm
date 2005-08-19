@@ -72,7 +72,7 @@ class FilenamesList:
 
             if not self.path.has_key(dirname):
                 continue
-            
+
             basename = pkg["basenames"][i]
             if self.path[dirname].has_key(basename):
                 self.path[dirname][basename].remove(pkg)

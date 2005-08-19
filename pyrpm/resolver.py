@@ -167,7 +167,7 @@ class RpmResolver(RpmList):
         self.installed_conflicts = self.getConflicts()
         self.installed_obsoletes = self.getObsoletes()
         self.installed_file_conflicts = self.getFileConflicts()
-        self.config.checkinstalled = check_installed                
+        self.config.checkinstalled = check_installed
     # ----
 
     def clear(self):
@@ -189,7 +189,7 @@ class RpmResolver(RpmList):
         self.provides_list.addPkg(pkg)
         self.obsoletes_list.addPkg(pkg)
         self.filenames_list.addPkg(pkg)
-        
+
         return self.OK
     # ----
 
@@ -227,7 +227,7 @@ class RpmResolver(RpmList):
         ret = RpmList.update(self, pkg)
         if ret != self.OK:
             del self.pkg_obsoletes
-            return ret            
+            return ret
 
         for r in self.pkg_obsoletes:
             # package is not the same and has not the same name
@@ -600,7 +600,7 @@ class RpmResolver(RpmList):
                         pkgs.append(r)
         return -1
     # ----
-    
+
     def reloadDependencies(self):
         self.provides_list.clear()
         self.obsoletes_list.clear()

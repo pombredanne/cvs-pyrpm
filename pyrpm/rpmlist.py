@@ -104,7 +104,7 @@ class RpmList:
                            self.__arch_incompat(pkg, r):
                         del self.pkg_updates
                         return self.ARCH_INCOMPAT
-                    
+
                     if archDuplicate(pkg["arch"], r["arch"]) or \
                            pkg["arch"] == "noarch" or r["arch"] == "noarch":
                         self.pkg_updates.append(r)
@@ -113,7 +113,7 @@ class RpmList:
                            self.__arch_incompat(pkg, r):
                         del self.pkg_updates
                         return self.ARCH_INCOMPAT
-                    
+
                     ret = self.__install_check(r, pkg)
                     if ret != self.OK:
                         del self.pkg_updates

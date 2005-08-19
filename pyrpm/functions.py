@@ -159,10 +159,10 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None, rusage=N
         if arg2 != None:
             args.append(arg2)
     (rfd, wfd) = os.pipe()
-    
+
     if rusage != None:
         rusage_old = getrusage(RUSAGE_CHILDREN)
-        
+
     pid = os.fork()
     if pid == 0:
         os.close(rfd)
@@ -200,7 +200,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None, rusage=N
         rusage_new = getrusage(RUSAGE_CHILDREN)
         for i in xrange(len(rusage_new)):
             rusage.insert(i, rusage_new[i] - rusage_old[i])
-        
+
     if script != None:
         os.unlink(tmpfilename)
     if status != 0: #or cret != "":
@@ -299,7 +299,7 @@ def setFileMods(filename, uid, gid, mode, mtime):
     """Set owner, group, mode and mtime of filename to the specified values.
 
     Raise OSError."""
-    
+
     os.chown(filename, uid, gid)
     os.chmod(filename, S_IMODE(mode))
     os.utime(filename, (mtime, mtime))
@@ -323,7 +323,7 @@ def createLink(src, dst):
     """Create a link from src to dst.
 
     Raise OSError."""
-    
+
     try:
         # First try to unlink the defered file
         os.unlink(dst)
@@ -500,7 +500,7 @@ def cacheLocal(url, subdir, force=0):
         os.makedirs("/var/cache/pyrpm/%s" % subdir)
     try:
         if force:
-            f = urlgrab(url, "/var/cache/pyrpm/%s/%s" % 
+            f = urlgrab(url, "/var/cache/pyrpm/%s/%s" %
                         (subdir, os.path.basename(url)))
         else:
             f = urlgrab(url, "/var/cache/pyrpm/%s/%s" %
@@ -527,7 +527,7 @@ def parseYumOptions(argv, yum):
     # Argument parsing
     try:
       opts, args = getopt.getopt(argv, "?vhc:r:y",
-        ["help", "verbose", 
+        ["help", "verbose",
          "hash", "version", "quiet", "dbpath=", "root=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
@@ -713,7 +713,7 @@ def readPackages(dbpath):
             storedata = data[indexNo*16+8:]
             pkg["signature"] = {}
             for idx in xrange(0, indexNo):
-                try: 
+                try:
                     (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
                                                            storedata)
                 except ValueError, e:
@@ -1216,7 +1216,7 @@ def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
 
     tags, if defined, specifies tags to load.  Raise ValueError on invalid
     data, IOError."""
-    
+
     pkg = package.RpmPackage(config, source, verify, strict, hdronly, db)
     pkg.read(tags=tags)
     pkg.close()

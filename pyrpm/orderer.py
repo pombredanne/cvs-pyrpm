@@ -273,7 +273,7 @@ class RpmOrderer:
             del relations[max_count_node].pre[max_count_next]
             del relations[max_count_next].post[max_count_node]
             return 1
-        
+
         return 0
 
     # ----
@@ -304,7 +304,7 @@ class RpmOrderer:
                 next = pkg
                 next_post_len = len(rel.post)
         return next
-        
+
     # ----
 
     def _genOrder(self, relations):
@@ -315,7 +315,7 @@ class RpmOrderer:
         last = [ ]
         while len(relations) > 0:
             # remove and save all packages without a post relation in reverse
-            # order 
+            # order
             # these packages will be appended later to the list
             self._separatePostLeafNodes(relations, last)
 
@@ -368,7 +368,7 @@ class RpmOrderer:
             if order2 == None:
                 return None
             order.extend(order2)
-            
+
         # order erases
         if self.erases and len(self.erases) > 0:
             # generate relations

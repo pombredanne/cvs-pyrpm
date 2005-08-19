@@ -49,15 +49,15 @@ class PyGZIP:
         """Read gzip header.
 
         Raise IOError."""
-        
+
         magic = self.fd.read(2)
         if magic != '\037\213':
             raise IOError("Not a gzipped file")
         if ord(functions.readExact(self.fd, 1)) != 8:
             raise IOError("Unknown compression method")
-        flag = ord(functions.readExact(self.fd, 1)) 
+        flag = ord(functions.readExact(self.fd, 1))
         # Discard modification time, extra flags, OS byte
-        functions.readExact(self.fd, 4+1+1) 
+        functions.readExact(self.fd, 4+1+1)
         if flag & FEXTRA:
             # Read & discard the extra field, if present
             (xlen,) = unpack("<H", functions.readExact(self.fd, 2))
@@ -117,7 +117,7 @@ class PyGZIP:
             # bytes from the buffer containing the CRC and the file size.  The
             # decompressor is smart and knows when to stop, so feeding it
             # extra data is harmless.
-            	try:
+                try:
                     crc32 = unpack("<i", self.enddata[0:4]) # le signed int
                     isize = unpack("<I", self.enddata[4:8]) # le unsigned int
                 except struct.error:
@@ -178,7 +178,7 @@ class CPIOFile:
         or (None, None) at EOF.
 
         Metadata is discarded.  Raise IOError."""
-        
+
         self.readsize = 0
         # Do padding if necessary for nexty entry
         functions.readExact(self.fd, (4 - (self.lastfilesize % 4)) % 4)
@@ -212,7 +212,7 @@ class CPIOFile:
         """Return up to size bytes of file data.
 
         Raise IOError."""
-        
+
         if size > self.lastfilesize - self.readsize:
             size = self.lastfilesize - self.readsize
         self.readsize += size
@@ -222,7 +222,7 @@ class CPIOFile:
         """Skip current file data.
 
         Raise IOError."""
-        
+
         size = self.lastfilesize - self.readsize
         data = "1"
         while size > 0 and data:
@@ -261,7 +261,7 @@ class RpmIO:
         """Write a RpmPackage header (without payload!) to self.source.
 
         Raise IOError, NotImplementedError."""
-        
+
         raise NotImplementedError
 
     def close(self):
@@ -409,7 +409,7 @@ class RpmStreamIO(RpmIO):
         """Open self.source for writing if it is not open, write data to it.
 
         Raise IOError."""
-        
+
         if self.fd == None:
             self.open("w+")
         return self.fd.write(data)
@@ -427,7 +427,7 @@ class RpmStreamIO(RpmIO):
 
         self.fd should already be open.  Raise ValueError on invalid data,
         IOError."""
-        
+
         leaddata = functions.readExact(self.fd, 96)
         if leaddata[:4] != RPM_HEADER_LEAD_MAGIC:
             raise ValueError, "no rpm magic found"
@@ -447,7 +447,7 @@ class RpmStreamIO(RpmIO):
 
     def __readHdr(self):
         """Read main header.
-        
+
         self.fd should already be open.  Raise ValueError on invalid data,
         IOError."""
 
@@ -473,7 +473,7 @@ class RpmStreamIO(RpmIO):
         """Verify RPM lead leaddata.
 
         Raise ValueError on invalid data."""
-        
+
         (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
             unpack("!4s2c2h66s2h16x", leaddata)
         if major not in ('\x03', '\x04') or minor != '\x00' or \
@@ -511,7 +511,7 @@ class RpmStreamIO(RpmIO):
         (of size storeSize).
 
         Return tag data length.  Raise ValueError on invalid data."""
-        
+
         checkSize = 0
         for i in xrange(0, indexNo * 16, 16):
             index = unpack("!4I", fmt[i:i + 16])
@@ -536,7 +536,7 @@ class RpmStreamIO(RpmIO):
 
         Raise ValueError on invalid data; only print error messages on
         suspicious, but non-fatal errors."""
-        
+
         (tag, ttype, offset, count) = index
         if issig:
             if not rpmsigtag.has_key(tag):
@@ -604,7 +604,7 @@ class RpmStreamIO(RpmIO):
         """Parse value of tag with index from data in fmt.
 
         Return tag value.  Raise ValueError on invalid data."""
-        
+
         (tag, ttype, offset, count) = index
         try:
             if ttype == RPM_INT32:
@@ -634,13 +634,13 @@ class RpmStreamIO(RpmIO):
 
     class __GeneratedHeader:
         """A helper for header generation."""
-        
+
         def __init__(self, taghash, tagnames, region):
             """Initialize for creating a header with region tag region.
 
             taghash is base.rpmsigtag or base.rpmtag, tagnames is the
             corresponding tag name hash."""
-            
+
             self.taghash = taghash
             self.tagnames = tagnames
             self.region = region
@@ -700,11 +700,11 @@ class RpmStreamIO(RpmIO):
             self.indexlist.append((tag, ttype, self.offset, count))
             self.store += pad + data
             self.offset += len(data)
-            
+
         def __generateTag(self, ttype, value):
             """Return (tag data, tag count for index header) for value of
             ttype."""
-            
+
             # Decide if we have to write out a list or a single element
             if isinstance(value, (tuple, list)):
                 count = len(value)
@@ -758,7 +758,7 @@ class RpmStreamIO(RpmIO):
         def __generateIndex(self, pad):
             """Return (header tags, padding after data area) with data area end
             aligned to pad."""
-        
+
             index = ""
             for (tag, ttype, offset, count) in self.indexlist:
                 # Make sure the region tag is the first one in the index
@@ -809,7 +809,7 @@ class RpmFileIO(RpmStreamIO):
         """Open self.source, mark it close-on-exec.
 
         Return the opened file.  Raise IOError."""
-        
+
         if not self.source.startswith("file:/"):
             filename = self.source
         else:
@@ -836,7 +836,7 @@ class RpmFileIO(RpmStreamIO):
         least length bytes available if len != 0.
 
         Return the open file.  Raise IOError."""
-        
+
         fd = self.__openFile()
         fd.seek(0, 2)
         total = fd.tell()
@@ -1037,7 +1037,7 @@ class RpmDatabase:
         elif self.source[:7] == 'rpmdb:/':
             tsource = self.source[7:]
         else:
-            tsource = self.source 
+            tsource = self.source
         if self.buildroot != None:
             return self.buildroot + tsource
         else:
@@ -1113,7 +1113,7 @@ class RpmDB(RpmDatabase):
             pkg.source = "rpmdb:/"+dbpath+"/"+pkg.getNEVRA()
             self._addPkg(pkg)
             pkg["provides"] = pkg.getProvides()
-            pkg["requires"] = pkg.getRequires() 
+            pkg["requires"] = pkg.getRequires()
             pkg["obsoletes"] = pkg.getObsoletes()
             pkg["conflicts"] = pkg.getConflicts()
             pkg["triggers"] = pkg.getTriggers()
@@ -1428,7 +1428,7 @@ class RpmSQLiteDB(RpmDatabase):
             pkg.generateFileNames()
             self._addPkg(pkg)
             pkg["provides"] = pkg.getProvides()
-            pkg["requires"] = pkg.getRequires() 
+            pkg["requires"] = pkg.getRequires()
             pkg["obsoletes"] = pkg.getObsoletes()
             pkg["conflicts"] = pkg.getConflicts()
             pkg["triggers"] = pkg.getTriggers()
@@ -1697,7 +1697,7 @@ class RpmRepo(RpmDatabase):
             self.__writePrimary(pfd, proot, pkg)
             self.__writeFilelists(ffd, froot, pkg)
 #            self.__writeOther(ofd, oroot, pkg)
-	    try:
+            try:
                 pkg.close()
             except IOError:
                 pass # Should not happen when opening for reading anyway
@@ -1777,7 +1777,7 @@ class RpmRepo(RpmDatabase):
                 try:
                     pkg.read(tags=("name", "epoch", "version", "release", "arch", "sourcerpm", "requirename", "requireflags", "requireversion"))
                 except (IOError, ValueError), e:
-                    self.config.printWarning(0, "%s: %s" % (path, e)) 
+                    self.config.printWarning(0, "%s: %s" % (path, e))
                     continue
                 pkg.close()
                 if self.__isExcluded(pkg):
@@ -1866,7 +1866,7 @@ class RpmRepo(RpmDatabase):
     def __getProps(self, reader):
         props = {}
         while reader.MoveToNextAttribute():
-            props[reader.Name()] = reader.Value() 
+            props[reader.Name()] = reader.Value()
         return props
 
     def __parsePackage(self, reader):

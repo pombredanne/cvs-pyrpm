@@ -64,16 +64,16 @@ _ALG_HASH_SHA512 = 10
 
 # alg: (name, module or None, ASN.1 prefix)
 _hash_alg_data = {
-    _ALG_HASH_MD5: ("MD5", md5, "\x30\x20\x30\x0C\x06\x08\x2A\x86" 
+    _ALG_HASH_MD5: ("MD5", md5, "\x30\x20\x30\x0C\x06\x08\x2A\x86"
                     "\x48\x86\xF7\x0D\x02\x05\x05\x00\x04\x10"),
     _ALG_HASH_SHA1: ("SHA1", sha, "\x30\x21\x30\x09\x06\x05\x2B\x0E"
                      "\x03\x02\x1A\x05\x00\x04\x14"),
     _ALG_HASH_RIPE_MD160: ("RIPE-MD/160", RIPEMD,
-                           "\x30\x21\x30\x09\x06\x05\x2B\x24" 
+                           "\x30\x21\x30\x09\x06\x05\x2B\x24"
                            "\x03\x02\x01\x05\x00\x04\x14"),
     _ALG_HASH_MD2: ("MD2", MD2, "\x30\x20\x30\x0C\x06\x08\x2A\x86"
                     "\x48\x86\xF7\x0D\x02\x02\x05\x00\x04\x10"),
-    _ALG_HASH_SHA256: ("SHA256", SHA256, "\x30\x41\x30\x0D\x06\x09\x60\x86" 
+    _ALG_HASH_SHA256: ("SHA256", SHA256, "\x30\x41\x30\x0D\x06\x09\x60\x86"
                        "\x48\x01\x65\x03\x04\x02\x01\x05\x00\x04\x20"),
     _ALG_HASH_SHA384: ("SHA384", None, "\x30\x41\x30\x0D\x06\x09\x60\x86"
                        "\x48\x01\x65\x03\x04\x02\x02\x05\x00\x04\x30"),
@@ -144,7 +144,7 @@ class _RSAPubkeyAlg(_PubkeyAlg):
         if RSA is None:
             raise NotImplementedError, "python-Crypto not available"
         self.rsa = RSA.construct((n, e))
-    
+
     def verify(self, data, value):
         (sig, length) = _parseMPI(data)
         if length != len(data):
@@ -222,7 +222,7 @@ class _SignaturePacket(_PGPPacket):
     FL_CAN_SIGN = 0x02
     FL_CAN_ENCRYPT_COMMUNICATIONS = 0x04
     FL_CAN_ENCRYPT_STORAGE = 0x08
-    
+
     sigtypes = {
         ST_BINARY: "binary", ST_TEXT: "text", ST_STANDALONE: "standalone",
         ST_CERT_GENERIC: "cert_generic", ST_CERT_NONE: "cert_none",
@@ -465,7 +465,7 @@ class _SignaturePacket(_PGPPacket):
         self.finishDigest().  Note that there is no way to 100% reliably detect
         whether signature verification failed or whether a wrong key was
         used."""
-        
+
         if (packet.pubkey_alg not in _pubkey_alg_data
             or self.pubkey_alg not in _pubkey_alg_data):
             raise NotImplementedError, "Unknown public key algorithm"
@@ -572,7 +572,7 @@ class _SignaturePacket(_PGPPacket):
                 if r == 0:
                     result = 0
         return (result, None)
-        
+
 
 class _PublicKeyPacket__(_PGPPacket):
     """A public key packet (tag 6 or 14)."""
@@ -646,10 +646,10 @@ class _PublicKeyPacket__(_PGPPacket):
         return ("%s(v%s, %s, %s, %s)"
                 % (self.desc, self.ver, self.creation_time, self.validity,
                    pubkey_alg))
-                                             
+
 class _PublicKeyPacket(_PublicKeyPacket__):
     """A public key packet (tag 6)."""
-    
+
     desc = "pubkey"
 
 class _PublicSubkeyPacket(_PublicKeyPacket__):
@@ -672,7 +672,7 @@ class _MarkerPacket(_PGPPacket):
 
 class _TrustPacket(_PGPPacket):
     """A trust packet (tag 12)."""
-    
+
     # Contents are unspecified
     def __str__(self):
         return "trust"
@@ -869,7 +869,7 @@ def parsePGPSignature(data):
  # Key storage
 def _mergeSigs(dest, src):
     """Merge list of signature packets src to dest."""
-    
+
     s = {}
     for sig in dest:
         s[sig.data] = None
@@ -912,7 +912,7 @@ class _PublicKey:
                                    "public key packet" % p.sigtype)
             self.direct_sigs.append(p)
             p = _popListHead(packets)
-        
+
         # VERIFY: primary key must be capable of signing (on selfsignature)
         # VERIFY: check primary key has not expired (on selfsignature on v4)
         #        (but what if it has?)
@@ -999,7 +999,7 @@ class _PublicKey:
                  or self.primary_revocation.hashed_sp["sign_time"] >
                  other.primary_revocation.hashed_sp["sign_time"])):
             self.primary_revocation = other.primary_revocation
-        
+
         _mergeSigs(self.direct_sigs, other.direct_sigs)
 
         h = {}
@@ -1012,7 +1012,7 @@ class _PublicKey:
                 h[uid.data] = sigs
             else:
                 _mergeSigs(h[uid.data], sigs)
-        
+
         h = {}
         for (subkey, sigs) in self.subkeys:
             h[subkey.data] = sigs
