@@ -51,7 +51,7 @@
 # - use setPerms() in doLnOrCopy()
 # - Change "strict" and "verify" into "debug" and have one integer specify
 #   debug and output levels. (Maybe also "nodigest" can move in?)
-# - limit: does not support all RHL5.x and earlier rpms if verify is enabled
+# - limit: verify mode warns about a few rpms from RHL5.x or earlier (rpm-2.x)
 # - Whats the difference between "cookie" and "buildhost" + "buildtime".
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
 #   and "0" epoch (push this change into createrepo)
@@ -349,7 +349,7 @@ class PyGZIP:
             if len(data) >= 8:
                 self.enddata = data[-8:]
             else:
-                self.enddata = self.enddata[-len(data):] + data
+                self.enddata = self.enddata[len(data)-8:] + data
             x = obj.decompress(data)
             self.crcval = zlib.crc32(x, self.crcval)
             self.length += len(x)
@@ -364,11 +364,11 @@ class PyGZIP:
         return "".join(decompdata)
 
     def __del__(self):
-        data = self.fd.read(8)
+        data = self.fd.read(12)
         if len(data) >= 8:
             self.enddata = data[-8:]
         else:
-            self.enddata = self.enddata[-len(data):] + data
+            self.enddata = self.enddata[len(data)-8:] + data
         (crc32, isize) = unpack("<iI", self.enddata)
         if crc32 != self.crcval:
             print self.filename, "CRC check failed:", crc32, self.crcval
@@ -2536,7 +2536,8 @@ def checkSrpms():
         "/var/www/html/mirror/updates-rhel/4",
         "/mnt/hdb4/data/cAos/3.5/updates/SRPMS",
         "/mnt/hdb4/data/cAos/4.1/os/SRPMS",
-        "/mnt/hdb4/data/cAos/4.1/updates/SRPMS"]
+        "/mnt/hdb4/data/cAos/4.1/updates/SRPMS",
+        "/var/www/html/mirror/tao"]
     for d in directories:
         if not os.path.isdir(d):
             continue
