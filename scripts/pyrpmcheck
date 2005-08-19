@@ -181,13 +181,13 @@ def main():
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
         usage()
-        sys.exit(1)
+        return 1
 
     # Argument handling
     for (opt, val) in opts:
         if   opt in ['-?', "--help"]:
             usage()
-            sys.exit(0)
+            return 0
         elif opt in ["-v", "--verbose"]:
             rpmconfig.verbose += 1
         elif opt == "--nodir":
@@ -207,7 +207,7 @@ def main():
     if not args:
         print "No packages/dirs given"
         usage()
-        sys.exit(1)
+        return 1
 
     repo_list = []
     for arg in args:
@@ -236,27 +236,9 @@ def main():
         checkProvides(pkg_list)
     if not nosymlinks:
         checkSymlinks(pkg_list)
-
-    sys.exit(0)
+    return 0
 
 if __name__ == '__main__':
-    dohotshot = 0
-    if dohotshot:
-        import tempfile, hotshot, hotshot.stats
-        filename = tempfile.mktemp()
-        prof = hotshot.Profile(filename)
-        try:
-            prof = prof.runcall(main)
-        except SystemExit:
-            pass
-        print "Starting profil statistics. This takes some time..."
-        prof.close()
-        del prof
-        s = hotshot.stats.load(filename)
-        s.strip_dirs().sort_stats('time').print_stats(100)
-        s.strip_dirs().sort_stats('cumulative').print_stats(100)
-        os.unlink(filename)
-    else:
-        main()
+    run_main(main)
 
 # vim:ts=4:sw=4:showmatch:expandtab

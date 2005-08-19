@@ -1222,4 +1222,26 @@ def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
     pkg.close()
     return pkg
 
+def run_main(main):
+    dohotshot = 0
+    if len(sys.argv) >= 2 and sys.argv[1] == "--hotshot":
+        dohotshot = 1
+        sys.argv.pop(1)
+    if dohotshot:
+        import hotshot, hotshot.stats
+        htfilename = mkstemp_file("/tmp", tmpprefix)[1]
+        prof = hotshot.Profile(htfilename)
+        prof.runcall(main)
+        prof.close()
+        del prof
+        print "Starting profil statistics. This takes some time..."
+        s = hotshot.stats.load(htfilename)
+        s.strip_dirs().sort_stats("time").print_stats(100)
+        s.strip_dirs().sort_stats("cumulative").print_stats(100)
+        os.unlink(htfilename)
+    else:
+        ret = main()
+        if ret != None:
+            sys.exit(ret)
+
 # vim:ts=4:sw=4:showmatch:expandtab

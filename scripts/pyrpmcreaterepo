@@ -438,7 +438,8 @@ def doRepoMetadata(cmds):
 
 
 
-def main(args):
+def main():
+    args = sys.argv[1:]
     cmds, directory = parseArgs(args)
 
     #setup some defaults
@@ -455,26 +456,26 @@ def main(args):
     # start the sanity/stupidity checks
     if not os.path.exists(directory):
         errorprint(_('Directory must exist'))
-        sys.exit(1)
+        return 1
 
     if not os.path.isdir(directory):
         errorprint(_('Directory of packages must be a directory.'))
-        sys.exit(1)
+        return 1
 
     if not os.access(directory, os.W_OK):
         errorprint(_('Directory must be writable.'))
-        sys.exit(1)
+        return 1
 
 
     if not checkAndMakeDir(os.path.join(directory, cmds['tempdir'])):
-        sys.exit(1)
+        return 1
 
     if not checkAndMakeDir(os.path.join(directory, cmds['finaldir'])):
-        sys.exit(1)
+        return 1
 
     if os.path.exists(os.path.join(directory, cmds['olddir'])):
         errorprint(_('Old data directory exists, please remove: %s') % cmds['olddir'])
-        sys.exit(1)
+        return 1
 
     # change to the basedir to work from w/i the path - for relative url paths
     os.chdir(directory)
@@ -508,7 +509,7 @@ def main(args):
         except:
             errorprint(_('Error moving final to old dir'))
             os.chdir(curdir)
-            sys.exit(1)
+            return 1
 
     try:
         os.rename(cmds['tempdir'], cmds['finaldir'])
@@ -517,7 +518,7 @@ def main(args):
         # put the old stuff back
         os.rename(cmds['olddir'], cmds['finaldir'])
         os.chdir(curdir)
-        sys.exit(1)
+        return 1
 
     for key in ['primaryfile', 'filelistsfile', 'otherfile', 'repomdfile', 'groupfile']:
         if cmds[key]:
@@ -532,7 +533,7 @@ def main(args):
                 errorprint(_('Could not remove old metadata file: %s') % oldfile)
                 errorprint(_('Error was %s') % e)
                 os.chdir(curdir)
-                sys.exit(1)
+                return 1
 
     try:
         os.rmdir(cmds['olddir'])
@@ -547,15 +548,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        if sys.argv[1] == 'profile':
-            import hotshot
-            p = hotshot.Profile(os.path.expanduser("~/createrepo.prof"))
-            p.run('main(sys.argv[2:])')
-            p.close()
-        else:
-            main(sys.argv[1:])
-    else:
-        main(sys.argv[1:])
+    run_main(main)
 
 # vim:ts=4:sw=4:showmatch:expandtab

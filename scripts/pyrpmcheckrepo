@@ -80,12 +80,12 @@ def main():
     args = parseYumOptions(sys.argv[1:], yum)
     if args == None:
         usage()
-        sys.exit(1)
+        return 1
 
     if args[0] != "install":
         print "No install command found."
         usage()
-        sys.exit(1)
+        return 1
 
     for pos in xrange(len(args)):
         if args[pos] == "update":
@@ -93,7 +93,7 @@ def main():
     else:
         print "No update command found."
         usage()
-        sys.exit(1)
+        return 1
 
     instargs = args[1:pos]
     upargs = args[pos+1:]
@@ -132,30 +132,13 @@ def main():
             llist.append(nevra)
 
     if len(llist) == 0:
-        sys.exit(0)
+        return 0
     llist.sort()
     print "Leftover/repoless packages:"
     for nevra in llist:
         print "\t%s" % nevra
 
 if __name__ == '__main__':
-    dohotshot = 0
-    if dohotshot:
-        import tempfile, hotshot, hotshot.stats
-        filename = tempfile.mktemp()
-        prof = hotshot.Profile(filename)
-        try:
-            prof.runcall(main)
-        except SystemExit:
-            pass
-        print "Starting profil statistics. This takes some time..."
-        prof.close()
-        del prof
-        s = hotshot.stats.load(filename)
-        s.strip_dirs().sort_stats('time').print_stats(100)
-        s.strip_dirs().sort_stats('cumulative').print_stats(100)
-        os.unlink(filename)
-    else:
-        main()
+    run_main(main)
 
 # vim:ts=4:sw=4:showmatch:expandtab

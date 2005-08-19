@@ -85,7 +85,7 @@ def main():
 
     if not args:
         usage()
-        sys.exit(1)
+        return 1
 
     lockfile = lockPyrpm()
     if lockfile == None:
@@ -104,24 +104,6 @@ def main():
     return 1
 
 if __name__ == '__main__':
-    dohotshot = 0
-    if dohotshot:
-        import tempfile, hotshot, hotshot.stats
-        filename = tempfile.mktemp()
-        prof = hotshot.Profile(filename)
-        try:
-            prof.runcall(main)
-        except SystemExit:
-            pass
-        print "Starting profil statistics. This takes some time..."
-        prof.close()
-        del prof
-        s = hotshot.stats.load(filename)
-        s.strip_dirs().sort_stats('time').print_stats(100)
-        s.strip_dirs().sort_stats('cumulative').print_stats(100)
-        os.unlink(filename)
-    else:
-        if not main():
-            sys.exit(1)
+    run_main(main)
 
 # vim:ts=4:sw=4:showmatch:expandtab

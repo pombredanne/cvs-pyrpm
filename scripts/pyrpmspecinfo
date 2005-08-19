@@ -92,7 +92,6 @@ if __name__ == '__main__':
         Usage()
         sys.exit(1)
 
-
     for filename in args:
         spec = RpmSpecFile(filename)
         if print_name:
@@ -103,7 +102,5 @@ if __name__ == '__main__':
             print string.join(spec.getSections(), "\n")
         if section:
             sys.stdout.write(spec.getSection(section))
-
-    sys.exit(0)
 
 # vim:ts=4:sw=4:showmatch:expandtab
