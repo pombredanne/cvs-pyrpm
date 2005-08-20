@@ -2500,14 +2500,14 @@ def readRpmdb(dbpath, verbose):
             continue
         # Try to just copy the immutable region to verify the sha1.
         useimmutable = 0
-        if pkg[region] != None:
+        if pkg["immutable"] != None:
             (tag, ttype, offset, count) = unpack("!4I", pkg.hdrdata[3][0:16])
-            if tag == rpmtag[region][0] and offset + 16 == pkg.hdrdata[1] \
-                and ttype == RPM_BIN and count == 16:
+            if tag == rpmtag["immutable"][0] and ttype == RPM_BIN \
+                and count == 16:
                 storeSize = offset + 16
-                (tag, ttype, offset, count) = unpack("!4I",
+                (tag, ttype, offset, count) = unpack("!2IiI",
                     pkg.hdrdata[4][offset:storeSize])
-                if tag == rpmtag[region][0] and (-offset % 16 == 0) \
+                if tag == rpmtag["immutable"][0] and (-offset % 16 == 0) \
                     and ttype == RPM_BIN and count == 16:
                     indexNo = -offset / 16
                     fmt = pkg.hdrdata[3][:indexNo*16]
