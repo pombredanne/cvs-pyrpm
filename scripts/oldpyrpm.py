@@ -1770,13 +1770,8 @@ class ReadRpm:
             print "wrong fmt2 data"
 
     def __doVerify(self):
-        region = "immutable"
-        if self[region] == None and self["immutable1"] != None:
-            region = "immutable1"
-        #if self.verbose > 2 and self[region] == None:
-        #   self.printErr("no region tag set for normal header")
         self.__verifyWriteHeader(self.hdr.hash, rpmtag,
-            region, self.hdrdata, 1, self.rpmgroup)
+            "immutable", self.hdrdata, 1, self.rpmgroup)
         if self.strict:
             self.__verifyWriteHeader(self.sig.hash, rpmsigtag,
                 "header_signatures", self.sigdata, 0, None)
@@ -1798,13 +1793,6 @@ class ReadRpm:
         for i in rpmtagrequired:
             if not self.hdr.has_key(i):
                 self.printErr("hdr is missing: %s" % i)
-        if self[region] != None:
-            (tag, ttype, offset, count) = unpack("!4I", self.hdrdata[3][0:16])
-            if tag == rpmtag[region][0]:
-                if offset + 16 != self.hdrdata[1]:
-                    self.printErr("wrong length of tag header detected")
-            else:
-                self.printErr("region tag not at the beginning of the header")
         size_in_sig = self.sig.getOne("size_in_sig")
         if size_in_sig != None:
             rpmsize = os.stat(self.filename)[6]
@@ -1971,24 +1959,25 @@ class ReadRpm:
                     self.printErr("non-regular file has filemd5sum")
         # Verify region headers have sane data. We do not support more than
         # one region header at this point.
-        for (data, regiontag, indexNo) in ((self["immutable"],
-            rpmtag["immutable"][0], self.hdrdata[0]),
-            (self["immutable1"], rpmdbtag["immutable1"][0], self.hdrdata[0]),
-            (self.sig["header_signatures"], rpmsigtag["header_signatures"][0],
-            self.sigdata[0])):
+        if self["immutable"] != None:
+            (tag, ttype, offset, count) = unpack("!4I", self.hdrdata[3][0:16])
+            if tag != rpmtag["immutable"][0] or ttype != RPM_BIN or count != 16:
+                self.printErr("region tag not at the beginning of the header")
+            elif offset + 16 != self.hdrdata[1]:
+                self.printErr("wrong length of tag header detected")
+        for (data, regiontag) in ((self["immutable"], rpmtag["immutable"][0]),
+            (self.sig["header_signatures"], rpmsigtag["header_signatures"][0])):
             if data == None:
                 continue
             (tag, ttype, offset, count) = unpack("!2IiI", data)
-            if tag != regiontag:
-                self.printErr("region has wrong tag")
-            if ttype != RPM_BIN or count != 16:
-                self.printErr("region has wrong type/count")
+            if tag != regiontag or ttype != RPM_BIN or count != 16:
+                self.printErr("region has wrong tag/type/count")
             if -offset % 16 != 0:
                 self.printErr("region has wrong offset")
-            if regiontag != rpmsigtag["header_signatures"][0] and \
-                -offset / 16 != indexNo:
+            if regiontag == rpmtag["immutable"][0] and \
+                -offset / 16 != self.hdrdata[0]:
                 self.printErr("region tag %s only for partial header: %d, %d" \
-                    % (regiontag, indexNo, -offset / 16))
+                    % (regiontag, self.hdrdata[0], -offset / 16))
 
         if self.nodigest:
             return
