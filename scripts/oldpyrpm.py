@@ -57,6 +57,9 @@
 # - allow a --rebuilddb into a new directory and a diff between two rpmdb
 # - check OpenGPG signatures
 # - allow src.rpm selection based on OpenGPG signature. Prefer GPG signed.
+# - For reading rpmdb we could first try to detect the region tag, then
+#   read all additional added tags into a separate hash. This would really
+#   clean up data handling and how duplicate tags are taken care off.
 # - Bring extractCpio and verifyCpio closer together again.
 # - i386 rpm extraction on ia64? (This is stored like relocated rpms in
 #   duplicated file tags.)
@@ -1767,12 +1770,17 @@ class ReadRpm:
             print "wrong fmt2 data"
 
     def __doVerify(self):
+        region = "immutable"
+        if self[region] == None and self["immutable1"] != None:
+            region = "immutable1"
+        #if self.verbose > 2 and self[region] == None:
+        #   self.printErr("no region tag set for normal header")
         self.__verifyWriteHeader(self.hdr.hash, rpmtag,
-            "immutable", self.hdrdata, 1, self.rpmgroup)
+            region, self.hdrdata, 1, self.rpmgroup)
         if self.strict:
             self.__verifyWriteHeader(self.sig.hash, rpmsigtag,
                 "header_signatures", self.sigdata, 0, None)
-        # disable the utf-8 test per default:
+        # disable the utf-8 test per default, should check against self.verbose:
         if self.strict and None:
             for i in ["summary", "description", "changelogtext"]:
                 if self[i] == None:
@@ -1790,9 +1798,6 @@ class ReadRpm:
         for i in rpmtagrequired:
             if not self.hdr.has_key(i):
                 self.printErr("hdr is missing: %s" % i)
-        region = "immutable"
-        if self[region] == None:
-            region = "immutable1"
         if self[region] != None:
             (tag, ttype, offset, count) = unpack("!4I", self.hdrdata[3][0:16])
             if tag == rpmtag[region][0]:
@@ -2481,34 +2486,54 @@ def readRpmdb(dbpath, verbose):
         if len(data) % 4 != 0:
             print "rpmdb header is not aligned to 4"
         if data != pkgdata[tid]:
-            print pkg["name"], "wrong pkgdata", len(data), len(pkgdata[tid]), \
-                pkg["rpmversion"]
-            if fmt != pkg.hdrdata[3]:
-                print "wrong fmt"
-            if fmt2 != pkg.hdrdata[4]:
-                print "wrong fmt2", len(fmt2), len(pkg.hdrdata[4])
-            for i in xrange(0, indexNo * 16, 16):
-                (tag1, ttype1, offset1, count1) = unpack("!4I", fmt[i:i + 16])
-                (tag2, ttype2, offset2, count2) = unpack("!4I",
-                    pkg.hdrdata[3][i:i + 16])
-                if tag1 != tag2 or ttype1 != ttype2 or count1 != count2:
-                    print "tag:", tag1, tag2, i
-                if offset1 != offset2:
-                    print "offset:", offset1, offset2, "tag=", tag1
+            print "writeHeader() would not write the same rpmdb data for", \
+                pkg["name"], "(rpm-%s)" % pkg["rpmversion"]
+            if verbose > 2:
+                if fmt != pkg.hdrdata[3]:
+                    print "wrong fmt"
+                if fmt2 != pkg.hdrdata[4]:
+                    print "wrong fmt2", len(fmt2), len(pkg.hdrdata[4])
+                for i in xrange(0, indexNo * 16, 16):
+                    (tag1, ttype1, offset1, count1) = unpack("!4I",
+                        fmt[i:i + 16])
+                    (tag2, ttype2, offset2, count2) = unpack("!4I",
+                        pkg.hdrdata[3][i:i + 16])
+                    if tag1 != tag2 or ttype1 != ttype2 or count1 != count2:
+                        print "tag:", tag1, tag2, i
+                    if offset1 != offset2:
+                        print "offset:", offset1, offset2, "tag=", tag1
         # Verify the sha1 crc of the normal header data. (Signature
         # data does not have an extra crc.)
-        pkg.sig = HdrIndex()
-        if pkg["archivesize"] != None:
-            pkg.sig["payloadsize"] = pkg["archivesize"]
-            if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
-                del pkg["archivesize"]
         sha1header = pkg["install_sha1header"]
         if sha1header == None:
             print "warning: package", pkg.getFilename(), \
                 "does not have a sha1 header"
             continue
-        (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
-            region, install_keys, 0, pkg.rpmgroup)
+        # Try to just copy the immutable region to verify the sha1.
+        useimmutable = 0
+        if pkg[region] != None:
+            (tag, ttype, offset, count) = unpack("!4I", pkg.hdrdata[3][0:16])
+            if tag == rpmtag[region][0] and offset + 16 == pkg.hdrdata[1] \
+                and ttype == RPM_BIN and count == 16:
+                storeSize = offset + 16
+                (tag, ttype, offset, count) = unpack("!4I",
+                    pkg.hdrdata[4][offset:storeSize])
+                if tag == rpmtag[region][0] and (-offset % 16 == 0) \
+                    and ttype == RPM_BIN and count == 16:
+                    indexNo = -offset / 16
+                    fmt = pkg.hdrdata[3][:indexNo*16]
+                    fmt2 = pkg.hdrdata[4][:storeSize]
+                    useimmutable = 1
+        # If we cannot use the immutable region, try to write our own
+        # header again.
+        if useimmutable == 0:
+            pkg.sig = HdrIndex()
+            if pkg["archivesize"] != None:
+                pkg.sig["payloadsize"] = pkg["archivesize"]
+                if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
+                    del pkg["archivesize"]
+            (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash,
+                rpmdbtag, region, install_keys, 0, pkg.rpmgroup)
         lead = pack("!8s2I", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
             indexNo, storeSize)
         ctx = sha.new()
