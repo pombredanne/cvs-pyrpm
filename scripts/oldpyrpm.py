@@ -19,7 +19,22 @@
 
 #
 # Read .rpm packages from python. Implemented completely in python without
-# using the rpmlib C library.
+# using the rpmlib C library. Use "oldpyrpm.py -h" to get a list of possible
+# options.
+#
+# Tested with all rpm packages from RHL5.2, 6.x, 7.x, 8.0, 9,
+# Fedora Core 1/2/3/4/development, Fedora Extras, livna, freshrpms and
+# other distributions. No output should be generated if rpm packages
+# are verified via this python implementation, so all possible quirks in
+# the binary packages are taken care of and can be read in this code.
+# Known problem areas:
+# - Signing a second time can corrupt packages with older rpm releases.
+# - Packages built with a broken kernel that does not mmap() files with
+#   size 0 just have that filemd5sum set to "" and "rpm -V" also fails.
+# - Verify mode warns about a few packages from RHL5.x (rpm-2.x).
+# - pyrpm warns for some packages about a difference in "filemtimes" between
+#   header and cpio data. As we generally ignore cpio data, this could get
+#   enabled only for the "strict" case, but also only happens very seldom.
 #
 # Other usages:
 # - Check your rpmdb for consistency (works as non-root readonly):
@@ -39,7 +54,6 @@
 
 #
 # TODO:
-# - check install_badsha1_2 if available
 # - allow a --rebuilddb into a new directory and a diff between two rpmdb
 # - check OpenGPG signatures
 # - allow src.rpm selection based on OpenGPG signature. Prefer GPG signed.
@@ -51,11 +65,13 @@
 # - use setPerms() in doLnOrCopy()
 # - Change "strict" and "verify" into "debug" and have one integer specify
 #   debug and output levels. (Maybe also "nodigest" can move in?)
-# - limit: verify mode warns about a few rpms from RHL5.x or earlier (rpm-2.x)
 # - Whats the difference between "cookie" and "buildhost" + "buildtime".
 # - evrSplit(): 'epoch = ""' would make a distinction between missing
 #   and "0" epoch (push this change into createrepo)
 # things to be noted, probably not getting fixed:
+# - "badsha1_2" has the size added in reversed order to compute the final
+#   sha1 sum. A patch to python shamodule.c could allow to verify also these
+#   old broken entries.
 # - PyGZIP is way faster than existing gzip routines, but still 2 times
 #   slower than a C version. Can further improvements be made?
 #   The C part should offer a class which supports read().
@@ -684,7 +700,7 @@ rpmsigtag = {
     # legacy entries in older rpm packages:
     "pgp": [1002, RPM_BIN, None, 1],
     "badsha1_1": [264, RPM_STRING, None, 1],
-    "badsha1_2": [265, RPM_STRING, None, 1]
+    "badsha1_2": [265, RPM_STRING, None, 1] # size added in reversed order
 }
 # Add a reverse mapping for all tags plus the name again.
 for v in rpmsigtag.keys():
@@ -1996,7 +2012,9 @@ class ReadRpm:
             # make sure we re-open this file if we read the payload
             self.closeFd()
             if ctx.digest() != md5sum:
-                self.printErr("wrong md5: %s / %s" % (md5sum, ctx.hexdigest()))
+                from binascii import b2a_hex
+                self.printErr("wrong md5: %s / %s" % (b2a_hex(md5sum),
+                    ctx.hexdigest()))
 
 
 def verifyRpm(filename, verify, strict, payload, nodigest, hdrtags, keepdata):
@@ -2485,8 +2503,7 @@ def readRpmdb(dbpath, verbose):
             if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
                 del pkg["archivesize"]
         sha1header = pkg["install_sha1header"]
-        install_badsha1_2 = pkg["install_badsha1_2"]
-        if sha1header == None: # and install_badsha1_2 == None:
+        if sha1header == None:
             print "warning: package", pkg.getFilename(), \
                 "does not have a sha1 header"
             continue
@@ -2494,11 +2511,6 @@ def readRpmdb(dbpath, verbose):
             region, install_keys, 0, pkg.rpmgroup)
         lead = pack("!8s2I", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
             indexNo, storeSize)
-        if sha1header == None:
-            sha1header = install_badsha1_2
-            #lead = convert(lead)
-            #fmt = convert(fmt)
-            #fmt2 = convert(fmt2)
         ctx = sha.new()
         ctx.update(lead)
         ctx.update(fmt)
