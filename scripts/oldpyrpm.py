@@ -173,13 +173,18 @@ def S_ISBLK(mode):
 def S_ISSOCK(mode):
     return (mode & 0170000) == 0140000
 
+# Use this filename prefix for all temp files to be able
+# to search them and delete them again if they are left
+# over from killed processes.
+tmpprefix = "..pyrpm"
+
 openflags = os.O_RDWR | os.O_CREAT | os.O_EXCL
 if hasattr(os, "O_NOINHERIT"):
     openflags |= os.O_NOINHERIT
 if hasattr(os, "O_NOFOLLOW"):
     openflags |= os.O_NOFOLLOW
 
-def mkstemp_file(dirname, pre):
+def mkstemp_file(dirname, pre=tmpprefix):
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
@@ -212,7 +217,7 @@ def mkstemp_link(dirname, pre, linkfile):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-def mkstemp_dir(dirname, pre):
+def mkstemp_dir(dirname, pre=tmpprefix):
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
@@ -268,17 +273,13 @@ def mkstemp_mknod(dirname, pre, mode, rdev):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-# Use this filename prefix for all temp files to be able
-# to search them and delete them again if they are left
-# over from killed processes.
-tmpprefix = "..pyrpm"
-
 def doLnOrCopy(src, dst):
+    """Hardlink or copy a file "src" to a new file "dst"."""
     dstdir = os.path.dirname(dst)
     tmp = mkstemp_link(dstdir, tmpprefix, src)
     if tmp == None:
         # no hardlink possible, copy the data into a new file
-        (fd, tmp) = mkstemp_file(dstdir, tmpprefix)
+        (fd, tmp) = mkstemp_file(dstdir)
         fsrc = open(src, "rb")
         while 1:
             buf = fsrc.read(16384)
@@ -316,7 +317,6 @@ def getMD5(fpath):
 # "import gzip" doesn't give good data handling (old code
 # can still easily be enabled to compare performance):
 
-(FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT) = (1, 2, 4, 8, 16)
 class PyGZIP:
     def __init__(self, fd, datasize, filename):
         self.fd = fd
@@ -326,27 +326,23 @@ class PyGZIP:
         self.enddata = "" # remember last 8 bytes for crc/length check
         self.pos = 0
         self.data = ""
-        if self.fd.read(3) != "\037\213\010":
-            print "Not a gzipped file"
-            sys.exit(0)
+        data = doRead(self.fd, 10)
+        if data[:3] != "\037\213\010":
+            raise ValueError, "Not a gzipped file: %s" % self.filename
         # flag (1 byte), modification time (4 bytes), extra flags (1), OS (1)
-        data = doRead(self.fd, 7)
-        flag = ord(data[0])
-        if flag & FEXTRA:
-            # Read & discard the extra field, if present
+        flag = ord(data[3])
+        if flag & 4: # extra field
             xlen = ord(self.fd.read(1))
             xlen += 256 * ord(self.fd.read(1))
             doRead(self.fd, xlen)
-        if flag & FNAME:
-            # Read and discard a nul-terminated string containing the filename
+        if flag & 8: # filename
             while self.fd.read(1) != "\000":
                 pass
-        if flag & FCOMMENT:
-            # Read and discard a nul-terminated string containing a comment
+        if flag & 16: # comment string
             while self.fd.read(1) != "\000":
                 pass
-        if flag & FHCRC:
-            doRead(self.fd, 2)      # Read & discard the 16-bit header CRC
+        if flag & 2:
+            doRead(self.fd, 2) # 16-bit header CRC
         self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
         self.crcval = zlib.crc32("")
 
@@ -426,10 +422,10 @@ RPMSENSE_CONFLICTS  = (1 << 5)          # only used internally by builds
 RPMSENSE_PREREQ     = (1 << 6)          # legacy
 RPMSENSE_OBSOLETES  = (1 << 7)          # only used internally by builds
 RPMSENSE_INTERP     = (1 << 8)          # Interpreter used by scriptlet.
-RPMSENSE_SCRIPT_PRE = ((1 << 9) | RPMSENSE_PREREQ)      # %pre dependency
-RPMSENSE_SCRIPT_POST = ((1 << 10)|RPMSENSE_PREREQ)      # %post dependency
-RPMSENSE_SCRIPT_PREUN = ((1 << 11)|RPMSENSE_PREREQ)     # %preun dependency
-RPMSENSE_SCRIPT_POSTUN = ((1 << 12)|RPMSENSE_PREREQ)    # %postun dependency
+RPMSENSE_SCRIPT_PRE = ((1 << 9) | RPMSENSE_PREREQ)   # %pre dependency
+RPMSENSE_SCRIPT_POST = ((1 << 10)|RPMSENSE_PREREQ)   # %post dependency
+RPMSENSE_SCRIPT_PREUN = ((1 << 11)|RPMSENSE_PREREQ)  # %preun dependency
+RPMSENSE_SCRIPT_POSTUN = ((1 << 12)|RPMSENSE_PREREQ) # %postun dependency
 RPMSENSE_SCRIPT_VERIFY = (1 << 13)      # %verify dependency
 RPMSENSE_FIND_REQUIRES = (1 << 14)      # find-requires generated dependency
 RPMSENSE_FIND_PROVIDES = (1 << 15)      # find-provides generated dependency
@@ -807,7 +803,7 @@ def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
         store.append(data)
         index = pack("!4I", tagnum, ttype, offset, count)
         offset += len(data)
-        if tagname == region:
+        if tagname == region: # data for region tag is first
             indexdata.insert(0, index)
         else:
             indexdata.append(index)
@@ -1079,12 +1075,12 @@ class ReadRpm:
     def __init__(self, filename, verify=None, fd=None, strict=None,
                  nodigest=None):
         self.filename = filename
-        self.issrc = 0
         self.verify = verify # enable/disable more data checking
         self.fd = fd # filedescriptor
         self.strict = strict
         self.nodigest = nodigest # check md5sum/sha1 digests
-        self.buildroot = None # do we have a chroot-like start?
+        self.issrc = 0
+        self.buildroot = "" # do we have a chroot-like start?
         self.owner = None # are uid/gid set?
         self.uid = None
         self.gid = None
@@ -1144,10 +1140,8 @@ class ReadRpm:
             unpack("!4s2B2H66s2H16x", leaddata)
         failed = None
         if major not in (3, 4) or minor != 0 or \
-            sigtype != 5 or rpmtype not in (0, 1):
-            failed = 1
-        # 21 == darwin
-        if osnum not in (1, 21, 255, 256):
+            rpmtype not in (0, 1) or sigtype != 5 or \
+            osnum not in (1, 21, 255, 256):
             failed = 1
         name = name.rstrip("\x00")
         if self.strict:
@@ -1156,78 +1150,6 @@ class ReadRpm:
         if failed:
             print major, minor, rpmtype, arch, name, osnum, sigtype
             self.printErr("wrong data in rpm lead")
-
-    def __verifyTag(self, index, fmt, hdrtags):
-        (tag, ttype, offset, count) = index
-        if not hdrtags.has_key(tag):
-            self.printErr("hdrtags has no tag %d" % tag)
-        else:
-            t = hdrtags[tag]
-            if t[1] != None and t[1] != ttype:
-                if t[1] == RPM_ARGSTRING and \
-                    (ttype == RPM_STRING or ttype == RPM_STRING_ARRAY):
-                    pass    # special exception case
-                elif t[1] == RPM_GROUP and \
-                    (ttype == RPM_STRING or ttype == RPM_I18NSTRING):
-                    pass    # exception for RPMTAG_GROUP
-                else:
-                    self.printErr("tag %d has wrong type %d" % (tag, ttype))
-            if t[2] != None and t[2] != count:
-                self.printErr("tag %d has wrong count %d" % (tag, count))
-            if (t[3] & 1) and self.strict:
-                self.printErr("tag %d is old" % tag)
-            if self.issrc:
-                if (t[3] & 4):
-                    self.printErr("tag %d should be for binary rpms" % tag)
-            else:
-                if (t[3] & 2):
-                    self.printErr("tag %d should be for src rpms" % tag)
-        if count == 0:
-            self.raiseErr("zero length tag")
-        if ttype < 1 or ttype > 9:
-            self.raiseErr("unknown rpmtype %d" % ttype)
-        if ttype == RPM_INT32:
-            count = count * 4
-        elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
-            size = 0
-            for _ in xrange(count):
-                end = fmt.index("\x00", offset) + 1
-                size += end - offset
-                offset = end
-            count = size
-        elif ttype == RPM_STRING:
-            if count != 1:
-                self.raiseErr("tag string count wrong")
-            count = fmt.index("\x00", offset) - offset + 1
-        elif ttype == RPM_CHAR or ttype == RPM_INT8:
-            pass
-        elif ttype == RPM_INT16:
-            count = count * 2
-        elif ttype == RPM_INT64:
-            count = count * 8
-        elif ttype == RPM_BIN:
-            pass
-        else:
-            self.raiseErr("unknown tag header")
-        return count
-
-    def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, hdrtags):
-        checkSize = 0
-        for i in xrange(0, indexNo * 16, 16):
-            index = unpack("!4I", fmt[i:i + 16])
-            ttype = index[1]
-            # alignment for some types of data
-            if ttype == RPM_INT16:
-                checkSize += (2 - (checkSize % 2)) % 2
-            elif ttype == RPM_INT32:
-                checkSize += (4 - (checkSize % 4)) % 4
-            elif ttype == RPM_INT64:
-                checkSize += (8 - (checkSize % 8)) % 8
-            checkSize += self.__verifyTag(index, fmt2, hdrtags)
-        if checkSize != storeSize:
-            # Seems this is triggered for a few (legacy) RHL5.x rpm packages.
-            self.printErr("storeSize/checkSize is %d/%d" % (storeSize,
-                checkSize))
 
     def __readIndex(self, pad, hdrtags, rpmdb=None):
         if rpmdb:
@@ -1242,10 +1164,8 @@ class ReadRpm:
         padfmt = ""
         if pad != 1:
             padfmt = doRead(self.fd, (pad - (storeSize % pad)) % pad)
-        if self.verify:
-            self.__verifyIndex(fmt, fmt2, indexNo, storeSize, hdrtags)
-        return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + \
-            len(fmt2) + len(padfmt))
+        return (indexNo, storeSize, data, fmt, fmt2,
+            16 + len(fmt) + len(fmt2) + len(padfmt))
 
     def __parseIndex(self, indexNo, fmt, fmt2, dorpmtag):
         hdr = HdrIndex()
@@ -1284,6 +1204,18 @@ class ReadRpm:
             else:
                 self.raiseErr("unknown tag header")
                 data = None
+            if self.verify:
+                t = dorpmtag[tag]
+                if t[2] != None and t[2] != count:
+                    self.printErr("tag %d has wrong count %d" % (tag, count))
+                if self.strict and (t[3] & 1):
+                    self.printErr("tag %d is old" % tag)
+                if self.issrc:
+                    if (t[3] & 4):
+                        self.printErr("tag %d should be for binary rpms" % tag)
+                else:
+                    if (t[3] & 2):
+                        self.printErr("tag %d should be for src rpms" % tag)
             if nametag == "group":
                 self.rpmgroup = ttype
             # Ignore duplicate entries as long as they are identical.
@@ -1424,7 +1356,7 @@ class ReadRpm:
                 if ctx.hexdigest() != self["filemd5s"][i]:
                     if self.strict or self["filesizes"][i] != 0:
                         self.printErr("wrong filemd5s for %s: %s, %s" \
-                            % (filename, ctx.hexdigest(), \
+                            % (filename, ctx.hexdigest(),
                             self["filemd5s"][i]))
 
     def extractCpio(self, filename, datasize, read_data, filenamehash,
@@ -1445,14 +1377,13 @@ class ReadRpm:
             gid = self.gid.ugid[group]
         if self.relocated:
             filename = self.__relocatedFile(filename)
-        if self.buildroot:
-            filename = "%s%s" % (self.buildroot, filename)
+        filename = "%s%s" % (self.buildroot, filename)
         dirname = os.path.dirname(filename)
         makeDirs(dirname)
         if S_ISREG(mode):
             di = devinode.get((dev, inode))
             if di == None or data:
-                (fd, tmpfilename) = mkstemp_file(dirname, tmpprefix)
+                (fd, tmpfilename) = mkstemp_file(dirname)
                 os.write(fd, data)
                 os.close(fd)
                 setPerms(tmpfilename, uid, gid, mode, mtime)
@@ -1463,13 +1394,12 @@ class ReadRpm:
                         fn2 = filenames[j]
                         if self.relocated:
                             fn2 = self.__relocatedFile(fn2)
-                        if self.buildroot:
-                            fn2 = "%s%s" % (self.buildroot, fn2)
+                        fn2 = "%s%s" % (self.buildroot, fn2)
                         dirname = os.path.dirname(fn2)
                         makeDirs(dirname)
                         tmpfilename = mkstemp_link(dirname, tmpprefix, filename)
                         if tmpfilename == None:
-                            (fd, tmpfilename) = mkstemp_file(dirname, tmpprefix)
+                            (fd, tmpfilename) = mkstemp_file(dirname)
                             os.write(fd, data)
                             os.close(fd)
                             setPerms(tmpfilename, uid, gid, mode, mtime)
@@ -1479,8 +1409,8 @@ class ReadRpm:
             makeDirs(filename)
             setPerms(filename, uid, gid, mode, None)
         elif S_ISLNK(mode):
-            #if os.path.islink(filename) \
-            #    and os.readlink(filename) == linkto:
+            #if os.path.islink(filename) and \
+            #    os.readlink(filename) == linkto:
             #    return
             tmpfile = mkstemp_symlink(dirname, tmpprefix, linkto)
             setPerms(tmpfile, uid, gid, None, None)
@@ -1794,16 +1724,11 @@ class ReadRpm:
             if not self.hdr.has_key(i):
                 self.printErr("hdr is missing: %s" % i)
         size_in_sig = self.sig.getOne("size_in_sig")
-        if size_in_sig != None:
-            rpmsize = os.stat(self.filename)[6]
+        if size_in_sig != None and not isUrl(filename):
+            rpmsize = os.stat(self.filename).st_size
             if rpmsize != 96 + self.sigdatasize + size_in_sig:
                 self.printErr("wrong size in rpm package")
         filenames = self.getFilenames()
-        fileflags = self["fileflags"]
-        if fileflags:
-            for flag in fileflags:
-                if flag & RPMFILE_EXCLUDE:
-                    self.printErr("exclude flag set in rpm")
         if self.issrc:
             i = self.getSpecfile(filenames)
             if i == None:
@@ -1843,7 +1768,7 @@ class ReadRpm:
         elif self["os"] not in ["Linux", "linux", "darwin"]:
             self.printErr("bad os: %s" % self["os"])
         if self.strict:
-            if self["packager"] not in (None, \
+            if self["packager"] not in (None,
                 "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>"):
                 self.printErr("unknown packager: %s" % self["packager"])
             if self["vendor"] not in (None, "Red Hat, Inc."):
@@ -1945,6 +1870,8 @@ class ReadRpm:
         fileflags = self["fileflags"]
         if filemodes:
             for x in xrange(len(filemodes)):
+                if fileflags[x] & RPMFILE_EXCLUDE:
+                    self.printErr("exclude flag set in rpm")
                 if fileflags[x] & (RPMFILE_GHOST | RPMFILE_EXCLUDE):
                     continue
                 if S_ISREG(filemodes[x]):
@@ -2104,8 +2031,8 @@ def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
             orpm["release"] + " to " + nrpm["version"] + "-" + \
             nrpm["release"] + ".\n"
 
-    obuildroot = orpm.buildroot = mkstemp_dir("/tmp", tmpprefix) + "/"
-    nbuildroot = nrpm.buildroot = mkstemp_dir("/tmp", tmpprefix) + "/"
+    obuildroot = orpm.buildroot = mkstemp_dir("/tmp") + "/"
+    nbuildroot = nrpm.buildroot = mkstemp_dir("/tmp") + "/"
 
     sed1 = "sed 's#^--- " + obuildroot + "#--- #'"
     sed2 = "sed 's#^+++ " + nbuildroot + "#+++ #'"
@@ -2158,8 +2085,8 @@ def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
         os.unlink(nspec)
 
     # Diff the rest.
-    ret = ret + getoutput("diff -urN " + obuildroot + " " + nbuildroot \
-        + " | " + sed)
+    ret = ret + getoutput("diff -urN " + obuildroot + " " + nbuildroot + \
+        " | " + sed)
     os.system("rm -rf " + obuildroot + " " + nbuildroot)
     return ret
 
@@ -2502,13 +2429,13 @@ def readRpmdb(dbpath, verbose):
         useimmutable = 0
         if pkg["immutable"] != None:
             (tag, ttype, offset, count) = unpack("!4I", pkg.hdrdata[3][0:16])
-            if tag == rpmtag["immutable"][0] and ttype == RPM_BIN \
-                and count == 16:
+            if tag == rpmtag["immutable"][0] and ttype == RPM_BIN and \
+                count == 16:
                 storeSize = offset + 16
                 (tag, ttype, offset, count) = unpack("!2IiI",
                     pkg.hdrdata[4][offset:storeSize])
-                if tag == rpmtag["immutable"][0] and (-offset % 16 == 0) \
-                    and ttype == RPM_BIN and count == 16:
+                if tag == rpmtag["immutable"][0] and (-offset % 16 == 0) and \
+                    ttype == RPM_BIN and count == 16:
                     indexNo = -offset / 16
                     fmt = pkg.hdrdata[3][:indexNo*16]
                     fmt2 = pkg.hdrdata[4][:storeSize]
@@ -2911,7 +2838,7 @@ if __name__ == "__main__":
         sys.argv.pop(1)
     if dohotshot:
         import hotshot, hotshot.stats
-        htfilename = mkstemp_file("/tmp", tmpprefix)[1]
+        htfilename = mkstemp_file("/tmp")[1]
         prof = hotshot.Profile(htfilename)
         prof.runcall(main)
         prof.close()
