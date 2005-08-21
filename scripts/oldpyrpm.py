@@ -1151,7 +1151,7 @@ class ReadRpm:
             print major, minor, rpmtype, arch, name, osnum, sigtype
             self.printErr("wrong data in rpm lead")
 
-    def __readIndex(self, pad, hdrtags, rpmdb=None):
+    def __readIndex(self, pad, rpmdb=None):
         if rpmdb:
             data = "\x8e\xad\xe8\x01\x00\x00\x00\x00" + doRead(self.fd, 8)
         else:
@@ -1246,9 +1246,9 @@ class ReadRpm:
             self.issrc = (leaddata[7] == "\x01")
             if self.verify:
                 self.__verifyLead(leaddata)
-            sigdata = self.__readIndex(8, sigtags)
+            sigdata = self.__readIndex(8)
             self.sigdatasize = sigdata[5]
-        hdrdata = self.__readIndex(1, hdrtags, rpmdb)
+        hdrdata = self.__readIndex(1, rpmdb)
         self.hdrdatasize = hdrdata[5]
         if keepdata:
             if rpmdb == None:
@@ -1724,7 +1724,7 @@ class ReadRpm:
             if not self.hdr.has_key(i):
                 self.printErr("hdr is missing: %s" % i)
         size_in_sig = self.sig.getOne("size_in_sig")
-        if size_in_sig != None and not isUrl(filename):
+        if size_in_sig != None and not isUrl(self.filename):
             rpmsize = os.stat(self.filename).st_size
             if rpmsize != 96 + self.sigdatasize + size_in_sig:
                 self.printErr("wrong size in rpm package")
