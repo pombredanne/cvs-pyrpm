@@ -32,9 +32,6 @@
 # - Packages built with a broken kernel that does not mmap() files with
 #   size 0 just have that filemd5sum set to "" and "rpm -V" also fails.
 # - Verify mode warns about a few packages from RHL5.x (rpm-2.x).
-# - pyrpm warns for some packages about a difference in "filemtimes" between
-#   header and cpio data. As we generally ignore cpio data, this could get
-#   enabled only for the "strict" case, but also only happens very seldom.
 #
 # Other usages:
 # - Check your rpmdb for consistency (works as non-root readonly):
@@ -318,11 +315,14 @@ def getMD5(fpath):
 # can still easily be enabled to compare performance):
 
 class PyGZIP:
-    def __init__(self, fd, datasize, filename):
-        self.fd = fd
+    def __init__(self, filename, fd, datasize, readsize):
         self.filename = filename
+        self.fd = fd
         self.length = 0 # length of all decompressed data
         self.length2 = datasize
+        self.readsize = readsize
+        if self.readsize != None:
+            self.readsize -= 10
         self.enddata = "" # remember last 8 bytes for crc/length check
         self.pos = 0
         self.data = ""
@@ -335,14 +335,24 @@ class PyGZIP:
             xlen = ord(self.fd.read(1))
             xlen += 256 * ord(self.fd.read(1))
             doRead(self.fd, xlen)
+            if self.readsize != None:
+                self.readsize -= 2 + xlen
         if flag & 8: # filename
             while self.fd.read(1) != "\000":
-                pass
+                if self.readsize != None:
+                    self.readsize -= 1
+            if self.readsize != None:
+                self.readsize -= 1
         if flag & 16: # comment string
             while self.fd.read(1) != "\000":
-                pass
+                if self.readsize != None:
+                    self.readsize -= 1
+            if self.readsize != None:
+                self.readsize -= 1
         if flag & 2:
             doRead(self.fd, 2) # 16-bit header CRC
+            if self.readsize != None:
+                self.readsize -= 2
         self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
         self.crcval = zlib.crc32("")
 
@@ -360,11 +370,16 @@ class PyGZIP:
                 decompdata.append(self.data[self.pos:end])
                 self.pos = end
                 break
-            data = self.fd.read(32768)
+            readsize = 32768
+            if self.readsize != None and self.readsize < 32768:
+                readsize = self.readsize
+            data = self.fd.read(readsize)
+            if self.readsize != None:
+                self.readsize -= len(data)
             if len(data) >= 8:
                 self.enddata = data[-8:]
             else:
-                self.enddata = self.enddata[len(data)-8:] + data
+                self.enddata = self.enddata[len(data) - 8:] + data
             x = obj.decompress(data)
             self.crcval = zlib.crc32(x, self.crcval)
             self.length += len(x)
@@ -378,12 +393,30 @@ class PyGZIP:
                 break
         return "".join(decompdata)
 
+    def printErr(self, err):
+        print "%s: %s" % (self.filename, err)
+
     def __del__(self):
-        data = self.fd.read(12)
-        if len(data) >= 8:
-            self.enddata = data[-8:]
+        if self.data:
+            self.printErr("PyGZIP: bytes left to read: %d" % \
+                len(self.data) - self.pos)
+        if self.readsize != None:
+            if self.readsize:
+                self.printErr("PyGZIP: bytes left to read for zlib: %d" % \
+                    self.readsize)
+            data = self.fd.read(8 + self.readsize)
+            if len(data) != 8 + self.readsize:
+                self.printErr("have read bytes: %d" % len(data))
+            if len(data) >= 8:
+                self.enddata = data[-8:]
+            else:
+                self.enddata = self.enddata[len(data) - 8:] + data
         else:
-            self.enddata = self.enddata[len(data)-8:] + data
+            data = self.fd.read()
+            if len(data) >= 8:
+                self.enddata = data[-8:]
+            else:
+                self.enddata = self.enddata[len(data) - 8:] + data
         (crc32, isize) = unpack("<iI", self.enddata)
         if crc32 != self.crcval:
             print self.filename, "CRC check failed:", crc32, self.crcval
@@ -999,13 +1032,14 @@ class Gid(UGid):
 class CPIO:
     """Read a cpio archive."""
 
-    def __init__(self, fd, issrc, size=None):
+    def __init__(self, filename, fd, issrc, size=None):
+        self.filename = filename
         self.fd = fd
         self.issrc = issrc
         self.size = size
 
     def printErr(self, err):
-        print "%s: %s" % ("cpio-header", err)
+        print "%s: %s" % (self.filename, err)
 
     def __readDataPad(self, size, pad=0):
         data = doRead(self.fd, size)
@@ -1024,12 +1058,15 @@ class CPIO:
                 self.size -= 110
             # CPIO ASCII hex, expanded device numbers (070702 with CRC)
             if data[0:6] not in ("070701", "070702"):
-                raise IOError, "Bad magic reading CPIO headers %s" % data[0:6]
+                self.printErr("%s: Bad magic reading CPIO headers %s" \
+                    % (self.filename, data[0:6]))
+                return None
             namesize = int(data[94:102], 16)
             filename = self.__readDataPad(namesize, 110).rstrip("\x00")
             if filename == "TRAILER!!!":
                 if self.size != None and self.size != 0:
                     self.printErr("failed cpiosize check")
+                    return None
                 return 1
             if filename[:2] == "./":
                 filename = filename[1:]
@@ -1205,6 +1242,7 @@ class ReadRpm:
                 self.raiseErr("unknown tag header")
                 data = None
             if self.verify:
+                # This could move into doVerify() again.
                 t = dorpmtag[tag]
                 if t[2] != None and t[2] != count:
                     self.printErr("tag %d has wrong count %d" % (tag, count))
@@ -1337,7 +1375,7 @@ class ReadRpm:
             #elif nlink > len(di):
             #   self.printErr("wrong number of hardlinks %s, %d / %d" % \
             #       (filename, nlink, len(di)))
-        if mtime != mtime2:
+        if self.strict and mtime != mtime2:
             self.printErr("wrong filemtimes for %s" % filename)
         if filesize != self["filesizes"][i] and \
             not (filesize == 0 and nlink > 1):
@@ -1492,13 +1530,21 @@ class ReadRpm:
                 cpiosize = archivesize
             elif cpiosize != archivesize:
                 self.printErr("wrong archive size")
+        size_in_sig = self.sig.getOne("size_in_sig")
+        if size_in_sig != None:
+            size_in_sig -= self.hdrdatasize
         if self["payloadcompressor"] in [None, "gzip"]:
-            fd = PyGZIP(self.fd, cpiosize, self.filename)
+            if size_in_sig != None and size_in_sig >= 8:
+                size_in_sig -= 8
+            fd = PyGZIP(self.filename, self.fd, cpiosize, size_in_sig)
             #import gzip
             #fd = gzip.GzipFile(fileobj=self.fd)
         elif self["payloadcompressor"] == "bzip2":
             import bz2, cStringIO
-            payload = self.fd.read()
+            if size_in_sig != None:
+                payload = self.fd.read(size_in_sig)
+            else:
+                payload = self.fd.read()
             fd = cStringIO.StringIO(bz2.decompress(payload))
         else:
             self.printErr("unknown payload compression")
@@ -1506,13 +1552,14 @@ class ReadRpm:
         if self["payloadformat"] not in [None, "cpio"]:
             self.printErr("unknown payload format")
             return
-        c = CPIO(fd, self.issrc, cpiosize)
+        c = CPIO(self.filename, fd, self.issrc, cpiosize)
         if c.readCpio(func, filenamehash, devinode, filenames, extract) == None:
-            self.raiseErr("Error reading CPIO payload")
-        for filename in filenamehash.iterkeys():
-            self.printErr("file not in cpio: %s" % filename)
-        if extract and len(devinode.keys()):
-            self.printErr("hardlinked files remain from cpio")
+            pass # error output is already done
+        else:
+            for filename in filenamehash.iterkeys():
+                self.printErr("file not in cpio: %s" % filename)
+            if extract and len(devinode.keys()):
+                self.printErr("hardlinked files remain from cpio")
         self.closeFd()
 
     def getSpecfile(self, filenames=None):
