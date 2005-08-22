@@ -399,7 +399,7 @@ class PyGZIP:
     def __del__(self):
         if self.data:
             self.printErr("PyGZIP: bytes left to read: %d" % \
-                len(self.data) - self.pos)
+                (len(self.data) - self.pos))
         if self.readsize != None:
             if self.readsize:
                 self.printErr("PyGZIP: bytes left to read for zlib: %d" % \
@@ -1058,8 +1058,7 @@ class CPIO:
                 self.size -= 110
             # CPIO ASCII hex, expanded device numbers (070702 with CRC)
             if data[0:6] not in ("070701", "070702"):
-                self.printErr("%s: Bad magic reading CPIO headers %s" \
-                    % (self.filename, data[0:6]))
+                self.printErr("bad magic reading CPIO header")
                 return None
             namesize = int(data[94:102], 16)
             filename = self.__readDataPad(namesize, 110).rstrip("\x00")
@@ -1308,8 +1307,8 @@ class ReadRpm:
         self.__contains__ = self.hdr.__contains__
         self.has_key = self.hdr.has_key
         self.__repr__ = self.hdr.__repr__
-        if self.verify:
-            self.__doVerify()
+        if self.verify and self.__doVerify():
+            return 1
         # hack: Save a tiny bit of memory by compressing the fileusername
         # and filegroupname strings to be only stored once. Evil and maybe
         # this does not make sense at all.
@@ -1704,9 +1703,10 @@ class ReadRpm:
         useinstall, rpmgroup):
         (indexNo, storeSize, fmt, fmt2) = writeHeader(hdrhash, taghash, region,
             None, useinstall, rpmgroup)
-        if (indexNo, storeSize, fmt, fmt2) != (hdrdata[0], hdrdata[1], hdrdata[3], hdrdata[4]):
-            print self.getFilename(), self["rpmversion"], \
-                "writeHeader() would write a different normal header"
+        if (indexNo, storeSize, fmt, fmt2) != (hdrdata[0], hdrdata[1],
+            hdrdata[3], hdrdata[4]):
+            self.printErr("(rpm-%s) writeHeader() would write a different " \
+                "normal header" % self["rpmversion"])
         return
 
         if indexNo != hdrdata[0]:
@@ -1954,7 +1954,7 @@ class ReadRpm:
                     % (regiontag, self.hdrdata[0], -offset / 16))
 
         if self.nodigest:
-            return
+            return 0
 
         # sha1 of the header
         sha1header = self.sig["sha1header"]
@@ -1966,6 +1966,7 @@ class ReadRpm:
             if ctx.hexdigest() != sha1header:
                 self.printErr("wrong sha1: %s / %s" % (sha1header,
                     ctx.hexdigest()))
+                return 1
         # md5sum of header plus payload
         md5sum = self.sig["md5"]
         if md5sum:
@@ -1983,6 +1984,8 @@ class ReadRpm:
                 from binascii import b2a_hex
                 self.printErr("wrong md5: %s / %s" % (b2a_hex(md5sum),
                     ctx.hexdigest()))
+                return 1
+        return 0
 
 
 def verifyRpm(filename, verify, strict, payload, nodigest, hdrtags, keepdata):
