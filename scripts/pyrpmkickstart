@@ -89,6 +89,7 @@ class KickstartConfig(dict):
                 in_packages = 1
                 in_post = 0
                 in_pre = 0
+                continue
             elif opt == "%post":
                 self.parseSimple(opt[1:], args[1:],
                                  [ "nochroot", "interpreter=",
@@ -96,12 +97,14 @@ class KickstartConfig(dict):
                 in_packages = 0
                 in_post = 1
                 in_pre = 0
+                continue
             elif opt == "%pre":
                 self.parseSimple(opt[1:], args[1:],
                                  [ "erroronfail", "interpreter=" ])
                 in_packages = 0
                 in_post = 0
                 in_pre = 1
+                continue
             elif opt == "%include":
                 if len(args) == 2:
                     try:
@@ -116,6 +119,7 @@ class KickstartConfig(dict):
                         open_files.append(args[1])
                 else:
                     raise ValueError, "Error in line '%s'" % line
+                continue
 
             if not in_packages and not in_post and not in_pre:
                 if len(args) == 1:
@@ -194,19 +198,32 @@ class KickstartConfig(dict):
                             self[opt]["disabled"] = None
                         elif _opt == "--trust" and _val:
                             if not self[opt].has_key("trust"):
-                               self[opt]["trust"] = [ ]
-                            self[opt]["trust"].append(_val)
+                               self[opt]["trusted"] = [ ]
+                            self[opt]["trusted"].append(_val)
                         elif _opt in [ "--ssh", "--telnet", "--smtp", "--http",
                                        "--ftp" ]:
-                            if not self[opt].has_key("services"):
-                               self[opt]["services"] = [ ]
-                            self[opt]["services"].append(_opt[2:])
+                            if not self[opt].has_key("ports"):
+                                self[opt]["ports"] = [ ]
+                            if _opt == "--ftp":
+                                self[opt]["ports"].append([21,"tcp"])
+                            elif _opt == "--ssh":
+                                self[opt]["ports"].append([22,"tcp"])
+                            elif _opt == "--telnet":
+                                self[opt]["ports"].append([23,"tcp"])
+                            elif _opt == "--smtp":
+                                self[opt]["ports"].append([25,"tcp"])
+                            elif _opt == "--http":
+                                self[opt]["ports"].append([80,"tcp"])
                         elif _opt == "--port":
                             _vals = noquote_split(val, ",")
                             for v in _vals:
                                 if not self[opt].has_key("ports"):
                                     self[opt]["ports"] = [ ]
-                                self[opt]["ports"].append(v)
+                                a = v.split(":")
+                                if len(a) != 2:
+                                    raise ValueError, \
+                                          "ERROR: port '%s' invalid" % v
+                                self[opt]["ports"].append(a)
                         else:
                             print "'%s': option '%s' not recognized" % (line,
                                                                         _opt)
@@ -269,7 +286,12 @@ class KickstartConfig(dict):
                     self.parseSimple(opt, args[1:], [ "url:" ])
                     if not self[opt].has_key("url"):
                         raise ValueError, "Error in line '%s'" % line
-                # TODO: xconfig
+                elif opt == "xconfig":
+                    self.parseSimple("xconfig", args[1:],
+                                     [ "noprobe", "card:", "videoram:",
+                                       "monitor:", "hsync:", "vsync:",
+                                       "defaultdesktop:", "startxonboot",
+                                       "resolution:", "depth:" ])
                 # TODO: volgroup
                 else:
                     print "'%s' is unsupported" % line
@@ -396,7 +418,7 @@ class KickstartConfig(dict):
                     o = opt[2:-1]
                 else:
                     o = opt[2:]
-                dict[o] = val
+                dict[o] = self.stripQuotes(val)
             else:
                 dict[opt[2:]] = None
 
@@ -425,6 +447,13 @@ class KickstartConfig(dict):
                 raise ValueError, "%s already set." % tag
 
         self[tag][args[0]] = dict
+
+    def stripQuotes(self, var):
+        if var and len(var) > 2:
+            if (var[0] == '"' and var[-1] == '"') or \
+                   (var[0] == "'" and var[-1] == "'"):
+                var = var[1:-1]
+        return var
 
 ################################## functions ##################################
 
@@ -856,7 +885,6 @@ if "everything" in ks["packages"]["groups"]:
             pkgs.extend(comps.grouphash[group]["packagelist"])
 
 del comps
-   
 
 # add and remove packages from default list
 if ks["packages"].has_key("drop"):
@@ -877,20 +905,38 @@ if ks["authconfig"] and not "authconfig" in pkgs:
     print "Adding package authconfig"
     pkgs.append("authconfig")
 
+# append iptables, if we want to configure it
+if ks["firewall"] and not ks["firewall"].has_key("disabled"):
+    print "Adding package iptables"
+    pkgs.append("iptables")
+
+# append xorg-x11, if we want to configure it
+if ks["xconfig"]:
+    print "Adding package xorg-x11"
+    pkgs.append("xorg-x11")
+
+# no packages?
 if len(pkgs) < 1:
     print "Nothing to do."
+    if umount_all(tempdir+"/") == 0:
+        if not nocleanup:
+            rm_rf(tempdir)
     sys.exit(1)
 
-# greate essential directories and files
+# create essential directories and files
 os.umask(000)
 if not os.path.exists(buildroot+"/dev"):
     os.mkdir(buildroot+"/dev")
+if not os.path.exists(buildroot+"/dev/console"):
     os.mknod(buildroot+"/dev/console", 0666 | stat.S_IFCHR, os.makedev(5, 1))
+if not os.path.exists(buildroot+"/dev/null"):
     os.mknod(buildroot+"/dev/null", 0666 | stat.S_IFCHR, os.makedev(1, 3))
+if not os.path.exists(buildroot+"/dev/zero"):
     os.mknod(buildroot+"/dev/zero", 0666 | stat.S_IFCHR, os.makedev(1, 5))
 
 if not os.path.exists(buildroot+"/etc"):
     os.mkdir(buildroot+"/etc")
+if not os.path.exists(buildroot+"/etc/fstab"):
     fd = open(buildroot+"/etc/fstab", "w")
     fd.write("/dev/root\t\t/\t\text3\tdefaults\t1 1\n")
     fd.write("/dev/devpts\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n")
@@ -898,14 +944,17 @@ if not os.path.exists(buildroot+"/etc"):
     fd.write("/dev/proc\t\t/proc\t\tproc\tdefaults\t0 0\n")
     fd.write("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
     fd.close()
+if not os.path.exists(buildroot+"/etc/hosts"):
     fd = open(buildroot+"/etc/hosts", "w")
     fd.write("# Do not remove the following line, or various programs\n")
     fd.write("# that require network functionality will fail.\n")
     fd.write("127.0.0.1\t\tlocalhost.localdomain\tlocalhost\n")
     fd.close()
+if not os.path.exists(buildroot+"/etc/modprobe.conf"):
     fd = open(buildroot+"/etc/modprobe.conf", "w")
     fd.close()
 
+print "Preparing installation"
 
 # configure yum
 os.mkdir("%s/yum.cache" % tempdir)
@@ -932,9 +981,8 @@ fd.close()
 # yum
 yum = "PYTHONPATH=%s %s/scripts/pyrpmyum --servicehack -y -c '%s' -r '%s'" % \
       (PYRPMDIR, PYRPMDIR, yum_conf, buildroot)
-if not ks["packages"].has_key("resolvedeps") or \
-       (ks["packages"].has_key("ignoredeps") and \
-        ks["packages"].has_key("ignoremissing")):
+if ks["packages"].has_key("ignoredeps") and \
+       ks["packages"].has_key("ignoremissing"):
     yum += " --nodeps"
 if ks.has_key("install"):
     yum += " install "
@@ -972,12 +1020,17 @@ if pid != 0:
         print "ERROR: kudzu failed."
 else:
     os.chroot(buildroot)
-    pyrpm.runScript("/usr/sbin/kudzu")
+    pyrpm.runScript(script="/usr/sbin/kudzu -s")
     sys.exit(0)
 
 # run authconfig if set
 if ks["authconfig"]:
     print "Configuring authentication"
+
+    # Create /etc/samba for authconfig
+    if not os.path.exists(buildroot+"/etc/samba"):
+        os.mkdir(buildroot+"/etc/samba")
+
     pid = os.fork()
     if pid != 0:
         (rpid, status) = os.waitpid(pid, 0)
@@ -985,7 +1038,7 @@ if ks["authconfig"]:
             print "ERROR: authconfig failed"
     else:
         os.chroot(buildroot)
-        authconfig = "/usr/bin/authconfig --kickstart --nostart"
+        authconfig = "/usr/bin/authconfig --nostart --kickstart"
         for tag in ks["authconfig"]:
             if ks["authconfig"][tag]:
                 authconfig += " --%s=%s" % (tag, ks["authconfig"][tag])
@@ -994,15 +1047,41 @@ if ks["authconfig"]:
         pyrpm.runScript(script=authconfig)
         sys.exit(0)
 
+# /etc/inittab
+if ks["xconfig"] and ks["xconfig"].has_key("startxonboot"):
+    try:
+        fd_in = open(buildroot+"/etc/inittab", "r")
+        fd_out = open(buildroot+"/etc/inittab.pyrpmkickstart", "w")
+        while 1:
+            line = fd_in.readline()
+            if not line:
+                break
+            if len(line) > 3 and line[:3] == "id:":
+                id = string.split(line, ":")
+                if len(id) > 1:
+                    id[1] = "5"
+                    line = string.join(id, ":")
+                else:
+                    print "ERROR: Malformed '/etc/inittab'"
+            fd_out.write(line)
+        fd_in.close()
+        fd_out.close()
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/inittab' failed:", msg
+    else:
+        os.unlink(buildroot+"/etc/inittab")
+        os.rename(buildroot+"/etc/inittab.pyrpmkickstart",
+                  buildroot+"/etc/inittab")
+
 # /etc/sysconfig/clock
 if ks["timezone"]:
     print "Configuring timezone"
+    zone = ks["timezone"].keys()[0]
     try:
         fd = open(buildroot+"/etc/sysconfig/clock", "w")
     except Exception, msg:
         print "ERROR: Configuration of '/etc/sysconfig/clock' failed:", msg
     else:
-        zone = ks["timezone"].keys()[0]
         fd.write('ZONE="%s"\n' % zone)
         if ks["timezone"][zone].has_key("utc"):
             fd.write('UTC=true\n')
@@ -1011,11 +1090,26 @@ if ks["timezone"]:
         fd.write('ARC=false\n')
         fd.close()
 
+    # Create /etc/localtime
+    pid = os.fork()
+    if pid != 0:
+        (rpid, status) = os.waitpid(pid, 0)
+        if status != 0:
+            print "ERROR: Could not create /etc/localtime."
+    else:
+        os.chroot(buildroot)
+        tzfile = "/usr/share/zoneinfo/" + zone
+        pyrpm.runScript(script="rm -f /etc/localtime; ln '%s' /etc/localtime 2>/dev/null || cp '%s' /etc/localtime" % (tzfile, tzfile))
+        sys.exit(0)
+
 # /etc/sysconfig/desktop
 print "Configuring desktop"
 try:
     fd = open(buildroot+"/etc/sysconfig/desktop", "w")
-    fd.write('DESKTOP="GNOME"\n')
+    desktop = "GNOME"
+    if ks["xconfig"] and ks["xconfig"].has_key("defaultdesktop"):
+        desktop = ks["xconfig"]["defaultdesktop"]
+    fd.write('DESKTOP="%s"\n' % desktop)
     fd.close()
 except Exception, msg:
     print "ERROR: Configuration of '/etc/sysconfig/desktop' failed:", msg
@@ -1048,6 +1142,69 @@ try:
 except Exception, msg:
     print "ERROR: Configuration of '/etc/sysconfig/installinfo' failed:", msg
 
+# /etc/sysconfig/iptables
+if ks["firewall"] and not ks["firewall"].has_key("disabled"):
+    print "Configuring firewall"
+    try:
+        fd = open(buildroot+"/etc/sysconfig/iptables", "w")
+        fd.write('# Firewall configuration written by pyrpmkickstart\n')
+        fd.write('# Manual customization of this file is not recommended.\n')
+        fd.write('*filter\n')
+        fd.write(':INPUT ACCEPT [0:0]\n')
+        fd.write(':FORWARD ACCEPT [0:0]\n')
+        fd.write(':OUTPUT ACCEPT [0:0]\n')
+        fd.write(':RH-Firewall-1-INPUT - [0:0]\n')
+        fd.write('-A INPUT -j RH-Firewall-1-INPUT\n')
+        fd.write('-A FORWARD -j RH-Firewall-1-INPUT\n')
+        fd.write('-A RH-Firewall-1-INPUT -i lo -j ACCEPT\n')
+        # add truted devices
+        if ks["firewall"].has_key("trusted"):
+            for iface in ks["firewall"]["trusted"]:
+                fd.write('-A RH-Firewall-1-INPUT -i %s -j ACCEPT\n' % iface)
+        fd.write('-A RH-Firewall-1-INPUT -p icmp --icmp-type any -j ACCEPT\n')
+        fd.write('-A RH-Firewall-1-INPUT -p 50 -j ACCEPT\n')
+        fd.write('-A RH-Firewall-1-INPUT -p 51 -j ACCEPT\n')
+        fd.write('-A RH-Firewall-1-INPUT -p udp --dport 5353 -d 224.0.0.251 -j ACCEPT\n')
+        fd.write('-A RH-Firewall-1-INPUT -p udp -m udp --dport 631 -j ACCEPT\n')
+        fd.write('-A RH-Firewall-1-INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT\n')
+        if ks["firewall"].has_key("ports"):
+            ports = ks["firewall"]["ports"][:]
+            ports.sort()
+            for port in ports:
+                fd.write('-A RH-Firewall-1-INPUT -m state --state NEW -m %s -p %s --dport %d -j ACCEPT\n' % (port[1], port[1], port[0]))
+        fd.write('-A RH-Firewall-1-INPUT -j REJECT --reject-with icmp-host-prohibited\n')
+        fd.write('COMMIT\n')
+        fd.close()
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/iptables' failed:", \
+              msg
+
+    # enable firewall
+    if ks["firewall"].has_key("enabled"):
+        pid = os.fork()
+        if pid != 0:
+            (rpid, status) = os.waitpid(pid, 0)
+            if status != 0:
+                print "ERROR: Could not enable firewall."
+        else:
+            os.chroot(buildroot)
+            pyrpm.runScript(script="/sbin/chkconfig iptables on")
+            sys.exit(0)
+
+# /etc/sysconfig/kernel
+print "Configuring kernel"
+try:
+    fd = open(buildroot+"/etc/sysconfig/kernel", "w")
+    fd.write('# UPDATEDEFAULT specifies if new-kernel-pkg should make\n')
+    fd.write('# new kernels the default\n')
+    fd.write('UPDATEDEFAULT=yes\n')
+    fd.write('\n')
+    fd.write('# DEFAULTKERNEL specifies the default kernel package type\n')
+    fd.write('DEFAULTKERNEL=kernel\n')
+    fd.close()
+except Exception, msg:
+    print "ERROR: Configuration of '/etc/sysconfig/kernel' failed:", msg
+
 # /etc/sysconfig/keyboard
 if ks["keyboard"]:
     print "Configuring keyboard"
@@ -1058,6 +1215,18 @@ if ks["keyboard"]:
         fd.close()
     except Exception, msg:
         print "ERROR: Configuration of '/etc/sysconfig/keyboard' failed: ", msg
+
+# /etc/sysconfig/mouse
+print "Configuring generic IMPS/2 mouse"
+pid = os.fork()
+if pid != 0:
+    (rpid, status) = os.waitpid(pid, 0)
+    if status != 0:
+        print "ERROR: mouseconfig failed"
+else:
+    os.chroot(buildroot)
+    pyrpm.runScript(script="/usr/sbin/mouseconfig --noui genericwheelps/2")
+    sys.exit(0)
 
 # setup networking
 if ks["network"]:
@@ -1079,6 +1248,166 @@ if ks["network"]:
             fd.close()        
     except Exception, msg:
         print "ERROR: Configuration of '/etc/sysconfig/network' failed:", msg
+
+# /etc/rpm/platform
+print "Configuring platform"
+pid = os.fork()
+if pid != 0:
+    (rpid, status) = os.waitpid(pid, 0)
+    if status != 0:
+        print "ERROR: Configuration of '/etc/rpm/platform' failed."
+else:
+    os.chroot(buildroot)
+    pyrpm.runScript(script="echo $(uname -m)-redhat-linux > /etc/rpm/platform")
+    sys.exit(0)
+
+# /etc/X11/xorg.conf
+if ks["xconfig"]:
+    print "Configuring xorg.conf"
+
+    # default: VGA graphics card, Generic extended super VGA monitor
+    card = "Unknown video card"
+    card_driver = "vga"
+    videoram = 0
+    monitor = "Unknown monitor"
+    hsync = "31.5 - 37.9"
+    vsync = "50 - 61"
+    resolution = "800x600"
+    depth = 16
+    user_hsync = user_vsync = None
+
+    if ks["xconfig"].has_key("card"):
+        fd = open ('/usr/share/hwdata/Cards')
+        found = 0
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            line = string.strip(line)
+            if len(line) < 1 or line[0] == "#":
+                continue
+            if not found:
+                if line[:4] != "NAME":
+                    continue
+                name = string.strip(line[4:])
+                if name == ks["xconfig"]["card"]:
+                    found = 1
+            elif string.strip(line[:6]) == "DRIVER":
+                card = ks["xconfig"]["card"]
+                card_driver = string.strip(line[6:])
+                found = 2
+                break
+        fd.close()
+        if found != 2:
+            print "ERROR: Card not found in hardware database."
+    if ks["xconfig"].has_key("videoram"):
+        videoram = ks["xconfig"]["videoram"]
+    if ks["xconfig"].has_key("monitor"):
+        fd = open ('/usr/share/hwdata/MonitorsDB')
+        found = 0
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            line = string.strip(line)
+            if len(line) < 1 or line[0] == "#":
+                continue
+            args = string.split(line, ";")
+            if len(args) < 5:
+                continue
+            if string.strip(args[1]) == ks["xconfig"]["monitor"]:
+                monitor = ks["xconfig"]["monitor"]
+                hsync = string.strip(args[3])
+                vsync = string.strip(args[4])
+                found = 1
+                break
+        fd.close()
+        if found != 1:
+            print "ERROR: Monitor not found in hardware database."
+    if ks["xconfig"].has_key("hsync"): # overwrite with user supplied value
+        hsync = ks["xconfig"]["hsync"]
+    if ks["xconfig"].has_key("vsync"):
+        vsync = ks["xconfig"]["vsync"] # overwrite with user supplied value
+    if ks["xconfig"].has_key("resolution"):
+        resolution = ks["xconfig"]["resolution"]
+    if ks["xconfig"].has_key("depth"):
+        depth = ks["xconfig"]["depth"]
+
+    try:
+        fd = open(buildroot+"/etc/X11/xorg.conf", "w")
+        fd.write('Section "ServerLayout"\n')
+        fd.write('        Identifier   "Default Layout"\n')
+        fd.write('        Screen       0 "Screen0" 0 0\n')
+        fd.write('        InputDevice  "Mouse0" "CorePointer"\n')
+        fd.write('        InputDevice  "Keyboard0" "CoreKeyboard"\n')
+        fd.write('EndSection\n\n')
+        fd.write('Section "Files"\n')
+        fd.write('        RgbPath      "/usr/X11R6/lib/X11/rgb"\n')
+        fd.write('        ModulePath   "/usr/X11R6/lib/modules"\n')
+        fd.write('        FontPath     "unix/:7100"\n')
+        fd.write('EndSection\n\n')
+        fd.write('Section "Module"\n')
+        fd.write('        Load         "dbe"\n')
+        fd.write('        Load         "extmod"\n')
+        fd.write('        Load         "fbdevhw"\n')
+        fd.write('        Load         "record"\n')
+        fd.write('        Load         "freetype"\n')
+        fd.write('        Load         "type1"\n')
+        fd.write('        Load         "glx"\n')
+        fd.write('        Load         "dri"\n')
+        fd.write('EndSection\n\n')
+        fd.write('Section "InputDevice"\n')
+        fd.write('        Identifier   "Keyboard0"\n')
+        fd.write('        Driver       "kbd"\n')
+        fd.write('        Option       "XkbModel" "pc105"\n')
+        fd.write('        Option       "XkbLayout" "de"\n')
+        fd.write('        Option       "XkbVariant" "nodeadkeys"\n')
+        fd.write('EndSection\n\n')
+        fd.write('Section "InputDevice"\n')
+        fd.write('        Identifier   "Mouse0"\n')
+        fd.write('        Driver       "mouse"\n')
+        fd.write('        Option       "Protocol" "IMPS/2"\n')
+        fd.write('        Option       "Device" "/dev/input/mice"\n')
+        fd.write('        Option       "ZAxisMapping" "4 5"\n')
+        fd.write('        Option       "Emulate3Buttons" "no"\n')
+        fd.write('EndSection\n\n')
+        fd.write('Section "Monitor"\n')
+        fd.write('        Identifier   "Monitor0"\n')
+        fd.write('        VendorName   "Monitor Vendor"\n')
+        fd.write('        ModelName    "%s"\n' % monitor)
+        if hsync:
+            fd.write('        HorizSync    %s\n' % hsync)
+        if vsync:
+            fd.write('        VertRefresh  %s\n' % vsync)
+        fd.write('        Option       "dpms"\n')
+        fd.write('EndSection\n\n')
+        fd.write('Section "Device"\n')
+        fd.write('        Identifier   "Videocard0"\n')
+        fd.write('        VendorName   "Videocard vendor"\n')
+        fd.write('        BoardName    "%s"\n' % card)
+        fd.write('        Driver       "%s"\n' % card_driver)
+        if videoram:
+            fd.write('        VideoRam     %s\n' % videoram)
+        fd.write('EndSection\n\n')
+        fd.write('Section "Screen"\n')
+        fd.write('        Identifier   "Screen0"\n')
+        fd.write('        Device       "Videocard0"\n')
+        fd.write('        Monitor      "Monitor0"\n')
+        fd.write('        DefaultDepth %s\n' % depth)
+        fd.write('        SubSection "Display"\n')
+        fd.write('                Viewport 0 0\n')
+        fd.write('                Depth    %s\n' % depth)
+        fd.write('                Modes    "%s"\n' % resolution)
+        fd.write('        EndSubSection\n')
+        fd.write('EndSection\n\n')
+        fd.write('Section "DRI"\n')
+        fd.write('        Group        0\n')
+        fd.write('        Mode         0666\n')
+        fd.write('EndSection\n')
+        fd.close()
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/X11/xorg.conf' failed:", msg
+
 
 # run post script
 if ks["post"] and len(ks["post"]["script"]) > 0:
@@ -1129,53 +1458,7 @@ sys.exit(0)
 ##############################################################################
 
 """
-########################## MAYBE ##########################
-
-/etc/localtime
-
-/etc/nsswitch.conf
--netgroup:   nisplus
-+netgroup:   files
--automount:  files nisplus
-+automount:  files
-
-/etc/rpm/platform
-+i686-redhat-linux
-
-/etc/sysconfig/iptables
-+# Firewall configuration written by system-config-securitylevel
-+# Manual customization of this file is not recommended.
-+*filter
-+:INPUT ACCEPT [0:0]
-+:FORWARD ACCEPT [0:0]
-+:OUTPUT ACCEPT [0:0]
-+:RH-Firewall-1-INPUT - [0:0]
-+-A INPUT -j RH-Firewall-1-INPUT
-+-A FORWARD -j RH-Firewall-1-INPUT
-+-A RH-Firewall-1-INPUT -i lo -j ACCEPT
-+-A RH-Firewall-1-INPUT -p icmp --icmp-type any -j ACCEPT
-+-A RH-Firewall-1-INPUT -p 50 -j ACCEPT
-+-A RH-Firewall-1-INPUT -p 51 -j ACCEPT
-+-A RH-Firewall-1-INPUT -p udp --dport 5353 -d 224.0.0.251 -j ACCEPT
-+-A RH-Firewall-1-INPUT -p udp -m udp --dport 631 -j ACCEPT
-+-A RH-Firewall-1-INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-+-A RH-Firewall-1-INPUT -j REJECT --reject-with icmp-host-prohibited
-+COMMIT
-
-/etc/sysconfig/kernel
-+# UPDATEDEFAULT specifies if new-kernel-pkg should make
-+# new kernels the default
-+UPDATEDEFAULT=yes
-+
-+# DEFAULTKERNEL specifies the default kernel package type
-+DEFAULTKERNEL=kernel-smp
-
-/etc/sysconfig/mouse
-+FULLNAME="Generic - Wheel Mouse (USB)"
-+MOUSETYPE="imps2"
-+XEMU3="no"
-+XMOUSETYPE="IMPS/2"
-+DEVICE=/dev/input/mice
+########################## TODO ##########################
 
 /etc/modprobe.conf
 """
