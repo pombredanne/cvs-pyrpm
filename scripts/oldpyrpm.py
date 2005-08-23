@@ -397,20 +397,15 @@ class PyGZIP:
         print "%s: %s" % (self.filename, err)
 
     def __del__(self):
+        # Sanity check.
         if self.data:
             self.printErr("PyGZIP: bytes left to read: %d" % \
                 (len(self.data) - self.pos))
         if self.readsize != None:
-            if self.readsize:
-                self.printErr("PyGZIP: bytes left to read for zlib: %d" % \
-                    self.readsize)
-            data = self.fd.read(8 + self.readsize)
-            if len(data) != 8 + self.readsize:
-                self.printErr("have read bytes: %d" % len(data))
-            if len(data) >= 8:
-                self.enddata = data[-8:]
-            else:
-                self.enddata = self.enddata[len(data) - 8:] + data
+            # zlib sometimes adds one or two additional bytes that it also
+            # does not need to decompress all data again.
+            data = doRead(self.fd, 8 + self.readsize)
+            self.enddata = data[-8:]
         else:
             data = self.fd.read()
             if len(data) >= 8:
@@ -1240,19 +1235,6 @@ class ReadRpm:
             else:
                 self.raiseErr("unknown tag header")
                 data = None
-            if self.verify:
-                # This could move into doVerify() again.
-                t = dorpmtag[tag]
-                if t[2] != None and t[2] != count:
-                    self.printErr("tag %d has wrong count %d" % (tag, count))
-                if self.strict and (t[3] & 1):
-                    self.printErr("tag %d is old" % tag)
-                if self.issrc:
-                    if (t[3] & 4):
-                        self.printErr("tag %d should be for binary rpms" % tag)
-                else:
-                    if (t[3] & 2):
-                        self.printErr("tag %d should be for src rpms" % tag)
             if nametag == "group":
                 self.rpmgroup = ttype
             # Ignore duplicate entries as long as they are identical.
@@ -1350,10 +1332,11 @@ class ReadRpm:
         if self.strict and filename != os.path.normpath(filename):
             self.printErr("failed: normpath(%s)" % filename)
         isreg = S_ISREG(mode)
-        if isreg and inode != inode2:
-            self.printErr("wrong fileinode for %s" % filename)
-        if self.strict and mode != mode2:
-            self.printErr("wrong filemode for %s" % filename)
+        if self.strict:
+            if isreg and inode != inode2:
+                self.printErr("wrong fileinode for %s" % filename)
+            if mode != mode2:
+                self.printErr("wrong filemode for %s" % filename)
         # uid/gid are ignored from cpio
         # device/inode are only set correctly for regular files
         di = devinode.get((dev, inode))
@@ -1376,7 +1359,7 @@ class ReadRpm:
             #       (filename, nlink, len(di)))
         if self.strict and mtime != mtime2:
             self.printErr("wrong filemtimes for %s" % filename)
-        if filesize != self["filesizes"][i] and \
+        if self.strict and filesize != self["filesizes"][i] and \
             not (filesize == 0 and nlink > 1):
             self.printErr("wrong filesize for %s" % filename)
         if isreg and dev != dev2:
@@ -1391,7 +1374,8 @@ class ReadRpm:
                 ctx = md5.new()
                 ctx.update(data)
                 if ctx.hexdigest() != self["filemd5s"][i]:
-                    if self.strict or self["filesizes"][i] != 0:
+                    if (self.strict or self["filesizes"][i] != 0) and \
+                        self["arch"] != "sparc":
                         self.printErr("wrong filemd5s for %s: %s, %s" \
                             % (filename, ctx.hexdigest(),
                             self["filemd5s"][i]))
@@ -1495,7 +1479,7 @@ class ReadRpm:
                 if flag & (RPMFILE_GHOST | RPMFILE_EXCLUDE):
                     continue
                 filenamehash[fn] = fileinfo[i]
-                if S_ISREG(mode):
+                if S_ISREG(mode): #and inode != 0:
                     #di = (dev, inode)
                     #if not devinode.has_key(di):
                     #    devinode[di] = []
@@ -1515,13 +1499,13 @@ class ReadRpm:
                 for j in hardlinks[1:]:
                     # dev/inode are already guaranteed to be the same
                     if self["filemodes"][j] != mode:
-                        self.raiseErr("modes differ for hardlink")
+                        self.printErr("modes differ for hardlink")
                     if self["filemtimes"][j] != mtime:
-                        self.raiseErr("mtimes differ for hardlink")
+                        self.printErr("mtimes differ for hardlink")
                     if self["filesizes"][j] != size:
-                        self.raiseErr("sizes differ for hardlink")
+                        self.printErr("sizes differ for hardlink")
                     if self["filemd5s"][j] != fmd5:
-                        self.raiseErr("md5s differ for hardlink")
+                        self.printErr("md5s differ for hardlink")
         cpiosize = self.sig.getOne("payloadsize")
         archivesize = self.hdr.getOne("archivesize")
         if archivesize != None:
@@ -1931,6 +1915,24 @@ class ReadRpm:
                 elif filemd5s[x] != "":
                     print filemd5s[x]
                     self.printErr("non-regular file has filemd5sum")
+
+        # Verify count/flags for rpmheader tags.
+        for (indexNo, fmt, dorpmtag) in ((self.hdrdata[0], self.hdrdata[3],
+             rpmtag), (self.sigdata[0], self.sigdata[3], rpmsigtag)):
+            for i in xrange(0, indexNo * 16, 16):
+                (tag, ttype, offset, count) = unpack("!4I", fmt[i:i + 16])
+                t = dorpmtag[tag]
+                if t[2] != None and t[2] != count:
+                    self.printErr("tag %d has wrong count %d" % (tag, count))
+                if self.strict and (t[3] & 1):
+                    self.printErr("tag %d is old" % tag)
+                if self.issrc:
+                    if (t[3] & 4):
+                        self.printErr("tag %d should be for binary rpms" % tag)
+                else:
+                    if (t[3] & 2):
+                        self.printErr("tag %d should be for src rpms" % tag)
+
         # Verify region headers have sane data. We do not support more than
         # one region header at this point.
         if self["immutable"] != None:
