@@ -660,7 +660,7 @@ rpmdbtag = {
     "origbasenames": [1120, RPM_STRING_ARRAY, None, 1],
     "install_size_in_sig": [257, RPM_INT32, 1, 0],
     "install_md5": [261, RPM_BIN, 16, 0],
-    "install_unknownchecksum": [262, RPM_BIN, None, 0],
+    "install_gpg": [262, RPM_BIN, None, 0],
     "install_dsaheader": [267, RPM_BIN, 16, 0],
     "install_sha1header": [269, RPM_STRING, None, 0],
     "installtime": [1008, RPM_INT32, 1, 8],
@@ -1321,7 +1321,7 @@ class ReadRpm:
             self.printErr("cpio file %s not in rpm header" % filename)
             return
         (fn, flag, mode2, mtime2, dev2, inode2, user, group, rdev2,
-            linkto, i) = fileinfo
+            linkto, md5sum, i) = fileinfo
         del filenamehash[filename]
         # printconf-0.3.61-4.1.i386.rpm is an example where paths are
         # stored like: /usr/share/printconf/tests/../mf.magic
@@ -1339,19 +1339,31 @@ class ReadRpm:
                 self.printErr("wrong filemode for %s" % filename)
         # uid/gid are ignored from cpio
         # device/inode are only set correctly for regular files
-        di = devinode.get((dev, inode))
+        di = None
+        if isreg:
+            di = devinode.get((dev, inode, md5sum))
         if di == None:
-            pass
+            ishardlink = 0
             # nlink is only set correctly for hardlinks, so disable this check:
             #if nlink != 1:
             #    self.printErr("wrong number of hardlinks")
         else:
+            ishardlink = 1
+            di.remove(i)
+            if not di:
+                if not data:
+                    self.printErr("must be 0-size hardlink: %s" % filename)
+                del devinode[(dev, inode, md5sum)]
+            else:
+                if data:
+                    self.printErr("non-zero hardlink file, but not the last: %s" % filename)
             # Search for "normpath" to read why hardlinks might not
             # be hardlinks, but only double stored files with "/../"
             # stored in their filename. Broken packages out there...
-            if self.strict and nlink != len(di):
-                self.printErr("wrong number of hardlinks %s, %d / %d" % \
-                    (filename, nlink, len(di)))
+            ##XXX; Move this test to the setup time.
+            ##if self.strict and nlink != len(di):
+            ##    self.printErr("wrong number of hardlinks %s, %d / %d" % \
+            ##        (filename, nlink, len(di)))
             # This case also happens e.g. in RHL6.2: procps-2.0.6-5.i386.rpm
             # where nlinks is greater than the number of actual hardlinks.
             #elif nlink > len(di):
@@ -1359,8 +1371,7 @@ class ReadRpm:
             #       (filename, nlink, len(di)))
         if self.strict and mtime != mtime2:
             self.printErr("wrong filemtimes for %s" % filename)
-        if self.strict and filesize != self["filesizes"][i] and \
-            not (filesize == 0 and nlink > 1):
+        if isreg and filesize != self["filesizes"][i] and ishardlink == 0:
             self.printErr("wrong filesize for %s" % filename)
         if isreg and dev != dev2:
             self.printErr("wrong filedevice for %s" % filename)
@@ -1370,15 +1381,14 @@ class ReadRpm:
             if data.rstrip("\x00") != linkto:
                 self.printErr("wrong filelinkto for %s" % filename)
         elif isreg:
-            if not (filesize == 0 and nlink > 1):
+            if not (filesize == 0 and ishardlink == 1):
                 ctx = md5.new()
                 ctx.update(data)
-                if ctx.hexdigest() != self["filemd5s"][i]:
+                if ctx.hexdigest() != md5sum:
                     if (self.strict or self["filesizes"][i] != 0) and \
                         self["arch"] != "sparc":
                         self.printErr("wrong filemd5s for %s: %s, %s" \
-                            % (filename, ctx.hexdigest(),
-                            self["filemd5s"][i]))
+                            % (filename, ctx.hexdigest(), md5sum))
 
     def extractCpio(self, filename, datasize, read_data, filenamehash,
             devinode, filenames):
@@ -1390,7 +1400,7 @@ class ReadRpm:
             self.printErr("cpio file %s not in rpm header" % filename)
             return
         (fn, flag, mode, mtime, dev, inode, user, group, rdev,
-            linkto, i) = fileinfo
+            linkto, md5sum, i) = fileinfo
         del filenamehash[filename]
         uid = gid = None
         if self.owner:
@@ -1402,7 +1412,7 @@ class ReadRpm:
         dirname = os.path.dirname(filename)
         makeDirs(dirname)
         if S_ISREG(mode):
-            di = devinode.get((dev, inode))
+            di = devinode.get((dev, inode, md5sum))
             if di == None or data:
                 (fd, tmpfilename) = mkstemp_file(dirname)
                 os.write(fd, data)
@@ -1425,7 +1435,7 @@ class ReadRpm:
                             os.close(fd)
                             setPerms(tmpfilename, uid, gid, mode, mtime)
                         os.rename(tmpfilename, fn2)
-                    del devinode[(dev, inode)]
+                    del devinode[(dev, inode, md5sum)]
         elif S_ISDIR(mode):
             makeDirs(filename)
             setPerms(filename, uid, gid, mode, None)
@@ -1473,18 +1483,19 @@ class ReadRpm:
             fileinfo = zip(filenames, self["fileflags"], self["filemodes"],
                 self["filemtimes"], self["filedevices"], self["fileinodes"],
                 self["fileusername"], self["filegroupname"], self["filerdevs"],
-                self["filelinktos"], xrange(len(self["fileinodes"])))
+                self["filelinktos"], self["filemd5s"],
+                xrange(len(self["fileinodes"])))
             for (fn, flag, mode, mtime, dev, inode, user, group,
-                rdev, linkto, i) in fileinfo:
+                rdev, linkto, md5sum, i) in fileinfo:
                 if flag & (RPMFILE_GHOST | RPMFILE_EXCLUDE):
                     continue
                 filenamehash[fn] = fileinfo[i]
-                if S_ISREG(mode): #and inode != 0:
-                    #di = (dev, inode)
+                if S_ISREG(mode):
+                    #di = (dev, inode, md5sum)
                     #if not devinode.has_key(di):
                     #    devinode[di] = []
                     #devinode[di].append(i)
-                    devinode.setdefault((dev, inode), []).append(i)
+                    devinode.setdefault((dev, inode, md5sum), []).append(i)
         for di in devinode.keys():
             if len(devinode[di]) <= 1:
                 del devinode[di]
@@ -1495,17 +1506,14 @@ class ReadRpm:
                 mode = self["filemodes"][j]
                 mtime = self["filemtimes"][j]
                 size = self["filesizes"][j]
-                fmd5 = self["filemd5s"][j]
                 for j in hardlinks[1:]:
-                    # dev/inode are already guaranteed to be the same
+                    # dev/inode/md5sum are already guaranteed to be the same
                     if self["filemodes"][j] != mode:
                         self.printErr("modes differ for hardlink")
                     if self["filemtimes"][j] != mtime:
                         self.printErr("mtimes differ for hardlink")
                     if self["filesizes"][j] != size:
                         self.printErr("sizes differ for hardlink")
-                    if self["filemd5s"][j] != fmd5:
-                        self.printErr("md5s differ for hardlink")
         cpiosize = self.sig.getOne("payloadsize")
         archivesize = self.hdr.getOne("archivesize")
         if archivesize != None:
