@@ -319,7 +319,7 @@ def verifyRpmDB():
     verifyTriggername()
 
 def diffPkgs(pkg1, pkg2):
-    ignore_list = ["signature", "obsoletes", "requires", "provides", "conflicts", "triggers", "install_dsaheader", "install_md5", "archivesize", "install_size_in_sig", "install_sha1header", "install_unknownchecksum", "instprefixes", "installtime", "installcolor", "installtid", "filestates"]
+    ignore_list = ["signature", "obsoletes", "requires", "provides", "conflicts", "triggers", "install_dsaheader", "install_md5", "archivesize", "install_size_in_sig", "install_sha1header", "install_gpg", "instprefixes", "installtime", "installcolor", "installtid", "filestates"]
     nevra = pkg1.getNEVRA()
     for key in pkg1.keys():
         if key in ignore_list:
