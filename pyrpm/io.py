@@ -673,6 +673,9 @@ class RpmStreamIO(RpmIO):
             key = self.tagnames[self.region]
             if header.has_key(key):
                 self.__appendTag(self.region, header[key])
+            else:
+                regiondata = self.__createRegionData()
+                self.__appendTag(self.region, regiondata)
             # 2nd pass: Ouput install only tags.
             for tag in install_keys:
                 if tag in skip_tags:
@@ -700,6 +703,13 @@ class RpmStreamIO(RpmIO):
             self.indexlist.append((tag, ttype, self.offset, count))
             self.store += pad + data
             self.offset += len(data)
+
+        def __createRegionData(self):
+            tag = self.region
+            type = RPM_BIN
+            offset = -(len(self.indexlist) * 16) - 16
+            count = 16
+            return pack("!2IiI", tag, type, offset, count)
 
         def __generateTag(self, ttype, value):
             """Return (tag data, tag count for index header) for value of
@@ -1095,6 +1105,14 @@ class RpmDB(RpmDatabase):
                     pkg["signature"]["size_in_sig"] = tagval
                 elif tag == 261:
                     pkg["signature"]["md5"] = tagval
+                elif tag == 262:
+                    pkg["signature"]["gpg"] = tagval
+                elif tag == 264:
+                    pkg["signature"]["badsha1_1"] = tagval
+                elif tag == 265:
+                    pkg["signature"]["badsha1_2"] = tagval
+                elif tag == 267:
+                    pkg["signature"]["dsaheader"] = tagval
                 elif tag == 269:
                     pkg["signature"]["sha1header"] =tagval
                 elif rpmtag.has_key(tag):
@@ -1103,6 +1121,7 @@ class RpmDB(RpmDatabase):
                     else:
                         pkg[rpmtagname[tag]] = tagval
             if pkg["name"].startswith("gpg-pubkey"):
+                continue
                 keys = openpgp.parsePGPKeys(pkg["description"])
                 for k in keys:
                     self.keyring.addKey(k)
@@ -1145,6 +1164,8 @@ class RpmDB(RpmDatabase):
         rpmio = RpmFileIO(self.config, "dummy")
         if pkg["signature"].has_key("size_in_sig"):
             pkg["install_size_in_sig"] = pkg["signature"]["size_in_sig"]
+        if pkg["signature"].has_key("gpg"):
+            pkg["install_gpg"] = pkg["signature"]["gpg"]
         if pkg["signature"].has_key("md5"):
             pkg["install_md5"] = pkg["signature"]["md5"]
         if pkg["signature"].has_key("sha1header"):

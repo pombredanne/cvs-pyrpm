@@ -334,7 +334,7 @@ rpmtag = {
     # install information
     "install_size_in_sig": (257, RPM_INT32, 1, 0),
     "install_md5": (261, RPM_BIN, 16, 0),
-    "install_unknownchecksum": (262, RPM_BIN, None, 0),
+    "install_gpg": (262, RPM_BIN, None, 0),
     "install_badsha1_1": (264, RPM_STRING, None, 1),
     "install_badsha1_2": (265, RPM_STRING, None, 1),
     "install_dsaheader": (267, RPM_BIN, 16, 0),

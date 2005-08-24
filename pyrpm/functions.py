@@ -725,12 +725,21 @@ def readPackages(dbpath):
                     pkg["signature"]["size_in_sig"] = tagval
                 elif tag == 261:
                     pkg["signature"]["md5"] = tagval
+                elif tag == 262:
+                    pkg["signature"]["gpg"] = tagval
+                elif tag == 264:
+                    pkg["signature"]["badsha1_1"] = tagval
+                elif tag == 265:
+                    pkg["signature"]["badsha1_2"] = tagval
+                elif tag == 267:
+                    pkg["signature"]["dsaheader"] = tagval
                 elif tag == 269:
                     pkg["signature"]["sha1header"] = tagval
-                if rpmtag.has_key(tag):
+                elif rpmtag.has_key(tag):
                     if rpmtagname[tag] == "archivesize":
                         pkg["signature"]["payloadsize"] = tagval
-                    pkg[rpmtagname[tag]] = tagval
+                    else:
+                        pkg[rpmtagname[tag]] = tagval
             if pkg["name"].startswith("gpg-pubkey"):
                 continue
                 keys = openpgp.parsePGPKeys(pkg["description"])
@@ -738,7 +747,7 @@ def readPackages(dbpath):
                     keyring.addKey(k)
                 pkg["group"] = (pkg["group"],)
             pkg.generateFileNames()
-            pkg.source = "db:"+dbpath+"/"+pkg.getNEVRA()
+            pkg.source = "rpmdb:"+dbpath+"/"+pkg.getNEVRA()
             packages[val] = pkg
             rpmio.hdr = {}
     return packages, keyring

@@ -11,11 +11,17 @@ for i in sys.argv[1:]:
     except (IOError, ValueError), e:
         sys.stderr.write("%s: %s\n" % (i, e))
         continue
-    print rpm["basenames"]
-    print rpm["dirnames"]
-    print rpm["dirindexes"]
-    for f in rpm["filenames"]:
-	rfi = rpm.getRpmFileInfo(f)
-        print f
-        print rfi.filename, hex(rfi.flags)
+    print repr(rpm["install_unknownchecksum"])
+    try:
+        print repr(rpm["signature"]["gpg"])
+    except:
+        pass
+    print unpack("!2IiI", rpm["signature"]["header_signatures"])
+#    print rpm["basenames"]
+#    print rpm["dirnames"]
+#    print rpm["dirindexes"]
+#    for f in rpm["filenames"]:
+#	rfi = rpm.getRpmFileInfo(f)
+#        print f
+#        print rfi.filename, hex(rfi.flags)
     rpms.append(rpm)

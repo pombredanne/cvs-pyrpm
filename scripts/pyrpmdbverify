@@ -260,9 +260,18 @@ def verifyPackages():
     for id in packages.keys():
         (headerindex, headerdata) = rpmio._generateHeader(packages[id], 1, [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
         if packages[id]["signature"].has_key("sha1header"):
-            if packages[id]["signature"]["sha1header"] != \
+            if packages[id]["signature"]["sha1header"] == 
                sha.new(headerindex+headerdata).hexdigest():
-                print "Error packages: Package %s SHA1 header checksum incorrect" % packages[id].getNEVRA()
+                continue
+            if not packages[id].has_key("archivesize") and \
+               pkg["signature"].has_key("payloadsize"):
+                packages[id]["archivesize"] = pkg["signature"]["payloadsize"]
+                (headerindex, headerdata) = rpmio._generateHeader(packages[id], 1, [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
+            if packages[id]["signature"]["sha1header"] == 
+               sha.new(headerindex+headerdata).hexdigest():
+                continue
+            print "Error packages: Package %s SHA1 header checksum incorrect" % packages[id].getNEVRA()
+        
 
 def verifyProvidename():
     print "Checking Providename integrity."
@@ -310,7 +319,7 @@ def verifyRpmDB():
     verifyTriggername()
 
 def diffPkgs(pkg1, pkg2):
-    ignore_list = ["signature", "obsoletes", "requires", "provides", "conflicts", "triggers", "install_dsaheader", "installtime", "installcolor", "installtid", "filestates"]
+    ignore_list = ["signature", "obsoletes", "requires", "provides", "conflicts", "triggers", "install_dsaheader", "install_md5", "archivesize", "install_size_in_sig", "install_sha1header", "install_unknownchecksum", "instprefixes", "installtime", "installcolor", "installtid", "filestates"]
     nevra = pkg1.getNEVRA()
     for key in pkg1.keys():
         if key in ignore_list:
@@ -357,9 +366,12 @@ def main():
     # Do /var/lib/rpm/Packages cross ref checks with given rpms
     external_check = 1
 
+    # No yum config file by default
+    yumconf = None
+
     # Argument parsing
     try:
-      opts, args = getopt.getopt(sys.argv[1:], "?h",
+      opts, args = getopt.getopt(sys.argv[1:], "?hc:",
         ["help", "dbpath=", "nointernal", "noexternal"])
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
@@ -377,13 +389,15 @@ def main():
             internal_check = 0
         elif opt == "--noexternal":
             external_check = 0
+        elif opt == "-c":
+            yumconf = val
 
     readRpmDB()
 
     if internal_check:
         verifyRpmDB()
 
-    if len(args) == 0 or not external_check:
+    if (not yumconf and len(args) == 0) or not external_check:
         return
 
     pkglist = []
@@ -395,6 +409,21 @@ def main():
                 pkglist.append(readRpmPackage(rpmconfig, arg, tags=rtags))
             except (IOError, ValueError), e:
                 sys.stderr.write("%s: %s\n" % (arg, e))
+
+    if yumconf:
+        print "Reading package headers from yum repository. Please wait..."
+        rpmconfig.nofileconflicts = 1
+        yum = RpmYum(rpmconfig)
+        if os.path.isfile(yumconf):
+            addRepo(yum, yumconf)
+        for repo in yum.repos:
+            plist = repo.getPkgList()
+            for pkg in plist:
+                pkg.clear()
+                pkg.open()
+                pkg.read(tags=rtags)
+                pkg.close()
+                pkglist.append(pkg)
 
     checkRpmDB(pkglist)
 
