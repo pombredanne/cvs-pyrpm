@@ -2200,13 +2200,13 @@ class RpmCompsXML:
         return ret2
 
     def getOptionalPackageNames(self, group):
-        return __getPackageNames(self, group, ("optional"))
+        return self.__getPackageNames(group, ["optional"])
 
     def getDefaultPackageNames(self, group):
-        return __getPackageNames(self, group, ("default"))
+        return self.__getPackageNames(group, ["default"])
 
     def getMandatoryPackageNames(self, group):
-        return __getPackageNames(self, group, ("mandatory"))
+        return self.__getPackageNames(group, ["mandatory"])
 
     def __getPackageNames(self, group, typelist):
         ret = []
