@@ -37,7 +37,7 @@ class KickstartConfig(dict):
     # Currently unsupported tags:
     # driverdisk, logvol, raid, xconfig, volgroup
 
-    
+
     def __init__(self, filename):
         dict.__init__(self)
         self.parse(filename)
@@ -65,14 +65,14 @@ class KickstartConfig(dict):
         open_files = [ filename ]
         while 1:
             line = fd[0].readline()
-            
+
             if not line:
                 if len(fd) > 0:
                     _fd = fd.pop(0)
                     _fd.close()
                 if len(fd) == 0:
                     break
-            
+
             line = string.rstrip(line)
             if len(line) < 1: continue
             if line[0] == '#': continue
@@ -460,7 +460,7 @@ class KickstartConfig(dict):
             raise ValueError, "'%s %s' is unsupported" % (tag,
                                                           string.join(argv))
         self[tag] = dict
-        
+
     def parseSub(self, tag, argv, allowed_args, replace_tags=None):
         (dict, args) = self.parseArgs(tag, argv, allowed_args, replace_tags)
 
@@ -516,7 +516,7 @@ class Disk:
 ################################## functions ##################################
 
 # To combine option and value in longopts:
-#   "opt=" for --opt=val 
+#   "opt=" for --opt=val
 #   "opt:" for --opt val or --opt=val
 def getopt(args, shortopts, longopts=[ ]):
     _shortopts = { }
@@ -559,7 +559,7 @@ def getopt(args, shortopts, longopts=[ ]):
                         continue
                     else:
                         raise ValueError, "Missing value for '%s'" % arg
-            
+
             i = arg.find("=")
             if i > 0: # found '='
                 a = arg[2:i]
@@ -669,7 +669,7 @@ def umount(what):
     if not os.path.ismount(what):
         return
     print "Umounting '%s'" % what
-    
+
     i = 0
     failed = 0
     while os.path.ismount(what) and i < 100:
@@ -856,7 +856,7 @@ OPTIONS
 if os.geteuid() != 0:
     print "ERROR: You have to be root to perform an installation."
     exit(1)
-    
+
 try:
     (opts, args) = getopt(sys.argv[1:], "hvyxn", [ "help", "verbose", "xen",
                                                    "nocleanup" ])
@@ -953,7 +953,7 @@ else:
 
 if not ks["nfs"]:
     print "ERROR: Only nfs install is supported, exiting."
-    exit(1)    
+    exit(1)
 
 ### create system diskmap ###
 
@@ -1149,7 +1149,7 @@ for part in to_format:
         mkswap = "/sbin/mkswap -L 'swap-%s' '%s' %d >/dev/null" % \
                  (part, partitionmap[part]["device"],
                   (partitionmap[part]["size"] / 1024))
-        
+
         print mkswap
         print "Formatting swap on '%s' (%s)" % (partitionmap[part]["disk"],
                                                 name)
@@ -1257,7 +1257,7 @@ if ks["langsupport"]:
     for lang in ks["langsupport"]["supported"]:
         languages.append(lang[:2])
     print "languages=%s" % languages
-    
+
     for group in comps.grouphash.keys():
         if comps.grouphash[group].has_key("langonly") and \
                comps.grouphash[group]["langonly"] in languages:
@@ -1507,7 +1507,7 @@ if ks["rootpw"]:
 # /etc/inittab
 if ks["xconfig"] and ks["xconfig"].has_key("startxonboot"):
     print "Configuring runlevel"
-    
+
     try:
         fd_in = open(buildroot+"/etc/inittab", "r")
         fd_out = open(buildroot+"/etc/inittab.pyrpmkickstart", "w")
@@ -1535,7 +1535,7 @@ if ks["xconfig"] and ks["xconfig"].has_key("startxonboot"):
 # /etc/sysconfig/selinux
 if ks["selinux"]:
     print "Configuring selinux"
-    
+
     pid = os.fork()
     if pid != 0:
         (rpid, status) = os.waitpid(pid, 0)
@@ -1559,7 +1559,7 @@ if ks["timezone"]:
         if ks["timezone"][zone].has_key("utc"):
             fd.write('UTC=true\n')
         else:
-            fd.write('UTC=false\n')    
+            fd.write('UTC=false\n')
         fd.write('ARC=false\n')
         fd.close()
     except Exception, msg:
@@ -1708,7 +1708,7 @@ if ks["network"]:
             fd.write("BOOTPROTO=%s\n" % ks["network"]["bootproto"])
             fd.write("ONBOOT=yes\n")
             fd.write("TYPE=Ethernet\n")
-            fd.close()        
+            fd.close()
     except Exception, msg:
         print "ERROR: Configuration of '/etc/sysconfig/network' failed:", msg
 

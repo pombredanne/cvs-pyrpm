@@ -31,7 +31,7 @@ Convert one rpm database to another
 pyrpmdbconvert [-v] sourcedb targetdb
 
 -v:                 Put in verbose mode
-sourcedb/targetdb:  URLs to the respective databases. 
+sourcedb/targetdb:  URLs to the respective databases.
 
 The URL for a database looks like this:
 
