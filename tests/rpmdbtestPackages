@@ -23,7 +23,8 @@ for key in db.keys():
 		for idx in xrange(0, indexNo):
 			(tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata, storedata)
 			if rpmtagname.has_key(tag):
-				if rpmtagname[tag] == "name":
+				if rpmtagname[tag] == "name" or \
+				   rpmtagname[tag] == "installcolor":
 					print tag, rpmtagname[tag], tagval
 				else:
 					print tag, rpmtagname[tag]

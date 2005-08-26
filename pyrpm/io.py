@@ -388,7 +388,7 @@ class RpmStreamIO(RpmIO):
             self.open("w+")
         lead = pack("!4s2c2h66s2h16x", RPM_HEADER_LEAD_MAGIC, '\x03', '\x00', 0, 1, pkg.getNEVR()[0:66], rpm_lead_arch[pkg["arch"]], 5)
         (sigindex, sigdata) = self.__generateSig(pkg["signature"])
-        (headerindex, headerdata) = self._generateHeader(pkg)
+        (headerindex, headerdata) = self._generateHeader(pkg, 1, [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
         self._write(lead)
         self._write(sigindex)
         self._write(sigdata)
@@ -1175,7 +1175,8 @@ class RpmDB(RpmDatabase):
         if pkg["signature"].has_key("payloadsize"):
             pkg["archivesize"] = pkg["signature"]["payloadsize"]
         pkg["installtime"] = int(time.time())
-        pkg["filestates"]= ['\x00',]
+        if pkg.has_key("basenames"):
+            pkg["filestates"]= ['\x00',] * len(pkg["basenames"])
         pkg["installcolor"] = [0,]
         pkg["installtid"] = [self.config.tid,]
 
@@ -2188,25 +2189,38 @@ class RpmCompsXML:
         pass
 
     def getPackageNames(self, group):
+        ret = self.__getPackageNames(group, ("mandatory", "default"))
+        ret2 = []
+        for i in xrange(len(ret)):
+            ret2.append(ret[i][0])
+            ret2.extend(ret[i][1])
+        return ret2
+
+    def getOptionalPackageNames(self, group):
+        return __getPackageNames(self, group, ("optional"))
+
+    def getDefaultPackageNames(self, group):
+        return __getPackageNames(self, group, ("default"))
+
+    def getMandatoryPackageNames(self, group):
+        return __getPackageNames(self, group, ("mandatory"))
+
+    def __getPackageNames(self, group, typelist):
         ret = []
         if not self.grouphash.has_key(group):
             return ret
         if self.grouphash[group].has_key("packagelist"):
             pkglist = self.grouphash[group]["packagelist"]
             for pkgname in pkglist:
-                if pkglist[pkgname][0] == "mandatory" or \
-                   pkglist[pkgname][0] == "default":
-                    ret.append(pkgname)
-                    for req in pkglist[pkgname][1]:
-                        ret.append(req)
+                for t in typelist:
+                    if pkglist[pkgname][0] == t:
+                        ret.append((pkgname, pkglist[pkgname][1]))
         if self.grouphash[group].has_key("grouplist"):
             grplist = self.grouphash[group]["grouplist"]
             for grpname in grplist["groupreqs"]:
-                ret.extend(self.getPackageNames(grpname))
+                ret.extend(self.__getPackageNames(grpname, typelist))
             for grpname in grplist["metapkgs"]:
-                if grplist["metapkgs"][grpname] == "mandatory" or \
-                   grplist["metapkgs"][grpname] == "default":
-                    ret.extend(self.getPackageNames(grpname))
+                ret.extend(self.__getPackageNames(grpname, typelist))
         # Sort and duplicate removal
         ret.sort()
         for i in xrange(len(ret)-2, -1, -1):

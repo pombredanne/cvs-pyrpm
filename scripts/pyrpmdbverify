@@ -257,21 +257,33 @@ def verifyName():
 def verifyPackages():
     print "Checking Packages integrity."
     rpmio = RpmFileIO(rpmconfig, "dummy")
+    packages_db = hashopen(dbpath+"/Packages", "r")
     for id in packages.keys():
+        packages[id]["archivesize"] = packages[id]["signature"]["payloadsize"]
+        (headerindex, headerdata) = rpmio._generateHeader(packages[id], 4)
+        data1 = headerindex[16:]+headerdata
+        data2 = packages_db[pack("I", id)][8:]
+        if data1 != data2:
+            print "Error packages: Self generated header different from original stored header for package %s" % packages[id].getNEVRA()
+#            print len(data1), len(data2)
+#            (indexNo, storeSize) = unpack("!2I", headerindex[8:16])
+#            print indexNo, storeSize
+#            for idx in xrange(indexNo):
+#                index1 = unpack("!4I", data1[idx*16:(idx+1)*16])
+#                index2 = unpack("!4I", data2[idx*16:(idx+1)*16])
+#                print index1, index2
         (headerindex, headerdata) = rpmio._generateHeader(packages[id], 1, [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
         if packages[id]["signature"].has_key("sha1header"):
-            if packages[id]["signature"]["sha1header"] == 
-               sha.new(headerindex+headerdata).hexdigest():
+            if packages[id]["signature"]["sha1header"] == sha.new(headerindex+headerdata).hexdigest():
                 continue
             if not packages[id].has_key("archivesize") and \
                pkg["signature"].has_key("payloadsize"):
                 packages[id]["archivesize"] = pkg["signature"]["payloadsize"]
                 (headerindex, headerdata) = rpmio._generateHeader(packages[id], 1, [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
-            if packages[id]["signature"]["sha1header"] == 
-               sha.new(headerindex+headerdata).hexdigest():
+            if packages[id]["signature"]["sha1header"] == sha.new(headerindex+headerdata).hexdigest():
                 continue
             print "Error packages: Package %s SHA1 header checksum incorrect" % packages[id].getNEVRA()
-        
+
 
 def verifyProvidename():
     print "Checking Providename integrity."
@@ -339,8 +351,10 @@ def checkRpmDB(pkglist):
     sha1hash = {}
     for pkg in pkglist:
         sha1hash[pkg["signature"]["sha1header"]] = pkg
-    for key in packages:
-        pkg = packages[key]
+    rpmio = RpmFileIO(rpmconfig, "dummy")
+    packages_db = hashopen(dbpath+"/Packages", "r")
+    for id in packages.keys():
+        pkg = packages[id]
         if not pkg["signature"].has_key("sha1header"):
             print "Skipping package %s, no sha1header." % pkg.getNEVRA()
             continue
@@ -349,6 +363,40 @@ def checkRpmDB(pkglist):
 #            print "Skipping package %s, not found in packagelist." % pkg.getNEVRA()
             continue
         opkg = readRpmPackage(rpmconfig, sha1hash[pkg["signature"]["sha1header"]].source)
+        # Fill in the package with own information and some additional things
+        # we got from the rpmdb package and see if we can recreate the same
+        # binary package header.
+        if opkg["signature"].has_key("size_in_sig"):
+            opkg["install_size_in_sig"] = opkg["signature"]["size_in_sig"]
+        if opkg["signature"].has_key("md5"):
+            opkg["install_md5"] = opkg["signature"]["md5"]
+        if opkg["signature"].has_key("gpg"):
+            opkg["install_gpg"] = opkg["signature"]["gpg"]
+        if opkg["signature"].has_key("badsha1_1"):
+            opkg["install_badsha1_1"] = opkg["signature"]["badsha1_1"]
+        if opkg["signature"].has_key("badsha1_2"):
+            opkg["install_badsha1_2"] = opkg["signature"]["badsha1_2"]
+        if opkg["signature"].has_key("dsaheader"):
+            opkg["install_dsaheader"] = opkg["signature"]["dsaheader"]
+        if opkg["signature"].has_key("sha1header"):
+            opkg["install_sha1header"] = opkg["signature"]["sha1header"]
+        if opkg["signature"].has_key("payloadsize"):
+            opkg["archivesize"] = opkg["signature"]["payloadsize"]
+        if pkg.has_key("instprefixes"):
+            opkg["instprefixes"] = pkg["instprefixes"]
+        if pkg.has_key("installtime"):
+            opkg["installtime"] = pkg["installtime"]
+        if pkg.has_key("installcolor"):
+            opkg["installcolor"] = pkg["installcolor"]
+        if pkg.has_key("installtid"):
+            opkg["installtid"] = pkg["installtid"]
+        if pkg.has_key("filestates"):
+            opkg["filestates"] = pkg["filestates"]
+        (headerindex, headerdata) = rpmio._generateHeader(opkg, 4)
+        data1 = headerindex[16:]+headerdata
+        data2 = packages_db[pack("I", id)][8:]
+        if data1 != data2:
+            print "Error: Couldn't recreate rpmdb package header correctly for package %s" % opkg.getNEVRA()
         diffPkgs(opkg, pkg)
         diffPkgs(pkg, opkg)
 

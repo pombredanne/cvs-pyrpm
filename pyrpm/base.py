@@ -37,7 +37,7 @@ class RpmFileInfo:
         self.filecolor = filecolor
 
     def getHardLinkID(self):
-        return self.inode*65536+self.dev
+        return self.md5sum+":"+str(self.inode*65536+self.dev)
 
 
 class FilenamesList:

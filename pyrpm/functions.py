@@ -735,7 +735,7 @@ def readPackages(dbpath):
                     pkg["signature"]["dsaheader"] = tagval
                 elif tag == 269:
                     pkg["signature"]["sha1header"] = tagval
-                elif rpmtag.has_key(tag):
+                if rpmtag.has_key(tag):
                     if rpmtagname[tag] == "archivesize":
                         pkg["signature"]["payloadsize"] = tagval
                     else:

@@ -447,7 +447,7 @@ class RpmPackage(RpmData):
                         try:
                             os.unlink(f)
                         except OSError:
-                            self.config.printWarning(1, "Couldn't remove dir %s from pkg %s" % (f, self.source))
+                            self.config.printWarning(2, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
                 if self.rfilist.has_key(f):
                     rfi = self.rfilist[f]
@@ -458,7 +458,7 @@ class RpmPackage(RpmData):
                         os.unlink(f)
                     except OSError:
                         if not (rfi.flags & RPMFILE_GHOST):
-                            self.config.printWarning(1, "Couldn't remove file %s from pkg %s" \
+                            self.config.printWarning(2, "Couldn't remove file %s from pkg %s" \
                                 % (f, self.source))
         if self.config.printhash:
             self.config.printInfo(0, "\n")
@@ -560,7 +560,8 @@ class RpmPackage(RpmData):
         # We don't need those lists earlier, so we create them "on-the-fly"
         # before we actually start extracting files.
         self.__generateFileInfoList()
-        self.__generateHardLinkList()
+        #self.__generateHardLinkList()
+        self.hardlinks = {}
         (filename, cpio, filesize) = self.io.read()
         nfiles = len(files)
         n = 0
@@ -581,20 +582,20 @@ class RpmPackage(RpmData):
             if self.rfilist.has_key(filename):
                 rfi = self.rfilist[filename]
                 if self.__verifyFileInstall(rfi, db):
-                    if not rfi.getHardLinkID() in self.hardlinks.keys():
+                    if filesize == 0:
+                        self.__possibleHardLink(rfi)
+                    else:
                         installFile(rfi, cpio, filesize, not issrc)
                         # Many scripts have problems like e.g. openssh is
                         # stopping all sshd (also outside of a chroot if
                         # it is de-installed. Real hacky workaround:
                         if self.config.service and filename == "/sbin/service":
                             open("/sbin/service", "wb").write("exit 0\n")
-                    else:
-                        if filesize > 0:
-                            installFile(rfi, cpio, filesize, not issrc)
-                            self.__handleHardlinks(rfi)
+                        self.__handleHardlinks(rfi)
                 else:
                     cpio.skipToNextFile()
-                    self.__removeHardlinks(rfi)
+                    if filesize > 0:
+                        self.__removeHardlinks(rfi)
             # FIXME: else report error?
             (filename, cpio, filesize) = self.io.read()
         if nfiles == 0:
@@ -766,24 +767,15 @@ class RpmPackage(RpmData):
         for filename in self["filenames"]:
             self.rfilist[filename] = self.getRpmFileInfo(filename)
 
-    def __generateHardLinkList(self):
-        """Build self.hardlinks: {"hardlink id": [RpmFileInfo for that id]}
+    def __possibleHardLink(self, rfi):
+        """Add the given RpmFileInfo rfi as a possible hardlink"""
 
-        Only regular files with more than one link are represented in
-        self.hardlinks."""
-
-        self.hardlinks = {}
-        for filename in self.rfilist.keys():
-            rfi = self.rfilist[filename]
-            if not S_ISREG(rfi.mode): # FIXME? "if S_ISDIR(...)"
-                continue
-            key = rfi.getHardLinkID()
-            if not self.hardlinks.has_key(key):
-                self.hardlinks[key] = []
-            self.hardlinks[key].append(rfi)
-        for key in self.hardlinks.keys():
-            if len(self.hardlinks[key]) == 1:
-                del self.hardlinks[key]
+        if not S_ISREG(rfi.mode): # FIXME? "if S_ISDIR(...)"
+            return
+        key = rfi.getHardLinkID()
+        if not self.hardlinks.has_key(key):
+            self.hardlinks[key] = []
+        self.hardlinks[key].append(rfi)
 
     def __handleHardlinks(self, rfi):
         """Create hard links to RpmFileInfo rfi as specified in self.hardlinks.
@@ -791,7 +783,8 @@ class RpmPackage(RpmData):
         Raise OSError."""
 
         key = rfi.getHardLinkID()
-        self.hardlinks[key].remove(rfi)
+        if not key in self.hardlinks.keys():
+            return
         for hrfi in self.hardlinks[key]:
             makeDirs(hrfi.filename)
             createLink(rfi.filename, hrfi.filename)
@@ -809,10 +802,9 @@ class RpmPackage(RpmData):
 
         Raise IOError, OSError."""
 
-        keys = self.hardlinks.keys()
         issrc = self.isSourceRPM()
-        for key in keys:
-            rfi = self.hardlinks[key][0]
+        for key in self.hardlinks.keys():
+            rfi = self.hardlinks[key].pop(0)
             installFile(rfi, None, 0, not issrc)
             self.__handleHardlinks(rfi)
 
