@@ -1324,6 +1324,8 @@ os.umask(000)
 create_dir(buildroot, "/dev")
 create_dir(buildroot, "/etc")
 create_dir(buildroot, "/etc/rpm")
+create_dir(buildroot, "/var")
+create_dir(buildroot, "/var/log")
 
 # /dev
 if not os.path.exists(buildroot+"/dev/console"):
@@ -1374,6 +1376,18 @@ if not os.path.exists(buildroot+"/etc/rpm/platform"):
     fd.write("%s-redhat-linux" % machine)
     fd.close()
 
+# /var/log/lastlog
+if not os.path.exists(buildroot+"/var/log/lastlog"):
+    fd = open(buildroot+"/var/log/lastlog", "w")
+    fd.close()
+
+# /var/log/messages
+if not os.path.exists(buildroot+"/var/log/messages"):
+    fd = open(buildroot+"/var/log/messages", "w")
+    fd.close()
+
+### installation ###
+
 print "Preparing installation"
 
 # configure yum
@@ -1422,6 +1436,7 @@ else:
     os.system(yum)
     sys.exit(0)
 
+### configuration ###
 
 # check system dirs
 if not check_dir(buildroot, "/etc") or \
