@@ -1277,7 +1277,10 @@ class RpmDB(RpmDatabase):
             for i in xrange(0, len(data), 8):
                 if not data[i:i+8] == pack("2I", id, idx):
                     ndata += data[i:i+8]
-            db[key] = ndata
+            if len(ndata) == 0:
+                del db[key]
+            else:
+                db[key] = ndata
 
     def __writeDB4(self, db, tag, id, pkg, useidx=True, func=lambda x:str(x)):
         if not pkg.has_key(tag):
