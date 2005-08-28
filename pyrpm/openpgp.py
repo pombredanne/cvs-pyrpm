@@ -845,8 +845,8 @@ def parseRawPGPMessage(data):
 
 
 def parsePGPMessage(data):
-    """Return a list of PGPPackets (parsed from input data, dropping marker
-    and trust packets.
+    """Return a list of PGPPackets parsed from input data, dropping marker and
+    trust packets.
 
     Raise ValueError on invalid data."""
 
