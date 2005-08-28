@@ -21,36 +21,43 @@ import os.path
 class RpmFileInfo:
     def __init__(self, config, filename, inode, mode, uid, gid, mtime, filesize,
                  dev, rdev, md5sum, flags, verifyflags, filecolor):
-        self.config = config
+        self.config = config            # FIXME: write-only
         self.filename = filename
-        self.inode = inode
+        self.inode = inode            # rpm header limited to int32; write-only
         self.mode = mode
         self.uid = uid
         self.gid = gid
         self.mtime = mtime
-        self.filesize = filesize
-        self.dev = dev
-        self.rdev = rdev
+        self.filesize = filesize        # rpm header limited to int32
+        self.dev = dev                  # FIXME: write-only
+        self.rdev = rdev                # rpm header limited to int16
         self.md5sum = md5sum
-        self.flags = flags
-        self.verifyflags = verifyflags
-        self.filecolor = filecolor
+        self.flags = flags              # RPMFILE_*
+        self.verifyflags = verifyflags  # FIXME: write-only
+        self.filecolor = filecolor      # FIXME: write-only
 
     def getHardLinkID(self):
+        """Return a string integer representing
+        (self.md5sum, self.inode, self.dev)."""
+    
         return self.md5sum+":"+str(self.inode*65536+self.dev)
 
 
 class FilenamesList:
-    """ enable fast search of filenames """
-    """ filenames of packages can be added and removed by package """
+    """A mapping from filenames to RpmPackages."""
+
     def __init__(self, config):
-        self.config = config
+        self.config = config            # FIXME: write-only
         self.clear()
 
     def clear(self):
-        self.path = { }
+        """Clear the mapping."""
+        
+        self.path = { } # dirname => { basename => RpmPackage }
 
     def addPkg(self, pkg):
+        """Add all files from RpmPackage pkg to self."""
+
         if pkg["basenames"] == None:
             return
         for i in xrange (len(pkg["basenames"])):
@@ -65,6 +72,8 @@ class FilenamesList:
             self.path[dirname][basename].append(pkg)
 
     def removePkg(self, pkg):
+        """Remove all files from RpmPackage pkg from self."""
+
         if pkg["basenames"] == None:
             return
         for i in xrange (len(pkg["basenames"])):
@@ -81,6 +90,11 @@ class FilenamesList:
                 del self.path[dirname][basename]
 
     def search(self, name):
+        """Return list of packages providing file with name.
+
+        The list may point to internal structures of FilenamesList and may be
+        changed by calls to addPkg() and removePkg()."""
+        
         l = [ ]
         dirname = os.path.dirname(name)
         if len(dirname) > 0 and dirname[-1] != "/":
@@ -401,6 +415,7 @@ possible_archs = {'noarch':1, 'i386':1, 'i486':1, 'i586':1, 'i686':1,
     'arm':1, 'armv4l':1, 'mips':1, 'mipseb':1, 'mipsel':1, 'hppa':1, 'sh':1 }
 
 
+# arch => compatible archs, best match first
 arch_compats = {
 "noarch" : ["noarch"],
 
@@ -480,7 +495,7 @@ arch_compats = {
 "ia32e" : ["x86_64", "athlon", "i686", "i586", "i486", "i386", "noarch"]
 }
 
-# Buildarchtranslate table for multilib stuff
+# Buildarchtranslate table for multilib stuff: arch => base arch
 buildarchtranslate = {
 "osfmach3_i686" : "i386",
 "osfmach3_i586" : "i386",
