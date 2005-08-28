@@ -63,8 +63,8 @@ class _Triggers:
             if t[1] == "":
                 ret.append((t[2], t[3], t[4]))
             else:
-                if evrCompare(version, flag, t[1]) == 1 and \
-                       evrCompare(version, t[0], t[1]) == 1:
+                if evrCompare(version, flag, t[1]) and \
+                       evrCompare(version, t[0], t[1]):
                     ret.append((t[2], t[3], t[4]))
         return ret
 
@@ -173,6 +173,7 @@ class RpmController:
                         reponame = "default"
                     self.config.printInfo(1, "Caching network package %s\n" % \
                                           pkg.getNEVRA())
+                    # FIXME: may be None
                     pkg.source = cacheLocal(pkg.source, reponame+"/packages")
         for pkg in self.db.getPkgList():
             self.triggerlist.addPkg(pkg)
@@ -265,7 +266,7 @@ class RpmController:
                                                    % (pkg.getNEVRA(), e))
                             sys.exit(1)
                         self.__runTriggerIn(pkg)
-                        self.__addPkgToDB(pkg)
+                        self.__addPkgToDB(pkg) # FIXME: error handling
                     elif op == OP_ERASE:
                         self.__runTriggerUn(pkg)
                         try:
@@ -288,7 +289,10 @@ class RpmController:
                     del pkg
                 if self.config.delayldconfig:
                     self.config.delayldconfig = 0
-                    runScript("/sbin/ldconfig", force=1)
+                    try:
+                        runScript("/sbin/ldconfig", force=1)
+                    except (IOError, OSError):
+                        pass # FIXME: really?
                 self.config.printInfo(2, "number of /sbin/ldconfig calls optimized away: %d\n" % self.config.ldconfig)
                 sys.exit(0)
         self.db.close()
@@ -337,15 +341,19 @@ class RpmController:
             if spkg == pkg:
                 continue
             snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
-            if not runScript(prog, script, snumPkgs, tnumPkgs):
-                self.config.printError("%s: Error running any trigger in script." % spkg.getNEVRA())
+            try:
+                runScript(prog, script, [snumPkgs, tnumPkgs])
+            except (IOError, OSError), e:
+                self.config.printError("%s: Error running any trigger in script: %s" % (spkg.getNEVRA(), e))
                 return 0
         # new-%triggerin
         for (prog, script, spkg) in tlist:
             if spkg != pkg:
                 continue
-            if not runScript(prog, script, tnumPkgs, tnumPkgs):
-                self.config.printError("%s: Error running new trigger in script." % spkg.getNEVRA())
+            try:
+                runScript(prog, script, [tnumPkgs, tnumPkgs])
+            except (IOError, OSError), e:
+                self.config.printError("%s: Error running new trigger in script: %s" % (spkg.getNEVRA(), e))
                 return 0
         return 1
 
@@ -360,16 +368,20 @@ class RpmController:
         for (prog, script, spkg) in tlist:
             if spkg != pkg:
                 continue
-            if not runScript(prog, script, tnumPkgs, tnumPkgs):
-                self.config.printError("%s: Error running old trigger un script." % spkg.getNEVRA())
+            try:
+                runScript(prog, script, [tnumPkgs, tnumPkgs])
+            except (IOError, OSError), e:
+                self.config.printError("%s: Error running old trigger un script: %s" % (spkg.getNEVRA(), e))
                 return 0
         # any-%triggerun
         for (prog, script, spkg) in tlist:
             if spkg == pkg:
                 continue
             snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
-            if not runScript(prog, script, snumPkgs, tnumPkgs):
-                self.config.printError("%s: Error running any trigger un script." % spkg.getNEVRA())
+            try:
+                runScript(prog, script, [snumPkgs, tnumPkgs])
+            except (IOError, OSError), e:
+                self.config.printError("%s: Error running any trigger un script: %s" % (spkg.getNEVRA(), e))
                 return 0
         return 1
 
@@ -384,15 +396,19 @@ class RpmController:
         for (prog, script, spkg) in tlist:
             if spkg != pkg:
                 continue
-            if not runScript(prog, script, tnumPkgs, tnumPkgs):
-                self.config.printError("%s: Error running old trigger postun script." % spkg.getNEVRA())
+            try:
+                runScript(prog, script, [tnumPkgs, tnumPkgs])
+            except (IOError, OSError), e:
+                self.config.printError("%s: Error running old trigger postun script: %s" % (spkg.getNEVRA(), e))
         # any-%triggerpostun
         for (prog, script, spkg) in tlist:
             if spkg == pkg:
                 continue
             snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
-            if not runScript(prog, script, snumPkgs, tnumPkgs):
-                self.config.printError("%s: Error running any trigger postun script." % spkg.getNEVRA())
+            try:
+                runScript(prog, script, [snumPkgs, tnumPkgs])
+            except (IOError, OSError), e:
+                self.config.printError("%s: Error running any trigger postun script: %s" % (spkg.getNEVRA(), e))
                 return 0
         return 1
 

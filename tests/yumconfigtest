@@ -144,7 +144,7 @@ enabled=0
         
         conf = yumconfig.YumConf("3", "i686", "i386",
                                  chroot = self.dirname,
-                                 filename = "/etc/yum.conf",
+                                 filename = self.dirname + "/etc/yum.conf",
                                  reposdir = "/etc/yum.repos.d",
                                  )        
         

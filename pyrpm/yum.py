@@ -84,10 +84,7 @@ class RpmYum:
         # Create and read db
         self.pydb = getRpmDBFactory(self.config, self.config.dbpath,
                                     self.config.buildroot)
-        if not self.pydb:
-            return 0
-        if not self.pydb.open():
-            return 0
+        self.pydb.open()
         if not self.pydb.read():
             return 0
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())

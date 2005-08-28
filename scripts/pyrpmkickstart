@@ -683,8 +683,10 @@ def umount(what):
                 if status != 0:
                     sys.exit(1)
             else:
-                pyrpm.runScript(script="/sbin/fuser -k '%s'" % what)
-                sys.exit(0)
+                try:
+                    pyrpm.runScript(script="/sbin/fuser -k '%s'" % what)
+                finally:
+                    os._exit(0) # FIXME: really ignore errors?
 
             print "Trying to umount '%s'" % source_dir
             time.sleep(0.5)
@@ -786,8 +788,11 @@ def swapon(device):
             print "ERROR: swapon failed."
             return 1
     else:
-        pyrpm.runScript(script=swapon)
-        sys.exit(0)
+        try:
+            pyrpm.runScript(script=swapon)
+        except (IOError, OSError):
+            os._exit(1)
+        os._exit(0)
     return 0
 
 def swapoff(device):
@@ -800,8 +805,11 @@ def swapoff(device):
             print "ERROR: swapoff failed."
             return 1
     else:
-        pyrpm.runScript(script=swapoff)
-        sys.exit(0)
+        try:
+            pyrpm.runScript(script=swapoff)
+        except (IOError, OSError):
+            os._exit(1)
+        os._exit(0)
     return 0
 
 def exit(code):
@@ -935,8 +943,11 @@ if ks["pre"] and len(ks["pre"]["script"]) > 0:
         interpreter = "bin/sh"
         if ks["pre"].has_key("interpreter"):
             interpreter = ks["pre"]["interpreter"]
-        pyrpm.runScript(interpreter, ks["pre"]["script"])
-        sys.exit(0)
+        try:
+            pyrpm.runScript(interpreter, ks["pre"]["script"])
+        except (IOError, OSError):
+            os._exit(1)
+        os._exit(0)
 
 # parse file again
 ks.clear()
@@ -1142,8 +1153,11 @@ for part in to_format:
                 print "ERROR: mke2fs failed."
                 exit(1)
         else:
-            pyrpm.runScript(script=mke2fs)
-            sys.exit(0)
+            try:
+                pyrpm.runScript(script=mke2fs)
+            except (IOError, OSError):
+                os._exit(1)
+            os._exit(0)
 
     elif name == "swap":
         mkswap = "/sbin/mkswap -L 'swap-%s' '%s' %d >/dev/null" % \
@@ -1160,8 +1174,11 @@ for part in to_format:
                 print "ERROR: mkswap failed."
                 exit(1)
         else:
-            pyrpm.runScript(script=mkswap)
-            sys.exit(0)
+            try:
+                pyrpm.runScript(script=mkswap)
+            except (IOError, OSError):
+                os._exit(1)
+            os._exit(0)
     else:
         print "ERROR: Unknown filesystem for '%s' (%s)" % \
               (partitionmap[part]["disk"], name)
@@ -1434,7 +1451,7 @@ if pid != 0:
         exit(1)
 else:
     os.system(yum)
-    sys.exit(0)
+    os._exit(0)
 
 ### configuration ###
 
@@ -1453,8 +1470,11 @@ if pid != 0:
         print "ERROR: kudzu failed."
 else:
     os.chroot(buildroot)
-    pyrpm.runScript(script="/usr/sbin/kudzu -s")
-    sys.exit(0)
+    try:
+        pyrpm.runScript(script="/usr/sbin/kudzu -s")
+    except (IOError, OSError):
+        os._exit(1)
+    os._exit(0)
 
 # run authconfig if set
 if ks["authconfig"]:
@@ -1477,8 +1497,11 @@ if ks["authconfig"]:
                 authconfig += " --%s=%s" % (tag, ks["authconfig"][tag])
             else:
                 authconfig += " --%s" % tag
-        pyrpm.runScript(script=authconfig)
-        sys.exit(0)
+        try:
+            pyrpm.runScript(script=authconfig)
+        except (IOError, OSError):
+            os._exit(1)
+        os._exit(0)
 
 # setting root password
 if ks["rootpw"]:
@@ -1501,8 +1524,11 @@ if ks["rootpw"]:
             for i in range(salt_len):
                 salt += random.choice(string.letters+string.digits+"./")
             password = crypt.crypt(password, salt)
-        pyrpm.runScript(script="/usr/sbin/usermod -p '%s' root" % password)
-        sys.exit(0)
+        try:
+            pyrpm.runScript(script="/usr/sbin/usermod -p '%s' root" % password)
+        except (IOError, OSError):
+            os._exit(1)
+        os._exit(0)
 
 # /etc/inittab
 if ks["xconfig"] and ks["xconfig"].has_key("startxonboot"):
@@ -1545,8 +1571,11 @@ if ks["selinux"]:
         os.chroot(buildroot)
         lokkit = "/usr/sbin/lokkit --quiet --nostart --selinux='%s'" % \
                  ks["selinux"].keys()[0]
-        pyrpm.runScript(script=lokkit)
-        sys.exit(0)
+        try:
+            pyrpm.runScript(script=lokkit)
+        except (IOError, OSError):
+            os._exit(1)
+        os._exit(0)
 
 
 # /etc/sysconfig/clock
@@ -1574,8 +1603,11 @@ if ks["timezone"]:
     else:
         os.chroot(buildroot)
         tzfile = "/usr/share/zoneinfo/" + zone
-        pyrpm.runScript(script="rm -f /etc/localtime; ln '%s' /etc/localtime 2>/dev/null || cp '%s' /etc/localtime" % (tzfile, tzfile))
-        sys.exit(0)
+        try:
+            pyrpm.runScript(script="rm -f /etc/localtime; ln '%s' /etc/localtime 2>/dev/null || cp '%s' /etc/localtime" % (tzfile, tzfile))
+        except (IOError, OSError):
+            os._exit(1)
+        os._exit(0)
 
 # /etc/sysconfig/desktop
 print "Configuring desktop"
@@ -1641,8 +1673,11 @@ if ks["firewall"] and not ks["firewall"].has_key("disabled"):
     else:
         os.chroot(buildroot)
         lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % string.join(args)
-        pyrpm.runScript(script=lokkit)
-        sys.exit(0)
+        try:
+            pyrpm.runScript(script=lokkit)
+        except (IOError, OSError):
+            os._exit(1)
+        os._exit(0)
 
     try:
         fd = open(buildroot+"/etc/sysconfig/system-config-securitylevel", "w")
@@ -1688,8 +1723,11 @@ if pid != 0:
         print "ERROR: mouseconfig failed"
 else:
     os.chroot(buildroot)
-    pyrpm.runScript(script="/usr/sbin/mouseconfig --noui genericwheelps/2")
-    sys.exit(0)
+    try:
+        pyrpm.runScript(script="/usr/sbin/mouseconfig --noui genericwheelps/2")
+    except (IOError, OSError):
+        os._exit(1)
+    os._exit(0)
 
 # setup networking
 if ks["network"]:
@@ -1874,8 +1912,11 @@ if ks["post"] and len(ks["post"]["script"]) > 0:
         interpreter = "bin/sh"
         if ks["post"].has_key("interpreter"):
             interpreter = ks["post"]["interpreter"]
-        pyrpm.runScript(interpreter, ks["post"]["script"])
-        sys.exit(0)
+        try:
+            pyrpm.runScript(interpreter, ks["post"]["script"])
+        except (IOError, OSError):
+            os._exit(1)
+        os._exit(0)
 
 if xen:
     print "Writing xen.conf"

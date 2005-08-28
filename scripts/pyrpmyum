@@ -59,11 +59,11 @@ def lockPyrpm():
         lockfile = "/var/run/pyrpmyum.pid"
     try:
         makeDirs(lockfile)
-    except:
+    except OSError:
         pass
-    if tryUnlock(lockfile) == 1:
+    if tryUnlock(lockfile) == 1: # FIXME: IOError
         return None
-    if doLock(lockfile) == 0:
+    if doLock(lockfile) == 0: # FIXME: OSError
         return None
     return lockfile
 

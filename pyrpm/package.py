@@ -26,6 +26,8 @@ import openpgp
 
 
 class _RpmFilenamesIterator:
+    """An iterator over package files stored as basenames + dirindexes"""
+
     def __init__(self, pkg):
         self.pkg = pkg
         self.idx = -1
@@ -187,7 +189,8 @@ class RpmPackage(RpmData):
         self.range_payload = (None, None) # Payload; length is always None
 
     def clear(self):
-        """Drop read data, prepare for rereading it."""
+        """Drop read data and prepare for rereading it, unless install_id is
+        known."""
 
         if self.has_key("install_id"):
             return
@@ -198,7 +201,8 @@ class RpmPackage(RpmData):
         self.rpmusercache = RpmUserCache(self.config)
 
     def open(self, mode="r"):
-        """Open the package if it is not already open.
+        """Open the package if it is not already open and install_id is not
+        known.
 
         Raise IOError."""
 
@@ -212,7 +216,7 @@ class RpmPackage(RpmData):
         self.io.open(mode)
 
     def close(self):
-        """Close the package IO.
+        """Close the package IO if install_id is not known.
 
         Raise IOError."""
 
@@ -229,9 +233,9 @@ class RpmPackage(RpmData):
         """Open and read the package.
 
         Read only specified tags if tags != None, or skip tags in ntags.  In
-        addition, generate self["filenames"], self["provides"],
-        self["requires"], self["obsoletes"], self["conflicts"] and
-        self["triggers"].  Raise ValueError on invalid data, IOError."""
+        addition, generate self["provides"], self["requires"],
+        self["obsoletes"], self["conflicts"] and self["triggers"].  Raise
+        ValueError on invalid data, IOError."""
 
         self.open()
         self.__readHeader(tags, ntags)
@@ -366,17 +370,17 @@ class RpmPackage(RpmData):
         if self["preinprog"] != None or self["postinprog"] != None:
             numPkgs = str(db.getNumPkgs(self["name"])+1)
         if self["preinprog"] != None and not self.config.noscripts:
-            if self.config.rusage:
-                rusage = []
-            else:
-                rusage = None
-            if not runScript(self["preinprog"], self["prein"], numPkgs, rusage = rusage):
-                self.config.printError("\n%s: Error running pre install script." \
-                    % self.getNEVRA())
+            try:
+                rusage = runScript(self["preinprog"], self["prein"], [numPkgs],
+                                   rusage = self.config.rusage)
+            except (IOError, OSError), e:
+                self.config.printError("\n%s: Error running pre install script: %s" \
+                    % (self.getNEVRA(), e))
                 # FIXME? shouldn't we fail here?
-            elif rusage != None and len(rusage):
-                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
-
+            else:
+                if rusage != None and len(rusage):
+                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
+               
         self.__extract(db)
         if self.config.printhash:
             self.config.printInfo(0, "\n")
@@ -384,15 +388,15 @@ class RpmPackage(RpmData):
             self.config.printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None and not self.config.noscripts:
-            if self.config.rusage:
-                rusage = []
+            try:
+                rusage = runScript(self["postinprog"], self["postin"],
+                                   [numPkgs], rusage = self.config.rusage)
+            except (IOError, OSError), e:
+                self.config.printError("\n%s: Error running post install script: %s" \
+                    % (self.getNEVRA(), e))
             else:
-                rusage = None
-            if not runScript(self["postinprog"], self["postin"], numPkgs, rusage = rusage):
-                self.config.printError("\n%s: Error running post install script." \
-                    % self.getNEVRA())
-            elif rusage != None and len(rusage):
-                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "postin", str(rusage[0]), str(rusage[1])))
+                if rusage != None and len(rusage):
+                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "postin", str(rusage[0]), str(rusage[1])))
         self.rfilist = None
 
     def erase(self, db=None):
@@ -410,16 +414,16 @@ class RpmPackage(RpmData):
         if self["preunprog"] != None or self["postunprog"] != None:
             numPkgs = str(db.getNumPkgs(self["name"])-1)
         if self["preunprog"] != None and not self.config.noscripts:
-            if self.config.rusage:
-                rusage = []
-            else:
-                rusage = None
-            if not runScript(self["preunprog"], self["preun"], numPkgs, rusage = rusage):
-                self.config.printError("\n%s: Error running pre uninstall script." \
-                    % self.getNEVRA())
+            try:
+                rusage = runScript(self["preunprog"], self["preun"], [numPkgs],
+                                   rusage = self.config.rusage)
+            except (IOError, OSError), e:
+                self.config.printError("\n%s: Error running pre uninstall script: %s" \
+                    % (self.getNEVRA(), e))
                 # FIXME? shouldn't we fail here?
-            elif rusage != None and len(rusage):
-                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
+            else:
+                if rusage != None and len(rusage):
+                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
         # Generate the rpmfileinfo list, needed for erase verification
         self.__generateFileInfoList()
         # Remove files starting from the end (reverse process to install)
@@ -466,20 +470,20 @@ class RpmPackage(RpmData):
             self.config.printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None and not self.config.noscripts:
-            if self.config.rusage:
-                rusage = []
+            try:
+                rusage = runScript(self["postunprog"], self["postun"],
+                                   [numPkgs], rusage = self.config.rusage)
+            except (IOError, OSError), e:
+                self.config.printError("\n%s: Error running post uninstall script: %s" \
+                    % (self.getNEVRA(), e))
             else:
-                rusage = None
-            if not runScript(self["postunprog"], self["postun"], numPkgs, rusage = rusage):
-                self.config.printError("\n%s: Error running post uninstall script." \
-                    % self.getNEVRA())
-            elif rusage != None and len(rusage):
-                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
+                if rusage != None and len(rusage):
+                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
 
     def isSourceRPM(self):
         """Return 1 if the package is a SRPM."""
 
-        # XXX: is it right method how detect by header?
+        # XXX: is it a right method how to detect it by header?
         if self.io:
             return self.io.issrc
         if self["sourcerpm"] == None:
@@ -512,9 +516,8 @@ class RpmPackage(RpmData):
     def __readHeader(self, tags=None, ntags=None):
         """Read signature header to self["signature"], tag header to self.
 
-        Use only specified tags if tags != None, or skip tags in ntags.
-        Generate self["filenames"].  Raise ValueError on invalid data,
-        IOError."""
+        Use only specified tags if tags != None, or skip tags in ntags.  Raise
+        ValueError on invalid data, IOError."""
 
         if self.header_read:
             return
@@ -595,6 +598,8 @@ class RpmPackage(RpmData):
                 else:
                     cpio.skipToNextFile()
                     if filesize > 0:
+                        # FIXME: If other hard links are installed, the data
+                        # is lost.
                         self.__removeHardlinks(rfi)
             # FIXME: else report error?
             (filename, cpio, filesize) = self.io.read()
@@ -620,6 +625,7 @@ class RpmPackage(RpmData):
         if len(plist) == 0:
             return 1
         # Don't install ghost files ;)
+        # FIXME: check at the very start?
         if rfi.flags & RPMFILE_GHOST:
             return 0
         # Not a config file -> always overwrite it, resolver didn't say we
@@ -696,8 +702,9 @@ class RpmPackage(RpmData):
             break
         return do_write
 
+    # FIXME: db is not used
     def __verifyFileErase(self, rfi, db):
-        """Return 1 if file with RpmFileInfo rfi should be erase.
+        """Return 1 if file with RpmFileInfo rfi should be erased.
 
         Modify rfi.filename if necessary.  Raise OSError."""
         # Special case config files
@@ -712,6 +719,7 @@ class RpmPackage(RpmData):
             (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
                 = os.stat(rfi.filename)
             # File on disc is not a regular file -> don't try to calc an md5sum
+            md5sum = ''
             if S_ISREG(mode):
                 try:
                     f = open(rfi.filename)
@@ -721,7 +729,6 @@ class RpmPackage(RpmData):
                     md5sum = m.hexdigest()
                 except IOError, e:
                     self.config.printWarning(0, "%s: %s" % (rfi.filename, e))
-                    md5sum = ''
             # Same file in new rpm as on disk -> just erase it.
             if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid \
                 and rfi.filesize == filesize and rfi.md5sum == md5sum:
@@ -741,6 +748,7 @@ class RpmPackage(RpmData):
     def generateFileNames(self):
         """Generate basenames, dirnames and dirindexes for old packages from
         oldfilenames"""
+
         if self["oldfilenames"] != None and len(self["oldfilenames"]) > 0:
             self["basenames"] = [ ]
             self["dirnames"] = [ ]
@@ -752,7 +760,7 @@ class RpmPackage(RpmData):
                     dirname += "/"
                 try:
                     dirindex = self["dirnames"].index(dirname)
-                except:
+                except ValueError:
                     self["dirnames"].append(dirname)
                     dirindex = self["dirnames"].index(dirname)
 
@@ -778,14 +786,16 @@ class RpmPackage(RpmData):
         self.hardlinks[key].append(rfi)
 
     def __handleHardlinks(self, rfi):
-        """Create hard links to RpmFileInfo rfi as specified in self.hardlinks.
+        """Create hard links to RpmFileInfo rfi if specified so in
+        self.hardlinks.
 
         Raise OSError."""
 
         key = rfi.getHardLinkID()
-        if not key in self.hardlinks.keys():
+        links = self.hardlinks.get(key)
+        if not links:
             return
-        for hrfi in self.hardlinks[key]:
+        for hrfi in links:
             makeDirs(hrfi.filename)
             createLink(rfi.filename, hrfi.filename)
         del self.hardlinks[key]
@@ -800,7 +810,7 @@ class RpmPackage(RpmData):
     def __handleRemainingHardlinks(self):
         """Create empty hard-linked files according to self.hardlinks.
 
-        Raise IOError, OSError."""
+        Raise ValueError on invalid package data, IOError, OSError."""
 
         issrc = self.isSourceRPM()
         for key in self.hardlinks.keys():

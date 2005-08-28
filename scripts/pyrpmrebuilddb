@@ -127,7 +127,7 @@ def main():
         elif opt == "--dbpath":
             dbpath = val
 
-    (packages, keyring) = readPackages(dbpath)
+    (packages, keyring) = readPackages(dbpath) # FIXME: bsddb.error
 
     if len(args) == 0:
         outdbpath = "./rpmdb"

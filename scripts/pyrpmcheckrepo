@@ -109,6 +109,7 @@ def main():
 
     installed = yum.opresolver.getList()
     for pkg in installed:
+        # Error checking is not really necessary, what could go wrong?
         yum.pydb.addPkg(pkg, 1)
 
     yum.opresolver = RpmResolver(rpmconfig, installed)

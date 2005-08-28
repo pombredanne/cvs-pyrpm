@@ -80,7 +80,7 @@ class ProvidesList:
                 ret.append(rpm)
                 continue
             evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
-            if evrCompare(evr2, flag, evr) == 1:
+            if evrCompare(evr2, flag, evr):
                 ret.append(rpm)
 
         if not arch or arch == "noarch":   # all rpms are matching
@@ -283,7 +283,6 @@ class RpmResolver(RpmList):
 
     def _getObsoletes(self, pkg, dep, list, operation=OP_INSTALL):
         obsoletes = [ ]
-        ret = 0
         if len(list) != 0:
             if pkg in list:
                 list.remove(pkg)
@@ -304,7 +303,6 @@ class RpmResolver(RpmList):
 
     def _getConflicts(self, pkg, dep, list, operation=OP_INSTALL):
         conflicts = [ ]
-        ret = 0
         if len(list) != 0:
             if pkg in list:
                 list.remove(pkg)

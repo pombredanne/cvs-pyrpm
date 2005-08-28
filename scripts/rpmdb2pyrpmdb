@@ -37,7 +37,10 @@ if not os.path.isdir(pyrpmhdrdir):
     os.mkdir(pyrpmhdrdir)
 
 rpmdb = RpmDB(rpmconfig, rpmdir)
-rpmdb.read()
+rpmdb.open()
+if not rpmdb.read():
+    sys.stderr.write("Couldn't read rpmdb")
+    sys.exit(1)
 
 l = rpmdb.getPkgList()
 for pkg in l:

@@ -17,22 +17,20 @@
 #
 
 
-import os, os.path, sys, resource, re, getopt, errno
-from resource import getrusage, RUSAGE_CHILDREN
+import fcntl, os, os.path, struct, sys, resource, re, getopt, errno
 from types import TupleType, ListType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from bsddb import hashopen
-from struct import unpack
 try:
     from tempfile import mkstemp, mkdtemp, _get_candidate_names, TMP_MAX
 except:
-    print "Error: Couldn't import tempfile python module. Only check scripts available."
+    print >> sys.stderr, "Error: Couldn't import tempfile python module. Only check scripts available."
 
 try:
     from urlgrabber import urlgrab
     from urlgrabber.grabber import URLGrabError
 except:
-    print "Error: Couldn't import urlgrabber python module. Only check scripts available."
+    print >> sys.stderr, "Error: Couldn't import urlgrabber python module. Only check scripts available."
 
 
 from io import *
@@ -51,20 +49,35 @@ DIGEST_CHUNK = 65536
 # over from killed processes.
 tmpprefix = "..pyrpm"
 
-# Collection of class indepedant helper functions
+# Collection of class-indepedent helper functions
 def mkstemp_file(dirname, pre):
+    """Create a temporary file in dirname with prefix pre.
+
+    Return (file descriptor with FD_CLOEXEC, absolute path name).  Raise
+    IOError if no file name is available, OSError."""
+
     (fd, filename) = mkstemp(prefix=pre, dir=dirname)
     return (fd, filename)
 
 def mkstemp_dir(dirname, pre):
+    """Create a directory in dirname with prefix pre.
+
+    Return absolute directory path.  Raise IOError if no directory name is
+    available, OSError."""
+
     filename = mkdtemp(prefix=pre, dir=dirname)
     return filename
 
 def mkstemp_link(dirname, pre, linkfile):
-    names = _get_candidate_names()
+    """Create a temporary link to linkfile in dirname with prefix pre.
+
+    Return absolute file path, or None if such a link can not be made.  Raise
+    IOError if no file name is available, OSError."""
+    
+    names = _get_candidate_names() # FIXME: internal function
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dirname, pre, name)
+        filename = os.path.join(dirname, "%s.%s" % (pre, name))
         try:
             os.link(linkfile, filename)
             return filename
@@ -79,10 +92,15 @@ def mkstemp_link(dirname, pre, linkfile):
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
 def mkstemp_symlink(dirname, pre, symlinkfile):
+    """Create a temporary symlink to symlinkfile in dirname with prefix pre.
+
+    Return absolute file path.  Raise IOError if no file name is available,
+    OSError."""
+
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dirname, pre, name)
+        filename = os.path.join(dirname, "%s.%s" % (pre, name))
         try:
             os.symlink(symlinkfile, filename)
             return filename
@@ -93,10 +111,15 @@ def mkstemp_symlink(dirname, pre, symlinkfile):
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
 def mkstemp_mkfifo(dirname, pre):
+    """Create a temporary named pipe in dirname with prefix pre.
+
+    Return absolute file path.  Raise IOError if no file name is available,
+    OSError."""
+    
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dirname, pre, name)
+        filename = os.path.join(dirname, "%s.%s" % (pre, name))
         try:
             os.mkfifo(filename)
             return filename
@@ -107,10 +130,16 @@ def mkstemp_mkfifo(dirname, pre):
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
 def mkstemp_mknod(dirname, pre, mode, rdev):
+    """Create a temporary device file for rdev with mode in dirname with prefix
+    pre.
+
+    Return absolute file path.  Raise IOError if no file name is available,
+    OSError."""
+
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
-        filename = "%s/%s.%s" % (dirname, pre, name)
+        filename = os.path.join(dirname, "%s.%s" % (pre, name))
         try:
             os.mknod(filename, mode, rdev)
             return filename
@@ -120,15 +149,22 @@ def mkstemp_mknod(dirname, pre, mode, rdev):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-def runScript(prog=None, script=None, arg1=None, arg2=None, force=None, rusage=None):
+def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False):
+    """Run (script otherargs) with interpreter prog (which can be a list
+    containing initial arguments).
+
+    Return None, or getrusage() stats of the script if rusage.  Disable
+    ldconfig optimization if force.  Raise IOError, OSError."""
+
+    # FIXME? hardcodes config.rpmconfig usage
     if prog == None:
         prog = "/bin/sh"
     if prog == "/bin/sh" and script == None:
-        return 1
+        return None
     if not os.path.exists("/var/tmp"):
         try:
             os.makedirs("/var", mode=0755)
-        except:
+        except OSError:
             pass
         os.makedirs("/var/tmp", mode=01777)
     if isinstance(prog, TupleType):
@@ -138,15 +174,15 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None, rusage=N
     if not force and args == ["/sbin/ldconfig"] and script == None:
         if rpmconfig.delayldconfig == 1:
             rpmconfig.ldconfig += 1
+        # FIXME: assumes delayldconfig is checked after all runScript
+        # invocations
         rpmconfig.delayldconfig = 1
-        return 1
+        return None
     elif rpmconfig.delayldconfig:
         rpmconfig.delayldconfig = 0
         runScript("/sbin/ldconfig", force=1)
     if script != None:
         (fd, tmpfilename) = mkstemp_file("/var/tmp/", "rpm-tmp.")
-        if fd == None:
-            return 0
         # test for open fds:
         # script = "ls -l /proc/$$/fd >> /$$.out\n" + script
         os.write(fd, script)
@@ -154,38 +190,34 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None, rusage=N
         fd = None
         args.append(tmpfilename)
 
-        if arg1 != None:
-            args.append(arg1)
-        if arg2 != None:
-            args.append(arg2)
+        args += otherargs
     (rfd, wfd) = os.pipe()
 
-    if rusage != None:
-        rusage_old = getrusage(RUSAGE_CHILDREN)
+    if rusage:
+        rusage_old = resource.getrusage(resource.RUSAGE_CHILDREN)
 
     pid = os.fork()
     if pid == 0:
-        os.close(rfd)
-        if not os.path.exists("/dev"):
-            os.mkdir("/dev")
-        if not os.path.exists("/dev/null"):
-            os.mknod("/dev/null", 0666, 259)
-        fd = os.open("/dev/null", os.O_RDONLY)
-        if fd != 0:
-            os.dup2(fd, 0)
-            os.close(fd)
-        if wfd != 1:
-            os.dup2(wfd, 1)
-            os.close(wfd)
-        os.dup2(1, 2)
-        os.chdir("/")
-        e = {"HOME": "/", "USER": "root", "LOGNAME": "root",
-            "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin"}
-        if isinstance(prog, TupleType):
-            os.execve(prog[0], args, e)
-        else:
-            os.execve(prog, args, e)
-        sys.exit(255)
+        try:
+            os.close(rfd)
+            if not os.path.exists("/dev"):
+                os.mkdir("/dev")
+            if not os.path.exists("/dev/null"):
+                os.mknod("/dev/null", 0666, 259)
+            fd = os.open("/dev/null", os.O_RDONLY)
+            if fd != 0:
+                os.dup2(fd, 0)
+                os.close(fd)
+            if wfd != 1:
+                os.dup2(wfd, 1)
+                os.close(wfd)
+            os.dup2(1, 2)
+            os.chdir("/")
+            e = {"HOME": "/", "USER": "root", "LOGNAME": "root",
+                "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin"}
+            os.execve(args[0], args, e)
+        finally:
+            os._exit(255)
     os.close(wfd)
     # no need to read in chunks if we don't pass on data to some output func
     cret = ""
@@ -196,10 +228,12 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None, rusage=N
     os.close(rfd)
     (cpid, status) = os.waitpid(pid, 0)
 
-    if rusage != None:
-        rusage_new = getrusage(RUSAGE_CHILDREN)
-        for i in xrange(len(rusage_new)):
-            rusage.insert(i, rusage_new[i] - rusage_old[i])
+    if rusage:
+        rusage_new = resource.getrusage(resource.RUSAGE_CHILDREN)
+        rusage_val = [rusage_new[i] - rusage_old[i]
+                      for i in xrange(len(rusage_new))]
+    else:
+        rusage_val = None
 
     if script != None:
         os.unlink(tmpfilename)
@@ -213,7 +247,7 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None, rusage=N
                 core = "(with coredump)"
             printError("Script %s killed by signal %d%s:" % (str(args),
                 os.WTERMSIG(status), core))
-        elif os.WIFSTOPPED(status):
+        elif os.WIFSTOPPED(status):     # Can't happen, needs os.WUNTRACED
             printError("Script %s stopped with signal %d:" % (str(args),
                 os.WSTOPSIG(status)))
         else:
@@ -221,14 +255,16 @@ def runScript(prog=None, script=None, arg1=None, arg2=None, force=None, rusage=N
         if cret.endswith("\n"):
             cret = cret[:-1]
         printError(cret)
-        return 0
-    return 1
+        raise OSError, "Script %s failed" % (args,)
+    # FIXME: should we be swallowing the script output?
+    return rusage_val
 
-def installFile(rfi, infd, size, modsflag=True):
+def installFile(rfi, infd, size, useAttrs=True):
     """Install a file described by RpmFileInfo rfi, with input of given size
     from CPIOFile infd.
 
-    infd can be None if size == 0.  Raise IOError, OSError."""
+    infd can be None if size == 0.  Ignore file attributes in rfi if useAttrs
+    is False.  Raise ValueError on invalid mode, IOError, OSError."""
 
     mode = rfi.mode
     if S_ISREG(mode):
@@ -244,8 +280,8 @@ def installFile(rfi, infd, size, modsflag=True):
                         os.write(fd, data)
             finally:
                 os.close(fd)
-            if modsflag:
-                setFileMods(tmpfilename, rfi.uid, rfi.gid, mode, rfi.mtime)
+            if useAttrs:
+                _setFileAttrs(tmpfilename, rfi)
         except (IOError, OSError):
             os.unlink(tmpfilename)
             raise
@@ -253,8 +289,8 @@ def installFile(rfi, infd, size, modsflag=True):
     elif S_ISDIR(mode):
         if not os.path.isdir(rfi.filename):
             os.makedirs(rfi.filename)
-        if modsflag:
-            setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
+        if useAttrs:
+            _setFileAttrs(rfi.filename, rfi)
     elif S_ISLNK(mode):
         data = infd.read(size)
         symlinkfile = data.rstrip("\x00")
@@ -262,57 +298,77 @@ def installFile(rfi, infd, size, modsflag=True):
             and os.readlink(rfi.filename) == symlinkfile:
             return
         makeDirs(rfi.filename)
+        tmpfilename = mkstemp_symlink(os.path.dirname(rfi.filename), tmpprefix,
+                                      symlinkfile)
         try:
-            os.unlink(rfi.filename)
+            if useAttrs:
+                os.lchown(tmpfilename, rfi.uid, rfi.gid)
         except OSError:
-            pass
-        os.symlink(symlinkfile, rfi.filename)
-        if modsflag:
-            os.lchown(rfi.filename, rfi.uid, rfi.gid)
+            os.unlink(tmpfilename)
+            raise
+        os.rename(tmpfilename, rfi.filename)
     elif S_ISFIFO(mode):
         makeDirs(rfi.filename)
-        if not os.path.exists(rfi.filename):
-            os.mkfifo(rfi.filename)
+        tmpfilename = mkstemp_mkfifo(os.path.dirname(rfi.filename), tmpprefix)
         try:
-            setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
+            if useAttrs:
+                _setFileAttrs(tmpfilename, rfi)
         except OSError:
-            os.unlink(rfi.filename)
+            os.unlink(tmpfilename)
             raise
+        os.rename(tmpfilename, rfi.filename)
     elif S_ISCHR(mode) or S_ISBLK(mode):
         makeDirs(rfi.filename)
         try:
-            os.mknod(rfi.filename, mode, rfi.rdev)
+            tmpfilename = mkstemp_mknod(os.path.dirname(rfi.filename),
+                                        tmpprefix, mode, rfi.rdev)
         except OSError:
-            pass # FIXME: why?
+            return # FIXME: why?
         try:
-            if modsflag:
-                setFileMods(rfi.filename, rfi.uid, rfi.gid, mode, rfi.mtime)
+            if useAttrs:
+                _setFileAttrs(tmpfilename, rfi)
         except OSError:
             os.unlink(rfi.filename)
             raise
+        os.rename(tmpfilename, rfi.filename)
     elif S_ISSOCK(mode):
-        raise ValueError("UNIX domain sockets can't be extracted yet.")
+        # Sockets are useful only when bound, but what do we care...
+        # Note that creating sockets using mknod is not SUSv3-mandated, quite
+        # likely Linux-specific.
+        makeDirs(rfi.filename)
+        tmpfilename = mkstemp_mknod(os.path.dirname(rfi.filename), tmpprefix,
+                                    mode, 0)
+        try:
+            if useAttrs:
+                _setFileAttrs(tmpfilename, rfi)
+        except OSError:
+            os.unlink(rfi.filename)
+            raise
+        os.rename(tmpfilename, rfi.filename)
     else:
         raise ValueError, "%s: not a valid filetype" % (oct(mode))
 
-def setFileMods(filename, uid, gid, mode, mtime):
-    """Set owner, group, mode and mtime of filename to the specified values.
+def _setFileAttrs(filename, rfi):
+    """Set owner, group, mode and mtime of filename data from RpmFileInfo rfi.
 
     Raise OSError."""
 
-    os.chown(filename, uid, gid)
-    os.chmod(filename, S_IMODE(mode))
-    os.utime(filename, (mtime, mtime))
+    os.chown(filename, rfi.uid, rfi.gid)
+    os.chmod(filename, S_IMODE(rfi.mode))
+    os.utime(filename, (rfi.mtime, rfi.mtime))
 
 def makeDirs(fullname):
-    idx = fullname.rfind("/")
-    if idx > 0:
-        dirname = fullname[:idx]
-        if not os.path.isdir(dirname):
-            os.makedirs(dirname)
+    """Create a parent directory of fullname if it does not already exist.
+
+    Raise OSError."""
+
+    dirname = os.path.dirname(fullname)
+    if len(dirname) > 1 and not os.path.isdir(dirname):
+        os.makedirs(dirname)
 
 def listRpmDir(dirname):
     """List directory like standard or.listdir, but returns only .rpm files"""
+
     files = []
     for f in os.listdir(dirname):
         if f.endswith('.rpm'):
@@ -331,51 +387,63 @@ def createLink(src, dst):
         pass
     # Behave exactly like cpio: If the hardlink fails (because of different
     # partitions), then it has to fail
+    # FIXME: use mkstemp... and os.rename?
     os.link(src, dst)
 
 def tryUnlock(lockfile):
+    """If lockfile exists and is a stale lock, remove it.
+
+    Return 1 if lockfile is a live lock, 0 otherwise.  Raise IOError."""
+    
     if not os.path.exists(lockfile):
         return 0
     fd = open(lockfile, 'r')
     try:
         oldpid = int(fd.readline())
     except ValueError:
-        unlink(lockfile) # bogus data
-    else:
-        try:
-            os.kill(oldpid, 0)
-        except OSError, e:
-            if e[0] == errno.ESRCH:
-                unlink(lockfile) # pid doesn't exist
-            else:
-                return 1
-        else:
-            return 1
-    return 0
+        _unlink(lockfile) # bogus data
+        return 0
+    try:
+        os.kill(oldpid, 0)
+    except OSError, e:
+        if e.errno == errno.ESRCH:
+            _unlink(lockfile) # pid doesn't exist
+            return 0
+    return 1
 
 def doLock(filename):
+    """Create a lock file filename.
+
+    Return 1 on success, 0 if the file already exists.  Raise OSError."""
+    
     try:
         fd = os.open(filename, os.O_EXCL|os.O_CREAT|os.O_WRONLY, 0666)
-        os.write(fd, str(os.getpid()))
-        os.close(fd)
+        try:
+            os.write(fd, str(os.getpid()))
+        finally:
+            os.close(fd)
     except OSError, msg:
         if not msg.errno == errno.EEXIST:
-            raise msg
+            raise
         return 0
     return 1
 
-def unlink(file):
+def _unlink(file):
+    """Unlink file, ignoring errors."""
+    
     try:
         os.unlink(file)
-    except:
+    except OSError:
         pass
 
 def setCloseOnExec():
-    import fcntl
-    for fd in range(3, resource.getrlimit(resource.RLIMIT_NOFILE)[1]):
+    """Set all file descriptors except for 0, 1, 2, to close on exec."""
+
+    for fd in xrange(3, resource.getrlimit(resource.RLIMIT_NOFILE)[1]):
         try:
-            fcntl.fcntl(fd, fcntl.F_SETFD, 1)
-        except:
+            old = fcntl.fcntl(fd, fcntl.F_GETFD)
+            fcntl.fcntl(fd, fcntl.F_SETFD, old | fcntl.FD_CLOEXEC)
+        except IOError:
             pass
 
 def closeAllFDs():
@@ -417,14 +485,21 @@ def updateDigestFromFile(digest, fd, bytes = None):
 # - no information about not-installed files like multilib files, left out
 #   docu files etc
 def getFreeDiskspace(config, operations):
-    freehash = {}
-    minfreehash = {}
-    dirhash = {}
-    mountpoint = { }
+    """Check there is enough disk space for operations, a list of
+    (operation, RpmPackage).
+
+    Use RpmConfig config.  Return 1 if there is enough space (with 30 MB
+    slack), 0 otherwise."""
+    
+    freehash = {} # device number => [currently counted free bytes, block size]
+    # device number => [minimal encountered free bytes, block size]
+    minfreehash = {} 
+    dirhash = {}                        # directory name => device number
+    mountpoint = { }                    # device number => mount point path
     ret = 1
 
-    if rpmconfig.buildroot:
-        br = rpmconfig.buildroot
+    if config.buildroot:
+        br = config.buildroot
     else:
         br = "/"
     for (op, pkg) in operations:
@@ -441,7 +516,7 @@ def getFreeDiskspace(config, operations):
             while 1:
                 dnames.append(dirname)
                 try:
-                    dev = os.stat(devname)[2]
+                    dev = os.stat(devname).st_dev
                     break
                 except:
                     dirname = os.path.dirname(dirname)
@@ -481,49 +556,60 @@ def getFreeDiskspace(config, operations):
                 dev[0] -= filesize
             if mdev[0] > dev[0]:
                 mdev[0] = dev[0]
-        for dev in minfreehash.keys():
+        for (dev, val) in minfreehash.iteritems():
             # Less than 30MB space left on device?
-            if minfreehash[dev][0] < 31457280:
+            if val[0] < 31457280:
                 config.printInfo(1, "%s: Less than 30MB of diskspace left on %s\n" % (pkg.getNEVRA(), mountpoint[dev]))
 
-    for dev in minfreehash.keys():
-        if minfreehash[dev][0] < 31457280:
+    for (dev, val) in minfreehash.iteritems():
+        if val[0] < 31457280:
             config.printInfo(0, "Less than 30MB of diskspace left on %s for operation\n" % mountpoint[dev])
             ret = 0
 
     return ret
 
 def cacheLocal(url, subdir, force=0):
-    if not url.startswith("http://"):
+    """Copy file from HTTP url to subdir/$(basename url).
+
+    Return local file path, or None on failure.  If the local file is already
+    present, use it if the timestamp is not too old unless force is true."""
+    
+    if not url.startswith("http://"): # FIXME: ftp:// ?
         return url
-    if not os.path.isdir("/var/cache/pyrpm/%s" % subdir):
-        os.makedirs("/var/cache/pyrpm/%s" % subdir)
+    destdir = os.path.join("/var/cache/pyrpm", subdir)
+    if not os.path.isdir(destdir):
+        os.makedirs(destdir)
+    destfile = os.path.join(destdir, os.path.basename(url))
     try:
         if force:
-            f = urlgrab(url, "/var/cache/pyrpm/%s/%s" %
-                        (subdir, os.path.basename(url)))
+            f = urlgrab(url, destfile)
         else:
-            f = urlgrab(url, "/var/cache/pyrpm/%s/%s" %
-                        (subdir, os.path.basename(url)),
-                        reget='check_timestamp')
-
+            f = urlgrab(url, destfile, reget='check_timestamp')
     except URLGrabError, e:
         # urlgrab fails with invalid range for already completely transfered
         # files, pretty strange to me to be honest... :)
         if e[0] == 9:
-            return "/var/cache/pyrpm/%s/%s" % (subdir, os.path.basename(url))
+            return destfile
         else:
             return None
     return f
 
 def parseBoolean(str):
-    lower = str.lower()
-    if lower in ("yes", "true", "1", "on"):
-        return 1
-    return 0
+    """Convert str to a boolean.
 
-# Parse yum config options. Neede for several yum-like scripts
+    Return the resulting value, default to False if str is unrecognized."""
+
+    return str.lower() in ("yes", "true", "1", "on")
+
+# Parse yum config options. Needed for several yum-like scripts
 def parseYumOptions(argv, yum):
+    """Parse yum-like config options from argv to config.rpmconfig and RpmYum
+    yum.
+
+    Return list of non-option operands on success, None if a help message
+    should be written.  sys.exit () on --version, some invalid arguments
+    or errors in config files."""
+    
     # Argument parsing
     try:
       opts, args = getopt.getopt(argv, "?vhc:r:y",
@@ -534,7 +620,8 @@ def parseYumOptions(argv, yum):
          "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
          "servicehack", "installpkgs=", "arch=", "checkinstalled", "rusage"])
     except getopt.error, e:
-        print "Error parsing command list arguments: %s" % e
+        # FIXME: all to stderr
+        print "Error parsing command-line arguments: %s" % e
         return None
 
     # Argument handling
@@ -614,15 +701,15 @@ def parseYumOptions(argv, yum):
 
     if rpmconfig.arch != None:
         if not rpmconfig.test:
-            print "Arch option can only be used for tests"
+            print >> sys.stderr, "Arch option can only be used for tests"
             sys.exit(1)
         if not buildarchtranslate.has_key(rpmconfig.arch):
-            print "Unknown arch %s" % rpmconfig.arch
+            print >> sys.stderr, "Unknown arch %s" % rpmconfig.arch
             sys.exit(1)
         rpmconfig.machine = rpmconfig.arch
 
     if not args:
-        print "No command given"
+        print "No command given" # FIXME: all to stderr
         return None
 
     # Handle yum config file. By default we set the reposdir to "", meaning no
@@ -635,8 +722,18 @@ def parseYumOptions(argv, yum):
     return args
 
 def addRepo(yum, file):
-    conf = yumconfig.YumConf("3", rpmconfig.machine, buildarchtranslate[rpmconfig.machine], rpmconfig.buildroot, file, "")
-    for key in conf.vars.keys():
+    """Read yum configuration file and add repositories it uses to RpmYum yum.
+
+    sys.exit() on error."""
+    
+    try:
+        conf = yumconfig.YumConf("3", rpmconfig.machine,
+                                 buildarchtranslate[rpmconfig.machine],
+                                 rpmconfig.buildroot, file, "")
+    except IOError, e:
+        printError("Error reading configuration: %s" % e)
+        sys.exit(1)
+    for key in conf.keys():
         if key == "main":
             pass
         else:
@@ -649,13 +746,20 @@ def addRepo(yum, file):
                 excludes = ""
             else:
                 excludes = sec["exclude"]
-            yum.addRepo(baseurl, excludes, key)
+            yum.addRepo(baseurl, excludes, key) # FIXME: not documented yet
             if rpmconfig.compsfile == None:
+                # May stay None on download error
                 rpmconfig.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
 
 def selectNewestPkgs(pkglist):
-    """Filter the newest packages from given list and return new list. Honors
-buildarchtranslate and noarch problems."""
+    """Select the "best" packages for each base arch from RpmPackage list
+    pkglist.
+
+    Return a list of the "best" packages, selecting the highest EVR.arch for
+    each base arch."""
+
+    # %name.noarch => some RpmPackage with that %name
+    # %name.$basearch => RpmPackage with highest EVR for that %name.$basearch
     rethash = {}
     for pkg in pkglist:
         key1 = pkg["name"]+".noarch"
@@ -668,11 +772,9 @@ buildarchtranslate and noarch problems."""
             opkg = rethash[key2]
         else:
             opkg = rethash[key1]
-        if not pkg["arch"] == "noarch" and \
-           not opkg["arch"] == "noarch" and \
+        if pkg["arch"] != "noarch" and opkg["arch"] != "noarch" and \
            not archDuplicate(pkg["arch"], opkg["arch"]):
-            if rethash.has_key(key2):
-                raiseFatal("Impossible entry in selectNewestPkgs() found.")
+            assert not rethash.has_key(key2)
             rethash[key2] = pkg
             continue
         ret = pkgCompare(opkg, pkg)
@@ -685,6 +787,7 @@ buildarchtranslate and noarch problems."""
             rethash[key2] = pkg
     for key in rethash.keys():
         if key.endswith(".noarch") and rethash[key]["arch"] != "noarch":
+            # FIXME: why the try: except:?
             try:
                 del rethash[key]
             except:
@@ -695,20 +798,35 @@ buildarchtranslate and noarch problems."""
             retlist.append(pkg)
     return retlist
 
-#
-# DB Read function
-#
 def readPackages(dbpath):
+    """Read packages from rpmdb dbpath/Packages.
+
+    Return ({ package id => RpmPackage }, PGPKeyRing).  Raise bsddb.error.
+    Skip invalid packages and invalid tags, using config.rpmconfig to warn."""
+    
     packages = {}
     keyring = openpgp.PGPKeyRing()
-    db = hashopen(dbpath+"/Packages", "r")
+    db = hashopen(os.path.join(dbpath, "Packages"), "r")
     for key in db.keys():
         rpmio = RpmFileIO(rpmconfig, "dummy", verify=1)
         pkg = package.RpmPackage(rpmconfig, "dummy")
         data = db[key]
-        val = unpack("I", key)[0]
+        try:
+            val = struct.unpack("I", key)[0] # FIXME: native endian?
+        except struct.error:
+            rpmconfig.printError("Invalid key %s in rpmdb" % repr(key))
+            continue
         if val != 0:
-            (indexNo, storeSize) = unpack("!II", data[0:8])
+            try:
+                (indexNo, storeSize) = struct.unpack("!2I", data[0:8])
+            except struct.error:
+                rpmconfig.printError("Value for key %s in rpmdb is too short"
+                                     % repr(key))
+                continue
+            if len(data) < indexNo*16 + 8:
+                rpmconfig.printError("Value for key %s in rpmdb is too short"
+                                     % repr(key))
+                continue
             indexdata = data[8:indexNo*16+8]
             storedata = data[indexNo*16+8:]
             pkg["signature"] = {}
@@ -717,9 +835,8 @@ def readPackages(dbpath):
                     (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
                                                            storedata)
                 except ValueError, e:
-                    # FIXME: different handling?
-                    config.printError("Invalid header entry %s in %s: %s"
-                                      % (idx, key, e))
+                    rpmconfig.printError("Invalid header entry %s in %s: %s"
+                                         % (idx, repr(key), e))
                     continue
                 if   tag == 257:
                     pkg["signature"]["size_in_sig"] = tagval
@@ -741,36 +858,46 @@ def readPackages(dbpath):
                     else:
                         pkg[rpmtagname[tag]] = tagval
             if pkg["name"] == "gpg-pubkey":
-                continue
-                keys = openpgp.parsePGPKeys(pkg["description"])
+                continue # FIXME
+                try:
+                    keys = openpgp.parsePGPKeys(pkg["description"])
+                except ValueError, e:
+                    rpmconfig.printError("Invalid key package %s: %s"
+                                         % (pkg["name"], e))
+                    continue
                 for k in keys:
                     keyring.addKey(k)
                 pkg["group"] = (pkg["group"],)
             pkg.generateFileNames()
-            pkg.source = "rpmdb:"+dbpath+"/"+pkg.getNEVRA()
+            pkg.source = "rpmdb:"+os.path.join(dbpath, pkg.getNEVRA())
             packages[val] = pkg
             rpmio.hdr = {}
     return packages, keyring
 
 # Error handling functions
+
+# FIXME: not used
 def printDebug(level, msg):
     if level <= rpmconfig.debug:
         sys.stdout.write("Debug: %s\n" % msg)
         sys.stdout.flush()
     return 0
 
+# FIXME: not used
 def printInfo(level, msg):
     if level <= rpmconfig.verbose:
         sys.stdout.write(msg)
         sys.stdout.flush()
     return 0
 
+# FIXME: used
 def printWarning(level, msg):
     if level <= rpmconfig.warning:
         sys.stdout.write("Warning: %s\n" % msg)
         sys.stdout.flush()
     return 0
 
+# FIXME: used
 def printError(msg):
     sys.stderr.write("Error: %s\n" % msg)
     sys.stderr.flush()
@@ -781,8 +908,11 @@ def raiseFatal(msg):
 
 # ----------------------------------------------------------------------------
 
-# split EVR in epoch, version and release
 def evrSplit(evr):
+    """Split evr to components.
+
+    Return (E, V, R).  Default epoch to 0, release to "" if not specified."""
+
     i = 0
     p = evr.find(":") # epoch
     if p != -1:
@@ -799,8 +929,12 @@ def evrSplit(evr):
         release = ""
     return (epoch, version, release)
 
-# split [e:]name-version-release.arch into the 4 possible subcomponents.
 def envraSplit(envra):
+    """split [e:]name-version-release.arch into the 4 possible subcomponents.
+
+    Return (E, N, V, R, A).  Default epoch, version, release and arch to None
+    if not specified."""
+    
     # Find the epoch separator
     i = envra.find(":")
     if i >= 0:
@@ -839,7 +973,7 @@ def envraSplit(envra):
     return (epoch, envra, version, release, arch)
 
 
-# locale independend string methods
+# locale independent string methods
 def _xisalpha(chr):
     return (chr >= 'a' and chr <= 'z') or (chr >= 'A' and chr <= 'Z')
 def _xisdigit(chr):
@@ -850,8 +984,11 @@ def _xisalnum(chr):
 
 # compare two strings
 def stringCompare(str1, str2):
-    """ Loop through each version segment (alpha or numeric) of
-        str1 and str2 and compare them. """
+    """Compare version strings str1, str2 like rpm does.
+
+    Return an integer with the same sign as (str1 - str2).  Loop through each
+    version segment (alpha or numeric) of str1 and str2 and compare them."""
+
     if str1 == str2: return 0
     lenstr1 = len(str1)
     lenstr2 = len(str2)
@@ -864,7 +1001,7 @@ def stringCompare(str1, str2):
         # start of the comparison data, search digits or alpha chars
         j1 = i1
         j2 = i2
-        if _xisdigit(str1[j1]):
+        if j1 < lenstr1 and _xisdigit(str1[j1]):
             while j1 < lenstr1 and _xisdigit(str1[j1]): j1 += 1
             while j2 < lenstr2 and _xisdigit(str2[j2]): j2 += 1
             isnum = 1
@@ -873,9 +1010,10 @@ def stringCompare(str1, str2):
             while j2 < lenstr2 and _xisalpha(str2[j2]): j2 += 1
             isnum = 0
         # check if we already hit the end
+        # FIXME: return 0 if both at end?
         if j1 == i1: return -1
         if j2 == i2:
-            if isnum: return 1
+            if isnum: return 1 # FIXME: why only if isnum?
             return -1
         if isnum:
             # ignore leading "0" for numbers (1 == 000001)
@@ -894,9 +1032,12 @@ def stringCompare(str1, str2):
         return -1
     return 1
 
-# internal EVR compare, uses stringCompare to compare epochs, versions and
-# release versions
 def labelCompare(e1, e2):
+    """Compare (E, V, R) tuples e1 and e2.
+
+    Return an integer with the same sign as (e1 - e2).  If either of the tuples
+    has empty release, ignore releases in comparison."""
+
     if e2[2] == "": # no release
         e1 = (e1[0], e1[1], "")
     elif e1[2] == "": # no release
@@ -908,9 +1049,12 @@ def labelCompare(e1, e2):
             r = stringCompare(e1[2], e2[2])
     return r
 
-# compares two EVR's with comparator
 def evrCompare(evr1, comp, evr2):
-    res = -1
+    """Check whether evr1 matches comp (RPMSENSE_*) evr2.
+
+    Return True if it does, False otherwise.  Each of evr1 and evr2 can be
+    a string or an (E, V, R) string tuple."""
+
     if isinstance(evr1, TupleType):
         e1 = evr1
     else:
@@ -924,29 +1068,41 @@ def evrCompare(evr1, comp, evr2):
     #        e1 = ("0", e1[1], e1[2])
     #        e2 = ("0", e2[1], e2[2])
     r = labelCompare(e1, e2)
+    res = False
     if r == -1:
         if comp & RPMSENSE_LESS:
-            res = 1
+            res = True
     elif r == 0:
         if comp & RPMSENSE_EQUAL:
-            res = 1
+            res = True
     else: # res == 1
         if comp & RPMSENSE_GREATER:
-            res = 1
+            res = True
     return res
 
 def pkgCompare(p1, p2):
+    """Compare EVR of RpmPackage's p1 and p2.
+
+    Return an integer with the same sign as (p1 - p2).  The packages should
+    have same %name for the comparison to be meaningful."""
+    
     return labelCompare((p1.getEpoch(), p1["version"], p1["release"]),
                         (p2.getEpoch(), p2["version"], p2["release"]))
 
 def rangeCompare(flag1, evr1, flag2, evr2):
+    """Check whether (RPMSENSE_* flag, (E, V, R) evr) pairs (flag1, evr1)
+    and (flag2, evr2) intersect.
+
+    Return 1 if they do, 0 otherwise.  Assumes at least one of RPMSENSE_EQUAL,
+    RPMSENSE_LESS or RPMSENSE_GREATER is each of flag1 and flag2."""
+    
     sense = labelCompare(evr1, evr2)
     result = 0
     if sense < 0 and  \
            (flag1 & RPMSENSE_GREATER or flag2 & RPMSENSE_LESS):
         result = 1
     elif sense > 0 and \
-             (flag1 & RPMSENSE_LESS or flag2 & RPMSENSE_GREATER):
+           (flag1 & RPMSENSE_LESS or flag2 & RPMSENSE_GREATER):
         result = 1
     elif sense == 0 and \
              ((flag1 & RPMSENSE_EQUAL and flag2 & RPMSENSE_EQUAL) or \
@@ -956,7 +1112,8 @@ def rangeCompare(flag1, evr1, flag2, evr2):
     return result
 
 def depOperatorString(flag):
-    """ generate readable operator """
+    """Return a string representation of RPMSENSE_* comparison operator."""
+
     op = ""
     if flag & RPMSENSE_LESS:
         op = "<"
@@ -967,25 +1124,32 @@ def depOperatorString(flag):
     return op
 
 def depString((name, flag, version)):
+    """Return a string representation of (name, RPMSENSE_* flag, version)
+    condition."""
+
     if version == "":
         return name
     return "%s %s %s" % (name, depOperatorString(flag), version)
 
 def archCompat(parch, arch):
-    if parch == "noarch" or arch == "noarch" or \
-           parch == arch or \
-           (arch_compats.has_key(arch) and parch in arch_compats[arch]):
-        return 1
-    return 0
+    """Return True if package with architecture parch can be installed on
+    machine with arch arch."""
+    
+    return parch == "noarch" or arch == "noarch" or parch == arch or \
+           (arch_compats.has_key(arch) and parch in arch_compats[arch])
 
 def archDuplicate(parch, arch):
-    if parch == arch or \
-           buildarchtranslate[parch] == buildarchtranslate[arch]:
-        return 1
-    return 0
+    """Return True if parch and arch have the same base arch."""
+    
+    return (parch == arch
+            or buildarchtranslate[parch] == buildarchtranslate[arch])
 
 def filterArchCompat(list, arch):
-    # stage 1: filter packages which are not in compat arch
+    """Modify RpmPackage list list to contain only packages that can be
+    installed on arch arch.
+
+    Warn using config.rpmconfig about dropped packages."""
+    
     i = 0
     while i < len(list):
         if archCompat(list[i]["arch"], arch):
@@ -995,14 +1159,9 @@ def filterArchCompat(list, arch):
                          (list[i].source, arch))
             list.pop(i)
 
-def filterArchDuplicates(list):
-    raise Exception, "deprecated"
-
-def filterArchList(list, arch=None):
-    raise Exception, "deprecated"
-
 def normalizeList(list):
-    """ normalize list """
+    """Modify list to contain every entry at most once."""
+    
     if len(list) < 2:
         return
     h = { }
@@ -1016,7 +1175,9 @@ def normalizeList(list):
             i += 1
 
 def orderList(list, arch):
-    """ order list by machine distance and evr """
+    """Order RpmPackage list by "distance" to arch (ascending) and EVR
+    (descending), in that order."""
+
     distance = [ machineDistance(l["arch"], arch) for l in list ]
     for i in xrange(len(list)):
         for j in xrange(i + 1, len(list)):
@@ -1030,7 +1191,9 @@ def orderList(list, arch):
                 continue
 
 def machineDistance(arch1, arch2):
-    """ return machine distance as by arch_compats """
+    """Return machine distance between arch1 and arch2, as defined by
+    arch_compats."""
+
     # Noarch is always very good ;)
     if arch1 == "noarch" or arch2 == "noarch":
         return 0
@@ -1047,8 +1210,10 @@ def machineDistance(arch1, arch2):
     else:
         return 999   # incompatible archs, distance is very high ;)
 
+# FIXME: not used
 def getBuildArchList(list):
-    """Returns list of build architectures used in 'list' of packages."""
+    """Return a list of non-noarch architectures of RpmPackage's in list."""
+
     archs = []
     for p in list:
         a = p['arch']
@@ -1058,15 +1223,18 @@ def getBuildArchList(list):
             archs.append(a)
     return archs
 
-def tagsearch(searchtags, list, regex=None):
-    pkglist = []
-    st = []
-    if regex:
-        for (key, val) in searchtags:
-            st.append([key, re.compile(normalizeRegex(val))])
+def tagsearch(searchtags, list, wildcard=False):
+    """Return a list of RpmPackage's from list matching searchtags.
+
+    searchtags is a list of (tag name, value to match).  If wildcard, value is
+    a pattern possibly containing the '*' character."""
+
+    if wildcard:
+        st = [(key, re.compile(_patternToRegex(val)))
+              for (key, val) in searchtags]
         searchtags = st
+    pkglist = []
     for pkg in list:
-        # If we have an epoch we need to check it
         found = 1
         for (key, val) in searchtags:
             if not pkg.has_key(key):
@@ -1076,7 +1244,7 @@ def tagsearch(searchtags, list, regex=None):
                 pval = str(pkg[key][0])
             else:
                 pval = pkg[key]
-            if not regex:
+            if not wildcard:
                 if val != pval:
                     found = 0
                     break
@@ -1088,8 +1256,11 @@ def tagsearch(searchtags, list, regex=None):
             pkglist.append(pkg)
     return pkglist
 
-def normalizeRegex(regex):
-    regex = regex.replace(".", "\.")
+def _patternToRegex(pattern):
+    """Return a regex matching the original pattern, in which '*' matches any
+    number of characters."""
+    
+    regex = pattern.replace(".", "\.")
     regex = regex.replace("*", ".*")
     regex = regex.replace("+", "\+")
     regex = regex.replace("\\", "\\\\")
@@ -1103,7 +1274,7 @@ def normalizeRegex(regex):
     regex = regex.replace("|", "\|")
     regex = regex.replace("(", "\(")
     regex = regex.replace(")", "\)")
-    return regex
+    return regex + "$"
 
 EPOCHTAG=0
 NAMETAG=1
@@ -1118,105 +1289,116 @@ __delimeter = { EPOCHTAG : None,
                 ARCHTAG : "." }
 
 def constructName(nametags, namevals):
+    """Return a string containing tags from (ascending) *TAG list nametags,
+    describing (E, N, V, R, A) namevals."""
+
     ret = ""
     for tag in nametags:
-        if tag in __delimeter.keys():
-            if namevals[tag]:
-                if ret:
-                    ret += __delimeter[tag]
-                ret += namevals[tag]
+        assert tag in __delimeter.keys()
+        if namevals[tag]:
+            if ret:
+                ret += __delimeter[tag]
+            ret += namevals[tag]
     return ret
 
-def __findPkgByName(pkgname, list, regex=None):
-    """Find a package by name in a given list. Name can contain version,
-release and arch. Returns a list of all matching packages, starting with
-best match."""
+def __findPkgByName(pkgname, pkgs, wildcard=False):
+    """Return a list of RpmPackage's from pkgs matching pkgname.
+
+    pkgname can contain version, release and arch (but simple names are
+    prefered).  The returned list contains "better" matches first.  If
+    wildcard, '*' in pkgname matches any number of characters."""
+
+    # For a pattern like *-*.* we don't know which fields match which parts
+    # of the package's ENVRA, so we try several possibilities.
     pkglist = []
     envra = envraSplit(pkgname)
-    if not regex:
-        tmplist = []
-        for pkg in list:
-            if pkg["name"].find(envra[1]) >= 0:
-                tmplist.append(pkg)
-        list = tmplist
+    if not wildcard:
+        # Filter out packages that can't possibly match
+        tmplist = [pkg for pkg in pkgs if pkg["name"].find(envra[1]) >= 0]
+        pkgs = tmplist
     tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG, RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     if envra[RELEASETAG] != None:
         tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG], envra)), \
                 ("version", constructName([RELEASETAG, ARCHTAG], envra))]
-        pkglist.extend(tagsearch(tags, list, regex))
+        pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG], envra)), \
             ("version", constructName([RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
             ("version", constructName([VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
             ("version", constructName([VERSIONTAG, RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     if envra[RELEASETAG] != None:
         tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
                 ("version", constructName([VERSIONTAG], envra)), \
                 ("release", constructName([RELEASETAG, ARCHTAG], envra))]
-        pkglist.extend(tagsearch(tags, list, regex))
+        pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
             ("version", constructName([VERSIONTAG], envra)), \
             ("release", constructName([RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
 
     tags = [("epoch", constructName([EPOCHTAG], envra)), \
             ("name", constructName([NAMETAG, VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("epoch", constructName([EPOCHTAG], envra)), \
             ("name", constructName([NAMETAG, VERSIONTAG, RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     if envra[RELEASETAG] != None:
         tags = [("epoch", constructName([EPOCHTAG], envra)), \
                 ("name", constructName([NAMETAG, VERSIONTAG], envra)), \
                 ("version", constructName([RELEASETAG, ARCHTAG], envra))]
-        pkglist.extend(tagsearch(tags, list, regex))
+        pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("epoch", constructName([EPOCHTAG], envra)), \
             ("name", constructName([NAMETAG, VERSIONTAG], envra)), \
             ("version", constructName([RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("epoch", constructName([EPOCHTAG], envra)), \
             ("name", constructName([NAMETAG], envra)), \
             ("version", constructName([VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("epoch", constructName([EPOCHTAG], envra)), \
             ("name", constructName([NAMETAG], envra)), \
             ("version", constructName([VERSIONTAG, RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     if envra[RELEASETAG] != None:
         tags = [("epoch", constructName([EPOCHTAG], envra)), \
                 ("name", constructName([NAMETAG], envra)), \
                 ("version", constructName([VERSIONTAG], envra)), \
                 ("release", constructName([RELEASETAG, ARCHTAG], envra))]
-        pkglist.extend(tagsearch(tags, list, regex))
+        pkglist.extend(tagsearch(tags, pkgs, wildcard))
     tags = [("epoch", constructName([EPOCHTAG], envra)), \
             ("name", constructName([NAMETAG], envra)), \
             ("version", constructName([VERSIONTAG], envra)), \
             ("release", constructName([RELEASETAG], envra)), \
             ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, list, regex))
+    pkglist.extend(tagsearch(tags, pkgs, wildcard))
     normalizeList(pkglist)
     return pkglist
 
-def findPkgByName(pkgname, list):
-    pkglist = __findPkgByName(pkgname, list, None)
-    if len(pkglist) == 0:
-        if pkgname.find("*") < 0:
-            return [ ]
-        pkglist = __findPkgByName(pkgname, list, 1)
+def findPkgByName(pkgname, pkgs):
+    """Return a list of RpmPackage's from pkgs matching pkgname.
+
+    pkgname can contain version, release and arch (but simple names are
+    prefered).  The returned list contains "better" matches first.  '*' is
+    interpreted literally; if that results in no matches, '*' matches any
+    number of characters."""
+
+    pkglist = __findPkgByName(pkgname, pkgs, None)
+    if len(pkglist) == 0 and pkgname.find("*") >= 0:
+        pkglist = __findPkgByName(pkgname, pkgs, 1)
     return pkglist
 
 def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
@@ -1232,6 +1414,10 @@ def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
     return pkg
 
 def run_main(main):
+    """Run main, handling --hotshot.
+
+    The return value from main, if not None, is a return code."""
+    
     dohotshot = 0
     if len(sys.argv) >= 2 and sys.argv[1] == "--hotshot":
         dohotshot = 1

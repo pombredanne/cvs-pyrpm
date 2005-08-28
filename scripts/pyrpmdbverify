@@ -149,7 +149,7 @@ def readRpmDB():
     readGroup()
     readInstalltid()
     readName()
-    (packages, keyring) = readPackages(dbpath)
+    (packages, keyring) = readPackages(dbpath) # FIXME: bsddb.error
     readProvidename()
     readProvideversion()
     readRequirename()

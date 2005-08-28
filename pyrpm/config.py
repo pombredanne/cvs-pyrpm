@@ -21,12 +21,17 @@ import os, copy, sys, time
 
 
 class RpmMessageHandler:
+    """A closure for message output."""
+    
     def __init__(self, config, prefix="", suffix="\n"):
-        self.config = config
+        self.config = config            # FIXME: write-only
         self.prefix = prefix
         self.suffix = suffix
 
     def handle(self, msg):
+        """Write msg to stdout, using the defined prefix and suffix."""
+        # FIXME: to stderr?
+
         sys.stdout.write("%s%s%s" % (self.prefix, msg, self.suffix))
         sys.stdout.flush()
 
@@ -35,11 +40,12 @@ class RpmConfig:
     def __init__(self):
         (self.sysname, self.nodename, self.release, self.version,
             self.machine) = os.uname()
-        self.debug = 0
-        self.warning = 0
-        self.verbose = 0
+        self.debug = 0              # Maximum level of debug messages to output
+        self.warning = 0          # Maximum level of warning messages to output
+        self.verbose = 0             # Maximum level of info messages to output
         self.debug_handler = RpmMessageHandler(self, "Debug: ")
         self.warning_handler = RpmMessageHandler(self, "Warning: ")
+        # FIXME: why not default suffix="\n"?
         self.verbose_handler = RpmMessageHandler(self, "", "")
         self.error_handler = RpmMessageHandler(self, "Error: ")
         self.printhash = 0
@@ -62,7 +68,7 @@ class RpmConfig:
         self.nofileconflicts = 0
         self.checkinstalled = 0
         self.exactarch = 0
-        self.tid = int(time.time())
+        self.tid = int(time.time())     # FIXME: make sure it is unique?
         self.compsfile = None
         self.resolvertags = ("name", "epoch", "version", "release", "arch",
             "providename", "provideflags", "provideversion", "requirename",
@@ -70,13 +76,13 @@ class RpmConfig:
             "obsoleteversion", "conflictname", "conflictflags",
             "conflictversion", "filesizes", "filemodes", "filemd5s",
             "fileflags", "dirindexes", "basenames", "dirnames", "oldfilenames",
-            "sourcerpm", "md5", "sha1header")
-        self.timer = 0
-        self.ldconfig = 0
-        self.delayldconfig = 0
-        self.service = 0
+            "sourcerpm", "md5", "sha1header") # Tags used by RpmResolver
+        self.timer = 0                  # Output timing information
+        self.ldconfig = 0             # Number of ldconfig calls optimized away
+        self.delayldconfig = 0          # A delayed ldconfig call is pending
+        self.service = 0                # Install /sbin/service with "exit 0"
         self.yumconf = '/etc/yum.conf'
-        self.arch = None
+        self.arch = None                # If explicitly selected, for --test
 
     def printDebug(self, level, msg):
         if self.debug_handler and level <= self.debug:
@@ -94,7 +100,7 @@ class RpmConfig:
         if self.error_handler:
             self.error_handler.handle(msg)
 
-    def copy(self):
+    def copy(self):                     # FIXME: not used
         return copy.deepcopy(self)
 
 

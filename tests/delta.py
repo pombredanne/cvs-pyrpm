@@ -897,6 +897,7 @@ def openRPM(name):
         # installed package
         db = pyrpm.getRpmDBFactory(pyrpm.rpmconfig, pyrpm.rpmconfig.dbpath,
                                    pyrpm.rpmconfig.buildroot)
+        db.open()
         if not db.read():
             raiseFatal("Couldn't read database")
         pkgs = pyrpm.findPkgByName(name, db.getPkgList())
