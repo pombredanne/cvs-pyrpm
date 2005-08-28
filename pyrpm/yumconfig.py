@@ -27,49 +27,87 @@ from glob import glob
 import sys, re, os, string
 
 class Conf:
+    """A generic .ini file parser."""
+
     def __init__(self, filename, commenttype='#',
                  separators='\t ', separator='\t',
                  merge=1, create_if_missing=1):
+        """Open and read (not parse) filename.
+
+        Use commenttype to start comment lines.  Use separators to separate
+        fields in file on input, separator on output (note that lines starting
+        with separators are interpreted as having a zero-length first field).
+        Allow more than one separator between two fields if merge.
+
+        Don't report error if filename does not exist and create_if_missing.
+        Raise IOError."""
+        
         self.commenttype = commenttype
         self.separators = separators
         self.separator = separator
-        self.codedict = {}
-        self.splitdict = {}
+        # A cache for self.findnextcodeline():
+        # (separators, commenttype) => RE for non-empty, non-comment lines
+        self.codedict = {} 
+        # A cache for self.getfields(): regexp => compiled RE
+        self.splitdict = {} 
         self.merge = merge
         self.create_if_missing = create_if_missing
-        self.line = 0
-        self.rcs = 0
-        self.mode = -1
         # self.line is a "point" -- 0 is before the first line;
         # 1 is between the first and second lines, etc.
         # The "current" line is the line after the point.
+        self.line = 0
+        self.rcs = 0 # The file is managed by RCS, attempt to commit changes
+        self.mode = -1                  # Mode to use in self.write()
         self.filename = filename
         self.read()
+
     def rewind(self):
+        """Seek to the first line."""
+        
         self.line = 0
+
+    # FIXME: not used
     def fsf(self):
+        """Seek after all lines."""
+        
         self.line = len(self.lines)
+
+    # FIXME: not used
     def tell(self):
+        """Return the current line number (0-based)."""
+        
         return self.line
+
+    # FIXME: not used
     def seek(self, line):
+        """Seek to (0-based) line."""
+        
         self.line = line
+    
     def nextline(self):
+        """Seek to the next line, if any."""
+
         self.line = min([self.line + 1, len(self.lines)])
-    def findnextline(self, regexp=None):
-        # returns false if no more lines matching pattern
+        
+    def findnextline(self, regexp):
+        """Starting at the current line, skip all lines not containing a match
+        to regexp.
+
+        Return 1 if found a match, 0 otherwise."""
+        
+        if not hasattr(regexp, "search"):
+            regexp = re.compile(regexp)
         while self.line < len(self.lines):
-            if regexp:
-                if hasattr(regexp, "search"):
-                    if regexp.search(self.lines[self.line]):
-                        return 1
-                elif re.search(regexp, self.lines[self.line]):
-                    return 1
-            elif not regexp:
+            if regexp.search(self.lines[self.line]):
                 return 1
             self.line = self.line + 1
-        # if while loop terminated, pattern not found.
         return 0
+    
     def findnextcodeline(self):
+        """Starting at the current line, skip all empty or comment lines.
+
+        Return 1 if found a "value" line, 0 otherwise."""
+        
         # optional whitespace followed by non-comment character
         # defines a codeline.  blank lines, lines with only whitespace,
         # and comment lines do not count.
@@ -79,7 +117,14 @@ class Conf:
                 '[^' + self.commenttype + self.separators + ']+')
         codereg = self.codedict[(self.separators, self.commenttype)]
         return self.findnextline(codereg)
+
+    # FIXME: not used
     def findlinewithfield(self, fieldnum, value):
+        """Starting at the current line, skip all lines that do not contain
+        value as field fieldnum (1-based).
+
+        Return 1 if found, 0 otherwise."""
+        
         if self.merge:
             seps = '['+self.separators+']+'
         else:
@@ -88,12 +133,17 @@ class Conf:
         rx = rx + ('[^'+self.separators+']*' + seps) * (fieldnum - 1)
         rx = rx + value + '\(['+self.separators+']\|$\)'
         return self.findnextline(rx)
+
     def getline(self):
+        """Return current line, or '' if past EOF."""
+        
         if self.line >= len(self.lines):
             return ''
         return self.lines[self.line]
+
     def getfields(self):
-        # returns list of fields split by self.separators
+        """Return a list of fields on the current line, or [] if past EOF."""
+
         if self.line >= len(self.lines):
             return []
         if self.merge:
@@ -106,70 +156,103 @@ class Conf:
             self.splitdict[seps] = re.compile(seps)
         regexp = self.splitdict[seps]
         return regexp.split(self.lines[self.line])
+
     def setfields(self, list):
-        # replaces current line with line built from list
-        # appends if off the end of the array
+        """Replace current line with fields list, or append it if at EOF."""
+    
         if self.line < len(self.lines):
             self.deleteline()
         self.insertlinelist(list)
+
     def insertline(self, line=''):
+        """Insert line to current position in self.lines."""
+
         self.lines.insert(self.line, line)
+
     def insertlinelist(self, linelist):
+        """Insert line with fields linelist to self.lines at current
+        position."""
+        
         self.insertline(string.joinfields(linelist, self.separator))
+
     def sedline(self, pat, repl):
+        """Replace pat with repl in current line."""
+        
         if self.line < len(self.lines):
             self.lines[self.line] = re.sub(pat, repl, self.lines[self.line])
+
+    # FIXME: not used
     def changefield(self, fieldno, fieldtext):
+        """Replace field filedno (0-based) on current line by fieldtext."""
+        
         fields = self.getfields()
         fields[fieldno:fieldno+1] = [fieldtext]
         self.setfields(fields)
-    def setline(self, line=[]):
+
+    # FIXME: not used
+    def setline(self, line=''):
+        """Replace current line by line."""
+    
         self.deleteline()
         self.insertline(line)
+
     def deleteline(self):
+        """Remove current line from self.lines."""
+        
         self.lines[self.line:self.line+1] = []
+    
     def chmod(self, mode=-1):
+        """Set file permissions to enforce in write () to mode.
+
+        mode -1 means only umask should be used."""
+
         self.mode = mode
+
     def read(self):
-        file_exists = 0
-        if os.path.isfile(self.filename):
-            file_exists = 1
-        if not self.create_if_missing and not file_exists:
-            raise FileMissing, self.filename + ' does not exist.'
-        if file_exists and os.access(self.filename, os.R_OK):
-            self.file = open(self.filename, 'r', -1)
-            self.lines = self.file.readlines()
-            # strip newlines
-            for index in xrange(len(self.lines)):
-                if len(self.lines[index]) and self.lines[index][-1] == '\n':
-                    self.lines[index] = self.lines[index][:-1]
-                if len(self.lines[index]) and self.lines[index][-1] == '\r':
-                    self.lines[index] = self.lines[index][:-1]
-            self.file.close()
-        else:
-            self.lines = []
+        """Read (not parse) the config file into self.lines.
+
+        Raise IOError."""
+        
+        self.lines = []
+        if self.create_if_missing and not os.path.isfile(self.filename):
+            return
+        f = open(self.filename, 'r')
+        for line in f:
+            if line.endswith('\n'):
+                line = line[:-1]
+            if line.endswith('\r'):
+                line = line[:-1]
+            self.lines.append(line)
+        f.close()
+
     def write(self):
+        """Write current lines to self.filename.
+
+        Note that self.filename should not contain shell metacharacters. Raise
+        IOError, OSError."""
+        
         # rcs checkout/checkin errors are thrown away, because they
         # aren't this tool's fault, and there's nothing much it could
         # do about them.  For example, if the file is already locked
         # by someone else, too bad!  This code is for keeping a trail,
         # not for managing contention.  Too many deadlocks that way...
-        if self.rcs or os.path.exists(os.path.split(self.filename)[0]+'/RCS'):
+        if self.rcs or os.path.exists(os.path.dirname(self.filename)+'/RCS'):
             self.rcs = 1
             os.system('/usr/bin/co -l '+self.filename+' </dev/null >/dev/null 2>&1')
-        self.file = open(self.filename, 'w', -1)
+        f = open(self.filename, 'w')
         if self.mode >= 0:
             os.chmod(self.filename, self.mode)
         # add newlines
-        for index in xrange(len(self.lines)):
-            self.file.write(self.lines[index] + '\n')
-        self.file.close()
+        for line in self.lines:
+            f.write(line + '\n')
+        f.close()
         if self.rcs:
-            mode = os.stat(self.filename)[0]
+            mode = os.stat(self.filename).st_mode
             os.system('/usr/bin/ci -u -m"control panel update" ' +
                       self.filename+' </dev/null >/dev/null 2>&1')
             os.chmod(self.filename, mode)
 
+# FIXME: dict would be good enough, .conf and .stanza are not used.
 class YumConfSubDict(DictType):
     def __init__(self, parent_conf, stanza, initdict=None):
         DictType.__init__(self, initdict)
@@ -177,9 +260,9 @@ class YumConfSubDict(DictType):
         self.stanza = stanza
 
 class YumConf(Conf):
-    """Simple Yum config file parser
-    """
+    """Simple Yum config file parser"""
 
+    # Variables valid in [main]
     MainVarnames = ( "cachedir",
                      "reposdir",
                      "debuglevel",
@@ -213,8 +296,10 @@ class YumConf(Conf):
                      "pkgpolicy",
                      )
 
+    # Variables that can have multi-line values
     MultiLines = ( "baseurl", "mirrorlist" )
 
+    # Variables valid in repository stanzas
     RepoVarnames = ( "name",
                      "baseurl",
                      "mirrorlist",
@@ -233,6 +318,7 @@ class YumConf(Conf):
                      "proxy_username",
                      "proxy_password" )
 
+    # $varname replaced by self.varname
     Variables = ( "releasever", "arch", "basearch" )
 
     def __init__(self, releasever, arch, basearch,
@@ -240,13 +326,16 @@ class YumConf(Conf):
                  filename = '/etc/yum.conf',
                  reposdir = '/etc/yum.repos.d',
                  ):
-        """releasever - version of release (e.g. 3 for Fedora Core 3)
+        """Open, read and parse filename and reposdir/*.repo.
+
+        releasever - version of release (e.g. 3 for Fedora Core 3)
         arch - architecure (e.g. i686)
         basearch - base architecture (e.g. i386)
-        chroot - set a chroot to add to all local config filename
+        chroot - a chroot to add to [main]/reposdir
         filename - the base config file
-        reposdir - additional dir to read (glob *.repo)
-        """
+
+        Raise IOError."""
+
         if chroot == None:
             self.chroot = ''
         else:
@@ -256,9 +345,9 @@ class YumConf(Conf):
             self.chroot += '/'
 
         self.reposdir = reposdir
-        self.releasever = releasever
-        self.arch = arch
-        self.basearch = basearch
+        self.releasever = releasever    # Used by extendValue()
+        self.arch = arch                # Used by extendValue()
+        self.basearch = basearch        # Used by extendValue()
         # Don't prefix the yum config file with the chroot
         self.myfilename = filename
 
@@ -267,24 +356,26 @@ class YumConf(Conf):
                       merge=1, create_if_missing=0)
 
     def extendValue(self, value):
-        """replaces known $vars in values"""
+        """Return value with all known $vars replaced by their values."""
+        
         for var in YumConf.Variables:
             if value.find("$" + var) != -1:
                 value = value.replace("$" + var, self.__dict__[var])
         return value
 
     def checkVar(self, stanza, varname):
-        """check variablename, if allowed in the config file"""
+        """Return True if varname is allowed in stanza."""
+        
         if stanza == "main":
-            if varname in YumConf.MainVarnames:
-                return True
+            return varname in YumConf.MainVarnames
         else:
-            if varname in YumConf.RepoVarnames:
-                return True
-        return False
+            return varname in YumConf.RepoVarnames
 
     def read(self):
-        """read all config files"""
+        """Read and parse all config files to self.vars.
+
+        Raise IOError."""
+        
         self.vars = {}
         self.filename = self.myfilename
         Conf.read(self)
@@ -302,7 +393,8 @@ class YumConf(Conf):
             self.parseFile()
 
     def parseFile(self):
-        """parse one config file with the help of Conf"""
+        """Parse current self.lines into self.vars"""
+
         self.rewind()
         stanza = None
         while 1:
@@ -320,6 +412,7 @@ class YumConf(Conf):
                     break
 
                 if not self.checkVar(stanza, v[0]):
+                    # FIXME: not v[1] not quite correct, should use whole line
                     if (not v[1]) and (prevname in YumConf.MultiLines):
                         value = self.extendValue(v[0])
                         stanzavars[prevname].append(value)
@@ -348,23 +441,35 @@ class YumConf(Conf):
         self.rewind()
 
     def getEntry(self):
+        """Parse a single variable definition.
+
+        Return [name, value] (both with leading and trailing white space
+        stripped), or None if the line is invalid."""
+        
         v = self.getfields()
 
         try:
+            # FIXME: Loses white space around '=' in field values
             v = [v[0], string.joinfields(v[1:len(v)], '=')]
         except(LookupError):
-            return 0
+            return None
 
         if not v:
-            return 0
+            return None
 
         return [string.strip(v[0]), string.strip(v[1])]
 
     def nextEntry(self):
+        """Starting at the current line, skip all lines that are not variable
+        definitions.
+
+        Return [name, value] (both with leading and trailing white space
+        stripped) if found a "valud" line, None otherwise."""
+
         while self.findnextcodeline():
             #print "nextEntry: " + self.getline()
             if self.isStanzaDecl():
-                return 0
+                return None
 
             v = self.getEntry()
 
@@ -373,19 +478,31 @@ class YumConf(Conf):
 
             self.nextline()
 
-        return 0
+        return None
 
     def findnextcodeline(self):
+        """Starting at the current line, skip all lines that can't be valid
+        values or stanza headers.
+
+        Return 1 if found a "valid" line, 0 otherwise."""
+        
         # cannot rename, because of inherited class
+        # XXX base class does not call this
         return self.findnextline('^[\t ]*[\[0-9A-Za-z_]+.*')
 
     def isStanzaDecl(self):
-        # return true if the current line is of the form [...]
+        """Return 1 if the current line is a stanza header."""
+
         if self.stanza_re.match(self.getline()):
             return 1
         return 0
 
     def nextStanza(self):
+        """Starting at the current line, skip all lines until a stanza
+        header.
+
+        Return a stanza name if found, None otherwise."""
+        
         # leave the current line at the first line of the stanza
         # (the first line after the [stanza_name] entry)
         while self.findnextline('^[\t ]*\[.*\]'):
@@ -397,23 +514,24 @@ class YumConf(Conf):
 
             self.nextline()
 
-        self.rewind()
-        return 0
+        return None
 
     def __getitem__(self, stanza):
+        """Return a YumConfSubDict for stanza.
+
+        Raise KeyError."""
+        
         return self.vars[stanza]
 
-    def __setitem__(self, stanza, value):
-        raise Exception, "read only"
-
-    def __delitem__(self, stanza):
-        raise Exception, "read only"
-
     def keys(self):
+        """Return a list of known stanza names."""
+        
         # no need to return list in order here, I think.
         return self.vars.keys()
 
     def has_key(self, key):
+        """Return true if key is a valid stanza name."""
+
         return self.vars.has_key(key)
 
 
