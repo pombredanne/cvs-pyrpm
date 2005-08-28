@@ -1,7 +1,7 @@
                               RPM database internals
                               ----------------------
 
-This document describes the reveres engineered info from the various files in
+This document describes the reverse engineered info from the various files in
 /var/lib/rpm. All files are db4 files, either hash or btree based. With the
 excpetion of Packages all files have the corresponding rpmtag based value as
 key. The data the consists of integer pairs which contain the package id and
@@ -13,31 +13,31 @@ First the list of files and their data:
 
 Basenames (hash):
  key: Basename (string)
- values: list of 2-tupels: installid (4 byte int), basenameindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), basenameindex (4 byte int)
 
 Conflictname (hash):
  key: Conflictname (string)
- values: list of 2-tupels: installid (4 byte int), conflictindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), conflictindex (4 byte int)
 
 Dirnames (btree):
  key: Dirname (string)
- values: list of 2-tupels: installid (4 byte int), dirindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), dirindex (4 byte int)
 
 Filemd5s (hash):
  key: md5sum (4 * 4 byte int, no hex string!)
- values: list of 2-tupels: installid (4 byte int), basenameindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), basenameindex (4 byte int)
 
 Group (hash):
  key: Groupname (string)
- values: list of 2-tupels: installid (4 byte int), groupindex (4 byte int) (always 0)
+ values: list of 2-tuples: installid (4 byte int), groupindex (4 byte int) (always 0)
 
 Installtid (btree):
  key: Installtime of transaction (4 byte int, time() value)
- values: list of 2-tupels: installid (4 byte int), index (4 byte int) (always 0)
+ values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
 
 Name (hash):
  key: Packagename (string)
- values: list of 2-tupels: installid (4 byte int), index (4 byte int) (always 0)
+ values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
 
 Packages (hash):
  key: Installid (4 byte int)
@@ -46,11 +46,11 @@ Packages (hash):
 
 Providename (hash):
  key: Providename (string)
- values: list of 2-tupels: installid (4 byte int), providenameindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), providenameindex (4 byte int)
 
 Provideversion (btree):
  key: Provideversion (string)
- values: list of 2-tupels: installid (4 byte int), provideversionindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), provideversionindex (4 byte int)
 
 Pubkeys (hash):
  key: ?
@@ -58,24 +58,24 @@ Pubkeys (hash):
 
 Requirename (hash):
  key: Requirename (string)
- values: list of 2-tupels: installid (4 byte int), requirenameindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), requirenameindex (4 byte int)
  Only contains the requirenames of not install prereqs
 
 Requireversion (btree):
  key: Requireversion (string)
- values: list of 2-tupels: installid (4 byte int), requireversionindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), requireversionindex (4 byte int)
 
 Sha1header (hash):
  key: Sha1header (string) (just as the value from the header)
- values: list of 2-tupels: installid (4 byte int), index (4 byte int) (always 0)
+ values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
 
 Sigmd5 (hash):
  key: md5sum from header (4 * 4 byte int)
- values: list of 2-tupels: installid (4 byte int), index (4 byte int) (always 0)
+ values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
 
 Triggername (hash):
  key: Triggername (string)
- values: list of 2-tupels: installid (4 byte int), triggerindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), triggerindex (4 byte int)
 
 
 
@@ -99,7 +99,7 @@ Requirenames key(requirename) a: (5, 0), (8, 1)
 That means the complete /var/lib/rpm files can be cross checked with
 /var/lib/rpm/Packages and can be regenerated from that file as well.
 
-An excpetion is Installtid. This db file contains as keys the TID which is a
+An exception is Installtid. This db file contains as keys the TID which is a
 unique time in seconds since 1970 that reflects a complete transaction. Every
 header in Packages contains that TID as "installtid" tag. The values of the
 Installtid db file are again pairs of integers with a package id as first

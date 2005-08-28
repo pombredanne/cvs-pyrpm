@@ -15,14 +15,14 @@ python to do rapid prototyping was only logical.
 
 The code itself is still very small, about 9000-10000 lines of code. We're
 constantly looking to improve the code, make it more production ready and 
-remove double functionality.
+remove duplicate functionality.
 
 
 2. Whats in there
 -----------------
 PyRPM comes with a small collection of scripts and the pyrpm module itself:
 
- pyrpmcheck:      Check rpms for various know problems
+ pyrpmcheck:      Check rpms for various known problems
  pyrpmcheckrepo:  Simulate an install of a given system followed by an
                   update to the second repo or rpms
  pyrpmcreaterepo: Build the yum repodata, but using the pyrpm module
@@ -114,9 +114,7 @@ for all kinds of archs can be performed this way on one single machine.
 4.3 pyrpmcreaterepo
 -------------------
 Here we've take the code from the original createrepo and replaced the rpmlib
-based access to rpm headers with our code. This shows how easy it can be to
-switch from rpmlib to pyrpm. As the rest of the code is unmodified it actually
-produces the same repodata as the original createrepo would.
+based access to rpm headers with our code.
 
 4.4 pyrpmdb2rpmdb
 -----------------
@@ -130,11 +128,11 @@ become obsolete with the full support of rpmdb.
 4.5 pyrpmdbverify
 -----------------
 This tool actually really reads all DB4 files in /var/lib/rpm (or, if you
-use the --dbpath option in that directory) and tries to cross check the entries
+use the --dbpath option, in that directory) and tries to cross check the entries
 with the rpm header that is found in /var/lib/rpm/Packages. The README.rpmdb
 contains a lot more detail about the structure of rpmdb. Simply put we check
 if for every entry in every file there is a corresponding entry in Packages
-and vice versa. There are some exceptions and special cases, but all know ones
+and vice versa. There are some exceptions and special cases, but all known ones
 are handled correctly. The one check that is very unreliable is the SHA1 header
 checksum tests as this test has to rely on a very specific ordering of the
 rpm binary header and about the tags that appear in the original rpm. If those
@@ -160,7 +158,7 @@ options which help circumvent some strange problems. The first is --servicehack
 which simply changes /sbin/service to "exit 0" as especially some of the
 postuninstall scripts really misbehave otherwise and you don't need any
 services started or stopped in a buildroot anyway for testing. The second is
-the --autoerase option which i'll describe a little more in detail for
+the --autoerase option which I'll describe a little more in detail for
 pyrpmyum.
 
 4.8 pyrpmrebuilddb
@@ -190,7 +188,7 @@ that by semi-intelligently selecting the package that needs to be removed in
 order for the update to work properly without user intervention. For the
 described update chain only about 6-7 packages were deleted up to FC3, and all
 of them would have to be removed manually anyway. But a word of warning here:
-The autoerase option might run amok if things go really wrong our you try to
+The autoerase option might run amok if things go really wrong or you try to
 update to a completely broken tree and would then try to remove almost all of
 your packages. This has never happend for real trees for us, but just imagine
 a broken repository and things could go really wrong. That's why this option
@@ -201,7 +199,7 @@ transaction the packages that pyrpmyum would autoerase for you.
 4.11 rpmdb2pyrpmdb
 ------------------
 The counterpart to pyrpmdb2rpmdb, again rather obsolete like it's brother as
-we now have real rpmdb support. What it actually does is to extract all rpm
+we now have real rpmdb support. What it actually does is it extracts all rpm
 headers from /var/lib/rpm/Packages and then recreates proper rpm header files
 and stores them as files in /var/lib/pyrpm/headers which can afterwards again
 be used by rpm -ivh --justdb /var/lib/pyrpm/headers/* to generate a valid rpm

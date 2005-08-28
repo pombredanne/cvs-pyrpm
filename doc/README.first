@@ -1,7 +1,7 @@
                               !!! W A R N I N G !!!
 
 The PyRPM project is by no means meant to be a full replacement of rpm or yum.
-In it's current stat we feel confident that in general it won't break anything,
+In it's current state we feel confident that in general it won't break anything,
 but the code isn't production quality yet.
 
 The check scripts can be safely used as they won't modify anything on your
