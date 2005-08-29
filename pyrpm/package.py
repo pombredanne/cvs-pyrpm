@@ -585,7 +585,7 @@ class RpmPackage(RpmData):
             if self.rfilist.has_key(filename):
                 rfi = self.rfilist[filename]
                 if self.__verifyFileInstall(rfi, db):
-                    if filesize == 0:
+                    if filesize == 0 and S_ISREG(rfi.mode): # Only hardlink reg
                         self.__possibleHardLink(rfi)
                     else:
                         installFile(rfi, cpio, filesize, not issrc)
@@ -778,8 +778,6 @@ class RpmPackage(RpmData):
     def __possibleHardLink(self, rfi):
         """Add the given RpmFileInfo rfi as a possible hardlink"""
 
-        if not S_ISREG(rfi.mode): # FIXME? "if S_ISDIR(...)"
-            return
         key = rfi.getHardLinkID()
         if not self.hardlinks.has_key(key):
             self.hardlinks[key] = []
