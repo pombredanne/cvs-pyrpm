@@ -67,7 +67,7 @@ class RpmConfig:
         self.noconflicts = 0
         self.nofileconflicts = 0
         self.checkinstalled = 0
-        self.exactarch = 0
+        self.exactarch = 0           # same base arch is not enough for updates
         self.tid = int(time.time())     # FIXME: make sure it is unique?
         self.compsfile = None
         self.resolvertags = ("name", "epoch", "version", "release", "arch",

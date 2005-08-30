@@ -20,11 +20,13 @@
 from types import IntType
 
 class HashList:
-    """ hash list """
+    """A hash with a list of keys.
+
+    The hash keys should not be integers."""
 
     def __init__(self):
-        self.list = [ ]
-        self.hash = { }
+        self.list = [ ] # keys
+        self.hash = { } # key => value
 
         self.__len__ = self.list.__len__
         self.__repr__ = self.list.__repr__
@@ -32,6 +34,11 @@ class HashList:
         self.keys = self.hash.keys
 
     def __getitem__(self, key):
+        """self[key] = value, or None if key does not exist.
+
+        self[i] = i'th (0-based) key, therefore "for i in self" iterates over
+        keys.  Note that a nonexisting key does not raise KeyError."""
+
         if isinstance(key, IntType):
             return self.list[key]
         return self.hash.get(key)
@@ -48,6 +55,11 @@ class HashList:
         return value
 
     def __delitem__(self, key):
+        """Remove key and its value.
+
+        Return key if it exists, None otherwise."""
+        # Protocol says it should raise KeyError if key does not exist
+
         if self.hash.has_key(key):
             del self.hash[key]
             self.list.remove(key)
@@ -55,6 +67,11 @@ class HashList:
         return None
 
     def pop(self, idx):
+        """Remove idx'th (0-based) key and its value.
+
+        Return key.  Raise IndexError if idx is out of range."""
+        # Behaves like list.pop, not like dict.pop.
+
         key = self.list.pop(idx)
         del self.hash[key]
         return key

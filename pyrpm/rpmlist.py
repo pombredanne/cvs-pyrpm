@@ -23,6 +23,13 @@ from functions import normalizeList
 from base import OP_INSTALL, OP_UPDATE, OP_ERASE, OP_FRESHEN
 
 class RpmList:
+    """A list of RPM packages, allowing basic operations.
+
+    Does not at all handle requires/obsoletes/conflicts.
+
+    Allows "direct" access to packages: "for %name in self",
+    "self[idx] => %name", "self[%name] => RpmPackage", "pkg in self."."""
+
     OK = 1
     ALREADY_INSTALLED = -1
     OLD_PACKAGE = -2
@@ -33,27 +40,41 @@ class RpmList:
     # ----
 
     def __init__(self, config, installed):
+        """Initialize, with the "currently installed" packages in RpmPackage
+        list installed."""
+
         self.config = config
         self.clear()
         self.__len__ = self.list.__len__
         self.__getitem__ = self.list.__getitem__
         for r in installed:
             name = r["name"]
-            self._install(r, 1)
+            self._install(r, 1) # Can't fail
             if not name in self.installed:
                 self.installed[name] = [ ]
             self.installed[name].append(r)
     # ----
 
     def clear(self):
-        self.list = HashList()
+        """Drop all data."""
+
+        self.list = HashList() # %name => [RpmPackage]; "current" list
+        # %name => [RpmPackage]; "originally" installed packages
         self.installed = HashList()
-        self.installs = [ ]
-        self.updates = { }
-        self.erases = [ ]
+        self.installs = [ ] # Added RpmPackage's
+        # new RpmPackage
+        # => ["originally" installed RpmPackage removed by update]
+        self.updates = { } 
+        self.erases = [ ] # Removed RpmPackage's
     # ----
 
     def _install(self, pkg, no_check=0):
+        """Add RpmPackage pkg.
+        
+        Return an RpmList error code.  Check whether a package with the same
+        NEVRA is already in the list unless no_check.  Unlike install() this
+        method allows adding "originally" installed packages."""
+
         name = pkg["name"]
         if no_check == 0 and name in self.list:
             for r in self.list[name]:
@@ -68,6 +89,10 @@ class RpmList:
     # ----
 
     def install(self, pkg, operation=OP_INSTALL):
+        """Add RpmPackage pkg as part of the defined operation.
+
+        Return an RpmList error code."""
+
         ret = self._install(pkg)
         if ret != self.OK:
             return ret
@@ -81,6 +106,10 @@ class RpmList:
     # ----
 
     def update(self, pkg):
+        """Add RpmPackage pkg, removing older versions.
+
+        Return an RpmList error code."""
+
         key = pkg["name"]
 
         self.pkg_updates = [ ]
@@ -114,7 +143,7 @@ class RpmList:
                         del self.pkg_updates
                         return self.ARCH_INCOMPAT
 
-                    ret = self.__install_check(r, pkg)
+                    ret = self.__install_check(r, pkg) # Fails for same NEVRAs
                     if ret != self.OK:
                         del self.pkg_updates
                         return ret
@@ -146,7 +175,7 @@ class RpmList:
             else:
                 self.config.printWarning(1, "%s was already added, replacing with %s" \
                                  % (r.getNEVRA(), pkg.getNEVRA()))
-            if self._pkgUpdate(pkg, r) != self.OK:
+            if self._pkgUpdate(pkg, r) != self.OK: # Currently can't fail
                 del self.pkg_updates
                 return self.UPDATE_FAILED
 
@@ -156,6 +185,11 @@ class RpmList:
     # ----
 
     def freshen(self, pkg):
+        """Add RpmPackage pkg, removing older versions, if a package of the
+        same %name and base arch is "originally" installed.
+
+        Return an RpmList error code."""
+
         # pkg in self.installed
         if not pkg["name"] in self.installed:
             return self.NOT_INSTALLED
@@ -171,6 +205,10 @@ class RpmList:
     # ----
 
     def erase(self, pkg):
+        """Remove RpmPackage.
+
+        Return an RpmList error code."""
+        
         key = pkg["name"]
         if not key in self.list or pkg not in self.list[key]:
             return self.NOT_INSTALLED
@@ -189,7 +227,13 @@ class RpmList:
     # ----
 
     def _pkgUpdate(self, pkg, update_pkg):
+        """Remove RpmPackage update_pkg because it will be replaced by
+        RpmPackage pkg.
+
+        Return an RpmList error code."""
+
         if self.isInstalled(update_pkg):
+            # assert update_pkg not in self.updates
             if not pkg in self.updates:
                 self.updates[pkg] = [ ]
             self.updates[pkg].append(update_pkg)
@@ -199,10 +243,14 @@ class RpmList:
     # ----
 
     def isInstalled(self, pkg):
+        """Return True if RpmPackage pkg is an "originally" installed
+        package.
+
+        Note that having the same NEVRA is not enough, the package should
+        be from self.list."""
+        
         key = pkg["name"]
-        if key in self.installed and pkg in self.installed[key]:
-            return 1
-        return 0
+        return key in self.installed and pkg in self.installed[key]
     # ----
 
     def __contains__(self, pkg):
@@ -213,6 +261,11 @@ class RpmList:
     # ----
 
     def __install_check(self, r, pkg):
+        """Check whether RpmPackage pkg can be installed when RpmPackage r
+        with same %name is already in the current list.
+
+        Return an RpmList error code."""
+
         if r == pkg or r.isEqual(pkg):
             if self.isInstalled(r):
                 self.config.printWarning(2, "%s: %s is already installed" % \
@@ -226,6 +279,9 @@ class RpmList:
     # ----
 
     def __arch_incompat(self, pkg, r):
+        """Return True (and warn) if RpmPackage's pkg and r have different
+        architectures, but the same base arch."""
+
         if pkg["arch"] != r["arch"] and archDuplicate(pkg["arch"], r["arch"]):
             self.config.printWarning(1, "%s does not match arch %s." % \
                          (pkg.getNEVRA(), r["arch"]))
@@ -234,6 +290,9 @@ class RpmList:
     # ----
 
     def _inheritUpdates(self, pkg, old_pkg):
+        """RpmPackage old_pkg will be replaced by RpmPackage pkg; inherit
+        packages updated by old_pkg."""
+
         if old_pkg in self.updates:
             if pkg in self.updates:
                 self.updates[pkg].extend(self.updates[old_pkg])
@@ -244,6 +303,8 @@ class RpmList:
     # ----
 
     def getList(self):
+        """Return a list of RpmPackages in current state of the list."""
+
         l = [ ]
         for name in self:
             l.extend(self[name])
@@ -251,6 +312,8 @@ class RpmList:
     # ----
 
     def p(self):
+        """Debugging: Print NEVRAs of packages in current list."""
+
         for r in self.getList():
             print "\t%s" % r.getNEVRA()
 
