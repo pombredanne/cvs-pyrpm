@@ -31,6 +31,21 @@ from base import *
 import functions
 import package
 
+
+def _uriToFilename(uri):
+    """Convert a file:/ URI or a local path to a local path."""
+
+    if not uri.startswith("file:/"):
+        filename = uri
+    else:
+        filename = uri[5:]
+        if len(filename) > 1 and filename[1] == "/":
+            idx = filename[2:].find("/")
+            if idx != -1:
+                filename = filename[idx+2:]
+    return filename
+
+
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
 class PyGZIP:
     def __init__(self, config, fd):
@@ -302,7 +317,7 @@ class RpmStreamIO(RpmIO):
         self.fd = None
         self.cpio = None
         self.verify = verify            # Verify lead and index entries
-        self.strict = strict # Report legacy tags and packags not named %name
+        self.strict = strict  # Report legacy tags and packages not named %name
         self.hdronly = hdronly          # Don't return payload from read()
         self.issrc = 0  # 0:binary rpm 1:source rpm
         self.where = 0  # 0:lead 1:separator 2:sig 3:header 4:files
@@ -397,15 +412,6 @@ class RpmStreamIO(RpmIO):
         self._write(headerindex)
         self._write(headerdata)
         return 1
-
-    def _read(self, nbytes=None):
-        """Read up to nbytes data from self.fd.
-
-        Raise IOError."""
-
-        if self.fd == None:
-            self.open()
-        return self.fd.read(nbytes)
 
     def _write(self, data):
         """Open self.source for writing if it is not open, write data to it.
@@ -830,14 +836,7 @@ class RpmFileIO(RpmStreamIO):
 
         Return the opened file.  Raise IOError."""
 
-        if not self.source.startswith("file:/"):
-            filename = self.source
-        else:
-            filename = self.source[5:]
-            if filename[1] == "/":
-                idx = filename[2:].index("/")
-                filename = filename[idx+2:]
-        fd = open(filename, mode)
+        fd = open(_uriToFilename(self.source), mode)
         fcntl.fcntl(fd.fileno(), fcntl.F_SETFD, 1)
         return fd
 
@@ -1810,13 +1809,7 @@ class RpmRepo(RpmDatabase):
 
     def read(self):
         self.is_read = 1 # FIXME: write-only
-        if not self.source.startswith("file:/"):
-            filename = self.source
-        else:
-            filename = self.source[5:]
-            if filename[1] == "/":
-                idx = filename[2:].index("/")
-                filename = filename[idx+2:]
+        filename = _uriToFilename(self.source)
         filename = functions.cacheLocal(os.path.join(filename, "repodata/primary.xml.gz"),
                                         self.reponame, 1)
         if not filename:
@@ -1825,7 +1818,7 @@ class RpmRepo(RpmDatabase):
             reader = libxml2.newTextReaderFilename(filename)
         except libxml2.libxmlError:
             return 0
-        self.__parseNode(reader) # FIXME
+        self.__parseNode(reader)
         return 1
 
     def addPkg(self, pkg, unused_nowrite=None):
@@ -1836,15 +1829,13 @@ class RpmRepo(RpmDatabase):
         return 1
 
     def importFilelist(self):
+        """Parse filelists.xml.gz if it was not parsed before.
+
+        Return 1 on success, 0 on failure."""
+
         if self.filelist_imported:
             return 1
-        if not self.source.startswith("file:/"):
-            filename = self.source
-        else:
-            filename = self.source[5:]
-            if filename[1] == "/":
-                idx = filename[2:].index("/")
-                filename = filename[idx+2:]
+        filename = _uriToFilename(self.source)
         filename = functions.cacheLocal(os.path.join(filename, "repodata/filelists.xml.gz"),
                               self.reponame, 1)
         if not filename:
@@ -1853,42 +1844,47 @@ class RpmRepo(RpmDatabase):
             reader = libxml2.newTextReaderFilename(filename)
         except libxml2.libxmlError:
             return 0
-        self.__parseNode(reader) # FIXME
+        self.__parseNode(reader)
         self.filelist_imported = 1
         return 1
 
     def createRepo(self):
+        """Create repodata metadata for self.source.
+
+        Return 1 on success, 0 on failure.  Assumes self.source is a local file
+        system path without schema prefix."""
+
         self.filerequires = []
         self.config.printInfo(1, "Pass 1: Parsing package headers for file requires.\n")
         self.__readDir(self.source, "")
-        if not self.source.startswith("file:/"):
-            filename = self.source
-        else:
-            filename = self.source[5:]
-            if filename[1] == "/":
-                idx = filename[2:].index("/")
-                filename = filename[idx+2:]
-        if not os.path.isdir(filename+"/repodata"):
+        filename = _uriToFilename(self.source)
+        datapath = os.path.join(filename, "repodata")
+        if not os.path.isdir(datapath):
             try:
-                os.makedirs(filename+"/repodata")
-            except:
-                self.config.printError("%s: Couldn't open PyRPM database" % filename)
+                os.makedirs(datapath)
+            except OSError, e:
+                self.config.printError("%s: Couldn't create repodata: %s"
+                                       % (filename, e))
                 return 0
-        pfd = gzip.GzipFile(filename+"/repodata/primary.xml.gz", "wb")
-        if not pfd:
+        try:
+            pfd = gzip.GzipFile(os.path.join(datapath, "primary.xml.gz"), "wb")
+        except IOError:
             return 0
-        ffd = gzip.GzipFile(filename+"/repodata/filelists.xml.gz", "wb")
-        if not ffd:
+        try:
+            ffd = gzip.GzipFile(os.path.join(datapath, "filelists.xml.gz"),
+                                "wb")
+        except IOError:
             return 0
-        ofd = gzip.GzipFile(filename+"/repodata/other.xml.gz", "wb")
-        if not ofd:
-            return 0
+        #try:
+        #    ofd = gzip.GzipFile(os.path.join(datapath, "other.xml.gz"), "wb")
+        #except IOError:
+        #    return 0
         pdoc = libxml2.newDoc("1.0")
         proot = pdoc.newChild(None, "metadata", None)
         fdoc = libxml2.newDoc("1.0")
-        froot = pdoc.newChild(None, "filelists", None)
-        odoc = libxml2.newDoc("1.0")
-        oroot = pdoc.newChild(None, "filelists", None)
+        froot = fdoc.newChild(None, "filelists", None)
+        #odoc = libxml2.newDoc("1.0")
+        #oroot = odoc.newChild(None, "filelists", None)
         self.config.printInfo(1, "Pass 2: Writing repodata information.\n")
         pfd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         pfd.write('<metadata xmlns="http://linux.duke.edu/metadata/common" xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="%d">\n' % len(self.getPkgList()))
@@ -1907,7 +1903,11 @@ class RpmRepo(RpmDatabase):
             # for createRepo, never do this anywhere else. ;)
             if pkg.isSourceRPM():
                 pkg["arch"] = "src"
-            checksum = self.__getChecksum(pkg)
+            try:
+                checksum = self.__getChecksum(pkg)
+            except (IOError, NotImplementedError), e:
+                self.config.printWarning(0, "%s: %s" % (pkg.getNEVRA(), e))
+                continue
             pkg["yumchecksum"] = checksum
             self.__writePrimary(pfd, proot, pkg)
             self.__writeFilelists(ffd, froot, pkg)
@@ -1934,7 +1934,7 @@ class RpmRepo(RpmDatabase):
             props = self.__getProps(reader)
             if props.get("type") == "rpm":
                 try:
-                    pkg = self.__parsePackage(reader) # FIXME
+                    pkg = self.__parsePackage(reader)
                 except ValueError, e:
                     self.config.printWarning(0, "%s: %s" % (pkg.getNEVRA(), e))
                     continue
@@ -1943,9 +1943,22 @@ class RpmRepo(RpmDatabase):
                 pkg["yumreponame"] = self.reponame
                 self.pkglist[pkg.getNEVRA()] = pkg
             if props.has_key("name"):
-                self.__parseFilelist(reader, props["name"], props["arch"]) # FIXME
+                try:
+                    arch = props["arch"]
+                except KeyError:
+                    self.config.printWarning(0,
+                                             "%s: missing arch= in <package>"
+                                             % pkg.getNEVRA())
+                    continue
+                try:
+                    self.__parseFilelist(reader, props["name"], arch)
+                except ValueError, e:
+                    self.config.printWarning(0, "%s: %s" % (pkg.getNEVRA(), e))
+                    continue
 
     def __isExcluded(self, pkg):
+        """Return True if RpmPackage pkg is excluded by configuration.""" 
+        
         found = 0
         for ex in self.excludes:
             excludes = functions.findPkgByName(ex, [pkg])
@@ -1954,53 +1967,62 @@ class RpmRepo(RpmDatabase):
                 break
         return found
 
-    def __escape(self, str):
+    def __escape(self, s):
         """Return escaped string converted to UTF-8"""
-        if str == None:
+
+        if s == None:
             return ''
-        str = string.replace(str, "&", "&amp;")
-        if isinstance(str, unicode):
-            return str
+        s = string.replace(s, "&", "&amp;")
+        if isinstance(s, unicode):
+            return s
         try:
-            x = unicode(str, 'ascii')
-            return str
+            x = unicode(s, 'ascii')
+            return s
         except UnicodeError:
             encodings = ['utf-8', 'iso-8859-1', 'iso-8859-15', 'iso-8859-2']
             for enc in encodings:
                 try:
-                    x = unicode(str, enc)
+                    x = unicode(s, enc)
                 except UnicodeError:
                     pass
                 else:
-                    if x.encode(enc) == str:
+                    if x.encode(enc) == s:
                         return x.encode('utf-8')
         newstring = ''
-        for char in str:
+        for char in s:
             if ord(char) > 127:
                 newstring = newstring + '?'
             else:
                 newstring = newstring + char
-        return re.sub("\n$", '', newstring)
+        return re.sub("\n$", '', newstring) # FIXME: not done in other returns
 
     def __readDir(self, dir, location):
-        files = os.listdir(dir)
-        for f in files:
-            if os.path.isdir("%s/%s" % (dir, f)):
-                self.__readDir("%s/%s" % (dir, f), "%s%s/" % (location, f))
+        """Look for non-excluded *.rpm files under dir and add them to
+        self.pkglist.
+
+        dir must be a local file system path.  The remote location prefix
+        corresponding to dir is location.  Collect file requires of added
+        packages in self.filerequires.  Set pkg["yumlocation"] to the remote
+        relative path to the package."""
+
+        for f in os.listdir(dir):
+            path = os.path.join(dir, f)
+            if os.path.isdir(path):
+                self.__readDir(path, "%s%s/" % (location, f))
             elif f.endswith(".rpm"):
-                path = dir + "/" + f
                 pkg = package.RpmPackage(self.config, path)
                 try:
                     pkg.read(tags=("name", "epoch", "version", "release", "arch", "sourcerpm", "requirename", "requireflags", "requireversion"))
+                    pkg.close()
                 except (IOError, ValueError), e:
                     self.config.printWarning(0, "%s: %s" % (path, e))
                     continue
-                pkg.close()
                 if self.__isExcluded(pkg):
                     continue
                 for reqname in pkg["requirename"]:
                     if reqname[0] == "/":
                         self.filerequires.append(reqname)
+                # FIXME: this is done in createRepo too
                 # If it is a source rpm change the arch to "src". Only valid
                 # for createRepo, never do this anywhere else. ;)
                 if pkg.isSourceRPM():
@@ -2011,6 +2033,10 @@ class RpmRepo(RpmDatabase):
                 self.pkglist[nevra] = pkg
 
     def __writePrimary(self, fd, parent, pkg):
+        """Write primary.xml data about RpmPackage pkg to fd.
+
+        Use libxml2.xmlNode parent as root of a temporary xml subtree."""
+
         pkg_node = parent.newChild(None, "package", None)
         pkg_node.newProp('type', 'rpm')
         pkg_node.newChild(None, 'name', pkg['name'])
@@ -2047,6 +2073,10 @@ class RpmRepo(RpmDatabase):
         del pkg_node
 
     def __writeFilelists(self, fd, parent, pkg):
+        """Write primary.xml data about RpmPackage pkg to fd.
+
+        Use libxml2.xmlNode parent as root of a temporary xml subtree."""
+
         pkg_node = parent.newChild(None, "package", None)
         pkg_node.newProp('pkgid', pkg["yumchecksum"])
         pkg_node.newProp('name', pkg["name"])
@@ -2066,17 +2096,16 @@ class RpmRepo(RpmDatabase):
         del pkg_node
 
     def __getChecksum(self, pkg):
-        # FIXME: raise IOError
+        """Return checksum of package source of RpmPackage pkg.
+
+        Raise IOError, NotImplementedError."""
 
         io = getRpmIOFactory(self.config, pkg.source)
-        data = io._read(65536)
         if self.config.checksum == "md5":
             s = md5.new()
         else:
             s = sha.new()
-        while len(data) > 0:
-            s.update(data)
-            data = io._read(65536)
+        io.updateDigestFromRange(s, 0, None)
         return s.hexdigest()
 
     def __getProps(self, reader):
@@ -2107,28 +2136,42 @@ class RpmRepo(RpmDatabase):
                 continue
             props = self.__getProps(reader)
             if    name == "name":
-                reader.Read() # FIXME: failure
+                if reader.Read() != 1:
+                    break
                 pkg["name"] = reader.Value()
             elif name == "arch":
-                reader.Read() # FIXME: failure
+                if reader.Read() != 1:
+                    break
                 pkg["arch"] = reader.Value()
                 if pkg["arch"] != "src":
                     pkg["sourcerpm"] = ""
             elif name == "version":
-                pkg["version"] = props["ver"]
-                pkg["release"] = props["rel"]
-                pkg["epoch"] = [int(props["epoch"]),]
+                try:
+                    pkg["version"] = props["ver"]
+                    pkg["release"] = props["rel"]
+                    pkg["epoch"] = [int(props["epoch"]),]
+                except KeyError:
+                    raise ValueError, "Missing attributes of <version>"
             elif name == "checksum":
-                if   props["type"] == "md5":
-                    reader.Read() # FIXME: failure
+                try:
+                    type_ = props["type"]
+                except KeyError:
+                    raise ValueError, "Missing type= in <checksum>"
+                if   type_ == "md5":
+                    if reader.Read() != 1:
+                        break
                     pkg["signature"]["md5"] = reader.Value()
-                elif props["type"] == "sha":
-                    reader.Read() # FIXME: failure
+                elif type_ == "sha":
+                    if reader.Read() != 1:
+                        break
                     pkg["signature"]["sha1header"] = reader.Value()
             elif name == "location":
-                pkg.source = self.source + "/" + props["href"]
+                try:
+                    pkg.source = self.source + "/" + props["href"]
+                except KeyError:
+                    raise ValueError, "Missing href= in <location>"
             elif name == "format":
-                self.__parseFormat(reader, pkg) # FIXME
+                self.__parseFormat(reader, pkg)
         pkg.header_read = 1
         pkg.generateFileNames()
         pkg["provides"] = pkg.getProvides()
@@ -2163,36 +2206,44 @@ class RpmRepo(RpmDatabase):
         return pkg
 
     def __parseFilelist(self, reader, pname, arch):
+        """Parse a file list from current <package name=pname> tag at
+        libxml2.xmlTextReader reader for package with arch arch.
+
+        Raise ValueError on invalid data."""
+        
         filelist = []
-        ret = reader.Read()
-        while ret == 1:
+        version, release, epoch = None, None, None
+        while reader.Read() == 1:
             if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT and \
                reader.NodeType() != libxml2.XML_READER_TYPE_END_ELEMENT:
-                ret = reader.Read()
                 continue
             name = reader.Name()
             if reader.NodeType() == libxml2.XML_READER_TYPE_END_ELEMENT:
                 if name == "package":
                     break
-                ret = reader.Read()
                 continue
             props = self.__getProps(reader)
             if   name == "version":
-                version = props["ver"]
-                release = props["rel"]
-                epoch   = props["epoch"]
+                version = props.get("ver")
+                release = props.get("rel")
+                epoch   = props.get("epoch")
             elif name == "file":
-                reader.Read()
+                if reader.Read() != 1:
+                    break
                 filelist.append(reader.Value())
-            ret = reader.Read()
+        if version is None or release is None or epoch is None:
+            raise ValueError, "Missing version information"
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
-        if self.pkglist.has_key(nevra):
-            self.pkglist[nevra]["oldfilenames"] = filelist
-            self.pkglist[nevra].generateFileNames()
-            del self.pkglist[nevra]["oldfilenames"]
-        return 1
+        pkg = self.pkglist.get(nevra)
+        if pkg:
+            pkg["oldfilenames"] = filelist
+            pkg.generateFileNames()
+            del pkg["oldfilenames"]
 
     def __generateFormat(self, node, pkg):
+        """Add RPM-specific tags under libxml2.xmlNode node for RpmPackage
+        pkg."""
+
         node.newChild(None, 'rpm:license', self.__escape(pkg['license']))
         node.newChild(None, 'rpm:vendor', self.__escape(pkg['vendor']))
         node.newChild(None, 'rpm:group', self.__escape(pkg['group'][0]))
@@ -2212,6 +2263,9 @@ class RpmRepo(RpmDatabase):
         self.__generateFilelist(node, pkg)
 
     def __generateDeps(self, node, pkg, name):
+        """Add RPM-specific dependency info under libxml2.xmlNode node for
+        RpmPackage pkg dependencies "name"."""
+
         dnode = node.newChild(None, 'rpm:%s' % name, None)
         deps = self.__filterDuplicateDeps(pkg[name])
         for dep in deps:
@@ -2230,6 +2284,12 @@ class RpmRepo(RpmDatabase):
                     enode.newProp('rel', r)
 
     def __generateFilelist(self, node, pkg, filter=1):
+        """Add RPM-specific file list under libxml2.xmlNode node for RpmPackage
+        pkg.
+
+        Restrict the output to _dirrc/_filerc or known file requires if
+        filter."""
+
         files = pkg['filenames']
         fileflags = pkg['fileflags']
         filemodes = pkg['filemodes']
@@ -2250,40 +2310,46 @@ class RpmRepo(RpmDatabase):
                     tnode.newProp('type', 'ghost')
 
     def __parseFormat(self, reader, pkg):
+        """Parse data from current <format> tag at libxml2.xmlTextReader reader
+        to RpmPackage pkg.
+
+        Raise ValueError on invalid input."""
+
         pkg["oldfilenames"] = []
-        ret = reader.Read()
-        while ret == 1:
+        while reader.Read() == 1:
             if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT and \
                reader.NodeType() != libxml2.XML_READER_TYPE_END_ELEMENT:
-                ret = reader.Read()
                 continue
             name = reader.Name()
             if reader.NodeType() == libxml2.XML_READER_TYPE_END_ELEMENT:
                 if name == "format":
                     break
-                ret = reader.Read()
                 continue
             elif name == "rpm:sourcerpm":
-                ret = reader.Read()
+                if reader.Read() != 1:
+                    break
                 pkg["sourcerpm"] = reader.Value()
             elif name == "rpm:provides":
-                plist = self.__parseDeps(reader, name, pkg)
+                plist = self.__parseDeps(reader, name)
                 pkg["providename"], pkg["provideflags"], pkg["provideversion"] = plist
             elif name == "rpm:requires":
-                plist = self.__parseDeps(reader, name, pkg)
+                plist = self.__parseDeps(reader, name)
                 pkg["requirename"], pkg["requireflags"], pkg["requireversion"] = plist
             elif name == "rpm:obsoletes":
-                plist = self.__parseDeps(reader, name, pkg)
+                plist = self.__parseDeps(reader, name)
                 pkg["obsoletename"], pkg["obsoleteflags"], pkg["obsoleteversion"] = plist
             elif name == "rpm:conflicts":
-                plist = self.__parseDeps(reader, name, pkg)
+                plist = self.__parseDeps(reader, name)
                 pkg["conflictname"], pkg["conflictflags"], pkg["conflictversion"] = plist
             elif name == "file":
-                ret = reader.Read()
+                if reader.Read() != 1:
+                    break
                 pkg["oldfilenames"].append(reader.Value())
-            ret = reader.Read()
 
     def __filterDuplicateDeps(self, deps):
+        """Return the list of (name, flags, release) dependencies deps with
+        duplicates (when output by __generateDeps ()) removed."""
+
         fdeps = []
         for name, flags, version in deps:
             duplicate = 0
@@ -2304,34 +2370,31 @@ class RpmRepo(RpmDatabase):
                 fdeps.append([name, flags, version])
         return fdeps
 
-    def __parseDeps(self, reader, ename, pkg):
-        plist = []
-        plist.append([])
-        plist.append([])
-        plist.append([])
-        ret = reader.Read()
-        while ret == 1:
+    def __parseDeps(self, reader, ename):
+        """Parse a dependency list from currrent tag ename at
+        libxml2.xmlTextReader reader.
+
+        Return [namelist, flaglist, versionlist].  Raise ValueError on invalid
+        input."""
+        
+        plist = [[], [], []]
+        while reader.Read() == 1:
             if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT and \
                reader.NodeType() != libxml2.XML_READER_TYPE_END_ELEMENT:
-                ret = reader.Read()
                 continue
             name = reader.Name()
             if reader.NodeType() == libxml2.XML_READER_TYPE_END_ELEMENT:
                 if name == ename:
                     break
-                ret = reader.Read()
                 continue
             props = self.__getProps(reader)
             if name == "rpm:entry":
-                name  = props["name"]
-                flags = None
-                ver = None
-                epoch = None
-                rel = None
-                if props.has_key("ver"):
-                    ver = props["ver"]
-                if props.has_key("flags"):
-                    flags = props["flags"]
+                try:
+                    name = props["name"]
+                except KeyError:
+                    raise ValueError, "Missing name= in <rpm.entry>"
+                ver = props.get("ver")
+                flags = props.get("flags")
                 if props.has_key("pre"):
                     prereq = RPMSENSE_PREREQ
                 else:
@@ -2340,82 +2403,100 @@ class RpmRepo(RpmDatabase):
                     plist[0].append(name)
                     plist[1].append(prereq)
                     plist[2].append("")
-                    ret = reader.Read()
                     continue
-                if props.has_key("epoch"):
-                    epoch = props["epoch"]
-                if props.has_key("rel"):
-                    rel = props["rel"]
+                epoch = props.get("epoch")
+                rel = props.get("rel")
                 if epoch != None:
                     ver = "%s:%s" % (epoch, ver)
                 if rel != None:
                     ver = "%s-%s" % (ver, rel)
                 plist[0].append(name)
-                plist[1].append(self.flagmap[flags] + prereq)
+                try:
+                    flags = self.flagmap[flags]
+                except KeyError:
+                    raise ValueError, "Unknown flags %s" % flags
+                plist[1].append(flags + prereq)
                 plist[2].append(ver)
-            ret = reader.Read()
         return plist
 
 class RpmCompsXML:
     def __init__(self, config, source):
+        """Initialize the parser.
+
+        source is an URL to comps.xml."""
+
         self.config = config
         self.source = source
-        self.grouphash = {}
-        self.grouphierarchyhash = {}
+        self.grouphash = {}             # group id => { key => value }
+        self.grouphierarchyhash = {}    # FIXME: write-only
 
     def __str__(self):
         return str(self.grouphash)
 
     def read(self):
-        if not self.source.startswith("file:/"):
-            filename = self.source
-        else:
-            filename = self.source[5:]
-            if filename[1] == "/":
-                idx = filename[2:].index("/")
-                filename = filename[idx+2:]
-        # FIXME: may return None
-        filename = functions.cacheLocal(filename, "", 1)
-        doc = libxml2.parseFile (filename)
-        if doc == None:
+        """Open and parse the comps file.
+
+        Return 1 on success, 0 on failure."""
+
+        filename = functions.cacheLocal(_uriToFilename(self.source), "", 1)
+        if filename is None:
             return 0
-        root = doc.getRootElement()
-        if root == None:
+        try:
+            doc = libxml2.parseFile (filename)
+            root = doc.getRootElement()
+        except libxml2.libxmlError:
             return 0
         return self.__parseNode(root.children)
 
-    def write(self):
-        pass
-
     def getPackageNames(self, group):
+        """Return a list of mandatory an default packages from group and its
+        dependencies and the dependencies of the packages.
+
+        The list may contain a single package name more than once.  Only the
+        first-level package dependencies are returned, not their transitive
+        closure."""
+
         ret = self.__getPackageNames(group, ("mandatory", "default"))
         ret2 = []
-        for i in xrange(len(ret)):
-            ret2.append(ret[i][0])
-            ret2.extend(ret[i][1])
+        for val in ret:
+            ret2.append(val[0])
+            ret2.extend(val[1])
         return ret2
 
     def getOptionalPackageNames(self, group):
+        """Return a sorted list of (package name, [package requirement]) of
+        optional packagres from group and its dependencies."""
+
         return self.__getPackageNames(group, ["optional"])
 
     def getDefaultPackageNames(self, group):
+        """Return a sorted list of (package name, [package requirement]) of
+        default packagres from group and its dependencies."""
+
         return self.__getPackageNames(group, ["default"])
 
     def getMandatoryPackageNames(self, group):
+        """Return a sorted list of (package name, [package requirement]) of
+        mandatory packagres from group and its dependencies."""
+
         return self.__getPackageNames(group, ["mandatory"])
 
     def __getPackageNames(self, group, typelist):
+        """Return a sorted list of (package name, [package requirement]) of
+        packages from group and its dependencies with selection type in
+        typelist."""
+        
         ret = []
         if not self.grouphash.has_key(group):
             return ret
         if self.grouphash[group].has_key("packagelist"):
             pkglist = self.grouphash[group]["packagelist"]
-            for pkgname in pkglist:
-                for t in typelist:
-                    if pkglist[pkgname][0] == t:
-                        ret.append((pkgname, pkglist[pkgname][1]))
+            for (pkgname, value) in pkglist.iteritems():
+                if value[0] in typelist:
+                    ret.append((pkgname, value[1]))
         if self.grouphash[group].has_key("grouplist"):
             grplist = self.grouphash[group]["grouplist"]
+            # FIXME: Stack overflow with loops in group requirements
             for grpname in grplist["groupreqs"]:
                 ret.extend(self.__getPackageNames(grpname, typelist))
             for grpname in grplist["metapkgs"]:
@@ -2428,14 +2509,18 @@ class RpmCompsXML:
         return ret
 
     def __parseNode(self, node):
+        """Parse libxml2.xmlNode node and its siblings under the root
+        element.
+
+        Return 1 on success, 0 on failure.  Handle <group>, <grouphierarchy>,
+        warn about other tags."""
+
         while node != None:
             if node.type != "element":
                 node = node.next
                 continue
             if node.name == "group":
-                ret = self.__parseGroup(node.children)
-                if not ret:
-                    return 0
+                self.__parseGroup(node.children)
             elif node.name == "grouphierarchy":
                 ret = self.__parseGroupHierarchy(node.children)
                 if not ret:
@@ -2444,9 +2529,11 @@ class RpmCompsXML:
                 self.config.printWarning(1, "Unknown entry in comps.xml: %s" % node.name)
                 return 0
             node = node.next
-        return 0
+        return 1
 
     def __parseGroup(self, node):
+        """Parse libxml2.xmlNode node and its siblings under <group>."""
+
         group = {}
         while node != None:
             if node.type != "element":
@@ -2476,9 +2563,12 @@ class RpmCompsXML:
                 group["grouplist"] = self.__parseGroupList(node.children)
             node = node.next
         self.grouphash[group["id"]] = group
-        return 1
 
     def __parsePackageList(self, node):
+        """Parse libxml2.xmlNode node and its siblings under <packagelist>.
+
+        Return { package => (selection, [requirement]) }."""
+
         plist = {}
         while node != None:
             if node.type != "element":
@@ -2498,6 +2588,11 @@ class RpmCompsXML:
         return plist
 
     def __parseGroupList(self, node):
+        """Parse libxml2.xmlNode node and its siblings under <grouplist>.
+
+        Return { "groupgreqs" => [requirement],
+        "metapkgs" => { requirement => requirement type } }."""
+
         glist = {}
         glist["groupreqs"] = []
         glist["metapkgs"] = {}
@@ -2516,11 +2611,22 @@ class RpmCompsXML:
         return glist
 
     def __parseGroupHierarchy(self, node):
+        """"Parse" libxml2.xmlNode node and its siblings under
+        <grouphierarchy>.
+
+        Return 1."""
+
         # We don't need grouphierarchies, so don't parse them ;)
         return 1
 
 
 def getRpmIOFactory(config, source, verify=None, strict=None, hdronly=None):
+    """Get a RpmIO implementation for package "URI" source.
+
+    Configure it to verify lead and index entries if verify; report legacy tags
+    and packages not named %name if strict; don't return payload from read()
+    if hdronly.  Default to file:/ if no scheme is provided."""
+
     if   source[:5] == 'ftp:/':
         return RpmFtpIO(config, source, verify, strict, hdronly)
     elif source[:6] == 'file:/':
@@ -2535,6 +2641,11 @@ def getRpmIOFactory(config, source, verify=None, strict=None, hdronly=None):
 
 
 def getRpmDBFactory(config, source, root=None):
+    """Get a RpmDatabase implementation for database "URI" source under
+    root.
+
+    Default to rpmdb:/ if no scheme is provided."""
+
     if   source[:6] == 'pydb:/':
         return RpmPyDB(config, source[6:], root)
     elif source[:7] == 'rpmdb:/':

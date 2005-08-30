@@ -48,7 +48,6 @@ def main():
         usage()
         return 1
 
-    operation = None
     for (opt, val) in opts:
         if opt in ["-v", "--verbose"]:
             rpmconfig.verbose += 1

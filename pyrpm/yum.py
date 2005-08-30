@@ -100,7 +100,7 @@ class RpmYum:
                 self.config.printError("You need to specify a comps.xml file for group operations")
                 return 0
             comps = RpmCompsXML(self.config, self.config.compsfile)
-            comps.read()
+            comps.read() # Ignore errors
             pkgs = []
             for grp in args:
                 pkgs.extend(comps.getPackageNames(grp))
@@ -346,7 +346,7 @@ class RpmYum:
             self.config.printWarning(1, "Importing filelist from repositories due to unresolved dependencies")
             self.resolvers = []
             for repo in self.repos:
-                repo.importFilelist()
+                repo.importFilelist() # Ignore errors
                 r = RpmResolver(self.config, repo.getPkgList())
                 self.resolvers.append(r)
             self.reread = 1

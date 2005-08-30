@@ -548,6 +548,6 @@ def main():
 
 
 if __name__ == "__main__":
-    run_main(main)
+    pyrpm.run_main(main)
 
 # vim:ts=4:sw=4:showmatch:expandtab

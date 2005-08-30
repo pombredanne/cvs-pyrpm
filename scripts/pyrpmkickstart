@@ -1262,7 +1262,7 @@ if len(ks["packages"]["groups"]) == 0:
 # load comps file for groups and default packages
 comps = pyrpm.RpmCompsXML(pyrpm.rpmconfig,
                           "%s/repodata/comps.xml" % source_dir)
-comps.read()
+comps.read() # Ignore errors
 pkgs = [ ]
 for group in ks["packages"]["groups"]:
     pkgs.extend(comps.getPackageNames(group))
@@ -1288,9 +1288,9 @@ if ks["langsupport"]:
 
 # everything install
 if "everything" in ks["packages"]["groups"]:
-    for group in comps.grouphash.keys():
-        if comps.grouphash[group].has_key("packagelist"):
-            pkgs.extend(comps.grouphash[group]["packagelist"])
+    for group in comps.grouphash.values():
+        if group.has_key("packagelist"):
+            pkgs.extend(group["packagelist"])
 
 del comps
 

@@ -100,7 +100,10 @@ def main():
     if not yum.runCommand():
         return 0
     if lockfile:
-        unlink(lockfile)
+        try:
+            os.unlink(lockfile)
+        except OSError:
+            pass
     return 1
 
 if __name__ == '__main__':
