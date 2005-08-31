@@ -25,9 +25,9 @@ for key in db.keys():
 			if rpmtagname.has_key(tag):
 				if rpmtagname[tag] == "name" or \
 				   rpmtagname[tag] == "installcolor":
-					print tag, rpmtagname[tag], tagval
+					print tag, rpmtagname[tag], repr(tagval)
 				else:
-					print tag, rpmtagname[tag]
+					print tag, rpmtagname[tag], repr(tagval)
 			else:
 				print tag, repr(tagval)
 		rpmio.hdr = {}

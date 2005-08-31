@@ -3,11 +3,19 @@ from struct import unpack
 
 from pyrpm import *
 
-db = bsddb.hashopen("/var/lib/rpm/Filemd5s", "r")
+if len(sys.argv) > 1:
+        dbpath = sys.argv[1]
+else:
+        dbpath = "/var/lib/rpm"
+
+db = bsddb.hashopen(dbpath+"/Filemd5s", "r")
 
 for key in db.keys():
 	data = db[key]
-	(md1, md2, md3, md4) = unpack("!4I", key)
+	try:
+		(md1, md2, md3, md4) = unpack("!4I", key)
+	except:
+		print repr(key)
 	print hex(md1), hex(md2), hex(md3), hex(md4)
 	for i in xrange(0, len(data)/8):
                 print "\t", unpack("i", data[8*i:8*i+4]), unpack("i", data[8*i+4:8*i+8])

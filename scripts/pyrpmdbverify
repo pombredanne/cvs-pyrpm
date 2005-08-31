@@ -206,8 +206,10 @@ def verifyStructure(hash, tag, useidx=True):
                 # Skip install prereqs, just like rpm does...
                 if isInstallPreReq(pkg["requireflags"][idx]):
                     continue
-            # only include filemd5s for regular files
-            if tag == "filemd5s" and not S_ISREG(pkg["fileflags"][idx]):
+            # only include filemd5s for none empty m5 sums
+            if tag == "filemd5s" and (val == "" or val == "\x00"):
+                continue
+            if tag == "filemd5s" and not S_ISREG(pkg["filemodes"][idx]):
                 continue
             # Equal Triggernames aren't added multiple times for the same
             # package

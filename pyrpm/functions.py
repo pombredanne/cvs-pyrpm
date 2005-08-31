@@ -480,6 +480,35 @@ def updateDigestFromFile(digest, fd, bytes = None):
         if bytes is not None:
             bytes -= len(data)
 
+def getFreeCachespace(config, operations):
+    """Check if there is enough diskspace for caching the rpms for the given
+    operations"""
+    cachedir = "/var/cache/pyrm/"
+    while 1:
+        try:
+            dev = os.stat(cachedir).st_dev
+            break
+        except:
+            cachedir = os.path.dirname(cachedir)
+    statvfs = os.statvfs(cachedir)
+    freespace = statvfs[0] * statvfs[4]
+    for (op, pkg) in operations:
+        # No packages will get downloaded for erase operations.
+        if op == OP_ERASE:
+            continue
+        # Also local files won't be cached either.
+        if pkg.source.startswith("file:/") or pkg.source[0] == "/":
+            continue
+        try:
+            freespace -= pkg['signature']['size_in_sig'][0]+pkg.range_header[0]
+        except KeyError:
+            raise ValueError, "Missing signature:size_in sig in package"
+        print freespace
+    if freespace < 31457280:
+        config.printInfo(0, "Less than 30MB of diskspace left on %s for caching rpms\n" % mountpoint[dev])
+        return 0
+    return 1
+
 # Things not done for disksize calculation, might stay this way:
 # - no hardlink detection
 # - no information about not-installed files like multilib files, left out

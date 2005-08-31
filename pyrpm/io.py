@@ -1434,7 +1434,10 @@ class RpmDB(RpmDatabase):
                 # Skip install prereqs, just like rpm does...
                 if isInstallPreReq(pkg["requireflags"][idx]):
                     continue
+            # Skip all files with empty md5 sums
             key = self.__getKey(tag, idx, pkg, useidx, func)
+            if tag == "filemd5s" and (key == "" or key == "\x00"):
+                continue
             if not db.has_key(key):
                 db[key] = ""
             db[key] += pack("2I", pkgid, idx) # FIXME: native endian?
@@ -2125,6 +2128,7 @@ class RpmRepo(RpmDatabase):
         
         pkg = package.RpmPackage(self.config, "dummy")
         pkg["signature"] = {}
+        pkg["signature"]["size_in_sig"] = [0,]
         while reader.Read() == 1:
             if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT and \
                reader.NodeType() != libxml2.XML_READER_TYPE_END_ELEMENT:
@@ -2170,6 +2174,11 @@ class RpmRepo(RpmDatabase):
                     pkg.source = self.source + "/" + props["href"]
                 except KeyError:
                     raise ValueError, "Missing href= in <location>"
+            elif name == "size":
+                try:
+                    pkg["signature"]["size_in_sig"][0] += int(props["package"])
+                except KeyError:
+                    raise ValueError, "Missing package= in <size>"
             elif name == "format":
                 self.__parseFormat(reader, pkg)
         pkg.header_read = 1
@@ -2329,6 +2338,17 @@ class RpmRepo(RpmDatabase):
                 if reader.Read() != 1:
                     break
                 pkg["sourcerpm"] = reader.Value()
+            elif name == "rpm:header-range":
+                props = self.__getProps(reader)
+                try:
+                    header_start = int(props["start"])
+                    header_end = int(props["end"])
+                except KeyError:
+                    raise ValueError, "Missing start= in <rpm:header_range>"
+                pkg["signature"]["size_in_sig"][0] -= header_start
+                pkg.range_signature = [96, header_start-96]
+                pkg.range_header = [header_start, header_end-header_start]
+                pkg.range_payload = [header_end, None]
             elif name == "rpm:provides":
                 plist = self.__parseDeps(reader, name)
                 pkg["providename"], pkg["provideflags"], pkg["provideversion"] = plist

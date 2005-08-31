@@ -143,6 +143,14 @@ class RpmController:
         if not self.config.ignoresize:
             if self.config.timer:
                 time1 = clock()
+            ret = getFreeCachespace(self.config, operations)
+            if self.config.timer:
+                self.config.printInfo(0, "getFreeCachespace took %s seconds\n" % \
+                             (clock() - time1))
+            if not ret:
+                sys.exit(1)
+            if self.config.timer:
+                time1 = clock()
             ret = getFreeDiskspace(self.config, operations)
             if self.config.timer:
                 self.config.printInfo(0, "getFreeDiskspace took %s seconds\n" % \
