@@ -482,13 +482,16 @@ def updateDigestFromFile(digest, fd, bytes = None):
 
 def getFreeCachespace(config, operations):
     """Check if there is enough diskspace for caching the rpms for the given
-    operations"""
+    operations.
+
+    Return 1 if there is enough space (with 30 MB slack), 0 otherwise."""
+    
     cachedir = "/var/cache/pyrm/"
     while 1:
         try:
             dev = os.stat(cachedir).st_dev
             break
-        except:
+        except OSError:
             cachedir = os.path.dirname(cachedir)
     statvfs = os.statvfs(cachedir)
     freespace = statvfs[0] * statvfs[4]
