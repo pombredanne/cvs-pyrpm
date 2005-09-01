@@ -20,18 +20,19 @@ import os.path
 
 class RpmFileInfo:
     def __init__(self, config, filename, inode, mode, uid, gid, mtime, filesize,
-                 dev, rdev, md5sum, flags, verifyflags, filecolor):
+                 dev, rdev, md5sum, linktos, flags, verifyflags, filecolor):
         self.config = config            # FIXME: write-only
-        self.filename = filename
+        self.filename = filename        # Usually real name, but can be modified
         self.inode = inode            # rpm header limited to int32; write-only
-        self.mode = mode
-        self.uid = uid
-        self.gid = gid
+        self.mode = mode                # Standard stat file modes
+        self.uid = uid                  # int32 uid instead of name as in cpio
+        self.gid = gid                  # int32 gid instead of name as in cpio
         self.mtime = mtime
         self.filesize = filesize        # rpm header limited to int32
         self.dev = dev                  # FIXME: write-only
         self.rdev = rdev                # rpm header limited to int16
-        self.md5sum = md5sum
+        self.md5sum = md5sum            # Uncoverted md5sum from header
+        self.linktos = linktos          # Target file in case of symlink
         self.flags = flags              # RPMFILE_*
         self.verifyflags = verifyflags  # FIXME: write-only
         self.filecolor = filecolor      # FIXME: write-only

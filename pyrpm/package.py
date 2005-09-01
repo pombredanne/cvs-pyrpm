@@ -491,9 +491,25 @@ class RpmPackage(RpmData):
         return 0
 
     def isEqual(self, pkg):
-        """Return true if self and pkg have the same NEVRA."""
+        """Return true if self and pkg have the same NEVRA. Missing Epoch
+        is identical to Epoch=0."""
 
-        return self.getNEVRA() == pkg.getNEVRA()
+        if self["name"]    != pkg["name"] or \
+           self["version"] != pkg["version"] or \
+           self["release"] != pkg["release"] or \
+           self["arch"]    != pkg["arch"]:
+            return 0
+
+        if not self["epoch"] or len(self["epoch"]) == 0:
+            e1 = 0
+        else:
+            e1 = self["epoch"][0]
+        if not pkg["epoch"] or len(pkg["epoch"]) == 0:
+            e2 = 0
+        else:
+            e2 = pkg["epoch"][0]
+
+        return e1 == e2
 
     def isIdentical(self, pkg):
         """Return true if self and pkg have the same checksum.
@@ -833,6 +849,7 @@ class RpmPackage(RpmData):
         rpmdev = None
         rpmrdev = None
         rpmmd5sum = None
+        rpmlinktos = None
         rpmflags = None
         rpmverifyflags = None
         rpmfilecolor = None
@@ -854,6 +871,8 @@ class RpmPackage(RpmData):
             rpmrdev = self["filerdevs"][i]
         if self.has_key("filemd5s"):
             rpmmd5sum = self["filemd5s"][i]
+        if self.has_key("filelinktos"):
+            rpmlinktos = self["filelinktos"][i]
         if self.has_key("fileflags"):
             rpmflags = self["fileflags"][i]
         if self.has_key("fileverifyflags"):
@@ -862,7 +881,8 @@ class RpmPackage(RpmData):
             rpmfilecolor = self["filecolors"][i]
         rfi = RpmFileInfo(self.config, filename, rpminode, rpmmode, rpmuid,
                           rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev,
-                          rpmmd5sum, rpmflags, rpmverifyflags, rpmfilecolor)
+                          rpmmd5sum, rpmlinktos, rpmflags, rpmverifyflags,
+                          rpmfilecolor)
         return rfi
 
     def getEpoch(self):

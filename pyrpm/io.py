@@ -1138,7 +1138,7 @@ class RpmDB(RpmDatabase):
         if not os.path.isdir(dbpath):
             return 1
         try:
-            db = bsddb.hashopen(os.path.join(dbpath, "/Packages"), "r")
+            db = bsddb.hashopen(os.path.join(dbpath, "Packages"), "r")
         except bsddb.error:
             return 1
         for key in db.keys():
@@ -1232,6 +1232,7 @@ class RpmDB(RpmDatabase):
 
     def addPkg(self, pkg, nowrite=None):
         self._addPkg(pkg)
+        functions.blockSignals()
 
         if nowrite:
             return 1
@@ -1292,7 +1293,10 @@ class RpmDB(RpmDatabase):
             # FIXME: native endian?
             self.packages_db[self.zero] = pack("I", self.maxid)
         except bsddb.error:
-            return 0 # FIXME: remove added parts?
+            functions.unblockSignals()
+            self._erasePkg(pkg)
+            return 0 # Due to the blocking, this is now virtually atomic
+        functions.unblockSignals()
         return 1
 
     def erasePkg(self, pkg, nowrite=None):
@@ -1301,7 +1305,11 @@ class RpmDB(RpmDatabase):
         if nowrite:
             return 1
 
+        functions.blockSignals()
+
         if not pkg.has_key("install_id"):
+            functions.unblockSignals()
+            self._addPkg(pkg)
             return 0
 
         try:
@@ -1330,7 +1338,10 @@ class RpmDB(RpmDatabase):
             self.__removeId(self.triggername_db, "triggername", pkgid, pkg)
             del self.packages_db[pack("I", pkgid)] # FIXME: native endian?
         except bsddb.error:
+            functions.unblockSignals()
+            self._addPkg(pkg)
             return 0 # FIXME: keep trying?
+        functions.unblockSignals()
         return 1
 
     def __openDB4(self):
@@ -1522,37 +1533,61 @@ class RpmPyDB(RpmDatabase):
         return 1
 
     def addPkg(self, pkg, nowrite=None):
-        if not nowrite:
-            if not self.__mkDBDirs():
-                return 0
-            dbpath = self._getDBPath()
-            nevra = pkg.getNEVRA()
-            src = "pydb:/"+os.path.join(dbpath, "headers", nevra)
-            apkg = getRpmIOFactory(self.config, src)
-            try:
-                apkg.write(pkg)
-                apkg.close()
-            except IOError:
-                return 0 # FIXME: clean up partial data?
-            if not self.write():
-                return 0
         self._addPkg(pkg)
+        functions.blockSignals()
+
+        if nowrite:
+            return 1
+
+        if not self.__mkDBDirs():
+            functions.unblockSignals()
+            self._erasePkg(pkg)
+            return 0
+
+        dbpath = self._getDBPath()
+        nevra = pkg.getNEVRA()
+        src = "pydb:/"+os.path.join(dbpath, "headers", nevra)
+        apkg = getRpmIOFactory(self.config, src)
+        try:
+            apkg.write(pkg)
+            apkg.close()
+        except IOError:
+            functions.unblockSignals()
+            self._erasePkg(pkg)
+            return 0 # FIXME: clean up partial data?
+        if not self.write():
+            functions.unblockSignals()
+            self._erasePkg(pkg)
+            return 0
+        functions.unblockSignals()
         return 1
 
     def erasePkg(self, pkg, nowrite=None):
-        if not nowrite:
-            if not self.__mkDBDirs():
-                return 0
-            dbpath = self._getDBPath()
-            nevra = pkg.getNEVRA()
-            headerfile = os.path.join(dbpath, "headers", nevra)
-            try:
-                os.unlink(headerfile)
-            except OSError:
-                self.config.printWarning(1, "%s: Package not found in PyDB" % nevra)
-            if not self.write():
-                return 0
         self._erasePkg(pkg)
+        functions.blockSignals()
+
+        if nowrite:
+            return 1
+
+        if not self.__mkDBDirs():
+            functions.unblockSignals()
+            self._addPkg(pkg)
+            return 0
+        dbpath = self._getDBPath()
+        nevra = pkg.getNEVRA()
+        headerfile = os.path.join(dbpath, "headers", nevra)
+        try:
+            os.unlink(headerfile)
+        except OSError:
+            self.config.printWarning(1, "%s: Package not found in PyDB" % nevra)
+            functions.unblockSignals()
+            self._addPkg(pkg)
+            return 0
+        if not self.write():
+            functions.unblockSignals()
+            self._addPkg(pkg)
+            return 0
+        functions.unblockSignals()
         return 1
 
     def __mkDBDirs(self):
@@ -1634,7 +1669,10 @@ class RpmSQLiteDB(RpmDatabase):
             self._addPkg(pkg)
             pkg.io = None
             pkg.header_read = 1
-        cu.execute("commit")
+        try:
+            cu.execute("commit")
+        except:
+            return 0
         return 1
 
     def write(self):
@@ -1642,10 +1680,14 @@ class RpmSQLiteDB(RpmDatabase):
 
     def addPkg(self, pkg, nowrite=None):
         self._addPkg(pkg)
+
         if nowrite:
             return 1
+
         if not self.cx:
+            self._erasePkg(pkg)
             return 0
+
         self.__initDB()
         cu = self.cx.cursor()
         cu.execute("begin")
@@ -1673,22 +1715,34 @@ class RpmSQLiteDB(RpmDatabase):
             if not pkg.has_key(tag):
                 continue
             self.__writeTags(cu, rowid, pkg, tag)
-        cu.execute("commit")
+        try:
+            cu.execute("commit")
+        except:
+            self._erasePkg(pkg)
+            return 0
         return 1
 
     def erasePkg(self, pkg, nowrite=None):
         self._erasePkg(pkg)
+
         if nowrite:
             return 1
+
         if not self.cx:
+            self._addPkg(pkg)
             return 0
+
         self.__initDB()
         cu = self.cx.cursor()
         cu.execute("begin")
         cu.execute("delete from Packages where rowid=%d", (pkg["install_id"],))
         for tag in self.tagnames:
             cu.execute("delete from %s where id=%d", (tag, pkg["install_id"]))
-        cu.execute("commit")
+        try:
+            cu.execute("commit")
+        except:
+            self._addPkg(pkg)
+            return 0
         return 1
 
     def __initDB(self):

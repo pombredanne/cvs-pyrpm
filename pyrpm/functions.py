@@ -17,7 +17,8 @@
 #
 
 
-import fcntl, os, os.path, struct, sys, resource, re, getopt, errno
+import fcntl, os, os.path, struct, sys, resource, re, getopt, errno, signal
+import shutil
 from types import TupleType, ListType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from bsddb import hashopen
@@ -292,8 +293,12 @@ def installFile(rfi, infd, size, useAttrs=True):
         if useAttrs:
             _setFileAttrs(rfi.filename, rfi)
     elif S_ISLNK(mode):
-        data = infd.read(size)
-        symlinkfile = data.rstrip("\x00")
+        data1 = rfi.linktos
+        data2 = infd.read(size)
+        data2 = data2.rstrip("\x00")
+        symlinkfile = data1
+        if data1 != data2:
+            print "Warning: Symlink information differs between rpm header and cpio for %s -> %s" % (rfi.filename, data1)
         if os.path.islink(rfi.filename) \
             and os.readlink(rfi.filename) == symlinkfile:
             return
@@ -335,6 +340,8 @@ def installFile(rfi, infd, size, useAttrs=True):
         # Sockets are useful only when bound, but what do we care...
         # Note that creating sockets using mknod is not SUSv3-mandated, quite
         # likely Linux-specific.
+        # Also, only 1 know package has a socket packaged, and that was dev in
+        # RH-5.2.
         makeDirs(rfi.filename)
         tmpfilename = mkstemp_mknod(os.path.dirname(rfi.filename), tmpprefix,
                                     mode, 0)
@@ -387,8 +394,13 @@ def createLink(src, dst):
         pass
     # Behave exactly like cpio: If the hardlink fails (because of different
     # partitions), then it has to fail
-    # FIXME: use mkstemp... and os.rename?
-    os.link(src, dst)
+    # NEW: Don't use original cpio behaviour, we can do better: I the mkstemp
+    # hardlink fails we copy the original file over retaining all modes.
+    tmpfilename = mkstemp_link(os.path.dirname(dst), tmpprefix, src)
+    if tmpfilename:
+        os.rename(tmpfilename, dst)
+    else:
+        shutil.copy2(src, dst)
 
 def tryUnlock(lockfile):
     """If lockfile exists and is a stale lock, remove it.
@@ -427,6 +439,30 @@ def doLock(filename):
             raise
         return 0
     return 1
+
+__orig_signals = []
+def blockSignals():
+    """Blocks the typical signals to avoid interruption during critical code
+    segments."""
+
+    global __orig_signals
+    if len(__orig_signals) > 0:
+        return 1
+    __orig_signals.append(signal.signal(signal.SIGINT, signal.SIG_IGN))
+    __orig_signals.append(signal.signal(signal.SIGTERM, signal.SIG_IGN))
+    __orig_signals.append(signal.signal(signal.SIGHUP, signal.SIG_IGN))
+    return 1
+
+def unblockSignals():
+    """Unblocks the previously blocked signals and restores the original
+    signal handlers."""
+
+    global __orig_signals
+    if len(__orig_signals) == 0:
+        return 1
+    signal.signal(signal.SIGINT, __orig_signals.pop(0))
+    signal.signal(signal.SIGTERM, __orig_signals.pop(0))
+    signal.signal(signal.SIGHUP, __orig_signals.pop(0))
 
 def _unlink(file):
     """Unlink file, ignoring errors."""
@@ -506,7 +542,6 @@ def getFreeCachespace(config, operations):
             freespace -= pkg['signature']['size_in_sig'][0]+pkg.range_header[0]
         except KeyError:
             raise ValueError, "Missing signature:size_in sig in package"
-        print freespace
     if freespace < 31457280:
         config.printInfo(0, "Less than 30MB of diskspace left on %s for caching rpms\n" % mountpoint[dev])
         return 0

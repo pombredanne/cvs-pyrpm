@@ -15,7 +15,7 @@ for i in sys.argv[1:]:
     print repr(rpm.range_header)
     print repr(rpm.range_payload)
     print repr(rpm["signature"]["size_in_sig"])
-    print zip(rpm["basenames"], rpm["filemd5s"], rpm["filesizes"])
+    print zip(rpm["basenames"], rpm["filelinktos"], rpm["filemd5s"], rpm["filesizes"])
 #    print rpm["basenames"]
 #    print rpm["dirnames"]
 #    print rpm["dirindexes"]
