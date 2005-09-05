@@ -17,7 +17,7 @@
 #
 
 
-import os, copy, sys, time
+import os, copy, sys, time, signal
 
 
 class RpmMessageHandler:
@@ -84,6 +84,10 @@ class RpmConfig:
         self.service = 0                # Install /sbin/service with "exit 0"
         self.yumconf = '/etc/yum.conf'
         self.arch = None                # If explicitly selected, for --test
+        self.tmpdir = None
+        self.supported_signals = [ signal.SIGINT, signal.SIGTERM,
+                                   signal.SIGHUP ]
+        self.signals = [ ]
 
     def printDebug(self, level, msg):
         if self.debug_handler and level <= self.debug:
