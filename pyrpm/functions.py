@@ -440,29 +440,38 @@ def doLock(filename):
         return 0
     return 1
 
-__orig_signals = []
+def setSignals(sig):
+    """Set the typical signals to sig."""
+
+    global rpmconfig
+    signals = { }
+    for key in rpmconfig.supported_signals:
+        signals[key] = signal.signal(key, sig)
+    rpmconfig.signals.append(signals)
+    return 1
+
+def resetSignals():
+    """Reset the typical signals."""
+
+    global rpmconfig
+    if len(rpmconfig.signals) < 1:
+        return 0
+    signals = rpmconfig.signals.pop(len(rpmconfig.signals)-1)
+    for key in signals:
+        signal.signal(key, signals[key])
+    return 1
+
 def blockSignals():
     """Blocks the typical signals to avoid interruption during critical code
     segments."""
 
-    global __orig_signals
-    if len(__orig_signals) > 0:
-        return 1
-    __orig_signals.append(signal.signal(signal.SIGINT, signal.SIG_IGN))
-    __orig_signals.append(signal.signal(signal.SIGTERM, signal.SIG_IGN))
-    __orig_signals.append(signal.signal(signal.SIGHUP, signal.SIG_IGN))
-    return 1
+    return setSignals(signal.SIG_IGN)
 
 def unblockSignals():
     """Unblocks the previously blocked signals and restores the original
     signal handlers."""
 
-    global __orig_signals
-    if len(__orig_signals) == 0:
-        return 1
-    signal.signal(signal.SIGINT, __orig_signals.pop(0))
-    signal.signal(signal.SIGTERM, __orig_signals.pop(0))
-    signal.signal(signal.SIGHUP, __orig_signals.pop(0))
+    return resetSignals()
 
 def _unlink(file):
     """Unlink file, ignoring errors."""
