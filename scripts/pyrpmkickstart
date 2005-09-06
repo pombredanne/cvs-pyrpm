@@ -545,17 +545,19 @@ for part in partitionmap:
         error = 1
     if error:
         continue
+    partitionmap[part]["blocksize"] = d.partition[id].geom.dev.sector_size
+    partitionmap[part]["start"] = d.partition[id].geom.start * \
+                                  partitionmap[part]["blocksize"]
+    partitionmap[part]["end"] = d.partition[id].geom.end * \
+                                partitionmap[part]["blocksize"]
+    partitionmap[part]["length"] = d.partition[id].geom.length
+    partitionmap[part]["size"] = d.partition[id].geom.length * \
+                                 partitionmap[part]["blocksize"]
     if diskmap[disk].has_key("image"):
-        partitionmap[part]["blocksize"] = d.partition[id].geom.dev.sector_size
-        partitionmap[part]["start"] = d.partition[id].geom.start * \
-                                      partitionmap[part]["blocksize"]
-        partitionmap[part]["end"] = d.partition[id].geom.end * \
-                                    partitionmap[part]["blocksize"]
-        partitionmap[part]["length"] = d.partition[id].geom.length
-        partitionmap[part]["size"] = d.partition[id].geom.length * \
-                                     partitionmap[part]["blocksize"]
         device = losetup(diskmap[disk]["image"], partitionmap[part]["start"])
         partitionmap[part]["device"] = device
+    else:
+        partitionmap[part]["device"] = "/dev/"+part
 
     # TODO: update
 #    if d.partition[id].fs_type and d.partition[id].fs_type.name:
@@ -628,6 +630,7 @@ for part in to_format:
         if diskmap[disk].has_key("image"):
             blocksize = 4096
             mke2fs += " -b %d" % blocksize
+        print partitionmap[part]
         mke2fs += " '%s'" % partitionmap[part]["device"]
         if diskmap[disk].has_key("image"):
             mke2fs += " %d" % (partitionmap[part]["size"] / blocksize)
@@ -1678,7 +1681,8 @@ if ks["bootloader"] and not (ks["bootloader"].has_key("location") and \
         if hdmap.has_key(location):
             hd = hdmap[location]
         else:
-            hd = "%s,%d" % (hdmap[diskName(location)], partitionId(location))
+            hd = "%s,%d" % (hdmap[diskName(location)],
+                            (partitionId(location)-1))
         fd.write('setup (%s)\n' % hd)
         fd.write('quit\n')
         fd.write('EOF\n')
