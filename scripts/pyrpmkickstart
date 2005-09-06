@@ -249,8 +249,9 @@ def exitHandler(signum, frame):
 def exit(code):
     time.sleep(1)
     if wait:
-        sys.stdout.write('Use "chroot %s" to change into the installation tree.\n' %\
-                         target_dir)
+        if target_dir:
+            sys.stdout.write('Use "chroot %s" to change into the installation tree.\n' %\
+                             target_dir)
         sys.stdout.write('Waiting.. Press any key to cleanup and quit. ')
         c = sys.stdin.read(1)
 
@@ -291,6 +292,7 @@ partitionmap = None
 wait = 0
 kudzu = 0
 orig_yum = 0
+target_dir = None
 
 def usage():
     print """

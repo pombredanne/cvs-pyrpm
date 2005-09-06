@@ -1,3 +1,11 @@
 #!/bin/sh
 
-rpm -ivh --nosignature --nodigest --justdb /var/lib/pyrpm/headers/*
+rm -f /var/lib/rpm/*
+rpm --initdb
+
+for p in `ls -rt /var/lib/pyrpm/headers/*`; do
+    basename $p
+    rpm -i --quiet --nodeps --nosignature --nodigest --justdb --ignoresize $p
+done
+
+#rpm -i --quiet --nosignature --nodigest --justdb --ignoresize /var/lib/pyrpm/headers/*
