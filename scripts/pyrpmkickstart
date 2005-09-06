@@ -509,11 +509,15 @@ for disk in diskmap.keys():
             print "Unable to get loop device, exiting."
             exit(1)
         diskmap[disk]["device"] = device
-        diskmap[disk]["disk"] = Disk(device)
+
+    diskmap[disk]["disk"] = Disk(diskmap[disk]["device"])
+
+    if diskmap[disk].has_key("image"):
         d = diskmap[disk]["disk"]
 
         if verbose:
-            print "C/H/S: %d/%d/%d" % (d.disk.dev.cylinders, d.disk.dev.heads, d.disk.dev.sectors)
+            print "C/H/S: %d/%d/%d" % (d.disk.dev.cylinders, d.disk.dev.heads,
+                                       d.disk.dev.sectors)
             for i in d.partition:
                 if d.partition[i].type == parted.PARTITION_PRIMARY:
                     type = "primary"
@@ -528,8 +532,6 @@ for disk in diskmap.keys():
                        d.partition[i].geom.dev.sector_size)
                 if d.partition[i].fs_type and d.partition[i].fs_type.name:
                     print "\t%s" % d.partition[i].fs_type.name
-    else:
-        diskmap[disk]["device"] = "/dev/" + disk
 
 # are all needed partitions there?
 error = 0
