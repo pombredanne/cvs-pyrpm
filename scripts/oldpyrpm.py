@@ -59,7 +59,6 @@
 #   doing this in an extra pass. That's why it is then already too late
 #   to set distroverpkg within the config file at all.
 # - support reading some vars from yum.conf like distroverpkg
-# - readRpmdb(): dep check based only on rpmdb (unresolved deps)
 # - readRepos() is only using the first baseurl until now. Add mirror
 #   selection code.
 # - generic diff routine for rpm header data or maybe dump into xml to
@@ -840,6 +839,17 @@ def BuildArchTranslate(arch):
 
 # arch => compatible archs, best match first
 arch_compats = {
+    "athlon": ("i686", "i586", "i486", "i386"),
+    "i686": ("i586", "i486", "i386"),
+    "i586": ("i486", "i386"),
+    "i486": ("i386",),
+
+    "x86_64": ("amd64", "athlon", "i686", "i586", "i486", "i386"),
+    "amd64": ("x86_64", "athlon", "i686", "i586", "i486", "i386"),
+    "ia32e": ("x86_64", "athlon", "i686", "i586", "i486", "i386"),
+
+    "ia64": ("i686", "i586", "i486", "i386"),
+
     "alphaev67": ("alphaev6", "alphapca56", "alphaev56", "alphaev5", "alpha",
         "axp"),
     "alphaev6": ("alphapca56", "alphaev56", "alphaev5", "alpha", "axp"),
@@ -847,11 +857,6 @@ arch_compats = {
     "alphaev56": ("alphaev5", "alpha", "axp"),
     "alphaev5": ("alpha", "axp"),
     "alpha": ("axp",),
-
-    "athlon": ("i686", "i586", "i486", "i386"),
-    "i686": ("i586", "i486", "i386"),
-    "i586": ("i486", "i386"),
-    "i486": ("i386",),
 
     "osfmach3_i686": ("i686", "osfmach3_i586", "i586", "osfmach3_i486", "i486",
         "osfmach3_i386", "i486", "i386"),
@@ -897,10 +902,6 @@ arch_compats = {
     "hades": ("m68kmint",),
 
     "s390x": ("s390",),
-
-    "x86_64": ("amd64", "athlon", "i686", "i586", "i486", "i386"),
-    "amd64": ("x86_64", "athlon", "i686", "i586", "i486", "i386"),
-    "ia32e": ("x86_64", "athlon", "i686", "i586", "i486", "i386")
 }
 
 def archCompat(parch, arch):
@@ -1105,22 +1106,21 @@ def pkgCompare(one, two):
 
 def evrCompare(evr1, comp, evr2):
     """Check whether evr1 matches comp(RPMSENSE_*) evr2."""
-    res = 0
-    if not isinstance(evr1, TupleType):
-        evr1 = evrSplit(evr1)
-    if not isinstance(evr2, TupleType):
-        evr2 = evrSplit(evr2)
+    #if not isinstance(evr1, TupleType):
+    #    evr1 = evrSplit(evr1)
+    #if not isinstance(evr2, TupleType):
+    #    evr2 = evrSplit(evr2)
     r = labelCompare(evr1, evr2)
     if r == -1:
         if comp & RPMSENSE_LESS:
-            res = 1
+            return 1
     elif r == 0:
         if comp & RPMSENSE_EQUAL:
-            res = 1
-    else: # res == 1
+            return 1
+    else: # r == 1
         if comp & RPMSENSE_GREATER:
-            res = 1
-    return res
+            return 1
+    return 0
 
 def rangeCompare(flag1, evr1, flag2, evr2):
     """Check whether (RPMSENSE_* flag, (E, V, R) evr) pairs (flag1, evr1)
@@ -1128,17 +1128,18 @@ def rangeCompare(flag1, evr1, flag2, evr2):
     Return 1 if they do, 0 otherwise.  Assumes at least one of RPMSENSE_EQUAL,
     RPMSENSE_LESS or RPMSENSE_GREATER is each of flag1 and flag2."""
     sense = labelCompare(evr1, evr2)
-    result = 0
-    if sense < 0 and (flag1 & RPMSENSE_GREATER or flag2 & RPMSENSE_LESS):
-        result = 1
-    elif sense > 0 and (flag1 & RPMSENSE_LESS or flag2 & RPMSENSE_GREATER):
-        result = 1
-    elif sense == 0 and \
-        ((flag1 & RPMSENSE_EQUAL and flag2 & RPMSENSE_EQUAL) or \
-         (flag1 & RPMSENSE_LESS and flag2 & RPMSENSE_LESS) or \
-         (flag1 & RPMSENSE_GREATER and flag2 & RPMSENSE_GREATER)):
-        result = 1
-    return result
+    if sense < 0:
+        if (flag1 & RPMSENSE_GREATER) or (flag2 & RPMSENSE_LESS):
+            return 1
+    elif sense > 0:
+        if (flag1 & RPMSENSE_LESS) or (flag2 & RPMSENSE_GREATER):
+            return 1
+    else: # elif sense == 0:
+        if ((flag1 & RPMSENSE_EQUAL and flag2 & RPMSENSE_EQUAL) or \
+            (flag1 & RPMSENSE_LESS and flag2 & RPMSENSE_LESS) or \
+            (flag1 & RPMSENSE_GREATER and flag2 & RPMSENSE_GREATER)):
+            return 1
+    return 0
 
 def isCommentOnly(script):
     """Return 1 is script contains only empty lines or lines
@@ -2549,11 +2550,43 @@ class FilenamesList:
             dirname += "/"
         return self.path.get(dirname, {}).get(basename, [])
 
+def searchDep(flag, version, rpms):
+    ret = []
+    if rpms:
+        if not isinstance(version, TupleType):
+            evr = evrSplit(version)
+        else:
+            evr = version
+        for (f, v, rpm) in rpms:
+            if rpm in ret:
+                continue
+            if version == "" or rangeCompare(flag, evr, f, evrSplit(v)):
+                ret.append(rpm)
+            # This should move into getProvides(). Also get more selective to
+            # only set this if the "Obsoletes:" line is set to then add "evr"
+            # also to the "Provides:" line.
+            # Should we issue a packaging warning about these cases?
+            if v == "":
+                evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
+                if evrCompare(evr2, flag, evr):
+                    ret.append(rpm)
+    return ret
+
+def depString(name, flag, version):
+    if version == "":
+        return name
+    op = ""
+    if flag & RPMSENSE_LESS:
+        op = "<"
+    if flag & RPMSENSE_GREATER:
+        op += ">"
+    if flag & RPMSENSE_EQUAL:
+        op += "="
+    return "%s %s %s" % (name, op, version)
 
 class DepList:
 
-    def __init__(self, depname):
-        self.depname = depname
+    def __init__(self):
         self.clear()
 
     def clear(self):
@@ -2568,36 +2601,30 @@ class DepList:
             self.deps[name].remove( (flag, version, rpm) )
 
     def search(self, name, flag, version):
-        evr = evrSplit(version)
-        ret = []
-        for (f, v, rpm) in self.deps.get(name, []):
-            if rpm in ret:
-                continue
-            if version == "" or rangeCompare(flag, evr, f, evrSplit(v)):
-                ret.append(rpm)
-            elif self.depname == "provides":
-                evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
-                if evrCompare(evr2, flag, evr):
-                    ret.append(rpm)
-        return ret
+        return searchDep(flag, version, self.deps.get(name, []))
 
 
 class RpmResolver:
 
     def __init__(self):
+        self.mydeps = {}
         self.filenameslist = FilenamesList()
-        self.provides_list = DepList("provides")
-        self.obsoletes_list = DepList("obsoletes")
+        self.provides_list = DepList()
+        self.obsoletes_list = DepList()
+        self.conflicts_list = DepList()
+        self.requires_list = DepList()
 
     def addPkg(self, pkg):
+        self.mydeps.setdefault(pkg["name"], []).append((RPMSENSE_EQUAL, pkg.getEVR(), pkg))
         self.filenameslist.addPkg(pkg)
         self.provides_list.addPkg(pkg, pkg.getProvides())
         self.obsoletes_list.addPkg(pkg, pkg.getObsoletes())
+        self.conflicts_list.addPkg(pkg, pkg.getConflicts())
+        self.requires_list.addPkg(pkg, pkg.getRequires())
 
-    def searchDependency(self, dep):
-        (name, flag, version) = dep
+    def searchDependency(self, name, flag, version):
         s = self.provides_list.search(name, flag, version)
-        if name[0] == "/":
+        if name[0] == "/" and version == "":
             s += self.filenameslist.search(name)
         return s
 
@@ -3657,6 +3684,29 @@ def readRepos(releasever, configfiles, arch, buildroot, readcompsfile=0):
         print "Done reading config file %s." % c
     return repos
 
+def checkDeps(rpms):
+    resolver = RpmResolver()
+    for pkg in rpms:
+        resolver.addPkg(pkg)
+    for name in resolver.obsoletes_list.deps.keys():
+        for (flag, version, rpm) in resolver.obsoletes_list.deps[name]:
+            for pkg in searchDep(flag, version, resolver.mydeps.get(name, [])):
+                if pkg["name"] != name:
+                    print "Warning:", pkg.getFilename(), "is obsoleted by", \
+                        depString(name, flag, version), "from", rpm.getFilename()
+    for name in resolver.requires_list.deps.keys():
+        if name.startswith("rpmlib("):
+            continue
+        for (flag, version, rpm) in resolver.requires_list.deps[name]:
+            if not resolver.searchDependency(name, flag, version):
+                print "Warning:", rpm.getFilename(), "did not find a package for:", \
+                    depString(name, flag, version)
+    for name in resolver.conflicts_list.deps.keys():
+        for (flag, version, rpm) in resolver.conflicts_list.deps[name]:
+            for pkg in resolver.searchDependency(name, flag, version):
+                print "Warning:", rpm.getFilename(), "contains a conflict", \
+                    depString(name, flag, version), "with", pkg.getFilename()
+
 
 def verifyStructure(verbose, packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
@@ -3877,15 +3927,19 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     verifyStructure(verbose, packages, triggername, "triggername")
     checkdupes = {}
     for pkg in packages.values():
+        if dbpath != "/var/lib/rpm" and pkg["name"] in ("kernel", "kernel-smp"):
+            if arch != pkg["arch"] and not archCompat(pkg["arch"], arch):
+                arch = pkg["arch"]
+                print "Change 'arch' setting to be:", arch
         if not releasever and pkg["name"] in distroverpkg:
             releasever = pkg["version"]
         if pkg["name"] not in installonlypkgs:
             checkdupes.setdefault("%s.%s" % (pkg["name"], pkg["arch"]),
                 []).append(pkg)
+    for pkg in packages.values():
         if pkg["name"] != "gpg-pubkey" and not archCompat(pkg["arch"], arch):
             print "Warning: did not expect package with this arch: %s" % \
                 pkg.getFilename()
-    for pkg in packages.values():
         if pkg["arch"] != "noarch" and \
             checkdupes.has_key("%s.noarch" % pkg["name"]):
             print "Warning: noarch and arch-dependent package installed:", \
@@ -3994,13 +4048,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
         if ctx.hexdigest() != sha1header:
             print pkg.getFilename(), \
                 "bad sha1: %s / %s" % (sha1header, ctx.hexdigest())
-    filenameslist = FilenamesList()
-    provides_list = DepList("provides")
-    obsoletes_list = DepList("obsoletes")
-    for pkg in packages.values():
-        filenameslist.addPkg(pkg)
-        provides_list.addPkg(pkg, pkg.getProvides())
-        obsoletes_list.addPkg(pkg, pkg.getObsoletes())
+    checkDeps(packages.values())
     if verbose:
         print "Done."
     return None
