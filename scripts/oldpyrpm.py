@@ -1106,24 +1106,6 @@ def pkgCompare(one, two):
     return labelCompare((one.getEpoch(), one["version"], one["release"]),
                         (two.getEpoch(), two["version"], two["release"]))
 
-def evrCompare(evr1, comp, evr2):
-    """Check whether evr1 matches comp(RPMSENSE_*) evr2."""
-    #if not isinstance(evr1, TupleType):
-    #    evr1 = evrSplit(evr1)
-    #if not isinstance(evr2, TupleType):
-    #    evr2 = evrSplit(evr2)
-    r = labelCompare(evr1, evr2)
-    if r == -1:
-        if comp & RPMSENSE_LESS:
-            return 1
-    elif r == 0:
-        if comp & RPMSENSE_EQUAL:
-            return 1
-    else: # r == 1
-        if comp & RPMSENSE_GREATER:
-            return 1
-    return 0
-
 def rangeCompare(flag1, evr1, flag2, evr2):
     """Check whether (RPMSENSE_* flag, (E, V, R) evr) pairs (flag1, evr1)
     and (flag2, evr2) intersect.
@@ -2552,28 +2534,6 @@ class FilenamesList:
             dirname += "/"
         return self.path.get(dirname, {}).get(basename, [])
 
-def searchDep(flag, version, rpms):
-    ret = []
-    if rpms:
-        if not isinstance(version, TupleType):
-            evr = evrSplit(version)
-        else:
-            evr = version
-        for (f, v, rpm) in rpms:
-            if rpm in ret:
-                continue
-            if version == "" or rangeCompare(flag, evr, f, evrSplit(v)):
-                ret.append(rpm)
-            # This should move into getProvides(). Also get more selective to
-            # only set this if the "Obsoletes:" line is set to then add "evr"
-            # also to the "Provides:" line.
-            # Should we issue a packaging warning about these cases?
-            if v == "":
-                evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
-                if evrCompare(evr2, flag, evr):
-                    ret.append(rpm)
-    return ret
-
 def depString(name, flag, version):
     if version == "":
         return name
@@ -2585,6 +2545,27 @@ def depString(name, flag, version):
     if flag & RPMSENSE_EQUAL:
         op += "="
     return "%s %s %s" % (name, op, version)
+
+def searchDep(name, flag, version, rpms):
+    ret = []
+    if rpms:
+        if not isinstance(version, TupleType):
+            evr = evrSplit(version)
+        else:
+            evr = version
+        for (f, v, rpm) in rpms:
+            if rpm in ret:
+                continue
+            if version == "" or rangeCompare(flag, evr, f, evrSplit(v)):
+                ret.append(rpm)
+            elif v == "":
+                if rpm.strict:
+                    print "Warning:", rpm.getFilename(), \
+                        "should have a flag/version added for the provides", \
+                        depString(name, flag, version)
+                # We should issue a packaging warning about this:
+                ret.append(rpm)
+    return ret
 
 class DepList:
 
@@ -2603,7 +2584,7 @@ class DepList:
             self.deps[name].remove( (flag, version, rpm) )
 
     def search(self, name, flag, version):
-        return searchDep(flag, version, self.deps.get(name, []))
+        return searchDep(name, flag, version, self.deps.get(name, []))
 
 
 class RpmResolver:
@@ -2617,7 +2598,8 @@ class RpmResolver:
         self.requires_list = DepList()
 
     def addPkg(self, pkg):
-        self.mydeps.setdefault(pkg["name"], []).append((RPMSENSE_EQUAL, pkg.getEVR(), pkg))
+        self.mydeps.setdefault(pkg["name"], []).append(
+            (RPMSENSE_EQUAL, pkg.getEVR(), pkg))
         self.filenameslist.addPkg(pkg)
         self.provides_list.addPkg(pkg, pkg.getProvides())
         self.obsoletes_list.addPkg(pkg, pkg.getObsoletes())
@@ -3186,7 +3168,8 @@ class RpmRepo:
             elif name == "file":
                 reader.Read()
                 pkg["oldfilenames"].append(reader.Value())
-            #elif name in ("rpm:vendor", "rpm:buildhost", "rpm:group", "rpm:license"):
+            #elif name in ("rpm:vendor", "rpm:buildhost", "rpm:group",
+            #    "rpm:license"):
             #    pass
             #else:
             #    print name
@@ -3689,7 +3672,8 @@ def checkDeps(rpms):
         resolver.addPkg(pkg)
     for name in resolver.obsoletes_list.deps.keys():
         for (flag, version, rpm) in resolver.obsoletes_list.deps[name]:
-            for pkg in searchDep(flag, version, resolver.mydeps.get(name, [])):
+            for pkg in searchDep(name, flag, version,
+                resolver.mydeps.get(name, [])):
                 if pkg["name"] != name:
                     print "Warning:", pkg.getFilename(), "is obsoleted by", \
                         depString(name, flag, version), "from", rpm.getFilename()
@@ -3698,7 +3682,8 @@ def checkDeps(rpms):
             continue
         for (flag, version, rpm) in resolver.requires_list.deps[name]:
             if not resolver.searchDependency(name, flag, version):
-                print "Warning:", rpm.getFilename(), "did not find a package for:", \
+                print "Warning:", rpm.getFilename(), \
+                    "did not find a package for:", \
                     depString(name, flag, version)
     for name in resolver.conflicts_list.deps.keys():
         for (flag, version, rpm) in resolver.conflicts_list.deps[name]:
@@ -4047,6 +4032,23 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
         if ctx.hexdigest() != sha1header:
             print pkg.getFilename(), \
                 "bad sha1: %s / %s" % (sha1header, ctx.hexdigest())
+    if None:
+      for pkg in packages.values():
+        if pkg["name"] == "gpg-pubkey":
+            continue
+        #if pkg["installcolor"] != (0,):
+        #    print pkg.getFilename(), "wrong installcolor", pkg["installcolor"]
+        if pkg["basenames"] == None and pkg["filestates"] == None:
+            pass
+        elif pkg["filestates"] != (0,) * len(pkg["basenames"]):
+            print pkg.getFilename(), "wrong filestates", pkg["filestates"]
+        if pkg["instprefix"] != None:
+            print pkg.getFilename(), "instprefix", pkg["instprefix"]
+        if None:
+          for i in ("installtime", "filestates", "instprefixes", "installcolor",
+            "installtid"):
+            if pkg[i] != None:
+                print pkg.getFilename(), i, pkg[i]
     checkDeps(packages.values())
     if verbose:
         print "Done."
@@ -4196,18 +4198,13 @@ def checkProvides(repo, checkrequires=1):
     provides = {}
     requires = {}
     for rpm in repo:
-        req = rpm.getRequires()
-        for r in req:
-            if not requires.has_key(r[0]):
-                requires[r[0]] = []
-            requires[r[0]].append(rpm.getFilename())
+        for r in rpm.getRequires():
+            requires.setdefault(r[0], []).append(rpm.getFilename())
     for rpm in repo:
         if (rpm["name"], rpm["arch"]) in dupes:
             continue
         for p in rpm.getProvides():
-            if not provides.has_key(p):
-                provides[p] = []
-            provides[p].append(rpm)
+            provides.setdefault(p, []).append(rpm)
     print "Duplicate provides:"
     for p in provides.keys():
         # only look at duplicate keys
@@ -4268,7 +4265,8 @@ def main():
     if None:
         for _ in xrange(5):
             repo = RpmRepo("/home/mirror/fedora/development/i386/", "")
-            #repo = RpmCompsXML("/home/mirror/fedora/development/i386/repodata/comps.xml")
+            #repo = RpmCompsXML(
+            #    "/home/mirror/fedora/development/i386/repodata/comps.xml")
             repo.read()
             #repo.importFilelist()
         return 0
@@ -4439,6 +4437,12 @@ def main():
             checkDirs(repo)
             checkSymlinks(repo)
             checkProvides(repo, checkrequires=1)
+            repo2 = []
+            for rpm in repo:
+                if (rpm["name"], rpm["arch"]) in dupes:
+                    continue
+                repo2.append(rpm)
+            checkDeps(repo2)
         if wait:
             import time
             print "ready"
