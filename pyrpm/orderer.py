@@ -25,13 +25,23 @@ from hashlist import HashList
 from base import *
 from resolver import RpmResolver
 
-class _Relation:
+
+class Relation:
+    SOFT    = 0 # normal requirement
+    HARD    = 1 # prereq
+    VIRTUAL = 2
+
     """ Pre and post relations for a package """
     def __init__(self):
         self.pre = { }
         self.post = { }
     def __str__(self):
         return "%d %d" % (len(self.pre), len(self.post))
+
+def isHardRelation(flag):
+    return (flag & Relation.HARD == Relation.HARD)
+def isVirtualRelation(flag):
+    return (flag & Relation.VIRTUAL == Relation.VIRTUAL)
 
 # ----
 
@@ -48,15 +58,15 @@ class _Relations:
             return
         i = self.list[pkg]
         if i == None:
-            i = _Relation()
+            i = Relation()
             self.list[pkg] = i
         if pre == None:
             return # no additional things to do for empty relations
-        if pre not in i.pre or flag == 2:
+        if pre not in i.pre or isHardRelation(flag):
             # prefer hard requirements, do not overwrite with soft req
             i.pre[pre] = flag
             if not pre in self.list:
-                self.list[pre] = _Relation()
+                self.list[pre] = Relation()
             self.list[pre].post[pkg] = 1
 
     def remove(self, pkg):
@@ -91,6 +101,7 @@ class RpmOrderer:
                 for p in self.obsoletes[pkg]:
                     if p in self.erases:
                         self.erases.remove(p)
+        self.dropped_relations = { }
 
     # ----
 
@@ -99,8 +110,8 @@ class RpmOrderer:
         if isLegacyPreReq(flag) or \
                (operation == OP_ERASE and isErasePreReq(flag)) or \
                (operation != OP_ERASE and isInstallPreReq(flag)):
-            return 2 # hard requirement
-        return 1 # soft requirement
+            return Relation.HARD # hard requirement
+        return Relation.SOFT # soft requirement
 
     # ----
 
@@ -126,8 +137,6 @@ class RpmOrderer:
                     if r in s:
                         continue
                     f = self._operationFlag(flag, operation)
-                    if f == 0: # no hard or soft requirement
-                        continue
                     for r2 in s:
                         relations.append(r, r2, f)
                     empty = 0
@@ -138,7 +147,7 @@ class RpmOrderer:
 
         if self.config.debug > 1:
             # print relations
-            self.config.printDebug(2, "\t==== relations (%d) ==== #pre-relations #post-relations package pre-relation-packages, (*) marks prereq's" % len(relations))
+            self.config.printDebug(2, "\t==== relations (%d) ==== #pre-relations #post-relations package pre-relation-packages, '*' marks prereq's" % len(relations))
             for pkg in relations:
                 rel = relations[pkg]
                 pre = ""
@@ -147,7 +156,7 @@ class RpmOrderer:
                     for p in rel.pre:
                         if len(pre) > 2:
                             pre += ", "
-                        if rel.pre[p] == 2:
+                        if isHardRelation(rel.pre[p]):
                             pre += "*" # prereq
                         pre += p.getNEVRA()
                 self.config.printDebug(2, "\t%d %d %s%s" % (len(rel.pre),
@@ -190,14 +199,15 @@ class RpmOrderer:
     # ----
 
     def _detectLoops(self, relations, path, pkg, loops, used):
-        if pkg in used: return
+        if pkg in used:
+            return
         used[pkg] = 1
         for p in relations[pkg].pre:
             if len(path) > 0 and p in path:
                 w = path[path.index(p):] # make shallow copy of loop
                 w.append(pkg)
                 w.append(p)
-                loops.append(w)
+                loops.append(tuple(w))
             else:
                 w = path[:] # make shallow copy of path
                 w.append(pkg)
@@ -205,7 +215,7 @@ class RpmOrderer:
 
     # ----
 
-    def getLoops(self, relations):
+    def detectLoops(self, relations):
         loops = [ ]
         used =  { }
         for pkg in relations:
@@ -217,10 +227,11 @@ class RpmOrderer:
 
     def genCounter(self, loops):
         counter = HashList()
-        for w in loops:
-            for j in xrange(len(w) - 1):
-                node = w[j]
-                next = w[j+1]
+        for loop in loops:
+            for j in xrange(len(loop) - 1):
+                # first and last pkg are the same, use once
+                node = loop[j]
+                next = loop[j+1]
                 if node not in counter:
                     counter[node] = HashList()
                 if next not in counter[node]:
@@ -231,50 +242,136 @@ class RpmOrderer:
 
     # ----
 
-    def breakupLoops(self, relations, loops):
-        counter = self.genCounter(loops)
-
-        # breakup soft loop
+    def _breakupLoop(self, relations, counter, loop, hard=0):
+        # breakup loop
+        virt_max_count_node = None
+        virt_max_count_next = None
+        virt_max_count = 0
         max_count_node = None
         max_count_next = None
         max_count = 0
-        for node in counter:
-            for next in counter[node]:
-                count = counter[node][next]
-                if max_count < count and relations[node].pre[next] == 1:
+        for j in xrange(len(loop) - 1):
+            # first and last node (package) are the same
+            node = loop[j]
+            next = loop[j+1]
+            if isHardRelation(relations[node].pre[next]) and not hard:
+                continue
+            if isVirtualRelation(relations[node].pre[next]):
+                if virt_max_count < counter[node][next]:
+                    virt_max_count_node = node
+                    virt_max_count_next = next
+                    virt_max_count = counter[node][next]
+            else:
+                if max_count < counter[node][next]:
                     max_count_node = node
                     max_count_next = next
-                    max_count = count
+                    max_count = counter[node][next]
 
-        if max_count_node:
-            self.config.printDebug(1, "Removing requires for %s from %s (%d)" % \
-                       (max_count_next.getNEVRA(), max_count_node.getNEVRA(),
-                        max_count))
-            del relations[max_count_node].pre[max_count_next]
-            del relations[max_count_next].post[max_count_node]
+        # prefer to drop virtual relation
+        if virt_max_count_node:
+            self._dropRelation(relations, virt_max_count_node,
+                               virt_max_count_next, virt_max_count)
             return 1
-
-        # breakup hard loop
-        max_count_node = None
-        max_count_next = None
-        max_count = 0
-        for node in counter:
-            for next in counter[node]:
-                count = counter[node][next]
-                if max_count < count:
-                    max_count_node = node
-                    max_count_next = next
-                    max_count = count
-
-        if max_count_node:
-            self.config.printDebug(1, "Zapping requires for %s from %s (%d)" % \
-                       (max_count_next.getNEVRA(), max_count_node.getNEVRA(),
-                        max_count))
-            del relations[max_count_node].pre[max_count_next]
-            del relations[max_count_next].post[max_count_node]
+        elif max_count_node:
+            self._dropRelation(relations, max_count_node, max_count_next,
+                               max_count)
             return 1
 
         return 0
+    
+    # ----
+
+    def _dropRelation(self, relations, node, next, count):
+        hard = isHardRelation(relations[node].pre[next])
+
+        txt = "Removing"
+        if hard:
+            txt = "Zapping"
+        if isVirtualRelation(relations[node].pre[next]):
+            txt += " virtual"
+        self.config.printDebug(1, "%s requires for %s from %s (%d)" % \
+                   (txt, next.getNEVRA(),
+                    node.getNEVRA(), count))
+        del relations[node].pre[next]
+        del relations[next].post[node]
+        if not node in self.dropped_relations:
+            self.dropped_relations[node] = [ ]
+        self.dropped_relations[node].append(next)
+
+        # add virtual relation to make sure, that next is
+        # installed before p if the relation was not kicked before
+        for p in relations[node].post:
+            if p == next or p == node:
+                continue
+            if p in self.dropped_relations and \
+               next in self.dropped_relations[p]:
+                continue
+            self.config.printDebug(1, "%s: Adding virtual requires for %s" % \
+                                   (p.getNEVRA(), next.getNEVRA()))
+
+            if not next in relations[p].pre:
+                req = Relation.SOFT
+                if hard and isHardRelation(relations[p].pre[node]):
+                    req = Relation.HARD
+                relations[p].pre[next] = Relation.VIRTUAL | req
+            if not p in relations[next].post:
+                relations[next].post[p] = Relation.VIRTUAL
+
+    # ----
+
+    def breakupLoop(self, relations, loops, loop):
+        counter = self.genCounter(loops)
+
+        # breakup soft loop
+        if self._breakupLoop(relations, counter, loop, hard=0):
+            return 1
+
+        # breakup hard loop
+        return self._breakupLoop(relations, counter, loop, hard=1)
+
+    # ----
+
+    def sortLoops(self, relations, loops):
+        loop_nodes = [ ]
+        for loop in loops:
+            for j in xrange(len(loop) - 1):
+                # first and last pkg are the same, use once
+                pkg = loop[j]
+                if not pkg in loop_nodes:
+                    loop_nodes.append(pkg)
+
+        loop_relations = { }
+        loop_requires = { }
+        for loop in loops:
+            loop_relations[loop] = 0
+            loop_requires[loop] = 0
+            for j in xrange(len(loop) - 1):
+                # first and last pkg are the same, use once
+                pkg = loop[j]
+                for p in relations[pkg].pre:
+                    if p in loop_nodes and p not in loop:
+                        # p is not in own loop, but in an other loop
+                        loop_relations[loop] += 1
+                for p in relations[pkg].post:
+                    if p not in loop:
+                        # p is not in own loop, but in an other loop
+                        loop_requires[loop] += 1
+
+        sorted = [ ]
+        for loop in loop_relations:
+            i = 0
+            added = 0
+            for i in xrange(len(sorted)):
+                if (loop_relations[loop] < loop_relations[sorted[i]]) or \
+                       (loop_relations[loop] == loop_relations[sorted[i]] and \
+                        loop_requires[loop] > loop_requires[sorted[i]]):
+                    sorted.insert(i, loop)
+                    added = 1
+                    break
+            if added == 0:
+                sorted.append(loop)            
+
+        return sorted
 
     # ----
 
@@ -341,8 +438,21 @@ class RpmOrderer:
                                        (r.getNEVRA(), rel2.pre[r]))
                     self.config.printDebug(2, "===== remaining packages =====\n")
 
-                loops = self.getLoops(relations)
-                if self.breakupLoops(relations, loops) != 1:
+                loops = self.detectLoops(relations)
+                if len(loops) < 1:
+                    self.config.printError("Unable to detect loops.")
+                    return None
+                if self.config.debug > 1:
+                    self.config.printDebug(2, "Loops:")
+                    for i in xrange(len(loops)):
+                        str = ""
+                        for pkg in loops[i]:
+                            if len(str) > 0:
+                                str += ", "
+                            str += pkg.getNEVRA()
+                        self.config.printDebug(2, "  %d: %s" % (i, str))
+                sorted_loops = self.sortLoops(relations, loops)
+                if self.breakupLoop(relations, loops, sorted_loops[0]) != 1:
                     self.config.printError("Unable to breakup loop.")
                     return None
 
