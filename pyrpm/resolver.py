@@ -79,9 +79,10 @@ class ProvidesList:
             if rangeCompare(flag, evr, f, evrSplit(v)):
                 ret.append(rpm)
                 continue
-            evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
-            if evrCompare(evr2, flag, evr):
-                ret.append(rpm)
+            if v == "": # compare with package version for unversioned provides
+                evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
+                if evrCompare(evr2, flag, evr):
+                    ret.append(rpm)
 
         if not arch or arch == "noarch":   # all rpms are matching
             return ret
