@@ -126,6 +126,8 @@ from types import DictType, IntType, TupleType
 from struct import pack, unpack
 try:
     import libxml2
+    TYPE_ELEMENT = libxml2.XML_READER_TYPE_ELEMENT
+    TYPE_END_ELEMENT = libxml2.XML_READER_TYPE_END_ELEMENT
 except:
     print "libxml2 is not imported"
 
@@ -156,7 +158,7 @@ if sys.version_info < (2, 3):
         def next(self):
             c = self.characters
             choose = self.rng.choice
-            letters = [choose(c) for dummy in "123456"]
+            letters = [choose(c) for _ in "123456"]
             return self.normcase("".join(letters))
 
     _name_sequence = None
@@ -2838,9 +2840,9 @@ class RpmRepo:
         reader = libxml2.newTextReaderFilename(filename)
         if reader == None:
             return 0
-        ret = self.__parseNode(reader)
+        self.__parseNode(reader)
         self.__removeExcluded()
-        return ret
+        return 1
 
     def importFilelist(self):
         if self.filelist_imported:
@@ -2852,9 +2854,9 @@ class RpmRepo:
         reader = libxml2.newTextReaderFilename(filename)
         if reader == None:
             return 0
-        ret = self.__parseNode(reader)
+        self.__parseNode(reader)
         self.filelist_imported = 1
-        return ret
+        return 1
 
     def createRepo(self):
         import gzip
@@ -2909,7 +2911,7 @@ class RpmRepo:
 
     def __parseNode(self, reader):
         while reader.Read() == 1:
-            if reader.NodeType() == libxml2.XML_READER_TYPE_ELEMENT and \
+            if reader.NodeType() == TYPE_ELEMENT and \
                 reader.Name() == "package":
                 props = getProps(reader)
                 if props.get("type") == "rpm":
@@ -2918,7 +2920,6 @@ class RpmRepo:
                         self.pkglist[pkg.getNEVRA0()] = pkg
                 elif props.has_key("name") and props.has_key("arch"):
                     self.__parseFilelist(reader, props["name"], props["arch"])
-        return 1
 
     def __removeExcluded(self):
         (exactmatch, matched, unmatched) = parsePackages(self.pkglist.values(),
@@ -3020,21 +3021,20 @@ class RpmRepo:
         return s.hexdigest()
 
     def __parsePackage(self, reader):
-        pkg = ReadRpm("dummy")
+        pkg = ReadRpm("repopkg")
         pkg.sig = HdrIndex()
         pkg.hdr = HdrIndex()
         pkg.setHdr()
         pkg.sig["size_in_sig"] = [0,]
         while reader.Read() == 1:
             ntype = reader.NodeType()
-            if  ntype != libxml2.XML_READER_TYPE_ELEMENT and \
-                ntype != libxml2.XML_READER_TYPE_END_ELEMENT:
-                continue
-            name = reader.Name()
-            if ntype == libxml2.XML_READER_TYPE_END_ELEMENT:
-                if name == "package":
+            if ntype == TYPE_END_ELEMENT:
+                if reader.Name() == "package":
                     break
                 continue
+            if ntype != TYPE_ELEMENT:
+                continue
+            name = reader.Name()
             if name == "name":
                 reader.Read()
                 pkg["name"] = reader.Value()
@@ -3066,6 +3066,8 @@ class RpmRepo:
                 pkg.sig["size_in_sig"][0] += int(props.get("package", "0"))
             elif name == "format":
                 self.__parseFormat(reader, pkg)
+            #elif name in ("summary", "description", "packager", "url", "time"):
+            #    pass
             #else:
             #    print name
         return pkg
@@ -3074,26 +3076,24 @@ class RpmRepo:
         filelist = []
         while reader.Read() == 1:
             ntype = reader.NodeType()
-            if ntype != libxml2.XML_READER_TYPE_ELEMENT and \
-               ntype != libxml2.XML_READER_TYPE_END_ELEMENT:
-                continue
-            name = reader.Name()
-            if ntype == libxml2.XML_READER_TYPE_END_ELEMENT:
-                if name == "package":
+            if ntype == TYPE_END_ELEMENT:
+                if reader.Name() == "package":
                     break
                 continue
+            if ntype != TYPE_ELEMENT:
+                continue
+            name = reader.Name()
             if name == "version":
                 props = getProps(reader)
+                epoch   = props["epoch"]
                 version = props["ver"]
                 release = props["rel"]
-                epoch   = props["epoch"]
             elif name == "file":
                 reader.Read()
                 filelist.append(reader.Value())
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
         if self.pkglist.has_key(nevra):
             self.pkglist[nevra]["oldfilenames"] = filelist
-        return 1
 
     def __generateFormat(self, node, pkg):
         node.newChild(None, "rpm:license", __escape(pkg["license"]))
@@ -3155,15 +3155,14 @@ class RpmRepo:
         pkg["oldfilenames"] = []
         while reader.Read() == 1:
             ntype = reader.NodeType()
-            if  ntype != libxml2.XML_READER_TYPE_ELEMENT and \
-                ntype != libxml2.XML_READER_TYPE_END_ELEMENT:
-                continue
-            name = reader.Name()
-            if ntype == libxml2.XML_READER_TYPE_END_ELEMENT:
-                if name == "format":
+            if ntype == TYPE_END_ELEMENT:
+                if reader.Name() == "format":
                     break
                 continue
-            elif name == "rpm:sourcerpm":
+            if ntype != TYPE_ELEMENT:
+                continue
+            name = reader.Name()
+            if name == "rpm:sourcerpm":
                 reader.Read()
                 pkg["sourcerpm"] = reader.Value()
             elif name == "rpm:header-range":
@@ -3171,6 +3170,7 @@ class RpmRepo:
                 header_start = int(props.get("start", "0"))
                 header_end = int(props.get("end", "0"))
                 pkg.sig["size_in_sig"][0] -= header_start
+                pkg["rpm:header-range:end"] = header_end
             elif name == "rpm:provides":
                 (pkg["providename"], pkg["provideflags"],
                     pkg["provideversion"]) = self.__parseDeps(reader, name)
@@ -3183,18 +3183,19 @@ class RpmRepo:
             elif name == "rpm:conflicts":
                 (pkg["conflictname"], pkg["conflictflags"],
                     pkg["conflictversion"]) = self.__parseDeps(reader, name)
-            elif name == "rpm:header-range":
-                props = getProps(reader)
-                pkg["rpm:header-range:end"] = props["end"]
             elif name == "file":
                 reader.Read()
                 pkg["oldfilenames"].append(reader.Value())
+            #elif name in ("rpm:vendor", "rpm:buildhost", "rpm:group", "rpm:license"):
+            #    pass
+            #else:
+            #    print name
 
     def __filterDuplicateDeps(self, deps):
         fdeps = []
-        for name, flags, version in deps:
+        for (name, flags, version) in deps:
             duplicate = 0
-            for fname, fflags, fversion in fdeps:
+            for (fname, fflags, fversion) in fdeps:
                 if name != fname or \
                    version != fversion or \
                    (isErasePreReq(flags) or \
@@ -3208,22 +3209,20 @@ class RpmRepo:
                 duplicate = 1
                 break
             if not duplicate:
-                fdeps.append([name, flags, version])
+                fdeps.append((name, flags, version))
         return fdeps
 
     def __parseDeps(self, reader, ename):
-        plist = [[], [], []]
+        plist = ([], [], [])
         while reader.Read() == 1:
             ntype = reader.NodeType()
-            if ntype != libxml2.XML_READER_TYPE_ELEMENT and \
-                ntype != libxml2.XML_READER_TYPE_END_ELEMENT:
-                continue
-            name = reader.Name()
-            if ntype == libxml2.XML_READER_TYPE_END_ELEMENT:
-                if name == ename:
+            if ntype == TYPE_END_ELEMENT:
+                if reader.Name() == ename:
                     break
                 continue
-            if name == "rpm:entry":
+            if ntype != TYPE_ELEMENT:
+                continue
+            if reader.Name() == "rpm:entry":
                 props = getProps(reader)
                 name  = props["name"]
                 flags = flagmap[props.get("flags", "")]
@@ -3280,13 +3279,13 @@ class RpmCompsXML:
         return ret2
 
     def getOptionalPackageNames(self, group):
-        return self.__getPackageNames(group, ["optional"])
+        return self.__getPackageNames(group, ("optional",))
 
     def getDefaultPackageNames(self, group):
-        return self.__getPackageNames(group, ["default"])
+        return self.__getPackageNames(group, ("default",))
 
     def getMandatoryPackageNames(self, group):
-        return self.__getPackageNames(group, ["mandatory"])
+        return self.__getPackageNames(group, ("mandatory",))
 
     def __getPackageNames(self, group, typelist):
         ret = []
@@ -3336,7 +3335,7 @@ class RpmCompsXML:
             if node.type != "element":
                 node = node.next
                 continue
-            if  node.name == "name":
+            if node.name == "name":
                 lang = node.prop("lang")
                 if lang:
                     group["name:" + lang] = node.content
@@ -4019,7 +4018,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
                 repopkg = r.pkglist[nevra]
                 headerend = None
                 if repopkg["rpm:header-range:end"]:
-                    headerend = int(repopkg["rpm:header-range:end"]) + 1
+                    headerend = repopkg["rpm:header-range:end"] + 1
                 rpm = ReadRpm(repopkg.filename)
                 if rpm.readHeader(rpmsigtag, rpmtag, 1, headerend=headerend):
                     print "Cannot read %s.\n" % repopkg.filename
@@ -4122,7 +4121,7 @@ def checkArch(path):
         if showit:
             showrpms.append((nn, builds, srpm))
     showrpms.sort(cmpA)
-    for (dummy, builds, srpm) in showrpms:
+    for (_, builds, srpm) in showrpms:
         s = ""
         for a in arch:
             if builds[a] == 1:
@@ -4266,6 +4265,14 @@ def main():
     import getopt
     global cachedir
 
+    if None:
+        for _ in xrange(5):
+            repo = RpmRepo("/home/mirror/fedora/development/i386/", "")
+            #repo = RpmCompsXML("/home/mirror/fedora/development/i386/repodata/comps.xml")
+            repo.read()
+            #repo.importFilelist()
+        return 0
+
     if len(sys.argv) <= 1:
         usage()
         return 0
@@ -4403,7 +4410,7 @@ def main():
             for p in r.pkglist.values():
                 args.append(p.filename)
                 if p["rpm:header-range:end"]:
-                    headerend[p.filename] = int(p["rpm:header-range:end"]) + 1
+                    headerend[p.filename] = p["rpm:header-range:end"] + 1
         for a in args:
             a = Uri2Filename(a)
             b = [a]
