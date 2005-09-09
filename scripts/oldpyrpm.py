@@ -2418,6 +2418,7 @@ class HashList:
         self.__repr__ = self.list.__repr__
         self.has_key = self.hash.has_key
         self.keys = self.hash.keys
+        self.get = self.hash.get
 
     def __getitem__(self, key):
         if isinstance(key, IntType):
@@ -2462,6 +2463,11 @@ class HashList:
         l.remove(value)
         if len(l) == 0:
             del self[key]
+
+    def setdefault(self, key, defvalue):
+        if not self.has_key(key):
+            self[key] = defvalue
+        return self[key]
 
 
 class FilenamesList:
