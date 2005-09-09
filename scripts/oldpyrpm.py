@@ -51,6 +51,8 @@
 
 #
 # TODO:
+# - Check for fileconflicts.
+# - Make info in depString() more complete.
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
 # - urlgrab fails with invalid range for already completely transfered
@@ -129,7 +131,7 @@ try:
     TYPE_ELEMENT = libxml2.XML_READER_TYPE_ELEMENT
     TYPE_END_ELEMENT = libxml2.XML_READER_TYPE_END_ELEMENT
 except:
-    print "libxml2 is not imported"
+    print "libxml2 is not imported, do not try to use repodata."
 
 if sys.version_info < (2, 3):
     from types import StringType
@@ -1953,43 +1955,6 @@ class ReadRpm:
                 "normal header" % self["rpmversion"])
         return
 
-        if indexNo != hdrdata[0]:
-            if taghash == rpmtag:
-                print self.getFilename(), self["rpmversion"], "normal header"
-            else:
-                print self.getFilename(), self["rpmversion"], "sig header"
-            print "wrong number of rpmtag values", indexNo, hdrdata[0]
-        if storeSize != hdrdata[1]:
-            if taghash == rpmtag:
-                print self.getFilename(), self["rpmversion"], "normal header"
-            else:
-                print self.getFilename(), self["rpmversion"], "sig header"
-            print "wrong length of data", storeSize, hdrdata[1]
-        if fmt != hdrdata[3]:
-            if taghash == rpmtag:
-                print self.getFilename(), self["rpmversion"], "normal header"
-            else:
-                print self.getFilename(), self["rpmversion"], "sig header"
-            print "wrong fmt data"
-            print "fmt length:", len(fmt), len(hdrdata[3])
-            for i in xrange(0, indexNo * 16, 16):
-                (tag1, ttype1, offset1, count1) = unpack("!4I", fmt[i:i + 16])
-                (tag2, ttype2, offset2, count2) = unpack("!4I",
-                    hdrdata[3][i:i + 16])
-                print "tag(%d):" % i, tag1, tag2
-                if tag1 != tag2:
-                    print "tag:", tag1, tag2
-                if ttype1 != ttype2:
-                    print "ttype:", ttype1, ttype2
-                print "offset(%d):" % i, offset1, offset2, "(tag: %s)" % tag1
-                if offset1 != offset2:
-                    print "offset(%d):" % i, offset1, offset2, "(tag: %s)" \
-                        % tag1
-                if count1 != count2:
-                    print "ttype/count:", ttype1, count1, count2
-        if fmt2 != hdrdata[4]:
-            print "wrong fmt2 data"
-
     def getImmutableRegion(self):
         """rpmdb data has the original header data and then adds some items
            from the signature header and some other info about the installed
@@ -2019,7 +1984,7 @@ class ReadRpm:
                 "header_signatures", self.sigdata, 0, None)
         # disable the utf-8 test per default, should check against self.verbose:
         if self.strict and None:
-            for i in ["summary", "description", "changelogtext"]:
+            for i in ("summary", "description", "changelogtext"):
                 if self[i] == None:
                     continue
                 for j in self[i]:
