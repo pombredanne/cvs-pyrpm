@@ -2513,14 +2513,14 @@ def depString(name, flag, version):
         op += "="
     return "%s %s %s" % (name, op, version)
 
-def searchDep(name, flag, version, rpms):
+def searchDep(name, flag, version, deps):
     ret = []
-    if rpms:
+    if deps:
         if not isinstance(version, TupleType):
             evr = evrSplit(version)
         else:
             evr = version
-        for (f, v, rpm) in rpms:
+        for (f, v, rpm) in deps:
             if rpm in ret:
                 continue
             if version == "" or rangeCompare(flag, evr, f, evrSplit(v)):
@@ -2530,7 +2530,6 @@ def searchDep(name, flag, version, rpms):
                     print "Warning:", rpm.getFilename(), \
                         "should have a flag/version added for the provides", \
                         depString(name, flag, version)
-                # We should issue a packaging warning about this:
                 ret.append(rpm)
     return ret
 
@@ -3651,7 +3650,7 @@ def checkDeps(rpms):
         for (flag, version, rpm) in resolver.obsoletes_list.deps[name]:
             for pkg in searchDep(name, flag, version,
                 resolver.mydeps.get(name, [])):
-                if pkg["name"] != name:
+                if rpm["name"] != name:
                     print "Warning:", pkg.getFilename(), "is obsoleted by", \
                         depString(name, flag, version), "from", rpm.getFilename()
     # Check all requires.
