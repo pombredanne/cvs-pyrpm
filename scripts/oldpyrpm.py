@@ -104,6 +104,7 @@
 #   slow. At some point it may make sense to write again a librpm type
 #   thing to have a core part in C and testing/outer decisions in python.
 #   Due to the large data rpm is handling this is kind of tricky.
+#   Same problem shows up if python is used for large xml files.
 # things that look even less important to implement:
 # - add support for drpm (delta rpm) payloadformat
 # - check for #% in spec files: grep "#.*%" *.spec (too many hits until now)
@@ -4190,7 +4191,11 @@ dupes = [ ("glibc", "i386"),
           ("nptl-devel", "i386"),
           ("openssl", "i386"),
           ("kernel", "i586"),
+          ("kernel", "athlon"),
+          ("kernel-unsupported", "athlon"),
           ("kernel-smp", "i686"),
+          ("kernel-smp", "athlon"),
+          ("kernel-smp-unsupported", "athlon"),
           ("kernel-smp-devel", "i686"),
           ("kernel-xen0", "i686"),
           ("kernel-xenU", "i686"),
