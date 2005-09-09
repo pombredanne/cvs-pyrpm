@@ -21,7 +21,6 @@
 
 import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt
 import parted
-from rhpl import keyboard_models
 
 PYRPMDIR = os.path.abspath("..")
 if not PYRPMDIR in sys.path:
@@ -162,6 +161,22 @@ def create_dir(buildroot, dir):
     if not os.path.exists(d):
         os.mkdir(d)
 
+def lolist():
+    list = os.listdir("/dev/")
+    list.sort()
+    free = 0
+    for file in list:
+        if file[:4] != "loop":
+            continue
+        status = os.system("/sbin/losetup '/dev/%s' 2>/dev/null" % file)
+        if status != 0:
+            free += 1
+    if free == 0:
+        print "All loop devices are in use."
+        print "You should generate additional loop devices or free some, which are not used by this program."
+    else:
+        print "You have %d free loop devices available." % free
+
 def losetup(target, offset=0):
     i = 0
     loop_device = None
@@ -178,9 +193,6 @@ def losetup(target, offset=0):
                                                            target))
         if status != 0:
             loop_device = None
-    if not loop_device:
-        print "Unable to get loop device, exiting."
-        return None
     return loop_device
 
 def lofree(device):
@@ -247,13 +259,15 @@ def exitHandler(signum, frame):
     exit(1)
 
 def exit(code):
-    time.sleep(1)
     if wait:
         if target_dir:
             sys.stdout.write('Use "chroot %s" to change into the installation tree.\n' %\
                              target_dir)
         sys.stdout.write('Waiting.. Press any key to cleanup and quit. ')
         c = sys.stdin.read(1)
+    else:
+        if code != 0:
+            time.sleep(1)
 
     if tempdir:
         if umount_all() == 0:
@@ -279,6 +293,80 @@ def exit(code):
                 del diskmap[disk]["device"]
     sys.exit(code)
 
+#################################### dicts ####################################
+
+grp_st_ld = 'grp:shift_toggle,grp_led:scroll'
+
+keyboard_models = {
+    'ar-azerty'           : ['us,ar(azerty)', 'pc105', '', grp_st_ld],
+    'ar-azerty-digits'    : ['us,ar(azerty_digits)', 'pc105', '', grp_st_ld],
+    'ar-digits'           : ['us,ar(digits)', 'pc105', '', grp_st_ld],
+    'ar-qwerty'           : ['us,ar(qwerty)', 'pc105', '', grp_st_ld],
+    'ar-qwerty-digits'    : ['us,ar(qwerty_digits)', 'pc105', '', grp_st_ld],
+    'be-latin1'           : ['be', 'pc105', '', ''],
+    'ben'                 : ['us,ben', 'pc105', '', grp_st_ld],
+    'ben-probhat'         : ['us,ben(probhat)', 'pc105', '', grp_st_ld],
+    'bg'                  : ['us,bg', 'pc105', '', grp_st_ld],
+    'br-abnt2'            : ['br', 'abnt2', '', ''],
+    'cf'                  : ['ca_enhanced', 'pc105', '', ''],
+    'croat'               : ['hr', 'pc105', '', ''],
+    'cz-lat2'             : ['cz_qwerty', 'pc105', '', ''],
+    'cz-us-qwertz'        : ['us,cz', 'pc105', '', grp_st_ld],
+    'de'                  : ['de', 'pc105', '', ''],
+    'de-latin1'           : ['de', 'pc105', '', ''],
+    'de-latin1-nodeadkeys': ['de', 'pc105', 'nodeadkeys', ''],
+    'dev'                 : ['us,dev', 'pc105', '', grp_st_ld],
+    'dk'                  : ['dk', 'pc105', '', ''],
+    'dk-latin1'           : ['dk', 'pc105', '', ''],
+    'dvorak'              : ['dvorak', 'pc105', '', ''],
+    'es'                  : ['es', 'pc105', '', ''],
+    'et'                  : ['ee', 'pc105', '', ''],
+    'fi'                  : ['fi', 'pc105', '', ''],
+    'fi-latin1'           : ['fi', 'pc105', '', ''],
+    'fr'                  : ['fr', 'pc105', '', ''],
+    'fr-latin1'           : ['fr', 'pc105', '', ''],
+    'fr-latin9'           : ['fr-latin9', 'pc105', '', ''],
+    'fr-pc'               : ['fr', 'pc105', '', ''],
+    'fr_CH'               : ['fr_CH', 'pc105', '', ''],
+    'fr_CH-latin1'        : ['fr_CH', 'pc105', '', ''],
+    'gr'                  : ['us,el', 'pc105', '', grp_st_ld],
+    'guj'                 : ['us,guj', 'pc105', '', grp_st_ld],
+    'gur'                 : ['us,gur', 'pc105', '', grp_st_ld],
+    'hu'                  : ['hu', 'pc105', '', ''],
+    'hu101'               : ['hu_qwerty', 'pc105', '', ''],
+    'is-latin1'           : ['is', 'pc105', '', ''],
+    'it'                  : ['it', 'pc105', '', ''],
+    'it-ibm'              : ['it', 'pc105', '', ''],
+    'it2'                 : ['it', 'pc105', '', ''],
+    'jp106'               : ['jp', 'jp106', '', ''],
+    'la-latin1'           : ['la', 'pc105', '', ''],
+    'mk-utf'              : ['us,mk', 'pc105', '', grp_st_ld],
+    'nl'                  : ['nl', 'pc105', '', ''],
+    'no'                  : ['no', 'pc105', '', ''],
+    'pl'                  : ['pl', 'pc105', '', ''],
+    'pt-latin1'           : ['pt', 'pc105', '', ''],
+    'ro_win'              : ['ro', 'pc105', '', ''],
+    'ru'                  : ['us,ru', 'pc105', '', grp_st_ld],
+    'ru-cp1251'           : ['us,ru', 'pc105', '', grp_st_ld],
+    'ru-ms'               : ['us,ru', 'pc105', '', grp_st_ld],
+    'ru.map.utf8ru'       : ['us,ru', 'pc105', '', grp_st_ld],
+    'ru1'                 : ['us,ru', 'pc105', '', grp_st_ld],
+    'ru2'                 : ['us,ru', 'pc105', '', grp_st_ld],
+    'ru_win'              : ['us,ru', 'pc105', '', grp_st_ld],
+    'sg'                  : ['de_CH', 'pc105', '', ''],
+    'sg-latin1'           : ['de_CH', 'pc105', '', ''],
+    'sk-qwerty'           : ['sk_qwerty', 'pc105', '', ''],
+    'slovene'             : ['si', 'pc105', '', ''],
+    'sv-latin1'           : ['se', 'pc105', '', ''],
+    'tml-inscript'        : ['us,tml(INSCRIPT)', 'pc105', '', grp_st_ld],
+    'tml-uni'             : ['us,tml(UNI)', 'pc105', '', grp_st_ld],
+    'trq'                 : ['tr', 'pc105', '', ''],
+    'ua-utf'              : ['us,ua', 'pc105', '', grp_st_ld],
+    'uk'                  : ['gb', 'pc105', '', ''],
+    'us'                  : ['us', 'pc105', '', ''],
+    'us-acentos'          : ['us_intl', 'pc105', '', ''],
+    }
+
 #################################### main ####################################
 
 verbose = 0
@@ -297,7 +385,7 @@ target_dir = None
 def usage():
     print """
 Usage: pyrpmkickstart <options> <kickstartfile>
-                      [<disk name:disk image> | <device name:device>]*
+                      [[<disk name>:]<disk image>|<disk device>]*
 
 OPTIONS
   -h  | --help       Print help.
@@ -366,22 +454,48 @@ if len(args) > 1:
     for arg in args[1:]:
         splits = string.split(arg, ":")
         if len(splits) != 2:
-            usage()
-            exit(1)
-        key = string.strip(splits[0])
-        val = string.strip(splits[1])
+            if len(splits) != 1:
+                usage()
+                exit(1)
+            key = None
+            val = string.strip(arg)
+        else:
+            key = string.strip(splits[0])
+            val = string.strip(splits[1])
         if not os.path.exists(val):
             print "ERROR: '%s' does not exist." % val
             exit(1)
-        diskmap[key] = { }
         mode = os.stat(val).st_mode
+        if stat.S_ISBLK(mode):
+            if not key:
+                if len(val) > 7 and (val[:7] == "/dev/hd" or \
+                                     val[:7] == "/dev/sd"):
+                    key = val[5:]
+                elif len(val) > 9 and val[:9] == "/dev/dasd":
+                    key = val[5:]
+        elif stat.S_ISREG(mode):
+            if not key:
+                for i in xrange(ord("a"), ord("z"), 1):
+                    _key = "hd%c" % chr(i)
+                    if not diskmap.has_key(_key):
+                        key = _key
+                        break;
+            if not key:
+                print "ERROR: Unable to find an unused name for '%s'" % val
+                exit(1)
+            print "Using '%s' as '%s'" % (val, key)
+        if not key:
+            print "ERROR: Unsupported type of '%s'." % val
+            exit(1)
+        if diskmap.has_key(key):
+            print "ERROR: '%s' already exists in diskmap." % key
+            exit(1)
+
+        diskmap[key] = { }
         if stat.S_ISREG(mode):
             diskmap[key]["image"] = val
         elif stat.S_ISBLK(mode):
             diskmap[key]["device"] = val
-        else:
-            print "ERROR: Unsupported type of '%s'." % val
-            exit(1)
 
 ### load kickstart file ###
 
@@ -420,6 +534,11 @@ else:
 
 if not ks["nfs"]:
     print "ERROR: Only nfs install is supported, exiting."
+    exit(1)
+
+if not keyboard_models.has_key(ks["keyboard"]):
+    print "ERROR: Keyboard model '%s' is not defined, exiting." % \
+          ks["keyboard"]
     exit(1)
 
 ### create system diskmap ###
@@ -483,22 +602,12 @@ for name in ks["partition"]:
         print "ERROR: no partition gived for '%s'" % name
         exit(1)
 
-#needed = [ ]
 # check partitionmap with diskmap
 for part in partitionmap:
     disk_name = partitionmap[part]["disk"]
     if not diskmap.has_key(disk_name):
-        print "ERROR: disk '%s' does not exist." % disk_name
+        print "ERROR: disk '%s' is not defined." % disk_name
         exit(1)
-#    if disk_name not in needed:
-#        needed.append(disk_name)
-
-## remove unneeded disks
-#for disk in diskmap:
-#    if not disk in needed:
-#        print "INFO: Dropping unneded disk '%s'" % disk
-#        del diskmap[disk]
-#del needed
 
 # get loop devices for disks, get parted structure
 for disk in diskmap.keys():
@@ -507,6 +616,7 @@ for disk in diskmap.keys():
         device = losetup(diskmap[disk]["image"])
         if not device:
             print "Unable to get loop device, exiting."
+            lolist()
             exit(1)
         diskmap[disk]["device"] = device
 
@@ -555,6 +665,10 @@ for part in partitionmap:
                                  partitionmap[part]["blocksize"]
     if diskmap[disk].has_key("image"):
         device = losetup(diskmap[disk]["image"], partitionmap[part]["start"])
+        if not device:
+            lolist()
+            print "Unable to get loop device, exiting."
+            exit(1)
         partitionmap[part]["device"] = device
     else:
         partitionmap[part]["device"] = "/dev/"+part
@@ -610,7 +724,7 @@ if confirm == 1 and len(to_format) > 0:
                               diskmap[partitionmap[part]["disk"]]["image"])
         else:
             disk = partitionmap[part]["disk"]
-        print "\t'%s' [%s] on '%s'" % (part, name, disk)
+        print "\t'%s': '%s' on '%s'" % (name, part, disk)
     choice = raw_input("Is this ok [y/N]: ")
     if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
         exit(1)
@@ -1389,9 +1503,8 @@ if ks["xconfig"]:
     user_hsync = user_vsync = None
 
     # keyboard
-    keyboard_models = keyboard_models.KeyboardModels().get_models()
-    (kbd_name, kbd_layout, kbd_model, kbd_variant, kbd_options) = \
-               keyboard_models[ks["keyboard"]]
+    (kbd_layout, kbd_model, kbd_variant, kbd_options) = \
+                 keyboard_models[ks["keyboard"]]
 
     if ks["xconfig"].has_key("card"):
         fd = open ('/usr/share/hwdata/Cards')
