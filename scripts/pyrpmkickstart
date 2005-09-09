@@ -19,7 +19,7 @@
 # AUTHOR: Thomas Woerner <twoerner@redhat.com>
 #
 
-import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt
+import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, time
 import parted
 
 PYRPMDIR = os.path.abspath("..")
@@ -382,6 +382,8 @@ kudzu = 0
 orig_yum = 0
 target_dir = None
 
+label_prefix = "%x_" % int(time.strftime("%m%d%H%M"))
+
 def usage():
     print """
 Usage: pyrpmkickstart <options> <kickstartfile>
@@ -655,14 +657,12 @@ for part in partitionmap:
         error = 1
     if error:
         continue
-    partitionmap[part]["blocksize"] = d.partition[id].geom.dev.sector_size
-    partitionmap[part]["start"] = d.partition[id].geom.start * \
-                                  partitionmap[part]["blocksize"]
-    partitionmap[part]["end"] = d.partition[id].geom.end * \
-                                partitionmap[part]["blocksize"]
-    partitionmap[part]["length"] = d.partition[id].geom.length
-    partitionmap[part]["size"] = d.partition[id].geom.length * \
-                                 partitionmap[part]["blocksize"]
+    geom = d.partition[id].geom
+    partitionmap[part]["blocksize"] = geom.dev.sector_size
+    partitionmap[part]["start"] = geom.start * partitionmap[part]["blocksize"]
+    partitionmap[part]["end"] = geom.end * partitionmap[part]["blocksize"]
+    partitionmap[part]["length"] = geom.length
+    partitionmap[part]["size"] = geom.length * partitionmap[part]["blocksize"]
     if diskmap[disk].has_key("image"):
         device = losetup(diskmap[disk]["image"], partitionmap[part]["start"])
         if not device:
@@ -684,17 +684,20 @@ for part in partitionmap:
 #            print "ERROR: Filesystem '%s' on '%s' is not supported" % \
 #                  (d.partition[id].fs_type.name, part)
 #            error = 1
-    label = ""
+    label = label_prefix
     if ks["partition"][name].has_key("fstype") and \
            ks["partition"][name]["fstype"] in [ "ext2", "ext3" ]:
-        label = name
+        label += name
     elif name == "swap":
-        label = "swap-%s" % part
+        label += "%s-swap" % part
     else:
         print "Could not determine filesystem type of '%s'" % part
         error = 1
     if ks["partition"][name].has_key("label"):
         label = ks["partition"][name]["label"]
+    if len(label) > 16:
+        print "WARNING: Label '%s' for '%s' is too long, tuncating to 16 chars." % (label, part)
+        label = label[:16]
     partitionmap[part]["label"] = label
 
 if error:
