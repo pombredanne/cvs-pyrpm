@@ -48,7 +48,7 @@ class KickstartConfig(dict):
         try:
             _fd = open(filename, "r")
         except:
-            raise IOError, "Unable to open '%s'" % args[1]
+            raise IOError, "Unable to open '%s'" % filename
 
         in_packages = 0
         in_post = 0
@@ -205,7 +205,7 @@ class KickstartConfig(dict):
                             elif _opt == "--http":
                                 self[opt]["ports"].append([80,"tcp"])
                         elif _opt == "--port":
-                            _vals = noquote_split(val, ",")
+                            _vals = noquote_split(_val, ",")
                             for v in _vals:
                                 if not self[opt].has_key("ports"):
                                     self[opt]["ports"] = [ ]
