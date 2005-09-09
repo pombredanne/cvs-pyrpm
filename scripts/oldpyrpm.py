@@ -51,7 +51,8 @@
 
 #
 # TODO:
-# - Check for fileconflicts.
+# - Improve fileconflicts checks.
+# - FilenamesList() depends on basenames/dirnames to exist.
 # - Make info in depString() more complete.
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -2467,7 +2468,7 @@ class FilenamesList:
     """A mapping from filenames to rpm packages."""
 
     def __init__(self):
-        self.path = {} # dirname => { basename => RpmPackage }
+        self.path = {} # dirname => { basename => (RpmPackage, index) }
 
     def addPkg(self, pkg):
         """Add all files from RpmPackage pkg to self."""
@@ -2480,7 +2481,7 @@ class FilenamesList:
         for i in xrange(len(basenames)):
             dirname = dirnames[dirindexes[i]]
             path.setdefault(dirname, {})
-            path[dirname].setdefault(basenames[i], []).append(pkg)
+            path[dirname].setdefault(basenames[i], []).append((pkg, i))
 
     def removePkg(self, pkg):
         """Remove all files from RpmPackage pkg from self."""
@@ -2490,14 +2491,15 @@ class FilenamesList:
         dirnames = pkg["dirnames"]
         dirindexes = pkg["dirindexes"]
         for i in xrange(len(basenames)):
-            self.path[dirnames[dirindexes[i]]][basenames[i]].remove(pkg)
+            self.path[dirnames[dirindexes[i]]][basenames[i]].remove((pkg, i))
 
     def search(self, name):
         """Return list of packages providing file with name."""
         (dirname, basename) = os.path.split(name)
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
-        return self.path.get(dirname, {}).get(basename, [])
+        ret = self.path.get(dirname, {}).get(basename, [])
+        return [ r[0] for r in ret ]
 
 def depString(name, flag, version):
     if version == "":
@@ -2556,7 +2558,7 @@ class RpmResolver:
 
     def __init__(self):
         self.mydeps = {}
-        self.filenameslist = FilenamesList()
+        self.filenames_list = FilenamesList()
         self.provides_list = DepList()
         self.obsoletes_list = DepList()
         self.conflicts_list = DepList()
@@ -2565,7 +2567,7 @@ class RpmResolver:
     def addPkg(self, pkg):
         self.mydeps.setdefault(pkg["name"], []).append(
             (RPMSENSE_EQUAL, pkg.getEVR(), pkg))
-        self.filenameslist.addPkg(pkg)
+        self.filenames_list.addPkg(pkg)
         self.provides_list.addPkg(pkg, pkg.getProvides())
         self.obsoletes_list.addPkg(pkg, pkg.getObsoletes())
         self.conflicts_list.addPkg(pkg, pkg.getConflicts())
@@ -2574,7 +2576,7 @@ class RpmResolver:
     def searchDependency(self, name, flag, version):
         s = self.provides_list.search(name, flag, version)
         if name[0] == "/" and version == "":
-            s += self.filenameslist.search(name)
+            s += self.filenames_list.search(name)
         return s
 
 
@@ -2867,6 +2869,12 @@ class RpmRepo:
                         self.pkglist[pkg.getNEVRA0()] = pkg
                 elif props.has_key("name") and props.has_key("arch"):
                     self.__parseFilelist(reader, props["name"], props["arch"])
+
+    def delDebuginfo(self):
+        for nevra in self.pkglist.keys():
+            pkg = self.pkglist[nevra]
+            if pkg["name"].endswith("-debuginfo"):
+                del self.pkglist[nevra]
 
     def __removeExcluded(self):
         (exactmatch, matched, unmatched) = parsePackages(self.pkglist.values(),
@@ -3597,7 +3605,7 @@ class YumConf(Conf):
         raise Exception, "read only"
 
 
-def readRepos(releasever, configfiles, arch, buildroot, readcompsfile=0):
+def readRepos(releasever, configfiles, arch, buildroot, readdebug, readcompsfile=0):
     # Read in /etc/yum.conf config files.
     repos = []
     for c in configfiles:
@@ -3621,6 +3629,8 @@ def readRepos(releasever, configfiles, arch, buildroot, readcompsfile=0):
             excludes = sec.get("exclude", "")
             repo = RpmRepo(baseurl, excludes, key)
             repo.read()
+            if not readdebug:
+                repo.delDebuginfo()
             for nevra in repo.pkglist.keys():
                 pkg = repo.pkglist[nevra]
                 if not archCompat(pkg["arch"], arch):
@@ -3632,9 +3642,11 @@ def readRepos(releasever, configfiles, arch, buildroot, readcompsfile=0):
     return repos
 
 def checkDeps(rpms):
+    # Add all packages in.
     resolver = RpmResolver()
     for pkg in rpms:
         resolver.addPkg(pkg)
+    # Check for obsoletes.
     for name in resolver.obsoletes_list.deps.keys():
         for (flag, version, rpm) in resolver.obsoletes_list.deps[name]:
             for pkg in searchDep(name, flag, version,
@@ -3642,6 +3654,7 @@ def checkDeps(rpms):
                 if pkg["name"] != name:
                     print "Warning:", pkg.getFilename(), "is obsoleted by", \
                         depString(name, flag, version), "from", rpm.getFilename()
+    # Check all requires.
     for name in resolver.requires_list.deps.keys():
         if name.startswith("rpmlib("):
             continue
@@ -3650,11 +3663,29 @@ def checkDeps(rpms):
                 print "Warning:", rpm.getFilename(), \
                     "did not find a package for:", \
                     depString(name, flag, version)
+    # Check all conflicts.
     for name in resolver.conflicts_list.deps.keys():
         for (flag, version, rpm) in resolver.conflicts_list.deps[name]:
             for pkg in resolver.searchDependency(name, flag, version):
                 print "Warning:", rpm.getFilename(), "contains a conflict", \
                     depString(name, flag, version), "with", pkg.getFilename()
+    # Check for fileconflicts.
+    for dirname in resolver.filenames_list.path.keys():
+        for basename in resolver.filenames_list.path[dirname].keys():
+            s = resolver.filenames_list.path[dirname][basename]
+            if len(s) < 2:
+                continue
+            filename = dirname + basename
+            for j in xrange(len(s) - 1):
+                (rpm1, i1) = s[j]
+                for k in xrange(j + 1, len(s)):
+                    (rpm2, i2) = s[k]
+                    if  not S_ISREG(rpm1["filemodes"][i1]) or \
+                        not S_ISREG(rpm2["filemodes"][i2]):
+                        continue
+                    if rpm1["filemd5s"][i1] != rpm2["filemd5s"][i2]:
+                        print "fileconflict for", filename, "in", \
+                            rpm1.getFilename(), rpm2.getFilename()
 
 
 def verifyStructure(verbose, packages, phash, tag, useidx=1):
@@ -3896,7 +3927,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     for pkg in checkdupes.keys():
         if len(checkdupes[pkg]) > 1:
             print "Warning: more than one package installed for %s." % pkg
-    repos = readRepos(releasever, configfiles, arch, buildroot)
+    repos = readRepos(releasever, configfiles, arch, buildroot, 1)
     if repos == None:
         return 1
     for tid in packages.keys():
@@ -4365,7 +4396,7 @@ def main():
                     importanttags[i] = value
                     importanttags[value[0]] = value
                 hdrtags = importanttags
-        repos = readRepos(releasever, configfiles, arch, buildroot)
+        repos = readRepos(releasever, configfiles, arch, buildroot, 0)
         if repos == None:
             return 1
         headerend = {}
