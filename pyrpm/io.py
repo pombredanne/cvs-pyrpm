@@ -112,9 +112,7 @@ class PyGZIP:
             if len(data) >= 8:
                 self.enddata = data[-8:]
             else:
-                # FIXME: e.g. if len(data) == 1, this gives only 2 bytes of
-                # enddata
-                self.enddata = self.enddata[-len(data):] + data
+                self.enddata = self.enddata[-8+len(data):] + data
             size = bytes - self.bufferlen
             if size > 65536:
                 size = 32768
@@ -1012,6 +1010,7 @@ class RpmDatabase:
         raise NotImplementedError
 
     # FIXME: not used, addPkg/erasePkg write data immediately
+    # For now, yes. Maybe someday there will be transcation based databases.
     def write(self):
         """Write the database out.
 
@@ -1119,7 +1118,7 @@ class RpmDB(RpmDatabase):
 
     def __init__(self, config, source, buildroot=None):
         RpmDatabase.__init__(self, config, source, buildroot)
-        self.zero = pack("I", 0) # FIXME: native endian?
+        self.zero = pack("I", 0)
         self.dbopen = False
         self.maxid = 0
 
@@ -1146,13 +1145,13 @@ class RpmDB(RpmDatabase):
             pkg = package.RpmPackage(self.config, "dummy")
             data = db[key]
             try:
-                val = unpack("I", key)[0] # FIXME: native endian?
+                val = unpack("I", key)[0]
             except struct.error:
                 self.config.printError("Invalid key %s in rpmdb" % repr(key))
                 continue
 
             if val == 0:
-                self.maxid = unpack("I", data)[0] # FIXME: native endian?
+                self.maxid = unpack("I", data)[0]
                 continue
 
             try:
@@ -1241,7 +1240,6 @@ class RpmDB(RpmDatabase):
             self.__openDB4()
 
             try:
-                # FIXME: native endian?
                 self.maxid = unpack("I", self.packages_db[self.zero])[0]
             except:
                 pass
@@ -1275,10 +1273,9 @@ class RpmDB(RpmDatabase):
                             a2b_hex)
             self.__writeDB4(self.group_db, "group", pkgid, pkg)
             self.__writeDB4(self.installtid_db, "installtid", pkgid, pkg, True,
-                            lambda x:pack("i", x)) # FIXME: native endian?
+                            lambda x:pack("i", x))
             self.__writeDB4(self.name_db, "name", pkgid, pkg, False)
             (headerindex, headerdata) = rpmio._generateHeader(pkg, 4)
-            # FIXME: native endian?
             self.packages_db[pack("I", pkgid)] = headerindex[8:]+headerdata
             self.__writeDB4(self.providename_db, "providename", pkgid, pkg)
             self.__writeDB4(self.provideversion_db, "provideversion", pkgid,
@@ -1290,7 +1287,6 @@ class RpmDB(RpmDatabase):
                             pkg)
             self.__writeDB4(self.sigmd5_db, "install_md5", pkgid, pkg)
             self.__writeDB4(self.triggername_db, "triggername", pkgid, pkg)
-            # FIXME: native endian?
             self.packages_db[self.zero] = pack("I", self.maxid)
         except bsddb.error:
             functions.unblockSignals()
@@ -1324,7 +1320,7 @@ class RpmDB(RpmDatabase):
                             a2b_hex)
             self.__removeId(self.group_db, "group", pkgid, pkg)
             self.__removeId(self.installtid_db, "installtid", pkgid, pkg, True,
-                            lambda x:pack("i", x)) # FIXME: native endian?
+                            lambda x:pack("i", x))
             self.__removeId(self.name_db, "name", pkgid, pkg, False)
             self.__removeId(self.providename_db, "providename", pkgid, pkg)
             self.__removeId(self.provideversion_db, "provideversion", pkgid,
@@ -1336,7 +1332,7 @@ class RpmDB(RpmDatabase):
                             pkg)
             self.__removeId(self.sigmd5_db, "install_md5", pkgid, pkg)
             self.__removeId(self.triggername_db, "triggername", pkgid, pkg)
-            del self.packages_db[pack("I", pkgid)] # FIXME: native endian?
+            del self.packages_db[pack("I", pkgid)]
         except bsddb.error:
             functions.unblockSignals()
             self._addPkg(pkg)
@@ -1451,7 +1447,7 @@ class RpmDB(RpmDatabase):
                 continue
             if not db.has_key(key):
                 db[key] = ""
-            db[key] += pack("2I", pkgid, idx) # FIXME: native endian?
+            db[key] += pack("2I", pkgid, idx)
             if not useidx:
                 break
 
