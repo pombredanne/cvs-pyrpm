@@ -1123,9 +1123,9 @@ def rangeCompare(flag1, evr1, flag2, evr2):
         if (flag1 & RPMSENSE_LESS) or (flag2 & RPMSENSE_GREATER):
             return 1
     else: # elif sense == 0:
-        if ((flag1 & RPMSENSE_EQUAL and flag2 & RPMSENSE_EQUAL) or \
-            (flag1 & RPMSENSE_LESS and flag2 & RPMSENSE_LESS) or \
-            (flag1 & RPMSENSE_GREATER and flag2 & RPMSENSE_GREATER)):
+        if ((flag1 & RPMSENSE_EQUAL) and (flag2 & RPMSENSE_EQUAL)) or \
+           ((flag1 & RPMSENSE_LESS) and (flag2 & RPMSENSE_LESS)) or \
+           ((flag1 & RPMSENSE_GREATER) and (flag2 & RPMSENSE_GREATER)):
             return 1
     return 0
 
@@ -2508,6 +2508,7 @@ class FilenamesList:
         ret = self.path.get(dirname, {}).get(basename, [])
         return [ r[0] for r in ret ]
 
+
 def depString(name, flag, version):
     if version == "":
         return name
@@ -3681,17 +3682,17 @@ def checkDeps(rpms):
             s = resolver.filenames_list.path[dirname][basename]
             if len(s) < 2:
                 continue
-            filename = dirname + basename
             for j in xrange(len(s) - 1):
                 (rpm1, i1) = s[j]
+                if not S_ISREG(rpm1["filemodes"][i1]):
+                    continue
                 for k in xrange(j + 1, len(s)):
                     (rpm2, i2) = s[k]
-                    if  not S_ISREG(rpm1["filemodes"][i1]) or \
-                        not S_ISREG(rpm2["filemodes"][i2]):
+                    if not S_ISREG(rpm2["filemodes"][i2]):
                         continue
                     if rpm1["filemd5s"][i1] != rpm2["filemd5s"][i2]:
-                        print "fileconflict for", filename, "in", \
-                            rpm1.getFilename(), rpm2.getFilename()
+                        print "fileconflict for", dirname + basename, "in", \
+                            rpm1.getFilename(), "and", rpm2.getFilename()
 
 
 def verifyStructure(verbose, packages, phash, tag, useidx=1):
@@ -4046,11 +4047,6 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
             print pkg.getFilename(), "wrong filestates", pkg["filestates"]
         if pkg["instprefix"] != None:
             print pkg.getFilename(), "instprefix", pkg["instprefix"]
-        if None:
-          for i in ("installtime", "filestates", "instprefixes", "installcolor",
-            "installtid"):
-            if pkg[i] != None:
-                print pkg.getFilename(), i, pkg[i]
     checkDeps(packages.values())
     if verbose:
         print "Done."
@@ -4135,7 +4131,7 @@ def checkArch(path):
         print "%29s  %s" % (srpm["name"], s)
 
 def checkSymlinks(repo):
-    """Check if any two dirs in a repository differ in user/group/mode."""
+    """Check for dangling symlinks."""
     allfiles = {}
     # collect all directories
     for rpm in repo:
