@@ -2498,7 +2498,7 @@ class FilenamesList:
             dirindexes = pkg["dirindexes"]
             dirnames = pkg["dirnames"]
         else:
-            if self["oldfilenames"] == None:
+            if pkg["oldfilenames"] == None:
                 return
             (basenames, dirindexes, dirnames) = \
                 genBasenames(self["oldfilenames"])
