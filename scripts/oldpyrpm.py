@@ -52,7 +52,6 @@
 #
 # TODO:
 # - Improve fileconflicts checks.
-# - FilenamesList() depends on basenames/dirnames to exist.
 # - Make info in depString() more complete.
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -1695,16 +1694,15 @@ class ReadRpm:
             raise ValueError, "%s: not a valid filetype" % (oct(mode))
 
     def getFilenames(self):
+        oldfilenames = self["oldfilenames"]
+        if oldfilenames != None:
+            return oldfilenames
         basenames = self["basenames"]
-        if basenames != None:
-            dirnames = self["dirnames"]
-            return [ "%s%s" % (dirnames[d], b)
-                     for (d, b) in zip(self["dirindexes"], basenames) ]
-        else:
-            oldfilenames = self["oldfilenames"]
-            if oldfilenames != None:
-                return oldfilenames
-        return []
+        if basenames == None:
+            return []
+        dirnames = self["dirnames"]
+        return [ "%s%s" % (dirnames[d], b)
+                 for (d, b) in zip(self["dirindexes"], basenames) ]
 
     def readPayload(self, func, filenames=None, extract=None):
         self.__openFd(96 + self.sigdatasize + self.hdrdatasize)
@@ -2471,6 +2469,22 @@ class HashList:
         return self[key]
 
 
+def genBasenames(oldfilenames):
+    (basenames, dirindexes, dirnames) = ([], [], [])
+    for filename in oldfilenames:
+        (dirname, basename) = os.path.split(filename)
+        if len(dirname) > 0 and dirname[-1] != "/":
+            dirname += "/"
+        try:
+            dirindex = dirnames.index(dirname)
+        except ValueError:
+            dirnames.append(dirname)
+            dirindex = dirnames.index(dirname)
+        basenames.append(basename)
+        dirindexes.append(dirindex)
+    return (basenames, dirindexes, dirnames)
+
+
 class FilenamesList:
     """A mapping from filenames to rpm packages."""
 
@@ -2480,14 +2494,19 @@ class FilenamesList:
     def addPkg(self, pkg):
         """Add all files from RpmPackage pkg to self."""
         basenames = pkg["basenames"]
-        if basenames == None:
-            return
-        dirnames = pkg["dirnames"]
-        dirindexes = pkg["dirindexes"]
+        if basenames != None:
+            dirindexes = pkg["dirindexes"]
+            dirnames = pkg["dirnames"]
+        else:
+            if self["oldfilenames"] == None:
+                return
+            (basenames, dirindexes, dirnames) = \
+                genBasenames(self["oldfilenames"])
         path = self.path
+        for i in dirnames:
+            path.setdefault(i, {})
         for i in xrange(len(basenames)):
             dirname = dirnames[dirindexes[i]]
-            path.setdefault(dirname, {})
             path[dirname].setdefault(basenames[i], []).append((pkg, i))
 
     def removePkg(self, pkg):
@@ -3055,7 +3074,10 @@ class RpmRepo:
                 filelist.append(reader.Value())
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
         if self.pkglist.has_key(nevra):
-            self.pkglist[nevra]["oldfilenames"] = filelist
+            pkg = self.pkglist[nevra]
+            #pkg["oldfilenames"] = filelist
+            (pkg["basenames"], pkg["dirindexes"], pkg["dirnames"]) = \
+                genBasenames(filelist)
 
     def __generateFormat(self, node, pkg):
         node.newChild(None, "rpm:license", __escape(pkg["license"]))
@@ -3114,7 +3136,7 @@ class RpmRepo:
                     tnode.newProp("type", "ghost")
 
     def __parseFormat(self, reader, pkg):
-        pkg["oldfilenames"] = []
+        filelist = []
         while reader.Read() == 1:
             ntype = reader.NodeType()
             if ntype == TYPE_END_ELEMENT:
@@ -3147,12 +3169,15 @@ class RpmRepo:
                     pkg["conflictversion"]) = self.__parseDeps(reader, name)
             elif name == "file":
                 reader.Read()
-                pkg["oldfilenames"].append(reader.Value())
+                filelist.append(reader.Value())
             #elif name in ("rpm:vendor", "rpm:buildhost", "rpm:group",
             #    "rpm:license"):
             #    pass
             #else:
             #    print name
+        #pkg["oldfilenames"] = filelist
+        (pkg["basenames"], pkg["dirindexes"], pkg["dirnames"]) = \
+            genBasenames(filelist)
 
     def __filterDuplicateDeps(self, deps):
         fdeps = []
