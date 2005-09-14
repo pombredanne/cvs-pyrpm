@@ -803,7 +803,7 @@ class RpmPackage(RpmData):
         """Create hard links to RpmFileInfo rfi if specified so in
         self.hardlinks.
 
-        Raise OSError."""
+        Raise IOError, OSError."""
 
         key = rfi.getHardLinkID()
         links = self.hardlinks.get(key)

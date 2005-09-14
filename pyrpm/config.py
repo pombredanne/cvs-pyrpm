@@ -87,7 +87,7 @@ class RpmConfig:
         self.tmpdir = None
         self.supported_signals = [ signal.SIGINT, signal.SIGTERM,
                                    signal.SIGHUP ]
-        self.signals = [ ]
+        self.signals = [ ]              # Stack of saved signal halders
 
     def printDebug(self, level, msg):
         if self.debug_handler and level <= self.debug:

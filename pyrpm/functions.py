@@ -74,7 +74,7 @@ def mkstemp_link(dirname, pre, linkfile):
 
     Return absolute file path, or None if such a link can not be made.  Raise
     IOError if no file name is available, OSError."""
-    
+
     names = _get_candidate_names() # FIXME: internal function
     for _ in xrange(TMP_MAX):
         name = names.next()
@@ -298,7 +298,7 @@ def installFile(rfi, infd, size, useAttrs=True):
         data2 = data2.rstrip("\x00")
         symlinkfile = data1
         if data1 != data2:
-            print "Warning: Symlink information differs between rpm header and cpio for %s -> %s" % (rfi.filename, data1)
+            print >> sys.stderr, "Warning: Symlink information differs between rpm header and cpio for %s -> %s" % (rfi.filename, data1)
         if os.path.islink(rfi.filename) \
             and os.readlink(rfi.filename) == symlinkfile:
             return
@@ -385,7 +385,7 @@ def listRpmDir(dirname):
 def createLink(src, dst):
     """Create a link from src to dst.
 
-    Raise OSError."""
+    Raise IOError, OSError."""
 
     try:
         # First try to unlink the defered file
@@ -427,7 +427,7 @@ def doLock(filename):
     """Create a lock file filename.
 
     Return 1 on success, 0 if the file already exists.  Raise OSError."""
-    
+
     try:
         fd = os.open(filename, os.O_EXCL|os.O_CREAT|os.O_WRONLY, 0666)
         try:
@@ -440,42 +440,41 @@ def doLock(filename):
         return 0
     return 1
 
-def setSignals(sig):
-    """Set the typical signals to sig."""
+def setSignals(handler):
+    """Set the typical signals to handler, save previous handlers."""
 
     global rpmconfig
     signals = { }
     for key in rpmconfig.supported_signals:
-        signals[key] = signal.signal(key, sig)
+        signals[key] = signal.signal(key, handler)
     rpmconfig.signals.append(signals)
-    return 1
 
 def resetSignals():
-    """Reset the typical signals."""
+    """Restore previously saved handlers of the typical signals."""
 
     global rpmconfig
-    if len(rpmconfig.signals) < 1:
-        return 0
-    signals = rpmconfig.signals.pop(len(rpmconfig.signals)-1)
+    try:
+        signals = rpmconfig.signals.pop()
+    except IndexError:
+        raise RuntimeError, "resetSignals() without matching setSignals()"
     for key in signals:
         signal.signal(key, signals[key])
-    return 1
 
 def blockSignals():
     """Blocks the typical signals to avoid interruption during critical code
-    segments."""
+    segments. Save previous handlers."""
 
-    return setSignals(signal.SIG_IGN)
+    setSignals(signal.SIG_IGN)
 
 def unblockSignals():
-    """Unblocks the previously blocked signals and restores the original
-    signal handlers."""
+    """Unblock the previously blocked signals and restore the original signal
+    handlers."""
 
-    return resetSignals()
+    resetSignals()
 
 def _unlink(file):
     """Unlink file, ignoring errors."""
-    
+
     try:
         os.unlink(file)
     except OSError:
@@ -530,7 +529,7 @@ def getFreeCachespace(config, operations):
     operations.
 
     Return 1 if there is enough space (with 30 MB slack), 0 otherwise."""
-    
+
     cachedir = "/var/cache/pyrm/"
     while 1:
         try:
@@ -552,7 +551,7 @@ def getFreeCachespace(config, operations):
         except KeyError:
             raise ValueError, "Missing signature:size_in sig in package"
     if freespace < 31457280:
-        config.printInfo(0, "Less than 30MB of diskspace left on %s for caching rpms\n" % mountpoint[dev])
+        config.printInfo(0, "Less than 30MB of diskspace left in %s for caching rpms\n" % cachedir)
         return 0
     return 1
 

@@ -999,7 +999,7 @@ class RpmDatabase:
 
     def close(self):
         """If the database keeps a connection, close it."""
-        
+
         raise NotImplementedError
 
     def read(self):
@@ -1231,11 +1231,11 @@ class RpmDB(RpmDatabase):
 
     def addPkg(self, pkg, nowrite=None):
         self._addPkg(pkg)
-        functions.blockSignals()
 
         if nowrite:
             return 1
 
+        functions.blockSignals()
         try:
             self.__openDB4()
 
@@ -1301,13 +1301,11 @@ class RpmDB(RpmDatabase):
         if nowrite:
             return 1
 
-        functions.blockSignals()
-
         if not pkg.has_key("install_id"):
-            functions.unblockSignals()
             self._addPkg(pkg)
             return 0
 
+        functions.blockSignals()
         try:
             self.__openDB4()
 
@@ -1530,16 +1528,15 @@ class RpmPyDB(RpmDatabase):
 
     def addPkg(self, pkg, nowrite=None):
         self._addPkg(pkg)
-        functions.blockSignals()
 
         if nowrite:
             return 1
 
         if not self.__mkDBDirs():
-            functions.unblockSignals()
             self._erasePkg(pkg)
             return 0
 
+        functions.blockSignals()
         dbpath = self._getDBPath()
         nevra = pkg.getNEVRA()
         src = "pydb:/"+os.path.join(dbpath, "headers", nevra)
@@ -1560,11 +1557,11 @@ class RpmPyDB(RpmDatabase):
 
     def erasePkg(self, pkg, nowrite=None):
         self._erasePkg(pkg)
-        functions.blockSignals()
 
         if nowrite:
             return 1
 
+        functions.blockSignals()
         if not self.__mkDBDirs():
             functions.unblockSignals()
             self._addPkg(pkg)
@@ -1590,7 +1587,7 @@ class RpmPyDB(RpmDatabase):
         """Make sure dbpath/headers exists, try to create dbpath/pubkeys.
 
         Return 1 on success, 0 on failure."""
-        
+
         dbpath = self._getDBPath()
         if not os.path.isdir(os.path.join(dbpath, "headers")):
             try:
@@ -1608,7 +1605,7 @@ class RpmPyDB(RpmDatabase):
 
 class RpmSQLiteDB(RpmDatabase):
     """RPM database storage in an SQLite database."""
-    
+
     # Tags stored in the Packages table
     pkgnames = ["name", "epoch", "version", "release", "arch", "prein", "preinprog", "postin", "postinprog", "preun", "preunprog", "postun", "postunprog", "verifyscript", "verifyscriptprog", "url", "license", "rpmversion", "sourcerpm", "optflags", "sourcepkgid", "buildtime", "buildhost", "cookie", "size", "distribution", "vendor", "packager", "os", "payloadformat", "payloadcompressor", "payloadflags", "rhnplatform", "platform", "capability", "xpm", "gif", "verifyscript2", "disturl"]
     # Tags stored in separate tables
@@ -1851,7 +1848,7 @@ class RpmRepo(RpmDatabase):
     def __init__(self, config, source, buildroot=None, excludes="", reponame="default"):
         """Exclude packages matching whitespace-separated excludes.  Use
         reponame for cache subdirectory name and pkg["yumreponame"]."""
-        
+
         RpmDatabase.__init__(self, config, source, buildroot)
         self.excludes = excludes.split()
         self.reponame = reponame
