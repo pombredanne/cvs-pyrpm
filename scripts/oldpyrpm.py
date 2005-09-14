@@ -23,10 +23,11 @@
 # options.
 #
 # Tested with all rpm packages from RHL5.2, 6.x, 7.x, 8.0, 9,
-# Fedora Core 1/2/3/4/development, Fedora Extras, livna, freshrpms and
-# other distributions. No output should be generated if rpm packages
-# are verified via this python implementation, so all possible quirks in
-# the binary packages are taken care of and can be read in this code.
+# Fedora Core 1/2/3/4/development, Fedora Extras, livna, freshrpms,
+# Mandriva 10.2, Open SuSE 10RC1 and other distributions.
+# No output should be generated if rpm packages are verified via this python
+# implementation, so all possible quirks in the binary packages are taken
+# care of and can be read in this code.
 # Known problem areas:
 # - Signing a second time can corrupt packages with older rpm releases.
 # - Packages built with a broken kernel that does not mmap() files with
@@ -125,7 +126,7 @@ import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
 import os, os.path, md5, sha, pwd, grp, zlib, errno, re, fnmatch, glob
-from types import DictType, IntType, TupleType
+from types import DictType, IntType, ListType
 from struct import pack, unpack
 try:
     import libxml2
@@ -1311,6 +1312,7 @@ class HdrIndex:
         self.hash = {}
         self.__len__ = self.hash.__len__
         self.__getitem__ = self.hash.get
+        self.get = self.hash.get
         self.__delitem__ = self.hash.__delitem__
         self.__setitem__ = self.hash.__setitem__
         self.__contains__ = self.hash.__contains__
@@ -1793,10 +1795,10 @@ class ReadRpm:
                 return i
         return None
 
-    def getEpoch(self):
+    def getEpoch(self, default="0"):
         e = self["epoch"]
         if e == None:
-            return "0"
+            return default
         return str(e[0])
 
     def getArch(self):
@@ -2087,7 +2089,8 @@ class ReadRpm:
             if script != None and prog == None:
                 self.printErr("no prog")
             if self.strict:
-                if not possible_scripts.has_key(prog):
+                if (not isinstance(prog, basestring) and prog != None) or \
+                    not possible_scripts.has_key(prog):
                     self.printErr("unknown prog: %s" % prog)
                 if script == None and prog == "/bin/sh":
                     self.printErr("empty script: %s" % s)
@@ -2543,7 +2546,7 @@ def depString(name, flag, version):
 def searchDep(name, flag, version, deps):
     ret = []
     if deps:
-        if not isinstance(version, TupleType):
+        if isinstance(version, basestring):
             evr = evrSplit(version)
         else:
             evr = version
@@ -2660,6 +2663,116 @@ class RpmTree:
                         print "duplicate rpms:", v[i].filename, v[i + 1].filename
                     v.remove(v[i])
                 i += 1
+
+
+class RpmInfo:
+
+    def __init__(self, pkg):
+        if isinstance(pkg, ListType):
+            (self.filename, self.name, self.origepoch, self.version, self.release,
+                self.arch, self.sigdatasize, self.hdrdatasize, self.pkgsize,
+                self.sha1header) = pkg[:10]
+            self.sigdatasize = int(self.sigdatasize)
+            self.hdrdatasize = int(self.hdrdatasize)
+            self.pkgsize = int(self.pkgsize)
+            self.deps = [ (pkg[i], int(pkg[i + 1]), pkg[i + 2]) \
+                for i in xrange(10, len(pkg), 3) ]
+        else: # if isinstance(pkg, ReadRpm):
+            self.filename = pkg.filename
+            self.name = pkg["name"]
+            self.origepoch = pkg.getEpoch("")
+            self.version = pkg["version"]
+            self.release = pkg["release"]
+            self.arch = pkg.getArch()
+            self.sigdatasize = pkg.sigdatasize
+            self.hdrdatasize = pkg.hdrdatasize
+            # XXX check this more thoroughly:
+            self.pkgsize = 96 + pkg.sigdatasize + \
+                pkg.sig.getOne("size_in_sig")
+            self.sha1header = pkg.sig.get("sha1header", "")
+            self.deps = pkg.getObsoletes()
+        self.epoch = self.origepoch
+        if self.epoch == "":
+            self.epoch = "0"
+
+    def getCSV(self):
+        ret = [self.filename, self.name, self.epoch, self.version,
+            self.release, self.arch, str(self.sigdatasize),
+            str(self.hdrdatasize), str(self.pkgsize), self.sha1header]
+        for (n, f, v) in self.deps:
+            ret.extend([n, str(f), v])
+        return ret
+
+
+class RpmCSV:
+
+    def __init__(self, data=None):
+        self.pkglist = []
+        if isinstance(data, basestring):
+            self.pkglist = self.readCSV(data)
+
+    def readCSV(self, filename):
+        lines = open(filename, "r").readlines()
+        csv = []
+        crc = lines.pop()
+        if not crc.startswith("# crc: ") or not crc[-1] == "\n":
+            #print "crc not correct"
+            return None
+        crc = int(crc[7:-1])
+        crcval = zlib.crc32("")
+        for l in lines:
+            crcval = zlib.crc32(l, crcval)
+            if l[-1:] == "\n":
+                l = l[:-1]
+            entry = l.split(",")
+            if len(entry) < 10:
+                #print "csv: not enough entries"
+                return None
+            csv.append(RpmInfo(entry))
+        if crcval != crc:
+            #print "csv: crc did not match"
+            return None
+        return csv
+
+    def addPkg(self, pkg):
+        self.pkglist.append(RpmInfo(pkg))
+
+    def writeCSV(self, filename, check=1):
+        csv = [ pkg.getCSV() for pkg in self.pkglist ]
+        # Check if any value contains a wrong character.
+        if check:
+            for l in csv:
+                for item in l:
+                    if "," in item:
+                        return None
+        # Write new CSV file with crc checksum.
+        (fd, tmp) = mkstemp_file(os.path.dirname(filename))
+        crcval = zlib.crc32("")
+        for l in csv:
+            data = ",".join(l) + "\n"
+            crcval = zlib.crc32(data, crcval)
+            os.write(fd, data)
+        os.write(fd, "# crc: " + str(crcval) + "\n")
+        os.close(fd)
+        os.rename(tmp, filename)
+        return 1
+
+def checkCSV():
+    r = RpmTree()
+    r.addDirectory("/home/mirror/fedora/development/i386/Fedora/RPMS")
+    pkgs = []
+    for p in r.h.values():
+        pkgs.extend(p)
+    csv = RpmCSV()
+    for p in pkgs:
+        csv.addPkg(p)
+    if csv.writeCSV("/tmp/csv") == None:
+        print "Cannot write csv file."
+    csv2 = RpmCSV("/tmp/csv")
+    if csv2.pkglist == None:
+        print "Cannot read/parse csv file."
+        return
+    csv2.writeCSV("/tmp/csv2")
 
 
 def cacheLocal(url, subdir, force=0):
@@ -4085,7 +4198,10 @@ def checkSrpms():
         "/mnt/hdb4/data/cAos/3.5/updates/SRPMS",
         "/mnt/hdb4/data/cAos/4.1/os/SRPMS",
         "/mnt/hdb4/data/cAos/4.1/updates/SRPMS",
-        "/var/www/html/mirror/tao"]
+        "/var/www/html/mirror/tao",
+        "/home/devel/laroche/download/scientific/SRPMS/vendor/errata",
+        "/home/devel/laroche/download/scientific/SRPMS/vendor/original",
+        "/home/devel/laroche/download/scientific/SRPMS"]
     for d in directories:
         if not os.path.isdir(d):
             continue
@@ -4499,6 +4615,7 @@ def run_main(main):
             sys.exit(ret)
 
 if __name__ == "__main__":
+    #checkCSV()
     run_main(main)
 
 # vim:ts=4:sw=4:showmatch:expandtab
