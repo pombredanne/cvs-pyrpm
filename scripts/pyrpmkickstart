@@ -1113,7 +1113,7 @@ if not os.path.exists(buildroot+"/etc/modprobe.conf"):
 (sysname, nodename, release, version, machine) = os.uname()
 if not os.path.exists(buildroot+"/etc/rpm/platform"):
     fd = open(buildroot+"/etc/rpm/platform", "w")
-    fd.write("%s-redhat-linux" % machine)
+    fd.write("%s-redhat-linux\n" % machine)
     fd.close()
 
 # /var/log/lastlog
