@@ -380,7 +380,7 @@ class RpmPackage(RpmData):
             else:
                 if rusage != None and len(rusage):
                     sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
-               
+
         self.__extract(db)
         if self.config.printhash:
             self.config.printInfo(0, "\n")

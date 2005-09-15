@@ -25,7 +25,7 @@ from base import OP_INSTALL, OP_UPDATE, OP_ERASE, OP_FRESHEN
 class RpmList:
     """A list of RPM packages, allowing basic operations.
 
-    Does not at all handle requires/obsoletes/conflicts.
+    Does not at all handles requires/obsoletes/conflicts.
 
     Allows "direct" access to packages: "for %name in self",
     "self[idx] => %name", "self[%name] => RpmPackage", "pkg in self."."""
@@ -64,13 +64,13 @@ class RpmList:
         self.installs = [ ] # Added RpmPackage's
         # new RpmPackage
         # => ["originally" installed RpmPackage removed by update]
-        self.updates = { } 
+        self.updates = { }
         self.erases = [ ] # Removed RpmPackage's
     # ----
 
     def _install(self, pkg, no_check=0):
         """Add RpmPackage pkg.
-        
+
         Return an RpmList error code.  Check whether a package with the same
         NEVRA is already in the list unless no_check.  Unlike install() this
         method allows adding "originally" installed packages."""
@@ -112,6 +112,8 @@ class RpmList:
 
         key = pkg["name"]
 
+        # Valid only during OP_UPDATE: list of RpmPackage's that will be
+        # removed by the current update
         self.pkg_updates = [ ]
         if key in self.list:
             for r in self.list[key]:
@@ -208,7 +210,7 @@ class RpmList:
         """Remove RpmPackage.
 
         Return an RpmList error code."""
-        
+
         key = pkg["name"]
         if not key in self.list or pkg not in self.list[key]:
             return self.NOT_INSTALLED
@@ -248,7 +250,7 @@ class RpmList:
 
         Note that having the same NEVRA is not enough, the package should
         be from self.list."""
-        
+
         key = pkg["name"]
         return key in self.installed and pkg in self.installed[key]
     # ----

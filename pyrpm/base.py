@@ -40,7 +40,7 @@ class RpmFileInfo:
     def getHardLinkID(self):
         """Return a string integer representing
         (self.md5sum, self.inode, self.dev)."""
-    
+
         return self.md5sum+":"+str(self.inode*65536+self.dev)
 
 
@@ -53,7 +53,7 @@ class FilenamesList:
 
     def clear(self):
         """Clear the mapping."""
-        
+
         self.path = { } # dirname => { basename => RpmPackage }
 
     def addPkg(self, pkg):
@@ -95,7 +95,7 @@ class FilenamesList:
 
         The list may point to internal structures of FilenamesList and may be
         changed by calls to addPkg() and removePkg()."""
-        
+
         l = [ ]
         dirname = os.path.dirname(name)
         if len(dirname) > 0 and dirname[-1] != "/":
