@@ -205,13 +205,16 @@ if hasattr(os, "O_NOINHERIT"):
 if hasattr(os, "O_NOFOLLOW"):
     openflags |= os.O_NOFOLLOW
 
-def mkstemp_file(dirname, pre=tmpprefix):
+def mkstemp_file(dirname, pre=tmpprefix, special=0):
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
         filename = "%s/%s.%s" % (dirname, pre, name)
         try:
-            fd = os.open(filename, openflags, 0600)
+            if special:
+                fd = open(filename, "wb")
+            else:
+                fd = os.open(filename, openflags, 0600)
             #_set_cloexec(fd)
             return (fd, filename)
         except OSError, e:
@@ -323,15 +326,21 @@ def doRead(fd, size):
             % (len(data), size)
     return data
 
-def getMD5(fpath):
+def getChecksum(fpath, digest="md5"):
     fd = open(fpath, "r")
-    ctx = md5.new()
+    if digest == "md5":
+        ctx = md5.new()
+    else:
+        ctx = sha.new()
     while 1:
         data = fd.read(16384)
         if not data:
             break
         ctx.update(data)
     return ctx.hexdigest()
+
+def getMD5(fpath):
+    return getChecksum(fpath, "md5")
 
 
 # Optimized routines that use zlib to extract data, since
@@ -2852,7 +2861,7 @@ def parsePackages(pkgs, requests, casematch=1):
             unmatched.append(request)
     return (exactmatch, matched, unmatched)
 
-def __escape(s):
+def escape(s):
     """Return escaped string converted to UTF-8."""
     if s == None:
         return ""
@@ -2898,6 +2907,27 @@ flagmap = {
 filerc = re.compile("^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$")
 dirrc = re.compile("^(.*bin/.*|/etc/.*)$")
 
+def findRpms(dir, uselstat=None, verbose=0):
+    s = os.stat
+    if uselstat:
+        s = os.lstat
+    dirs = [ dir ]
+    files = []
+    while dirs:
+        d = dirs.pop()
+        for f in os.listdir(d):
+            path = "%s/%s" % (d, f)
+            st = s(path)
+            if S_ISDIR(st.st_mode):
+                dirs.append(path)
+            elif S_ISREG(st.st_mode) and f.endswith(".rpm"):
+                files.append(path)
+            else:
+                if verbose:
+                    print "ignoring", path
+    files.sort()
+    return files
+
 def getProps(reader):
     props = {}
     while reader.MoveToNextAttribute():
@@ -2913,7 +2943,7 @@ class RpmRepo:
         self.readsrc = readsrc
         self.filelist_imported = 0
         self.checksum = "sha" # or "md5"
-        self.pretty = 0
+        self.pretty = 1
         self.pkglist = {}
         self.compsfile = None
 
@@ -2948,17 +2978,45 @@ class RpmRepo:
 
     def createRepo(self):
         import gzip
-        self.filerequires = []
+        while len(self.filename) > 1 and self.filename[-1] == "/":
+            self.filename = self.filename[:-1]
         filename = self.filename
-        self.__readDir(self.filename, "")
-        makeDirs(filename + "/repodata")
-        pfd = gzip.GzipFile(filename + "/repodata/primary.xml.gz", "wb")
+        self.filerequires = []
+        pkglist = []
+        for path in findRpms(filename):
+            pkg = ReadRpm(path)
+            if pkg.readHeader(rpmsigtag, rpmtag):
+                print "Cannot read %s.\n" % path
+                continue
+            pkg.closeFd()
+            if self.__isExcluded(pkg):
+                continue
+            for reqname in pkg["requirename"]:
+                if reqname[0] == "/":
+                    self.filerequires.append(reqname)
+            pkg["yumlocation"] = path[len(filename) + 1:]
+            self.pkglist[pkg.getNEVRA0()] = pkg
+            pkglist.append(pkg)
+        numpkg = len(pkglist)
+        repodir = filename + "/repodata"
+        makeDirs(repodir)
+        (origpfd, pfdtmp) = mkstemp_file(repodir, special=1)
+        pfd = gzip.GzipFile(fileobj=origpfd, mode="wb")
         if not pfd:
             return 0
-        ffd = gzip.GzipFile(filename + "/repodata/filelists.xml.gz", "wb")
+        pfd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        pfd.write('<metadata xmlns="http://linux.duke.edu/metadata/common" ' \
+            'xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="%d">\n' \
+            % numpkg)
+        (origffd, ffdtmp) = mkstemp_file(repodir, special=1)
+        ffd = gzip.GzipFile(fileobj=origffd, mode="wb")
         if not ffd:
             return 0
-        ofd = gzip.GzipFile(filename + "/repodata/other.xml.gz", "wb")
+        ffd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        ffd.write('<filelists xmlns="http://linux.duke.edu/filelists" ' \
+            'packages="%d">\n' % numpkg)
+        (origofd, ofdtmp) = mkstemp_file(repodir, special=1)
+        ofd = gzip.GzipFile(fileobj=origofd, mode="wb")
         if not ofd:
             return 0
         pdoc = libxml2.newDoc("1.0")
@@ -2967,33 +3025,19 @@ class RpmRepo:
         froot = pdoc.newChild(None, "filelists", None)
         _ = libxml2.newDoc("1.0")
         _ = pdoc.newChild(None, "filelists", None)
-        pfd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-        pfd.write('<metadata xmlns="http://linux.duke.edu/metadata/common" ' \
-            'xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="%d">\n' \
-            % len(self.pkglist.values()))
-        ffd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-        ffd.write('<filelists xmlns:rpm="http://linux.duke.edu/filelists" ' \
-            'packages="%d">\n' % len(self.pkglist.values()))
-        for pkg in self.pkglist.values():
-            try:
-                pkg.open()
-                pkg.read()
-            except (IOError, ValueError), e:
-                self.printErr("%s: %s" % (pkg.getNEVRA(), e))
-                continue
-            pkg["yumchecksum"] = self.__getChecksum(pkg)
+        for pkg in pkglist:
+            pkg["yumchecksum"] = getChecksum(pkg.filename, self.checksum)
             self.__writePrimary(pfd, proot, pkg)
             self.__writeFilelists(ffd, froot, pkg)
-#            self.__writeOther(ofd, oroot, pkg)
-            try:
-                pkg.close()
-            except IOError:
-                pass # Should not happen when opening for reading anyway
-            pkg.clear()
         pfd.write("</metadata>\n")
         ffd.write("</filelists>\n")
-        pfd.close()
-        ffd.close()
+        del pfd, ffd, ofd
+        origpfd.close()
+        origffd.close()
+        origofd.close()
+        os.rename(pfdtmp, repodir + "/primary.xml.gz")
+        os.rename(ffdtmp, repodir + "/filelists.xml.gz")
+        os.rename(ofdtmp, repodir + "/other.xml.gz")
         del self.filerequires
         return 1
 
@@ -3027,31 +3071,6 @@ class RpmRepo:
         (exactmatch, matched, unmatched) = parsePackages([pkg,], self.excludes)
         return (len(exactmatch) + len(matched)) != 0
 
-    def __readDir(self, dir, location):
-        files = os.listdir(dir)
-        for f in files:
-            if os.path.isdir("%s/%s" % (dir, f)):
-                self.__readDir("%s/%s" % (dir, f), "%s%s/" % (location, f))
-            elif f.endswith(".rpm"):
-                path = dir + "/" + f
-                pkg = ReadRpm(path)
-                try:
-                    pkg.read(tags=("name", "epoch", "version", "release",
-                        "arch", "sourcerpm", "requirename", "requireflags",
-                        "requireversion"))
-                except (IOError, ValueError), e:
-                    self.printErr("%s: %s" % (path, e))
-                    continue
-                pkg.close()
-                if self.__isExcluded(pkg):
-                    continue
-                for reqname in pkg["requirename"]:
-                    if reqname[0] == "/":
-                        self.filerequires.append(reqname)
-                nevra = pkg.getNEVRA0()
-                pkg["yumlocation"] = location + f
-                self.pkglist[nevra] = pkg
-
     def __writePrimary(self, fd, parent, pkg):
         pkg_node = parent.newChild(None, "package", None)
         pkg_node.newProp("type", "rpm")
@@ -3064,18 +3083,21 @@ class RpmRepo:
         tnode = pkg_node.newChild(None, "checksum", pkg["yumchecksum"])
         tnode.newProp("type", self.checksum)
         tnode.newProp("pkgid", "YES")
-        pkg_node.newChild(None, "summary", __escape(pkg["summary"][0]))
-        pkg_node.newChild(None, "description", __escape(pkg["description"][0]))
-        pkg_node.newChild(None, "packager", __escape(pkg["packager"]))
-        pkg_node.newChild(None, "url", __escape(pkg["url"]))
+        pkg_node.newChild(None, "summary", escape(pkg["summary"][0]))
+        pkg_node.newChild(None, "description", escape(pkg["description"][0]))
+        pkg_node.newChild(None, "packager", escape(pkg["packager"]))
+        pkg_node.newChild(None, "url", escape(pkg["url"]))
         tnode = pkg_node.newChild(None, "time", None)
-        tnode.newProp("file", str(pkg["buildtime"][0]))
+        tnode.newProp("file", str(os.stat(pkg.filename).st_mtime))
         tnode.newProp("build", str(pkg["buildtime"][0]))
         tnode = pkg_node.newChild(None, "size", None)
-        tnode.newProp("package", str(pkg.sig["size_in_sig"][0]+ \
-            pkg.range_signature[0]+pkg.range_signature[1]))
+        tnode.newProp("package", str(96 + pkg.sigdatasize +
+            pkg.sig.getOne("size_in_sig")))
         tnode.newProp("installed", str(pkg["size"][0]))
-        tnode.newProp("archive", str(pkg.sig["payloadsize"][0]))
+        archivesize = pkg.hdr.getOne("archivesize")
+        if archivesize == None:
+            archivesize = pkg.sig.getOne("payloadsize")
+        tnode.newProp("archive", str(archivesize))
         tnode = pkg_node.newChild(None, "location", None)
         tnode.newProp("href", pkg["yumlocation"])
         fnode = pkg_node.newChild(None, "format", None)
@@ -3101,18 +3123,6 @@ class RpmRepo:
         pkg_node.unlinkNode()
         pkg_node.freeNode()
         del pkg_node
-
-    def __getChecksum(self, pkg):
-        io = getRpmIOFactory(pkg.filename)
-        data = io._read(65536)
-        if self.checksum == "md5":
-            s = md5.new()
-        else:
-            s = sha.new()
-        while len(data) > 0:
-            s.update(data)
-            data = io._read(65536)
-        return s.hexdigest()
 
     def __parsePackage(self, reader):
         pkg = ReadRpm("repopkg")
@@ -3193,60 +3203,78 @@ class RpmRepo:
                 genBasenames(filelist)
 
     def __generateFormat(self, node, pkg):
-        node.newChild(None, "rpm:license", __escape(pkg["license"]))
-        node.newChild(None, "rpm:vendor", __escape(pkg["vendor"]))
-        node.newChild(None, "rpm:group", __escape(pkg["group"][0]))
-        node.newChild(None, "rpm:buildhost", __escape(pkg["buildhost"]))
-        node.newChild(None, "rpm:sourcerpm", __escape(pkg["sourcerpm"]))
+        node.newChild(None, "rpm:license", escape(pkg["license"]))
+        node.newChild(None, "rpm:vendor", escape(pkg["vendor"]))
+        node.newChild(None, "rpm:group", escape(pkg["group"][0]))
+        node.newChild(None, "rpm:buildhost", escape(pkg["buildhost"]))
+        node.newChild(None, "rpm:sourcerpm", escape(pkg["sourcerpm"]))
         tnode = node.newChild(None, "rpm:header-range", None)
-        tnode.newProp("start", str(pkg.range_signature[0] + \
-            pkg.range_signature[1]))
-        tnode.newProp("end", str(pkg.range_payload[0]))
-        if len(pkg["provides"]) > 0:
-            self.__generateDeps(node, pkg, "provides")
-        if len(pkg["requires"]) > 0:
-            self.__generateDeps(node, pkg, "requires")
-        if len(pkg["conflicts"]) > 0:
-            self.__generateDeps(node, pkg, "conflicts")
-        if len(pkg["obsoletes"]) > 0:
-            self.__generateDeps(node, pkg, "obsoletes")
+        start = 96 + pkg.sigdatasize
+        end = start + pkg.hdrdatasize
+        tnode.newProp("start", str(start))
+        tnode.newProp("end", str(end))
+        provides = pkg.getProvides()
+        if len(provides) > 0:
+            self.__generateDeps(node, pkg, "provides", provides)
+        conflicts = pkg.getConflicts()
+        if len(conflicts) > 0:
+            self.__generateDeps(node, pkg, "conflicts", conflicts)
+        obsoletes = pkg.getObsoletes()
+        if len(obsoletes) > 0:
+            self.__generateDeps(node, pkg, "obsoletes", obsoletes)
+        requires = pkg.getRequires()
+        if len(requires) > 0:
+            self.__generateDeps(node, pkg, "requires", requires)
         self.__generateFilelist(node, pkg)
 
-    def __generateDeps(self, node, pkg, name):
+    def __generateDeps(self, node, pkg, name, deps):
         dnode = node.newChild(None, "rpm:%s" % name, None)
-        deps = self.__filterDuplicateDeps(pkg[name])
+        deps = self.__filterDuplicateDeps(deps)
         for dep in deps:
             enode = dnode.newChild(None, "rpm:entry", None)
             enode.newProp("name", dep[0])
             if dep[1] != "":
                 if (dep[1] & RPMSENSE_SENSEMASK) != 0:
                     enode.newProp("flags", flagmap[dep[1] & RPMSENSE_SENSEMASK])
-                if isLegacyPreReq(dep[1]) or isInstallPreReq(dep[1]):
-                    enode.newProp("pre", "1")
             if dep[2] != "":
                 (e, v, r) = evrSplit(dep[2])
                 enode.newProp("epoch", e)
                 enode.newProp("ver", v)
                 if r != "":
                     enode.newProp("rel", r)
+            if dep[1] != "" and name == "requires":
+                if isLegacyPreReq(dep[1]) or isInstallPreReq(dep[1]):
+                    enode.newProp("pre", "1")
 
     def __generateFilelist(self, node, pkg, filter=1):
-        files = pkg["filenames"]
+        files = pkg.getFilenames()
         fileflags = pkg["fileflags"]
         filemodes = pkg["filemodes"]
         if files == None or fileflags == None or filemodes == None:
             return
+        (writefile, writedir, writeghost) = ([], [], [])
         for (fname, mode, flag) in zip(files, filemodes, fileflags):
             if S_ISDIR(mode):
                 if not filter or dirrc.match(fname) or \
                     fname in self.filerequires:
-                    tnode = node.newChild(None, "file", __escape(fname))
-                    tnode.newProp("type", "dir")
+                    writedir.append(fname)
             elif not filter or filerc.match(fname) or \
                 fname in self.filerequires:
-                tnode = node.newChild(None, "file", __escape(fname))
                 if flag & RPMFILE_GHOST:
-                    tnode.newProp("type", "ghost")
+                    writeghost.append(fname)
+                else:
+                    writefile.append(fname)
+        writefile.sort()
+        for f in writefile:
+            tnode = node.newChild(None, "file", escape(f))
+        writedir.sort()
+        for f in writedir:
+            tnode = node.newChild(None, "file", escape(f))
+            tnode.newProp("type", "dir")
+        writeghost.sort()
+        for f in writeghost:
+            tnode = node.newChild(None, "file", escape(f))
+            tnode.newProp("type", "ghost")
 
     def __parseFormat(self, reader, pkg):
         filelist = []
@@ -3311,6 +3339,7 @@ class RpmRepo:
                 break
             if not duplicate:
                 fdeps.append((name, flags, version))
+        fdeps.sort()
         return fdeps
 
     def __parseDeps(self, reader, ename):
@@ -4404,16 +4433,6 @@ def usage():
 def main():
     import getopt
     global cachedir
-
-    if None:
-        for _ in xrange(5):
-            repo = RpmRepo("/home/mirror/fedora/development/i386/", "")
-            #repo = RpmCompsXML(
-            #    "/home/mirror/fedora/development/i386/repodata/comps.xml")
-            repo.read()
-            #repo.importFilelist()
-        return 0
-
     if len(sys.argv) <= 1:
         usage()
         return 0
@@ -4441,19 +4460,23 @@ def main():
     explode = 0
     diff = 0
     extract = 0
+    excludes = ""
     checksrpms = 0
     rpmdbpath = "/var/lib/rpm/"
     checkarch = 0
     buildroot = ""
     checkrpmdb = 0
+    createrepo = 0
     releasever = None
     (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
         ["help", "verbose", "quiet", "arch=", "releasever=",
          "distroverpkg", "strict",
          "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
+         "excludes=",
          "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
-         "checkrpmdb", "buildroot=", "installroot=", "root=", "version"])
+         "checkrpmdb", "buildroot=", "installroot=", "root=", "version",
+         "createrepo"])
     for (opt, val) in opts:
         if opt in ("-?", "-h", "--help"):
             usage()
@@ -4495,6 +4518,8 @@ def main():
             diff = 1
         elif opt == "--extract":
             extract = 1
+        elif opt == "--excludes":
+            excludes = val
         elif opt == "--checksrpms":
             checksrpms = 1
         elif opt == "--checkarch":
@@ -4517,6 +4542,8 @@ def main():
         elif opt == "--version":
             print sys.argv[0], "version:", __version__
             return 0
+        elif opt == "--createrepo":
+            createrepo = 1
     if diff:
         diff = diffTwoSrpms(args[0], args[1], explode)
         if diff != "":
@@ -4532,6 +4559,10 @@ def main():
         if readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
             arch, verbose):
             return 1
+    elif createrepo:
+        for a in args:
+            repo = RpmRepo(args[0], excludes)
+            repo.createRepo()
     else:
         keepdata = 1
         hdrtags = rpmtag
