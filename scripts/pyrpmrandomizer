@@ -74,6 +74,9 @@ def main():
         if count % 2:
             pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgList()
             pkg = pkglist[random.randrange(0, len(pkglist))]
+            while pkg["name"].find("-debuginfo") >= 0:
+                pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgList()
+                pkg = pkglist[random.randrange(0, len(pkglist))]
             yum.setCommand("update")
             print "Updating package %s" % pkg.getNEVRA()
             resolver.update(pkg)

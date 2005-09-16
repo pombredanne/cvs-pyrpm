@@ -1284,8 +1284,8 @@ class RpmDB(RpmDatabase):
             self.__writeDB4(self.requireversion_db, "requireversion", pkgid,
                             pkg)
             self.__writeDB4(self.sha1header_db, "install_sha1header", pkgid,
-                            pkg)
-            self.__writeDB4(self.sigmd5_db, "install_md5", pkgid, pkg)
+                            pkg, False)
+            self.__writeDB4(self.sigmd5_db, "install_md5", pkgid, pkg, False)
             self.__writeDB4(self.triggername_db, "triggername", pkgid, pkg)
             self.packages_db[self.zero] = pack("I", self.maxid)
         except bsddb.error:
@@ -1327,8 +1327,8 @@ class RpmDB(RpmDatabase):
             self.__removeId(self.requireversion_db, "requireversion", pkgid,
                             pkg)
             self.__removeId(self.sha1header_db, "install_sha1header", pkgid,
-                            pkg)
-            self.__removeId(self.sigmd5_db, "install_md5", pkgid, pkg)
+                            pkg, False)
+            self.__removeId(self.sigmd5_db, "install_md5", pkgid, pkg, False)
             self.__removeId(self.triggername_db, "triggername", pkgid, pkg)
             del self.packages_db[pack("I", pkgid)]
         except bsddb.error:
