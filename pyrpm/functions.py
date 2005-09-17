@@ -406,7 +406,7 @@ def tryUnlock(lockfile):
     """If lockfile exists and is a stale lock, remove it.
 
     Return 1 if lockfile is a live lock, 0 otherwise.  Raise IOError."""
-    
+
     if not os.path.exists(lockfile):
         return 0
     fd = open(lockfile, 'r')
@@ -533,7 +533,7 @@ def getFreeCachespace(config, operations):
     cachedir = "/var/cache/pyrm/"
     while 1:
         try:
-            dev = os.stat(cachedir).st_dev
+            os.stat(cachedir).st_dev
             break
         except OSError:
             cachedir = os.path.dirname(cachedir)

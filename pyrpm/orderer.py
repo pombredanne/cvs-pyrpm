@@ -27,14 +27,16 @@ from resolver import RpmResolver
 
 
 class Relation:
+    """Pre and post relations for a package (a node in the dependency
+    graph)."""
+
     SOFT    = 0 # normal requirement
     HARD    = 1 # prereq
-    VIRTUAL = 2
+    VIRTUAL = 2 # added by _dropRelation
 
-    """ Pre and post relations for a package """
     def __init__(self):
-        self.pre = { }
-        self.post = { }
+        self.pre = { }                  # RpmPackage => flag
+        self.post = { }        # RpmPackage => 1 or VIRTUAL (value is not used)
     def __str__(self):
         return "%d %d" % (len(self.pre), len(self.post))
 
@@ -46,14 +48,19 @@ def isVirtualRelation(flag):
 # ----
 
 class _Relations:
-    """ relations list for packages """
+    """List of relations for each package (a dependency graph)."""
+
     def __init__(self):
-        self.list = HashList()
+        self.list = HashList()          # RpmPackage => Relation
         self.__len__ = self.list.__len__
         self.__getitem__ = self.list.__getitem__
         self.has_key = self.list.has_key
 
     def append(self, pkg, pre, flag):
+        """Add an arc from RpmPackage pre to RpmPackage pkg with flag.
+
+        pre can be None to add pkg to the graph with no arcs."""
+
         if pre == pkg:
             return
         i = self.list[pkg]
@@ -70,6 +77,8 @@ class _Relations:
             self.list[pre].post[pkg] = 1
 
     def remove(self, pkg):
+        """Remove RpmPackage pkg from the dependency graph"""
+
         rel = self.list[pkg]
         # remove all post relations for the matching pre relation packages
         for r in rel.pre:
@@ -83,12 +92,20 @@ class _Relations:
 
 class RpmOrderer:
     def __init__(self, config, installs, updates, obsoletes, erases):
-        """ rpms is a list of the packages which has to be installed, updated
-        or removed. The operation is either OP_INSTALL, OP_UPDATE or
-        OP_ERASE. """
+        """Initialize.
+
+        installs is a list of added RpmPackage's
+        erases a list of removed RpmPackage's (including updated/obsoleted)
+        updates is a hash: new RpmPackage => ["originally" installed RpmPackage
+        	removed by update]
+        obsoletes is a hash: new RpmPackage => ["originally" installed
+        	RpmPackage removed by update]
+        installs, updates and obsoletes can be None."""
+
         self.config = config
         self.installs = installs
         self.updates = updates
+        # Only explicitly removed packages, not updated/obsoleted
         self.erases = erases
         if self.updates:
             for pkg in self.updates:
@@ -101,12 +118,15 @@ class RpmOrderer:
                 for p in self.obsoletes[pkg]:
                     if p in self.erases:
                         self.erases.remove(p)
+        # RpmPackage =>
+        # [list of required RpmPackages that were dropped to break a loop]
         self.dropped_relations = { }
 
     # ----
 
     def _operationFlag(self, flag, operation):
-        """ Return operation flag or requirement """
+        """Return dependency flag for RPMSENSE_* flag during operation."""
+
         if isLegacyPreReq(flag) or \
                (operation == OP_ERASE and isErasePreReq(flag)) or \
                (operation != OP_ERASE and isInstallPreReq(flag)):
@@ -116,7 +136,9 @@ class RpmOrderer:
     # ----
 
     def genRelations(self, rpms, operation):
-        """ Generate relations from RpmList """
+        """Return orderer._Relations between RpmPackage's in list rpms for
+        operation."""
+
         relations = _Relations()
 
         # generate todo list for installs
@@ -170,6 +192,9 @@ class RpmOrderer:
     # ----
 
     def _genEraseOps(self, list):
+        """Return a list of (operation, RpmPackage) for erasing RpmPackage's
+        in list."""
+
         if len(list) == 1:
             return [(OP_ERASE, list[0])]
 
@@ -179,7 +204,9 @@ class RpmOrderer:
     # ----
 
     def genOperations(self, order):
-        """ Generate operations list """
+        """Return a list of (operation, RpmPackage) tuples from ordered list of
+        RpmPackage's order."""
+
         operations = [ ]
         for r in order:
             if r in self.erases:
@@ -199,10 +226,23 @@ class RpmOrderer:
     # ----
 
     def _detectLoops(self, relations, path, pkg, loops, used):
+        """Do a DFS walk in orderer._Relations relations from RpmPackage pkg,
+        add discovered loops to loops.
+
+        The list of RpmPackages path contains the path from the search root to
+        the current package.  loops is a list of RpmPackage tuples, each tuple
+        contains a loop.  Use hash used (RpmPackage => 1) to mark visited
+        nodes.
+
+        The tuple in loops starts and ends with the same RpmPackage.  The
+        nodes in the tuple are in reverse dependency order (B is in
+        relations[A].pre)."""
+
         if pkg in used:
             return
         used[pkg] = 1
         for p in relations[pkg].pre:
+            # "p in path" is O(N), can be O(1) with another hash.
             if len(path) > 0 and p in path:
                 w = path[path.index(p):] # make shallow copy of loop
                 w.append(pkg)
@@ -212,10 +252,18 @@ class RpmOrderer:
                 w = path[:] # make shallow copy of path
                 w.append(pkg)
                 self._detectLoops(relations, w, p, loops, used)
+                # or just path.pop() instead of making a copy?
 
     # ----
 
     def detectLoops(self, relations):
+        """Return a list of loops in orderer._Relations relations.
+
+        Each loop is represented by a tuple in reverse dependency order,
+        starting and ending with the same RpmPackage.  The loops each differ
+        in at least one package, but one package can be in more than one loop
+        (e.g. ABA, ACA)."""
+
         loops = [ ]
         used =  { }
         for pkg in relations:
@@ -226,6 +274,12 @@ class RpmOrderer:
     # ----
 
     def genCounter(self, loops):
+        """Count number of times each arcs is represented in the list of loop
+        tuples loops.
+
+        Return a HashList: RpmPackage A =>
+        HashList :RpmPackage B => number of loops in which A requires B."""
+
         counter = HashList()
         for loop in loops:
             for j in xrange(len(loop) - 1):
@@ -243,7 +297,11 @@ class RpmOrderer:
     # ----
 
     def _breakupLoop(self, relations, counter, loop, hard=0):
-        # breakup loop
+        """Remove an arc in loop tuple loop from orderer._Relations relations..
+
+        Return 1 on success, 0 if no arc to break was found.  Use counter from
+        genCounter.  Remove hard arcs only if hard."""
+
         virt_max_count_node = None
         virt_max_count_next = None
         virt_max_count = 0
@@ -278,10 +336,16 @@ class RpmOrderer:
             return 1
 
         return 0
-    
+
     # ----
 
     def _dropRelation(self, relations, node, next, count):
+        """Drop the "RpmPackage node requires RpmPackage next" arc, this
+        requirement appears count times in current loops in orderer._Relations
+        relations.
+
+        To preserve X->node->next, try to add virtual arcs X->next."""
+
         hard = isHardRelation(relations[node].pre[next])
 
         txt = "Removing"
@@ -320,19 +384,28 @@ class RpmOrderer:
     # ----
 
     def breakupLoop(self, relations, loops, loop):
+        """Remove an arc from loop tuple loop in loops from orderer._Relations
+        relations.
+
+        Return 1 on success, 0 on failure."""
+
         counter = self.genCounter(loops)
 
         # breakup soft loop
         if self._breakupLoop(relations, counter, loop, hard=0):
             return 1
 
-        # breakup hard loop
+        # breakup hard loop; should never fail
         return self._breakupLoop(relations, counter, loop, hard=1)
 
     # ----
 
     def sortLoops(self, relations, loops):
-        loop_nodes = [ ]
+        """Return a copy loop tuple list loops from order._Relations relations,
+        ordered by decreasing preference to break them."""
+        # FIXME: We really want only the maximum, not a sorted list.
+
+        loop_nodes = [ ]                # All nodes in loops; should be a hash?
         for loop in loops:
             for j in xrange(len(loop) - 1):
                 # first and last pkg are the same, use once
@@ -340,8 +413,9 @@ class RpmOrderer:
                 if not pkg in loop_nodes:
                     loop_nodes.append(pkg)
 
+        # loop => number of packages required from other loops
         loop_relations = { }
-        loop_requires = { }
+        loop_requires = { } # loop => number of packages requiring the loop
         for loop in loops:
             loop_relations[loop] = 0
             loop_requires[loop] = 0
@@ -359,23 +433,27 @@ class RpmOrderer:
 
         sorted = [ ]
         for loop in loop_relations:
-            i = 0
-            added = 0
             for i in xrange(len(sorted)):
                 if (loop_relations[loop] < loop_relations[sorted[i]]) or \
                        (loop_relations[loop] == loop_relations[sorted[i]] and \
                         loop_requires[loop] > loop_requires[sorted[i]]):
                     sorted.insert(i, loop)
-                    added = 1
                     break
-            if added == 0:
-                sorted.append(loop)            
+            else:
+                sorted.append(loop)
 
         return sorted
 
     # ----
 
     def _separatePostLeafNodes(self, relations, list):
+        """Move topologically sorted "trailing" packages from
+        orderer._Relations relations to start of list.
+
+        Stop when each remaining package has successor (implies a dependency
+        loop)."""
+
+        # This is O(N * M * hash lookup), can be O(M * hash lookup)
         while len(relations) > 0:
             i = 0
             found = 0
@@ -393,6 +471,13 @@ class RpmOrderer:
     # ----
 
     def _getNextLeafNode(self, relations):
+        """Return a node from orderer._Relations relations which has no
+        predecessors.
+
+        Return None if there is no such node, otherwise select a node on which
+        depend the maximum possible number of other nodes."""
+
+        # Without the requirement of max(rel.pre) this could be O(1)
         next = None
         next_post_len = -1
         for pkg in relations:
@@ -405,8 +490,10 @@ class RpmOrderer:
     # ----
 
     def _genOrder(self, relations):
-        """ Order rpms.
-        Returns ordered list of packages. """
+        """Order rpms in orderer._Relations relations.
+
+        Return an ordered list of RpmPackage's on success, None on error."""
+
         order = [ ]
         idx = 1
         last = [ ]
@@ -440,17 +527,14 @@ class RpmOrderer:
 
                 loops = self.detectLoops(relations)
                 if len(loops) < 1:
+                    # raise AssertionError ?
                     self.config.printError("Unable to detect loops.")
                     return None
                 if self.config.debug > 1:
                     self.config.printDebug(2, "Loops:")
                     for i in xrange(len(loops)):
-                        str = ""
-                        for pkg in loops[i]:
-                            if len(str) > 0:
-                                str += ", "
-                            str += pkg.getNEVRA()
-                        self.config.printDebug(2, "  %d: %s" % (i, str))
+                        s = ", ".join([pkg.getNEVRA() for pkg in loops[i]])
+                        self.config.printDebug(2, "  %d: %s" % (i, s))
                 sorted_loops = self.sortLoops(relations, loops)
                 if self.breakupLoop(relations, loops, sorted_loops[0]) != 1:
                     self.config.printError("Unable to breakup loop.")
@@ -466,6 +550,11 @@ class RpmOrderer:
     # ----
 
     def genOrder(self):
+        """Return an ordered list of RpmPackage's, first installs, then
+        erases.
+
+        Return None on error."""
+
         order = [ ]
 
         # order installs
@@ -496,11 +585,12 @@ class RpmOrderer:
     # ----
 
     def order(self):
-        """ Start the order process
-        Returns ordered list of operations on success, with tupels of the
-        form (operation, package). The operation is one of OP_INSTALL,
+        """Order operations.
+
+        Return an ordered list of operations on success, with tuples of the
+        form (operation, RpmPackage). The operation is one of OP_INSTALL,
         OP_UPDATE or OP_ERASE per package.
-        If an error occurs, None is returned. """
+        If an error occurs, return None."""
 
         order = self.genOrder()
         if order == None:
