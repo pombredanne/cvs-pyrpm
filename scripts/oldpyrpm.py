@@ -21,6 +21,7 @@
 # Read .rpm packages from python. Implemented completely in python without
 # using the rpmlib C library. Use "oldpyrpm.py -h" to get a list of possible
 # options.
+# This python script depends on libxml2 and urlgrabber for some functionality.
 #
 # Tested with all rpm packages from RHL5.2, 6.x, 7.x, 8.0, 9,
 # Fedora Core 1/2/3/4/development, Fedora Extras, livna, freshrpms,
@@ -2684,9 +2685,9 @@ class RpmInfo:
 
     def __init__(self, pkg):
         if isinstance(pkg, ListType):
-            (self.filename, self.name, self.origepoch, self.version, self.release,
-                self.arch, self.sigdatasize, self.hdrdatasize, self.pkgsize,
-                self.sha1header) = pkg[:10]
+            (self.filename, self.name, self.origepoch, self.version,
+                self.release, self.arch, self.sigdatasize, self.hdrdatasize,
+                self.pkgsize, self.sha1header) = pkg[:10]
             self.sigdatasize = int(self.sigdatasize)
             self.hdrdatasize = int(self.hdrdatasize)
             self.pkgsize = int(self.pkgsize)
@@ -3049,8 +3050,8 @@ class RpmRepo:
         if not ffd:
             return 0
         ffd.write(firstlinexml)
-        ffd.write('<filelists xmlns="http://linux.duke.edu/metadata/filelists" ' \
-            'packages="%d">\n' % numpkg)
+        ffd.write('<filelists xmlns="http://linux.duke.edu/metadata/' \
+            'filelists" packages="%d">\n' % numpkg)
         (origofd, ofdtmp) = mkstemp_file(repodir, special=1)
         ofd = gzip.GzipFile(fileobj=origofd, mode="wb")
         if not ofd:
@@ -3901,7 +3902,8 @@ class YumConf(Conf):
         raise Exception, "read only"
 
 
-def readRepos(releasever, configfiles, arch, buildroot, readdebug, readcompsfile=0):
+def readRepos(releasever, configfiles, arch, buildroot, readdebug,
+    readcompsfile=0):
     # Read in /etc/yum.conf config files.
     repos = []
     for c in configfiles:
@@ -4564,7 +4566,7 @@ def main():
         owner = 1
     homedir = os.environ.get("HOME", "")
     if homedir and not owner:
-            cachedir = homedir + "/.pyrpm/cache/"
+        cachedir = homedir + "/.pyrpm/cache/"
     if not os.path.isdir(cachedir):
         print "Created the directory %s to cache files locally." % cachedir
         makeDirs(cachedir)
