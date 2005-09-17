@@ -2938,14 +2938,13 @@ def utf8String(string):
     """hands back a unicoded string"""
     if string == None:
         return ""
-    elif isinstance(string, unicode):
+    if isinstance(string, unicode):
         return string
     try:
         x = unicode(string, "ascii")
         return string
     except UnicodeError:
-        encodings = ["utf-8", "iso-8859-1", "iso-8859-15", "iso-8859-2"]
-        for enc in encodings:
+        for enc in ("utf-8", "iso-8859-1", "iso-8859-15", "iso-8859-2"):
             try:
                 x = unicode(string, enc)
             except UnicodeError:
@@ -2956,9 +2955,9 @@ def utf8String(string):
     newstring = ""
     for char in string:
         if ord(char) > 127:
-            newstring = newstring + "?"
+            newstring += "?"
         else:
-            newstring = newstring + char
+            newstring += char
     return newstring
 
 def getProps(reader):
@@ -3011,26 +3010,33 @@ class RpmRepo:
 
     def createRepo(self, baseurl):
         import gzip
+        # Strip trailing slashes.
         while len(self.filename) > 1 and self.filename[-1] == "/":
             self.filename = self.filename[:-1]
+        rt = {}
+        for i in ("name", "epoch", "version", "release", "arch",
+            "requirename"):
+            rt[i] = rpmtag[i]
         filename = self.filename
         self.filerequires = []
-        pkglist = []
-        for path in findRpms(filename):
+        filenames = findRpms(filename)
+        i = 0
+        while i < len(filenames):
+            path = filenames[i]
             pkg = ReadRpm(path)
-            if pkg.readHeader(rpmsigtag, rpmtag):
+            if pkg.readHeader({}, rt):
                 print "Cannot read %s.\n" % path
                 continue
             pkg.closeFd()
-            if self.__isExcluded(pkg):
+            if self.excludes and self.__isExcluded(pkg):
+                filenames.pop(i)
                 continue
-            for reqname in pkg["requirename"]:
+            for reqname in pkg.hdr.get("requirename", []):
                 if reqname[0] == "/":
                     self.filerequires.append(reqname)
-            pkg["yumlocation"] = path[len(filename) + 1:]
-            self.pkglist[pkg.getNEVRA0()] = pkg
-            pkglist.append(pkg)
-        numpkg = len(pkglist)
+            i += 1
+        numpkg = len(filenames)
+        print "finished first pass"
         repodir = filename + "/repodata"
         makeDirs(repodir)
         (origpfd, pfdtmp) = mkstemp_file(repodir, special=1)
@@ -3072,7 +3078,12 @@ class RpmRepo:
         otherns = oroot.newNs("http://linux.duke.edu/metadata/other", None)
         oroot.setNs(otherns)
 
-        for pkg in pkglist:
+        for path in filenames:
+            pkg = ReadRpm(path)
+            if pkg.readHeader(rpmsigtag, rpmtag):
+                print "Cannot read %s.\n" % path
+                continue
+            pkg["yumlocation"] = path[len(filename) + 1:]
             pkg["yumchecksum"] = getChecksum(pkg.filename, self.checksum)
             self.__writePrimary(pfd, proot, pkg, formatns)
             self.__writeFilelists(ffd, froot, pkg)
