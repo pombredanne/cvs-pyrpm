@@ -2979,9 +2979,6 @@ class RpmRepo:
         self.pkglist = {}
         self.compsfile = None
 
-    def printErr(self, err):
-        print "%s: %s" % (self.filename, err)
-
     def read(self):
         filename = cacheLocal(self.filename + "/repodata/primary.xml.gz",
             self.reponame, 1)
@@ -3036,14 +3033,14 @@ class RpmRepo:
                     self.filerequires.append(reqname)
             i += 1
         numpkg = len(filenames)
-        print "finished first pass"
         repodir = filename + "/repodata"
         makeDirs(repodir)
         (origpfd, pfdtmp) = mkstemp_file(repodir, special=1)
         pfd = gzip.GzipFile(fileobj=origpfd, mode="wb")
         if not pfd:
             return 0
-        pfd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        firstlinexml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        pfd.write(firstlinexml)
         pfd.write('<metadata xmlns="http://linux.duke.edu/metadata/common" ' \
             'xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="%d">\n' \
             % numpkg)
@@ -3051,14 +3048,14 @@ class RpmRepo:
         ffd = gzip.GzipFile(fileobj=origffd, mode="wb")
         if not ffd:
             return 0
-        ffd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        ffd.write(firstlinexml)
         ffd.write('<filelists xmlns="http://linux.duke.edu/metadata/filelists" ' \
             'packages="%d">\n' % numpkg)
         (origofd, ofdtmp) = mkstemp_file(repodir, special=1)
         ofd = gzip.GzipFile(fileobj=origofd, mode="wb")
         if not ofd:
             return 0
-        ofd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        ofd.write(firstlinexml)
         ofd.write('<otherdata xmlns="http://linux.duke.edu/metadata/other" ' \
             'packages="%s">\n' % numpkg)
 
@@ -3175,15 +3172,18 @@ class RpmRepo:
         (exactmatch, matched, unmatched) = parsePackages([pkg,], self.excludes)
         return (len(exactmatch) + len(matched)) != 0
 
+    def __writeVersion(self, pkg_node, pkg):
+        tnode = pkg_node.newChild(None, "version", None)
+        tnode.newProp("epoch", pkg.getEpoch())
+        tnode.newProp("ver", pkg["version"])
+        tnode.newProp("rel", pkg["release"])
+
     def __writePrimary(self, fd, parent, pkg, formatns):
         pkg_node = parent.newChild(None, "package", None)
         pkg_node.newProp("type", "rpm")
         pkg_node.newChild(None, "name", pkg["name"])
         pkg_node.newChild(None, "arch", pkg.getArch())
-        tnode = pkg_node.newChild(None, "version", None)
-        tnode.newProp("epoch", pkg.getEpoch())
-        tnode.newProp("ver", pkg["version"])
-        tnode.newProp("rel", pkg["release"])
+        self.__writeVersion(pkg_node, pkg)
         tnode = pkg_node.newChild(None, "checksum", pkg["yumchecksum"])
         tnode.newProp("type", self.checksum)
         tnode.newProp("pkgid", "YES")
@@ -3192,11 +3192,12 @@ class RpmRepo:
         pkg_node.newChild(None, "packager", escape(pkg["packager"]))
         pkg_node.newChild(None, "url", escape(pkg["url"]))
         tnode = pkg_node.newChild(None, "time", None)
-        tnode.newProp("file", str(os.stat(pkg.filename).st_mtime))
+        st = os.stat(pkg.filename)
+        tnode.newProp("file", str(st.st_mtime))
         tnode.newProp("build", str(pkg["buildtime"][0]))
         tnode = pkg_node.newChild(None, "size", None)
-        tnode.newProp("package", str(96 + pkg.sigdatasize +
-            pkg.sig.getOne("size_in_sig")))
+        # st.st_size == 96 + pkg.sigdatasize + pkg.sig.getOne("size_in_sig")
+        tnode.newProp("package", str(st.st_size))
         tnode.newProp("installed", str(pkg["size"][0]))
         archivesize = pkg.hdr.getOne("archivesize")
         if archivesize == None:
@@ -3212,15 +3213,16 @@ class RpmRepo:
         pkg_node.freeNode()
         del pkg_node
 
-    def __writeFilelists(self, fd, parent, pkg):
+    def __writePkgInfo(self, parent, pkg):
         pkg_node = parent.newChild(None, "package", None)
         pkg_node.newProp("pkgid", pkg["yumchecksum"])
         pkg_node.newProp("name", pkg["name"])
         pkg_node.newProp("arch", pkg.getArch())
-        tnode = pkg_node.newChild(None, "version", None)
-        tnode.newProp("epoch", pkg.getEpoch())
-        tnode.newProp("ver", pkg["version"])
-        tnode.newProp("rel", pkg["release"])
+        self.__writeVersion(pkg_node, pkg)
+        return pkg_node
+
+    def __writeFilelists(self, fd, parent, pkg):
+        pkg_node = self.__writePkgInfo(parent, pkg)
         self.__generateFilelist(pkg_node, pkg, 0)
         output = pkg_node.serialize("UTF-8", self.pretty)
         fd.write(output + "\n")
@@ -3229,14 +3231,7 @@ class RpmRepo:
         del pkg_node
 
     def __writeOther(self, fd, parent, pkg):
-        pkg_node = parent.newChild(None, "package", None)
-        pkg_node.newProp("pkgid", pkg["yumchecksum"])
-        pkg_node.newProp("name", pkg["name"])
-        pkg_node.newProp("arch", pkg.getArch())
-        tnode = pkg_node.newChild(None, "version", None)
-        tnode.newProp("epoch", pkg.getEpoch())
-        tnode.newProp("ver", pkg["version"])
-        tnode.newProp("rel", pkg["release"])
+        pkg_node = self.__writePkgInfo(parent, pkg)
         if pkg["changelogname"] != None:
             for (name, time, text) in zip(pkg["changelogname"],
                 pkg["changelogtime"], pkg["changelogtext"]):
