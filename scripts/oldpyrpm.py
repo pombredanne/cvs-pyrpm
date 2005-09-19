@@ -2313,9 +2313,13 @@ def sameSrcRpm(a, b):
     bmd5s.sort()
     return amd5s == bmd5s
 
+def ignoreBinary():
+    return "\.gz$\n\.tgz$\n\.taz$\n\.bz2$\n\.z$\n\.Z$\n\.zip$\n" \
+        "\.ttf$\n\.db$\n\.jar$\n\.pdf$\n\.sdf$\n\.war$\n"
+
 def isBinary(filename):
     for i in (".gz", ".tgz", ".taz", ".bz2", ".z", ".Z", ".zip", ".ttf",
-        ".db", ".jar"):
+        ".db", ".jar", ".pdf", ".sdf", ".war"):
         if filename.endswith(i):
             return 1
     return 0
@@ -3939,6 +3943,163 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
         print "Done reading config file %s." % c
     return repos
 
+
+def writeFile(filename, data, mode=None):
+    (fd, tmpfile) = mkstemp_file(os.path.dirname(filename), special=1)
+    fd.write("".join(data))
+    if mode != None:
+        os.chmod(tmpfile, mode & 07777)
+    os.rename(tmpfile, filename)
+
+
+# Mirror script:
+##!/bin/sh
+#REPODIR=~/hgrepo
+#for i in $REPODIR/* ; do
+#    cd $i || continue
+#    grep ^default .hg/hgrc >/dev/null 2>&1 || continue
+#    j=`basename $i`
+#    echo "Updating now $j."
+#    hg pull
+#    hg update -m
+#done
+# Sample config for /etc/httpd/conf/httpd.conf:
+#Alias /hg /home/devel/test/hgrepo-cgi
+#<Directory "/home/devel/test/hgrepo-cgi">
+#    DirectoryIndex index.cgi
+#    AddHandler cgi-script .cgi
+#    Options ExecCGI
+#    Order allow,deny
+#    Allow from all
+#</Directory>
+hgauthor = "Florian La Roche <laroche@redhat.com>"
+hgrepo = "/home/devel/test/hgrepo"
+hgcgi = "/home/devel/test/hgrepo-cgi"
+hgfiles = "/home/devel/test/filecache"
+mirror = "/var/www/html/mirror/"
+fedora = mirror + "fedora/"
+rhelupdates = mirror + "updates-rhel/"
+srpm_repos = [
+    ("Fedora Core development", "FC-development",
+     [fedora + "development/SRPMS"], None),
+#    ("Fedora Core 4", "FC4",
+#     [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
+#      fedora + "updates/testing/4/SRPMS"], None),
+#    ("FC3", [fedora + "3/SRPMS", fedora + "updates/3/SRPMS",
+#             fedora + "updates/testing/3/SRPMS"], None),
+#    ("FC2", [fedora + "2/SRPMS", fedora + "updates/2/SRPMS",
+#             fedora + "updates/testing/2/SRPMS"], None),
+#    ("FC1", [fedora + "1/SRPMS", fedora + "updates/1/SRPMS",
+#             fedora + "updates/testing/4/SRPMS"], None),
+#    ("RHEL4",   [rhelupdates + "4"], None),
+#    ("RHEL3",   [rhelupdates + "3"], None),
+    ("Red Hat Enterprise Linux 2.1", "RHEL2.1",
+     [rhelupdates + "2.1"], None),
+
+    # Other sites I mirror:
+    ("mirror from http://selenic.com/hg/", "hg", None, None),
+    ("mirror from http://hg.serpentine.com/mercurial/mq/", "mq", None, None),
+    ("mirror from http://hg.serpentine.com/mercurial/bos/", "hg-bos", None, None),
+    ("mirror from http://hannibal.lr-s.tudelft.nl/~vincent/py/hg-scripts/",
+        "hg-scripts", None, None),
+    ("mirror from http://www.kernel.org/hg/linux-2.6/",
+        "linux-2.6", None, None),
+    ("mirror from http://xenbits.xensource.com/xen-unstable.hg/",
+        "xen-unstable", None, None),
+]
+
+def createMercurialCGI():
+    """Setup CGI configuration for mercurial."""
+    if not hgcgi:
+        return
+    if not os.path.isdir(hgcgi):
+        print "Error: cgi path for mercurial not setup."
+        return
+    mainindex = [
+        "#!/usr/bin/python\nimport cgitb, os, sys\n",
+        "cgitb.enable()\nfrom mercurial import hgweb\n\n",
+        "config = []\nfor (n, d) in (\n"]
+    for (repodescr, reponame, dirs, filecache) in srpm_repos:
+        repodir = hgrepo + "/" + reponame
+        cgidir = hgcgi + "/" + reponame
+        mainindex.append("    (\"%s\", \"%s\"),\n" % (reponame, repodir))
+        # Write index.cgi for each repository.
+        makeDirs(cgidir)
+        writeFile(cgidir + "/index.cgi",
+            ["#!/usr/bin/python\nimport cgitb, os, sys\n",
+             "cgitb.enable()\nfrom mercurial import hgweb\n",
+             "h = hgweb.hgweb(\"%s\", \"%s\")\n" % (repodir, repodescr),
+             "h.run()\n"], 0755)
+    mainindex.extend(["    ):\n",
+        "    if os.path.isfile(d + \"/.hg/00changelog.d\"):\n",
+        "        config.append((n, d))\n\n"])
+    mainindex.append("h = hgweb.hgwebdir(config)\nh.run()\n")
+    writeFile(hgcgi + "/index.cgi", mainindex, 0755)
+
+def createMercurial():
+    if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
+        print "Error: Paths for mercurial not setup."
+        return
+    createMercurialCGI()
+    # Create and initialize repos if still missing.
+    for (repodescr, reponame, dirs, filecache) in srpm_repos:
+        repodir = hgrepo + "/" + reponame
+        if not dirs or os.path.isdir(repodir):
+            continue
+        os.system("hg init %s" % repodir)
+        writeFile(repodir + "/.hgignore", [ignoreBinary(), "\.src\.rpm$\n"])
+        writeFile(repodir + "/.hg/hgrc",
+            ["[web]\ndescription = %s\n" % repodescr,
+             "author = %s\n" % hgauthor])
+    # Write data for different repos.
+    for (repodescr, reponame, dirs, filecache) in srpm_repos:
+        repodir = hgrepo + "/" + reponame
+        if not dirs or os.path.isdir(repodir):
+            continue
+        if not filecache:
+            filecache = hgfiles + "/" + reponame
+        makeDirs(filecache)
+        r = RpmTree()
+        #if len(dirs) > 1:
+        #    dirs = dirs[1:]
+        for d in dirs:
+            r.addDirectory(d)
+        r.sort_unify()
+        r.keepNewest()
+        for pkgname in r.getNames():
+            for pkg in r.h[pkgname]:
+                pkgdir = repodir + "/" + pkg["name"]
+                makeDirs(pkgdir)
+                os.system("cd %s && rm -rf * .[^.h]* .h[^g]*" % pkgdir)
+                extractRpm(pkg, pkgdir + "/")
+                files = pkg.getFilenames()
+                specfile = files[pkg.getSpecfile(files)]
+                if "sources" in files or "Makefile" in files:
+                    raise ValueError, "src.rpm contains sources / Makefile: %s" % pkg.filename
+                sources = []
+                if filecache:
+                    for i in xrange(len(files)):
+                        f = files[i]
+                        if not S_ISREG(pkg["filemodes"][i]) or not isBinary(f):
+                            continue
+                        fsrc = pkgdir + "/" + f
+                        # XXX should we use sha instead of md5?
+                        #md5data = getMD5(fsrc)
+                        md5data = pkg["filemd5s"][i]
+                        fdir = "%s/%s" % (filecache, md5data[0:2])
+                        fname = "%s/%s.bin" % (fdir, md5data)
+                        if not os.path.isfile(fname):
+                            makeDirs(fdir)
+                            doLnOrCopy(fsrc, fname)
+                        os.unlink(fsrc)
+                        sources.append("%s %s\n" % (md5data, f))
+                    sources.sort() # we should sort on filename, not on md5sum
+                writeFile(pkgdir + "/sources", sources)
+                writeFile(pkgdir + "/Makefile", ["include ../pyrpm/Makefile.srpm\n",
+                    "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
+                os.system("cd %s; hg commit -q -A -m initial-import" % repodir)
+
+
 def checkDeps(rpms):
     # Add all packages in.
     resolver = RpmResolver()
@@ -4592,6 +4753,7 @@ def main():
     checkrpmdb = 0
     baseurl = None
     createrepo = 0
+    mercurial = 0
     releasever = None
     (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
         ["help", "verbose", "quiet", "arch=", "releasever=",
@@ -4601,7 +4763,7 @@ def main():
          "excludes=",
          "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
          "checkrpmdb", "buildroot=", "installroot=", "root=", "version",
-         "baseurl=", "createrepo"])
+         "baseurl=", "createrepo", "mercurial"])
     for (opt, val) in opts:
         if opt in ("-?", "-h", "--help"):
             usage()
@@ -4671,6 +4833,8 @@ def main():
             baseurl = val
         elif opt == "--createrepo":
             createrepo = 1
+        elif opt == "--mercurial":
+            mercurial = 1
     if diff:
         diff = diffTwoSrpms(args[0], args[1], explode)
         if diff != "":
@@ -4693,6 +4857,8 @@ def main():
                 break
             repo = RpmRepo(a, excludes)
             repo.createRepo(baseurl)
+    elif mercurial:
+        createMercurial()
     else:
         keepdata = 1
         hdrtags = rpmtag
