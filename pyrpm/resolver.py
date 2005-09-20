@@ -343,10 +343,10 @@ class RpmResolver(RpmList):
                    (r in self.pkg_updates or r in self.pkg_obsoletes):
                 continue
             if self.isInstalled(r):
-                fmt = "%s conflicts with already installed %s, skipping"
+                fmt = "%s conflicts with already installed %s on %s, skipping"
             else:
-                fmt = "%s conflicts with already added %s, skipping"
-            self.config.printWarning(1, fmt % (pkg.getNEVRA(),
+                fmt = "%s conflicts with already added %s on %s, skipping"
+            self.config.printWarning(1, fmt % (pkg.getNEVRA(), depString(c),
                                                r.getNEVRA()))
             ret = 1
         return ret
@@ -360,19 +360,14 @@ class RpmResolver(RpmList):
         ((name, RPMSENSE_* flags, EVR string), RpmPackage): handle
         config.checkinstalled, always allow updates and multilib packages.  dep
         is (name, RPMSENSE_* flag, EVR string) or (filename, 0, "")."""
-        # FIXME: _checkObsoletes(), the only caller, needs just a list of
-        # packages
 
         obsoletes = [ ]
         if len(list) != 0:
             if pkg in list:
                 list.remove(pkg)
             for r in list:
-                # FIXME: entries in installed_obsoletes[pkg] are
-                # (dep, RpmPackage)
                 if self.config.checkinstalled == 0 and \
-                       pkg in self.installed_obsoletes and \
-                       dep in self.installed_obsoletes[pkg]:
+                       self._hasConflict(dep, self.installed_obsoletes):
                     continue
                 if operation == OP_UPDATE:
                     if pkg["name"] == r["name"]:
@@ -384,8 +379,17 @@ class RpmResolver(RpmList):
         return obsoletes
     # ----
 
-    # FIXME: nothing changes operation from the default
-    def _getConflicts(self, pkg, dep, list, operation=OP_INSTALL):
+    def _hasConflict(self, dep, conflicts_list):
+        found = 0
+        for pkg in conflicts_list:
+            for (c,r) in conflicts_list[pkg]:
+                if c == dep:
+                    found = 1
+                    break
+        return found
+    # ----
+
+    def _getConflicts(self, pkg, dep, list):
         """RpmPackage pkg Conflicts: or Obsoletes: (name, RPMSENSE_* flag,
         EVR string) dep, with RpmPackage's in list matching that.
 
@@ -397,55 +401,38 @@ class RpmResolver(RpmList):
             if pkg in list:
                 list.remove(pkg)
             for r in list:
-                # FIXME: entries in installed_obsoletes[pkg] are
-                # (dep, RpmPackage). Likewise for installed_conflicts.
                 if self.config.checkinstalled == 0 and \
-                       ((pkg in self.installed_conflicts and \
-                         dep in self.installed_conflicts[pkg]) or \
-                        (pkg in self.installed_obsoletes and \
-                         dep in self.installed_obsoletes[pkg])):
+                       (self._hasConflict(dep, self.installed_conflicts) or \
+                        self._hasConflict(dep, self.installed_obsoletes)):
                     continue
-                if operation == OP_UPDATE:
-                    if pkg["name"] == r["name"]:
-                        continue
-                else:
-                    if pkg.getNEVR() == r.getNEVR():
-                        continue
+                if pkg.getNEVR() == r.getNEVR():
+                    continue
                 conflicts.append((dep, r))
         return conflicts
     # ----
 
-    # FIXME: nothing changes operation from the default
-    def _hasFileConflict(self, pkg1, pkg2, filename, pkg1_fi,
-                         operation=OP_INSTALL):
+    def _hasFileConflict(self, pkg1, pkg2, filename, pkg1_fi):
         """RpmPackage's pkg1 and pkg2 share filename.
 
         Return 1 if the conflict is "real", 0 if it should be ignored.
         pkg1_fi is RpmFileInfo of filename in pkg1."""
-
+        # it is ok if there is a file conflict which is in
+        # installed_file_conflicts and not checkinstalled
         if self.config.checkinstalled == 0 and \
                pkg1 in self.installed_file_conflicts and \
                (filename,pkg2) in self.installed_file_conflicts[pkg1]:
             return 0
-        # AFAICS it is unclear which package is updating and which is updated;
-        # pkg2 is actually likely to be added _after_ pkg1.  Luckily this code
-        # is currently dead :)
-        if operation == OP_UPDATE and \
-               (pkg2 in self.pkg_updates or pkg2 in self.pkg_obsoletes):
-            return 0
-        if operation == OP_UPDATE:
-            if pkg1["name"] == pkg2["name"]:
-                return 0
-        else:
-            if pkg1.getNEVR() == pkg2.getNEVR() and \
-                   buildarchtranslate[pkg1["arch"]] != \
-                   buildarchtranslate[pkg2["arch"]] and \
-                   pkg1["arch"] != "noarch" and \
-                   pkg2["arch"] != "noarch":
-                # do not check packages with the same NEVR which are
-                # not buildarchtranslate compatible
-                return 0
         fi = pkg2.getRpmFileInfo(filename)
+        # do not check packages with the same NEVR which are
+        # not buildarchtranslate compatible
+        if pkg1.getNEVR() == pkg2.getNEVR() and \
+               buildarchtranslate[pkg1["arch"]] != \
+               buildarchtranslate[pkg2["arch"]] and \
+               pkg1["arch"] != "noarch" and \
+               pkg2["arch"] != "noarch" and \
+               pkg1_fi.filecolor != fi.filecolor and \
+               pkg1_fi.filecolor > 0 and fi.filecolor > 0:
+            return 0
         # ignore directories
         if S_ISDIR(pkg1_fi.mode) and S_ISDIR(fi.mode):
             return 0
@@ -507,10 +494,6 @@ class RpmResolver(RpmList):
 
         If arch is not none, return only packages which can satisfy Requires:
         by package with arch."""
-        # FIXME: When should arch be used?  It is never used for Conflicts:
-        # and Obsoletes.  For Requires: it is used in RpmResolver, but not
-        # in RpmYum.
-
         (name, flag, version) = dep
         s = self.provides_list.search(name, flag, version, arch)
         if name[0] == '/': # all filenames are beginning with a '/'
@@ -579,7 +562,6 @@ class RpmResolver(RpmList):
         return no_unresolved
     # ----
 
-    # FIXME: not used
     def getResolvedDependencies(self):
         """Get resolved dependencies.
 
@@ -606,14 +588,25 @@ class RpmResolver(RpmList):
         [(name, RPMSENSE_* flags, EVR string)]."""
 
         all_unresolved = HashList()
+
         for name in self:
-            for r in self[name]:
-                self.config.printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
-                (unresolved, resolved) = self.getPkgDependencies(r)
+            for pkg in self[name]:
+                unresolved = [ ]
+                for u in pkg["requires"]:
+                    if u[0].startswith("rpmlib("): # drop rpmlib requirements
+                        continue
+                    s = self.searchDependency(u, pkg["arch"])
+                    if len(s) > 0: # found something
+                        continue
+                    if self.config.checkinstalled == 0 and \
+                           pkg in self.installed_unresolved and \
+                           u in self.installed_unresolved[pkg]:
+                        continue
+                    unresolved.append(u)
                 if len(unresolved) > 0:
-                    if r not in all_unresolved:
-                        all_unresolved[r] = [ ]
-                    all_unresolved[r].extend(unresolved)
+                    if pkg not in all_unresolved:
+                        all_unresolved[pkg] = [ ]
+                    all_unresolved[pkg].extend(unresolved)
         return all_unresolved
     # ----
 
@@ -656,7 +649,8 @@ class RpmResolver(RpmList):
         obsoletes = HashList()
 
         if self.config.noconflicts:
-            # conflicts turned off; FIXME: applies to obsoletes?
+            # conflicts turned off, obsoletes are also conflicts, but in an
+            # other level
             return obsoletes
         if self.config.checkinstalled == 0 and len(self.installs) == 0:
             # no obsoletes if there is no new package
@@ -745,15 +739,8 @@ class RpmResolver(RpmList):
 
         for pkg in conflicts:
             self.config.printError("%s file conflicts with:" % pkg.getNEVRA())
-            if self.config.verbose > 1:
-                for f,r in conflicts[pkg]:
-                    self.config.printError("\t'%s' <=> %s" % (f, r.getNEVRA()))
-            else:
-                pkgs = [ ]
-                for f,r in conflicts[pkg]:
-                    if r not in pkgs:
-                        self.config.printError("\t%s" % r.getNEVRA())
-                        pkgs.append(r)
+            for f,r in conflicts[pkg]:
+                self.config.printError("\t'%s' on %s" % (r.getNEVRA(), r))
         return 0
     # ----
 
