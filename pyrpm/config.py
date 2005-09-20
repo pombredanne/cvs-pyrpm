@@ -75,7 +75,8 @@ class RpmConfig:
             "requireflags", "requireversion", "obsoletename", "obsoleteflags",
             "obsoleteversion", "conflictname", "conflictflags",
             "conflictversion", "filesizes", "filemodes", "filemd5s",
-            "filelinktos", "fileflags", "dirindexes", "basenames",
+            "filelinktos", "fileflags", "filecolors", "dirindexes",
+            "basenames",
             "dirnames", "oldfilenames", "sourcerpm", "md5",
             "sha1header") # Tags used by RpmResolver
         self.timer = 0                  # Output timing information
