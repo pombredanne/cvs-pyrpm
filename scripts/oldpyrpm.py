@@ -53,6 +53,7 @@
 
 #
 # TODO:
+# - fileconflict for multilib systems
 # - gzip write code from createrepo
 # - Improve fileconflicts checks.
 # - Make info in depString() more complete.
@@ -3952,17 +3953,6 @@ def writeFile(filename, data, mode=None):
     os.rename(tmpfile, filename)
 
 
-# Mirror script:
-##!/bin/sh
-#REPODIR=~/hgrepo
-#for i in $REPODIR/* ; do
-#    cd $i || continue
-#    grep ^default .hg/hgrc >/dev/null 2>&1 || continue
-#    j=`basename $i`
-#    echo "Updating now $j."
-#    hg pull
-#    hg update -m
-#done
 # Sample config for /etc/httpd/conf/httpd.conf:
 #Alias /hg /home/devel/test/hgrepo-cgi
 #<Directory "/home/devel/test/hgrepo-cgi">
@@ -3980,8 +3970,8 @@ mirror = "/var/www/html/mirror/"
 fedora = mirror + "fedora/"
 rhelupdates = mirror + "updates-rhel/"
 srpm_repos = [
-    ("Fedora Core development", "FC-development",
-     [fedora + "development/SRPMS"], None),
+#    ("Fedora Core development", "FC-development",
+#     [fedora + "development/SRPMS"], None, 30),
 #    ("Fedora Core 4", "FC4",
 #     [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
 #      fedora + "updates/testing/4/SRPMS"], None),
@@ -3993,20 +3983,39 @@ srpm_repos = [
 #             fedora + "updates/testing/4/SRPMS"], None),
 #    ("RHEL4",   [rhelupdates + "4"], None),
 #    ("RHEL3",   [rhelupdates + "3"], None),
-    ("Red Hat Enterprise Linux 2.1", "RHEL2.1",
-     [rhelupdates + "2.1"], None),
+#    ("Red Hat Enterprise Linux 2.1", "RHEL2.1",
+#     [rhelupdates + "2.1"], 30),
 
     # Other sites I mirror:
-    ("mirror from http://selenic.com/hg/", "hg", None, None),
-    ("mirror from http://hg.serpentine.com/mercurial/mq/", "mq", None, None),
-    ("mirror from http://hg.serpentine.com/mercurial/bos/", "hg-bos", None, None),
-    ("mirror from http://hannibal.lr-s.tudelft.nl/~vincent/py/hg-scripts/",
-        "hg-scripts", None, None),
-    ("mirror from http://www.kernel.org/hg/linux-2.6/",
-        "linux-2.6", None, None),
-    ("mirror from http://xenbits.xensource.com/xen-unstable.hg/",
-        "xen-unstable", None, None),
+    ("http://selenic.com/hg/", "hg", None, None, 20),
+    ("http://hg.serpentine.com/mercurial/mq/", "mq", None, None, 20),
+    ("http://hg.serpentine.com/mercurial/bos/", "hg-bos", None, None, 20),
+    ("http://hannibal.lr-s.tudelft.nl/~vincent/py/hg-scripts/",
+        "hg-scripts", None, None, None),
+    ("http://www.kernel.org/hg/linux-2.6/", "linux-2.6", None, None, 40),
+#    ("http://xenbits.xensource.com/xen-unstable.hg/",
+#        "xen-unstable", None, None, 30),
 ]
+
+def createMercurialMirrors():
+    """Setup local mirror dirs and populate them."""
+    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
+        repodir = hgrepo + "/" + reponame
+        if dirs or os.path.isdir(repodir):
+            continue
+        os.system("hg clone -q " + repodescr + " " + repodir)
+        data = ["[paths]\ndefault = %s\n" % repodescr,
+            "[web]\ndescription = mirror from %s\n" % repodescr]
+        if maxchanges:
+            data.append("maxchanges = %d\n" % maxchanges)
+        writeFile(repodir + "/.hg/hgrc", data)
+
+def updateMercurialMirrors():
+    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
+        repodir = hgrepo + "/" + reponame
+        if dirs or not os.path.isdir(repodir):
+            continue
+        os.system("cd %s && { hg pull -q; hg update -m -q; }" % repodir)
 
 def createMercurialCGI():
     """Setup CGI configuration for mercurial."""
@@ -4019,12 +4028,14 @@ def createMercurialCGI():
         "#!/usr/bin/python\nimport cgitb, os, sys\n",
         "cgitb.enable()\nfrom mercurial import hgweb\n\n",
         "config = []\nfor (n, d) in (\n"]
-    for (repodescr, reponame, dirs, filecache) in srpm_repos:
+    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
         repodir = hgrepo + "/" + reponame
         cgidir = hgcgi + "/" + reponame
         mainindex.append("    (\"%s\", \"%s\"),\n" % (reponame, repodir))
         # Write index.cgi for each repository.
         makeDirs(cgidir)
+        if dirs == None:
+            repodescr = "mirror from " + repodescr
         writeFile(cgidir + "/index.cgi",
             ["#!/usr/bin/python\nimport cgitb, os, sys\n",
              "cgitb.enable()\nfrom mercurial import hgweb\n",
@@ -4036,13 +4047,41 @@ def createMercurialCGI():
     mainindex.append("h = hgweb.hgwebdir(config)\nh.run()\n")
     writeFile(hgcgi + "/index.cgi", mainindex, 0755)
 
+grepodir = "/home/devel/test/gitrepos"
+
+kgit = "rsync://rsync.kernel.org/pub/scm/"
+gitrepos = (
+    (kgit + "git/git.git", "git"),
+    (kgit + "gitk/gitk.git", "gitk"),
+    (kgit + "git/gitweb.git", "gitweb"),
+    (kgit + "git/git-tools.git", "git-tools"),
+    #(kgit + "cogito/cogito.git", "cogito"),
+    (kgit + "cogito/git-pb.git", "cogito-git-pb"),
+    (kgit + "linux/hotplug/udev.git", "udev"),
+    ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct"),
+    (kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6"),
+)
+
+def createGitMirrors():
+    if not os.path.isdir(grepodir):
+        return
+    for (repo, dirname) in gitrepos:
+        d = grepodir + "/" + dirname
+        if not os.path.isdir(d):
+            os.system("git clone -q " + repo + " " + d)
+            os.system("cd %s && git checkout" % d)
+        os.system("cd %s && git pull" % d)
+
 def createMercurial():
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
         print "Error: Paths for mercurial not setup."
         return
+    createGitMirrors()
     createMercurialCGI()
+    createMercurialMirrors()
+    updateMercurialMirrors()
     # Create and initialize repos if still missing.
-    for (repodescr, reponame, dirs, filecache) in srpm_repos:
+    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
         repodir = hgrepo + "/" + reponame
         if not dirs or os.path.isdir(repodir):
             continue
@@ -4052,7 +4091,7 @@ def createMercurial():
             ["[web]\ndescription = %s\n" % repodescr,
              "author = %s\n" % hgauthor])
     # Write data for different repos.
-    for (repodescr, reponame, dirs, filecache) in srpm_repos:
+    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
         repodir = hgrepo + "/" + reponame
         if not dirs or os.path.isdir(repodir):
             continue

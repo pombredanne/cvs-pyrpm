@@ -118,7 +118,7 @@ def main():
     yum.runCommand()
     resolver = yum.opresolver
 
-    ihash = { }
+    ihash = {}
     for pkg in installed:
         if not pkg.has_key("epoch"):
             pkg["epoch"] = (0,)
