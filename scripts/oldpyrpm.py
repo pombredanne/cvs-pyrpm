@@ -3992,9 +3992,11 @@ srpm_repos = [
     ("http://hg.serpentine.com/mercurial/bos/", "hg-bos", None, None, 20),
     ("http://hannibal.lr-s.tudelft.nl/~vincent/py/hg-scripts/",
         "hg-scripts", None, None, None),
-    ("http://www.kernel.org/hg/linux-2.6/", "linux-2.6", None, None, 40),
-#    ("http://xenbits.xensource.com/xen-unstable.hg/",
-#        "xen-unstable", None, None, 30),
+    ("http://www.kernel.org/hg/linux-2.6/", "hg-linux-2.6", None, None, 40),
+    # Their http server is broken. A new checkout often fails. See the
+    # mercurial mailinglists for details.
+    ("http://xenbits.xensource.com/xen-unstable.hg/",
+        "xen-unstable", None, None, 30),
 ]
 
 def createMercurialMirrors():
@@ -4041,6 +4043,16 @@ def createMercurialCGI():
              "cgitb.enable()\nfrom mercurial import hgweb\n",
              "h = hgweb.hgweb(\"%s\", \"%s\")\n" % (repodir, repodescr),
              "h.run()\n"], 0755)
+    for (repo, dirname) in gitrepos:
+        dst = hgrepo + "/" + dirname
+        mainindex.append("    (\"%s\", \"%s\"),\n" % (dirname, dst))
+        cgidir = hgcgi + "/" + dirname
+        makeDirs(cgidir)
+        writeFile(cgidir + "/index.cgi",
+            ["#!/usr/bin/python\nimport cgitb, os, sys\n",
+             "cgitb.enable()\nfrom mercurial import hgweb\n",
+             "h = hgweb.hgweb(\"%s\", \"%s\")\n" % (dst, "mirror from " + repo),
+             "h.run()\n"], 0755)
     mainindex.extend(["    ):\n",
         "    if os.path.isfile(d + \"/.hg/00changelog.d\"):\n",
         "        config.append((n, d))\n\n"])
@@ -4055,7 +4067,7 @@ gitrepos = (
     (kgit + "gitk/gitk.git", "gitk"),
     (kgit + "git/gitweb.git", "gitweb"),
     (kgit + "git/git-tools.git", "git-tools"),
-    #(kgit + "cogito/cogito.git", "cogito"),
+    (kgit + "cogito/cogito.git", "cogito"),
     (kgit + "cogito/git-pb.git", "cogito-git-pb"),
     (kgit + "linux/hotplug/udev.git", "udev"),
     ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct"),
@@ -4064,13 +4076,33 @@ gitrepos = (
 
 def createGitMirrors():
     if not os.path.isdir(grepodir):
+        print "No directory", grepodir, "is setup."
         return
+    print "Pulling now git mirrors:"
     for (repo, dirname) in gitrepos:
         d = grepodir + "/" + dirname
-        if not os.path.isdir(d):
+        if not os.path.isdir(d + ".git"):
             os.system("git clone -q " + repo + " " + d)
-            os.system("cd %s && git checkout" % d)
-        os.system("cd %s && git pull" % d)
+            os.rename(d + "/.git", d + ".git")
+            os.system("rmdir " + d)
+        os.system("cd %s && GIT_DIR=%s git-pull" % (grepodir, d + ".git"))
+    print "\n\nConverting now git to hg repos."
+    for (repo, dirname) in gitrepos:
+        src = grepodir + "/" + dirname + ".git"
+        dst = hgrepo + "/" + dirname
+        mapfile = src + "-mapfile"
+        if not os.path.isdir(dst):
+            makeDirs(dst)
+            os.system("cd %s && hg init" % dst)
+            writeFile(mapfile, [])
+        os.system("/home/devel/test/gitrepos/convert-repo " + src + " " + \
+            dst + " " + mapfile)
+        data = ["[paths]\ndefault = %s\n" % repo,
+            "[web]\ndescription = mirror from %s\n" % repo]
+        #if maxchanges:
+        #    data.append("maxchanges = %d\n" % maxchanges)
+        writeFile(dst + "/.hg/hgrc", data)
+    print "Done."
 
 def createMercurial():
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
