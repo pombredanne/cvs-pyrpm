@@ -75,10 +75,9 @@ class RpmConfig:
             "requireflags", "requireversion", "obsoletename", "obsoleteflags",
             "obsoleteversion", "conflictname", "conflictflags",
             "conflictversion", "filesizes", "filemodes", "filemd5s",
-            "filelinktos", "fileflags", "filecolors", "dirindexes",
-            "basenames",
-            "dirnames", "oldfilenames", "sourcerpm", "md5",
-            "sha1header") # Tags used by RpmResolver
+            "filelinktos", "fileflags", "filecolors", "fileverifyflags",
+            "dirindexes", "basenames", "dirnames", "oldfilenames", "sourcerpm",
+            "md5", "sha1header") # Tags used by RpmResolver
         self.timer = 0                  # Output timing information
         self.ldconfig = 0             # Number of ldconfig calls optimized away
         self.delayldconfig = 0          # A delayed ldconfig call is pending
