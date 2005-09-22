@@ -4043,7 +4043,7 @@ def createMercurialCGI():
              "cgitb.enable()\nfrom mercurial import hgweb\n",
              "h = hgweb.hgweb(\"%s\", \"%s\")\n" % (repodir, repodescr),
              "h.run()\n"], 0755)
-    for (repo, dirname) in gitrepos:
+    for (repo, dirname, maxchanges) in gitrepos:
         dst = hgrepo + "/" + dirname
         mainindex.append("    (\"%s\", \"%s\"),\n" % (dirname, dst))
         cgidir = hgcgi + "/" + dirname
@@ -4063,31 +4063,34 @@ grepodir = "/home/devel/test/gitrepos"
 
 kgit = "rsync://rsync.kernel.org/pub/scm/"
 gitrepos = (
-    (kgit + "git/git.git", "git"),
-    (kgit + "gitk/gitk.git", "gitk"),
-    (kgit + "git/gitweb.git", "gitweb"),
-    (kgit + "git/git-tools.git", "git-tools"),
-    (kgit + "cogito/cogito.git", "cogito"),
-    (kgit + "cogito/git-pb.git", "cogito-git-pb"),
-    (kgit + "linux/hotplug/udev.git", "udev"),
-    ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct"),
-    (kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6"),
+    (kgit + "git/git.git", "git", 20),
+    (kgit + "gitk/gitk.git", "gitk", None),
+    (kgit + "git/gitweb.git", "gitweb", None),
+    (kgit + "git/git-tools.git", "git-tools", None),
+    (kgit + "cogito/cogito.git", "cogito", 20),
+    (kgit + "linux/hotplug/udev.git", "udev", None),
+    ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct", None),
+    (kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6", 40),
 )
 
 def createGitMirrors():
     if not os.path.isdir(grepodir):
         print "No directory", grepodir, "is setup."
         return
-    print "Pulling now git mirrors:"
-    for (repo, dirname) in gitrepos:
+    print "Downloading from git mirrors."
+    for (repo, dirname, maxchanges) in gitrepos:
         d = grepodir + "/" + dirname
-        if not os.path.isdir(d + ".git"):
-            os.system("git clone -q " + repo + " " + d)
-            os.rename(d + "/.git", d + ".git")
-            os.system("rmdir " + d)
-        os.system("cd %s && GIT_DIR=%s git-pull" % (grepodir, d + ".git"))
-    print "\n\nConverting now git to hg repos."
-    for (repo, dirname) in gitrepos:
+        if repo.startswith("rsync://"):
+            os.system("rsync -aqv --delete " + repo + "/ " + d + ".git")
+        else:
+            if not os.path.isdir(d + ".git"):
+                os.system("git clone -q " + repo + " " + d)
+                os.rename(d + "/.git", d + ".git")
+                os.system("rmdir " + d)
+            os.system("cd %s && GIT_DIR=%s git-pull" % (grepodir, d + ".git"))
+            writeFile(d + ".git/description", ["mirror from " + repo + "\n"])
+    print "Converting now git to hg repos."
+    for (repo, dirname, maxchanges) in gitrepos:
         src = grepodir + "/" + dirname + ".git"
         dst = hgrepo + "/" + dirname
         mapfile = src + "-mapfile"
@@ -4095,12 +4098,12 @@ def createGitMirrors():
             makeDirs(dst)
             os.system("cd %s && hg init" % dst)
             writeFile(mapfile, [])
-        os.system("/home/devel/test/gitrepos/convert-repo " + src + " " + \
+        os.system("/usr/share/doc/mercurial-0.7/convert-repo " + src + " " + \
             dst + " " + mapfile)
         data = ["[paths]\ndefault = %s\n" % repo,
             "[web]\ndescription = mirror from %s\n" % repo]
-        #if maxchanges:
-        #    data.append("maxchanges = %d\n" % maxchanges)
+        if maxchanges:
+            data.append("maxchanges = %d\n" % maxchanges)
         writeFile(dst + "/.hg/hgrc", data)
     print "Done."
 
