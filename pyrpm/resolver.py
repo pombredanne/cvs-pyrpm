@@ -380,6 +380,9 @@ class RpmResolver(RpmList):
     # ----
 
     def _hasConflict(self, dep, conflicts_list):
+        """Return 1 if (name, RPMSENSE_*flag, EVR string) dep is already
+        present in self.installed_{obsoletes_conflicts} conflicts_list."""
+
         found = 0
         for pkg in conflicts_list:
             for (c,r) in conflicts_list[pkg]:
@@ -535,7 +538,8 @@ class RpmResolver(RpmList):
     def checkDependencies(self):
         """Check dependencies, report errors.
 
-        Return 1 if all dependencies are resolved, 0 if not."""
+        Return 1 if all dependencies are resolved, 0 if not (after warning the
+        user)."""
 
         no_unresolved = 1
         for name in self:
@@ -674,7 +678,7 @@ class RpmResolver(RpmList):
     def checkConflicts(self):
         """Check for package conflicts, report errors.
 
-        Return 1 if OK, 0 if there are conflicts."""
+        Return 1 if OK, 0 if there are conflicts (after warning the user)."""
 
         conflicts = self.getConflicts()
         if len(conflicts) == 0:
@@ -731,7 +735,8 @@ class RpmResolver(RpmList):
     def checkFileConflicts(self):
         """Check file conflicts, report errors.
 
-        Return 1 if OK, 0 if there are file conflicts."""
+        Return 1 if OK, 0 if there are file conflicts (after warning the
+        user)."""
 
         conflicts = self.getFileConflicts()
         if len(conflicts) == 0:

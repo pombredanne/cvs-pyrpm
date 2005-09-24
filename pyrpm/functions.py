@@ -528,12 +528,13 @@ def getFreeCachespace(config, operations):
     """Check if there is enough diskspace for caching the rpms for the given
     operations.
 
-    Return 1 if there is enough space (with 30 MB slack), 0 otherwise."""
+    Return 1 if there is enough space (with 30 MB slack), 0 otherwise (after
+    warning the user)."""
 
     cachedir = "/var/cache/pyrm/"
     while 1:
         try:
-            os.stat(cachedir).st_dev
+            os.stat(cachedir)
             break
         except OSError:
             cachedir = os.path.dirname(cachedir)
@@ -564,11 +565,11 @@ def getFreeDiskspace(config, operations):
     (operation, RpmPackage).
 
     Use RpmConfig config.  Return 1 if there is enough space (with 30 MB
-    slack), 0 otherwise."""
-    
+    slack), 0 otherwise (after warning the user)."""
+
     freehash = {} # device number => [currently counted free bytes, block size]
     # device number => [minimal encountered free bytes, block size]
-    minfreehash = {} 
+    minfreehash = {}
     dirhash = {}                        # directory name => device number
     mountpoint = { }                    # device number => mount point path
     ret = 1
@@ -648,7 +649,7 @@ def cacheLocal(url, subdir, force=0):
 
     Return local file path, or None on failure.  If the local file is already
     present, use it if the timestamp is not too old unless force is true."""
-    
+
     if not url.startswith("http://"): # FIXME: ftp:// ?
         return url
     destdir = os.path.join("/var/cache/pyrpm", subdir)

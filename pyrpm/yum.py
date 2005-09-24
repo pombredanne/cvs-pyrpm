@@ -190,6 +190,8 @@ class RpmYum:
         else:
             control = RpmController(self.config, OP_UPDATE, self.pydb)
         ops = control.getOperations(self.opresolver)
+        if ops is None:
+            sys.exit(1)
         if len(ops) == 0:
             self.config.printInfo(0, "Nothing to do.\n")
             return
@@ -218,7 +220,8 @@ class RpmYum:
         if self.config.test:
             self.config.printInfo(0, "Test run stopped\n")
         else:
-            control.runOperations(ops)
+            if control.runOperations(ops) == 0:
+                sys.exit(1)
         self.pydb.close()
 
     def __generateObsoletesList(self):

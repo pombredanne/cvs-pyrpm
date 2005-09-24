@@ -71,9 +71,10 @@ class RpmList:
     def _install(self, pkg, no_check=0):
         """Add RpmPackage pkg.
 
-        Return an RpmList error code.  Check whether a package with the same
-        NEVRA is already in the list unless no_check.  Unlike install() this
-        method allows adding "originally" installed packages."""
+        Return an RpmList error code (after warning the user).  Check whether a
+        package with the same NEVRA is already in the list unless no_check.
+        Unlike install() this method allows adding "originally" installed
+        packages."""
 
         name = pkg["name"]
         if no_check == 0 and name in self.list:
@@ -91,7 +92,7 @@ class RpmList:
     def install(self, pkg, operation=OP_INSTALL):
         """Add RpmPackage pkg as part of the defined operation.
 
-        Return an RpmList error code."""
+        Return an RpmList error code (after warning the user)."""
 
         ret = self._install(pkg)
         if ret != self.OK:
@@ -108,7 +109,7 @@ class RpmList:
     def update(self, pkg):
         """Add RpmPackage pkg, removing older versions.
 
-        Return an RpmList error code."""
+        Return an RpmList error code (after warning the user)."""
 
         key = pkg["name"]
 
@@ -266,7 +267,7 @@ class RpmList:
         """Check whether RpmPackage pkg can be installed when RpmPackage r
         with same %name is already in the current list.
 
-        Return an RpmList error code."""
+        Return an RpmList error code (after warning the user)."""
 
         if r == pkg or r.isEqual(pkg):
             if self.isInstalled(r):
@@ -282,7 +283,9 @@ class RpmList:
 
     def __arch_incompat(self, pkg, r):
         """Return True (and warn) if RpmPackage's pkg and r have different
-        architectures, but the same base arch."""
+        architectures, but the same base arch.
+
+        Warn the user before returning True."""
 
         if pkg["arch"] != r["arch"] and archDuplicate(pkg["arch"], r["arch"]):
             self.config.printWarning(1, "%s does not match arch %s." % \

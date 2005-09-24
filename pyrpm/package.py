@@ -456,7 +456,7 @@ class RpmPackage(RpmData):
                 if self.rfilist.has_key(f):
                     rfi = self.rfilist[f]
                     # Check if we need to erase the file
-                    if not self.__verifyFileErase(rfi, db):
+                    if not self.__verifyFileErase(rfi):
                         continue
                     try:
                         os.unlink(f)
@@ -718,8 +718,7 @@ class RpmPackage(RpmData):
             break
         return do_write
 
-    # FIXME: db is not used
-    def __verifyFileErase(self, rfi, db):
+    def __verifyFileErase(self, rfi):
         """Return 1 if file with RpmFileInfo rfi should be erased.
 
         Modify rfi.filename if necessary.  Raise OSError."""

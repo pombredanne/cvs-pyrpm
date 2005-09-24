@@ -1037,7 +1037,7 @@ class RpmDatabase:
         not nowrite.
 
         Return 1 on success, 0 on failure."""
-        
+
         raise NotImplementedError
 
     def _erasePkg(self, pkg):
