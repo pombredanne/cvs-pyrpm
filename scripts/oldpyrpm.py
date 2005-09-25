@@ -3074,25 +3074,25 @@ class RpmRepo:
         pfd = GzipFile(fileobj=origpfd, mode="wb")
         if not pfd:
             return 0
-        firstlinexml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        firstlinexml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         pfd.write(firstlinexml)
-        pfd.write('<metadata xmlns="http://linux.duke.edu/metadata/common" ' \
-            'xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="%d">\n' \
-            % numpkg)
+        pfd.write("<metadata xmlns=\"http://linux.duke.edu/metadata/common\"" \
+            " xmlns:rpm=\"http://linux.duke.edu/metadata/rpm\" " \
+            "packages=\"%d\">\n" % numpkg)
         (origffd, ffdtmp) = mkstemp_file(repodir, special=1)
         ffd = GzipFile(fileobj=origffd, mode="wb")
         if not ffd:
             return 0
         ffd.write(firstlinexml)
-        ffd.write('<filelists xmlns="http://linux.duke.edu/metadata/' \
-            'filelists" packages="%d">\n' % numpkg)
+        ffd.write("<filelists xmlns=\"http://linux.duke.edu/metadata/" \
+            "filelists\" packages=\"%d\">\n" % numpkg)
         (origofd, ofdtmp) = mkstemp_file(repodir, special=1)
         ofd = GzipFile(fileobj=origofd, mode="wb")
         if not ofd:
             return 0
         ofd.write(firstlinexml)
-        ofd.write('<otherdata xmlns="http://linux.duke.edu/metadata/other" ' \
-            'packages="%s">\n' % numpkg)
+        ofd.write("<otherdata xmlns=\"http://linux.duke.edu/metadata/other\"" \
+            " packages=\"%s\">\n" % numpkg)
 
         pdoc = libxml2.newDoc("1.0")
         proot = pdoc.newChild(None, "metadata", None)
