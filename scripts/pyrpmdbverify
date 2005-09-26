@@ -259,7 +259,7 @@ def verifyName():
 
 def verifyPackages():
     print "Checking Packages integrity."
-    rpmio = RpmFileIO(rpmconfig, "rpmdb")
+    rpmio = RpmFileIO(rpmconfig, "dummy")
     packages_db = hashopen(dbpath+"/Packages", "r")
     for id in packages.keys():
         packages[id]["archivesize"] = packages[id]["signature"]["payloadsize"]
@@ -358,12 +358,12 @@ def checkRpmDB(pkglist):
     packages_db = hashopen(dbpath+"/Packages", "r")
     for id in packages.keys():
         pkg = packages[id]
-        #if not pkg["signature"].has_key("sha1header"):
-        #    print "Skipping package %s, no sha1header." % pkg.getNEVRA()
-        #    continue
+        if not pkg["signature"].has_key("sha1header"):
+            print "Skipping package %s, no sha1header." % pkg.getNEVRA()
+            continue
         # Silently skip packages not found
         if not sha1hash.has_key(pkg["signature"]["sha1header"]):
-            print "Skipping package %s, not found in packagelist." % pkg.getNEVRA()
+#            print "Skipping package %s, not found in packagelist." % pkg.getNEVRA()
             continue
         opkg = readRpmPackage(rpmconfig, sha1hash[pkg["signature"]["sha1header"]].source)
         # Fill in the package with own information and some additional things
