@@ -3982,7 +3982,7 @@ def writeFile(filename, data, mode=None):
     os.rename(tmpfile, filename)
 
 
-# Sample config for /etc/httpd/conf/httpd.conf:
+# Sample config for /etc/httpd/conf.d/scm.conf:
 #Alias /hg /home/devel/test/hgrepo-cgi
 #<Directory "/home/devel/test/hgrepo-cgi">
 #    DirectoryIndex index.cgi
@@ -3995,26 +3995,32 @@ hgauthor = "Florian La Roche <laroche@redhat.com>"
 hgrepo = "/home/devel/test/hgrepo"
 hgcgi = "/home/devel/test/hgrepo-cgi"
 hgfiles = "/home/devel/test/filecache"
-#mirror = "/var/www/html/mirror/"
-mirror = "/home/mirror/"
+mirror = "/var/www/html/mirror/"
 fedora = mirror + "fedora/"
 rhelupdates = mirror + "updates-rhel/"
 srpm_repos = [
+    # Fedora Core
     ("Fedora Core development", "FC-development",
      [fedora + "development/SRPMS"], None, 30),
-#    ("Fedora Core 4", "FC4",
-#     [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
-#      fedora + "updates/testing/4/SRPMS"], None),
-#    ("FC3", [fedora + "3/SRPMS", fedora + "updates/3/SRPMS",
-#             fedora + "updates/testing/3/SRPMS"], None),
-#    ("FC2", [fedora + "2/SRPMS", fedora + "updates/2/SRPMS",
-#             fedora + "updates/testing/2/SRPMS"], None),
-#    ("FC1", [fedora + "1/SRPMS", fedora + "updates/1/SRPMS",
-#             fedora + "updates/testing/4/SRPMS"], None),
-#    ("RHEL4",   [rhelupdates + "4"], None),
-#    ("RHEL3",   [rhelupdates + "3"], None),
-#    ("Red Hat Enterprise Linux 2.1", "RHEL2.1",
-#     [rhelupdates + "2.1"], 30),
+    ("Fedora Core 4", "FC4",
+     [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
+      fedora + "updates/testing/4/SRPMS"], None, 30),
+    ("Fedora Core 3", "FC3",
+     [fedora + "3/SRPMS", fedora + "updates/3/SRPMS",
+      fedora + "updates/testing/3/SRPMS"], None, 30),
+    ("Fedora Core 2", "FC2",
+     [fedora + "2/SRPMS", fedora + "updates/2/SRPMS",
+      fedora + "updates/testing/2/SRPMS"], None, 30),
+    ("fedora Core 1", "FC1",
+     [fedora + "1/SRPMS", fedora + "updates/1/SRPMS",
+      fedora + "updates/testing/1/SRPMS"], None, 30),
+    # Red Hat Enterprise Linux
+    ("Red Hat Enterprise Linux 4", "RHEL4",
+     [ mirror + "rhel/4/en/os/i386/SRPMS", rhelupdates + "4"], None, 30),
+    ("Red Hat Enterprise Linux 3", "RHEL3",
+     [ mirror + "rhel/3/en/os/i386/SRPMS", rhelupdates + "3"], None, 30),
+    ("Red Hat Enterprise Linux 2.1", "RHEL2.1",
+     [ mirror + "rhel/2.1AS/en/os/i386/SRPMS", rhelupdates + "2.1"], None, 30),
 
     # Other sites I mirror:
     ("http://selenic.com/hg/", "hg", None, None, 20),
@@ -4030,27 +4036,20 @@ srpm_repos = [
     ("http://thunk.org/hg/e2fsprogs/", "e2fsprogs", None, None, 20),
 ]
 
-def createMercurialMirrors():
-    """Setup local mirror dirs and populate them."""
-    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
-        repodir = hgrepo + "/" + reponame
-        if dirs or os.path.isdir(repodir):
-            continue
-        os.system("hg clone -q " + repodescr + " " + repodir)
-        data = ["[paths]\ndefault = %s\n" % repodescr,
-            "[web]\ndescription = mirror from %s\n" % repodescr]
-        if maxchanges:
-            data.append("maxchanges = %d\n" % maxchanges)
-        writeFile(repodir + "/.hg/hgrc", data)
+grepodir = "/home/devel/test/gitrepos"
 
-def updateMercurialMirrors():
-    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
-        repodir = hgrepo + "/" + reponame
-        if dirs or not os.path.isdir(repodir):
-            continue
-        os.system("cd %s && { hg pull -q; hg update -m -q; }" % repodir)
+kgit = "rsync://rsync.kernel.org/pub/scm/"
+gitrepos = (
+    (kgit + "git/git.git", "git", 20),
+    (kgit + "gitk/gitk.git", "gitk", None),
+    (kgit + "git/gitweb.git", "gitweb", None),
+    (kgit + "cogito/cogito.git", "cogito", 20),
+    (kgit + "linux/hotplug/udev.git", "udev", None),
+    ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct", None),
+    (kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6", 40),
+)
 
-def createMercurialCGI():
+def createCGI():
     """Setup CGI configuration for mercurial."""
     if not hgcgi:
         return
@@ -4090,20 +4089,22 @@ def createMercurialCGI():
     mainindex.append("h = hgweb.hgwebdir(config)\nh.run()\n")
     writeFile(hgcgi + "/index.cgi", mainindex, 0755)
 
-grepodir = "/home/devel/test/gitrepos"
+def updateMercurialMirrors():
+    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
+        if dirs:
+            continue
+        repodir = hgrepo + "/" + reponame
+        if not os.path.isdir(repodir):
+            os.system("hg clone -q " + repodescr + " " + repodir)
+            data = ["[paths]\ndefault = %s\n" % repodescr,
+                "[web]\ndescription = mirror from %s\n" % repodescr]
+            if maxchanges:
+                data.append("maxchanges = %d\n" % maxchanges)
+            writeFile(repodir + "/.hg/hgrc", data)
+        else:
+            os.system("cd %s && { hg pull -q; hg update -m -q; }" % repodir)
 
-kgit = "rsync://rsync.kernel.org/pub/scm/"
-gitrepos = (
-    (kgit + "git/git.git", "git", 20),
-    (kgit + "gitk/gitk.git", "gitk", None),
-    (kgit + "git/gitweb.git", "gitweb", None),
-    (kgit + "cogito/cogito.git", "cogito", 20),
-    (kgit + "linux/hotplug/udev.git", "udev", None),
-    ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct", None),
-    (kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6", 40),
-)
-
-def createGitMirrors():
+def updateGitMirrors():
     if not os.path.isdir(grepodir):
         print "No directory", grepodir, "is setup."
         return
@@ -4178,16 +4179,14 @@ def createMercurial():
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
         print "Error: Paths for mercurial not setup."
         return
-    createGitMirrors()
-    createMercurialCGI()
-    createMercurialMirrors()
+    createCGI()
+    updateGitMirrors()
     updateMercurialMirrors()
     # Create and initialize repos if still missing.
     for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
         repodir = hgrepo + "/" + reponame
-        if not dirs:
+        if not dirs or not os.path.isdir(dirs[0]):
             continue
-        continue # XXX
         if os.path.isdir(repodir):
             firsttime = 0
         else:
@@ -4203,7 +4202,8 @@ def createMercurial():
         makeDirs(filecache)
         r = RpmTree()
         for d in dirs:
-            r.addDirectory(d)
+            if os.path.isdir(d):
+                r.addDirectory(d)
         if firsttime:
             pkgs = r.getPkgsByTime()
         else:
@@ -4632,7 +4632,6 @@ def checkSrpms():
         "/mnt/hdb4/data/cAos/3.5/updates/SRPMS",
         "/mnt/hdb4/data/cAos/4.1/os/SRPMS",
         "/mnt/hdb4/data/cAos/4.1/updates/SRPMS",
-        "/var/www/html/mirror/tao",
         "/home/devel/laroche/download/scientific/SRPMS/vendor/errata",
         "/home/devel/laroche/download/scientific/SRPMS/vendor/original",
         "/home/devel/laroche/download/scientific/SRPMS"]
