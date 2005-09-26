@@ -326,7 +326,7 @@ def doRead(fd, size):
 
 def getChecksum(fd, digest="md5"):
     if isinstance(fd, basestring):
-        fd = open(fd, "r")
+        fd = open(fd, "rb")
     if digest == "md5":
         ctx = md5.new()
     else:
@@ -350,7 +350,7 @@ class PyGZIP:
     def __init__(self, filename, fd, datasize, readsize):
         self.filename = filename
         if fd == None:
-            fd = open(filename, "r")
+            fd = open(filename, "rb")
         self.fd = fd
         self.length = 0 # length of all decompressed data
         self.length2 = datasize
@@ -1398,7 +1398,7 @@ class ReadRpm:
                     return 1
             else:
                 try:
-                    self.fd = open(self.filename, "ro")
+                    self.fd = open(self.filename, "rb")
                 except:
                     self.printErr("could not open file")
                     return 1
@@ -4365,7 +4365,7 @@ def readPackages(dbpath, verbose):
     # Read the db4/hash file to determine byte order / endianness
     # as well as maybe host order:
     swapendian = ""
-    data = open(dbpath + "Packages", "ro").read(16)
+    data = open(dbpath + "Packages", "rb").read(16)
     if len(data) == 16:
         if unpack("=I", data[12:16])[0] == 0x00061561:
             if verbose > 2:
