@@ -24,6 +24,7 @@ from hashlist import HashList
 from resolver import RpmResolver
 from control import RpmController
 from package import RpmPackage
+from database import RpmRepo, getRpmDBFactory
 from functions import *
 from io import *
 
@@ -190,8 +191,6 @@ class RpmYum:
         else:
             control = RpmController(self.config, OP_UPDATE, self.pydb)
         ops = control.getOperations(self.opresolver)
-        if ops is None:
-            sys.exit(1)
         if len(ops) == 0:
             self.config.printInfo(0, "Nothing to do.\n")
             return
@@ -220,8 +219,7 @@ class RpmYum:
         if self.config.test:
             self.config.printInfo(0, "Test run stopped\n")
         else:
-            if control.runOperations(ops) == 0:
-                sys.exit(1)
+            control.runOperations(ops)
         self.pydb.close()
 
     def __generateObsoletesList(self):

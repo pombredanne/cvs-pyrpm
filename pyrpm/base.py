@@ -17,6 +17,7 @@
 #
 
 import os.path
+from struct import unpack
 
 class RpmFileInfo:
     def __init__(self, config, filename, inode, mode, uid, gid, mtime, filesize,
@@ -40,7 +41,7 @@ class RpmFileInfo:
     def getHardLinkID(self):
         """Return a string integer representing
         (self.md5sum, self.inode, self.dev)."""
-
+    
         return self.md5sum+":"+str(self.inode*65536+self.dev)
 
 
@@ -53,7 +54,7 @@ class FilenamesList:
 
     def clear(self):
         """Clear the mapping."""
-
+        
         self.path = { } # dirname => { basename => RpmPackage }
 
     def addPkg(self, pkg):
@@ -95,7 +96,7 @@ class FilenamesList:
 
         The list may point to internal structures of FilenamesList and may be
         changed by calls to addPkg() and removePkg()."""
-
+        
         l = [ ]
         dirname = os.path.dirname(name)
         if len(dirname) > 0 and dirname[-1] != "/":
@@ -105,6 +106,148 @@ class FilenamesList:
                self.path[dirname].has_key(basename):
             l = self.path[dirname][basename]
         return l
+
+class RpmIndexData:
+    # Class method, self is NOT used.
+    def getKey(item):
+        """Extracts the tag/sigtag key from a given item and return it"""
+
+        if item[0] == "S":
+            item = item[1:]
+        if item[-2] == ",":
+            item = item[:-2]
+        return item
+    getKey = staticmethod(getKey)
+
+    def __init__(self, config, index=None, storelen=None, sindex=None,
+                 sstorelen=None):
+        self.config = config
+        self.sigidx = []        # Signature index list
+        self.sighash = {}       # Signature tag hash
+        self.hdridx = []        # Header index list
+        self.hdrhash = {}       # Header tag hash
+        if index != None:
+            self.__createHashIdx(index, self.hdridx, self.hdrhash, storelen)
+        if sindex != None:
+            self.__createHashIdx(sindex, self.sigidx, self.sighash, sstorelen)
+
+    def __createHashIdx(self, index, idx, hash, slen):
+        """Generate our internal index and hash lists needed to optimaly
+        perform the requests
+        """ 
+
+        lenlist = []
+        # First extract all indexes from the given binary index.
+        # There are 2 internal lists for each index:
+        # the idx list contains all indexes as lists of 5 integers. The first 4
+        # values are the original index values, the 5th is the actual computed
+        # length of the datasegement for this index.
+        for i in xrange(len(index)/16):
+            entry = unpack("!4I", index[i*16:(i+1)*16])
+            idx.append(entry)
+            tag    = entry[0]
+            offset = entry[2]
+            if not hash.has_key(tag):
+                hash[tag] = []
+            hash[tag].append(i)
+            lenlist.append((offset, i))
+        # Now we calculate the sizes for the index entries using a sorted list
+        # of the offsets with proper indexes.
+        lenlist.sort()
+        t2 = [0]*len(lenlist)
+        for i in xrange(len(lenlist)-1):
+            t2[lenlist[i][1]] = lenlist[i+1][0] - lenlist[i][0]
+        t2[lenlist[-1][1]] = slen-lenlist[-1][0]
+        # Extend the original indexes with the computed lengths
+        for i in xrange(len(t2)):
+            idx[i] = list(idx[i])
+            idx[i].append(t2[i])
+
+    def getIndex(self, item):
+        # Find out if user wants a different occurence than the 1st
+        if item[-2] == ",":
+            key = item[:-2]
+            pos = int(item[-1])
+        else:
+            key = item
+            pos = 0
+        # Check from which tagspace the data should be get (sig or normal
+        # header)
+        if item[0] == "S":
+            tag = rpmsigtag[key[1:]][0]
+            tidx = self.sigidx
+            thash = self.sighash
+        else:
+            tag = rpmtag[key][0]
+            tidx = self.hdridx
+            thash = self.hdrhash
+        # No such tag -> return None
+        if not thash.has_key(tag):
+            return None
+        return tidx[thash[tag][pos]]
+
+    def has_key(self, item):
+        key = RpmIndexData.getKey(item)
+        if item[0] == "S":
+            return rpmsigtag.has_key(key) and \
+                   self.sighash.has_key(rpmsigtag[key][0])
+        else:
+            return rpmtag.has_key(key) and self.hdrhash.has_key(rpmtag[key][0])
+
+    def keys(self):
+        klist = []
+        counthash = {}
+        for index in self.sigidx:
+            item = "S"+rpmsigtagname[index[0]]
+            if not counthash.has_key(item):
+                counthash[item] = 0
+            else:
+                counthash[item] += 1
+                item += ","+str(counthash[item])
+            klist.append(item)
+        for index in self.hdridx:  
+            item = rpmtagname[index[0]]
+            if not counthash.has_key(item):
+                counthash[item] = 0
+            else:
+                counthash[item] += 1
+                item += ","+str(counthash[item])
+            klist.append(item)
+        return klist
+
+    def parseTag(self, index, store):
+        """Parse value of tag with index from data in store.
+
+        Return tag value.  Raise ValueError on invalid data."""
+
+        (tag, ttype, offset, count, len) = index
+        offset = 0
+        try:
+            if ttype == RPM_INT32:
+                return unpack("!%dI" % count, store[:count * 4])
+            elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
+                data = []
+                for _ in xrange(0, count):
+                    end = store.index('\x00', offset)
+                    data.append(store[offset:end])
+                    offset = end + 1
+                return data
+            elif ttype == RPM_STRING:
+                return store[offset:store.index('\x00')]
+            elif ttype == RPM_CHAR:
+                return unpack("!%dc" % count, store[:count])
+            elif ttype == RPM_INT8:
+                return unpack("!%dB" % count, store[:count])
+            elif ttype == RPM_INT16:
+                return unpack("!%dH" % count, store[:count*2])
+            elif ttype == RPM_INT64:
+                return unpack("!%dQ" % count, store[:count*8])
+            elif ttype == RPM_BIN:
+                return store[:count]
+            raise ValueError, "unknown tag type: %d" % ttype
+        except struct.error:
+            raise ValueError, "Invalid header data"
+
 
 # RPM Constants - based from rpmlib.h and elsewhere
 
@@ -218,148 +361,148 @@ OP_FRESHEN = "freshen"
 # List of all rpm tags we care about. We mark older tags which are
 # not anymore in newer rpm packages (Fedora Core development tree) as
 # "legacy".
-# tagname: (tag, type, how-many, flags:legacy=1,src-only=2,bin-only=4)
+# tagname: (tag, type, how-many, flags:legacy=1,src-only=2,bin-only=4, storeflags:never=0,onread=1,immediate=2)
 rpmtag = {
     # basic info
-    "name": (1000, RPM_STRING, None, 0),
-    "epoch": (1003, RPM_INT32, 1, 0),
-    "version": (1001, RPM_STRING, None, 0),
-    "release": (1002, RPM_STRING, None, 0),
-    "arch": (1022, RPM_STRING, None, 0),
+    "name": (1000, RPM_STRING, None, 0, 2),
+    "epoch": (1003, RPM_INT32, 1, 0, 2),
+    "version": (1001, RPM_STRING, None, 0, 2),
+    "release": (1002, RPM_STRING, None, 0, 2),
+    "arch": (1022, RPM_STRING, None, 0, 2),
 
     # dependencies: provides, requires, obsoletes, conflicts
-    "providename": (1047, RPM_STRING_ARRAY, None, 0),
-    "provideflags": (1112, RPM_INT32, None, 0),
-    "provideversion": (1113, RPM_STRING_ARRAY, None, 0),
-    "requirename": (1049, RPM_STRING_ARRAY, None, 0),
-    "requireflags": (1048, RPM_INT32, None, 0),
-    "requireversion": (1050, RPM_STRING_ARRAY, None, 0),
-    "obsoletename": (1090, RPM_STRING_ARRAY, None, 4),
-    "obsoleteflags": (1114, RPM_INT32, None, 4),
-    "obsoleteversion": (1115, RPM_STRING_ARRAY, None, 4),
-    "conflictname": (1054, RPM_STRING_ARRAY, None, 0),
-    "conflictflags": (1053, RPM_INT32, None, 0),
-    "conflictversion": (1055, RPM_STRING_ARRAY, None, 0),
+    "providename": (1047, RPM_STRING_ARRAY, None, 0, 0),
+    "provideflags": (1112, RPM_INT32, None, 0, 0),
+    "provideversion": (1113, RPM_STRING_ARRAY, None, 0, 0),
+    "requirename": (1049, RPM_STRING_ARRAY, None, 0, 0),
+    "requireflags": (1048, RPM_INT32, None, 0, 0),
+    "requireversion": (1050, RPM_STRING_ARRAY, None, 0, 0),
+    "obsoletename": (1090, RPM_STRING_ARRAY, None, 4, 0),
+    "obsoleteflags": (1114, RPM_INT32, None, 4, 0),
+    "obsoleteversion": (1115, RPM_STRING_ARRAY, None, 4, 0),
+    "conflictname": (1054, RPM_STRING_ARRAY, None, 0, 0),
+    "conflictflags": (1053, RPM_INT32, None, 0, 0),
+    "conflictversion": (1055, RPM_STRING_ARRAY, None, 0, 0),
 
     # triggers
-    "triggername": (1066, RPM_STRING_ARRAY, None, 4),
-    "triggerflags": (1068, RPM_INT32, None, 4),
-    "triggerversion": (1067, RPM_STRING_ARRAY, None, 4),
-    "triggerscripts": (1065, RPM_STRING_ARRAY, None, 4),
-    "triggerscriptprog": (1092, RPM_STRING_ARRAY, None, 4),
-    "triggerindex": (1069, RPM_INT32, None, 4),
+    "triggername": (1066, RPM_STRING_ARRAY, None, 4, 0),
+    "triggerflags": (1068, RPM_INT32, None, 4, 0),
+    "triggerversion": (1067, RPM_STRING_ARRAY, None, 4, 0),
+    "triggerscripts": (1065, RPM_STRING_ARRAY, None, 4, 0),
+    "triggerscriptprog": (1092, RPM_STRING_ARRAY, None, 4, 0),
+    "triggerindex": (1069, RPM_INT32, None, 4, 0),
 
     # scripts
-    "prein": (1023, RPM_STRING, None, 4),
-    "preinprog": (1085, RPM_ARGSTRING, None, 4),
-    "postin": (1024, RPM_STRING, None, 4),
-    "postinprog": (1086, RPM_ARGSTRING, None, 4),
-    "preun": (1025, RPM_STRING, None, 4),
-    "preunprog": (1087, RPM_ARGSTRING, None, 4),
-    "postun": (1026, RPM_STRING, None, 4),
-    "postunprog": (1088, RPM_ARGSTRING, None, 4),
-    "verifyscript": (1079, RPM_STRING, None, 4),
-    "verifyscriptprog": (1091, RPM_ARGSTRING, None, 4),
+    "prein": (1023, RPM_STRING, None, 4, 0),
+    "preinprog": (1085, RPM_ARGSTRING, None, 4, 0),
+    "postin": (1024, RPM_STRING, None, 4, 0),
+    "postinprog": (1086, RPM_ARGSTRING, None, 4, 0),
+    "preun": (1025, RPM_STRING, None, 4, 0),
+    "preunprog": (1087, RPM_ARGSTRING, None, 4, 0),
+    "postun": (1026, RPM_STRING, None, 4, 0),
+    "postunprog": (1088, RPM_ARGSTRING, None, 4, 0),
+    "verifyscript": (1079, RPM_STRING, None, 4, 0),
+    "verifyscriptprog": (1091, RPM_ARGSTRING, None, 4, 0),
 
     # addon information:
-    "i18ntable": (100, RPM_STRING_ARRAY, None, 0), # list of available langs
-    "summary": (1004, RPM_I18NSTRING, None, 0),
-    "description": (1005, RPM_I18NSTRING, None, 0),
-    "url": (1020, RPM_STRING, None, 0),
-    "license": (1014, RPM_STRING, None, 0),
-    "rpmversion": (1064, RPM_STRING, None, 0),
-    "sourcerpm": (1044, RPM_STRING, None, 4),
-    "changelogtime": (1080, RPM_INT32, None, 0),
-    "changelogname": (1081, RPM_STRING_ARRAY, None, 0),
-    "changelogtext": (1082, RPM_STRING_ARRAY, None, 0),
-    "prefixes": (1098, RPM_STRING_ARRAY, None, 4), # relocatable rpm packages
-    "optflags": (1122, RPM_STRING, None, 4), # optimization flags for gcc
-    "pubkeys": (266, RPM_STRING_ARRAY, None, 4),
-    "sourcepkgid": (1146, RPM_BIN, 16, 4), # md5 from srpm (header+payload)
-    "immutable": (63, RPM_BIN, 16, 0), # content of this tag is unclear
+    "i18ntable": (100, RPM_STRING_ARRAY, None, 0, 0), # list of available langs
+    "summary": (1004, RPM_I18NSTRING, None, 0, 0),
+    "description": (1005, RPM_I18NSTRING, None, 0, 0),
+    "url": (1020, RPM_STRING, None, 0, 0),
+    "license": (1014, RPM_STRING, None, 0, 0),
+    "rpmversion": (1064, RPM_STRING, None, 0, 0),
+    "sourcerpm": (1044, RPM_STRING, None, 4, 0),
+    "changelogtime": (1080, RPM_INT32, None, 0, 0),
+    "changelogname": (1081, RPM_STRING_ARRAY, None, 0, 0),
+    "changelogtext": (1082, RPM_STRING_ARRAY, None, 0, 0),
+    "prefixes": (1098, RPM_STRING_ARRAY, None, 4, 0), # relocatable rpm packages
+    "optflags": (1122, RPM_STRING, None, 4, 0), # optimization flags for gcc
+    "pubkeys": (266, RPM_STRING_ARRAY, None, 4, 0),
+    "sourcepkgid": (1146, RPM_BIN, 16, 4, 0), # md5 from srpm (header+payload)
+    "immutable": (63, RPM_BIN, 16, 0, 0), # content of this tag is unclear
     # less important information:
-    "buildtime": (1006, RPM_INT32, 1, 0), # time of rpm build
-    "buildhost": (1007, RPM_STRING, None, 0), # hostname where rpm was built
-    "cookie": (1094, RPM_STRING, None, 0), # build host and time
+    "buildtime": (1006, RPM_INT32, 1, 0, 0), # time of rpm build
+    "buildhost": (1007, RPM_STRING, None, 0, 0), # hostname where rpm was built
+    "cookie": (1094, RPM_STRING, None, 0, 0), # build host and time
     # ignored now, successor is comps.xml
     # Code allows hardcoded exception to also have type RPM_STRING
     # for RPMTAG_GROUP==1016.
-    "group": (1016, RPM_I18NSTRING, None, 0),
-    "size": (1009, RPM_INT32, 1, 0),                # sum of all file sizes
-    "distribution": (1010, RPM_STRING, None, 0),
-    "vendor": (1011, RPM_STRING, None, 0),
-    "packager": (1015, RPM_STRING, None, 0),
-    "os": (1021, RPM_STRING, None, 0),              # always "linux"
-    "payloadformat": (1124, RPM_STRING, None, 0),   # "cpio"
-    "payloadcompressor": (1125, RPM_STRING, None, 0),# "gzip" or "bzip2"
-    "payloadflags": (1126, RPM_STRING, None, 0),    # "9"
-    "rhnplatform": (1131, RPM_STRING, None, 4),     # == arch
-    "platform": (1132, RPM_STRING, None, 0),
+    "group": (1016, RPM_I18NSTRING, None, 0, 0),
+    "size": (1009, RPM_INT32, 1, 0, 0),                # sum of all file sizes
+    "distribution": (1010, RPM_STRING, None, 0, 0),
+    "vendor": (1011, RPM_STRING, None, 0, 0),
+    "packager": (1015, RPM_STRING, None, 0, 0),
+    "os": (1021, RPM_STRING, None, 0, 0),              # always "linux"
+    "payloadformat": (1124, RPM_STRING, None, 0, 0),   # "cpio"
+    "payloadcompressor": (1125, RPM_STRING, None, 0, 0),# "gzip" or "bzip2"
+    "payloadflags": (1126, RPM_STRING, None, 0, 0),    # "9"
+    "rhnplatform": (1131, RPM_STRING, None, 4, 0),     # == arch
+    "platform": (1132, RPM_STRING, None, 0, 0),
 
     # rpm source packages:
-    "source": (1018, RPM_STRING_ARRAY, None, 2),
-    "patch": (1019, RPM_STRING_ARRAY, None, 2),
-    "buildarchs": (1089, RPM_STRING_ARRAY, None, 2),
-    "excludearch": (1059, RPM_STRING_ARRAY, None, 2),
-    "exclusivearch": (1061, RPM_STRING_ARRAY, None, 2),
-    "exclusiveos": (1062, RPM_STRING_ARRAY, None, 2), # ['Linux'] or ['linux']
+    "source": (1018, RPM_STRING_ARRAY, None, 2, 0),
+    "patch": (1019, RPM_STRING_ARRAY, None, 2, 0),
+    "buildarchs": (1089, RPM_STRING_ARRAY, None, 2, 0),
+    "excludearch": (1059, RPM_STRING_ARRAY, None, 2, 0),
+    "exclusivearch": (1061, RPM_STRING_ARRAY, None, 2, 0),
+    "exclusiveos": (1062, RPM_STRING_ARRAY, None, 2, 0), # ['Linux'] or ['linux']
 
     # information about files
-    "dirindexes": (1116, RPM_INT32, None, 0),
-    "dirnames": (1118, RPM_STRING_ARRAY, None, 0),
-    "basenames": (1117, RPM_STRING_ARRAY, None, 0),
-    "fileusername": (1039, RPM_STRING_ARRAY, None, 0),
-    "filegroupname": (1040, RPM_STRING_ARRAY, None, 0),
-    "filemodes": (1030, RPM_INT16, None, 0),
-    "filemtimes": (1034, RPM_INT32, None, 0),
-    "filedevices": (1095, RPM_INT32, None, 0),
-    "fileinodes": (1096, RPM_INT32, None, 0),
-    "filesizes": (1028, RPM_INT32, None, 0),
-    "filemd5s": (1035, RPM_STRING_ARRAY, None, 0),
-    "filerdevs": (1033, RPM_INT16, None, 0),
-    "filelinktos": (1036, RPM_STRING_ARRAY, None, 0),
-    "fileflags": (1037, RPM_INT32, None, 0),
-    "fileverifyflags": (1045, RPM_INT32, None, 0),
-    "fileclass": (1141, RPM_INT32, None, 0),
-    "filelangs": (1097, RPM_STRING_ARRAY, None, 0),
-    "filecolors": (1140, RPM_INT32, None, 0),
-    "filedependsx": (1143, RPM_INT32, None, 0),
-    "filedependsn": (1144, RPM_INT32, None, 0),
-    "classdict": (1142, RPM_STRING_ARRAY, None, 0),
-    "dependsdict": (1145, RPM_INT32, None, 0),
+    "dirindexes": (1116, RPM_INT32, None, 0, 0),
+    "dirnames": (1118, RPM_STRING_ARRAY, None, 0, 0),
+    "basenames": (1117, RPM_STRING_ARRAY, None, 0, 0),
+    "fileusername": (1039, RPM_STRING_ARRAY, None, 0, 0),
+    "filegroupname": (1040, RPM_STRING_ARRAY, None, 0, 0),
+    "filemodes": (1030, RPM_INT16, None, 0, 0),
+    "filemtimes": (1034, RPM_INT32, None, 0, 0),
+    "filedevices": (1095, RPM_INT32, None, 0, 0),
+    "fileinodes": (1096, RPM_INT32, None, 0, 0),
+    "filesizes": (1028, RPM_INT32, None, 0, 0),
+    "filemd5s": (1035, RPM_STRING_ARRAY, None, 0, 0),
+    "filerdevs": (1033, RPM_INT16, None, 0, 0),
+    "filelinktos": (1036, RPM_STRING_ARRAY, None, 0, 0),
+    "fileflags": (1037, RPM_INT32, None, 0, 0),
+    "fileverifyflags": (1045, RPM_INT32, None, 0, 0),
+    "fileclass": (1141, RPM_INT32, None, 0, 0),
+    "filelangs": (1097, RPM_STRING_ARRAY, None, 0, 0),
+    "filecolors": (1140, RPM_INT32, None, 0, 0),
+    "filedependsx": (1143, RPM_INT32, None, 0, 0),
+    "filedependsn": (1144, RPM_INT32, None, 0, 0),
+    "classdict": (1142, RPM_STRING_ARRAY, None, 0, 0),
+    "dependsdict": (1145, RPM_INT32, None, 0, 0),
 
     # SELinux stuff, needed for some FC4-extras packages
-    "policies": (1150, RPM_STRING_ARRAY, None, 0),
+    "policies": (1150, RPM_STRING_ARRAY, None, 0, 0),
 
     # tags not in Fedora Core development trees anymore:
-    "filecontexts": (1147, RPM_STRING_ARRAY, None, 1), # selinux filecontexts
-    "capability": (1105, RPM_INT32, None, 1),
-    "xpm": (1013, RPM_BIN, None, 1),
-    "gif": (1012, RPM_BIN, None, 1),
+    "filecontexts": (1147, RPM_STRING_ARRAY, None, 1, 0), # selinux filecontexts
+    "capability": (1105, RPM_INT32, None, 1, 0),
+    "xpm": (1013, RPM_BIN, None, 1, 0),
+    "gif": (1012, RPM_BIN, None, 1, 0),
     # bogus RHL5.2 data in XFree86-libs, ash, pdksh
-    "verifyscript2": (15, RPM_STRING, None, 1),
-    "nosource": (1051, RPM_INT32, None, 1),
-    "nopatch": (1052, RPM_INT32, None, 1),
-    "disturl": (1123, RPM_STRING, None, 1),
-    "oldfilenames": (1027, RPM_STRING_ARRAY, None, 1),
-    "triggerin": (1100, RPM_STRING, None, 5),
-    "triggerun": (1101, RPM_STRING, None, 5),
-    "triggerpostun": (1102, RPM_STRING, None, 5),
+    "verifyscript2": (15, RPM_STRING, None, 1, 0),
+    "nosource": (1051, RPM_INT32, None, 1, 0),
+    "nopatch": (1052, RPM_INT32, None, 1, 0),
+    "disturl": (1123, RPM_STRING, None, 1, 0),
+    "oldfilenames": (1027, RPM_STRING_ARRAY, None, 1, 0),
+    "triggerin": (1100, RPM_STRING, None, 5, 0),
+    "triggerun": (1101, RPM_STRING, None, 5, 0),
+    "triggerpostun": (1102, RPM_STRING, None, 5, 0),
 
     # install information
-    "install_size_in_sig": (257, RPM_INT32, 1, 0),
-    "install_md5": (261, RPM_BIN, 16, 0),
-    "install_gpg": (262, RPM_BIN, None, 0),
-    "install_badsha1_1": (264, RPM_STRING, None, 1),
-    "install_badsha1_2": (265, RPM_STRING, None, 1),
-    "install_dsaheader": (267, RPM_BIN, 16, 0),
-    "install_sha1header": (269, RPM_STRING, None, 0),
-    "installtime": (1008, RPM_INT32, None, 0),
-    "filestates": (1029, RPM_CHAR, None, 0),
-    "archivesize": (1046, RPM_INT32, 1, 1),
-    "instprefixes": (1099, RPM_STRING_ARRAY, None, 0),
-    "installcolor": (1127, RPM_INT32, None, 0),
-    "installtid": (1128, RPM_INT32, None, 0)
+    "install_size_in_sig": (257, RPM_INT32, 1, 0, 0),
+    "install_md5": (261, RPM_BIN, 16, 0, 0),
+    "install_gpg": (262, RPM_BIN, None, 0, 0),
+    "install_badsha1_1": (264, RPM_STRING, None, 1, 0),
+    "install_badsha1_2": (265, RPM_STRING, None, 1, 0),
+    "install_dsaheader": (267, RPM_BIN, 16, 0, 0),
+    "install_sha1header": (269, RPM_STRING, None, 0, 0),
+    "installtime": (1008, RPM_INT32, None, 0, 0),
+    "filestates": (1029, RPM_CHAR, None, 0, 0),
+    "archivesize": (1046, RPM_INT32, 1, 1, 0),
+    "instprefixes": (1099, RPM_STRING_ARRAY, None, 0, 0),
+    "installcolor": (1127, RPM_INT32, None, 0, 0),
+    "installtid": (1128, RPM_INT32, None, 0, 0)
 }
 rpmtagname = {}
 # Add a reverse mapping for all tags and a new tag -> name mapping.
@@ -379,17 +522,17 @@ del key
 # Info within the sig header.
 rpmsigtag = {
     # size of gpg/dsaheader sums differ between 64/65(contains '\n')
-    "dsaheader": (267, RPM_BIN, None, 0),
-    "gpg": (1005, RPM_BIN, None, 0),
-    "header_signatures": (62, RPM_BIN, 16, 0), # content of this tag is unclear
-    "payloadsize": (1007, RPM_INT32, 1, 0),
-    "size_in_sig": (1000, RPM_INT32, 1, 0),
-    "sha1header": (269, RPM_STRING, None, 0),
-    "md5": (1004, RPM_BIN, 16, 0),
+    "dsaheader": (267, RPM_BIN, None, 0, 0),
+    "gpg": (1005, RPM_BIN, None, 0, 0),
+    "header_signatures": (62, RPM_BIN, 16, 0, 0), # content of this tag is unclear
+    "payloadsize": (1007, RPM_INT32, 1, 0, 0),
+    "size_in_sig": (1000, RPM_INT32, 1, 0, 0),
+    "sha1header": (269, RPM_STRING, None, 0, 0),
+    "md5": (1004, RPM_BIN, 16, 0, 0),
     # legacy entries in older rpm packages:
-    "pgp": (1002, RPM_BIN, None, 1),
-    "badsha1_1": (264, RPM_STRING, None, 1),
-    "badsha1_2": (265, RPM_STRING, None, 1)
+    "pgp": (1002, RPM_BIN, None, 1, 0),
+    "badsha1_1": (264, RPM_STRING, None, 1, 0),
+    "badsha1_2": (265, RPM_STRING, None, 1, 0)
 }
 # Add a reverse mapping for all tags and a new tag -> name mapping
 rpmsigtagname = {}

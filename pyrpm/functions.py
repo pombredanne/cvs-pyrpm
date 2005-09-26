@@ -74,7 +74,7 @@ def mkstemp_link(dirname, pre, linkfile):
 
     Return absolute file path, or None if such a link can not be made.  Raise
     IOError if no file name is available, OSError."""
-
+    
     names = _get_candidate_names() # FIXME: internal function
     for _ in xrange(TMP_MAX):
         name = names.next()
@@ -298,7 +298,7 @@ def installFile(rfi, infd, size, useAttrs=True):
         data2 = data2.rstrip("\x00")
         symlinkfile = data1
         if data1 != data2:
-            print >> sys.stderr, "Warning: Symlink information differs between rpm header and cpio for %s -> %s" % (rfi.filename, data1)
+            print "Warning: Symlink information differs between rpm header and cpio for %s -> %s" % (rfi.filename, data1)
         if os.path.islink(rfi.filename) \
             and os.readlink(rfi.filename) == symlinkfile:
             return
@@ -374,7 +374,7 @@ def makeDirs(fullname):
         os.makedirs(dirname)
 
 def listRpmDir(dirname):
-    """List directory like standard os.listdir, but returns only .rpm files"""
+    """List directory like standard or.listdir, but returns only .rpm files"""
 
     files = []
     for f in os.listdir(dirname):
@@ -385,7 +385,7 @@ def listRpmDir(dirname):
 def createLink(src, dst):
     """Create a link from src to dst.
 
-    Raise IOError, OSError."""
+    Raise OSError."""
 
     try:
         # First try to unlink the defered file
@@ -406,7 +406,7 @@ def tryUnlock(lockfile):
     """If lockfile exists and is a stale lock, remove it.
 
     Return 1 if lockfile is a live lock, 0 otherwise.  Raise IOError."""
-
+    
     if not os.path.exists(lockfile):
         return 0
     fd = open(lockfile, 'r')
@@ -427,7 +427,7 @@ def doLock(filename):
     """Create a lock file filename.
 
     Return 1 on success, 0 if the file already exists.  Raise OSError."""
-
+    
     try:
         fd = os.open(filename, os.O_EXCL|os.O_CREAT|os.O_WRONLY, 0666)
         try:
@@ -440,41 +440,42 @@ def doLock(filename):
         return 0
     return 1
 
-def setSignals(handler):
-    """Set the typical signals to handler, save previous handlers."""
+def setSignals(sig):
+    """Set the typical signals to sig."""
 
     global rpmconfig
     signals = { }
     for key in rpmconfig.supported_signals:
-        signals[key] = signal.signal(key, handler)
+        signals[key] = signal.signal(key, sig)
     rpmconfig.signals.append(signals)
+    return 1
 
 def resetSignals():
-    """Restore previously saved handlers of the typical signals."""
+    """Reset the typical signals."""
 
     global rpmconfig
-    try:
-        signals = rpmconfig.signals.pop()
-    except IndexError:
-        raise RuntimeError, "resetSignals() without matching setSignals()"
+    if len(rpmconfig.signals) < 1:
+        return 0
+    signals = rpmconfig.signals.pop(len(rpmconfig.signals)-1)
     for key in signals:
         signal.signal(key, signals[key])
+    return 1
 
 def blockSignals():
     """Blocks the typical signals to avoid interruption during critical code
-    segments. Save previous handlers."""
+    segments."""
 
-    setSignals(signal.SIG_IGN)
+    return setSignals(signal.SIG_IGN)
 
 def unblockSignals():
-    """Unblock the previously blocked signals and restore the original signal
-    handlers."""
+    """Unblocks the previously blocked signals and restores the original
+    signal handlers."""
 
-    resetSignals()
+    return resetSignals()
 
 def _unlink(file):
     """Unlink file, ignoring errors."""
-
+    
     try:
         os.unlink(file)
     except OSError:
@@ -528,13 +529,12 @@ def getFreeCachespace(config, operations):
     """Check if there is enough diskspace for caching the rpms for the given
     operations.
 
-    Return 1 if there is enough space (with 30 MB slack), 0 otherwise (after
-    warning the user)."""
-
+    Return 1 if there is enough space (with 30 MB slack), 0 otherwise."""
+    
     cachedir = "/var/cache/pyrm/"
     while 1:
         try:
-            os.stat(cachedir)
+            dev = os.stat(cachedir).st_dev
             break
         except OSError:
             cachedir = os.path.dirname(cachedir)
@@ -552,7 +552,7 @@ def getFreeCachespace(config, operations):
         except KeyError:
             raise ValueError, "Missing signature:size_in sig in package"
     if freespace < 31457280:
-        config.printInfo(0, "Less than 30MB of diskspace left in %s for caching rpms\n" % cachedir)
+        config.printInfo(0, "Less than 30MB of diskspace left on %s for caching rpms\n" % mountpoint[dev])
         return 0
     return 1
 
@@ -565,11 +565,11 @@ def getFreeDiskspace(config, operations):
     (operation, RpmPackage).
 
     Use RpmConfig config.  Return 1 if there is enough space (with 30 MB
-    slack), 0 otherwise (after warning the user)."""
-
+    slack), 0 otherwise."""
+    
     freehash = {} # device number => [currently counted free bytes, block size]
     # device number => [minimal encountered free bytes, block size]
-    minfreehash = {}
+    minfreehash = {} 
     dirhash = {}                        # directory name => device number
     mountpoint = { }                    # device number => mount point path
     ret = 1
@@ -649,7 +649,7 @@ def cacheLocal(url, subdir, force=0):
 
     Return local file path, or None on failure.  If the local file is already
     present, use it if the timestamp is not too old unless force is true."""
-
+    
     if not url.startswith("http://"): # FIXME: ftp:// ?
         return url
     destdir = os.path.join("/var/cache/pyrpm", subdir)
@@ -669,6 +669,19 @@ def cacheLocal(url, subdir, force=0):
         else:
             return None
     return f
+
+def _uriToFilename(uri):
+    """Convert a file:/ URI or a local path to a local path."""
+
+    if not uri.startswith("file:/"):
+        filename = uri
+    else:
+        filename = uri[5:]
+        if len(filename) > 1 and filename[1] == "/":
+            idx = filename[2:].find("/")
+            if idx != -1:
+                filename = filename[idx+2:]
+    return filename
 
 def parseBoolean(str):
     """Convert str to a boolean.
@@ -869,9 +882,8 @@ def selectNewestPkgs(pkglist):
             except:
                 pass
     retlist = []
-    rv = rethash.values()
     for pkg in pkglist:
-        if pkg in rv:
+        if pkg in rethash.values():
             retlist.append(pkg)
     return retlist
 

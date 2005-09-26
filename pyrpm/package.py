@@ -22,6 +22,7 @@ import os.path, sys, pwd, grp, md5, sha
 from stat import S_ISREG
 from functions import *
 from io import getRpmIOFactory
+from base import RpmIndexData
 import openpgp
 
 
@@ -176,7 +177,6 @@ class RpmPackage(RpmData):
                  db=None):
         RpmData.__init__(self, config)
         self.config = config
-        self.clear()
         self.source = source
         self.verify = verify    # Verify file format constraints and signatures
         self.strict = strict # Report legacy tags and packages not named %name*
@@ -187,13 +187,49 @@ class RpmPackage(RpmData):
         self.range_signature = (None, None) # Signature header
         self.range_header = (None, None) # Main header
         self.range_payload = (None, None) # Payload; length is always None
+        self.header_read = 0
+        self.clear()
+
+    def __getitem__(self, item):
+        # if the data is already in the dict we don't need to anything special
+        if item == "filenames":
+            return _RpmFilenamesIterator(self)
+        if item == "provides":
+            return self.getProvides()
+        if item == "requires":
+            return self.getRequires()
+        if item == "obsoletes":
+            return self.getObsoletes()
+        if item == "conflicts":
+            return self.getConflicts()
+        if item == "triggers":
+            return self.getTriggers()
+        if not self.has_key(item):
+            return None
+        if RpmData.has_key(self, item):
+            return RpmData.__getitem__(self, item)
+        if not self.io and not self.open():
+            raise ValueError, "Invalid source for package or couldn't open source"
+        data = self.io.getTag(self, item)
+        key = RpmIndexData.getKey(item)
+        if item[0] == "S":
+            taghash = rpmsigtag
+        else:
+            taghash = rpmtag
+        if taghash[key][4] >= 0:
+            self[item] = data
+        return data
+
+    def has_key(self, item):
+        if RpmData.has_key(self, item):
+            return True
+        if not self.io and not self.open():
+            raise ValueError, "Invalid source for package or couldn't open source %s" % self.source
+        return self.io.has_key(self, item)
 
     def clear(self):
         """Drop read data and prepare for rereading it, unless install_id is
         known."""
-
-        if self.has_key("install_id"):
-            return
 
         for k in self.keys():
             del self[k]
@@ -206,28 +242,25 @@ class RpmPackage(RpmData):
 
         Raise IOError."""
 
-        if self.has_key("install_id"):
-            return
-
         if self.io != None:
-            return
+            return 1
         self.io = getRpmIOFactory(self.config, self.source, self.verify,
                                   self.strict, self.hdronly)
-        self.io.open(mode)
+        if not self.io:
+            return 0
+        return self.io.open(mode)
 
     def close(self):
         """Close the package IO if install_id is not known.
 
         Raise IOError."""
 
-        if self.has_key("install_id"):
-            return
-
         if self.io != None:
             try:
                 self.io.close()
             finally:
                 self.io = None
+        return 1
 
     def read(self, tags=None, ntags=None):
         """Open and read the package.
@@ -241,11 +274,14 @@ class RpmPackage(RpmData):
         self.__readHeader(tags, ntags)
         if self.verify and self.verifyOneSignature() == -1:
             raise ValueError, "Signature verification failed."""
-        self["provides"] = self.getProvides()
-        self["requires"] = self.getRequires()
-        self["obsoletes"] = self.getObsoletes()
-        self["conflicts"] = self.getConflicts()
-        self["triggers"] = self.getTriggers()
+        # Read in all 
+        for key in rpmtag.keys():
+            if type(key) == type(1):
+                continue
+            val = rpmtag[key]
+            # This code really does something useful! Hint: look at getitem ;)
+            if val[4] > 1 and self.has_key(key):
+                self[key] = self[key]
 
     def write(self, source=None):
         """Open and write package to the specified source.
@@ -269,7 +305,7 @@ class RpmPackage(RpmData):
             if self.db is None:
                 return 0
             try:
-                sig = openpgp.parsePGPSignature(self["signature"][tag])
+                sig = openpgp.parsePGPSignature(self["S"+tag])
                 digest = sig.prepareDigest()
                 digest.update(RPM_HEADER_INDEX_MAGIC)
                 self.io.updateDigestFromRegion(digest, self["immutable"],
@@ -289,7 +325,7 @@ class RpmPackage(RpmData):
                 return 0
             except ValueError:
                 return -1
-            if self["signature"][tag] == digest.hexdigest():
+            if self["S"+tag] == digest.hexdigest():
                 return 1
             else:
                 return -1
@@ -299,7 +335,7 @@ class RpmPackage(RpmData):
             total = self.io.getRpmFileSize()
             if total is None:
                 return 0
-            elif self["signature"][tag][0] == total - self.range_header[0]:
+            elif self["S"+tag][0] == total - self.range_header[0]:
                 return 1
             else:
                 return -1
@@ -307,7 +343,7 @@ class RpmPackage(RpmData):
             if self.db is None or self.range_header[0] is None:
                 return 0
             try:
-                sig = openpgp.parsePGPSignature(self["signature"][tag])
+                sig = openpgp.parsePGPSignature(self["S"+tag])
             except ValueError:
                 return -1
             try:
@@ -327,7 +363,7 @@ class RpmPackage(RpmData):
                                               None)
             except NotImplementedError:
                 return 0
-            if self["signature"][tag] == digest.digest():
+            if self["S"+tag] == digest.digest():
                 return 1
             else:
                 return -1
@@ -380,7 +416,7 @@ class RpmPackage(RpmData):
             else:
                 if rusage != None and len(rusage):
                     sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
-
+               
         self.__extract(db)
         if self.config.printhash:
             self.config.printInfo(0, "\n")
@@ -456,7 +492,7 @@ class RpmPackage(RpmData):
                 if self.rfilist.has_key(f):
                     rfi = self.rfilist[f]
                     # Check if we need to erase the file
-                    if not self.__verifyFileErase(rfi):
+                    if not self.__verifyFileErase(rfi, db):
                         continue
                     try:
                         os.unlink(f)
@@ -485,9 +521,7 @@ class RpmPackage(RpmData):
 
         # XXX: is it a right method how to detect it by header?
         if self.io:
-            return self.io.issrc
-        if self["sourcerpm"] == None:
-            return 1
+            return self.io.isSrc(self)
         return 0
 
     def isEqual(self, pkg):
@@ -521,12 +555,10 @@ class RpmPackage(RpmData):
         if not self.has_key("signature") or not pkg.has_key("signature"):
             return 0
         # MD5 sum should always be there, so check that first
-        if self["signature"].has_key("md5") and \
-           pkg["signature"].has_key("md5"):
-            return self["signature"]["md5"] == pkg["signature"]["md5"]
-        if self["signature"].has_key("sha1header") and \
-           pkg["signature"].has_key("sha1header"):
-            return self["signature"]["sha1header"] == pkg["signature"]["sha1header"]
+        if self.has_key("Smd5") and pkg.has_key("Smd5"):
+            return self["Smd5"] == pkg["Smd5"]
+        if self.has_key("Ssha1header") and pkg.has_key("Ssha1header"):
+            return self["Ssha1header"] == pkg["Ssha1header"]
         return 0
 
     def __readHeader(self, tags=None, ntags=None):
@@ -537,36 +569,9 @@ class RpmPackage(RpmData):
 
         if self.header_read:
             return
-        (key, value) = self.io.read()
-        # Read over lead
-        while key != "-":
-            (key, value) = self.io.read()
-        self.range_signature = value
-        # Read sig
-        (key, value) = self.io.read()
-        while key != "-":
-            if not self.has_key("signature"):
-                self["signature"] = {}
-            if tags and key in tags:
-                self["signature"][key] = value
-            elif ntags and not key in ntags:
-                self["signature"][key] = value
-            elif not tags and not ntags:
-                self["signature"][key] = value
-            (key, value) = self.io.read()
-        self.range_header = value
-        # Read header
-        (key, value) = self.io.read()
-        while key != "-":
-            if tags and key in tags:
-                self[key] = value
-            elif ntags and not key in ntags:
-                self[key] = value
-            elif not tags and not ntags:
-                self[key] = value
-            (key, value) = self.io.read()
-        self.range_payload = value
-
+        self.range_signature = (96, self.io.siglen)
+        self.range_header = (96+self.io.siglen, self.io.hdrlen)
+        self.range_payload = (96+self.io.siglen+self.io.hdrlen, None)
         self.generateFileNames()
         self.header_read = 1
 
@@ -581,7 +586,7 @@ class RpmPackage(RpmData):
         self.__generateFileInfoList()
         #self.__generateHardLinkList()
         self.hardlinks = {}
-        (filename, cpio, filesize) = self.io.read()
+        (filename, cpio, filesize) = self.io.getNextFile()
         nfiles = len(files)
         n = 0
         pos = 0
@@ -618,7 +623,7 @@ class RpmPackage(RpmData):
                         # is lost.
                         self.__removeHardlinks(rfi)
             # FIXME: else report error?
-            (filename, cpio, filesize) = self.io.read()
+            (filename, cpio, filesize) = self.io.getNextFile()
         if nfiles == 0:
             nfiles = 1
         if self.config.printhash:
@@ -718,7 +723,8 @@ class RpmPackage(RpmData):
             break
         return do_write
 
-    def __verifyFileErase(self, rfi):
+    # FIXME: db is not used
+    def __verifyFileErase(self, rfi, db):
         """Return 1 if file with RpmFileInfo rfi should be erased.
 
         Modify rfi.filename if necessary.  Raise OSError."""
@@ -802,7 +808,7 @@ class RpmPackage(RpmData):
         """Create hard links to RpmFileInfo rfi if specified so in
         self.hardlinks.
 
-        Raise IOError, OSError."""
+        Raise OSError."""
 
         key = rfi.getHardLinkID()
         links = self.hardlinks.get(key)

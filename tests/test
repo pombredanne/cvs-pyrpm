@@ -14,13 +14,14 @@ for i in sys.argv[1:]:
     print repr(rpm.range_signature)
     print repr(rpm.range_header)
     print repr(rpm.range_payload)
-    print repr(rpm["signature"]["size_in_sig"])
-    print zip(rpm["basenames"], rpm["filelinktos"], rpm["filemd5s"], rpm["filesizes"])
-#    print rpm["basenames"]
-#    print rpm["dirnames"]
-#    print rpm["dirindexes"]
-#    for f in rpm["filenames"]:
-#	rfi = rpm.getRpmFileInfo(f)
-#        print f
-#        print rfi.filename, hex(rfi.flags)
-    rpms.append(rpm)
+    print repr(rpm["Ssize_in_sig"])
+#    print zip(rpm["basenames"], rpm["filelinktos"], rpm["filemd5s"], rpm["filesizes"])
+#    for i in xrange(100):
+#    	print rpm["basenames"]
+    print rpm["dirnames"]
+    print rpm["dirindexes"]
+    for f in rpm["filenames"]:
+	rfi = rpm.getRpmFileInfo(f)
+        print f
+        print rfi.filename, hex(rfi.flags)
+#    rpms.append(rpm)
