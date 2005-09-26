@@ -62,7 +62,7 @@ class RpmDistribution:
         self.name = config.get(self.CONF_MAIN, self.CONF_NAME)
         self.abbr = config.get(self.CONF_MAIN, self.CONF_ABBR)
         if len(self.name)==0 or len(self.abbr)==0:
-            raise ParsingError, '%s: [%s] missing %s or %s' % \
+            raise ConfigParser.ParsingError, '%s: [%s] missing %s or %s' % \
                     (filename, self.CONF_MAIN, self.CONF_NAME, self.CONF_ABBR)
         r = config.get(self.CONF_MAIN, self.CONF_COLL)
         if r==None or len(r)==0:
@@ -70,12 +70,14 @@ class RpmDistribution:
         collnames = r.split(',')
         for x in collnames:
             if not config.has_section(x):
-                raise ParsingError, "%s: section '%s' missing" % (filename, x)
+                raise ConfigParser.ParsingError, "%s: section '%s' missing" % \
+                      (filename, x)
             name = config.get(x, self.CONF_NAME)
             abbr = config.get(x, self.CONF_ABBR)
             if len(name)==0 or len(abbr)==0:
-                raise ParsingError, '%s: [%s] missing %s or %s' % \
-                    (filename, x, self.CONF_NAME, self.CONF_ABBR)
+                raise ConfigParser.ParsingError, \
+                      '%s: [%s] missing %s or %s' % \
+                      (filename, x, self.CONF_NAME, self.CONF_ABBR)
             coll = RpmDistributionCollection(self, name, abbr)
             for o in config.options(x):
                 if o in [self.CONF_NAME, self.CONF_ABBR]:
