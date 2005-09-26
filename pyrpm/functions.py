@@ -374,7 +374,7 @@ def makeDirs(fullname):
         os.makedirs(dirname)
 
 def listRpmDir(dirname):
-    """List directory like standard or.listdir, but returns only .rpm files"""
+    """List directory like standard os.listdir, but returns only .rpm files"""
 
     files = []
     for f in os.listdir(dirname):
@@ -869,8 +869,9 @@ def selectNewestPkgs(pkglist):
             except:
                 pass
     retlist = []
+    rv = rethash.values()
     for pkg in pkglist:
-        if pkg in rethash.values():
+        if pkg in rv:
             retlist.append(pkg)
     return retlist
 
