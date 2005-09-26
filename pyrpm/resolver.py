@@ -768,7 +768,8 @@ class RpmResolver(RpmList):
     def resolve(self):
         """Check dependencies and conflicts.
 
-        Return 1 if everything is OK, a negative number if not."""
+        Return 1 if everything is OK, a negative number if not (after warning
+        the user)."""
 
         # checking dependencies
         if self.checkDependencies() != 1:

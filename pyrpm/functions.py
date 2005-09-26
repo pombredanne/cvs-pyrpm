@@ -801,7 +801,7 @@ def addRepo(yum, file):
     """Read yum configuration file and add repositories it uses to RpmYum yum.
 
     sys.exit() on error."""
-    
+
     try:
         conf = yumconfig.YumConf("3", rpmconfig.machine,
                                  buildarchtranslate[rpmconfig.machine],
@@ -822,7 +822,8 @@ def addRepo(yum, file):
                 excludes = ""
             else:
                 excludes = sec["exclude"]
-            yum.addRepo(baseurl, excludes, key) # FIXME: not documented yet
+            if yum.addRepo(baseurl, excludes, key) == 0:
+                sys.exit(1)
             if rpmconfig.compsfile == None:
                 # May stay None on download error
                 rpmconfig.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)

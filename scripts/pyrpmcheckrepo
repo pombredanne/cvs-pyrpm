@@ -71,10 +71,10 @@ def main():
     rpmconfig.ignoresize = 1
 
     # Do autoerase by default
-    yum.autoerase = 1
+    yum.setAutoerase(1)
 
     # Don't ask if we really want to do this
-    yum.confirm = 0
+    yum.setConfirm(0)
 
     # Argument parsing
     args = parseYumOptions(sys.argv[1:], yum)
@@ -99,9 +99,11 @@ def main():
     upargs = args[pos+1:]
 
     yum.setCommand("update")
-    yum.processArgs(instargs)
+    if yum.processArgs(instargs) == 0:
+        return 1
     yum.runDepRes()
-    yum.runCommand()
+    if yum.runCommand() == 0:
+        return 1
 
     if os.path.isfile(upargs[0]) and not upargs[0].endswith(".rpm"):
         addRepo(yum, upargs[0])
@@ -113,9 +115,11 @@ def main():
         yum.pydb.addPkg(pkg, 1)
 
     yum.opresolver = RpmResolver(rpmconfig, installed)
-    yum.runArgs(upargs)
+    if yum.runArgs(upargs) == 0:
+        return 1
     yum.runDepRes()
-    yum.runCommand()
+    if yum.runCommand() == 0:
+        return 1
     resolver = yum.opresolver
 
     ihash = { }

@@ -68,7 +68,8 @@ def main():
     count = int(args[0])
     yum.setCommand("update")
     while count > 0:
-        yum.processArgs([])
+        if yum.processArgs([]) == 0:
+            break
         resolver = yum.opresolver
         count -= 1
         if count % 2:
@@ -88,7 +89,8 @@ def main():
             resolver.erase(pkg)
         if not yum.runDepRes():
             continue
-        yum.runCommand()
+        if yum.runCommand() == 0:
+            break
 
 if __name__ == '__main__':
     run_main(main)

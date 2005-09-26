@@ -149,7 +149,7 @@ class RpmController:
         If resolver is None, use packages previously added to be acted upon;
         otherwise use the operations from resolver.
 
-        Return None on error.
+        Return None on error (after warning the user).
 
         New packages to be acted upon can't be added after calling this
         function, neither before nor after performing the current
@@ -375,6 +375,7 @@ class RpmController:
                 self.db.close()
                 sys.exit(0)
         self.db.close()
+        return 1
 
     def appendUri(self, uri):
         """Append package from "URI" uri to self.rpms.

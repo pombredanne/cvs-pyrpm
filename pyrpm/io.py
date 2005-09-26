@@ -2552,7 +2552,7 @@ class RpmCompsXML:
         """Return a sorted list of (package name, [package requirement]) of
         packages from group and its dependencies with selection type in
         typelist."""
-        
+
         ret = []
         if not self.grouphash.has_key(group):
             return ret

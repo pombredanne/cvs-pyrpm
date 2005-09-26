@@ -210,10 +210,12 @@ class RpmList:
     def erase(self, pkg):
         """Remove RpmPackage.
 
-        Return an RpmList error code."""
+        Return an RpmList error code (after warning the user)."""
 
         key = pkg["name"]
         if not key in self.list or pkg not in self.list[key]:
+            self.config.printWarning(1, "Package %s (id %s) not found"
+                                     % (pkg.getNEVRA(), id(pkg)))
             return self.NOT_INSTALLED
         self.list[key].remove(pkg)
         if len(self.list[key]) == 0:
