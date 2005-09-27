@@ -53,6 +53,7 @@
 
 #
 # TODO:
+# - How todo save shell escapes for os.system()
 # - Make info in depString() more complete.
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -4008,20 +4009,20 @@ fedora = mirror + "fedora/"
 rhelupdates = mirror + "updates-rhel/"
 srpm_repos = [
     # Fedora Core
-    ("Fedora Core development", "FC-development",
-     [fedora + "development/SRPMS"], None, 30),
+    #("Fedora Core development", "FC-development",
+    # [fedora + "development/SRPMS"], None, 30),
     ("Fedora Core 4", "FC4",
      [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
       fedora + "updates/testing/4/SRPMS"], None, 30),
     ("Fedora Core 3", "FC3",
      [fedora + "3/SRPMS", fedora + "updates/3/SRPMS",
       fedora + "updates/testing/3/SRPMS"], None, 30),
-    ("Fedora Core 2", "FC2",
-     [fedora + "2/SRPMS", fedora + "updates/2/SRPMS",
-      fedora + "updates/testing/2/SRPMS"], None, 30),
-    ("fedora Core 1", "FC1",
-     [fedora + "1/SRPMS", fedora + "updates/1/SRPMS",
-      fedora + "updates/testing/1/SRPMS"], None, 30),
+    #("Fedora Core 2", "FC2",
+    # [fedora + "2/SRPMS", fedora + "updates/2/SRPMS",
+    #  fedora + "updates/testing/2/SRPMS"], None, 30),
+    #("fedora Core 1", "FC1",
+    # [fedora + "1/SRPMS", fedora + "updates/1/SRPMS",
+    #  fedora + "updates/testing/1/SRPMS"], None, 30),
     # Red Hat Enterprise Linux
     ("Red Hat Enterprise Linux 4", "RHEL4",
      [ mirror + "rhel/4/en/os/i386/SRPMS", rhelupdates + "4"], None, 30),
@@ -4150,11 +4151,19 @@ def cmpNoMD5(a, b):
     """Ignore leading md5sum to sort the "sources" file."""
     return cmp(a[33:], b[33:])
 
-def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
+def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
     makeDirs(pkgdir)
-    os.system("cd %s && rm -rf * .[^.h]* .h[^g]*" % pkgdir)
+    if not git:
+        os.system("cd %s && rm -rf * .[^.h]* .h[^g]*" % pkgdir)
     extractRpm(pkg, pkgdir + "/")
     files = pkg.getFilenames()
+    if git:
+        for f in os.listdir(pkgdir):
+            if f not in files and f not in ("Makefile", "sources"):
+                fsrc = pkgdir + "/" + f
+                os.unlink(fsrc)
+                os.system("cd %s && git-update-index --remove %s" % \
+                    (pkgdir, f))
     specfile = files[pkg.getSpecfile(files)]
     if "sources" in files or "Makefile" in files:
         raise ValueError, \
@@ -4171,7 +4180,8 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
             md5data = pkg["filemd5s"][i]
             fdir = "%s/%s" % (filecache, md5data[0:2])
             fname = "%s/%s.bin" % (fdir, md5data)
-            if not os.path.isfile(fname):
+            # XXX disable this until my machine has more disk space
+            if None and not os.path.isfile(fname):
                 makeDirs(fdir)
                 doLnOrCopy(fsrc, fname)
             os.unlink(fsrc)
@@ -4183,6 +4193,8 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
         "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
     # XXX: unpack a few src.rpms into subdirectories
     # XXX: also checkin the data into a per-package repo
+    if git:
+        os.system("cd %s && git-update-index --add *" % pkgdir)
     if oldpkg:
         (fd, tmpfile) = mkstemp_file("/tmp", special=1)
         fd.write("update %s from %s-%s to %s-%s\n\nchangelog:\n\n" % \
@@ -4191,23 +4203,49 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
             getChangeLogDiff(oldpkg, pkg))
         fd.close()
         del fd
-        changelog = "-l " + tmpfile
+        if git:
+            changelog = "-F " + tmpfile
+        else:
+            changelog = "-l " + tmpfile
     else:
         tmpfile = None
         changelog = "-m \"import %s-%s-%s\"" % (pkg["name"], pkg["version"],
              pkg["release"])
-    user = " -u cvs@devel.redhat.com"
+    if git:
+        user = "cvs@devel.redhat.com"
+        email = user
+    else:
+        user = " -u cvs@devel.redhat.com"
     if pkg["changelogname"]:
         user = pkg["changelogname"][0]
         if user.rfind("> ") != -1:
             user = user[:user.rfind("> ") + 1]
-        user = " -u \"%s\"" % user
-    os.system("cd %s && hg commit -q -A %s --date \"%d 0\"%s" % (repodir,
-        changelog, pkg.hdr.getOne("buildtime"), user))
+        email = user
+        if email.find("<") != -1:
+            email = email[email.find("<") + 1:email.rfind(">") + 1]
+        if git:
+            if user.rfind(" <") != -1:
+                user = user[:user.rfind(" <")]
+        else:
+            user = " -u \"%s\"" % user
+    # XXX if we monitor trees, we could change the checkin time to
+    # first day of release of the rpm package instead of rpm buildtime
+    # XXX git knows about an "order" file which gives information on
+    # how to order files for a diff: "*.spec" (.spec first)
+    buildtime = str(pkg.hdr.getOne("buildtime"))
+    if git:
+        os.system("cd " + repodir + " && GIT_AUTHOR_NAME=\"" + user + \
+            "\" GIT_AUTHOR_EMAIL=\"" + email + "\" GIT_AUTHOR_DATE=" + \
+            buildtime + " GIT_COMMITTER_NAME=\"" + user + \
+            "\" GIT_COMMITTER_EMAIL=\"" + email + "\" GIT_COMMITTER_DATE=" + \
+            buildtime + " git commit " + changelog)
+    else:
+        os.system("cd %s && hg commit -q -A %s --date \"%s 0\"%s" % (repodir,
+            changelog, buildtime, user))
     if tmpfile != None:
         os.unlink(tmpfile)
 
-def createMercurial():
+def createMercurial(git):
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
         print "Error: Paths for mercurial not setup."
         return
@@ -4216,7 +4254,10 @@ def createMercurial():
     updateMercurialMirrors()
     # Create and initialize repos if still missing.
     for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
-        repodir = hgrepo + "/" + reponame
+        if git:
+            repodir = grepodir + "/" + reponame
+        else:
+            repodir = hgrepo + "/" + reponame
         if not dirs or not os.path.isdir(dirs[0]):
             continue
         if os.path.isdir(repodir):
@@ -4226,12 +4267,19 @@ def createMercurial():
             firsttime = 0
         else:
             firsttime = 1
-            os.system("hg init %s" % repodir)
-            writeFile(repodir + "/.hgignore",
-                [ignoreBinary(), "\.src\.rpm$\n"])
-            writeFile(repodir + "/.hg/hgrc",
-                ["[web]\ndescription = %s\n" % repodescr,
-                 "author = %s\n" % hgauthor])
+            if git:
+                makeDirs(repodir)
+                os.system(\
+                    "cd %s && { git init-db; ln -sf %s/.git ../%s.git; }" % \
+                    (repodir, reponame, reponame))
+                writeFile(repodir + "/.git/description", [repodescr + "\n"])
+            else:
+                os.system("hg init %s" % repodir)
+                writeFile(repodir + "/.hgignore",
+                    [ignoreBinary(), "\.src\.rpm$\n"])
+                writeFile(repodir + "/.hg/hgrc",
+                    ["[web]\ndescription = %s\n" % repodescr,
+                     "author = %s\n" % hgauthor])
         if not filecache:
             filecache = hgfiles + "/" + reponame
         makeDirs(filecache)
@@ -4247,8 +4295,10 @@ def createMercurial():
         for pkg in pkgs:
             name = pkg["name"]
             pkgdir = repodir + "/" + name
-            extractSrpm(pkg, pkgdir, filecache, repodir, oldpkgs.get(name))
+            extractSrpm(pkg, pkgdir, filecache, repodir, oldpkgs.get(name), git)
             oldpkgs[name] = pkg
+        if git:
+            os.system("cd %s && { git repack; git prune-packed; }" % repodir)
 
 
 def checkDeps(rpms):
@@ -5017,7 +5067,8 @@ def main():
             repo = RpmRepo(a, excludes)
             repo.createRepo(baseurl)
     elif mercurial:
-        createMercurial()
+        createMercurial(0)
+        createMercurial(1)
     else:
         keepdata = 1
         hdrtags = rpmtag
