@@ -1954,7 +1954,7 @@ class ReadRpm:
         # otherwise build this rpm normally for this arch
         return 1
 
-    def getChangeLog(self, num=-1):
+    def getChangeLog(self, num=-1, newer=None):
         """ Return the changlog entry in one string. """
         import time
         ctext = self["changelogtext"]
@@ -1964,11 +1964,13 @@ class ReadRpm:
         ctime = self["changelogtime"]
         if num == -1 or num > len(ctext):
             num = len(ctext)
-        data = ""
+        data = []
         for i in xrange(num):
-            data = data + "* %s %s\n\n%s\n\n" % (time.strftime("%a %b %d %Y",
-                time.localtime(ctime[i])), cname[i], ctext[i])
-        return data
+            if newer != None and ctime[i] <= newer:
+                break
+            data.append("* %s %s\n\n%s\n\n" % (time.strftime("%a %b %d %Y",
+                time.gmtime(ctime[i])), cname[i], ctext[i]))
+        return "".join(data)
 
     def __verifyWriteHeader(self, hdrhash, taghash, region, hdrdata,
         useinstall, rpmgroup):
@@ -3973,6 +3975,12 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
         print "Done reading config file %s." % c
     return repos
 
+
+def getChangeLogDiff(old, new):
+    t = None
+    if old["changelogtime"]:
+        t = old["changelogtime"][0]
+    return new.getChangeLog(newer=t)
 
 def writeFile(filename, data, mode=None):
     (fd, tmpfile) = mkstemp_file(os.path.dirname(filename), special=1)
