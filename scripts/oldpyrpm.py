@@ -4150,7 +4150,7 @@ def cmpNoMD5(a, b):
     """Ignore leading md5sum to sort the "sources" file."""
     return cmp(a[33:], b[33:])
 
-def extractSrpm(pkg, pkgdir, filecache, repodir):
+def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
     makeDirs(pkgdir)
     os.system("cd %s && rm -rf * .[^.h]* .h[^g]*" % pkgdir)
     extractRpm(pkg, pkgdir + "/")
@@ -4181,7 +4181,24 @@ def extractSrpm(pkg, pkgdir, filecache, repodir):
     writeFile(pkgdir + "/Makefile", [
         "include ../pyrpm/Makefile.srpm\n",
         "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
-    os.system("cd %s && hg commit -q -A -m initial-import" % repodir)
+    if oldpkg:
+        (fd, tmpfile) = mkstemp_file("/tmp", special=1)
+        fd.write("update %s from %s-%s to %s-%s\n\nchangelog:\n\n" % \
+            (pkg["name"], oldpkg["version"], oldpkg["release"],
+            pkg["version"], pkg["release"]) + \
+            getChangeLogDiff(oldpkg, pkg))
+        fd.close()
+        del fd
+        changelog = "-l " + tmpfile
+    else:
+        tmpfile = None
+        changelog = "-m \"import %s-%s-%s\"" % (pkg["name"], pkg["version"],
+             pkg["release"])
+    user = " -u cvs@devel.redhat.com"
+    os.system("cd %s && hg commit -q -A %s --date \"%d 0\"%s" % (repodir,
+        changelog, pkg.hdr.getOne("buildtime"), user))
+    if tmpfile != None:
+        os.unlink(tmpfile)
 
 def createMercurial():
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
@@ -4196,6 +4213,9 @@ def createMercurial():
         if not dirs or not os.path.isdir(dirs[0]):
             continue
         if os.path.isdir(repodir):
+            # XXX: we can only checkin once until now, no further
+            # automatic updates possible for a repo
+            continue
             firsttime = 0
         else:
             firsttime = 1
@@ -4216,9 +4236,12 @@ def createMercurial():
             pkgs = r.getPkgsByTime()
         else:
             pkgs = r.getPkgsNewest()
+        oldpkgs = {}
         for pkg in pkgs:
-            pkgdir = repodir + "/" + pkg["name"]
-            extractSrpm(pkg, pkgdir, filecache, repodir)
+            name = pkg["name"]
+            pkgdir = repodir + "/" + name
+            extractSrpm(pkg, pkgdir, filecache, repodir, oldpkgs.get(name))
+            oldpkgs[name] = pkg
 
 
 def checkDeps(rpms):
