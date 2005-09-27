@@ -178,10 +178,10 @@ class RpmYum:
                         self.pkgs.append(pkg)
             else:
                 if self.command.endswith("remove"):
-                    self.pkgs.extend(findPkgByName(f, self.pydb.getPkgList()))
+                    self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgList()))
                 else:
                     for rlist in repolists:
-                        self.pkgs.extend(findPkgByName(f, rlist))
+                        self.pkgs.extend(findPkgByNames([f,], rlist))
                     if len(self.pkgs) == 0:
                         self.config.printError("Couldn't find package %s, skipping" % f)
         if self.config.timer:
@@ -530,7 +530,7 @@ class RpmYum:
             #                 if p["name"] == pkg["name"]])
             # ? The current one can match packages with a different %name
             # if %name contains [-.]
-            pkg_list.extend(findPkgByName(pkg["name"], repo.getList()))
+            pkg_list.extend(findPkgByNames([pkg["name"],], repo.getList()))
         return self.__handleUpdatePkglist(pkg, pkg_list)
 
     def __handleUpdatePkglist(self, pkg, pkg_list):

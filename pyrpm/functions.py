@@ -1301,182 +1301,47 @@ def getBuildArchList(list):
             archs.append(a)
     return archs
 
-def tagsearch(searchtags, list, wildcard=False):
-    """Return a list of RpmPackage's from list matching searchtags.
+def buildPkgRefDict(pkgs):
+    """Take a list of packages and return a dict that contains all the possible
+       naming conventions for them: name, name.arch, name-version-release.arch,
+       name-version, name-version-release, epoch:name-version-release."""
+    pkgdict = {}
+    for pkg in pkgs:
+        (n, e, v, r, a) = (pkg["name"], pkg.getEpoch(), pkg["version"],
+            pkg["release"], pkg["arch"])
+        na = "%s.%s" % (n, a)
+        nv = "%s-%s" % (n, v)
+        nva = "%s.%s" % (nv, a)
+        nvr = "%s-%s" % (nv, r)
+        nvra = "%s.%s" % (nvr, a)
+        en = "%s:%s" % (e, n)
+        ena = "%s:%s" % (e, na)
+        env = "%s:%s" % (e, nv)
+        enva = "%s:%s" % (e, nva)
+        envr = "%s:%s" % (e, nvr)
+        envra = "%s:%s" % (e, nvra)
+        for item in (n, na, nv, nva, nvr, nvra, en, ena, env, enva, envr, envra):
+            pkgdict.setdefault(item, []).append(pkg)
+    return pkgdict
 
-    searchtags is a list of (tag name, value to match).  If wildcard, value is
-    a pattern possibly containing the '*' character."""
-
-    if wildcard:
-        st = [(key, re.compile(_patternToRegex(val)))
-              for (key, val) in searchtags]
-        searchtags = st
+def findPkgByNames(pkgnames, pkgs):
+    """Matches up the user package names versus a pkg list. For installs/updates
+       available pkgs should be the 'others list' for removes it should be
+       the installed list of pkgs. Takes an optional casematch option to
+       determine if case should be matched exactly."""
+    pkgdict = buildPkgRefDict(pkgs)
     pkglist = []
-    for pkg in list:
-        found = 1
-        for (key, val) in searchtags:
-            if not pkg.has_key(key):
-                found = 0
-                break
-            if key == "epoch":
-                pval = str(pkg[key][0])
-            else:
-                pval = pkg[key]
-            if not wildcard:
-                if val != pval:
-                    found = 0
-                    break
-            else:
-                if not val.match(pval):
-                    found = 0
-                    break
-        if found:
-            pkglist.append(pkg)
-    return pkglist
-
-def _patternToRegex(pattern):
-    """Return a regex matching the original pattern, in which '*' matches any
-    number of characters."""
-    
-    regex = pattern.replace(".", "\.")
-    regex = regex.replace("*", ".*")
-    regex = regex.replace("+", "\+")
-    regex = regex.replace("\\", "\\\\")
-    regex = regex.replace("^", "\^")
-    regex = regex.replace("$", "\$")
-    regex = regex.replace("?", "\?")
-    regex = regex.replace("{", "\{")
-    regex = regex.replace("}", "\}")
-    regex = regex.replace("[", "\[")
-    regex = regex.replace("]", "\]")
-    regex = regex.replace("|", "\|")
-    regex = regex.replace("(", "\(")
-    regex = regex.replace(")", "\)")
-    return regex + "$"
-
-EPOCHTAG=0
-NAMETAG=1
-VERSIONTAG=2
-RELEASETAG=3
-ARCHTAG=4
-
-__delimeter = { EPOCHTAG : None,
-                NAMETAG : ":",
-                VERSIONTAG : "-",
-                RELEASETAG : "-",
-                ARCHTAG : "." }
-
-def constructName(nametags, namevals):
-    """Return a string containing tags from (ascending) *TAG list nametags,
-    describing (E, N, V, R, A) namevals."""
-
-    ret = ""
-    for tag in nametags:
-        assert tag in __delimeter.keys()
-        if namevals[tag]:
-            if ret:
-                ret += __delimeter[tag]
-            ret += namevals[tag]
-    return ret
-
-def __findPkgByName(pkgname, pkgs, wildcard=False):
-    """Return a list of RpmPackage's from pkgs matching pkgname.
-
-    pkgname can contain version, release and arch (but simple names are
-    prefered).  The returned list contains "better" matches first.  If
-    wildcard, '*' in pkgname matches any number of characters."""
-
-    # For a pattern like *-*.* we don't know which fields match which parts
-    # of the package's ENVRA, so we try several possibilities.
-    pkglist = []
-    envra = envraSplit(pkgname)
-    if not wildcard:
-        # Filter out packages that can't possibly match
-        tmplist = [pkg for pkg in pkgs if pkg["name"].find(envra[1]) >= 0]
-        pkgs = tmplist
-    tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG, RELEASETAG], envra)), \
-            ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    if envra[RELEASETAG] != None:
-        tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG], envra)), \
-                ("version", constructName([RELEASETAG, ARCHTAG], envra))]
-        pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("name", constructName([EPOCHTAG, NAMETAG, VERSIONTAG], envra)), \
-            ("version", constructName([RELEASETAG], envra)), \
-            ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
-            ("version", constructName([VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
-            ("version", constructName([VERSIONTAG, RELEASETAG], envra)), \
-            ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    if envra[RELEASETAG] != None:
-        tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
-                ("version", constructName([VERSIONTAG], envra)), \
-                ("release", constructName([RELEASETAG, ARCHTAG], envra))]
-        pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("name", constructName([EPOCHTAG, NAMETAG], envra)), \
-            ("version", constructName([VERSIONTAG], envra)), \
-            ("release", constructName([RELEASETAG], envra)), \
-            ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-
-    tags = [("epoch", constructName([EPOCHTAG], envra)), \
-            ("name", constructName([NAMETAG, VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("epoch", constructName([EPOCHTAG], envra)), \
-            ("name", constructName([NAMETAG, VERSIONTAG, RELEASETAG], envra)), \
-            ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    if envra[RELEASETAG] != None:
-        tags = [("epoch", constructName([EPOCHTAG], envra)), \
-                ("name", constructName([NAMETAG, VERSIONTAG], envra)), \
-                ("version", constructName([RELEASETAG, ARCHTAG], envra))]
-        pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("epoch", constructName([EPOCHTAG], envra)), \
-            ("name", constructName([NAMETAG, VERSIONTAG], envra)), \
-            ("version", constructName([RELEASETAG], envra)), \
-            ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("epoch", constructName([EPOCHTAG], envra)), \
-            ("name", constructName([NAMETAG], envra)), \
-            ("version", constructName([VERSIONTAG, RELEASETAG, ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("epoch", constructName([EPOCHTAG], envra)), \
-            ("name", constructName([NAMETAG], envra)), \
-            ("version", constructName([VERSIONTAG, RELEASETAG], envra)), \
-            ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    if envra[RELEASETAG] != None:
-        tags = [("epoch", constructName([EPOCHTAG], envra)), \
-                ("name", constructName([NAMETAG], envra)), \
-                ("version", constructName([VERSIONTAG], envra)), \
-                ("release", constructName([RELEASETAG, ARCHTAG], envra))]
-        pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    tags = [("epoch", constructName([EPOCHTAG], envra)), \
-            ("name", constructName([NAMETAG], envra)), \
-            ("version", constructName([VERSIONTAG], envra)), \
-            ("release", constructName([RELEASETAG], envra)), \
-            ("arch", constructName([ARCHTAG], envra))]
-    pkglist.extend(tagsearch(tags, pkgs, wildcard))
-    normalizeList(pkglist)
-    return pkglist
-
-def findPkgByName(pkgname, pkgs):
-    """Return a list of RpmPackage's from pkgs matching pkgname.
-
-    pkgname can contain version, release and arch (but simple names are
-    prefered).  The returned list contains "better" matches first.  '*' is
-    interpreted literally; if that results in no matches, '*' matches any
-    number of characters."""
-
-    pkglist = __findPkgByName(pkgname, pkgs, None)
-    if len(pkglist) == 0 and pkgname.find("*") >= 0:
-        pkglist = __findPkgByName(pkgname, pkgs, 1)
+    for pkgname in pkgnames:
+        if pkgdict.has_key(pkgname):
+            pkglist.extend(pkgdict[pkgname])
+        elif re.match(".*[\*,\[,\],\{,\},\?].*", pkgname):
+            restring = fnmatch.translate(pkgname)
+            regex = re.compile(restring)
+            foundit = 0
+            for item in pkgdict.keys():
+                if regex.match(item):
+                    pkglist.extend(pkgdict[item])
+                    foundit = 1
     return pkglist
 
 def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,

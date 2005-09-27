@@ -3,7 +3,12 @@ from struct import unpack
 
 from pyrpm import *
 
-db = bsddb.hashopen("/var/lib/rpm/Sha1header", "r")
+if len(sys.argv) > 1:
+        dbpath = sys.argv[1]
+else:
+        dbpath = "/var/lib/rpm"
+
+db = bsddb.hashopen(dbpath+"/Sha1header", "r")
 
 for key in db.keys():
 	data = db[key]

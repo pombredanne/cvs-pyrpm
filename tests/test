@@ -11,16 +11,16 @@ for i in sys.argv[1:]:
     except (IOError, ValueError), e:
         sys.stderr.write("%s: %s\n" % (i, e))
         continue
-    print repr(rpm.range_signature)
-    print repr(rpm.range_header)
-    print repr(rpm.range_payload)
-    print repr(rpm["signature"]["size_in_sig"])
+    print rpm.range_signature
+    print rpm.range_header
+    print rpm.range_payload
+    print rpm["signature"]["size_in_sig"]
+    print rpm.has_key("epoch")
     print zip(rpm["basenames"], rpm["filelinktos"], rpm["filemd5s"], rpm["filesizes"])
-#    print rpm["basenames"]
-#    print rpm["dirnames"]
-#    print rpm["dirindexes"]
-#    for f in rpm["filenames"]:
-#	rfi = rpm.getRpmFileInfo(f)
-#        print f
-#        print rfi.filename, hex(rfi.flags)
-    rpms.append(rpm)
+    print rpm["basenames"]
+    print rpm["dirnames"]
+    print rpm["dirindexes"]
+    for f in rpm["filenames"]:
+	rfi = rpm.getRpmFileInfo(f)
+	print rfi.filename, rfi.filecolor
+#    rpms.append(rpm)

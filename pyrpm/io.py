@@ -2009,13 +2009,8 @@ class RpmRepo(RpmDatabase):
     def __isExcluded(self, pkg):
         """Return True if RpmPackage pkg is excluded by configuration.""" 
         
-        found = 0
-        for ex in self.excludes:
-            excludes = functions.findPkgByName(ex, [pkg])
-            if len(excludes) > 0:
-                found = 1
-                break
-        return found
+        excludes = functions.findPkgByNames(self.excludes, [pkg])
+        return len(excludes) > 0
 
     def __escape(self, s):
         """Return escaped string converted to UTF-8"""
