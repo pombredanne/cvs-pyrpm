@@ -1968,7 +1968,7 @@ class ReadRpm:
         for i in xrange(num):
             if newer != None and ctime[i] <= newer:
                 break
-            data.append("* %s %s\n\n%s\n\n" % (time.strftime("%a %b %d %Y",
+            data.append("* %s %s\n%s\n" % (time.strftime("%a %b %d %Y",
                 time.gmtime(ctime[i])), cname[i], ctext[i]))
         return "".join(data)
 
@@ -4181,6 +4181,8 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
     writeFile(pkgdir + "/Makefile", [
         "include ../pyrpm/Makefile.srpm\n",
         "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
+    # XXX: unpack a few src.rpms into subdirectories
+    # XXX: also checkin the data into a per-package repo
     if oldpkg:
         (fd, tmpfile) = mkstemp_file("/tmp", special=1)
         fd.write("update %s from %s-%s to %s-%s\n\nchangelog:\n\n" % \
@@ -4195,6 +4197,11 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
         changelog = "-m \"import %s-%s-%s\"" % (pkg["name"], pkg["version"],
              pkg["release"])
     user = " -u cvs@devel.redhat.com"
+    if pkg["changelogname"]:
+        user = pkg["changelogname"][0]
+        if user.rfind("> ") != -1:
+            user = user[:user.rfind("> ") + 1]
+        user = " -u \"%s\"" % user
     os.system("cd %s && hg commit -q -A %s --date \"%d 0\"%s" % (repodir,
         changelog, pkg.hdr.getOne("buildtime"), user))
     if tmpfile != None:
