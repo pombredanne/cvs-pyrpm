@@ -4249,9 +4249,9 @@ def createMercurial(git):
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
         print "Error: Paths for mercurial not setup."
         return
-    #createCGI()
-    #updateGitMirrors()
-    #updateMercurialMirrors()
+    createCGI()
+    updateGitMirrors()
+    updateMercurialMirrors()
     # Create and initialize repos if still missing.
     for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
         if git:

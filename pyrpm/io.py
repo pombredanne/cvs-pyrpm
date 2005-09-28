@@ -18,7 +18,7 @@
 
 
 import fcntl, bsddb, libxml2, os, os.path, sys, struct, time
-import zlib, gzip, sha, md5, string, stat, openpgp, re
+import zlib, gzip, sha, md5, string, stat, openpgp, re, sqlite
 (pack, unpack) = (struct.pack, struct.unpack)
 from binascii import b2a_hex, a2b_hex
 from types import TupleType
@@ -1615,7 +1615,6 @@ class RpmSQLiteDB(RpmDatabase):
         self.cx = None
 
     def open(self):
-        import sqlite
         if self.cx:
             return
         dbpath = self._getDBPath()

@@ -21,6 +21,7 @@
 import os.path, sys, pwd, grp, md5, sha
 from stat import S_ISREG
 from functions import *
+from io import getRpmIOFactory
 import openpgp
 
 
@@ -132,14 +133,14 @@ class RpmUserCache:
                         pw = pwd.getpwnam(username)
                         self.uid[username] = pw[2]
                     except:
-                        printWarning(1, "user %s not found, using uid 0" % username)
+                        # XXX: print warning
                         self.uid[username] = 0
                 else:
                     r = self.__parseFile("/etc/passwd")
                     if r.has_key(username):
                         self.uid[username] = r[username]
                     else:
-                        printWarning(1, "user %s not found, using uid 0" % username)
+                        # XXX: print warning
                         self.uid[username] = 0
             else:
                 return 0
@@ -156,14 +157,14 @@ class RpmUserCache:
                         gr = grp.getgrnam(groupname)
                         self.gid[groupname] = gr[2]
                     except:
-                        printWarning(1, "group %s not found, using gid 0" % groupname)
+                        # XXX: print warning
                         self.gid[groupname] = 0
                 else:
                     r = self.__parseFile("/etc/group")
                     if r.has_key(groupname):
                         self.gid[groupname] = r[groupname]
                     else:
-                        printWarning(1, "group %s not found, using gid 0" % groupname)
+                        # XXX: print warning
                         self.gid[groupname] = 0
             else:
                 return 0
@@ -186,7 +187,6 @@ class RpmPackage(RpmData):
         self.range_signature = (None, None) # Signature header
         self.range_header = (None, None) # Main header
         self.range_payload = (None, None) # Payload; length is always None
-        self.epoch = None
 
     def clear(self):
         """Drop read data and prepare for rereading it, unless install_id is
@@ -205,8 +205,6 @@ class RpmPackage(RpmData):
         known.
 
         Raise IOError."""
-
-        from io import getRpmIOFactory
 
         if self.has_key("install_id"):
             return
@@ -545,30 +543,26 @@ class RpmPackage(RpmData):
             (key, value) = self.io.read()
         self.range_signature = value
         # Read sig
-        if not self.has_key("signature"):
-            self["signature"] = {}
         (key, value) = self.io.read()
-        while key != None and key != "-":
-            if tags:
-                if tags.has_key(key):
-                    self["signature"][key] = value
-            elif ntags:
-                if not ntags.has_key(key):
-                    self["signature"][key] = value
-            else:
+        while key != "-":
+            if not self.has_key("signature"):
+                self["signature"] = {}
+            if tags and key in tags:
+                self["signature"][key] = value
+            elif ntags and not key in ntags:
+                self["signature"][key] = value
+            elif not tags and not ntags:
                 self["signature"][key] = value
             (key, value) = self.io.read()
         self.range_header = value
         # Read header
         (key, value) = self.io.read()
-        while key != None and key != "-":
-            if tags:
-                if tags.has_key(key):
-                    self[key] = value
-            elif ntags:
-                if not ntags.has_key(key):
-                    self[key] = value
-            else:
+        while key != "-":
+            if tags and key in tags:
+                self[key] = value
+            elif ntags and not key in ntags:
+                self[key] = value
+            elif not tags and not ntags:
                 self[key] = value
             (key, value) = self.io.read()
         self.range_payload = value
@@ -893,15 +887,10 @@ class RpmPackage(RpmData):
     def getEpoch(self):
         """Return %epoch as a string, or "0" for unspecified epoch."""
 
-        if self.epoch:
-            return self.epoch
-
         e = self["epoch"]
         if e == None:
-            self.epoch = "0"
-        else:
-            self.epoch = str(e[0])
-        return self.epoch
+            return "0"
+        return str(e[0])
 
     def getEVR(self):
         """Return [%epoch:]%version-%release."""

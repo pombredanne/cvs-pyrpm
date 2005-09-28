@@ -48,8 +48,11 @@ class RpmList:
         self.__len__ = self.list.__len__
         self.__getitem__ = self.list.__getitem__
         for r in installed:
-            self._install(r, 1)
-            self.installed.add(r["name"], r)
+            name = r["name"]
+            self._install(r, 1) # Can't fail
+            if not name in self.installed:
+                self.installed[name] = [ ]
+            self.installed[name].append(r)
     # ----
 
     def clear(self):
@@ -79,7 +82,10 @@ class RpmList:
                 ret = self.__install_check(r, pkg)
                 if ret != self.OK:
                     return ret
-        self.list.add(name, pkg)
+        if not name in self.list:
+            self.list[name] = [ ]
+        self.list[name].append(pkg)
+
         return self.OK
     # ----
 
@@ -211,7 +217,9 @@ class RpmList:
             self.config.printWarning(1, "Package %s (id %s) not found"
                                      % (pkg.getNEVRA(), id(pkg)))
             return self.NOT_INSTALLED
-        self.list.remove(key, pkg)
+        self.list[key].remove(pkg)
+        if len(self.list[key]) == 0:
+            del self.list[key]
 
         if self.isInstalled(pkg):
             self.erases.append(pkg)

@@ -340,8 +340,9 @@ class YumConf(Conf):
             self.chroot = ''
         else:
             self.chroot = chroot
-            if chroot and chroot[-1] != '/' and (not reposdir or reposdir[1] != '/'):
-                self.chroot += '/'
+
+        if chroot and chroot[-1] != '/':
+            self.chroot += '/'
 
         self.reposdir = reposdir
         self.releasever = releasever    # Used by extendValue()

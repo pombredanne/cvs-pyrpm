@@ -579,7 +579,9 @@ class RpmResolver(RpmList):
                 self.config.printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(resolved) > 0:
-                    all_resolved.extend(r, resolved)
+                    if r not in all_resolved:
+                        all_resolved[r] = [ ]
+                    all_resolved[r].extend(resolved)
         return all_resolved
     # ----
 
@@ -606,7 +608,9 @@ class RpmResolver(RpmList):
                         continue
                     unresolved.append(u)
                 if len(unresolved) > 0:
-                    all_unresolved.extend(pkg, unresolved)
+                    if pkg not in all_unresolved:
+                        all_unresolved[pkg] = [ ]
+                    all_unresolved[pkg].extend(unresolved)
         return all_unresolved
     # ----
 
@@ -637,7 +641,6 @@ class RpmResolver(RpmList):
                             conflicts[r] = [ ]
                         if c not in conflicts[r]:
                             conflicts[r].append(c)
-                        #conflicts.add(r, (c, r2))
         return conflicts
     # ----
 
