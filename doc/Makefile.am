@@ -1,1 +1,1 @@
-EXTRA_DIST = FILES INFO TODO classes.fig pycheckrc README README.first README.rpmdb
+EXTRA_DIST = README README.first README.rpmdb classes.fig pycheckrc

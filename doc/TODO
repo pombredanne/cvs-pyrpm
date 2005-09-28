@@ -1,7 +1,0 @@
-Convert oldfilenames to basenames/dirnames/dirindexs if available
-support bzip2 for payload data
-change filenames to be split for dirname/basename to reduce memory allocations
-Implement file checkes (md5 checks, %config, %ghost, etc)
-Write reader/writer for rpmdb, rebuilddb/verify support
-support writing sparse files for ELF files
-Merge rpmdb/bsddb functionality 
