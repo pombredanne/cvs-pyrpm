@@ -1150,8 +1150,6 @@ fd.write("\n")
 fd.write("[dist]\n")
 fd.write("name=dist\n")
 fd.write("baseurl=file:%s/source\n" % tempdir)
-if ks["packages"].has_key("drop"):
-    fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
 fd.close()
 
 # yum
