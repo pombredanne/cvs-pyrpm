@@ -30,7 +30,7 @@ make DESTDIR=${RPM_BUILD_ROOT} install
 rm -rf ${RPM_BUILD_ROOT}
 
 %files
-%doc doc/FILES doc/INFO doc/TODO doc/classes.fig
+%doc doc/classes.fig
 %{_bindir}/*
 %{_datadir}/pyrpm/
 

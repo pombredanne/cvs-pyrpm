@@ -1,5 +1,5 @@
 SUBDIRS = doc pyrpm scripts tests
-EXTRA_DIST = AUTHORS ChangeLog NEWS README build.sh pyrpm.spec
+EXTRA_DIST = AUTHORS ChangeLog NEWS README pyrpm.spec
 
 .PHONY: changelog build
 
@@ -11,4 +11,11 @@ changelog:
 
 CLEANFILES := COPYING INSTALL pyrpm.spec $(notdir $(wildcard *.pyc))  pyrpm-*.tar.bz2 pyrpm-*.tar.gz $(notdir $(wildcard *~)) $(notdir $(wildcard *\#)) $(notdir $(wildcard \.\#*))
 
+maintainer:
+	rm -rf pyrpm-*.tar.bz2
+	aclocal
+	automake -a -c
+	autoconf
+	./configure
+	make build
 
