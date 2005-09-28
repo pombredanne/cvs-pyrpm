@@ -19,7 +19,7 @@
 # AUTHOR: Thomas Woerner <twoerner@redhat.com>
 #
 
-import string, types
+import types
 
 ################################### classes ###################################
 
@@ -65,7 +65,7 @@ class KickstartConfig(dict):
                 if len(fd) == 0:
                     break
 
-            line = string.rstrip(line)
+            line = line.rstrip()
             if len(line) < 1: continue
             if line[0] == '#': continue
 
@@ -146,15 +146,14 @@ class KickstartConfig(dict):
                                        "password:", "md5pass:", "lba32",
                                        "upgrade" ])
                     if self["bootloader"].has_key("driveorder"):
-                        order = string.split(self["bootloader"]["driveorder"],
-                                             ",")
+                        order = self["bootloader"]["driveorder"].split(",")
                         self["bootloader"]["driveorder"] = order
                 elif opt == "clearpart":
                     self.parseSimple(opt, args[1:],
                                      [ "all", "drives:", "initlabel", "linux",
                                        "none" ])
                     if self["clearpart"].has_key("drives"):
-                        order = string.split(self["bootloader"]["drives"], ",")
+                        order = self["bootloader"]["drives"].split(",")
                         self["bootloader"]["drives"] = order
                 elif opt == "device":
                     (_dict, _args) = self.parseArgs(opt, args[1:], [ "opts:" ])
@@ -453,16 +452,14 @@ class KickstartConfig(dict):
         (dict, args) = self.parseArgs(tag, argv, allowed_args, replace_tags)
 
         if len(args) != 0:
-            raise ValueError, "'%s %s' is unsupported" % (tag,
-                                                          string.join(argv))
+            raise ValueError, "'%s %s' is unsupported" % (tag, "".join(argv))
         self[tag] = dict
 
     def parseSub(self, tag, argv, allowed_args, replace_tags=None):
         (dict, args) = self.parseArgs(tag, argv, allowed_args, replace_tags)
 
         if len(args) != 1:
-            raise ValueError, "'%s %s' is unsupported" % (tag,
-                                                          string.join(argv))
+            raise ValueError, "'%s %s' is unsupported" % (tag, "".join(argv))
         if not self[tag]:
             self[tag] = { }
         elif self[tag].has_key(args[0]):

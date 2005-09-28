@@ -76,4 +76,20 @@ class HashList:
         del self.hash[key]
         return key
 
+    def add(self, key, value):
+        if not key in self:
+            self[key] = [ ]
+        self[key].append(value)
+
+    def extend(self, key, value):
+        if not key in self:
+            self[key] = [ ]
+        self[key].extend(value)
+
+    def remove(self, key, value):
+        l = self[key]
+        l.remove(value)
+        if len(l) == 0:
+            del self[key]
+
 # vim:ts=4:sw=4:showmatch:expandtab

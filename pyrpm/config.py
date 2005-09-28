@@ -70,14 +70,15 @@ class RpmConfig:
         self.exactarch = 0           # same base arch is not enough for updates
         self.tid = int(time.time())     # FIXME: make sure it is unique?
         self.compsfile = None
-        self.resolvertags = ("name", "epoch", "version", "release", "arch",
-            "providename", "provideflags", "provideversion", "requirename",
-            "requireflags", "requireversion", "obsoletename", "obsoleteflags",
-            "obsoleteversion", "conflictname", "conflictflags",
-            "conflictversion", "filesizes", "filemodes", "filemd5s",
-            "filelinktos", "fileflags", "filecolors", "fileverifyflags",
-            "dirindexes", "basenames", "dirnames", "oldfilenames", "sourcerpm",
-            "md5", "sha1header") # Tags used by RpmResolver
+        self.resolvertags = {"name":1, "epoch":1, "version":1, "release":1,
+            "arch":1, "providename":1, "provideflags":1, "provideversion":1,
+            "requirename":1, "requireflags":1, "requireversion":1,
+            "obsoletename":1, "obsoleteflags":1, "obsoleteversion":1,
+            "conflictname":1, "conflictflags":1, "conflictversion":1,
+            "filesizes":1, "filemodes":1, "filemd5s":1, "filelinktos":1,
+            "fileflags":1, "filecolors":1, "fileverifyflags":1,
+            "dirindexes":1, "basenames":1, "dirnames":1, "oldfilenames":1,
+            "sourcerpm":1, "md5":1, "sha1header":1}
         self.timer = 0                  # Output timing information
         self.ldconfig = 0             # Number of ldconfig calls optimized away
         self.delayldconfig = 0          # A delayed ldconfig call is pending

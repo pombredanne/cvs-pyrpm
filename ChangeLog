@@ -1,4 +1,540 @@
+2005-09-28  Florian La Roche  <laroche@redhat.com>
+
+	* Makefile.am 1.14, build.sh 1.5, pyrpm.spec.in 1.9:
+	- cleanup of old files
+
+	* doc/FILES 1.2, doc/INFO 1.3, doc/Makefile.am 1.5, doc/TODO 1.4:
+	- remove old obsolete files
+
+	* scripts/pyrpmdbverify 1.21, scripts/pyrpmkickstart 1.22:
+	- revert again wrong checkin
+
+2005-09-27  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.104:
+	- first ugly support to use git in addition to mercurial for rpm repos
+
+	* scripts/oldpyrpm.py 1.103, scripts/pyrpmdbverify 1.20, scripts/pyrpmkickstart 1.21:
+	- more compact changelog text
+	- add user from last changelog entry
+
+2005-09-27  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/io.py 1.94, pyrpm/yum.py 1.60, tests/rpmdbtestSha1header 1.3, tests/test 1.18, pyrpm/functions.py 1.124, pyrpm/control.py 1.71:
+	- Ported the findPkgByNames() function from oldpyrpm and changed the calls
+	  accordingly as it now takes a list of names to search for instead of only 1.
+
+2005-09-27  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.102:
+	- write more information into commit lines if new packages are added
+	  into mercurial, also add the rpm changelog messages
+
+	* scripts/oldpyrpm.py 1.101:
+	- getChangeLog(): allow printing of changelog entries newer than
+	  a specific time
+
+2005-09-26  Miloslav Trmac  <mitr@redhat.com>
+
+	* pyrpm/control.py 1.70, pyrpm/functions.py 1.123, pyrpm/io.py 1.93, pyrpm/resolver.py 1.86, pyrpm/rpmlist.py 1.50, pyrpm/yum.py 1.59, scripts/pyrpmcheckrepo 1.9, scripts/pyrpmrandomizer 1.7:
+	* pyrpm/control.py:
+	- RpmController.runOperations(): Return 1 on success
+	* pyrpm/rpmlist.py:
+	- RpmList.erase(): Print warning on erasing a nonexistent package
+	* pyrpm/yum.py:
+	- Add some error handling, move sys.exit() to callers
+	- Add documentation
+	- RpmYum.runCommand(): Fix self.erase_list pruning.
+	- Misc. cleanups
+	* scripts/pyrpmcheckrepo, scripts/pyrpmrandomizer:
+	- Use methods instead of setting attributes directly
+	- Add error handling
+
+	* pyrpm/rpmdist.py 1.10: * pyrpm/rpmdist.py: Fix undefined ParsingError
+
+2005-09-26  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database.py 1.1.2.1: - Forgot to add new database.py file
+
+	* pyrpm/database.py 1.1: New file.
+
+	* pyrpm/package.py 1.88.2.1, pyrpm/yum.py 1.57.2.1, scripts/pyrpmrandomizer 1.5.2.1, tests/test 1.17.2.1, pyrpm/base.py 1.44.2.1, pyrpm/functions.py 1.118.2.1, pyrpm/io.py 1.89.2.1:
+	- First (not yet really usable) cut of new backend IO
+
+2005-09-26  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/functions.py 1.122: - typo in description
+
+	* scripts/pyrpmdbverify 1.19:
+	- revert change to hash instead of using a list
+
+	* scripts/pyrpmcheckrepo 1.8, scripts/pyrpmdbverify 1.18, scripts/pyrpmkickstart 1.20:
+	- revert accidental checkin
+
+	* scripts/oldpyrpm.py 1.100: - update to the git/mercurial config
+
+	* scripts/oldpyrpm.py 1.99: - consistent and correct use of open()
+
+2005-09-25  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.98: - use "" for all strings
+
+	* scripts/oldpyrpm.py 1.97:
+	- add GzipFile() from createrepo to write rsync-friendly gzip headers
+	- RpmTree(): add getPkgsByTime(): sort pkgs by buildtime
+	- RpmTree(): add getPkgsNewest(): return list of newest pkgs
+	- RpmInfo(): do not depend on size_in_sig to be set
+	- extractSrpm(): new function to store a src.rpm
+	- checkDeps(): do not add src.rpms
+	- checkDeos(): correctly check for fileconflicts with multilib rpms
+	- dupes: ignore kernel{,-unsupported}.ia32e as fixup
+
+2005-09-24  Miloslav Trmac  <mitr@redhat.com>
+
+	* pyrpm/control.py 1.69, pyrpm/functions.py 1.121, pyrpm/io.py 1.92, pyrpm/package.py 1.91, pyrpm/resolver.py 1.85, pyrpm/rpmlist.py 1.49, pyrpm/yum.py 1.58, scripts/pyrpminstall 1.24:
+	* pyrpm/control.py
+	- Add documentation
+	- eraseFile -> erasePackage, appendFile -> appendUri
+	- Return error values instead of sys.exit(1)
+	- Add some error handling
+	- Misc. cleanups
+	* pyrpm/package.py:
+	- remove unused db parameter from RpmPackage.__verifyFileErase
+	* pyrpm/functions.py, pyrpm/package.py, pyrpm/rpmlist.py:
+	- Mention that functions warn the user on failure in their documentation
+
+2005-09-22  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.96:
+	- only use rsync for git mirrors if possible
+
+2005-09-21  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.95: - more git -> hg conversion
+
+2005-09-21  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/config.py 1.40:
+	- Added the fileverifyflags for resolvertags for proper file conflict checks
+
+2005-09-20  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmcheckrepo 1.7, scripts/pyrpmdbverify 1.17, scripts/pyrpmkickstart 1.19, scripts/pyrpmyum 1.47, scripts/oldpyrpm.py 1.94:
+	- start to mirror some git repos as well
+
+2005-09-20  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/config.py 1.39: [tw] added filecolors to resolvertags
+
+	* pyrpm/resolver.py 1.84: [tw]
+	- fixed file conflict check: honour file color
+	- fixed FIXMES and dropped wrong FIXMES:
+	- new function _hasConflict to check if a dependency is in a conflict/obsolete
+	  list
+	- droppend operation from _getConflicts and _hasFileConflict
+	- speedup of getUnresolvedDependencies
+	- fixed error messages in checkFileConflicts
+
+2005-09-19  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.93, configure.in 1.26, pyrpm/__init__.py 1.30:
+	- release 0.32
+
+	* scripts/oldpyrpm.py 1.92:
+	- first try to use mercurial (using git makes more sense longterm to
+	  have more features. also not sure this is the right place to just
+	  dump this in.)
+
+2005-09-17  Miloslav Trmac  <mitr@redhat.com>
+
+	* pyrpm/functions.py 1.120, pyrpm/orderer.py 1.32: * pyrpm/orderer.py:
+	- Add/update documentation
+	- Misc. small cleanups
+
+2005-09-17  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.91: - linelength and whitespace cleanup
+
+	* scripts/oldpyrpm.py 1.90: - remove code duplication
+
+	* scripts/oldpyrpm.py 1.89:
+	- createrepo: two pass over all rpms to not use up all memory
+
+2005-09-16  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.88: - more complete 'createrepo' support
+
+2005-09-16  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/io.py 1.91, scripts/pyrpmrandomizer 1.6:
+	- Fixed missing idx flag for install_sha1header and install_md5 tags for the
+	  RpmDB database.
+	- Fixed pyrpmrandomizer to skip debuginfo packages
+
+2005-09-15  Miloslav Trmac  <mitr@redhat.com>
+
+	* pyrpm/base.py 1.45, pyrpm/package.py 1.90, pyrpm/resolver.py 1.83, pyrpm/rpmlist.py 1.48:
+	* pyrpm/resolver.py:
+	- Add documentation
+	- Misc. small cleanups
+
+2005-09-15  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.87: - createrepo write support
+
+2005-09-14  Miloslav Trmac  <mitr@redhat.com>
+
+	* pyrpm/config.py 1.38, pyrpm/functions.py 1.119, pyrpm/io.py 1.90, pyrpm/package.py 1.89:
+	* pyrpm/functions.py:
+	- installFile: warn to stderr
+	- *Signals: use RuntimeError for the only error case: mismatched pushes
+	  and pops
+	- getFreeCachespace: Fix undefined variable
+	* pyrpm/io.py: fix mismatched blockSignals/unblockSignals calls
+
+2005-09-14  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.86: - start experimenting with CSV files
+
+	* scripts/pyrpmkickstart 1.18:
+	- write newline at end of /etc/rpm/platform
+
+2005-09-12  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.85: - fix FilenamesList()
+
+	* scripts/oldpyrpm.py 1.84:
+	- also work if only oldfilenames is set for FilenamesList()
+
+2005-09-09  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/kickstart.py 1.2: - fixes for pychecker
+
+2005-09-09  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.17: [tw]
+	- generate label prefix for self generated labels
+	- truncate long labels to 16 chars
+
+2005-09-09  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.25, pyrpm/__init__.py 1.29: - release 0.31
+
+	* scripts/oldpyrpm.py 1.83: - cleanup
+
+2005-09-09  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.16: [tw]
+	- get rid of rhpl and keyboard_models class
+	- new function lolist to list all used loop devices
+	- new keyboard_models dictionary
+	- exit: only sleep if not in awit mode
+	- simplified disk mapping and handling:
+	  if no map name is given, get it from device name (for hdX, shX, dasdX) or
+	  generate a name (hdX)
+	- added sanity check for mapping names
+	- sanity check for ks["keyboard"]
+	- dropped disabled code for removal of unneeded disks
+
+2005-09-09  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.82: - ignore athlon kernels for some checks
+
+	* scripts/oldpyrpm.py 1.81:
+	- HashList(): add get() and setdefault() to make this more complete
+
+	* scripts/oldpyrpm.py 1.80: - fix obsoletes detection
+
+	* scripts/oldpyrpm.py 1.79: - add checks for fileconflicts
+
+2005-09-09  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/io.py 1.89:
+	- Fixed one place in the PyGZIP module where the restdata could have been
+	  constructed wrongly.
+	- Removed all the FIXME endian entries, verified them all before and again
+
+2005-09-09  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.78: - cleanup
+
+2005-09-08  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.77: - further cleanup for deps
+
+2005-09-08  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/resolver.py 1.82: [tw]
+	- only compare with package version for unversioned provides
+
+	* pyrpm/orderer.py 1.31: [tw]
+	- Class Relation now visible
+	- New type of relation: VIRTUAL
+	  If a realtion gets removed from a package to breakup a look, a VIRTUAL
+	  relation is inserted for all dependent packages. This relation is SOFT for
+	  the simple case or HARD, if the removed relation was HARD and the relation
+	  from the dependant package is HARD.
+	- Predefined variables for HARD and SOFT requirements
+	- New functions isHardRelation and isVirtualRelation to check relation type
+	- Remember removed relations in dropped_relations to prevent readding
+	- Loops are tuples, now
+	- Renamed getLoops to detectLoops
+	- New sub-function _breakupLoop, which searches for the max_count node in the
+	  loop - Search order for removal: VIRTUAL SOFT -> SOFT -> VIRTUAL HARD -> HARD
+	- New function _dropRelation, excerpt of breakupLoop
+	- New function sortLoops to get the best loop: First sort on number of
+	  relations to packages outside the loops, then on relations from outside
+	  packages to packages in the loop
+
+2005-09-08  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.76: - cleanup of repo handling
+
+2005-09-07  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.75: - first try at dep checking for rpmdb
+
+2005-09-06  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.74:
+	- automatically create local cachedir for urlgrabber
+	- add data transfer between rpmdb <-> sig header
+	- add more tables about the different archs
+	- use .get() more often to speed things up (seen from Miloslav)
+	- add basic compare functions for rpm packages
+	- automatically transform file:// into local filenames
+	- add range to __openFD() if only rpm headers are read
+	- add getImmutableRegion() to copy the normal header
+	- copy HashList(), FilenamesList() from other pyrpm code
+	- copy parsePackages() from yum code
+	- add RpmRepo() and classes for reading yum.conf
+	- add fix to verify filemd5s from rpmdb (Phil)
+	- check double installed pkgs in rpmdb
+	- check for noarch + arch-dependent rpms to be installed in rpmdb
+	- check for unusual arch in rpmdb
+	- read repos from yum.conf to check rpm header against rpmdb
+	  Use "yum -c /etc/yum.conf --checkrpmdb" to see current tests.
+
+2005-09-06  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.15: [tw]
+	- fixed partitionmap[part]["device"] for non images
+	- fixed bootloader --location=partition (decrease id by 1)
+
+	* scripts/pyrpmkickstart 1.14: [tw]
+	- fixed missing diskmap[disk]["disk"] if disk is not an image
+
+	* scripts/pyrpmdb2rpmdb 1.3, scripts/pyrpmkickstart 1.13: [tw]
+	- fixed unset variable in exit for early exits
+
+2005-09-05  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.12: [tw]
+	- extracted kickstart config class into pyrpm/kickstart.py
+	- moved over getopt and noquote_split functions
+	- new function buildroot_copy to copy one file in the buildroot to another
+	- signal handling with exitHandler and pyrpm.setSignals
+	- added wait option: do not cleanup untill user presses any key
+	- fixed cleanup in exit function
+	- new option kudzu to call kudzu after installation
+	- user can now decide which yum to use: --yum uses original yum for
+	  installation
+	- do not drop unneded disks (required for future paritioning)
+	- function partitionId returns integer, not string
+	- get label from kickstart file for paritions
+	- drop -F from mke2fs, this is not needed anymore, using devices, not files
+	- tune ext3 filesystems: max-mount-counts=0, interval-between-checks=0 and
+	  enable dir_index feature
+	- enable comps for Fedora and RedHat distributions
+	- add default group for desktop, xorg-x11 and xorg-x11-twm for xconfig
+	  -> this might go away again
+	- append, kernel firstboot and dhclient, if configures and needed
+	- create /etc/sysconfig/kernel prior to installation
+	- write proper /etc/fstab with labels
+	- configure /etc/hosts, /etc/resolv.conf /etc/modprobe.conf with information
+	  from kickstart file
+	- do not hardlink /etc/localtime, has to be copy for system-config-date
+	- configure full network according to kickstart file, enable creation of key
+	  files
+	- proper configure keyboard for xserver
+	- setup firstboot
+	- create grup configuration and the install it in the buildroot
+	- drop try's from child processes, this is not needed at all
+
+	* pyrpm/kickstart.py 1.1: [tw]
+	- new kickstart config class (extracted from pyrpmkickstart)
+
+	* pyrpm/functions.py 1.118: [tw]
+	- new function setSignals to set the rpmconfig.supported_signals to a new value
+	  and store the previous signals in rpmconfig.signals (list with history)
+	- new function resetSignals to get back to the previous signals, if there were
+	  any
+	- blockSignals/unblockSignals are calling setSignals/resetSignals
+
+	* pyrpm/config.py 1.37: [tw]
+	- added tmpdir for temporary data, default: None
+	- new signals as signal store: list with history
+	- new supported_signals, initial list
+
+2005-09-01  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/io.py 1.88, pyrpm/package.py 1.88, tests/test 1.17, pyrpm/base.py 1.44, pyrpm/config.py 1.36, pyrpm/functions.py 1.117:
+	- Some more documentation
+	- Added filelinktos info to RpmFileInfo class
+	- Use the linktos information now to create the symlinks. Verification code is
+	  still in place to test if the rpm header info differs from the cpio one
+	- Use mkstemp_link() to create hardlinks and copy them in case the hardlink
+	  fails
+	- Implemented 2 functions to block and unblock the common termination signals
+	- Fixed a small bug where Miloslav forgot to remove a "/" for os.path.join()
+	  which prevented rpmdb read() from working
+	- Use the blockSignal() and unblockSignal() functions in addPkg() and erasePkg()
+	  methods of RpmDB and RpmPyDB classes
+	- In case of write failures to the databases the internal DB will now be
+	  consistent with the actual files on disk.
+	- Handle failed "commit" statements in the RpmSqLiteDB class correctly
+	- Fixed the isEqual() method of RpmPackage to be compatible to rpm behaviour
+	  in respect to Epoch (empty epoch is identical to Epoch=0)
+
+2005-08-31  Miloslav Trmac  <mitr@redhat.com>
+
+	* pyrpm/functions.py 1.116: Pedantic cleanup
+
+2005-08-31  Philip Knirsch  <pknirsch@redhat.com>
+
+	* tests/rpmdbtestFilemd5s 1.3, tests/rpmdbtestPackages 1.7, tests/test 1.16, scripts/pyrpmdbverify 1.16, pyrpm/io.py 1.87, pyrpm/functions.py 1.115, pyrpm/control.py 1.68:
+	- Implemented the getFreeCachespace() function to determine if we have enough
+	  space for the cached rpms for a whole operation
+	- Fixed bug where for filemd5 checks "fileflags" was used instead of "filemodes"
+	- Fixed Filemd5s database writing to be equal to how rpm does it: Rpm only
+	  writes filemd5s entries for files without an empty filemd5s.
+	- Used the same logic in pyrpmdbverify for verifying the Filemd5s database
+	- Extract some more useful information from primary.xml repo headers. Those
+	  packages now also contain the correct pkg["signature"]["size_in_sig"] and
+	  the correct range_signature, range_header and range_payload variables.
+	- Some needed changes for private test scripts
+
+2005-08-30  Miloslav Trmac  <mitr@redhat.com>
+
+	* pyrpm/config.py 1.35, pyrpm/hashlist.py 1.17, pyrpm/rpmlist.py 1.47:
+	Add documentation
+
+	* pyrpm/io.py 1.86, pyrpm/yum.py 1.57, scripts/pyrpmcheckrepo 1.6, scripts/pyrpmcreaterepo 1.7, scripts/pyrpmdbconvert 1.3, scripts/pyrpmkickstart 1.11, scripts/pyrpmspecinfo 1.7, scripts/pyrpmyum 1.46:
+	Misc. cleanups and error handling
+	* pyrpm/io.py:
+	- _uriToFilename(): New function, use instead of duplicating code.
+	- RpmStreamIO:_read(): Remove, only user changed to FIXME
+	- Add documentation
+	- RpmRepo.__getChecksum(): Use RpmIO.updateDigestFromRange()
+	- RpmCompsXML.write(): Remove
+
+2005-08-29  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/package.py 1.87:
+	- Fixed bug with new hardlink algorithm which messed up for non regular files
+
+2005-08-28  Miloslav Trmac  <mitr@redhat.com>
+
+	* scripts/pyrpmcheckrepo 1.5, scripts/pyrpmdbverify 1.15, scripts/pyrpmkickstart 1.10, scripts/pyrpmrebuilddb 1.9, scripts/pyrpmyum 1.45, scripts/rpmdb2pyrpmdb 1.7, tests/delta.py 1.5, tests/yumconfigtest 1.5, pyrpm/config.py 1.34, pyrpm/control.py 1.67, pyrpm/functions.py 1.114, pyrpm/io.py 1.85, pyrpm/package.py 1.86, pyrpm/resolver.py 1.81, pyrpm/yum.py 1.56:
+	All files: Add/update documentation, update for interface changes, add error
+	handling
+	* pyrpm/functions.py:
+	- Report some error messages to stderr
+	- Use os.path
+	- runScript():
+	  use exceptions for error reporting
+	  return rusage data instead of using an out parameter
+	  use [args] instead of arg1, arg2
+	- installFile:
+	  modsflag -> useAttrs
+	  always create a temporary file and os.rename() it
+	  create (dummy) sockets
+	- setFileMods(file, values) -> _setFileAtrs(file, rfi)
+	- unlink() -> _unlink()
+	- normalizeRegex() -> patternToRegex(), add missing $
+	* pyrpm/io.py:
+	- RpmDatabase.{open,close}: don't return anything
+	- RpmDatabase.isDuplicate(): handle one file in /etc/rc.d/init.d/ and one in
+	  /etc/init.d/ as duclicates
+	* scripts/pyrpmkickstart: handle runScript() failures
+
+	* doc/README 1.3, doc/README.first 1.2, doc/README.rpmdb 1.2:
+	Misc. typo fixes
+
+	* pyrpm/openpgp.py 1.7: Fix typo
+
+	* pyrpm/base.py 1.43: Add documentation
+
+	* pyrpm/yumconfig.py 1.15: - Add documentation
+	- Misc. cleanups
+
+2005-08-26  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmdbconvert 1.2, scripts/pyrpmkickstart 1.9:
+	- remove trailing whitespace
+
+	* pyrpm/functions.py 1.113, pyrpm/io.py 1.84:
+	- compare name directly against gpg-pubkey
+
+2005-08-26  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.8:
+	[tw] create /var/log/lastlog and /var/log/messages prior to installation
+
+	* pyrpm/io.py 1.83: [tw]
+	- fixed usage of self in new functions in RpmCompsXML
+
+	* scripts/pyrpmkickstart 1.7: [tw]
+	- new diskmaps: <disk name:disk image>
+	- added verify for partitions
+	- fixed bug in parseArgs: replace replace_tags
+	- new class Disk with parted backend for disk management (read only for now)
+	- new function create_dir
+	- new function losetup to bind an image or partition to a loop device
+	- new function lofree to release a loop device
+	- new function diskName to get the disk name from a partition name
+	- new function partitionId to get the partition id from a partition name
+	- new functions swapon, swapoff
+	- new function exit to umount all mounted dirs, cleanup tmpdir and release
+	  all loop devices
+	- added geteuid check at the start
+	- replaced all sys.exit calls with internal exit function
+	- dropped old target (device/image) code, replaced with dynamic diskmap,
+	  partitionmap and mountmap
+	- enable usage of partitions in disk images
+	- format partitions in disk images
+	- format and use swap partitions
+	- added langsupport for packages: install e.g. aspell-de if de_DE is in
+	  langsupport
+	- add package system-config-securitylevel-tui for selinux and firewall
+	  configuration
+	- using new diskmap, etc. for /etc/fstab creation
+	- write /etc/rpm/platform before installing packages without bash script
+	- set root password
+	- configure selinux
+	- configure firewall with lokkit, dropped old code
+	- write /etc/sysconfig/system-config-securitylevel
+	- write xen config with diskmap, etc.  information
+
+2005-08-26  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/io.py 1.82:
+	- Properly remove keys for empty data from rpmdb files
+
+	* pyrpm/base.py 1.42, pyrpm/functions.py 1.112, pyrpm/io.py 1.81, pyrpm/package.py 1.85, scripts/pyrpmdbverify 1.14, tests/rpmdbtestPackages 1.6:
+	- Implemented new way of handling and extracting hardlinks properly. Should
+	  work now much better even for broken rpms
+	- Fixed bug in RpmDB class where "filestates" wouldn't be written proplerly
+	  into the Packages db header
+	- Implemented new methods for separate extraction of package names from
+	  comps.xml (optional, default and mandatory)
+	- Fixed some warning message levels
+	- pyrpmdbverify now even checks if the rpmdb package header would be identical
+	  with the given package and tries to recreate it from a binary package, too
+
 2005-08-24  Florian La Roche  <laroche@redhat.com>
+
+	* ChangeLog 1.13: - new ChangeLog
 
 	* configure.in 1.24, pyrpm/__init__.py 1.28: - release 0.30
 
