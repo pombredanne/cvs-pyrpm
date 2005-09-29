@@ -2564,6 +2564,17 @@ class FilenamesList:
         return [ r[0] for r in ret ]
 
 
+# split EVR string in epoch, version and release
+def evrSplit(evr):
+    epoch = "0"
+    i = evr.find(":")
+    if i != -1:
+        epoch = evr[:i]
+    j = evr.find("-", i + 1)
+    if j != -1:
+        return (epoch, evr[i + 1:j], evr[j + 1:])
+    return (epoch, evr[i + 1:], "")
+
 def depString(name, flag, version):
     if version == "":
         return name
@@ -2712,7 +2723,8 @@ class RpmTree:
                     if not sameSrcRpm(v[i], v[i + 1]):
                         print "duplicate rpms:", v[i].filename, v[i + 1].filename
                     v.remove(v[i])
-                i += 1
+                else:
+                    i += 1
 
 
 class RpmInfo:
@@ -2850,17 +2862,6 @@ def cacheLocal(url, subdir, force=0):
             return dd
         return None
     return f
-
-# split EVR string in epoch, version and release
-def evrSplit(evr):
-    epoch = "0"
-    i = evr.find(":")
-    if i != -1:
-        epoch = evr[:i]
-    j = evr.find("-", i + 1)
-    if j != -1:
-        return (epoch, evr[i + 1:j], evr[j + 1:])
-    return (epoch, evr[i + 1:], "")
 
 def buildPkgRefDict(pkgs):
     """Take a list of packages and return a dict that contains all the possible
