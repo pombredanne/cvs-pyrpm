@@ -18,7 +18,7 @@
 
 
 import fcntl, os, os.path, struct, sys, resource, re, getopt, errno, signal
-import shutil
+import shutil, fnmatch
 from types import TupleType, ListType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from bsddb import hashopen
@@ -788,45 +788,7 @@ def parseYumOptions(argv, yum):
         print "No command given" # FIXME: all to stderr
         return None
 
-    # Handle yum config file. By default we set the reposdir to "", meaning no
-    # repo dirs. If it is specified in the config file we use that though (as
-    # expected)
-    if os.path.isfile(rpmconfig.yumconf):
-        addRepo(yum, rpmconfig.yumconf)
-    else:
-        printWarning(1, "Couldn't find given yum config file, skipping read of repos")
     return args
-
-def addRepo(yum, file):
-    """Read yum configuration file and add repositories it uses to RpmYum yum.
-
-    sys.exit() on error."""
-
-    try:
-        conf = yumconfig.YumConf("3", rpmconfig.machine,
-                                 buildarchtranslate[rpmconfig.machine],
-                                 rpmconfig.buildroot, file, "")
-    except IOError, e:
-        printError("Error reading configuration: %s" % e)
-        sys.exit(1)
-    for key in conf.keys():
-        if key == "main":
-            pass
-        else:
-            sec = conf[key]
-            if not sec.has_key("baseurl"):
-                printError("%s: No baseurl for this section in conf file." % key)
-                sys.exit(1)
-            baseurl = sec["baseurl"][0]
-            if not sec.has_key("exclude"):
-                excludes = ""
-            else:
-                excludes = sec["exclude"]
-            if yum.addRepo(baseurl, excludes, key) == 0:
-                sys.exit(1)
-            if rpmconfig.compsfile == None:
-                # May stay None on download error
-                rpmconfig.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
 
 def selectNewestPkgs(pkglist):
     """Select the "best" packages for each base arch from RpmPackage list

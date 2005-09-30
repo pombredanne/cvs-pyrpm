@@ -149,6 +149,11 @@ def readRpmDB():
     readInstalltid()
     readName()
     (packages, keyring) = readPackages(dbpath) # FIXME: bsddb.error
+    for pkg in packages.values():
+        if pkg["signature"].has_key("md5"):
+            pkg["install_md5"] = pkg["signature"]["md5"]
+        if pkg["signature"].has_key("sha1header"):
+            pkg["install_sha1header"] = pkg["signature"]["sha1header"]
     readProvidename()
     readProvideversion()
     readRequirename()
@@ -303,12 +308,14 @@ def verifyRequireversion():
     verifyStructure(requireversion, "requireversion")
 
 def verifySha1header():
+    print "Checking Sha1Header integrity."
     # Skipping Sha1header integrity check, order of rpm header isn't know
-    pass
+    verifyStructure(sha1header, "install_sha1header", False)
 
 def verifySigmd5():
+    print "Checking Signature MD5 integrity."
     # Skipping Sigmd5 integrity check (no payload in packages ;)
-    pass
+    verifyStructure(sigmd5, "install_md5", False)
 
 def verifyTriggername():
     print "Checking Triggername integrity."
@@ -442,6 +449,9 @@ def main():
             yumconf = val
 
     readRpmDB()
+    for pkg in packages.values():
+        if pkg["name"] == "fedora-release" or pkg["name"] == "redhat-release":
+            rpmconfig.relver = pkg["version"]
 
     if internal_check:
         verifyRpmDB()
@@ -464,7 +474,7 @@ def main():
         rpmconfig.nofileconflicts = 1
         yum = RpmYum(rpmconfig)
         if os.path.isfile(yumconf):
-            addRepo(yum, yumconf)
+            yum.addRepo(yumconf)
         for repo in yum.repos:
             plist = repo.getPkgList()
             for pkg in plist:

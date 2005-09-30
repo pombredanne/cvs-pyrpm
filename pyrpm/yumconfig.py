@@ -66,24 +66,6 @@ class Conf:
         
         self.line = 0
 
-    # FIXME: not used
-    def fsf(self):
-        """Seek after all lines."""
-        
-        self.line = len(self.lines)
-
-    # FIXME: not used
-    def tell(self):
-        """Return the current line number (0-based)."""
-        
-        return self.line
-
-    # FIXME: not used
-    def seek(self, line):
-        """Seek to (0-based) line."""
-        
-        self.line = line
-    
     def nextline(self):
         """Seek to the next line, if any."""
 
@@ -117,22 +99,6 @@ class Conf:
                 '[^' + self.commenttype + self.separators + ']+')
         codereg = self.codedict[(self.separators, self.commenttype)]
         return self.findnextline(codereg)
-
-    # FIXME: not used
-    def findlinewithfield(self, fieldnum, value):
-        """Starting at the current line, skip all lines that do not contain
-        value as field fieldnum (1-based).
-
-        Return 1 if found, 0 otherwise."""
-        
-        if self.merge:
-            seps = '['+self.separators+']+'
-        else:
-            seps = '['+self.separators+']'
-        rx = '^'
-        rx = rx + ('[^'+self.separators+']*' + seps) * (fieldnum - 1)
-        rx = rx + value + '\(['+self.separators+']\|$\)'
-        return self.findnextline(rx)
 
     def getline(self):
         """Return current line, or '' if past EOF."""
@@ -181,21 +147,6 @@ class Conf:
         if self.line < len(self.lines):
             self.lines[self.line] = re.sub(pat, repl, self.lines[self.line])
 
-    # FIXME: not used
-    def changefield(self, fieldno, fieldtext):
-        """Replace field filedno (0-based) on current line by fieldtext."""
-        
-        fields = self.getfields()
-        fields[fieldno:fieldno+1] = [fieldtext]
-        self.setfields(fields)
-
-    # FIXME: not used
-    def setline(self, line=''):
-        """Replace current line by line."""
-    
-        self.deleteline()
-        self.insertline(line)
-
     def deleteline(self):
         """Remove current line from self.lines."""
         
@@ -224,33 +175,6 @@ class Conf:
                 line = line[:-1]
             self.lines.append(line)
         f.close()
-
-    def write(self):
-        """Write current lines to self.filename.
-
-        Note that self.filename should not contain shell metacharacters. Raise
-        IOError, OSError."""
-        
-        # rcs checkout/checkin errors are thrown away, because they
-        # aren't this tool's fault, and there's nothing much it could
-        # do about them.  For example, if the file is already locked
-        # by someone else, too bad!  This code is for keeping a trail,
-        # not for managing contention.  Too many deadlocks that way...
-        if self.rcs or os.path.exists(os.path.dirname(self.filename)+'/RCS'):
-            self.rcs = 1
-            os.system('/usr/bin/co -l '+self.filename+' </dev/null >/dev/null 2>&1')
-        f = open(self.filename, 'w')
-        if self.mode >= 0:
-            os.chmod(self.filename, self.mode)
-        # add newlines
-        for line in self.lines:
-            f.write(line + '\n')
-        f.close()
-        if self.rcs:
-            mode = os.stat(self.filename).st_mode
-            os.system('/usr/bin/ci -u -m"control panel update" ' +
-                      self.filename+' </dev/null >/dev/null 2>&1')
-            os.chmod(self.filename, mode)
 
 # FIXME: dict would be good enough, .conf and .stanza are not used.
 class YumConfSubDict(DictType):

@@ -81,7 +81,39 @@ class RpmYum:
             self.always_install = [ ]
         return 1
 
-    def addRepo(self, baseurl, excludes, reponame):
+    def addRepo(self, file):
+        """Read yum configuration file and add repositories it uses to RpmYum
+        yum.
+        sys.exit() on error."""
+
+        try:
+            conf = yumconfig.YumConf(self.config.relver, self.config.machine,
+                                     buildarchtranslate[self.config.machine],
+                                     self.config.buildroot, file, "")
+        except IOError, e:
+            printError("Error reading configuration: %s" % e)
+            sys.exit(1)
+        for key in conf.keys():
+            if key == "main":
+                pass
+            else:
+                sec = conf[key]
+                if not sec.has_key("baseurl"):
+                    printError("%s: No baseurl for this section in conf file." % key)
+                    sys.exit(1)
+                baseurl = sec["baseurl"][0]
+                if not sec.has_key("exclude"):
+                    excludes = ""
+                else:
+                    excludes = sec["exclude"]
+                if self.__addSingleRepo(baseurl, excludes, key) == 0:
+                    sys.exit(1)
+                if self.config.compsfile == None:
+                    # May stay None on download error
+                    self.config.compsfile = cacheLocal(baseurl + \
+                                            "/repodata/comps.xml", key)
+
+    def __addSingleRepo(self, baseurl, excludes, reponame):
         """Add a repository at baseurl as reponame.
 
         Return 1 on success 0 on errror (after warning the user).  Exclude
@@ -111,6 +143,14 @@ class RpmYum:
         if not self.pydb.read():
             self.config.printError("Error reading the RPM database")
             return 0
+        for pkg in self.pydb.getPkgList():
+            if pkg["name"] == "fedora-release" or \
+               pkg["name"] == "redhat-release":
+                rpmconfig.relver = pkg["version"]
+        if os.path.isfile(self.config.yumconf):
+            self.addRepo(self.config.yumconf)
+        else:
+            printWarning(1, "Couldn't find given yum config file, skipping read of repos")
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
         return self.runArgs(args)
 
