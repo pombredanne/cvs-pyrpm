@@ -1,11 +1,11 @@
 Summary: A rpm implementation purely in Python
 Name: pyrpm
-Version:  @VERSION@
+Version: @VERSION@
 Release: 1
 License: GPL
 Group: System Environment/Base
 Source: %{name}-%{version}.tar.bz2
-Requires: sqlite, pysqlite, libxml2-python
+Requires: sqlite, python-sqlite, libxml2-python, python-urlgrabber
 BuildRequires: asciidoc
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildArch: noarch
@@ -18,7 +18,7 @@ install packages.
 
 %prep
 rm -rf ${RPM_BUILD_ROOT}
-%setup -q 
+%setup -q
 
 %build
 %configure
