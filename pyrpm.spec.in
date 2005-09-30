@@ -5,7 +5,8 @@ Release: 1
 License: GPL
 Group: System Environment/Base
 Source: %{name}-%{version}.tar.bz2
-Requires: sqlite
+Requires: sqlite, pysqlite, libxml2-python
+BuildRequires: asciidoc
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildArch: noarch
 
@@ -30,7 +31,7 @@ make DESTDIR=${RPM_BUILD_ROOT} install
 rm -rf ${RPM_BUILD_ROOT}
 
 %files
-%doc doc/classes.fig
+%doc doc/README doc/README.html doc/README.rpmdb doc/classes.fig
 %{_bindir}/*
 %{_datadir}/pyrpm/
 

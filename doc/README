@@ -1,25 +1,62 @@
-                                   PyRPM
-                                  =======
+PyRPM
+=====
 
-1. Overview
------------
-PyRPM is a python module and a collection of scripts that provides the same
-functionality as rpm and yum and is completely written in python. It's built
-from ground up and supports the binary rpms, rpmdb, comps.xml files and
-yum repositories.
+
+Overview
+--------
+PyRPM is an experimental project to look at rpm package management. It is
+a python module and a collection of scripts that provide similar functionality
+as rpm, yum and co. It is written from ground up and is implemented only in
+python. It mainly deals with rpm packages, the rpm database "rpmdb" in /var/lib/rpm,
+comps.xml files and yum repositories (called repo data).
 
 The reason for this project was to have a codebase with which we can test and
 verify rpm, rpmdb and yum itself and experiment with new features and
-implementations very quickly. Python is our in-house defacto standard, so using
-python to do rapid prototyping was only logical.
+implementations very quickly. Python is Red Hat's in-house defacto standard,
+so using python to do rapid prototyping was only logical.
 
 The code itself is still very small, about 9000-10000 lines of code. We're
 constantly looking to improve the code, make it more production ready and 
-remove duplicate functionality.
+remove duplicate functionality. Results from this project back to rpm and co
+are very important for us to improve the current available Linux tools and
+not rush with only adding another project for this.
 
 
-2. Whats in there
------------------
+Warning
+-------
+The PyRPM project is by no means meant to be a full replacement of rpm or yum.
+In it's current state we feel confident that in general it won't break anything,
+but the code isn't production quality yet.
+
+The check scripts can be safely used as they won't modify anything on your
+system, so feel free to use them at your convenience.
+
+We personally have been using the yum replacement very extensively and even
+used it to update our own systems, but that's not even remotely a guarantee
+that it will work on your machine. It has only been run by a few people until
+now.
+
+Using it to set up buildroots on the other hand should be very safe as this
+all happens in a very contained environment (sandbox principle).
+
+Please let us know of any problems you encounter, if possible with some
+reproducible testcases so we can figure out what might have happend.
+
+
+Installation
+------------
+The newest source code is available from http://people.redhat.com/laroche/pyrpm/.
+We will setup a more permanent project place, mailinglist and wiki soon.
+
+The easiest way to install PyRPM is by compiling the src.rpm and installing that.
+In addition to standard python modules PyRPM depends on
+
+ - libxml2-python to read xml files like the repo data from yum
+ - pysqlite and sqlite from http://pysqlite.sf.net/ and http://sqlite.org/
+
+
+Whats in there
+--------------
 PyRPM comes with a small collection of scripts and the pyrpm module itself:
 
  pyrpmcheck:      Check rpms for various known problems
@@ -41,8 +78,8 @@ PyRPM comes with a small collection of scripts and the pyrpm module itself:
                   several nifty additional (and dangerous ;) features
 
 
-3. Examples
------------
+Examples
+--------
 This section contains some examples that we commonly use here to test the code
 and even use it for everyday buildroot setups.
 
@@ -82,8 +119,14 @@ Remove glibc and all depending packages from our buildroot :)
   pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 remove glibc
 
 
-4. Detailed tool descriptions
------------------------------
+Pointers to similar projects
+----------------------------
+
+http://smartpm.org/, apt, rpm, yum, up2date, createrepo, anaconda, conary
+
+
+Detailed tool descriptions
+--------------------------
 In order to understand what each of the tools really does this section describes
 the behaviour of the tools in more detail for each tool.
 
