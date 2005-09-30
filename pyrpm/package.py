@@ -895,10 +895,13 @@ class RpmPackage(RpmData):
     def getEVR(self):
         """Return [%epoch:]%version-%release."""
 
-        e = self["epoch"]
-        if e != None:
-            return "%s:%s-%s" % (str(e[0]), self["version"], self["release"])
-        return "%s-%s" % (self["version"], self["release"])
+#        e = self["epoch"]
+#        if e != None:
+#            return "%s:%s-%s" % (str(e[0]), self["version"], self["release"])
+#        return "%s-%s" % (self["version"], self["release"])
+        # Need to always use epochs because of repos. Maybe fixable in the
+        # future.
+        return "%s:%s-%s" % (self.getEpoch(), self["version"], self["release"])
 
     def getNEVR(self):
         """Return %name-[%epoch:]%version-%release."""
