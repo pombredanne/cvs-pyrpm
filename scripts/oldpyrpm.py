@@ -2637,6 +2637,7 @@ class RpmResolver:
         self.obsoletes_list = DepList()
         self.conflicts_list = DepList()
         self.requires_list = DepList()
+        self.cache = {}
 
     def addPkg(self, pkg):
         self.mydeps.setdefault(pkg["name"], []).append(
@@ -2646,11 +2647,16 @@ class RpmResolver:
         self.obsoletes_list.addPkg(pkg, pkg.getObsoletes())
         self.conflicts_list.addPkg(pkg, pkg.getConflicts())
         self.requires_list.addPkg(pkg, pkg.getRequires())
+        self.cache = {}
 
     def searchDependency(self, name, flag, version):
+        key = (name, flag, version)
+        if self.cache.has_key(key):
+            return self.cache[key]
         s = self.provides_list.search(name, flag, version)
         if name[0] == "/" and version == "":
             s += self.filenames_list.search(name)
+        self.cache[key] = s
         return s
 
 
@@ -4962,6 +4968,7 @@ def main():
     checkarch = 0
     buildroot = ""
     checkrpmdb = 0
+    checkdeps = 0
     baseurl = None
     createrepo = 0
     mercurial = 0
@@ -4973,8 +4980,8 @@ def main():
          "wait", "noverify", "small", "explode", "diff", "extract",
          "excludes=",
          "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
-         "checkrpmdb", "buildroot=", "installroot=", "root=", "version",
-         "baseurl=", "createrepo", "mercurial"])
+         "checkrpmdb", "checkdeps", "buildroot=", "installroot=", "root=",
+         "version", "baseurl=", "createrepo", "mercurial"])
     for (opt, val) in opts:
         if opt in ("-?", "-h", "--help"):
             usage()
@@ -5032,6 +5039,8 @@ def main():
                 cachedir += "/"
         elif opt == "--checkrpmdb":
             checkrpmdb = 1
+        elif opt == "--checkdeps":
+            checkdeps = 1
         elif opt in ("--buildroot", "--installroot", "--root"):
             #if not val.startswith("/"):
             #    print "buildroot should start with a /"
@@ -5110,7 +5119,7 @@ def main():
                 #if f:
                 #    print rpm.getFilename()
                 #    print f
-                if strict or wait:
+                if checkdeps or strict or wait:
                     repo.append(rpm)
                 del rpm
         if strict:
@@ -5119,6 +5128,7 @@ def main():
             checkDirs(repo)
             checkSymlinks(repo)
             checkProvides(repo, checkrequires=1)
+        if strict or checkdeps:
             repo2 = []
             for rpm in repo:
                 if (rpm["name"], rpm["arch"]) in dupes:
