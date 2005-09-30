@@ -22,7 +22,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import fnmatch, getopt, gzip, md5, os, sha, sys, libxml2
+import re, fnmatch, getopt, gzip, md5, os, sha, sys, libxml2
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
@@ -72,6 +72,11 @@ def usage(retval=1):
      -h, --help = show this help
      -V, --version = output version
      -p, --pretty = output xml files in pretty format.
+     -A, --autoglob = extract file and dir globs automatically from filereqs
+     -D, --dirglob = specify a directory glob used for trimming filelist, can
+                     be specified multiple times
+     -F, --fileglob = specify a file glob used for trimming filelist, can be
+                     specified multiple times
     """)
 
     sys.exit(retval)
@@ -158,13 +163,18 @@ def parseArgs(args):
     cmds['dir-pattern-match'] = ['.*bin\/.*', '^\/etc\/.*']
 
     try:
-        gopts, argsleft = getopt.getopt(args, 'phqVvg:s:x:u:', ['help', 'exclude=',
+        gopts, argsleft = getopt.getopt(args, 'phqVvg:s:x:u:AD:F:', ['help', 'exclude=',
                                             'quiet', 'verbose',
                                             'baseurl=', 'groupfile=', 'checksum=',
-                                            'version', 'pretty'])
+                                            'version', 'pretty', 'autoglob',
+                                            'dirglob=', 'fileglob='])
     except getopt.error, e:
         errorprint(_('Options Error: %s.') % e)
         usage()
+
+    # Flags needed for overwriting the default values
+    found_fileglob = False
+    found_dirglob = False
 
     try:
         for arg,a in gopts:
@@ -222,11 +232,28 @@ def parseArgs(args):
                     usage()
                 else:
                     cmds['sumtype'] = a
+            elif arg in ['-A', '--autoglob']:
+                cmds['autoglob'] = True
+            elif arg in ['-D', '--dirglob']:
+                if not found_dirglob:
+                    found_dirglob = True
+                    cmds['dir-pattern-match'] = []
+                if a == '':
+                    cmds['dir-pattern-match'] = []
+                else:
+                    cmds['dir-pattern-match'].append(a)
+            elif arg in ['-F', '--fileglob']:
+                if not found_fileglob:
+                    found_fileglob = True
+                    cmds['file-pattern-match'] = []
+                if a == '':
+                    cmds['file-pattern-match'] = []
+                else:
+                    cmds['file-pattern-match'].append(a)
 
     except ValueError, e:
         errorprint(_('Options Error: %s') % e)
         usage()
-
 
     return cmds, directory
 
@@ -323,6 +350,55 @@ def doPkgMetadata(cmds):
     other = OutputFile(cmds, 'otherfile', 'otherdata',
                        'http://linux.duke.edu/metadata/other', pkgcount)
 
+    # Find all real file requires
+    if cmds.has_key('autoglob'):
+        cmds['file-pattern-match'] = []
+        cmds['dir-pattern-match'] = []
+        current = 0
+        fhash = {}
+        if not cmds['quiet']:
+            print "Pass 1: Finding file requires"
+        for filename in files:
+            current+=1
+            try:
+                # FIXME: don't open the file twice?
+                pkgid = getChecksum(cmds['sumtype'], filename)
+                hdr = pyrpm.metadataReadPackage(filename)
+                if not cmds['quiet']:
+                    if cmds['verbose']:
+                        print '%d/%d - %s' % (current, len(files), filename)
+                    else:
+                        sys.stdout.write('\r' + ' ' * 80)
+                        sys.stdout.write("\r%d/%d - %s" % (current, len(files), filename))
+                        sys.stdout.flush()
+            except (IOError, MDError, ValueError), e:
+                errorprint('\n%s - %s' % (e, filename))
+                continue
+            for regex in hdr["requirename"]:
+                if regex.startswith("/"):
+                    regex = regex.replace("\\", "\\\\")
+                    regex = regex.replace("/", "\\/")
+                    regex = regex.replace(".", "\\.")
+                    regex = regex.replace("*", "\\*")
+                    regex = regex.replace("+", "\\+")
+                    regex = regex.replace("^", "\\^")
+                    regex = regex.replace("$", "\\$")
+                    regex = regex.replace("?", "\\?")
+                    regex = regex.replace("{", "\\{")
+                    regex = regex.replace("}", "\\}")
+                    regex = regex.replace("[", "\\[")
+                    regex = regex.replace("]", "\\]")
+                    regex = regex.replace("|", "\\|")
+                    regex = regex.replace("(", "\\(")
+                    regex = regex.replace(")", "\\)")
+                    regex = '^' + regex + '$'
+                    fhash[regex] = 1
+        cmds['dir-pattern-match'].extend(fhash.keys())
+        cmds['file-pattern-match'].extend(fhash.keys())
+     
+        if not cmds['quiet']:
+            print "\nPass 2: Generating repodata files"
+
     current = 0
     for filename in files:
         current+=1
@@ -393,6 +469,11 @@ def repoXML(node, cmds):
         data.newChild(None, 'timestamp', str(timestamp))
         unchecksum = data.newChild(None, 'open-checksum', uncsum)
         unchecksum.newProp('type', sumtype)
+        if ftype == 'primary':
+            for glob in cmds['file-pattern-match']:
+                fglob = data.newChild(None, 'fileglob', glob)
+            for glob in cmds['dir-pattern-match']:
+                dglob = data.newChild(None, 'dirglob', glob)
 
     # if we've got a group file then checksum it once and be done
     if cmds['groupfile'] is not None:

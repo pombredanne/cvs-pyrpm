@@ -118,7 +118,7 @@ def metadataReadPackage(filename):
     long it contains all needed tags.  Raise ValueError on invalid data,
     IOError."""
 
-    return functions.readRpmPackage(config.rpmconfig, "file:/" + filename,
+    return functions.readRpmPackage(config.rpmconfig, filename,
                                     verify = None, hdronly = True)
 
 
