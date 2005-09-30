@@ -749,8 +749,7 @@ install_keys["basenames2"] = 1
 # Required tags in a header.
 rpmtagrequired = ("name", "version", "release", "arch", "rpmversion")
 
-importanttags = {"name":1, "epoch":1, "version":1, "release":1,
-    "arch":1, "payloadcompressor":1, "payloadformat":1,
+importanttags = {"name":1, "epoch":1, "version":1, "release":1, "arch":1,
     "providename":1, "provideflags":1, "provideversion":1,
     "requirename":1, "requireflags":1, "requireversion":1,
     "obsoletename":1, "obsoleteflags":1, "obsoleteversion":1,
@@ -760,10 +759,12 @@ importanttags = {"name":1, "epoch":1, "version":1, "release":1,
     "prein":1, "preinprog":1, "postin":1, "postinprog":1,
     "preun":1, "preunprog":1, "postun":1, "postunprog":1,
     "verifyscript":1, "verifyscriptprog":1,
+    "payloadformat":1, "payloadcompressor":1, "immutable":1,
     "oldfilenames":1, "dirindexes":1, "dirnames":1, "basenames":1,
     "fileusername":1, "filegroupname":1, "filemodes":1,
     "filemtimes":1, "filedevices":1, "fileinodes":1, "filesizes":1,
-    "filemd5s":1, "filerdevs":1, "filelinktos":1, "fileflags":1}
+    "filemd5s":1, "filerdevs":1, "filelinktos":1, "fileflags":1,
+    "filecolors":1, "archivesize":1}
 
 
 # Info within the sig header.
