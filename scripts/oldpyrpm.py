@@ -1852,6 +1852,11 @@ class ReadRpm:
         """Return %name-[%epoch:]%version-%release.%arch."""
         return "%s-%s.%s" % (self["name"], self.getEVR(), self.getArch())
 
+    def getNEVR0(self):
+        """Return %name-[%epoch:]%version-%release."""
+        return "%s-%s:%s-%s" % (self["name"], self.getEpoch(),
+            self["version"], self["release"])
+
     def getNEVRA0(self):
         """Return %name-[%epoch:]%version-%release.%arch."""
         return "%s-%s:%s-%s.%s" % (self["name"], self.getEpoch(),
@@ -2631,7 +2636,6 @@ class DepList:
 class RpmResolver:
 
     def __init__(self):
-        self.mydeps = {}
         self.filenames_list = FilenamesList()
         self.provides_list = DepList()
         self.obsoletes_list = DepList()
@@ -2640,8 +2644,6 @@ class RpmResolver:
         self.cache = {}
 
     def addPkg(self, pkg):
-        self.mydeps.setdefault(pkg["name"], []).append(
-            (RPMSENSE_EQUAL, pkg.getEVR(), pkg))
         self.filenames_list.addPkg(pkg)
         self.provides_list.addPkg(pkg, pkg.getProvides())
         self.obsoletes_list.addPkg(pkg, pkg.getObsoletes())
@@ -4318,8 +4320,9 @@ def checkDeps(rpms):
     # Check for obsoletes.
     for name in resolver.obsoletes_list.deps.keys():
         for (flag, version, rpm) in resolver.obsoletes_list.deps[name]:
-            for pkg in searchDep(name, flag, version,
-                resolver.mydeps.get(name, [])):
+            for pkg in resolver.searchDependency(name, flag, version):
+                if rpm.getNEVR0() == pkg.getNEVR0():
+                    continue
                 if rpm["name"] != name:
                     print "Warning:", pkg.getFilename(), "is obsoleted by", \
                         depString(name, flag, version), "from", rpm.getFilename()
@@ -4336,6 +4339,8 @@ def checkDeps(rpms):
     for name in resolver.conflicts_list.deps.keys():
         for (flag, version, rpm) in resolver.conflicts_list.deps[name]:
             for pkg in resolver.searchDependency(name, flag, version):
+                if rpm.getNEVR0() == pkg.getNEVR0():
+                    continue
                 print "Warning:", rpm.getFilename(), "contains a conflict", \
                     depString(name, flag, version), "with", pkg.getFilename()
     # Check for fileconflicts.
@@ -4867,7 +4872,11 @@ dupes = [ ("glibc", "i386"),
           ("kernel-smp-devel", "i686"),
           ("kernel-xen0", "i686"),
           ("kernel-xenU", "i686"),
-          ("kernel-devel", "i586") ]
+          ("kernel-devel", "i586"),
+          ("GFS-kernel", "i586"),
+          ("gnbd-kernel", "i586"),
+          ("dlm-kernel", "i586"),
+          ("cman-kernel", "i586") ]
 def checkProvides(repo, checkrequires=1):
     provides = {}
     requires = {}
