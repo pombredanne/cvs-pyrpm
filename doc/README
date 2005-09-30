@@ -154,6 +154,9 @@ Pointers to related projects
 
 rpm is available from link:http://www.rpm.org/[http://www.rpm.org/] and
 link:http://www.wraptastic.org/[http://www.wraptastic.org/].
+Mailinglist at link:https://listman.redhat.com/mailman/listinfo/rpm-list[https://listman.redhat.com/mailman/listinfo/rpm-list].
+The binary rpm format is described at
+link:http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html[http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html].
 
 yum is available from link:http://linux.duke.edu/projects/yum/[http://linux.duke.edu/projects/yum/]
 with devel mailinglist at
@@ -179,7 +182,8 @@ up2date and rhnlib are the client software for link:http://rhn.redhat.com/[Red H
 downloaded from link:http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/[http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/].
 
 Anaconda is the Red Hat installation tool and can be downloaded at
-link:http://elvis.redhat.com/anaconda/[http://elvis.redhat.com/anaconda/].
+link:http://elvis.redhat.com/anaconda/[http://elvis.redhat.com/anaconda/] and
+link:http://fedora.redhat.com/projects/anaconda-installer/[http://fedora.redhat.com/projects/anaconda-installer/].
 
 Conary has looked at rpm history and defines a new distribution format that enables
 rollbacks and easier customization on the client side. Available at
@@ -188,6 +192,18 @@ link:http://wiki.conary.com/[http://wiki.conary.com/].
 
 apt4rpm is adapting the Debian packaging tool to also work with rpm packages.
 Available from link:http://apt4rpm.sourceforge.net/[http://apt4rpm.sourceforge.net/].
+
+deltarpm is working on reducing the network traffic for rpm based updates. Available
+at link:ftp://ftp.suse.com/pub/projects/deltarpm/[ftp://ftp.suse.com/pub/projects/deltarpm/].
+
+FAI (Fully Automatic Installation) for Debian. Available from
+link:http://www.informatik.uni-koeln.de/fai/[http://www.informatik.uni-koeln.de/fai/].
+
+OpenPKG cross-platform rpm-based software packaging, available at
+link:http://www.openpkg.org/[http://www.openpkg.org/].
+
+Rebuild rpm packages and manage build roots via mach, available from
+link:http://thomas.apestaart.org/projects/mach/[http://thomas.apestaart.org/projects/mach/].
 
 
 Detailed tool descriptions
@@ -256,6 +272,9 @@ are handled correctly. The one check that is very unreliable is the SHA1 header
 checksum tests as this test has to rely on a very specific ordering of the
 rpm binary header and about the tags that appear in the original rpm. If those
 assupmtions don't hold this checksum can't be computed correctly.
+
+Pointer to repair scripts is available at
+link:http://www.rpm.org/hintskinks/repairdb/[http://www.rpm.org/hintskinks/repairdb/].
 
 
 4.6 pyrpminstall
