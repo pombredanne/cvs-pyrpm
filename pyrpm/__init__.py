@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-__version__ = "0.32"
+__version__ = "0.33"
 __doc__ = """Read and manage RPM packages."""
 
 import os, locale, sys
@@ -31,7 +31,7 @@ _files.sort()
 locale.setlocale(locale.LC_ALL, "")
 
 # not tested at all, just a guess
-if sys.version_info < (2, 3):
+if sys.version_info < (2, 2):
     sys.exit("error: Python 2.3 or later required")
 
 for _i in _files:
