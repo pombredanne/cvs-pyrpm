@@ -8,8 +8,8 @@ Overview
 PyRPM is an experimental project to look at rpm package management. It is
 a python module and a collection of scripts that provide similar functionality
 as rpm, yum and co. It is written from ground up and is implemented only in
-python. It mainly deals with rpm packages, the rpm database "rpmdb" in /var/lib/rpm,
-comps.xml files and yum repositories (called repo data).
+python. It mainly deals with rpm packages, the rpm database `rpmdb` in
+`/var/lib/rpm`, comps.xml files and yum repositories (called repo data).
 
 The reason for this project was to have a codebase with which we can test and
 verify rpm, rpmdb and yum itself and experiment with new features and
@@ -27,8 +27,8 @@ Warning
 -------
 
 The PyRPM project is by no means meant to be a full replacement of rpm or yum.
-In it's current state we feel confident that in general it won't break anything,
-but the code isn't production quality yet.
+In its current state we feel confident that in general it won't break
+anything, but the code isn't production quality yet.
 
 The check scripts can be safely used as they won't modify anything on your
 system, so feel free to use them at your convenience.
@@ -48,61 +48,179 @@ reproducible testcases so we can figure out what might have happend.
 Installation
 ------------
 
-The newest source code is available from link:http://people.redhat.com/laroche/pyrpm/[http://people.redhat.com/laroche/pyrpm/].
-We will setup a more permanent project place, mailinglist and wiki soon.
+The newest source code is available from
+link:http://people.redhat.com/laroche/pyrpm/[].
+We will setup a more permanent project place, mailinglist and wiki later on.
 
-The easiest way to install PyRPM is by compiling the src.rpm and installing that.
-In addition to standard python modules PyRPM depends on
+The easiest way to install PyRPM is by compiling the src.rpm and installing
+that. Python 2.3 or newer is required. In addition to standard python modules
+PyRPM depends on:
 
  - libxml2-python to read xml files like the repo data from yum. Available from
-   link:http://xmlsoft.org/[http://xmlsoft.org/].
- - pysqlite (which is installed as python-sqlite on Fedora Core) and sqlite from link:http://pysqlite.org/[http://pysqlite.org/]
-   and link:http://sqlite.org/[http://sqlite.org/]
+   link:http://xmlsoft.org/[].
+ - pysqlite (which is installed as python-sqlite on Fedora Core) and sqlite
+   from link:http://pysqlite.org/[] and link:http://sqlite.org/[]
  - urlgrabber to download files via http and ftp
-   from link:http://linux.duke.edu/projects/urlgrabber/[http://linux.duke.edu/projects/urlgrabber/]
+   from link:http://linux.duke.edu/projects/urlgrabber/[]
 
-All the above are part of the Fedora Core 4 or newer, you might have to add them yourself to older releases.
+All the above are part of the Fedora Core 4 or newer, you might have to add
+them yourself to older releases.
 
 
-Whats in there
+Pointers to related projects
+----------------------------
+
+rpm is available from link:http://www.rpm.org/[] and
+link:http://www.wraptastic.org/[].
+Mailinglist at link:https://listman.redhat.com/mailman/listinfo/rpm-list[].
+The binary rpm format is described at
+link:http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html[].
+
+yum is available from link:http://linux.duke.edu/projects/yum/[]
+with the development mailinglist at
+link:https://lists.linux.duke.edu/mailman/listinfo/yum-devel/[].
+
+The new metadata for yum repositories (also named repodata) is discussed at
+link:http://linux.duke.edu/projects/metadata/[].
+It also includes the
+link:http://linux.duke.edu/projects/metadata/generate/[createrepo] tool.
+
+urlgrabber is available from
+link:http://linux.duke.edu/projects/urlgrabber[].
+
+repoview is available from
+link:http://linux.duke.edu/projects/mini/repoview/[].
+
+rpmlint is checking for packaging errors. It is available at
+link:http://people.mandriva.com/%7eflepied/projects/rpmlint/[http://people.mandriva.com/~flepied/projects/rpmlint/].
+
+Smart is written in python and combines several different binary
+packaging formats within one packaging tool. It is available at
+link:http://smartpm.org/[].
+
+up2date and rhnlib are the client software for
+link:http://rhn.redhat.com/[Red Hat Network] and can be downloaded from
+link:http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/[].
+
+Anaconda is the Red Hat installation tool and can be downloaded at
+link:http://elvis.redhat.com/anaconda/[] and
+link:http://fedora.redhat.com/projects/anaconda-installer/[].
+
+Conary has looked at rpm history and defines a new distribution format that
+enables rollbacks and easier customization on the client side. Available at
+link:http://www.rpath.com/[] and link:http://wiki.conary.com/[].
+
+apt4rpm is adapting the Debian packaging tool to also work with rpm packages.
+Available from link:http://apt4rpm.sourceforge.net/[].
+
+deltarpm is working on reducing the network traffic for rpm based updates.
+Available at link:ftp://ftp.suse.com/pub/projects/deltarpm/[].
+
+FAI (Fully Automatic Installation) for Debian. Available from
+link:http://www.informatik.uni-koeln.de/fai/[].
+
+OpenPKG cross-platform rpm-based software packaging, available at
+link:http://www.openpkg.org/[].
+
+Rebuild rpm packages and manage build roots via mach, available from
+link:http://thomas.apestaart.org/projects/mach/[] and further info
+at link:http://fedoraproject.org/wiki/UsingMach[].
+
+Fedora Core Live CDs at link:http://fedoraproject.org/wiki/LiveCD[].
+
+Here should be a link on how rpm packages for Fedora Extras are checked
+to make them real nice, stable and conforming to Red Hat and comunity
+standards.
+
+
+Developer Notes
+---------------
+
+Use `pychecker` or `pylint` to improve code quality, 4 space indents and
+no tabs. Most scripts support giving `\--hotshot` as first option to run
+them with the hotshot python profiler.
+Send patches to link:mailto:laroche@redhat.com[Florian La Roche],
+link:mailto:pknirsch@redhat.com[Phil Knirsch] and
+link:mailto:twoerner@redhat.com[Thomas Woerner].
+`oldpyrpm.py` has some TODO items listed in the source.
+
+
+Detailed tool descriptions
+--------------------------
+
+In order to understand what each of the tools really does this section describes
+the behaviour of the tools in more detail for each tool.
+
+
+4.1 pyrpmcheck
 --------------
 
-PyRPM comes with a small collection of scripts and the pyrpm module itself:
+There are currently 4 basic tests in pyrpmcheck. The first checks for all
+packages if any two dirs differ in user/group/mode. The second check looks for
+duplicate provides, meaning if 2 rpms provide the same thing. The third test
+looks for dangling symlinks, that is, symlinks that point to nowhere. The
+last check simply checks if any package names appear in the various given dirs.
+This check is only useful for FC and FC-Extras, as there should be no overlap
+there.
 
- pyrpmcheck:      Check rpms for various known problems
- pyrpmcheckrepo:  Simulate an install of a given system followed by an
-                  update to the second repo or rpms
- pyrpmcreaterepo: Build the yum repodata, but using the pyrpm module
-                  underneath instead of rpmlib
- pyrpmdb2rpmdb:   Convert a "old" pyrpm database to rpmdb using rpm itself.
-                  Obsolete now with direct rpmdb support in pyrpm
- pyrpmdbverify:   Check the internal and possibly external consistency of a
-                  rpmdb. See README.rpmdb for more info
- pyrpminstall:    Install, update and erase packages. Uses very similar command
-                  line options as rpm
- pyrpmrandomizer: Given a repo tries to install and remove packages trying to
-                  solve all unresolved deps along the way
- pyrpmrebuilddb:  Rebuilds a rpmdb, same as rpm --rebuilddb
- pyrpmspecinfo:   Spec file parser tool
- pyrpmyum:        A yum replacement, can use standard yum config files with
-                  several nifty additional (and dangerous ;) features
-
-
-Examples
---------
-
-This section contains some examples that we commonly use here to test the code
-and even use it for everyday buildroot setups.
-
-Check some common problems with packages and interdependancies for FC Devel:
+Check some common problems with packages and interdependancies for
+Fedora Core Devel:
 -------------------------------
-pyrpmcheck /mnt/redhat/fedora/development/i386/Fedora/RPMS
+pyrpmcheck /mirror/fedora/development/i386/Fedora/RPMS
 -------------------------------
 
-Check if an update from FC4 to FC Devel works or what problems come up:
+
+4.2 pyrpmcheckrepo
+------------------
+
+This tool should actually be renamed (and will so soon) to pyrpmcheckinstall as
+that's what it does. What the tool does it to simulate an installation (just
+like you could do with `pyrpmyum \--test`) and then simulates an update to the
+second set of rpms or repository. A typical test would be to use a FC-3
+or FC-4 yum.conf repo as a install base and then use a FC-devel repo or
+rpm tree as the update tree. The nice thing about the simulation is that it
+doesn't actually perform the installation and so doesn't need any diskspace.
+Additionally you can use the (undocumented ;)) option `\--arch` where you can
+specify an arch you like. The host arch doesn't matter for the simulation
+as the whole code "thinks" it runs under arch. So simulated installs and
+updates for all kinds of archs can be performed this way on one single machine.
+
+Check if an update from Fedora Core 4 to Fedora Core Devel works or what
+problems come up:
 -------------------------------
-pyrpmcheckrepo -r /mnt/foo install /mnt/raid/fedora/4/i386/os/Fedora/RPMS update /mnt/raid/fedora/development/i386/Fedora/RPMS
+pyrpmcheckrepo -r /mnt/foo install /mirror/fedora/4/i386/os/Fedora/RPMS update /mirror/fedora/development/i386/Fedora/RPMS
 -------------------------------
+
+
+4.3 pyrpmcreaterepo
+-------------------
+
+Here we've take the code from the original createrepo and replaced the rpmlib
+based access to rpm headers with our code.
+
+
+4.4 pyrpmdbconvert
+-----------------
+
+Nothing written yet.
+
+
+4.5 pyrpmdbverify
+-----------------
+
+This tool actually really reads all DB4 files in /var/lib/rpm (or, if you
+use the `\--dbpath` option, in that directory) and tries to cross check the entries
+with the rpm header that is found in /var/lib/rpm/Packages. The README.rpmdb
+contains a lot more detail about the structure of rpmdb. Simply put we check
+if for every entry in every file there is a corresponding entry in Packages
+and vice versa. There are some exceptions and special cases, but all known ones
+are handled correctly. The one check that is very unreliable is the SHA1 header
+checksum tests as this test has to rely on a very specific ordering of the
+rpm binary header and about the tags that appear in the original rpm. If those
+assupmtions don't hold this checksum can't be computed correctly.
+
+Pointer to repair scripts is available at
+link:http://www.rpm.org/hintskinks/repairdb/[].
 
 Check the rpmdb of the current system with internal cross checks
 -------------------------------
@@ -111,14 +229,87 @@ pyrpmdbverify
 
 Same, but this time we use external rpms to verify against, too
 -------------------------------
-pyrpmdbverify /mnt/redhat/fedora/development/i386/Fedora/RPMS
+pyrpmdbverify /mirror/fedora/development/i386/Fedora/RPMS
 -------------------------------
+
+
+4.6 pyrpminstall
+----------------
+
+Simply put this tool allows you to install, update and erase rpms just like
+you would with rpm itself. It supports most of the common options from rpm
+and used the same syntax, too. As it's "only" rpm though there is no depresolver
+in this tool, so if you have any missing dependencies you'll have to fiddle
+them out yourself, just as you had to do with rpm.
+
+
+4.7 pyrpmkickstart
+------------------
+
+Nothing written yet.
+
+
+4.8 pyrpmrandomizer
+-------------------
+
+This is our main stresstest tool. With it you can run literally thousands of
+update and erase operations in a buildroot and after several days scan the
+output for any problems. It works simply by alternating between trying to
+select randomly one package from the repository and installing that and 
+selecting a package from the installed ones and removing that, always trying
+to resolve all missing dependencies and conflicts. There are several special
+options which help circumvent some strange problems. The first is `\--servicehack`
+which simply changes `/sbin/service` to "exit 0" as especially some of the
+postuninstall scripts really misbehave otherwise and you don't need any
+services started or stopped in a buildroot anyway for testing. The second is
+the `\--autoerase` option which I'll describe a little more in detail for
+pyrpmyum.
 
 Run 10000 install and erase operations in the /mnt/build/test buildroot and
 save the resulting output in /tmp/stresstest
 -------------------------------
 pyrpmrandomizer --servicehack -y -v -c fc3-updates-i386.conf -r /mnt/build/test 10000 >&/tmp/stresstest
 -------------------------------
+
+
+4.9 pyrpmrebuilddb
+------------------
+
+Ever had to use `rpm \--rebuilddb`? Well, here is our version of it. It tries to
+do the same thing as rpm where it takes /var/lib/rpm/Packages and rebuilds the
+database with that information. The default path for the new db is ./rpmdb
+so that your original one won't be overwritten.
+
+
+4.10 pyrpmspecinfo
+-----------------
+As we often have to work with specfiles, too, we've written a small tool with
+which we can extrace the different sections from a specfile in order to use
+that info via pipe in other tools.
+
+
+4.11 pyrpmyum
+-------------
+
+Our main workhorse and real puppy. This tool, as the name already suggests is
+basically a yum replacement of sorts. It uses the same command line options as
+yum and uses the same config files, too. It contains a complete depresolver
+and allows complex installs, updates and erases from systems. We have used it
+to install FC1 and then step by step update to FC1-updates, FC2, FC2-updates,
+FC3, FC3-updates and finally FC4. Some of the updates need the `\--autoerase`
+option though because some dependencies just can't be met and packages need
+to be removed in order to fulfill them. The autoerase option tries exactly
+that by semi-intelligently selecting the package that needs to be removed in
+order for the update to work properly without user intervention. For the
+described update chain only about 6-7 packages were deleted up to FC3, and all
+of them would have to be removed manually anyway. But a word of warning here:
+The autoerase option might run amok if things go really wrong or you try to
+update to a completely broken tree and would then try to remove almost all of
+your packages. This has never happend for real trees for us, but just imagine
+a broken repository and things could go really wrong. That's why this option
+isn't directly listed in the help and should only be used for a `\--test` run
+or without the -y option where you get listed separately from the "normal"
+transaction the packages that pyrpmyum would autoerase for you.
 
 Install a full FC Devel in /mnt/build/fc-devel-i386 buildroot
 -------------------------------
@@ -149,208 +340,130 @@ pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 remove glibc
 -------------------------------
 
 
-Pointers to related projects
-----------------------------
-
-rpm is available from link:http://www.rpm.org/[http://www.rpm.org/] and
-link:http://www.wraptastic.org/[http://www.wraptastic.org/].
-Mailinglist at link:https://listman.redhat.com/mailman/listinfo/rpm-list[https://listman.redhat.com/mailman/listinfo/rpm-list].
-The binary rpm format is described at
-link:http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html[http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html].
-
-yum is available from link:http://linux.duke.edu/projects/yum/[http://linux.duke.edu/projects/yum/]
-with devel mailinglist at
-link:https://lists.linux.duke.edu/mailman/listinfo/yum-devel/[https://lists.linux.duke.edu/mailman/listinfo/yum-devel/].
-
-The new metadata for yum repositories (also named repodata) is discussed at
-link:http://linux.duke.edu/projects/metadata/[http://linux.duke.edu/projects/metadata/].
-It also includes the link:http://linux.duke.edu/projects/metadata/generate/[createrepo] tool.
-
-urlgrabber is available from
-link:http://linux.duke.edu/projects/urlgrabber[http://linux.duke.edu/projects/urlgrabber/].
-
-repoview is available from
-link:http://linux.duke.edu/projects/mini/repoview/[http://linux.duke.edu/projects/mini/repoview/].
-
-rpmlint is checking for packaging errors. It is available at
-link:http://people.mandriva.com/~flepied/projects/rpmlint/[http://people.mandriva.com/~flepied/projects/rpmlint/].
-
-Smart is written in python and combines several different binary packaging
-formats within one packaging tool. It is available at link:http://smartpm.org/[http://smartpm.org/].
-
-up2date and rhnlib are the client software for link:http://rhn.redhat.com/[Red Hat Network] and can be
-downloaded from link:http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/[http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/].
-
-Anaconda is the Red Hat installation tool and can be downloaded at
-link:http://elvis.redhat.com/anaconda/[http://elvis.redhat.com/anaconda/] and
-link:http://fedora.redhat.com/projects/anaconda-installer/[http://fedora.redhat.com/projects/anaconda-installer/].
-
-Conary has looked at rpm history and defines a new distribution format that enables
-rollbacks and easier customization on the client side. Available at
-link:http://www.rpath.com/[http://www.rpath.com/] and
-link:http://wiki.conary.com/[http://wiki.conary.com/].
-
-apt4rpm is adapting the Debian packaging tool to also work with rpm packages.
-Available from link:http://apt4rpm.sourceforge.net/[http://apt4rpm.sourceforge.net/].
-
-deltarpm is working on reducing the network traffic for rpm based updates. Available
-at link:ftp://ftp.suse.com/pub/projects/deltarpm/[ftp://ftp.suse.com/pub/projects/deltarpm/].
-
-FAI (Fully Automatic Installation) for Debian. Available from
-link:http://www.informatik.uni-koeln.de/fai/[http://www.informatik.uni-koeln.de/fai/].
-
-OpenPKG cross-platform rpm-based software packaging, available at
-link:http://www.openpkg.org/[http://www.openpkg.org/].
-
-Rebuild rpm packages and manage build roots via mach, available from
-link:http://thomas.apestaart.org/projects/mach/[http://thomas.apestaart.org/projects/mach/].
-
-
-Detailed tool descriptions
---------------------------
-
-In order to understand what each of the tools really does this section describes
-the behaviour of the tools in more detail for each tool.
-
-
-4.1 pyrpmcheck
---------------
-
-There are currently 4 basic tests in pyrpmcheck. The first checks for all
-packages if any two dirs differ in user/group/mode. The second check looks for
-duplicate provides, meaning if 2 rpms provide the same thing. The third test
-looks for dangling symlinks, that is, symlinks that point to nowhere. The
-last check simply checks if any package names appear in the various given dirs.
-This check is only useful for FC and FC-Extras, as there should be no overlap
-there.
-
-
-4.2 pyrpmcheckrepo
-------------------
-
-This tool should actually be renamed (and will so soon) to pyrpmcheckinstall as
-that's what it does. What the tool does it to simulate an installation (just
-like you could do with pyrpmyum --test) and then simulates an update to the
-second set of rpms or repository. A typical test would be to use a FC-3
-or FC-4 yum.conf repo as a install base and then use a FC-devel repo or
-rpm tree as the update tree. The nice thing about the simulation is that it
-doesn't actually perform the installation and so doesn't need any diskspace.
-Additionally you can use the (undocumented ;)) option --arch where you can
-specify and arch you like. The host arch doesn't matter for the simulation
-as the whole code "thinks" it runs under arch. So simulated installs and updates
-for all kinds of archs can be performed this way on one single machine.
-
-
-4.3 pyrpmcreaterepo
--------------------
-
-Here we've take the code from the original createrepo and replaced the rpmlib
-based access to rpm headers with our code.
-
-
-4.4 pyrpmdb2rpmdb
------------------
-
-As we didn't have rpmdb support in the beginning we had to use our "own"
-database which only consisted of the binary rpm headers saved as files with
-the NEVRA of the packages. This allowed easy manipulation of the database and
-the headers were still readable and usable by rpm itself, so you could build
-a rpmdb using those header files and the --justdb option of rpm. This has now
-become obsolete with the full support of rpmdb.
-
-
-4.5 pyrpmdbverify
------------------
-
-This tool actually really reads all DB4 files in /var/lib/rpm (or, if you
-use the --dbpath option, in that directory) and tries to cross check the entries
-with the rpm header that is found in /var/lib/rpm/Packages. The README.rpmdb
-contains a lot more detail about the structure of rpmdb. Simply put we check
-if for every entry in every file there is a corresponding entry in Packages
-and vice versa. There are some exceptions and special cases, but all known ones
-are handled correctly. The one check that is very unreliable is the SHA1 header
-checksum tests as this test has to rely on a very specific ordering of the
-rpm binary header and about the tags that appear in the original rpm. If those
-assupmtions don't hold this checksum can't be computed correctly.
-
-Pointer to repair scripts is available at
-link:http://www.rpm.org/hintskinks/repairdb/[http://www.rpm.org/hintskinks/repairdb/].
-
-
-4.6 pyrpminstall
+4.12 oldpyrpm.py
 ----------------
 
-Simply put this tool allows you to install, update and erase rpms just like
-you would with rpm itself. It supports most of the common options from rpm
-and used the same syntax, too. As it's "only" rpm though there is no depresolver
-in this tool, so if you have any missing dependencies you'll have to fiddle
-them out yourself, just as you had to do with rpm.
+This script does not depend on the rest of the pyrpm module, but is all
+copied into one file. It is not as complete as the new pyrpm code, but
+can still be used for many use cases. oldpyrpm.py only depends on
+python-2.2 or newer and you can use parts of it even if one of the addon
+python modules are not available. Also feel free to check the script for
+more hidden usage cases.
 
+You can list the changes between two source packages. If you specify
+`\--explode` it tries to also show the changes within `*.tar.gz` files
+if they have changed.
+-------------------------------
+oldpyrpm.py [--explode] --diff 1.src.rpm 2.src.rpm
+-------------------------------
 
-4.7 pyrpmrandomizer
--------------------
+You can extract source or normal binary packages. This always overwrites
+existing files and does not start any scripts in binary packages, so it
+is often only used for source packages:
+-------------------------------
+oldpyrpm.py [--buildroot=/chroot] --extract *.rpm
+-------------------------------
 
-This is our main stresstest tool. With it you can run literally thousands of
-update and erase operations in a buildroot and after several days scan the
-output for any problems. It works simply by alternating between trying to
-select randomly one package from the repository and installing that and 
-selecting a package from the installed ones and removing that, always trying
-to resolve all missing dependencies and conflicts. There are several special
-options which help circumvent some strange problems. The first is --servicehack
-which simply changes /sbin/service to "exit 0" as especially some of the
-postuninstall scripts really misbehave otherwise and you don't need any
-services started or stopped in a buildroot anyway for testing. The second is
-the --autoerase option which I'll describe a little more in detail for
-pyrpmyum.
+You can check source rpm packages and mark the ones which are excluded from
+building on certain architectures.
+-------------------------------
+oldpyrpm.py --checkarch /mirror/fedora/development/SRPMS
+-------------------------------
 
+You can check the rpm database `rpmdb`. The complete information that rpm
+needs is included in `/var/lib/rpm/Packages`. There are further db4 files
+in the rpmdb directory to speed up information lookup. This is how the rpmdb
+is being checked:
 
-4.8 pyrpmrebuilddb
-------------------
+ - Verify all data from `/var/lib/rpm/Packages` is the same as in all other
+   db4 files (two-way check).
+ - Most of the rpm header data does have a sha1 checksum. For most newer rpm
+   packages in rpmdb we can try to verify that sha1 to be correct.
+ - If scripts fail often duplicate rpm packages stay installed. Apart from
+   kernel packages and a few other special packages, you get a warning about
+   all duplicated packages.
+ - Check all dependency information for `Requires:`, `Provides:`,
+   `Conflicts:` and `Obsoletes:` is correctly matching up and if the
+   installed rpm packages do have any fileconflicts.
+ - If you specify a yum configuration file, all installed files are checked
+   against the yum repositories. Which rpm packages do not match, which
+   installed packages are not available in one of the repos. You can specify
+   more than on yum config file by repeating the `-c` option.
+ - If no repodata is read in, only the rpmdb files are accessed by all checks
+   and all tests can run as non-root user.
+ - The check can be run on any architecture for any other architecture with
+   automatic detection of the right endian setting as well as automatic
+   arch setting by looking at the installed kernels. So you can copy the
+   rpmdb files onto a central server to check them all.
+ - Check if only packages with the correct architecture are installed. Make
+   sure no arch-dependant rpm and a noarch package are installed at the
+   same time.
+ - `-q` and `\--quiet` output less progress information. `-v` or `\--verbose`
+   add more output information. `\--rpmdbpath /var/lib/rpm/` can specify the
+   directory which contains the database files.
+ - For special setups you might want to specify `\--releasever 4`,
+   `\--arch i686` or `\--buildroot /mnt/build` (buildroot is actually only
+   used to read the yum config files.
 
-Ever had to use rpm --rebuilddb? Well, here is our version of it. It tries to
-do the same thing as rpm where it takes /var/lib/rpm/Packages and rebuilds the
-database with that information. The default path for the new db is ./rpmdb
-so that your original one won't be overwritten.
+Example usages to check your rpm database `rpmdb`:
+-------------------------------
+oldpyrpm.py [--verbose|-v|--quiet|-q] [--rpmdbpath=/var/lib/rpm/] --checkrpmdb
+oldpyrpm.py -c /etc/yum.conf --checkrpmdb
+-------------------------------
 
+You can generate repo metadata like `createrepo` does. You need to copy the
+`comps.xml` file yourself into the repodata directory if you need one.
+Also xml pretty printing is hardcoded.
+Createrepo generation should be considered experimental and it is probably
+best to use upstream createrepo until more verification of the data is done.
+-------------------------------
+oldpyrpm.py [--verbose|-v|--quiet|-q] [--rpmdbpath=/var/lib/rpm/] --checkrpmdb
+oldpyrpm.py [--baseurl http://localhost/addons/] [--excludes="a b c"] --createrepo /repos/addons/
+-------------------------------
 
-4.9 pyrpmspecinfo
------------------
-As we often have to work with specfiles, too, we've written a small tool with
-which we can extrace the different sections from a specfile in order to use
-that info via pipe in other tools.
+Per default `oldpyrpm.py` is only reading in rpm packages and doing some
+sanity checks on them. It can read in rpm packages from Red Hat Linux 5.2
+and newer. The `pyrpmyum` code only works on RHEL3 or newer due to how
+missing epoch are treated in dependency information.
+Here some options that can be useful:
 
+ - If you specify a directory, automatically all files in that dir are read.
+ - `\--nodigest` skips verifying the md5 checksum of the header and payload
+   data and the sha1 checksum of the header data.
+ - `\--nopayload` skips reading in the cpio data of all files
+   (called `payload`).
+ - Add `-c /etc/yum.conf` to read in yum repositories.
+ - `\--strict` is adding checks which are only useful for the Fedora Core
+   development tree.
+ - `\--verbose` or `-v` increases output logging information. This is nearly
+   unused in the current code, so doesn't really change anything.
+ - `\--quiet` or `-q` sets the verbose level to 0.
+ - Specify a certain architecture via `\--arch i686`. Default value is detected
+   via uname(2).
+ - To override the release version information add `\--releasever 4`.
+   The default is the version number of the installed redhat-release or
+   fedora-release package (used rpm packages can be specified via
+   `\--distroverpkg="redhat-release fedora-release"`).
+ - `-y` to never prompt for yes/no questions. This is unused until now.
+ - `\--noverify` is skipping the special debug tests and then mainly all
+   rpm packages are only read in. If also `\--small` is specified, not all
+   rpm tags are read in, only the ones in `importanttags`.
+ - Specify a cache directory to hold data from yum repopsitories via
+   `\--cachedir ~/.pyrpm/cache/`.
+ - Dependency and fileconflict checking is done if either `\--strict` or
+   `\--checkdeps` is added.
 
-4.10 pyrpmyum
--------------
+Example usages:
+-------------------------------
+oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/i386/Fedora/RPMS
+oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/SRPMS
+find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null | xargs -0 oldpyrpm.py --nodigest --nopayload
+locate '*.rpm' | xargs oldpyrpm.py --nodigest --nopayload
+-------------------------------
 
-Our main workhorse and real puppy. This tool, as the name already suggests is
-basically a yum replacement of sorts. It uses the same command line options as
-yum and uses the same config files, too. It contains a complete depresolver
-and allows complex installs, updates and erases from systems. We have used it
-to install FC1 and then step by step update to FC1-updates, FC2, FC2-updates,
-FC3, FC3-updates and finally FC4. Some of the updates need the --autoerase
-option though because some dependencies just can't be met and packages need
-to be removed in order to fulfill them. The autoerase option tries exactly
-that by semi-intelligently selecting the package that needs to be removed in
-order for the update to work properly without user intervention. For the
-described update chain only about 6-7 packages were deleted up to FC3, and all
-of them would have to be removed manually anyway. But a word of warning here:
-The autoerase option might run amok if things go really wrong or you try to
-update to a completely broken tree and would then try to remove almost all of
-your packages. This has never happend for real trees for us, but just imagine
-a broken repository and things could go really wrong. That's why this option
-isn't directly listed in the help and should only be used for a --test run
-or without the -y option where you get listed separately from the "normal"
-transaction the packages that pyrpmyum would autoerase for you.
-
-
-4.11 rpmdb2pyrpmdb
-------------------
-
-The counterpart to pyrpmdb2rpmdb, again rather obsolete like it's brother as
-we now have real rpmdb support. What it actually does is it extracts all rpm
-headers from /var/lib/rpm/Packages and then recreates proper rpm header files
-and stores them as files in /var/lib/pyrpm/headers which can afterwards again
-be used by rpm -ivh --justdb /var/lib/pyrpm/headers/* to generate a valid rpm
-database again.
+Only read in the needed rpm tags and do dependency checking without further
+debug checks (finishes in under 15 seconds on some laptop):
+-------------------------------
+time oldpyrpm.py [--hotshot] --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/development/i386/Fedora/RPMS
+-------------------------------
 
