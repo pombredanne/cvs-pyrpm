@@ -16,11 +16,13 @@ verify rpm, rpmdb and yum itself and experiment with new features and
 implementations very quickly. Python is Red Hat's in-house defacto standard,
 so using python to do rapid prototyping was only logical.
 
-The code itself is still very small, about 9000-10000 lines of code. We're
+The code itself is still very small and modular. We're
 constantly looking to improve the code, make it more production ready and 
 remove duplicate functionality. Results from this project back to rpm and co
 are very important for us to improve the current available Linux tools and
 not rush with only adding another project for this.
+Next to working on good algorithms and sane implementations, most code is
+backed up with verify and testing scripts.
 
 
 Warning
@@ -181,7 +183,7 @@ or FC-4 yum.conf repo as a install base and then use a FC-devel repo or
 rpm tree as the update tree. The nice thing about the simulation is that it
 doesn't actually perform the installation and so doesn't need any diskspace.
 Additionally you can use the (undocumented ;)) option `\--arch` where you can
-specify an arch you like. The host arch doesn't matter for the simulation
+specify any arch you like. The host arch doesn't matter for the simulation
 as the whole code "thinks" it runs under arch. So simulated installs and
 updates for all kinds of archs can be performed this way on one single machine.
 
@@ -196,13 +198,14 @@ pyrpmcheckrepo -r /mnt/foo install /mirror/fedora/4/i386/os/Fedora/RPMS update /
 -------------------
 
 Here we've take the code from the original createrepo and replaced the rpmlib
-based access to rpm headers with our code.
+based access to rpm headers with our code. This code is not complete until now.
 
 
 4.4 pyrpmdbconvert
 -----------------
 
-Nothing written yet.
+Nothing written yet. This supports changing over from the current rpmdb to
+e.g. a sqlite database.
 
 
 4.5 pyrpmdbverify
@@ -219,7 +222,7 @@ checksum tests as this test has to rely on a very specific ordering of the
 rpm binary header and about the tags that appear in the original rpm. If those
 assupmtions don't hold this checksum can't be computed correctly.
 
-Pointer to repair scripts is available at
+Link to a page with more information on rpmdb repair information is available at
 link:http://www.rpm.org/hintskinks/repairdb/[].
 
 Check the rpmdb of the current system with internal cross checks
@@ -238,9 +241,9 @@ pyrpmdbverify /mirror/fedora/development/i386/Fedora/RPMS
 
 Simply put this tool allows you to install, update and erase rpms just like
 you would with rpm itself. It supports most of the common options from rpm
-and used the same syntax, too. As it's "only" rpm though there is no depresolver
-in this tool, so if you have any missing dependencies you'll have to fiddle
-them out yourself, just as you had to do with rpm.
+and is mostly using the same syntax, too. As it's "only" rpm though there is
+no depresolver in this tool, so if you have any missing dependencies you'll
+have to fiddle them out yourself, just as you had to do with rpm.
 
 
 4.7 pyrpmkickstart
@@ -255,9 +258,8 @@ Nothing written yet.
 This is our main stresstest tool. With it you can run literally thousands of
 update and erase operations in a buildroot and after several days scan the
 output for any problems. It works simply by alternating between trying to
-select randomly one package from the repository and installing that and 
-selecting a package from the installed ones and removing that, always trying
-to resolve all missing dependencies and conflicts. There are several special
+randomly install one rpm package (including needed dependent rpms) and
+randomly removing one package. There are several special
 options which help circumvent some strange problems. The first is `\--servicehack`
 which simply changes `/sbin/service` to "exit 0" as especially some of the
 postuninstall scripts really misbehave otherwise and you don't need any
@@ -283,6 +285,7 @@ so that your original one won't be overwritten.
 
 4.10 pyrpmspecinfo
 -----------------
+
 As we often have to work with specfiles, too, we've written a small tool with
 which we can extrace the different sections from a specfile in order to use
 that info via pipe in other tools.
@@ -311,19 +314,20 @@ isn't directly listed in the help and should only be used for a `\--test` run
 or without the -y option where you get listed separately from the "normal"
 transaction the packages that pyrpmyum would autoerase for you.
 
-Install a full FC Devel in /mnt/build/fc-devel-i386 buildroot
+Install a full Fedora Core Development tree in `/mnt/build/fc-devel-i386`
+buildroot:
 -------------------------------
 pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 install "*"
 -------------------------------
 
-Update kdebase in /mnt/build/fc-devel-i386 buildroot to latest version,
-resolving all dependancies
+Update kdebase in `/mnt/build/fc-devel-i386` buildroot to latest version,
+resolving all dependancies:
 -------------------------------
 pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 update kdebase
 -------------------------------
 
 Same, only if we get some unresolvable problems try to remove packages that
-don't fit automatically
+don't fit automatically:
 -------------------------------
 pyrpmyum -y -v --autoerase -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 update kdebase
 -------------------------------
