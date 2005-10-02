@@ -7,7 +7,7 @@
 
 import sys, os, getopt, errno
 from bsddb import hashopen, btopen
-from binascii import b2a_hex, a2b_hex
+from binascii import a2b_hex
 from struct import unpack
 
 PYRPMDIR = ".."
@@ -61,46 +61,51 @@ def writeDB4(db, tag, id, packages, useidx=True, func=lambda x:str(x)):
         if not useidx:
             return
 
-def writeRpmDB(path, packages):
-    if not os.path.isdir(path):
-        os.makedirs(path)
-    basenames_db      = hashopen(path+"/Basenames", "n")
-    conflictname_db   = hashopen(path+"/Conflictname", "n")
-    dirnames_db       = btopen(path+"/Dirnames", "n")
-    filemd5s_db       = hashopen(path+"/Filemd5s", "n")
-    group_db          = hashopen(path+"/Group", "n")
-    installtid_db     = btopen(path+"/Installtid", "n")
-    name_db           = hashopen(path+"/Name", "n")
-    packages_db       = hashopen(path+"/Packages", "n")
-    providename_db    = hashopen(path+"/Providename", "n")
-    provideversion_db = btopen(path+"/Provideversion", "n")
-    requirename_db    = hashopen(path+"/Requirename", "n")
-    requireversion_db = btopen(path+"/Requireversion", "n")
-    sha1header_db     = hashopen(path+"/Sha1header", "n")
-    sigmd5_db         = hashopen(path+"/Sigmd5", "n")
-    triggername_db    = hashopen(path+"/Triggername", "n")
+def writeRpmDB(path, packages, verbose):
+    if os.path.isdir(path):
+        print "Directory already exists, won't rebuild the rpmdb."
+        return
+    os.makedirs(path)
+    if not path.endswith("/"):
+        path += "/"
+    basenames_db      = hashopen(path + "Basenames", "n")
+    conflictname_db   = hashopen(path + "Conflictname", "n")
+    dirnames_db       = btopen(path + "Dirnames", "n")
+    filemd5s_db       = hashopen(path + "Filemd5s", "n")
+    group_db          = hashopen(path + "Group", "n")
+    installtid_db     = btopen(path + "Installtid", "n")
+    name_db           = hashopen(path + "Name", "n")
+    packages_db       = hashopen(path + "Packages", "n")
+    providename_db    = hashopen(path + "Providename", "n")
+    provideversion_db = btopen(path + "Provideversion", "n")
+    requirename_db    = hashopen(path + "Requirename", "n")
+    requireversion_db = btopen(path + "Requireversion", "n")
+    sha1header_db     = hashopen(path + "Sha1header", "n")
+    sigmd5_db         = hashopen(path + "Sigmd5", "n")
+    triggername_db    = hashopen(path + "Triggername", "n")
     rpmio = RpmFileIO(rpmconfig, "dummy")
     maxid = 0
-    for id in packages.keys():
-        if maxid < id:
-            maxid = id
-        print "Writing rpmdb id %d for package %s" % (id, packages[id].getNEVRA())
-        writeDB4(basenames_db, "basenames", id, packages)
-        writeDB4(conflictname_db, "conflictname", id, packages)
-        writeDB4(dirnames_db, "dirnames", id, packages)
-        writeDB4(filemd5s_db, "filemd5s", id, packages, True, lambda x:a2b_hex(x))
-        writeDB4(group_db, "group", id, packages)
-        writeDB4(installtid_db, "installtid", id, packages, True, lambda x:pack("i", x))
-        writeDB4(name_db, "name", id, packages, False)
-        (headerindex, headerdata) = rpmio._generateHeader(packages[id], 4)
-        packages_db[pack("I", id)] = headerindex[8:]+headerdata
-        writeDB4(providename_db, "providename", id, packages)
-        writeDB4(provideversion_db, "provideversion", id, packages)
-        writeDB4(requirename_db, "requirename", id, packages)
-        writeDB4(requireversion_db, "requireversion", id, packages)
-        writeDB4(sha1header_db, "install_sha1header", id, packages)
-        writeDB4(sigmd5_db, "install_sigmd5", id, packages)
-        writeDB4(triggername_db, "triggername", id, packages)
+    for tid in packages.keys():
+        if maxid < tid:
+            maxid = tid
+        if verbose > 2:
+            print "Writing rpmdb id %d for package %s" % (tid, packages[tid].getNEVRA())
+        writeDB4(basenames_db, "basenames", tid, packages)
+        writeDB4(conflictname_db, "conflictname", tid, packages)
+        writeDB4(dirnames_db, "dirnames", tid, packages)
+        writeDB4(filemd5s_db, "filemd5s", tid, packages, True, lambda x:a2b_hex(x))
+        writeDB4(group_db, "group", tid, packages)
+        writeDB4(installtid_db, "installtid", tid, packages, True, lambda x:pack("i", x))
+        writeDB4(name_db, "name", tid, packages, False)
+        (headerindex, headerdata) = rpmio._generateHeader(packages[tid], 4)
+        packages_db[pack("I", tid)] = headerindex[8:] + headerdata
+        writeDB4(providename_db, "providename", tid, packages)
+        writeDB4(provideversion_db, "provideversion", tid, packages)
+        writeDB4(requirename_db, "requirename", tid, packages)
+        writeDB4(requireversion_db, "requireversion", tid, packages)
+        writeDB4(sha1header_db, "install_sha1header", tid, packages, False)
+        writeDB4(sigmd5_db, "install_md5", tid, packages, False)
+        writeDB4(triggername_db, "triggername", tid, packages)
     packages_db[pack("I", 0)] = pack("I", maxid)
 
 #
@@ -109,6 +114,7 @@ def writeRpmDB(path, packages):
 def main():
     # Default dbpath is /var/lib/rpm
     dbpath = "/var/lib/rpm"
+    verbose = 2
 
     # Argument parsing
     try:
@@ -121,11 +127,13 @@ def main():
 
     # Argument handling
     for (opt, val) in opts:
-        if   opt in ['-h', "--help"]:
+        if opt in ("-h", "--help"):
             usage()
             return 0
         elif opt == "--dbpath":
             dbpath = val
+        elif opt in ("-v", "--verbose"):
+            verbose += 1
 
     (packages, keyring) = readPackages(dbpath) # FIXME: bsddb.error
 
@@ -134,9 +142,9 @@ def main():
     else:
         outdbpath = args[0]
 
-    writeRpmDB(outdbpath, packages)
+    writeRpmDB(outdbpath, packages, verbose)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_main(main)
 
 # vim:ts=4:sw=4:showmatch:expandtab
