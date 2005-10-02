@@ -391,7 +391,7 @@ class RpmController:
 
         Return 1 if found, 0 if not."""
 
-        pkgs = findPkgByName([pkgname,], self.db.getPkgList())
+        pkgs = findPkgByNames([pkgname,], self.db.getPkgList())
         if len(pkgs) == 0:
             return 0
         self.rpms.append(pkgs[0])
