@@ -598,3 +598,5 @@ def noquote_split(s, delimiter=None):
         tokens.append(s[b:])
 
     return tokens
+
+# vim:ts=4:sw=4:showmatch:expandtab
