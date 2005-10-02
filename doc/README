@@ -152,6 +152,8 @@ Detailed tool descriptions
 
 In order to understand what each of the tools really does this section describes
 the behaviour of the tools in more detail for each tool.
+Please also look at `tests/test10` to see actual tests we invoke ourselves from
+time to time.
 
 
 4.1 pyrpmcheck
@@ -281,6 +283,7 @@ Ever had to use `rpm \--rebuilddb`? Well, here is our version of it. It tries to
 do the same thing as rpm where it takes /var/lib/rpm/Packages and rebuilds the
 database with that information. The default path for the new db is ./rpmdb
 so that your original one won't be overwritten.
+Currently `/var/lib/rpm/Pubkeys` is not yet rebuild.
 
 
 4.10 pyrpmspecinfo
