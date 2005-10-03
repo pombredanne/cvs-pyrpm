@@ -420,12 +420,11 @@ oldpyrpm.py -c /etc/yum.conf --checkrpmdb
 
 You can generate repo metadata like `createrepo` does. You need to copy the
 `comps.xml` file yourself into the repodata directory if you need one.
-Also xml pretty printing is hardcoded.
-Createrepo generation should be considered experimental and it is probably
-best to use upstream createrepo until more verification of the data is done.
+Also xml pretty printing is hardcoded (`-p` option for upstream createrepo).
+Createrepo files are compatibel with the output from createrepo-0.4.3.
 -------------------------------
-oldpyrpm.py [--verbose|-v|--quiet|-q] [--rpmdbpath=/var/lib/rpm/] --checkrpmdb
-oldpyrpm.py [--baseurl http://localhost/addons/] [--excludes="a b c"] --createrepo /repos/addons/
+cp comps.xml /mirror/fedora/development/i386/repodata/comps.xml
+oldpyrpm.py --createrepo /mirror/fedora/development/i386/
 -------------------------------
 
 Per default `oldpyrpm.py` is only reading in rpm packages and doing some
