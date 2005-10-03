@@ -147,6 +147,41 @@ link:mailto:twoerner@redhat.com[Thomas Woerner].
 `oldpyrpm.py` has some TODO items listed in the source.
 
 
+Notes about the Repo-Metadata
+-----------------------------
+
+The following things should be noted about the repo metadata. yum is using
+the repodata only within the resolver part, then downloads the rpm headers
+and passes all the headers on to rpmlib to verify again if the resolver
+of rpmlib is ok as well as doing e.g. the installation ordering part
+within rpmlib. If the repodata would be more complete, more steps could
+be done only based on the repodata being available:
+
+ - Even if no epoch is specified, the metadata still specifies this as "0".
+   For most code paths this is no problem as for all comparisons of version
+   data, a missing epoch is the same as a "0" epoch. This should not be
+   a huge problem and would be only a cleanup item for the repodata.
+ - For dependency information the `flag` part is only partially copied into
+   the repodata. Just adding the `flag` information as integer would make
+   sure all information is present in any case. Extending the repodata to
+   have `intflag` added alongside the old information would be good.
+ - Repo data adds a "pre" flag if the RPMSENSE_PREREQ flag is set. That
+   information is actually not complete to identify install prereq and
+   we need the more complete flag information as requested above to
+   be able todo correct installation ordering based on repodata.
+ - There is a fixed regex string which specifies the filelist information
+   for the primary.xml file. In addition also all files are listed if
+   they appear in any file requires from the same repository. This means that
+   you need to download the full filelist once you work on more than one
+   repository and you have file requirements outside of the fixed regex list.
+   (Detecting the need for full filelists could be done per-repo to give
+   a quite good detection algorithm.) Only possible path for this is to
+   identify problems for several repos where the full filelists need to be
+   downloaded and to add such a requirement into that repo or otherwise
+   add a command line option to add such additional requirements (which
+   should then get also written into the repodata).
+
+
 Detailed tool descriptions
 --------------------------
 
