@@ -3413,7 +3413,8 @@ class RpmRepo:
                 if r != "":
                     enode.newProp("rel", r)
             if dep[1] != "" and name == "requires":
-                if isLegacyPreReq(dep[1]) or isInstallPreReq(dep[1]):
+                #if isLegacyPreReq(dep[1]) or isInstallPreReq(dep[1]):
+                if (dep[1] & RPMSENSE_PREREQ) != 0:
                     enode.newProp("pre", "1")
 
     def __generateFilelist(self, node, pkg, filter=1):
@@ -3493,22 +3494,25 @@ class RpmRepo:
     def __filterDuplicateDeps(self, deps):
         fdeps = []
         for (name, flags, version) in deps:
-            duplicate = 0
-            for (fname, fflags, fversion) in fdeps:
-                if name != fname or \
-                   version != fversion or \
-                   (isErasePreReq(flags) or \
-                    isInstallPreReq(flags) or \
-                    isLegacyPreReq(flags)) != \
-                   (isErasePreReq(fflags) or \
-                    isInstallPreReq(fflags) or \
-                    isLegacyPreReq(fflags)) or \
-                   (flags & RPMSENSE_SENSEMASK) != (fflags & RPMSENSE_SENSEMASK):
-                    continue
-                duplicate = 1
-                break
-            if not duplicate:
+            flags &= RPMSENSE_SENSEMASK | RPMSENSE_PREREQ
+            if (name, flags, version) not in fdeps:
                 fdeps.append((name, flags, version))
+            #duplicate = 0
+            #for (fname, fflags, fversion) in fdeps:
+            #    if name != fname or \
+            #       version != fversion or \
+            #       (isErasePreReq(flags) or \
+            #        isInstallPreReq(flags) or \
+            #        isLegacyPreReq(flags)) != \
+            #       (isErasePreReq(fflags) or \
+            #        isInstallPreReq(fflags) or \
+            #        isLegacyPreReq(fflags)) or \
+            #       (flags & RPMSENSE_SENSEMASK) != (fflags & RPMSENSE_SENSEMASK):
+            #        continue
+            #    duplicate = 1
+            #    break
+            #if not duplicate:
+            #    fdeps.append((name, flags, version))
         fdeps.sort()
         return fdeps
 
@@ -4888,7 +4892,8 @@ def checkProvides(repo, checkrequires=1):
             continue
         for p in rpm.getProvides():
             provides.setdefault(p, []).append(rpm)
-    print "Duplicate provides:"
+    if provides.keys():
+        print "Duplicate provides:"
     for p in provides.keys():
         # only look at duplicate keys
         if len(provides[p]) <= 1:
