@@ -82,8 +82,8 @@ class RpmYum:
         return 1
 
     def addRepo(self, file):
-        """Read yum configuration file and add repositories it uses to RpmYum
-        yum.
+        """Read yum configuration file and add repositories it uses.
+
         sys.exit() on error."""
 
         try:
@@ -144,8 +144,7 @@ class RpmYum:
             self.config.printError("Error reading the RPM database")
             return 0
         for pkg in self.pydb.getPkgList():
-            if pkg["name"] == "fedora-release" or \
-               pkg["name"] == "redhat-release":
+            if "redhat-release" in (dep[0] for dep in pkg["provides"]):
                 rpmconfig.relver = pkg["version"]
         if os.path.isfile(self.config.yumconf):
             self.addRepo(self.config.yumconf)

@@ -1264,9 +1264,11 @@ def getBuildArchList(list):
     return archs
 
 def buildPkgRefDict(pkgs):
-    """Take a list of packages and return a dict that contains all the possible
-       naming conventions for them: name, name.arch, name-version-release.arch,
-       name-version, name-version-release, epoch:name-version-release."""
+    """Take a list of RpmPackage's and return a dict that contains all the
+       possible naming conventions for them (name=>RpmPackage): name,
+       name.arch, name-version-release.arch, name-version,
+       name-version-release, epoch:name-version-release."""
+
     pkgdict = {}
     for pkg in pkgs:
         (n, e, v, r, a) = (pkg["name"], pkg.getEpoch(), pkg["version"],
@@ -1287,23 +1289,25 @@ def buildPkgRefDict(pkgs):
     return pkgdict
 
 def findPkgByNames(pkgnames, pkgs):
-    """Matches up the user package names versus a pkg list. For installs/updates
-       available pkgs should be the 'others list' for removes it should be
-       the installed list of pkgs. Takes an optional casematch option to
-       determine if case should be matched exactly."""
+    """Return a list of RpmPackage's from pkgs matching pkgnames.
+
+    pkgnames is a list of names, each name can contain epoch, version, release
+    and arch. If the name doesn't match literally, it is interpreted as a glob
+    pattern. The resulting list contains all matches in arbitrary order, and
+    it may contain a single package more than once."""
+
     pkgdict = buildPkgRefDict(pkgs)
     pkglist = []
     for pkgname in pkgnames:
         if pkgdict.has_key(pkgname):
             pkglist.extend(pkgdict[pkgname])
-        elif re.match(".*[\*,\[,\],\{,\},\?].*", pkgname):
+        elif re.match(".*[\*\[\]\{\}\?].*", pkgname):
             restring = fnmatch.translate(pkgname)
             regex = re.compile(restring)
-            foundit = 0
             for item in pkgdict.keys():
                 if regex.match(item):
                     pkglist.extend(pkgdict[item])
-                    foundit = 1
+    normalizeList(pkglist)
     return pkglist
 
 def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
