@@ -14,7 +14,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004, 2005 Red Hat, Inc.
 #
-# Author: Paul Nasrat, Florian La Roche, Phil Knirsch
+# Author: Paul Nasrat, Florian La Roche, Phil Knirsch, Thomas Woerner
 #
 
 #
@@ -125,6 +125,7 @@ import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
 import os, os.path, md5, sha, pwd, grp, zlib, gzip, errno, re, fnmatch, glob
+import string
 from types import DictType, IntType, ListType
 from struct import pack, unpack
 try:
@@ -133,6 +134,9 @@ try:
     TYPE_END_ELEMENT = libxml2.XML_READER_TYPE_END_ELEMENT
 except:
     print "libxml2 is not imported, do not try to use repodata."
+
+EXTRACT_SOURCE_FOR = [ "anaconda", "anaconda-help", "basesystem", "chkconfig",
+                       "dmraid", "firstboot", "hwdata", "kudzu", "mkinitrd", ]
 
 if sys.version_info < (2, 3):
     from types import StringType
@@ -2357,8 +2361,10 @@ def explodeFile(filename, dirname, version):
         newdirn = newdirn[:- len(version)]
     while newdirn[-1] in "-_.0123456789":
         newdirn = newdirn[:-1]
-    os.system("cd " + dirname + " && tar x" + explode + "f " + filename \
-        + "; for i in * ; do test -d \"$i\" && mv \"$i\" " + newdirn + "; done")
+    os.system("cd " + dirname + " && { tar x" + explode + "f " + filename \
+              + "; for i in * ; do test -d \"$i\" && mv \"$i\" " + newdirn \
+              + "; done; }")
+    return newdirn
 
 delim = "--- -----------------------------------------------------" \
     "---------------------\n"
@@ -4166,11 +4172,21 @@ def cmpNoMD5(a, b):
     return cmp(a[33:], b[33:])
 
 def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
-    makeDirs(pkgdir)
-    if not git:
-        os.system("cd %s && rm -rf * .[^.h]* .h[^g]*" % pkgdir)
-    extractRpm(pkg, pkgdir + "/")
     files = pkg.getFilenames()
+    i = pkg.getSpecfile(files)
+    specfile = files[i]
+
+    fd = open("%s/%s" % (pkgdir, specfile))
+    checksum = getChecksum(fd)
+    fd.close()
+
+    # same spec file in repo and in rpm: nothing to do
+    if checksum == pkg["filemd5s"][i]:
+        return
+    
+    os.system('rm -rf "%s"' % pkgdir)
+    makeDirs(pkgdir)
+    extractRpm(pkg, pkgdir + "/")
     if git:
         for f in os.listdir(pkgdir):
             if f not in files and f not in ("Makefile", "sources"):
@@ -4178,7 +4194,6 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
                 os.unlink(fsrc)
                 os.system("cd %s && git-update-index --remove %s" % \
                     (pkgdir, f))
-    specfile = files[pkg.getSpecfile(files)]
     if "sources" in files or "Makefile" in files:
         raise ValueError, \
             "src.rpm contains sources/Makefile: %s" % pkg.filename
@@ -4198,6 +4213,14 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
             if None and not os.path.isfile(fname):
                 makeDirs(fdir)
                 doLnOrCopy(fsrc, fname)
+            if pkg["name"] in EXTRACT_SOURCE_FOR:
+                i = string.find(fsrc, ".tar")
+                if i >= 0:
+                    tempdir = "%s/e.tar" % pkgdir
+                    os.mkdir(tempdir)
+                    dir = explodeFile(fsrc, tempdir, "0") # version is irrelevant
+                    os.rename(dir, "%s/tar" % pkgdir)
+                    os.rmdir(tempdir)
             os.unlink(fsrc)
             sources.append("%s %s\n" % (md5data, f))
         sources.sort(cmpNoMD5)
@@ -4208,7 +4231,8 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
     # XXX: unpack a few src.rpms into subdirectories
     # XXX: also checkin the data into a per-package repo
     if git:
-        os.system("cd %s && git-update-index --add *" % pkgdir)
+        os.system("cd %s && { find . -path ./.git -prune -o -type f -print | sed -e 's|^./||' | xargs git-update-index --add --refresh; }" % pkgdir)
+        os.system('cd %s && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
     if oldpkg:
         (fd, tmpfile) = mkstemp_file("/tmp", special=1)
         fd.write("update %s from %s-%s to %s-%s\n\nchangelog:\n\n" % \
@@ -4277,7 +4301,6 @@ def createMercurial(git):
         if os.path.isdir(repodir):
             # XXX: we can only checkin once until now, no further
             # automatic updates possible for a repo
-            continue
             firsttime = 0
         else:
             firsttime = 1
@@ -4312,7 +4335,7 @@ def createMercurial(git):
             extractSrpm(pkg, pkgdir, filecache, repodir, oldpkgs.get(name), git)
             oldpkgs[name] = pkg
         if git:
-            os.system("cd %s && { git repack; git prune-packed; }" % repodir)
+            os.system("cd %s && { git repack; git prune-packed; }"  % repodir)
 
 
 def checkDeps(rpms):
@@ -5092,7 +5115,7 @@ def main():
             repo = RpmRepo(a, excludes)
             repo.createRepo(baseurl)
     elif mercurial:
-        createMercurial(0)
+#        createMercurial(0)
         createMercurial(1)
     else:
         keepdata = 1
