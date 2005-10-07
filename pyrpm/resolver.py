@@ -685,16 +685,17 @@ class RpmResolver(RpmList):
             return 1
 
         for pkg in conflicts:
-            self.config.printError("%s conflicts with:" % pkg.getNEVRA())
-            if self.config.verbose > 1:
-                for c,r in conflicts[pkg]:
-                    self.config.printError("\t'%s' <=> %s" % (depString(c), r.getNEVRA()))
-            else:
-                pkgs = [ ]
-                for c,r in conflicts[pkg]:
-                    if r not in pkgs:
-                        self.config.printError("\t%s" % r.getNEVRA())
-                        pkgs.append(r)
+            conf = { }
+            for c,r in conflicts[pkg]:
+                if not r in conf:
+                    conf[r] = [ ]
+                if not c in conf[r]:
+                    conf[r].append(c)
+            for r in conf.keys():
+                self.config.printError("%s conflicts with %s on:" % \
+                                       (pkg.getNEVRA(), r.getNEVRA()))
+                for c in conf[r]:
+                    self.config.printError("\t%s" % depString(c))
         return 0
     # ----
 
@@ -743,9 +744,17 @@ class RpmResolver(RpmList):
             return 1
 
         for pkg in conflicts:
-            self.config.printError("%s file conflicts with:" % pkg.getNEVRA())
+            conf = { }
             for f,r in conflicts[pkg]:
-                self.config.printError("\t'%s' on %s" % (r.getNEVRA(), r))
+                if not r in conf:
+                    conf[r] = [ ]
+                if not f in conf[r]:
+                    conf[r].append(f)
+            for r in conf.keys():
+                self.config.printError("%s file conflicts with %s on:" % \
+                                       (pkg.getNEVRA(), r.getNEVRA()))
+                for f in conf[r]:
+                    self.config.printError("\t%s" % f)
         return 0
     # ----
 
