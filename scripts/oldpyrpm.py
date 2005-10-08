@@ -4176,13 +4176,13 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
     i = pkg.getSpecfile(files)
     specfile = files[i]
 
-    fd = open("%s/%s" % (pkgdir, specfile))
-    checksum = getChecksum(fd)
-    fd.close()
-
-    # same spec file in repo and in rpm: nothing to do
-    if checksum == pkg["filemd5s"][i]:
-        return
+    if os.path.exists(pkgdir) and os.path.exists("%s/%s" % (pkgdir, specfile)):
+        fd = open("%s/%s" % (pkgdir, specfile))
+        checksum = getChecksum(fd)
+        fd.close()
+        # same spec file in repo and in rpm: nothing to do
+        if checksum == pkg["filemd5s"][i]:
+            return
     
     os.system('rm -rf "%s"' % pkgdir)
     makeDirs(pkgdir)
