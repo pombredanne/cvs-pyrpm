@@ -125,7 +125,6 @@ import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
 import os, os.path, md5, sha, pwd, grp, zlib, gzip, errno, re, fnmatch, glob
-import string
 from types import DictType, IntType, ListType
 from struct import pack, unpack
 try:
@@ -2905,7 +2904,7 @@ def parsePackages(pkgs, requests, casematch=1):
     for request in requests:
         if pkgdict.has_key(request):
             exactmatch.extend(pkgdict[request])
-        elif re.match(".*[\*,\[,\],\{,\},\?].*", request):
+        elif re.match(".*[\*\[\]\{\}\?].*", request):
             restring = fnmatch.translate(request)
             if casematch:
                 regex = re.compile(restring)
@@ -3513,7 +3512,8 @@ class RpmRepo:
             #       (isErasePreReq(fflags) or \
             #        isInstallPreReq(fflags) or \
             #        isLegacyPreReq(fflags)) or \
-            #       (flags & RPMSENSE_SENSEMASK) != (fflags & RPMSENSE_SENSEMASK):
+            #       (flags & RPMSENSE_SENSEMASK) != \
+            #           (fflags & RPMSENSE_SENSEMASK):
             #        continue
             #    duplicate = 1
             #    break
@@ -4069,6 +4069,8 @@ grepodir = "/home/devel/test/gitrepos"
 
 kgit = "rsync://rsync.kernel.org/pub/scm/"
 gitrepos = (
+    (kgit + "boot/syslinux/syslinux.git", "syslinux", 20),
+    (kgit + "devel/sparse/sparse.git", "sparse", 20),
     (kgit + "git/git.git", "git", 20),
     (kgit + "gitk/gitk.git", "gitk", None),
     (kgit + "git/gitweb.git", "gitweb", None),
@@ -4171,29 +4173,25 @@ def cmpNoMD5(a, b):
     """Ignore leading md5sum to sort the "sources" file."""
     return cmp(a[33:], b[33:])
 
-def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
+def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
     files = pkg.getFilenames()
     i = pkg.getSpecfile(files)
     specfile = files[i]
 
-    if os.path.exists(pkgdir) and os.path.exists("%s/%s" % (pkgdir, specfile)):
-        fd = open("%s/%s" % (pkgdir, specfile))
-        checksum = getChecksum(fd)
-        fd.close()
+    if os.path.exists("%s/%s" % (pkgdir, specfile)):
+        checksum = getChecksum("%s/%s" % (pkgdir, specfile))
         # same spec file in repo and in rpm: nothing to do
         if checksum == pkg["filemd5s"][i]:
             return
-    
+
     os.system('rm -rf "%s"' % pkgdir)
     makeDirs(pkgdir)
     extractRpm(pkg, pkgdir + "/")
-    if git:
-        for f in os.listdir(pkgdir):
-            if f not in files and f not in ("Makefile", "sources"):
-                fsrc = pkgdir + "/" + f
-                os.unlink(fsrc)
-                os.system("cd %s && git-update-index --remove %s" % \
-                    (pkgdir, f))
+    for f in os.listdir(pkgdir):
+        if f not in files and f not in ("Makefile", "sources"):
+            fsrc = pkgdir + "/" + f
+            os.unlink(fsrc)
+            os.system("cd %s && git-update-index --remove %s" % (pkgdir, f))
     if "sources" in files or "Makefile" in files:
         raise ValueError, \
             "src.rpm contains sources/Makefile: %s" % pkg.filename
@@ -4214,12 +4212,11 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
                 makeDirs(fdir)
                 doLnOrCopy(fsrc, fname)
             if pkg["name"] in EXTRACT_SOURCE_FOR:
-                i = string.find(fsrc, ".tar")
-                if i >= 0:
+                if fsrc.find(".tar") >= 0:
                     tempdir = "%s/e.tar" % pkgdir
                     os.mkdir(tempdir)
-                    dir = explodeFile(fsrc, tempdir, "0") # version is irrelevant
-                    os.rename(dir, "%s/tar" % pkgdir)
+                    dirname = explodeFile(fsrc, tempdir, "0")
+                    os.rename(dirname, "%s/tar" % pkgdir)
                     os.rmdir(tempdir)
             os.unlink(fsrc)
             sources.append("%s %s\n" % (md5data, f))
@@ -4228,11 +4225,9 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
     writeFile(pkgdir + "/Makefile", [
         "include ../pyrpm/Makefile.srpm\n",
         "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
-    # XXX: unpack a few src.rpms into subdirectories
     # XXX: also checkin the data into a per-package repo
-    if git:
-        os.system("cd %s && { find . -path ./.git -prune -o -type f -print | sed -e 's|^./||' | xargs git-update-index --add --refresh; }" % pkgdir)
-        os.system('cd %s && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
+    os.system("cd %s && { find . -path ./.git -prune -o -type f -print | sed -e 's|^./||' | xargs git-update-index --add --refresh; }" % pkgdir)
+    os.system('cd %s && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
     if oldpkg:
         (fd, tmpfile) = mkstemp_file("/tmp", special=1)
         fd.write("update %s from %s-%s to %s-%s\n\nchangelog:\n\n" % \
@@ -4241,19 +4236,9 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
             getChangeLogDiff(oldpkg, pkg))
         fd.close()
         del fd
-        if git:
-            changelog = "-F " + tmpfile
-        else:
-            changelog = "-l " + tmpfile
-    else:
-        tmpfile = None
-        changelog = "-m \"import %s-%s-%s\"" % (pkg["name"], pkg["version"],
-             pkg["release"])
-    if git:
-        user = "cvs@devel.redhat.com"
-        email = user
-    else:
-        user = " -u cvs@devel.redhat.com"
+        changelog = "-F " + tmpfile
+    user = "cvs@devel.redhat.com"
+    email = user
     if pkg["changelogname"]:
         user = pkg["changelogname"][0]
         if user.rfind("> ") != -1:
@@ -4261,29 +4246,22 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg, git):
         email = user
         if email.find("<") != -1:
             email = email[email.find("<") + 1:email.rfind(">") + 1]
-        if git:
-            if user.rfind(" <") != -1:
-                user = user[:user.rfind(" <")]
-        else:
-            user = " -u \"%s\"" % user
+        if user.rfind(" <") != -1:
+            user = user[:user.rfind(" <")]
     # XXX if we monitor trees, we could change the checkin time to
     # first day of release of the rpm package instead of rpm buildtime
     # XXX git knows about an "order" file which gives information on
     # how to order files for a diff: "*.spec" (.spec first)
     buildtime = str(pkg.hdr.getOne("buildtime"))
-    if git:
-        os.system("cd " + repodir + " && GIT_AUTHOR_NAME=\"" + user + \
-            "\" GIT_AUTHOR_EMAIL=\"" + email + "\" GIT_AUTHOR_DATE=" + \
-            buildtime + " GIT_COMMITTER_NAME=\"" + user + \
-            "\" GIT_COMMITTER_EMAIL=\"" + email + "\" GIT_COMMITTER_DATE=" + \
-            buildtime + " git commit " + changelog)
-    else:
-        os.system("cd %s && hg commit -q -A %s --date \"%s 0\"%s" % (repodir,
-            changelog, buildtime, user))
+    os.system("cd " + repodir + " && GIT_AUTHOR_NAME=\"" + user + \
+        "\" GIT_AUTHOR_EMAIL=\"" + email + "\" GIT_AUTHOR_DATE=" + \
+        buildtime + " GIT_COMMITTER_NAME=\"" + user + \
+        "\" GIT_COMMITTER_EMAIL=\"" + email + "\" GIT_COMMITTER_DATE=" + \
+        buildtime + " git commit " + changelog)
     if tmpfile != None:
         os.unlink(tmpfile)
 
-def createMercurial(git):
+def createMercurial():
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
         print "Error: Paths for mercurial not setup."
         return
@@ -4292,31 +4270,17 @@ def createMercurial(git):
     updateMercurialMirrors()
     # Create and initialize repos if still missing.
     for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
-        if git:
-            repodir = grepodir + "/" + reponame
-        else:
-            repodir = hgrepo + "/" + reponame
+        repodir = grepodir + "/" + reponame
         if not dirs or not os.path.isdir(dirs[0]):
             continue
         if os.path.isdir(repodir):
-            # XXX: we can only checkin once until now, no further
-            # automatic updates possible for a repo
             firsttime = 0
         else:
             firsttime = 1
-            if git:
-                makeDirs(repodir)
-                os.system(\
-                    "cd %s && { git init-db; ln -sf %s/.git ../%s.git; }" % \
-                    (repodir, reponame, reponame))
-                writeFile(repodir + "/.git/description", [repodescr + "\n"])
-            else:
-                os.system("hg init %s" % repodir)
-                writeFile(repodir + "/.hgignore",
-                    [ignoreBinary(), "\.src\.rpm$\n"])
-                writeFile(repodir + "/.hg/hgrc",
-                    ["[web]\ndescription = %s\n" % repodescr,
-                     "author = %s\n" % hgauthor])
+            makeDirs(repodir)
+            os.system("cd %s && { git init-db; ln -sf %s/.git ../%s.git; }" % \
+                (repodir, reponame, reponame))
+            writeFile(repodir + "/.git/description", [repodescr + "\n"])
         if not filecache:
             filecache = hgfiles + "/" + reponame
         makeDirs(filecache)
@@ -4332,10 +4296,9 @@ def createMercurial(git):
         for pkg in pkgs:
             name = pkg["name"]
             pkgdir = repodir + "/" + name
-            extractSrpm(pkg, pkgdir, filecache, repodir, oldpkgs.get(name), git)
+            extractSrpm(pkg, pkgdir, filecache, repodir, oldpkgs.get(name))
             oldpkgs[name] = pkg
-        if git:
-            os.system("cd %s && { git repack; git prune-packed; }"  % repodir)
+        os.system("cd %s && { git repack; git prune-packed; }" % repodir)
 
 
 def checkDeps(rpms):
@@ -4672,6 +4635,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
             print "writeHeader() would not write the same rpmdb data for", \
                 pkg["name"], "(rpm-%s)" % pkg["rpmversion"]
             if verbose > 2:
+                # This should be some more generic diff routine for headers.
                 if fmt != pkg.hdrdata[3]:
                     print "wrong fmt"
                 if fmt2 != pkg.hdrdata[4]:
@@ -5115,8 +5079,7 @@ def main():
             repo = RpmRepo(a, excludes)
             repo.createRepo(baseurl)
     elif mercurial:
-#        createMercurial(0)
-        createMercurial(1)
+        createMercurial()
     else:
         keepdata = 1
         hdrtags = rpmtag
