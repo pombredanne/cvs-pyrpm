@@ -128,7 +128,8 @@ Rebuild rpm packages and manage build roots via mach, available from
 link:http://thomas.apestaart.org/projects/mach/[] and further info
 at link:http://fedoraproject.org/wiki/UsingMach[].
 
-Fedora Core Live CDs at link:http://fedoraproject.org/wiki/LiveCD[].
+Fedora Core Live CDs at link:http://fedoraproject.org/wiki/LiveCD[]
+and link:http://fedoraproject.org/wiki/DerivedDistributions[].
 
 Here should be a link on how rpm packages for Fedora Extras are checked
 to make them real nice, stable and conforming to Red Hat and comunity
