@@ -1175,8 +1175,8 @@ def archCompat(parch, arch):
     """Return True if package with architecture parch can be installed on
     machine with arch arch."""
     
-    return parch == "noarch" or arch == "noarch" or parch == arch or \
-           (arch_compats.has_key(arch) and parch in arch_compats[arch])
+    return (parch == "noarch" or arch == "noarch" or parch == arch or
+            parch in arch_compats.get(arch, []))
 
 def archDuplicate(parch, arch):
     """Return True if parch and arch have the same base arch."""
@@ -1243,10 +1243,10 @@ def machineDistance(arch1, arch2):
     # Everything else is determined by the "distance" in the arch_compats
     # array. If both archs are not compatible we return an insanely high
     # distance.
-    if   arch_compats.has_key(arch1) and arch2 in arch_compats[arch1]:
-        return arch_compats[arch1].index(arch2)+2
-    elif arch_compats.has_key(arch2) and arch1 in arch_compats[arch2]:
-        return arch_compats[arch2].index(arch1)+2
+    if arch2 in arch_compats.get(arch1, []):
+        return arch_compats[arch1].index(arch2) + 2
+    elif arch1 in arch_compats.get(arch2, []):
+        return arch_compats[arch2].index(arch1) + 2
     else:
         return 999   # incompatible archs, distance is very high ;)
 

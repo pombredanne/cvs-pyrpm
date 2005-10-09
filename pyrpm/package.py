@@ -794,9 +794,7 @@ class RpmPackage(RpmData):
         """Add the given RpmFileInfo rfi as a possible hardlink"""
 
         key = rfi.getHardLinkID()
-        if not self.hardlinks.has_key(key):
-            self.hardlinks[key] = []
-        self.hardlinks[key].append(rfi)
+        self.hardlinks.setdefault(key, []).append(rfi)
 
     def __handleHardlinks(self, rfi):
         """Create hard links to RpmFileInfo rfi if specified so in

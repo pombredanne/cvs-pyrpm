@@ -48,9 +48,7 @@ class ProvidesList:
         """Add Provides: (name, RPMSENSE_* flag, EVR string) by RpmPackage rpm
         to database"""
 
-        if not self.provide.has_key(name):
-            self.provide[name] = [ ]
-        self.provide[name].append((flag, version, rpm))
+        self.provide.setdefault(name, []).append((flag, version, rpm))
 
     def addPkg(self, rpm):
         """Add Provides: by RpmPackage rpm"""

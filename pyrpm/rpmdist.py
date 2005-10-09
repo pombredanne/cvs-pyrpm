@@ -154,9 +154,7 @@ class RpmDistributionCollection:
 
     def getArchDirs(self, arch):
         """returns dirs specific for architecture"""
-        if not self.dirs.has_key(arch):
-            return []
-        return self.dirs[arch]
+        return self.dirs.get(arch, [])
 
     def getDirs(self):
         """returns all dirs"""
@@ -180,8 +178,7 @@ class RpmDistributionCollection:
 
     def appendDirectory(self, arch, path):
         """add directory with files to collection"""
-        if not self.dirs.has_key(arch):
-            self.dirs[arch] = []
+        self.dirs.setdefault(arch, [])
         if path not in self.dirs[arch]:
             self.dirs[arch].append(path)
 
