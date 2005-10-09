@@ -2598,26 +2598,6 @@ def depString(name, flag, version):
         op += "="
     return "%s %s %s" % (name, op, version)
 
-def searchDep(name, flag, version, deps):
-    ret = []
-    if deps:
-        if isinstance(version, basestring):
-            evr = evrSplit(version)
-        else:
-            evr = version
-        for (f, v, rpm) in deps:
-            if rpm in ret:
-                continue
-            if version == "" or rangeCompare(flag, evr, f, evrSplit(v)):
-                ret.append(rpm)
-            elif v == "":
-                if rpm.strict:
-                    print "Warning:", rpm.getFilename(), \
-                        "should have a flag/version added for the provides", \
-                        depString(name, flag, version)
-                ret.append(rpm)
-    return ret
-
 class DepList:
 
     def __init__(self):
@@ -2635,7 +2615,26 @@ class DepList:
             self.deps[name].remove( (flag, version, rpm) )
 
     def search(self, name, flag, version):
-        return searchDep(name, flag, version, self.deps.get(name, []))
+        deps = self.deps.get(name, [])
+        if not deps:
+            return []
+        if isinstance(version, basestring):
+            evr = evrSplit(version)
+        else:
+            evr = version
+        ret = []
+        for (f, v, rpm) in deps:
+            if rpm in ret:
+                continue
+            if version == "" or rangeCompare(flag, evr, f, evrSplit(v)):
+                ret.append(rpm)
+            elif v == "":
+                if rpm.strict:
+                    print "Warning:", rpm.getFilename(), \
+                        "should have a flag/version added for the provides", \
+                        depString(name, flag, version)
+                ret.append(rpm)
+        return ret
 
 
 class RpmResolver:
