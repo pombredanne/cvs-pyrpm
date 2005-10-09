@@ -97,15 +97,11 @@ class FilenamesList:
         The list may point to internal structures of FilenamesList and may be
         changed by calls to addPkg() and removePkg()."""
 
-        l = [ ]
-        dirname = os.path.dirname(name)
+        (dirname, basename) = os.path.split(name)
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
-        basename = os.path.basename(name)
-        if self.path.has_key(dirname) and \
-               self.path[dirname].has_key(basename):
-            l = self.path[dirname][basename]
-        return l
+        return self.path.get(dirname, {}).get(basename, [])
+
 
 # RPM Constants - based from rpmlib.h and elsewhere
 
