@@ -144,7 +144,7 @@ class RpmYum:
             self.config.printError("Error reading the RPM database")
             return 0
         for pkg in self.pydb.getPkgList():
-            if "redhat-release" in (dep[0] for dep in pkg["provides"]):
+            if "redhat-release" in [ dep[0] for dep in pkg["provides"] ]:
                 rpmconfig.relver = pkg["version"]
         if os.path.isfile(self.config.yumconf):
             self.addRepo(self.config.yumconf)
