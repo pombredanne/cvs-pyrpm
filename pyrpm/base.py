@@ -47,8 +47,7 @@ class RpmFileInfo:
 class FilenamesList:
     """A mapping from filenames to RpmPackages."""
 
-    def __init__(self, config):
-        self.config = config            # FIXME: write-only
+    def __init__(self):
         self.clear()
 
     def clear(self):
@@ -59,23 +58,25 @@ class FilenamesList:
     def addPkg(self, pkg):
         """Add all files from RpmPackage pkg to self."""
 
-        if pkg["basenames"] == None:
+        basenames = pkg["basenames"]
+        if basenames == None:
+            # XXX we should also support "oldfilenames"
             return
-        for i in xrange (len(pkg["basenames"])):
-            dirname = pkg["dirnames"][pkg["dirindexes"][i]]
-
-            if not self.path.has_key(dirname):
-                self.path[dirname] = { }
-
-            basename = pkg["basenames"][i]
-            if not self.path[dirname].has_key(basename):
-                self.path[dirname][basename] = [ ]
-            self.path[dirname][basename].append(pkg)
+        dirindexes = pkg["dirindexes"]
+        dirnames = pkg["dirnames"]
+        path = self.path
+        for i in dirnames:
+            path.setdefault(i, {})
+        for i in xrange(len(basenames)):
+            dirname = dirnames[dirindexes[i]]
+            path[dirname].setdefault(basenames[i], []).append(pkg)
 
     def removePkg(self, pkg):
         """Remove all files from RpmPackage pkg from self."""
 
-        if pkg["basenames"] == None:
+        basenames = pkg["basenames"]
+        if basenames == None:
+            # XXX we should also support "oldfilenames"
             return
         for i in xrange (len(pkg["basenames"])):
             dirname = pkg["dirnames"][pkg["dirindexes"][i]]

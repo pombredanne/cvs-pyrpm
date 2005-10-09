@@ -235,7 +235,7 @@ class RpmResolver(RpmList):
         # Obsoletes by self.list
         self.obsoletes_list = ObsoletesList(self.config)
         # Files in self.list
-        self.filenames_list = base.FilenamesList(self.config)
+        self.filenames_list = base.FilenamesList()
         # new RpmPackage =>
         # ["originally" installed RpmPackage obsoleted by update]
         self.obsoletes = { }
