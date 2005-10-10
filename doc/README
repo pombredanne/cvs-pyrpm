@@ -148,39 +148,89 @@ link:mailto:twoerner@redhat.com[Thomas Woerner].
 `oldpyrpm.py` has some TODO items listed in the source.
 
 
+General Notes about the Rpm Format
+----------------------------------
+
+
 Notes about the Repo-Metadata
------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The following things should be noted about the repo metadata. yum is using
-the repodata only within the resolver part, then downloads the rpm headers
-and passes all the headers on to rpmlib to verify again if the resolver
-of rpmlib is ok as well as doing e.g. the installation ordering part
-within rpmlib. If the repodata would be more complete, more steps could
-be done only based on the repodata being available:
+the repodata only within the resolver part to determine a set of rpms that
+should be updated and/or installed. Then the complete rpm headers are
+downloaded and another dependency check from librpm is run in addition to
+determining the ordering of rpm packages.
 
- - Even if no epoch is specified, the metadata still specifies this as "0".
-   For most code paths this is no problem as for all comparisons of version
-   data, a missing epoch is the same as a "0" epoch. This should not be
-   a huge problem and would be only a cleanup item for the repodata.
- - For dependency information the `flag` part is only partially copied into
-   the repodata. Just adding the `flag` information as integer would make
-   sure all information is present in any case. Extending the repodata to
-   have `intflag` added alongside the old information would be good.
- - Repo data adds a "pre" flag if the RPMSENSE_PREREQ flag is set. That
-   information is actually not complete to identify install prereq and
-   we need the more complete flag information as requested above to
-   be able todo correct installation ordering based on repodata.
- - There is a fixed regex string which specifies the filelist information
-   for the primary.xml file. In addition also all files are listed if
-   they appear in any file requires from the same repository. This means that
-   you need to download the full filelist once you work on more than one
-   repository and you have file requirements outside of the fixed regex list.
-   (Detecting the need for full filelists could be done per-repo to give
-   a quite good detection algorithm.) Only possible path for this is to
-   identify problems for several repos where the full filelists need to be
-   downloaded and to add such a requirement into that repo or otherwise
-   add a command line option to add such additional requirements (which
-   should then get also written into the repodata).
+Here a few limitations you should be aware of if you want to work with the
+repodata for more than the resolver or understand the limits of the
+resolver:
+
+ - Repodata has evolved over time. Until now no version information has been
+   added to the created data, this might make sense for future changes.
+ - Even if no epoch is specified in the rpm header, the metadata will
+   specify this as "0". That's the correct way for version and dependency
+   checks.
+ - Dependency information is often specified like `bash >= 3.0` and consists
+   of a (name, flag, version) triple. The flag part is specified as integer
+   within the rpm header and is only partially copied over into the repodata.
+   Installation ordering of rpm packages is not possible with the current
+   available data (or only based on reduced data). Future repodata could make
+   the data more complete or just copy the integer into the output to provide
+   it as exact copy.
+   (Repo data adds a "pre" flag if the RPMSENSE_PREREQ flag is set. That
+   information is actually not complete to identify install prereq versus
+   an erase prereq.)
+ - The `primary.xml.gz` file contains a subset of the included files. See
+   below for a discussion on the limits of that.
+
+
+Huge Dependency Data
+~~~~~~~~~~~~~~~~~~~~
+
+The dependency data we operate with is extremely huge. In addition to the
+`Provides:` data which contains shared libs, rpm versions and explicitely
+listed ones in .spec files, dependency data can also use any filerequires
+like e.g. `Requires: /usr/bin/foo` to reference any file in any other rpm
+package. That means we potentially have to look at a filelist of all rpm
+packages. That data is extremely huge as the current Fedora Core
+development tree contains more than 350000 files.
+
+As the dependency data is worked with on each client to update the machine,
+it must be a goal to reduce this data to a smaller subset.
+
+The current repo metadata has a fixed file regex of
+`^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$` and a directory regex of
+`^(.*bin/.*|/etc/.*)$`. That regex specifies the data given in the
+`repodata/primary.xml.gz` file and you have to fallback to the complete
+filelists available in `repodata/filelists.xml.gz` if any `Requires:` need
+a file outside of the regex. The regex gives a deterministic way to know
+when to load the full filelist.
+
+In addition to the regex above, the current createrepo data is also adding
+all files from the repo for which requirements are also listed. If you
+work with several repositories, you need to fallback on full filelists.
+
+In addition to the completeness problems above, it was also noted that
+the regex lists contain 100 times more data than actually being used in
+current repositories. Conary is thus maintaining explicit lists of
+possible file requires.
+
+Working on new ideas to specify a rather small filelist that works in a
+deterministic way for at least all Fedora Core and Fedora Extra paths
+are worth exploring.
+
+
+Storing Complete Dep Graphs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It would also be possible to store dependency graphs that contain data for
+the resolver to select the right rpm packages plus the orderer to specify
+the right sequence to install them. But many machines do have further
+packages installed outside of that package set, so this would then mostly
+be used for new installs. Optimizing the general update path for running
+machines should be more important than improving the install path for
+new installs, so this is currently no goal, but would very well be possible
+todo.
 
 
 Detailed tool descriptions
