@@ -199,8 +199,8 @@ As the dependency data is worked with on each client to update the machine,
 it must be a goal to reduce this data to a smaller subset.
 
 The current repo metadata has a fixed file regex of
-`^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$` and a directory regex of
-`^(.*bin/.*|/etc/.*)$`. That regex specifies the data given in the
+`^(.\*bin/.\*|/etc/.\*|/usr/lib/sendmail)$` and a directory regex of
+`^(.\*bin/.\*|/etc/.\*)$`. That regex specifies the data given in the
 `repodata/primary.xml.gz` file and you have to fallback to the complete
 filelists available in `repodata/filelists.xml.gz` if any `Requires:` need
 a file outside of the regex. The regex gives a deterministic way to know
@@ -448,7 +448,7 @@ Diffing Source Rpms
 ~~~~~~~~~~~~~~~~~~~
 
 You can list the changes between two source packages. If you specify
-`\--explode` it tries to also show the changes within `*.tar.gz` files
+`\--explode` it tries to also show the changes within `\*.tar.gz` files
 if they have changed.
 -----------------------
 oldpyrpm.py [--explode] --diff 1.src.rpm 2.src.rpm
