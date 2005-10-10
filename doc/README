@@ -205,9 +205,9 @@ there.
 
 Check some common problems with packages and interdependancies for
 Fedora Core Devel:
--------------------------------
+-----------------------
 pyrpmcheck /mirror/fedora/development/i386/Fedora/RPMS
--------------------------------
+-----------------------
 
 
 4.2 pyrpmcheckrepo
@@ -227,9 +227,9 @@ updates for all kinds of archs can be performed this way on one single machine.
 
 Check if an update from Fedora Core 4 to Fedora Core Devel works or what
 problems come up:
--------------------------------
+-----------------------
 pyrpmcheckrepo -r /mnt/foo install /mirror/fedora/4/i386/os/Fedora/RPMS update /mirror/fedora/development/i386/Fedora/RPMS
--------------------------------
+-----------------------
 
 
 4.3 pyrpmcreaterepo
@@ -264,14 +264,14 @@ Link to a page with more information on rpmdb repair information is available at
 link:http://www.rpm.org/hintskinks/repairdb/[].
 
 Check the rpmdb of the current system with internal cross checks
--------------------------------
+-----------------------
 pyrpmdbverify
--------------------------------
+-----------------------
 
 Same, but this time we use external rpms to verify against, too
--------------------------------
+-----------------------
 pyrpmdbverify /mirror/fedora/development/i386/Fedora/RPMS
--------------------------------
+-----------------------
 
 
 4.6 pyrpminstall
@@ -307,9 +307,9 @@ pyrpmyum.
 
 Run 10000 install and erase operations in the /mnt/build/test buildroot and
 save the resulting output in /tmp/stresstest
--------------------------------
+-----------------------
 pyrpmrandomizer --servicehack -y -v -c fc3-updates-i386.conf -r /mnt/build/test 10000 >&/tmp/stresstest
--------------------------------
+-----------------------
 
 
 4.9 pyrpmrebuilddb
@@ -323,7 +323,7 @@ Currently `/var/lib/rpm/Pubkeys` is not yet rebuild.
 
 
 4.10 pyrpmspecinfo
------------------
+------------------
 
 As we often have to work with specfiles, too, we've written a small tool with
 which we can extrace the different sections from a specfile in order to use
@@ -355,32 +355,32 @@ transaction the packages that pyrpmyum would autoerase for you.
 
 Install a full Fedora Core Development tree in `/mnt/build/fc-devel-i386`
 buildroot:
--------------------------------
+-----------------------
 pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 install "*"
--------------------------------
+-----------------------
 
 Update kdebase in `/mnt/build/fc-devel-i386` buildroot to latest version,
 resolving all dependancies:
--------------------------------
+-----------------------
 pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 update kdebase
--------------------------------
+-----------------------
 
 Same, only if we get some unresolvable problems try to remove packages that
 don't fit automatically:
--------------------------------
+-----------------------
 pyrpmyum -y -v --autoerase -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 update kdebase
--------------------------------
+-----------------------
 
 Make a dry-run of the above command to be sure that not everything gets
 automatically deleted :)
--------------------------------
+-----------------------
 pyrpmyum -y -v --test --autoerase -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 update kdebase
--------------------------------
+-----------------------
 
 Remove glibc and all depending packages from our buildroot :)
--------------------------------
+-----------------------
 pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 remove glibc
--------------------------------
+-----------------------
 
 
 4.12 oldpyrpm.py
@@ -393,25 +393,41 @@ python-2.2 or newer and you can use parts of it even if one of the addon
 python modules are not available. Also feel free to check the script for
 more hidden usage cases.
 
+
+Diffing Source Rpms
+~~~~~~~~~~~~~~~~~~~
+
 You can list the changes between two source packages. If you specify
 `\--explode` it tries to also show the changes within `*.tar.gz` files
 if they have changed.
--------------------------------
+-----------------------
 oldpyrpm.py [--explode] --diff 1.src.rpm 2.src.rpm
--------------------------------
+-----------------------
+
+
+Extracting Rpm Data
+~~~~~~~~~~~~~~~~~~~
 
 You can extract source or normal binary packages. This always overwrites
 existing files and does not start any scripts in binary packages, so it
 is often only used for source packages:
--------------------------------
+-----------------------
 oldpyrpm.py [--buildroot=/chroot] --extract *.rpm
--------------------------------
+-----------------------
+
+
+Excluded Arch Checking
+~~~~~~~~~~~~~~~~~~~~~~
 
 You can check source rpm packages and mark the ones which are excluded from
 building on certain architectures.
--------------------------------
+-----------------------
 oldpyrpm.py --checkarch /mirror/fedora/development/SRPMS
--------------------------------
+-----------------------
+
+
+Checking rpmdb in /var/lib/rpm
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can check the rpm database `rpmdb`. The complete information that rpm
 needs is included in `/var/lib/rpm/Packages`. There are further db4 files
@@ -449,19 +465,27 @@ is being checked:
    used to read the yum config files.
 
 Example usages to check your rpm database `rpmdb`:
--------------------------------
+-----------------------
 oldpyrpm.py [--verbose|-v|--quiet|-q] [--rpmdbpath=/var/lib/rpm/] --checkrpmdb
 oldpyrpm.py -c /etc/yum.conf --checkrpmdb
--------------------------------
+-----------------------
+
+
+Createrepo
+~~~~~~~~~~
 
 You can generate repo metadata like `createrepo` does. You need to copy the
 `comps.xml` file yourself into the repodata directory if you need one.
 Also xml pretty printing is hardcoded (`-p` option for upstream createrepo).
 Createrepo files are compatibel with the output from createrepo-0.4.3.
--------------------------------
+-----------------------
 cp comps.xml /mirror/fedora/development/i386/repodata/comps.xml
 oldpyrpm.py --createrepo /mirror/fedora/development/i386/
--------------------------------
+-----------------------
+
+
+Package Verification
+~~~~~~~~~~~~~~~~~~~~
 
 Per default `oldpyrpm.py` is only reading in rpm packages and doing some
 sanity checks on them. It can read in rpm packages from Red Hat Linux 5.2
@@ -496,16 +520,17 @@ Here some options that can be useful:
    `\--checkdeps` is added.
 
 Example usages:
--------------------------------
+-----------------------
 oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/i386/Fedora/RPMS
 oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/SRPMS
 find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null | xargs -0 oldpyrpm.py --nodigest --nopayload
 locate '*.rpm' | xargs oldpyrpm.py --nodigest --nopayload
--------------------------------
+-----------------------
 
 Only read in the needed rpm tags and do dependency checking without further
-debug checks (finishes in under 15 seconds on some laptop):
--------------------------------
-time oldpyrpm.py [--hotshot] --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/development/i386/Fedora/RPMS
--------------------------------
+debug checks. This shows the full speed of the current implementation and
+finishes in under 14 seconds for FC-development on some laptop:
+-----------------------
+time oldpyrpm.py --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/development/i386/Fedora/RPMS
+-----------------------
 
