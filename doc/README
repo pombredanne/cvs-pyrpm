@@ -108,8 +108,9 @@ link:http://rhn.redhat.com/[Red Hat Network] and can be downloaded from
 link:http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/[].
 
 Anaconda is the Red Hat installation tool and can be downloaded at
-link:http://elvis.redhat.com/anaconda/[] and
-link:http://fedora.redhat.com/projects/anaconda-installer/[].
+link:http://elvis.redhat.com/anaconda/[],
+link:http://fedora.redhat.com/projects/anaconda-installer/[] and
+link:http://fedora.linux.duke.edu/wiki/Anaconda[].
 
 Conary has looked at rpm history and defines a new distribution format that
 enables rollbacks and easier customization on the client side. Available at
@@ -235,6 +236,23 @@ be used for new installs. Optimizing the general update path for running
 machines should be more important than improving the install path for
 new installs, so this is currently no goal, but would very well be possible
 todo.
+
+
+Is Python the right language?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Python is a very good scripting language. Very nice for fast prototyping
+and implementing new features. We currently see limits if too much data
+needs to be processed. This is happening with parsing xml data as well
+as with the huge amount of dependency data in rpm packages.
+
+To a lesser degree also a few python modules could see improvements:
+
+ - gzip decompression should offer a filetype object with .read().
+   The current hacks in the class PyGZIP should go away.
+ - bsddb access seems very slow (reading rpmdb)
+ - bzip2 decompression does not have streaming support
+
 
 
 Detailed tool descriptions
@@ -484,9 +502,11 @@ Checking rpmdb in /var/lib/rpm
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can check the rpm database `rpmdb`. The complete information that rpm
-needs is included in `/var/lib/rpm/Packages`. There are further db4 files
-in the rpmdb directory to speed up information lookup. This is how the rpmdb
-is being checked:
+needs is included in `/var/lib/rpm/Packages` and the opengpg data in
+`/var/lib/rpm/Pubkeys`. All other db4 files in the rpmdb directory contain
+duplicate data from `Packages` to speed up information lookup.
+
+This is how the rpmdb is being checked:
 
  - Verify all data from `/var/lib/rpm/Packages` is the same as in all other
    db4 files (two-way check).
@@ -503,7 +523,10 @@ is being checked:
    installed packages are not available in one of the repos. You can specify
    more than on yum config file by repeating the `-c` option.
  - If no repodata is read in, only the rpmdb files are accessed by all checks
-   and all tests can run as non-root user.
+   and all tests can run as non-root user. Also the check code automatically
+   detects the endianess of the db4 files and looks at the kernel packages
+   to switch over to some other arch setting. So copying over rpmdb files from
+   other machines and checking them is real easy.
  - The check can be run on any architecture for any other architecture with
    automatic detection of the right endian setting as well as automatic
    arch setting by looking at the installed kernels. So you can copy the
