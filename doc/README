@@ -312,7 +312,7 @@ based access to rpm headers with our code. This code is not complete until now.
 
 
 4.4 pyrpmdbconvert
------------------
+------------------
 
 Nothing written yet. This supports changing over from the current rpmdb to
 e.g. a sqlite database.
