@@ -39,6 +39,7 @@
 #
 # TODO:
 # - How todo save shell escapes for os.system()
+# - Can we write fileconflicts only once per package?
 # - Make info in depString() more complete.
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -789,6 +790,15 @@ installonlypkgs = ("gpg-pubkey", "kernel", "kernel-smp", "kernel-bigmem",
     "kernel-enterprise", "kernel-debug", "kernel-unsupported", "kernel-xen0",
     "kernel-xenU", "kernel-modules", "kernel-devel", "kernel-source")
 
+
+# This is RPMCANONCOLOR in /bin/rpm source, values change over time.
+def getInstallColor(arch):
+    if arch == "ia64": # also "0" and "3" have been here
+        return 2
+    elif arch in ("ia32e", "amd64", "x86_64", "sparc64", "s390x",
+        "powerpc64") or arch.startswith("ppc"):
+        return 3
+    return 0
 
 # Buildarchtranslate table for multilib stuff
 buildarchtranslate = {
@@ -4671,11 +4681,13 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
             print pkg.getFilename(), \
                 "bad sha1: %s / %s" % (sha1header, ctx.hexdigest())
     if None:
+      # XXX this should get tested via doVerify()
       for pkg in packages.values():
         if pkg["name"] == "gpg-pubkey":
             continue
-        #if pkg["installcolor"] != (0,):
-        #    print pkg.getFilename(), "wrong installcolor", pkg["installcolor"]
+        if pkg["installcolor"]:
+            if pkg["installcolor"] != (getInstallColor(arch),):
+                print pkg.getFilename(), "wrong installcolor", pkg["installcolor"]
         if pkg["basenames"] == None and pkg["filestates"] == None:
             pass
         elif pkg["filestates"] != (0,) * len(pkg["basenames"]):
