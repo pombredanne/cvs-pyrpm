@@ -1263,7 +1263,7 @@ class RpmDB(RpmDatabase):
             pkg["installtime"] = int(time.time())
             if pkg.has_key("basenames"):
                 pkg["filestates"]= ['\x00',] * len(pkg["basenames"])
-            pkg["installcolor"] = [0,]
+            pkg["installcolor"] = [self.__getInstallColor(),]
             pkg["installtid"] = [self.config.tid,]
 
             self.__writeDB4(self.basenames_db, "basenames", pkgid, pkg)
@@ -1467,6 +1467,13 @@ class RpmDB(RpmDatabase):
             key = "\x00"
         return key
 
+    def __getInstallColor():
+        if self.config.arch == "ia64": # also "0" and "3" have been here
+            return 2
+        elif self.config.arch in ("ia32e", "amd64", "x86_64", "sparc64",
+            "s390x", "powerpc64") or self.config.arch.startswith("ppc"):
+            return 3
+        return 0
 
 class RpmSQLiteDB(RpmDatabase):
     """RPM database storage in an SQLite database."""
@@ -1915,32 +1922,26 @@ class RpmRepo(RpmDatabase):
         packages in self.filerequires.  Set pkg["yumlocation"] to the remote
         relative path to the package."""
 
-        for f in os.listdir(dir):
-            path = os.path.join(dir, f)
-            if os.path.isdir(path):
-                self.__readDir(path, "%s%s/" % (location, f))
-            elif f.endswith(".rpm"):
-                pkg = package.RpmPackage(self.config, path)
-                try:
-                    pkg.read(tags=("name", "epoch", "version", "release", "arch", "sourcerpm", "requirename", "requireflags", "requireversion"))
-                    pkg.close()
-                except (IOError, ValueError), e:
-                    self.config.printWarning(0, "%s: %s" % (path, e))
-                    continue
-                if self.__isExcluded(pkg):
-                    continue
-                for reqname in pkg["requirename"]:
-                    if reqname[0] == "/":
-                        self.filerequires.append(reqname)
-                # FIXME: this is done in createRepo too
-                # If it is a source rpm change the arch to "src". Only valid
-                # for createRepo, never do this anywhere else. ;)
-                if pkg.isSourceRPM():
-                    pkg["arch"] = "src"
-                nevra = pkg.getNEVRA()
-                self.config.printInfo(2, "Adding %s to repo and checking file requires.\n" % nevra)
-                pkg["yumlocation"] = location+f
-                self.pkglist[nevra] = pkg
+        tmplist = []
+        functions.readDir(dir, tmplist,
+                          ("name", "epoch", "version", "release", "arch",
+                           "sourcerpm", "requirename", "requireflags",
+                           "requireversion"))
+        for pkg in tmplist:
+            if self.__isExcluded(pkg):
+                continue
+            for reqname in pkg["requirename"]:
+                if reqname[0] == "/":
+                    self.filerequires.append(reqname)
+            # FIXME: this is done in createRepo too
+            # If it is a source rpm change the arch to "src". Only valid
+            # for createRepo, never do this anywhere else. ;)
+            if pkg.isSourceRPM():
+                pkg["arch"] = "src"
+            nevra = pkg.getNEVRA()
+            self.config.printInfo(2, "Adding %s to repo and checking file requires.\n" % nevra)
+            pkg["yumlocation"] = location+f
+            self.pkglist[nevra] = pkg
 
     def __writePrimary(self, fd, parent, pkg):
         """Write primary.xml data about RpmPackage pkg to fd.

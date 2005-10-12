@@ -32,22 +32,6 @@ PACKAGES | DIRS: Optional single rpms or directories of rpms against which the
 # Tags which will be read from the rpms. CHANGE HERE IF SOME TESTS NEED MORE
 # tags!!!!
 rtags = ("name", "epoch", "version", "release", "arch", "sha1header", "sourcerpm")
-def readDir(dir, list):
-    for f in os.listdir(dir):
-        if os.path.isdir("%s/%s" % (dir, f)):
-            readDir("%s/%s" % (dir, f), list)
-        elif f.endswith(".rpm"):
-            if f.find("-debuginfo-") > 0:
-                continue
-            pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
-            try:
-                pkg.read(tags=rtags)
-                pkg.close()
-            except (IOError, ValueError), e:
-                rpmconfig.printError("%s: %s\n" % (pkg, e))
-                continue
-            rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())
-            list.append(pkg)
 
 #
 # DB Read functions
@@ -462,7 +446,7 @@ def main():
     pkglist = []
     for arg in args:
         if   os.path.isdir(arg):
-            readDir(arg, pkglist)
+            readDir(arg, pkglist, rtags)
         elif arg.endswith(".rpm"):
             try:
                 pkglist.append(readRpmPackage(rpmconfig, arg, tags=rtags))

@@ -1322,6 +1322,23 @@ def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
     pkg.close()
     return pkg
 
+def readDir(dir, list, rtags=None):
+    if not os.path.isdir(dir):
+        return
+    for f in os.listdir(dir):
+        if os.path.isdir("%s/%s" % (dir, f)):
+            readDir("%s/%s" % (dir, f), list)
+        elif f.endswith(".rpm"):
+            pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
+            try:
+                pkg.read(tags=rtags)
+                pkg.close()
+            except (IOError, ValueError), e:
+                rpmconfig.printError("%s: %s\n" % (pkg, e))
+                continue
+            rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())
+            list.append(pkg)
+
 def run_main(main):
     """Run main, handling --hotshot.
 

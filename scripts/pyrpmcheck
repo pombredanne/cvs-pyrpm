@@ -40,24 +40,6 @@ pyrpmcheck [--nodir] [--noprovides] [--nosymlinks] [-h, --help] [-v, --verbose] 
 # tags!!!!
 rtags = ("name", "epoch", "version", "release", "arch", "dirindexes", "dirnames", "basenames", "fileusername", "filegroupname", "filemodes", "filelinktos", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion")
 
-def readDir(dir, list):
-    files = os.listdir(dir)
-    for f in files:
-        if os.path.isdir("%s/%s" % (dir, f)):
-            readDir("%s/%s" % (dir, f), list)
-        elif f.endswith(".rpm"):
-            if f.find("debuginfo") > 0:
-                continue
-            pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
-            try:
-                pkg.read(tags=rtags)
-                pkg.close()
-            except (IOError, ValueError), e:
-                rpmconfig.printError("%s: %s\n" % (pkg, e))
-                continue
-            rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())
-            list.append(pkg)
-
 #
 # Put more check functions here
 #
@@ -213,7 +195,7 @@ def main():
     for arg in args:
         repo = []
         if   os.path.isdir(arg):
-            readDir(arg, repo)
+            readDir(arg, repo, rtags)
         elif arg.endswith(".rpm"):
             try:
                 repo.append(readRpmPackage(rpmconfig, arg, tags=rtags))

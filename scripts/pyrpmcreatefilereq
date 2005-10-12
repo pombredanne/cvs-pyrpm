@@ -1,0 +1,148 @@
+#!/usr/bin/python
+#
+# Generate extended file information based on multiple repos
+#
+# ./pyrpmcreatefilereq /mnt/raid/fedora/development/i386/Fedora/RPMS /mnt/raid/fedora-extras/development/i386/Fedora/RPMS
+#
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2004, 2005 Red Hat, Inc.
+#
+# Author: Phil Knirsch
+#
+
+import sys, os, getopt, errno, libxml2
+
+PYRPMDIR = ".."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+from pyrpm import __version__
+from pyrpm import *
+
+def usage():
+    print """
+Generate extended file requirement and package filename lists for multiple
+repositories.
+
+    pyrpmcreatefilereq [-o TARGETDIR] [MAINDIRECTORY] [[EXTDIRECTORY] ...]
+
+The main directory is mandatory, all extended directories are optional. The
+final extended file requirement list will be stored in the main directory.
+
+-o TARGETDIR:   Optional target directory where the filereq.xml.gz is written
+"""
+
+# Tags to be read. Extend here if more are necessary
+rtags = ("name", "epoch", "version", "release", "arch", "dirindexes",
+         "dirnames", "basenames", "requirename", "providename")
+
+
+def readFileReqList(dir):
+    filereqhash = {}
+    try:
+        reader = libxml2.newTextReaderFilename(dir+"/filereq.xml.gz")
+    except libxml2.libxmlError:
+        return filereqhash
+   
+    while reader.Read() == 1:
+        if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT or \
+           reader.Name() != "filereq":
+            continue
+        if reader.Read() != 1:
+            break
+        filereqhash[reader.Value()] = 1
+    return filereqhash
+
+def parseFileReqDir(dir, filereqhash):
+    if not os.path.isdir(dir):
+        return
+    for f in os.listdir(dir):
+        if os.path.isdir("%s/%s" % (dir, f)):
+            parseFileReqDir("%s/%s" % (dir, f), filereqhash)
+        elif f.endswith(".rpm"):
+            pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
+            try:
+                pkg.read(tags=["requirename",])
+                pkg.close()
+            except (IOError, ValueError), e:
+                rpmconfig.printError("%s: %s\n" % (pkg, e))
+                continue
+            for reqname in pkg["requirename"]:
+                if reqname[0] == "/":
+                    filereqhash[reqname] = 1
+
+def writeFileReqList(targetdir, mainlist, filereqhash):
+    try:
+        (fd, filename) = mkstemp_file(targetdir, "filereq")
+    except:
+        return 0
+
+    ffd = gzip.GzipFile(filename, "wb")
+
+    ffd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+    ffd.write('<filereqs>\n')
+
+    flist = filereqhash.keys()
+    flist.sort()
+    for fname in flist:
+        ffd.write("  <filereq>" + fname + "</filereq>\n")
+
+    for pkg in mainlist:
+        for fname in pkg["filenames"]:
+            if fname in filereqhash.keys():
+                ffd.write("  <package ver=\"" + pkg.getNEVRA() + "\">\n")
+                ffd.write("    <file>" + fname + "</file>\n")
+                ffd.write("  </package>\n")
+    ffd.write('</filereqs>')
+    ffd.close()
+    os.close(fd)
+    os.rename(filename, targetdir+"/filereq.xml.gz")
+    return 1
+
+#
+# Main program
+#
+def main():
+    sys.argv.pop(0)
+
+    if not sys.argv:
+        usage()
+        return 1
+
+    pkglist     = []
+
+    if sys.argv[0] == "-o":
+        targetdir = sys.argv[1]
+        sys.argv.pop(0)
+        sys.argv.pop(0)
+        maindir = sys.argv.pop(0)
+    else:
+        maindir = sys.argv.pop(0)
+        targetdir = maindir
+
+    filereqhash = readFileReqList(maindir)
+    readDir(maindir, pkglist, rtags)
+
+    parseFileReqDir(maindir, filereqhash)
+    for dir in sys.argv:
+        parseFileReqDir(dir, filereqhash)
+
+    writeFileReqList(targetdir, pkglist, filereqhash)
+
+    return 1
+
+if __name__ == '__main__':
+    run_main(main)
+
+# vim:ts=4:sw=4:showmatch:expandtab
