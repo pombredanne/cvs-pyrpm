@@ -131,6 +131,7 @@ link:http://www.openpkg.org/[].
 Rebuild rpm packages and manage build roots via mach, available from
 link:http://thomas.apestaart.org/projects/mach/[] and further info
 at link:http://fedoraproject.org/wiki/UsingMach[].
+Fedora Extras is using link:http://fedoraproject.org/wiki/Projects/Plague[].
 
 Fedora Core Live CDs at link:http://fedoraproject.org/wiki/LiveCD[]
 and link:http://fedoraproject.org/wiki/DerivedDistributions[].
