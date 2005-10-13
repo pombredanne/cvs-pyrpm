@@ -206,6 +206,15 @@ RPMVERIFY_MODE      = (1 << 6)     # from %verify(mode)
 RPMVERIFY_RDEV      = (1 << 7)     # from %verify(rdev)
 
 
+# RPM file state flags
+RPMFILE_STATE_NORMAL        = 0
+RPMFILE_STATE_REPLACED      = 1
+RPMFILE_STATE_NOTINSTALLED  = 2
+RPMFILE_STATE_NETSHARED     = 3
+RPMFILE_STATE_WRONGCOLOR    = 4
+
+
+# Operation defines
 OP_INSTALL = "install"
 OP_UPDATE = "update"
 OP_ERASE = "erase"

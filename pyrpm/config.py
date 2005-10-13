@@ -45,7 +45,6 @@ class RpmConfig:
         self.verbose = 0             # Maximum level of info messages to output
         self.debug_handler = RpmMessageHandler(self, "Debug: ")
         self.warning_handler = RpmMessageHandler(self, "Warning: ")
-        # FIXME: why not default suffix="\n"?
         self.verbose_handler = RpmMessageHandler(self, "", "")
         self.error_handler = RpmMessageHandler(self, "Error: ")
         self.printhash = 0
@@ -66,9 +65,12 @@ class RpmConfig:
         self.notriggers = 0
         self.noconflicts = 0
         self.nofileconflicts = 0
+        self.excludedocs = 0
+        self.excludeconfigs = 0
         self.checkinstalled = 0
         self.exactarch = 0           # same base arch is not enough for updates
         self.tid = int(time.time())     # FIXME: make sure it is unique?
+        self.tscolor = 0            # Transaction color, needed for rpmdb
         self.compsfile = None
         self.resolvertags = ("name", "epoch", "version", "release", "arch",
             "providename", "provideflags", "provideversion", "requirename",

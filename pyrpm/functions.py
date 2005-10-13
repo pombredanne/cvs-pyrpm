@@ -693,8 +693,9 @@ def parseYumOptions(argv, yum):
          "hash", "version", "quiet", "dbpath=", "root=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
-         "noorder", "noscripts", "notriggers", "oldpackage", "autoerase",
-         "servicehack", "installpkgs=", "arch=", "checkinstalled", "rusage"])
+         "noorder", "noscripts", "notriggers", "excludedocs", "excludeconfigs",
+         "oldpackage", "autoerase", "servicehack", "installpkgs=", "arch=",
+         "checkinstalled", "rusage"])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -763,6 +764,10 @@ def parseYumOptions(argv, yum):
             rpmconfig.noscripts = 1
         elif opt == "--notriggers":
             rpmconfig.notriggers = 1
+        elif opt == "--excludedocs":
+            rpmconfig.excludedocs = 1
+        elif opt == "--excludeconfigs":
+            rpmconfig.excludeconfigs = 1
         elif opt == "--servicehack":
             rpmconfig.service = 1
         elif opt == "--arch":

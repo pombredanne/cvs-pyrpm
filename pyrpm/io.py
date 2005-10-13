@@ -1121,6 +1121,8 @@ class RpmDB(RpmDatabase):
         self.zero = pack("I", 0)
         self.dbopen = False
         self.maxid = 0
+        # Correctly initialize the tscolor based on the current arch
+        self.config.tscolor = self.__getInstallColor()
 
     def open(self):
         pass
@@ -1262,8 +1264,9 @@ class RpmDB(RpmDatabase):
                 pkg["archivesize"] = pkg["signature"]["payloadsize"]
             pkg["installtime"] = int(time.time())
             if pkg.has_key("basenames"):
-                pkg["filestates"]= ['\x00',] * len(pkg["basenames"])
-            pkg["installcolor"] = [self.__getInstallColor(),]
+                pkg["filestates"] = self.__getFileStats(pkg)
+            # ['\x00',] * len(pkg["basenames"])
+            pkg["installcolor"] = [self.config.tscolor,]
             pkg["installtid"] = [self.config.tid,]
 
             self.__writeDB4(self.basenames_db, "basenames", pkgid, pkg)
@@ -1467,13 +1470,35 @@ class RpmDB(RpmDatabase):
             key = "\x00"
         return key
 
-    def __getInstallColor():
+    def __getInstallColor(self):
         if self.config.arch == "ia64": # also "0" and "3" have been here
             return 2
         elif self.config.arch in ("ia32e", "amd64", "x86_64", "sparc64",
             "s390x", "powerpc64") or self.config.arch.startswith("ppc"):
             return 3
         return 0
+
+    def __getFileStates(self, pkg):
+        """Returns a list of file states for rpmdb. """
+        states = []
+        for i in xrange(len(pkg["basenames"])):
+            fcolor = pkg["filecolors"][i]
+            if self.config.tscolor and fcolor and not (self.config & fcolor):
+                states.append(RPMFILE_STATE_WRONGCOLOR)
+                continue
+            fflags = pkg["fileflags"][i]
+            if self.config.excludedocs and (RPMFILE_DOC & fflags):
+                states.append(RPMFILE_STATE_NOTINSTALLED)
+                continue
+            if self.config.excludeconfigs and (RPMFILE_CONFIG & fflags):
+                states.append(RPMFILE_STATE_NOTINSTALLED)
+                continue
+            states.append(RPMFILE_STATE_NORMAL)
+            # FIXME: Still missing:
+            #  - netshared (found in /var/lib/rpm/macros)
+            #  - install_langs (found in /var/lib/rpm/macros)
+            #  - Now empty dirs which contained files which weren't installed
+        return states
 
 class RpmSQLiteDB(RpmDatabase):
     """RPM database storage in an SQLite database."""
