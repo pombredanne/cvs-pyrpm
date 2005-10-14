@@ -99,11 +99,22 @@ def writeFileReqList(targetdir, mainlist, filereqhash):
         ffd.write("  <filereq>" + fname + "</filereq>\n")
 
     for pkg in mainlist:
+        i = 0
         for fname in pkg["filenames"]:
             if fname in filereqhash.keys():
-                ffd.write("  <package ver=\"" + pkg.getNEVRA() + "\">\n")
-                ffd.write("    <file>" + fname + "</file>\n")
+                ffd.write("  <package name=\"%s arch=\"%s\">\n" %
+                          (pkg["name"], pkg["arch"]));
+                ffd.write("    <version epoch=\"%s\" ver=\"%s\" rel=\"%s\"/>\n" % (pkg.getEpoch(), pkg["version"], pkg["release"]))
+                fflag = pkg["fileflags"][i]
+                fmode = pkg["filemodes"][i]
+                typestr = ""
+                if   S_ISDIR(fmode):
+                    typestr = " type=\"dir\""
+                elif fflag & RPMFILE_GHOST:
+                    typestr = " type=\"ghost\""
+                ffd.write("    <file%s>%s</file>\n" % (typestr, fname))
                 ffd.write("  </package>\n")
+            i += 1
     ffd.write('</filereqs>')
     ffd.close()
     os.close(fd)
