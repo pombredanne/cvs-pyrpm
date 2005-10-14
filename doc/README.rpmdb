@@ -5,8 +5,10 @@ This document describes the reverse engineered info from the various files in
 /var/lib/rpm. All files are db4 files, either hash or btree based. With the
 excpetion of Packages all files have the corresponding rpmtag based value as
 key. The data the consists of integer pairs which contain the package id and
-the index at which this entry can be found in the rpm header of that tag. I'll
-give a small example later.
+the index at which this entry can be found in the rpm header of that tag. The
+values are 4 byte integers in host byte order. For some tags the index doesn't
+make any sense. In those cases the index value will always be set to 0.
+
 
 First the list of files and their data:
 
@@ -80,8 +82,8 @@ Triggername (hash):
 
 
 
-Now to the promised example of the connection between the package headers
-which are stored in Packages and the rest of the files.
+Now an example of the connection between the package headers which are stored
+in Packages and the rest of the files.
 
 The connection between /var/lib/rpm/Packages and the other files looks like
 this:

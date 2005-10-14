@@ -156,6 +156,70 @@ link:mailto:twoerner@redhat.com[Thomas Woerner].
 General Notes about the Rpm Format
 ----------------------------------
 
+For RPM there are nowadays several "formats" in which you can find information
+about rpm packages. The most typical one is of course the binary rpm header
+which is part of every binart rpm package. A typical binary rpm package looks
+like this:
+
++------+-----------+--------+-------------+
+| Lead | Signature | Header | Gziped CPIO +
++------+-----------+--------+-------------+
+
+The lead has a fixed size of 96 bytes and contains some very basic information
+about the binary rpm. It can also generally be used to determine if a file is
+a binary rpm or not (using file e.g.) as it contains some very specific to
+easily identify them.
+
+The signature and the header are stored as rpm header structures. Rpm header
+structures look like this:
+
++-------+---------+-----------+-----------+-----------+
+| Magic | IndexNr | StoreSize | Indexdata | Storedata |
++-------+---------+-----------+-----------+-----------+
+
+The Magic is a hardcoded value, IndexNr the number of index entries and
+StoreSize the size in bytes of the store data.
+
+Indexdata consists of IndexNr index entries each of which is 16 bytes. Each
+index entry looks like this:
+
++-----+------+--------+-------+
+| Tag | Type | Offset | Count |
++-----+------+--------+-------+
+
+Tag specifies which tag this entry is about. Type specifies the type of the
+tage. Offset specifies at which offset in the Storedata the data begins for
+this tag. Count has various size meanings depending on the type.
+
+Storedata finally contains the real tag information. As mentioned in the
+previous paragraph by using an index entry from the Indexdata you can find
+and parse all data relevant to a specifc tag. The format depends of course
+on the type of the tag.
+
+More detailed information about the binary rpm format can be found here:
+link:http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html[]
+
+The rpm binary format can be partially found in the rpmdb as well. The file
+/var/lib/rpm/Packages contains the complete headers of the orignal binary
+rpms in a rpm header structure format without the 8 byte magic and with
+some additional installation revelvant indexes appended.
+
+Another nowadays common format for reduced rpm header data is the repo metadata
+format used by yum. It is a split up and reduced version of the orignal
+rpm header information using XML. It is mainly useful to determine and resolve
+dependencies of rpm packages. More information about the metadata can be found
+here:
+
+link:http://linux.duke.edu/projects/metadata/[]
+
+Other less common storage formats include databases like SQLite or MySQL which
+e.g yum uses to convert the repodata format to a more usable form locally.
+
+Apart from that rpm itself extracts quite a bit of the information from rpm
+binary headers and writes them in various db4 files in /var/lib/rpm. For a
+very detailed and in depth description of the format take a look at the
+README.rpmdb file coming with pyrpm.
+
 
 Notes about the Repo-Metadata
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
