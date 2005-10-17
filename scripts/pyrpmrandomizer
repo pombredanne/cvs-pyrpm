@@ -68,7 +68,7 @@ def main():
     count = int(args[0])
     yum.setCommand("update")
     while count > 0:
-        if yum.processArgs([]) == 0:
+        if yum.prepareTransaction() == 0:
             break
         resolver = yum.opresolver
         count -= 1

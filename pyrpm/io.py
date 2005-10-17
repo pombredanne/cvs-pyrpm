@@ -1177,6 +1177,11 @@ class RpmDB(RpmDatabase):
                     self.config.printError("Invalid header entry %s in %s: %s"
                                            % (idx, key, e))
                     continue
+                if rpmtag.has_key(tag):
+                    if rpmtagname[tag] == "archivesize":
+                        pkg["signature"]["payloadsize"] = tagval
+                    else:
+                        pkg[rpmtagname[tag]] = tagval
                 if   tag == 257:
                     pkg["signature"]["size_in_sig"] = tagval
                 elif tag == 261:
@@ -1191,11 +1196,6 @@ class RpmDB(RpmDatabase):
                     pkg["signature"]["dsaheader"] = tagval
                 elif tag == 269:
                     pkg["signature"]["sha1header"] = tagval
-                elif rpmtag.has_key(tag):
-                    if rpmtagname[tag] == "archivesize":
-                        pkg["signature"]["payloadsize"] = tagval
-                    else:
-                        pkg[rpmtagname[tag]] = tagval
             if pkg["name"] == "gpg-pubkey":
                 continue # FIXME
                 try:
@@ -1264,8 +1264,7 @@ class RpmDB(RpmDatabase):
                 pkg["archivesize"] = pkg["signature"]["payloadsize"]
             pkg["installtime"] = int(time.time())
             if pkg.has_key("basenames"):
-                pkg["filestates"] = self.__getFileStats(pkg)
-            # ['\x00',] * len(pkg["basenames"])
+                pkg["filestates"] = self.__getFileStates(pkg)
             pkg["installcolor"] = [self.config.tscolor,]
             pkg["installtid"] = [self.config.tid,]
 
@@ -1411,14 +1410,19 @@ class RpmDB(RpmDatabase):
         
         if not pkg.has_key(tag):
             return
-        for idx in xrange(len(pkg[tag])):
+        if useidx:
+            maxidx = len(pkg[tag])
+        else:
+            maxidx = 1
+        for idx in xrange(maxidx):
             key = self.__getKey(tag, idx, pkg, useidx, func)
             if not db.has_key(key):
                 continue
             data = db[key]
             ndata = ""
+            rdata = pack("2I", pkgid, idx)
             for i in xrange(0, len(data), 8):
-                if not data[i:i+8] == pack("2I", pkgid, idx):
+                if not data[i:i+8] == rdata:
                     ndata += data[i:i+8]
             if len(ndata) == 0:
                 del db[key]
@@ -1471,10 +1475,10 @@ class RpmDB(RpmDatabase):
         return key
 
     def __getInstallColor(self):
-        if self.config.arch == "ia64": # also "0" and "3" have been here
+        if self.config.machine == "ia64": # also "0" and "3" have been here
             return 2
-        elif self.config.arch in ("ia32e", "amd64", "x86_64", "sparc64",
-            "s390x", "powerpc64") or self.config.arch.startswith("ppc"):
+        elif self.config.machine in ("ia32e", "amd64", "x86_64", "sparc64",
+            "s390x", "powerpc64") or self.config.machine.startswith("ppc"):
             return 3
         return 0
 
@@ -1482,7 +1486,10 @@ class RpmDB(RpmDatabase):
         """Returns a list of file states for rpmdb. """
         states = []
         for i in xrange(len(pkg["basenames"])):
-            fcolor = pkg["filecolors"][i]
+            if pkg.has_key("filecolors"):
+                fcolor = pkg["filecolors"][i]
+            else:
+                fcolor = 0
             if self.config.tscolor and fcolor and not (self.config & fcolor):
                 states.append(RPMFILE_STATE_WRONGCOLOR)
                 continue
@@ -1757,14 +1764,23 @@ class RpmRepo(RpmDatabase):
     def read(self):
         self.is_read = 1 # FIXME: write-only
         filename = _uriToFilename(self.source)
-        filename = functions.cacheLocal(os.path.join(filename, "repodata/primary.xml.gz"),
-                                        self.reponame, 1)
+        filename = functions.cacheLocal(os.path.join(filename, "repodata/primary.xml.gz"), self.reponame, 1)
         if not filename:
             return 0
         try:
             reader = libxml2.newTextReaderFilename(filename)
         except libxml2.libxmlError:
             return 0
+        self.__parseNode(reader)
+        filename = _uriToFilename(self.source)
+        filename = functions.cacheLocal(os.path.join(filename, "filereq.xml.gz"), self.reponame, 1)
+        # If we can't find the filereq.xml.gz file it doesn't matter
+        if not filename:
+            return 1
+        try:
+            reader = libxml2.newTextReaderFilename(filename)
+        except libxml2.libxmlError:
+            return 1
         self.__parseNode(reader)
         return 1
 
@@ -2178,6 +2194,8 @@ class RpmRepo(RpmDatabase):
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
         pkg = self.pkglist.get(nevra)
         if pkg:
+            filelist.extend(pkg["filenames"])
+            functions.normalizeList(filelist)
             pkg["oldfilenames"] = filelist
             pkg.generateFileNames()
             del pkg["oldfilenames"]

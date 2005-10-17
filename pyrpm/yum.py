@@ -48,6 +48,8 @@ class RpmYum:
         self.erase_list = []
         # Our database
         self.pydb = None
+        # Flag wether we already read all the repos
+        self.repos_read = 0
         # Our list of package names that get installed instead of updated
         self.always_install = ["kernel", "kernel-smp", "kernel-bigmem",
             "kernel-enterprise", "kernel-debug", "kernel-unsupported"]
@@ -130,8 +132,8 @@ class RpmYum:
         self.resolvers.append(r)
         return 1
 
-    def processArgs(self, args):
-        """Open the RPM database and process args.
+    def prepareTransaction(self):
+        """Open the RPM database and prepare the transaction.
 
         Return 1 in success, 0 on error (after warning the user)."""
 
@@ -147,11 +149,15 @@ class RpmYum:
             if "redhat-release" in [ dep[0] for dep in pkg["provides"] ]:
                 rpmconfig.relver = pkg["version"]
         if os.path.isfile(self.config.yumconf):
-            self.addRepo(self.config.yumconf)
+            if not self.repos_read:
+                self.addRepo(self.config.yumconf)
+            self.repos_read = 1
         else:
             printWarning(1, "Couldn't find given yum config file, skipping read of repos")
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
-        return self.runArgs(args)
+        self.pkgs = []
+        self.__generateObsoletesList()
+        return 1
 
     def runArgs(self, args):
         """Set self.pkgs to RpmPackage's to work with, based on args.
@@ -162,7 +168,6 @@ class RpmYum:
 
         if self.config.timer:
             time1 = clock()
-        self.__generateObsoletesList()
         # If we do a group operation handle it accordingly
         if self.command.startswith("group"):
             if self.config.compsfile == None:
@@ -328,6 +333,7 @@ class RpmYum:
         elif self.command.endswith("upgrade"):
             return self.opresolver.update(pkg)
         elif self.command.endswith("remove"):
+            print pkg.getNEVRA(), pkg
             return self.opresolver.erase(pkg)
         else:
             raise AssertionError, "Invalid command"

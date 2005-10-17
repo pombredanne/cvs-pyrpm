@@ -102,7 +102,7 @@ def writeFileReqList(targetdir, mainlist, filereqhash):
         i = 0
         for fname in pkg["filenames"]:
             if fname in filereqhash.keys():
-                ffd.write("  <package name=\"%s arch=\"%s\">\n" %
+                ffd.write("  <package name=\"%s\" arch=\"%s\">\n" %
                           (pkg["name"], pkg["arch"]));
                 ffd.write("    <version epoch=\"%s\" ver=\"%s\" rel=\"%s\"/>\n" % (pkg.getEpoch(), pkg["version"], pkg["release"]))
                 fflag = pkg["fileflags"][i]

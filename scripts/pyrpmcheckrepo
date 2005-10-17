@@ -103,7 +103,9 @@ def main():
         upargs = upargs[1:]
 
     yum.setCommand("update")
-    if yum.processArgs(instargs) == 0:
+    if yum.prepareTransaction() == 0:
+        return 1
+    if yum.runArgs(instargs) == 0:
         return 1
     yum.runDepRes()
     if yum.runCommand() == 0:
