@@ -333,7 +333,6 @@ class RpmYum:
         elif self.command.endswith("upgrade"):
             return self.opresolver.update(pkg)
         elif self.command.endswith("remove"):
-            print pkg.getNEVRA(), pkg
             return self.opresolver.erase(pkg)
         else:
             raise AssertionError, "Invalid command"

@@ -1123,6 +1123,7 @@ class RpmDB(RpmDatabase):
         self.maxid = 0
         # Correctly initialize the tscolor based on the current arch
         self.config.tscolor = self.__getInstallColor()
+        self.netsharedpath = self.__getNetSharedPath()
 
     def open(self):
         pass
@@ -1492,8 +1493,12 @@ class RpmDB(RpmDatabase):
                 fcolor = pkg["filecolors"][i]
             else:
                 fcolor = 0
-            if self.config.tscolor and fcolor and not (self.config.tscolor & fcolor):
+            if self.config.tscolor and fcolor and \
+               not (self.config.tscolor & fcolor):
                 states.append(RPMFILE_STATE_WRONGCOLOR)
+                continue
+            if pkg["dirnames"][pkg["dirindexes"][i]] in self.netsharedpath:
+                states.append(RPMFILE_STATE_NETSHARED)
                 continue
             fflags = pkg["fileflags"][i]
             if self.config.excludedocs and (RPMFILE_DOC & fflags):
@@ -1504,10 +1509,34 @@ class RpmDB(RpmDatabase):
                 continue
             states.append(RPMFILE_STATE_NORMAL)
             # FIXME: Still missing:
-            #  - netshared (found in /var/lib/rpm/macros)
-            #  - install_langs (found in /var/lib/rpm/macros)
+            #  - install_langs (found in /var/lib/rpm/macros) (unimportant)
             #  - Now empty dirs which contained files which weren't installed
         return states
+
+    def __getNetSharedPath(self):
+        netpaths = []
+        try:
+            if self.buildroot:
+                fname = br + "/etc/rpm/macros"
+            else:
+                fname = "/etc/rpm/macros"
+            lines = open(fname).readlines()
+            inpath = 0
+            liststr = ""
+            for l in lines:
+                if not inpath and not l.startswith("%_netsharedpath"):
+                    continue
+                l = l[:-1]
+                if l.startswith("%_netsharedpath"):
+                    inpath = 1
+                    l = l.split(None, 1)[1]
+                if not l[-1] == "\\":
+                    liststr += l
+                    break
+                liststr += l[:-1]
+            return liststr.split(",")
+        except:
+            return []
 
 class RpmSQLiteDB(RpmDatabase):
     """RPM database storage in an SQLite database."""
