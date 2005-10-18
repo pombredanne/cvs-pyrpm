@@ -1475,6 +1475,8 @@ class RpmDB(RpmDatabase):
         return key
 
     def __getInstallColor(self):
+        """Return the install color for self.config.machine."""
+
         if self.config.machine == "ia64": # also "0" and "3" have been here
             return 2
         elif self.config.machine in ("ia32e", "amd64", "x86_64", "sparc64",
@@ -1490,7 +1492,7 @@ class RpmDB(RpmDatabase):
                 fcolor = pkg["filecolors"][i]
             else:
                 fcolor = 0
-            if self.config.tscolor and fcolor and not (self.config & fcolor):
+            if self.config.tscolor and fcolor and not (self.config.tscolor & fcolor):
                 states.append(RPMFILE_STATE_WRONGCOLOR)
                 continue
             fflags = pkg["fileflags"][i]

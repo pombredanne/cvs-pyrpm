@@ -1328,6 +1328,10 @@ def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
     return pkg
 
 def readDir(dir, list, rtags=None):
+    """Append RpmPackage's for *.rpm in the subtree rooted at dir to list.
+
+    Read only rtags if rtags is not None."""
+
     if not os.path.isdir(dir):
         return
     for f in os.listdir(dir):
