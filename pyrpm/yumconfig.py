@@ -221,7 +221,7 @@ class YumConf(Conf):
                      )
 
     # Variables that can have multi-line values
-    MultiLines = ( "baseurl", "mirrorlist" )
+    MultiLines = ( "baseurl", "mirrorlist", "gpgkey" )
 
     # Variables valid in repository stanzas
     RepoVarnames = ( "name",

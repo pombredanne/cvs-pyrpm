@@ -529,7 +529,6 @@ class _SignaturePacket(_PGPPacket):
                 continue
             try:
                 r = self.__verifyDigestWithPacket(packet, alg, digest)
-                return 1
             except NotImplementedError:
                 r = 0;
             if r == 1:

@@ -108,21 +108,25 @@ class RpmYum:
                     excludes = ""
                 else:
                     excludes = sec["exclude"]
-                if self.__addSingleRepo(baseurl, excludes, key) == 0:
+                if not sec.has_key("gpgkey"):
+                    keys = []
+                else:
+                    keys = sec["gpgkey"]
+                if self.__addSingleRepo(baseurl, excludes, key, keys) == 0:
                     sys.exit(1)
                 if self.config.compsfile == None:
                     # May stay None on download error
                     self.config.compsfile = cacheLocal(baseurl + \
                                             "/repodata/comps.xml", key)
 
-    def __addSingleRepo(self, baseurl, excludes, reponame):
+    def __addSingleRepo(self, baseurl, excludes, reponame, key_urls):
         """Add a repository at baseurl as reponame.
 
         Return 1 on success 0 on errror (after warning the user).  Exclude
         packages matching whitespace-separated excludes."""
 
         repo = RpmRepo(self.config, baseurl, self.config.buildroot, excludes,
-                       reponame)
+                       reponame, key_urls)
         if repo.read() == 0:
             self.config.printError("Error reading the repository at %s"
                                    % baseurl)

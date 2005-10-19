@@ -1780,13 +1780,17 @@ class RpmRepo(RpmDatabase):
                 RPMSENSE_EQUAL | RPMSENSE_LESS: "LE",
                 RPMSENSE_EQUAL | RPMSENSE_GREATER: "GE"}
 
-    def __init__(self, config, source, buildroot=None, excludes="", reponame="default"):
+    def __init__(self, config, source, buildroot=None, excludes="",
+                 reponame="default", key_urls=[]):
         """Exclude packages matching whitespace-separated excludes.  Use
-        reponame for cache subdirectory name and pkg["yumreponame"]."""
+        reponame for cache subdirectory name and pkg["yumreponame"].
+
+        Load PGP keys from URLs in key_urls."""
 
         RpmDatabase.__init__(self, config, source, buildroot)
         self.excludes = excludes.split()
         self.reponame = reponame
+        self.key_urls = key_urls
         self.filelist_imported  = 0
         # Files included in primary.xml
         self._filerc = re.compile('^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$')
@@ -1803,6 +1807,24 @@ class RpmRepo(RpmDatabase):
         except libxml2.libxmlError:
             return 0
         self.__parseNode(reader)
+        for url in self.key_urls:
+            url = _uriToFilename(url)
+            filename = functions.cacheLocal(url, self.reponame, 1)
+            try:
+                f = file(filename)
+                key_data = f.read()
+                f.close()
+            except IOError, e:
+                self.config.printError("Error reading GPG key %s: %s"
+                                       % (filename, e))
+                continue
+            try:
+                keys = openpgp.parsePGPKeys(key_data)
+            except ValueError, e:
+                self.config.printError("Invalid GPG key %s: %s" % (url, e))
+                continue
+            for k in keys:
+                self.keyring.addKey(k)
         filename = _uriToFilename(self.source)
         filename = functions.cacheLocal(os.path.join(filename, "filereq.xml.gz"), self.reponame, 1)
         # If we can't find the filereq.xml.gz file it doesn't matter
@@ -2012,7 +2034,7 @@ class RpmRepo(RpmDatabase):
                 pkg["arch"] = "src"
             nevra = pkg.getNEVRA()
             self.config.printInfo(2, "Adding %s to repo and checking file requires.\n" % nevra)
-            pkg["yumlocation"] = location+f
+            pkg["yumlocation"] = location+pkg.source[len(dir):]
             self.pkglist[nevra] = pkg
 
     def __writePrimary(self, fd, parent, pkg):
@@ -2106,7 +2128,8 @@ class RpmRepo(RpmDatabase):
 
         Raise ValueError on invalid data."""
         
-        pkg = package.RpmPackage(self.config, "dummy")
+        pkg = package.RpmPackage(self.config, "dummy", verify = True,
+                                 db = self)
         pkg["signature"] = {}
         pkg["signature"]["size_in_sig"] = [0,]
         while reader.Read() == 1:
