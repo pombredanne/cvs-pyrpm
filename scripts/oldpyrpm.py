@@ -693,8 +693,11 @@ rpmdbtag = {
     "install_sha1header": [269, RPM_STRING, None, 0],
     "installtime": [1008, RPM_INT32, 1, 8],
     "filestates": [1029, RPM_CHAR, None, 0],
+    # set for relocatable packages
     "instprefixes": [1099, RPM_STRING_ARRAY, None, 0],
+    # installcolor is set at /bin/rpm compile time based on arch
     "installcolor": [1127, RPM_INT32, None, 0],
+    # unique number per installed rpm package
     "installtid": [1128, RPM_INT32, None, 0],
     "install_badsha1_1": [264, RPM_STRING, None, 1],
     "install_badsha1_2": [265, RPM_STRING, None, 1],
@@ -4132,6 +4135,9 @@ def updateGitMirrors():
                 os.system("rmdir " + d)
             os.system("cd %s && GIT_DIR=%s git-pull" % (grepodir, d + ".git"))
             writeFile(d + ".git/description", ["mirror from " + repo + "\n"])
+
+    return  # The following is all disabled:
+
     print "Converting now git to hg repos."
     for (repo, dirname, maxchanges) in gitrepos:
         src = grepodir + "/" + dirname + ".git"
