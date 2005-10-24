@@ -92,6 +92,9 @@ class RpmConfig:
                                    signal.SIGHUP ]
         self.signals = [ ]              # Stack of saved signal halders
 
+    def readConfig(filename="/etc/pyrpm.conf"):
+        return execfile(filename)
+
     def printDebug(self, level, msg):
         if self.debug_handler and level <= self.debug:
             self.debug_handler.handle(msg)
