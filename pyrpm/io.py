@@ -2128,8 +2128,7 @@ class RpmRepo(RpmDatabase):
 
         Raise ValueError on invalid data."""
         
-        pkg = package.RpmPackage(self.config, "dummy", verify = True,
-                                 db = self)
+        pkg = package.RpmPackage(self.config, "dummy", db = self)
         pkg["signature"] = {}
         pkg["signature"]["size_in_sig"] = [0,]
         while reader.Read() == 1:

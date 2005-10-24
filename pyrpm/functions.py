@@ -853,7 +853,7 @@ def readPackages(dbpath):
     keyring = openpgp.PGPKeyRing()
     db = hashopen(os.path.join(dbpath, "Packages"), "r")
     for key in db.keys():
-        rpmio = RpmFileIO(rpmconfig, "dummy", verify=1)
+        rpmio = RpmFileIO(rpmconfig, "dummy")
         pkg = package.RpmPackage(rpmconfig, "dummy")
         data = db[key]
         try:
