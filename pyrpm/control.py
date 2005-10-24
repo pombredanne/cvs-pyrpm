@@ -301,6 +301,8 @@ class RpmController:
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
                     pkg.clear()
+                    # Disable verify in child/buildroot, can go wrong horribly.
+                    pkg.verify = None
                     try:
                         pkg.read()
                     except (IOError, ValueError), e:
