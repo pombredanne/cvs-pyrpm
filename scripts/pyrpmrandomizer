@@ -28,7 +28,7 @@ from pyrpm import *
 def usage():
     print """
     Yum install and remove interative test
-    pyrpmrandomizer [options] number of iterations
+    pyrpmrandomizer [options] number of iterations [DIRS... | PACKAGES...]
 
 options:
     [-?, --help] [--version]
@@ -41,8 +41,22 @@ options:
     [--noorder] [--noscripts] [--notriggers]
     [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
 
-Warning: Some of the install-options are not evaluated yet"""
+Number of iterations: How many install/erase operations should be run
+DIRS:     Directories with packages for possible installation
+PACKAGES: Same for rpm binary packages"""
 
+
+class FakeRepo:
+    """Fake repository class to stuff into our yum object for additional
+    packages via dirs or files"""
+    def __init__(self, pkglist):
+        self.pkglist = pkglist
+
+    def getPkgList(self):
+        return self.pkglist
+
+    def importFilelist(self):
+        return 1
 
 #
 # Main program
@@ -63,11 +77,36 @@ def main():
         usage()
         return 1
 
+    # Remember number of iterations
+    count = int(args.pop(0))
+
+    # Read additional dirs/packages
+    pkglist = []
+    for fname in args:
+        if os.path.isdir(fname):
+            readDir(fname, pkglist, rtags=rpmconfig.resolvertags)
+        elif fname.endswith(".rpm"):
+            pkg = package.RpmPackage(rpmconfig, fname)
+            try:
+                pkg.read(tags=rpmconfig.resolvertags)
+                pkg.close()
+            except (IOError, ValueError), e:
+                rpmconfig.printError("%s: %s\n" % (pkg, e))
+                continue
+            pkglist.append(pkg)
+
+
+    # Create fake repository
+    frepo = FakeRepo(pkglist)
+
     # Always use the same random sequence
     random.seed(12345)
-    count = int(args[0])
     yum.setCommand("update")
     while count > 0:
+        if not yum.repos_read:
+            yum.repos.append(frepo)
+            r = RpmResolver(rpmconfig, frepo.getPkgList())
+            yum.resolvers.append(r)
         if yum.prepareTransaction() == 0:
             break
         resolver = yum.opresolver

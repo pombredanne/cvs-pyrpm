@@ -155,9 +155,9 @@ class RpmYum:
         if os.path.isfile(self.config.yumconf):
             if not self.repos_read:
                 self.addRepo(self.config.yumconf)
-            self.repos_read = 1
         else:
             printWarning(1, "Couldn't find given yum config file, skipping read of repos")
+        self.repos_read = 1
         self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
         self.pkgs = []
         self.__generateObsoletesList()
@@ -444,8 +444,10 @@ class RpmYum:
         # already in our opresolver to it and check afterwards if
         # there are any obsoletes for that package and handle them
         # Order the elements of the potential packages by machine
-        # distance and evr
-        ret = self.__handleUpdatePkglist(pkg, pkg_list)
+        # distance and evr.
+        # Special handling of filerequirements need to be done here in order to
+        # allow cross buildarchtranslate compatible package updates.
+        ret = self.__handleUpdatePkglist(pkg, pkg_list, dep[0][0] == '/')
         if ret > 0 :
             return 1
         # Ok, we didn't find any package that could fullfill the
@@ -581,7 +583,7 @@ class RpmYum:
             pkg_list.extend(findPkgByNames([pkg["name"],], repo.getList()))
         return self.__handleUpdatePkglist(pkg, pkg_list)
 
-    def __handleUpdatePkglist(self, pkg, pkg_list):
+    def __handleUpdatePkglist(self, pkg, pkg_list, is_filereq=0):
         """Choose a package from a list of RpmPackage's pkg_list that has the
         same base arch as RpmPackage pkg, and add it to self.opresolver.
 
@@ -596,10 +598,12 @@ class RpmYum:
             if upkg in self.erase_list or upkg in self.opresolver:
                 continue
             # Only try to update if the package itself or the update package
-            # are noarch or if they are buildarchtranslate compatible
-            if not (upkg["arch"] == "noarch" or \
-                    pkg["arch"] == "noarch" or \
-                    buildarchtranslate[upkg["arch"]] == buildarchtranslate[pkg["arch"]]):
+            # are noarch or if they are buildarchtranslate or arch compatible. 
+            # Some exception needs to be done for filerequirements.
+            if not (is_filereq or \
+                    archDuplicate(upkg["arch"], pkg["arch"]) or \
+                    archCompat(upkg["arch"], pkg["arch"]) or \
+                    archCompat(pkg["arch"], upkg["arch"])):
                 continue
             ret = self.opresolver.update(upkg)
             if ret > 0:
