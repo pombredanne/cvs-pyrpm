@@ -150,7 +150,7 @@ def mkstemp_mknod(dirname, pre, mode, rdev):
             raise
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
-def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False):
+def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False, tmpdir="/var/tmp"):
     """Run (script otherargs) with interpreter prog (which can be a list
     containing initial arguments).
 
@@ -162,12 +162,15 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False):
         prog = "/bin/sh"
     if prog == "/bin/sh" and script == None:
         return None
-    if not os.path.exists("/var/tmp"):
+    if not os.path.exists(tmpdir):
         try:
-            os.makedirs("/var", mode=0755)
-        except OSError:
+            os.makedirs(os.path.dirname(tmpdir), mode=0755)
+        except:
             pass
-        os.makedirs("/var/tmp", mode=01777)
+        try:
+            os.makedirs(tmpdir, mode=01777)
+        except:
+            return None
     if isinstance(prog, TupleType):
         args = prog
     else:
@@ -183,7 +186,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False):
         rpmconfig.delayldconfig = 0
         runScript("/sbin/ldconfig", force=1)
     if script != None:
-        (fd, tmpfilename) = mkstemp_file("/var/tmp/", "rpm-tmp.")
+        (fd, tmpfilename) = mkstemp_file(tmpdir, "rpm-tmp.")
         # test for open fds:
         # script = "ls -l /proc/$$/fd >> /$$.out\n" + script
         os.write(fd, script)
