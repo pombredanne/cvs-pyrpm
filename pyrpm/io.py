@@ -1795,6 +1795,7 @@ class RpmRepo(RpmDatabase):
         # Files included in primary.xml
         self._filerc = re.compile('^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$')
         self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
+        self.filereqs = []      # Filereqs, if available
 
     def read(self):
         self.is_read = 1 # FIXME: write-only
@@ -1940,12 +1941,22 @@ class RpmRepo(RpmDatabase):
         del self.filerequires
         return 1
 
+    def _matchesFile(self, fname):
+        return fname in self.filereqs or \
+               self._filerc.match(fname) or \
+               self._dirrc.match(fname)
+
     def __parseNode(self, reader):
         """Parse <package> tags from libxml2.xmlTextReader reader."""
         
         while reader.Read() == 1:
             if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT or \
-               reader.Name() != "package":
+               (reader.Name() != "package" and reader.Name() != "filereq"):
+                continue
+            if reader.Name() == "filereq":
+                if reader.Read() != 1:
+                    break
+                self.filereqs.append(reader.Value())
                 continue
             props = self.__getProps(reader)
             if props.get("type") == "rpm":

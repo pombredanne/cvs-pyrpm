@@ -172,6 +172,10 @@ class RpmYum:
 
         if self.config.timer:
             time1 = clock()
+        # Generate list of all packages in all repos
+        repopkglist = []
+        for repo in self.resolvers:
+            repopkglist.extend(repo.getList())
         # If we do a group operation handle it accordingly
         if self.command.startswith("group"):
             if self.config.compsfile == None:
@@ -186,14 +190,20 @@ class RpmYum:
             del comps
         else:
             if len(args) == 0:
-                for pkg in self.pydb.getPkgList():
-                    if not self.__handleObsoletes(pkg):
-                        args.append(pkg["name"])
+                if self.command.endswith("remove"):
+                    for pkg in self.opresolver.getList():
+                        self.pkgs.append(pkg)
+                else:
+                    for pkg in self.opresolver.getList():
+                        self.__handleObsoletes(pkg)
+                    for pkg in self.opresolver.getList():
+                        name = pkg["name"]
+                        for rpkg in repopkglist:
+                            if rpkg["name"] == name:
+                                if not self.__handleObsoletes(pkg):
+                                    self.pkgs.append(rpkg)
         # Look for packages we need/want to install. Arguments can either be
         # direct filenames or package nevra's with * wildcards
-        repolists = []
-        for repo in self.resolvers:
-            repolists.append(repo.getList())
         for f in args:
             if os.path.isfile(f) and f.endswith(".rpm"):
                 try:
@@ -228,8 +238,7 @@ class RpmYum:
                 if self.command.endswith("remove"):
                     self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgList()))
                 else:
-                    for rlist in repolists:
-                        self.pkgs.extend(findPkgByNames([f,], rlist))
+                    self.pkgs.extend(findPkgByNames([f,], repopkglist))
                     if len(self.pkgs) == 0:
                         self.config.printError("Couldn't find package %s, skipping" % f)
         if self.config.timer:
@@ -346,6 +355,8 @@ class RpmYum:
 
         Return 1 after reaching a steady state."""
 
+        # List of filereqs we already checked
+        self.filereqs = []
         self.iteration = 1
         # Mark if we might need to reread the repositories
         if self.config.nofileconflicts:
@@ -431,7 +442,23 @@ class RpmYum:
         if self.command.endswith("remove"):
             self.opresolver.erase(pkg)
             return 1
-        # For all other cases we need to find packages in our repos
+        # We need to first check if we might need to load the complete filelist
+        # in case of file requirements for every repo.
+        # In order to do so efficently we remember which filerequirements we
+        # already handled and only handle each one once.
+        modified_repo = 0
+        if dep[0][0] == "/" and not dep[0] in self.filereqs:
+            self.filereqs.append(dep[0])
+            for i in xrange(len(self.repos)):
+                if not self.repos[i]._matchesFile(dep[0]):
+                    self.config.printWarning(1, "Importing filelist from repository %s for filereq %s" % (self.repos[i].reponame, dep[0]))
+                    self.repos[i].importFilelist()
+                    r = RpmResolver(self.config, self.repos[i].getPkgList())
+                    self.resolvers[i] = r
+                    modified_repo = 1
+            if modified_repo:
+                self.opresolver.reloadDependencies()
+        # Now for all other cases we need to find packages in our repos
         # that resolve the given dependency
         pkg_list = [ ]
         self.config.printInfo(2, "\t" + depString(dep) + "\n")
@@ -447,26 +474,14 @@ class RpmYum:
         # distance and evr.
         # Special handling of filerequirements need to be done here in order to
         # allow cross buildarchtranslate compatible package updates.
-        ret = self.__handleUpdatePkglist(pkg, pkg_list, dep[0][0] == '/')
-        if ret > 0 :
+        ret = self.__handleUpdatePkglist(pkg, pkg_list, dep[0][0] == "/")
+        if ret > 0:
             return 1
         # Ok, we didn't find any package that could fullfill the
         # missing deps. Now what we do is we look for updates of that
         # package in all repos and try to update it.
         ret = self.__findUpdatePkg(pkg)
-        if ret > 0 :
-            return 1
-        # We had left over unresolved deps. If we didn't load the filelists
-        # from the repositories we do so now and try to do more resolving
-        if self.reread == 0:
-            self.config.printWarning(1, "Importing filelist from repositories due to unresolved dependencies")
-            self.resolvers = []
-            for repo in self.repos:
-                repo.importFilelist() # Ignore errors
-                r = RpmResolver(self.config, repo.getPkgList())
-                self.resolvers.append(r)
-            self.reread = 1
-            self.opresolver.reloadDependencies()
+        if ret > 0:
             return 1
         # OK, left over unresolved deps, but now we already have the
         # filelists from the repositories. We can now either:
@@ -575,12 +590,9 @@ class RpmYum:
 
         pkg_list = []
         for repo in self.resolvers:
-            # FIXME: Should that be
-            # pkg_list.extend([p for p in repo.getList()
-            #                 if p["name"] == pkg["name"]])
-            # ? The current one can match packages with a different %name
-            # if %name contains [-.]
-            pkg_list.extend(findPkgByNames([pkg["name"],], repo.getList()))
+            pkg_list.extend([p for p in repo.getList()
+                             if p["name"] == pkg["name"]])
+            #pkg_list.extend(findPkgByNames([pkg["name"],], repo.getList()))
         return self.__handleUpdatePkglist(pkg, pkg_list)
 
     def __handleUpdatePkglist(self, pkg, pkg_list, is_filereq=0):
@@ -642,63 +654,66 @@ class RpmYum:
         # at least one of the conflicting packages for each conflict.
         conflicts = self.opresolver.getConflicts()
         while len(conflicts) > 0:
-            if self.__doConflictAutoerase(conflicts):
+            pkg1 = conflicts.keys()[0]
+            (c, pkg2) = conflicts[pkg1][0]
+            if self.__doConflictAutoerase(pkg1, pkg2):
                 ret = 1
             conflicts = self.opresolver.getConflicts()
         if not self.config.nofileconflicts:
             conflicts = self.opresolver.getFileConflicts()
             while len(conflicts) > 0:
-                if self.__doConflictAutoerase(conflicts):
+                pkg1 = conflicts.keys()[0]
+                (c, pkg2) = conflicts[pkg1][0]
+                if self.__doConflictAutoerase(pkg1, pkg2):
                     ret = 1
                 conflicts = self.opresolver.getFileConflicts()
         return ret
 
-    def __doConflictAutoerase(self, conflicts):
-        """For each conflict in conflicts, try to erase one of the packages.
-
-        Return 1 if at least one package was succesfuly chosen for erasing, 0
-        otherwise.  conflicts is a HashList: RpmPackage => [(something,
-        conflicting RpmPackage)]."""
+    def __doConflictAutoerase(self, pkg1, pkg2):
+        """Resolve one single conflict by semi intelligently selecting one of
+        the two packages to be autoereased."""
 
         ret = 0
-        for pkg1 in conflicts.keys():
-            for (c, pkg2) in conflicts[pkg1]:
-                self.config.printInfo(1, "Resolving conflicts for %s:%s\n" % (pkg1.getNEVRA(), pkg2.getNEVRA()))
-                # FIXME?
-                # if pkg1 in self.erase_list or pkg2 in self.erase_list:
-                #     continue
-                if   self.pydb.isInstalled(pkg1) and \
-                     not pkg1 in self.erase_list:
-                    pkg = pkg1
-                elif self.pydb.isInstalled(pkg2) and \
-                     not pkg2 in self.erase_list:
-                    pkg = pkg2
-                elif machineDistance(pkg2["arch"], self.config.machine) < \
-                     machineDistance(pkg1["arch"], self.config.machine):
-                    pkg = pkg1
-                # FIXME: elif ... > ...: pkg = pkg2 ?
-                elif pkg1.has_key("sourcerpm") and \
-                     pkg2.has_key("sourcerpm") and \
-                     envraSplit(pkg1["sourcerpm"])[1] == envraSplit(pkg2["sourcerpm"])[1]:
-                    (e1, n1, v1, r1, a1) = envraSplit(pkg1["sourcerpm"])
-                    (e2, n2, v2, r2, a2) = envraSplit(pkg2["sourcerpm"])
-                    cmp = labelCompare((e1, v1, r1), (e2, v2, r2))
-                    if   cmp < 0:
-                        pkg = pkg1
-                    elif cmp > 0:
-                        pkg = pkg2
-                    else:
-                        if len(pkg1.getNEVRA()) < len(pkg2.getNEVRA()):
-                            pkg = pkg2
-                        else:
-                            pkg = pkg1
-                elif len(pkg1.getNEVRA()) < len(pkg2.getNEVRA()):
+        self.config.printInfo(1, "Resolving conflicts for %s:%s\n" % (pkg1.getNEVRA(), pkg2.getNEVRA()))
+        if   pkg1 in self.erase_list:
+            pkg = pkg2
+        elif pkg2 in self.erase_list:
+            pkg = pkg1
+        elif self.pydb.isInstalled(pkg1) and \
+             not pkg1 in self.erase_list:
+            pkg = pkg1
+        elif self.pydb.isInstalled(pkg2) and \
+             not pkg2 in self.erase_list:
+            pkg = pkg2
+        elif machineDistance(pkg2["arch"], self.config.machine) < \
+             machineDistance(pkg1["arch"], self.config.machine):
+            pkg = pkg1
+        elif machineDistance(pkg2["arch"], self.config.machine) > \
+             machineDistance(pkg1["arch"], self.config.machine):
+            pkg = pkg2
+        elif pkg1.has_key("sourcerpm") and \
+             pkg2.has_key("sourcerpm") and \
+             envraSplit(pkg1["sourcerpm"])[1] == envraSplit(pkg2["sourcerpm"])[1]:
+            (e1, n1, v1, r1, a1) = envraSplit(pkg1["sourcerpm"])
+            (e2, n2, v2, r2, a2) = envraSplit(pkg2["sourcerpm"])
+            cmp = labelCompare((e1, v1, r1), (e2, v2, r2))
+            if   cmp < 0:
+                pkg = pkg1
+            elif cmp > 0:
+                pkg = pkg2
+            else:
+                if len(pkg1.getNEVRA()) < len(pkg2.getNEVRA()):
                     pkg = pkg2
                 else:
                     pkg = pkg1
-                # Returns 0 if pkg was already erased - but warns the user
-                if self.__doAutoerase(pkg):
-                    ret = 1
+        elif len(pkg1.getNEVRA()) < len(pkg2.getNEVRA()):
+            pkg = pkg2
+        else:
+            pkg = pkg1
+        # Returns 0 if pkg was already erased - but warns the user
+        if self.__doAutoerase(pkg):
+            self.config.printInfo(1, "Autoerasing package %s due to conflicts\n" % pkg.getNEVRA())
+            ret = 1
         return ret
 
 # vim:ts=4:sw=4:showmatch:expandtab
