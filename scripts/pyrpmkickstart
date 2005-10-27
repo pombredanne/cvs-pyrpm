@@ -19,7 +19,8 @@
 # AUTHOR: Thomas Woerner <twoerner@redhat.com>
 #
 
-import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, time
+import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, \
+       signal, types, shutil
 import parted
 
 PYRPMDIR = os.path.abspath("..")
@@ -30,71 +31,557 @@ import pyrpm
 
 ################################### classes ###################################
 
-class Disk:
-    def __init__(self, device_name):
-        self.device = device_name
-        self.dev = parted.PedDevice.get(self.device)
-        self.disk = parted.PedDisk.new(self.dev)
-        self.read()
+# pyparted classes:
+#
+# PedDeviceType
+#   DEVICE_UNKNOWN        0
+#   DEVICE_SCSI           1
+#   DEVICE_IDE            2
+#   DEVICE_DAC960         3
+#   DEVICE_CPQARRAY       4
+#  (DEVICE_FILE           5) *not defined*
+#   DEVICE_ATARAID        6
+#   DEVICE_I2O            7
+#  (DEVICE_DASD           8) *not defined*
+#  (DEVICE_VIODASD        9) *not defined*
+#   DEVICE_SX8            10
+#
+# PedPartitionType
+#   PARTITION_PRIMARY     0x00
+#   PARTITION_LOGICAL     0x01
+#   PARTITION_EXTENDED    0x02
+#   PARTITION_FREESPACE   0x04
+#   PARTITION_METADATA    0x08
+#   PARTITION_PROTECTED   0x10
+#
+# PedDevice
+#   model                 string
+#   path                  string
+#   type                  PedDeviceType
+#   sector_size           uint
+#   length                PedSector
+#   cylinders             uint
+#   heads                 uint
+#   sectors               uint
+#
+# PedDiskType
+#   name                  string
+#
+# PedGeometry
+#   dev                   PedDevice (disk)
+#   start                 PedSector
+#   end                   PedSector
+#   length                PedSector
+#
+# PedDisk
+#   dev                   PedDevice
+#   type                  PedDiskType
+#
+# PedFileSystemType
+#   name                  string
+#
+# PedPartition
+#   disk                  PedDisk
+#   geom                  PedGeometry
+#   num                   int
+#   type                  PedPartitionType
+#   fs_type               PedFileSystemType
+#
 
-    def read(self):
-        self.partitions = 0
+class Partition(dict):
+    nativeType = {
+        0x00: "Empty",
+        0x01: "FAT12",
+        0x02: "XENIX root",
+        0x03: "XENIX usr",
+        0x04: "FAT16 <32M",
+        0x05: "Extended",         # DOS 3.3+ extended partition
+        0x06: "FAT16",            # DOS 16-bit >=32M
+        0x07: "HPFS/NTFS",        # OS/2 IFS, eg, HPFS or NTFS or QNX
+        0x08: "AIX",              # AIX boot (AIX -- PS/2 port) or SplitDrive
+        0x09: "AIX bootable",     # AIX data or Coherent
+        0x0a: "OS/2 Boot Manager",# OS/2 Boot Manager
+        0x0b: "W95 FAT32",
+        0x0c: "W95 FAT32 (LBA)",  # LBA really is `Extended Int 13h'
+        0x0e: "W95 FAT16 (LBA)",
+        0x0f: "W95 Ext'd (LBA)",
+        0x10: "OPUS",
+        0x11: "Hidden FAT12",
+        0x12: "Compaq diagnostics",
+        0x14: "Hidden FAT16 <32M",
+        0x16: "Hidden FAT16",
+        0x17: "Hidden HPFS/NTFS",
+        0x18: "AST SmartSleep",
+        0x1b: "Hidden W95 FAT32",
+        0x1c: "Hidden W95 FAT32 (LBA)",
+        0x1e: "Hidden W95 FAT16 (LBA)",
+        0x24: "NEC DOS",
+        0x39: "Plan 9",
+        0x3c: "PartitionMagic recovery",
+        0x40: "Venix 80286",
+        0x41: "PPC PReP Boot",
+        0x42: "SFS",
+        0x4d: "QNX4.x",
+        0x4e: "QNX4.x 2nd part",
+        0x4f: "QNX4.x 3rd part",
+        0x50: "OnTrack DM",
+        0x51: "OnTrack DM6 Aux1", # (or Novell)
+        0x52: "CP/M",             # CP/M or Microport SysV/AT
+        0x53: "OnTrack DM6 Aux3",
+        0x54: "OnTrackDM6",
+        0x55: "EZ-Drive",
+        0x56: "Golden Bow",
+        0x5c: "Priam Edisk",
+        0x61: "SpeedStor",
+        0x63: "GNU HURD or SysV", # GNU HURD or Mach or Sys V/386
+                                  # (such as ISC UNIX)
+        0x64: "Novell Netware 286",
+        0x65: "Novell Netware 386",
+        0x70: "DiskSecure Multi-Boot",
+        0x75: "PC/IX",
+        0x80: "Old Minix",        # Minix 1.4a and earlier
+        0x81: "Minix / old Linux",# Minix 1.4b and later
+        0x82: "Linux swap / Solaris",
+        0x83: "Linux",
+        0x84: "OS/2 hidden C: drive",
+        0x85: "Linux extended",
+        0x86: "NTFS volume set",
+        0x87: "NTFS volume set",
+        0x88: "Linux plaintext",
+        0x8e: "Linux LVM",
+        0x93: "Amoeba",
+        0x94: "Amoeba BBT",       # (bad block table)
+        0x9f: "BSD/OS",           # BSDI
+        0xa0: "IBM Thinkpad hibernation",
+        0xa5: "FreeBSD",          # various BSD flavours
+        0xa6: "OpenBSD",
+        0xa7: "NeXTSTEP",
+        0xa8: "Darwin UFS",
+        0xa9: "NetBSD",
+        0xab: "Darwin boot",
+        0xb7: "BSDI fs",
+        0xb8: "BSDI swap",
+        0xbb: "Boot Wizard hidden",
+        0xbe: "Solaris boot",
+        0xbf: "Solaris",
+        0xc1: "DRDOS/sec (FAT-12)",
+        0xc4: "DRDOS/sec (FAT-16 < 32M)",
+        0xc6: "DRDOS/sec (FAT-16)",
+        0xc7: "Syrinx",
+        0xda: "Non-FS data",
+        0xdb: "CP/M / CTOS / ...",# CP/M or Concurrent CP/M or
+                                  # Concurrent DOS or CTOS
+        0xde: "Dell Utility",     # Dell PowerEdge Server utilities
+        0xdf: "BootIt",           # BootIt EMBRM
+        0xe1: "DOS access",       # DOS access or SpeedStor 12-bit FAT
+                                  # extended partition
+        0xe3: "DOS R/O",          # DOS R/O or SpeedStor
+        0xe4: "SpeedStor",        # SpeedStor 16-bit FAT extended
+                                  # partition < 1024 cyl.
+        0xeb: "BeOS fs",
+        0xee: "EFI GPT",          # Intel EFI GUID Partition Table
+        0xef: "EFI (FAT-12/16/32)",# Intel EFI System Partition
+        0xf0: "Linux/PA-RISC boot",# Linux/PA-RISC boot loader
+        0xf1: "SpeedStor",
+        0xf4: "SpeedStor",        # SpeedStor large partition
+        0xf2: "DOS secondary",    # DOS 3.3+ secondary
+        0xfd: "Linux raid autodetect", # New (2.2.x) raid partition with
+                                       # autodetect using persistent
+                                       # superblock
+        0xfe: "LANstep",          # SpeedStor >1024 cyl. or LANstep
+        0xff: "BBT",              # Xenix Bad Block Table
+        }
+    
+    def __init__(self, ped_partition):
+        self.ped_partition = ped_partition
+
+    def __getitem__(self, item):
+        if item == "name":
+            return "%s%d" % (self["disk"]["name"], self.ped_partition.num)
+        elif item == "id":
+            return self.ped_partition.num
+        elif item == "type":
+            return self.ped_partition.type
+        elif item == "type-name":
+            return Partition.partitionType(self.ped_partition.type)
+        elif item == "fstype":
+            if self.ped_partition.fs_type and self.ped_partition.fs_type.name:
+                return self.ped_partition.fs_type.name
+            return None
+        elif item == "start":
+            return self.ped_partition.geom.start
+        elif item == "end":
+            return self.ped_partition.geom.end
+        elif item == "length":
+            return self.ped_partition.geom.length
+        elif item == "unit-start":
+            return self.ped_partition.geom.start / self["disk"]["units"] + 1
+        elif item == "unit-end":
+            return self.ped_partition.geom.end / self["disk"]["units"] + 1
+        elif item == "unit-length":
+            return self.ped_partition.geom.length / self["disk"]["units"]
+        elif item == "boot":
+            return self.ped_partition.get_flag(parted.PARTITION_BOOT)
+        elif item == "native_type":
+            return self.ped_partition.native_type
+        else:
+            return dict.get(self, item)
+
+    def partitionType(type):
+        t = [ ]
+        if type == parted.PARTITION_PRIMARY:
+            t.append("primary")
+        elif type & parted.PARTITION_EXTENDED:
+            t.append("extended")
+        elif type & parted.PARTITION_LOGICAL:
+            t.append("logical")
+
+        if type & parted.PARTITION_FREESPACE:
+            t.append("freespace")
+        if type & parted.PARTITION_METADATA:
+            t.append("metadata")
+        if type & parted.PARTITION_PROTECTED:
+            t.append("protected")
+        if len(t) == 0:
+            return "-unknown-"
+        return string.join(t, ",")
+
+    # make partitionType a static class method
+    partitionType = staticmethod(partitionType)
+
+    def set_type(self, type):
+        if not type in Partition.nativeType.keys():
+            print "ERROR: Unknown partition type %s" % type
+        try:
+            fst = parted.file_system_type_get(Partition.nativeType[type])
+        except Exception, msg:
+            print msg
+            return
+        return self.ped_partition.set_system(fst)
+
+    def keys(self):
+        k = dict.keys(self)
+        k.append("name")
+        k.append("id")
+        k.append("type")
+        k.append("type-name")
+        k.append("fstype")
+        k.append("start")
+        k.append("end")
+        k.append("length")
+        k.append("unit-start")
+        k.append("unit-end")
+        k.append("unit-length")
+        k.append("boot")
+        k.append("native-type")
+        if "disk" in k:
+            k.remove("disk")
+        return k
+
+class Disk(dict):
+    diskType = { }
+
+    # fill in Disk.diskType data
+    type = parted.disk_type_get_next()
+    while type:
+        diskType[type.name] = type
+        type = parted.disk_type_get_next(type)
+    
+    def __init__(self, name, alloc_loop=0):            
+        self.ped_disk = None
         self.partition = { }
-        self.extended = { }
-        self.free = { }
-        partition = None
-        partition = self.disk.next_partition()
-        
-        while partition:
-            if partition.num < 0:
-                if partition.type & parted.PARTITION_FREESPACE:
-                    self.free[len(self.free)+1] = partition
-                partition = self.disk.next_partition(partition)
-                continue
-            if partition.type & parted.PARTITION_EXTENDED:
-                self.extended[partition.num] = partition
-                self.partitions += 1
-            else:
-                self.partition[partition.num] = partition
-                self.partitions += 1
-            partition = self.disk.next_partition(partition)
+        self.alloc_loop = alloc_loop
+        self.open(name)
 
-    def getType(self):
-        return self.disk.type
+    def open(self, name):
+        device = name
+        mode = os.stat(device).st_mode
+
+        if stat.S_ISBLK(mode):
+            self["device"] = device
+        elif stat.S_ISREG(mode):
+            self["image"] = device
+            device = losetup(self["image"])
+            if not device:
+                raise IOError, "Unable to get loop device for '%s'." % \
+                      self["image"]
+            self["device"] = device
+        else:
+            print "ERROR: %s: Unsupported device type." % device
+            return
+        
+        self.ped_device = parted.PedDevice.get(self["device"])
+        try:
+            self.ped_disk = parted.PedDisk.new(self.ped_device)
+        except Exception, msg:
+            print Exception, msg
+            self.ped_disk = None
+        self.reload()
+
+    def has_disklabel(self):
+        return (self.ped_disk != None)
+        
+    def reload(self):
+        if self.has_key("image"):
+            for part in self["partition"].keys():
+                if disk["partition"][part]["device"]:
+                    lofree(self["partition"][part]["device"])
+        self.partition = { }
+        if not self.ped_disk:
+            return
+        ped_partition = self.ped_disk.next_partition()
+        while ped_partition:
+            num = ped_partition.num
+            if num >= 0 and \
+                   (ped_partition.type == parted.PARTITION_PRIMARY or \
+                    ped_partition.type & parted.PARTITION_EXTENDED or \
+                    ped_partition.type & parted.PARTITION_LOGICAL):
+                self.partition[num] = Partition(ped_partition)
+                self.partition[num]["disk"] = self
+                if self.has_key("image"):
+                    if self.alloc_loop:
+                        device = losetup(self["image"],
+                                         self.partition[num]["start"] * \
+                                         self["sector_size"])
+                        if not device:
+                            raise IOError, "Unable to get loop device for partition %d of '%s'." % \
+                                  (num, self["image"])
+                    else:
+                        device = None
+                    self.partition[num]["device"] = device
+                else:
+                    self.partition[num]["device"] = "%s%d" % (self["device"],
+                                                              num)
+            ped_partition = self.ped_disk.next_partition(ped_partition)
+
+    def close(self):
+        if self.has_key("image"):
+            # free loop device
+            lofree(self["device"])
+            for part in self["partition"].keys():
+                if self["partition"][part].has_key("device"):
+                    lofree(self["partition"][part]["device"])
+                del self["partition"][part]
+        del self.ped_disk
+        del self.ped_device
+        self.clear()
+
+    def keys(self):
+        k = dict.keys(self)
+        k.append("model")
+#        k.append("type")
+        k.append("sector_size")
+        k.append("length")
+        k.append("cylinders")
+        k.append("units")
+        k.append("heads")
+        k.append("sectors")
+        k.append("disklabel")
+        k.append("partition")
+        k.append("freespace")
+        return k
+
+    def __getitem__(self, item):
+        if self.has_key(item):
+            return dict.get(self, item)
+
+        if item == "model":
+            if not self.ped_disk:
+                return None
+            return self.ped_disk.dev.model
+        elif item == "device":
+            if not self.ped_disk:
+                return None
+            return self.ped_disk.dev.path
+        elif item == "type":
+            if not self.ped_disk:
+                return None
+            return self.ped_disk.dev.type.name
+        elif item == "sector_size":
+            if not self.ped_disk:
+                return None
+            return self.ped_disk.dev.sector_size
+        elif item == "length":
+            if not self.ped_disk:
+                return None
+            return self.ped_disk.dev.length * self["sector_size"]
+        elif item == "cylinders":
+            if not self.ped_disk:
+                return None
+            return self.ped_disk.dev.cylinders
+        elif item == "units":
+            if not self.ped_disk:
+                return None
+            return self["heads"] * self["sectors"]
+        elif item == "heads":
+            if not self.ped_disk:
+                return None
+            return self.ped_disk.dev.heads
+        elif item == "sectors":
+            if not self.ped_disk:
+                return None
+            return self.ped_disk.dev.sectors
+        elif item == "disklabel":
+            if not self.ped_disk:
+                return None
+            return self.ped_disk.type.name
+        elif item == "partition":
+            return self.partition
+        elif item == "freespace":
+            freespace = [ ]
+            ped_partition = self.ped_disk.next_partition()
+            while ped_partition:
+                if ped_partition.num == -1:
+                    if ped_partition.type & parted.PARTITION_FREESPACE:
+                        part = Partition(ped_partition)
+                        part["disk"] = self
+                        freespace.append(part)
+                ped_partition = self.ped_disk.next_partition(ped_partition)
+            return freespace
+        else:
+            return dict.get(self, item)
+
+    def __setitem__(self, item, value):
+        if self.ped_disk:
+            if item == "model":
+                self.ped_disk.dev.model = value
+            elif item == "device":
+                self.ped_disk.dev.path = value
+            elif item == "type":
+                self.ped_disk.dev.type.name = value
+            elif item == "sector_size":
+                self.ped_disk.dev.sector_size = value
+            elif item == "length":
+                self.ped_disk.dev.length = value
+            elif item == "cylinders":
+                self.ped_disk.dev.cylinders = value
+            elif item == "heads":
+                self.ped_disk.dev.heads = value
+            elif item == "sectors":
+                self.ped_disk.dev.sectors = value
+            elif item == "disklabel":
+                self.ped_disk.type.name = value
+            else:
+                return dict.__setitem__(self, item, value)
+        else:
+            return dict.__setitem__(self, item, value)
+
+    def add_partition(self, i, start, end, type, fstype):
+        part = disk.ped_disk.partition_new(type, fstype, start, end)
+        constraint = self.ped_disk.dev.constraint_any()
+        r = disk.ped_disk.add_partition(part, constraint)
+        self.reload()
+        return r
+
+    def delete_partition(self, i):
+        partition = self["partition"]
+        if i in partition.keys():
+            r = self.ped_disk.delete_partition(partition[i].ped_partition)
+            self.reload()
+            return r
+        return 0
+
+    def delete_all(self):
+        r = self.ped_disk.delete_all()
+        self.reload()
+        return r
+
+    def new_disklabel(self, label):
+        if not label in Disk.diskType:
+            print "ERROR: Disk label '%s' is not supported." % label
+            return
+        self.ped_disk = self.ped_device.disk_new_fresh(Disk.diskType[label])
+        self.reload()
+
+    def set_boot(self, i):
+        partition = self["partition"]
+        if i in partition.keys():
+            if partition[i].ped_partition.type  & parted.PARTITION_EXTENDED:
+                print "WARNING: Partition %d is an extended partition" % i
+            return partition[i].ped_partition.set_flag(parted.PARTITION_BOOT,
+                                                       1)
+        return 0
+
+    def commit(self):
+        self.ped_disk.commit()
+
+    def print_info(self):
+        print
+        device = self["device"]
+        if self.has_key("image"):
+            device = self["image"]
+        print "Disk %s: %.1f GB, %d bytes" % (device,
+                                              self["length"]/(1000*1000*1000),
+                                              self["length"])
+        print "%d heads, %d sectors/track, %d cylinders" % (self["heads"],
+                                                            self["sectors"],
+                                                            self["cylinders"])
+        units = self["units"]
+        print "Units = cylinders of %d * %d = %d bytes" % \
+              (units, self["sector_size"], (units*self["sector_size"]))
+
+    def print_partitions(self):
+        print
+        l = len("Device")
+        for part in self["partition"]:
+            partition = self["partition"][part]
+            if partition["disk"].has_key("image"):
+                device = "%s%d" % (self["image"], partition["id"])
+            else:
+                device = partition["device"]
+            if l < len(device):
+                l = len(device)
+        print "%*s Boot      Start         End      Blocks   Id  System" % \
+              (l, "Device")
+        for part in self["partition"]:
+            partition = self["partition"][part]
+            blocks = partition["length"] * self["sector_size"]
+            block_str = "%d" % (blocks / 1024)
+            if partition["disk"].has_key("image"):
+                device = "%s%d" % (self["image"], partition["id"])
+            else:
+                device = partition["device"]
+            if blocks % 1024 > 0:
+                block_str += "+"
+            else:
+                block_str += " "
+            if partition["boot"]:
+                boot = "*"
+            else:
+                boot = " "
+            print "%*s   %s  %10d  %10d  %11s  %2x  %s" % \
+                  (l, device, boot, partition["unit-start"],
+                   partition["unit-end"], block_str,
+                   partition["native_type"],
+                   Partition.nativeType[partition["native_type"]])
 
 ################################## functions ##################################
 
-def rm_rf(name):
-    if not os.path.exists(name) or not os.path.isdir(name):
-        return
-    if os.path.ismount(name):
-        umount(name)
-        return
-    list = os.listdir(name)
-    for file in list:
-        if os.path.isdir(name+"/"+file) and not os.path.islink(name+"/"+file):
-            rm_rf(name+"/"+file)
-        else:
-            os.unlink(name+"/"+file)
-    os.rmdir(name)
-
-
-def mount(what, where, fstype="ext3", options=None):
+def mount(what, where, fstype="ext3", options=None, arguments=None):
     print "Mounting '%s' on '%s'" % (what, where)
 
     opts = ""
     if options:
         opts = "-o '%s'" % options
-    stat = os.system("mount %s -t '%s' '%s' '%s'" % \
-                     (opts, fstype, what , where))
+    args = ""
+    if arguments:
+        args = string.join(arguments)
+    if fstype:
+        _fstype = "-t '%s'" % fstype
+    else:
+        _fstype = ""
+    mount = "mount %s %s %s '%s' '%s'" % (args, opts, _fstype, what , where)
+    stat = os.system(mount)
     if stat != 0:
         raise IOError, "mount of '%s' on '%s' failed" % (what , where)
 
 
 def umount(what):
-    if not os.path.ismount(what):
-        return
     print "Umounting '%s' " % what
+    if not os.path.ismount(what):
+        # TODO: ismount is not working for bind mounts
+        stat = os.system("umount '%s' 2>/dev/null" % what)
+        return stat
 
     i = 0
     failed = 0
@@ -112,7 +599,6 @@ def umount(what):
                 pyrpm.runScript(script="/sbin/fuser -k '%s'" % what)
                 sys.exit(0)
 
-#            print "Trying to umount '%s'" % what
             time.sleep(1)
         stat = os.system("umount '%s' 2>/dev/null" % what)
         if stat != 0:
@@ -125,11 +611,15 @@ def umount(what):
 
     return failed
 
-def umount_all():
+def umount_all(dir):
     # umount target dir and included mount points
-    dir = tempdir+"/"
     mounted = [ ]
-    fd = open("/proc/mounts", "r")
+    try:
+        fd = open("/proc/mounts", "r")
+    except Exception:
+        print "ERROR: Unable to open '/proc/mount2' for reading."
+        return
+        
     while 1:
         line = fd.readline()
         if not line:
@@ -159,7 +649,11 @@ def check_dir(buildroot, dir):
 def create_dir(buildroot, dir):
     d = buildroot+dir
     if not os.path.exists(d):
-        os.mkdir(d)
+        try:
+            os.mkdir(d)
+        except Exception, msg:
+            print "ERROR: Unable to create '%d':" % dir, msg
+            exit(1)
 
 def lolist():
     list = os.listdir("/dev/")
@@ -188,34 +682,15 @@ def losetup(target, offset=0):
         loop_device = child_stdout.read()
         loop_device = string.strip(loop_device)
         i += 1
-        status = os.system("/sbin/losetup %s '%s' '%s'" % (offset_string,
-                                                           loop_device,
-                                                           target))
-        if status != 0:
-            loop_device = None
+        if loop_device:
+            status = os.system("/sbin/losetup %s '%s' '%s'" % \
+                               (offset_string, loop_device, target))
+            if status != 0:
+                loop_device = None
     return loop_device
 
 def lofree(device):
     return (os.system("/sbin/losetup -d '%s'" % device) == 0)
-
-def diskName(name):
-    if len(name) < 2:
-        raise ValueError, "'%s' is no partition name" % name
-    tmp = name[:]
-    while len(tmp) > 0 and tmp[-1] >= '0' and tmp[-1] <= '9':
-        tmp = tmp[:-1]
-    return tmp
-
-def partitionId(name):
-    if len(name) < 2:
-        raise ValueError, "'%s' is no partition name" % name
-    id = 0
-    tmp = name[:]
-    while len(tmp) > 0 and tmp[-1] >= '0' and tmp[-1] <= '9':
-        id *= 10
-        id += int(tmp[-1])
-        tmp = tmp[:-1]
-    return id
 
 def swapon(device):
     swapon = "/sbin/swapon '%s'" % device
@@ -245,9 +720,55 @@ def swapoff(device):
         sys.exit(0)
     return 0
 
+def getName(name):
+    tmp = name[:]
+    while len(tmp) > 0 and tmp[-1] >= '0' and tmp[-1] <= '9':
+        tmp = tmp[:-1]
+    if len(tmp) < 1:
+        raise ValueError, "'%s' contains no name" % name
+    return tmp
+
+def diskName(name):
+    if len(name) < 2:
+        raise ValueError, "'%s' is no partition name" % name
+    try:
+        tmp = getName(name)
+    except:
+        raise ValueError, "'%s' is no valid disk name" % name
+    return tmp
+
+def getId(name):
+    tmp = name[:]
+    if tmp[-1] < '0' or tmp[-1] > '9':
+        raise ValueError, "'%s' contains no id" % name
+    i = 0
+    while len(tmp) > 0 and tmp[-1] >= '0' and tmp[-1] <= '9':
+        i *= 10
+        i += int(tmp[-1])
+        tmp = tmp[:-1]
+    return i
+    
+def partitionId(name):
+    if len(name) < 2:
+        raise ValueError, "'%s' is no valid partition name" % name
+    try:
+        i = getId(name)
+    except:
+        raise ValueError, "'%s' is no valid partition name" % name
+    return i
+
 def buildroot_copy(source, target):
-    source_fd = open(buildroot+source, "r")
-    target_fd = open(buildroot+target, "w")
+    try:
+        source_fd = open(buildroot+source, "r")
+    except Exception, msg:
+        print "ERROR: Failed to open '%s':" % buildroot+source, msg
+        return
+    try:
+        target_fd = open(buildroot+target, "w")
+    except Exception, msg:
+        print "ERROR: Failed to open '%s':" % buildroot+target, msg
+        source_fd.close()
+        return
     data = source_fd.read(65536)
     while data:
         target_fd.write(data)
@@ -255,42 +776,70 @@ def buildroot_copy(source, target):
     source_fd.close()
     target_fd.close()
 
+def ext2Label(device):
+    e2label = "e2label %s 2>/dev/null" % device
+    (child_stdin, child_stdout) = os.popen2(e2label)
+    l = child_stdout.read()
+    if l:
+        l = string.strip(l)
+    return l
+
+def swapLabel(device):
+    try:
+        fd = open(device, "r")
+    except:
+        return None
+    try:
+        fd.seek(1052, 0) # TODO: verify, pagesize?
+        l = fd.read(16)
+    except:
+        l = None
+    fd.close()
+    if not l:
+        return None
+    for i in xrange(len(l)):
+        if i > 0 and l[i] == "\0":
+            return l[:i]
+    return l
+
+def getLabel(device):
+    label = ext2Label(device)
+    if not label:
+        label = swapLabel(device)
+    return label
+
 def exitHandler(signum, frame):
     exit(1)
 
 def exit(code):
+    time.sleep(1)
+
     if wait:
         if target_dir:
             sys.stdout.write('Use "chroot %s" to change into the installation tree.\n' %\
                              target_dir)
         sys.stdout.write('Waiting.. Press any key to cleanup and quit. ')
         c = sys.stdin.read(1)
-    else:
-        if code != 0:
-            time.sleep(1)
+
+    if devmap:
+        # remove temporary devices
+        for dev in devmap:
+            os.unlink(buildroot+devmap[dev])
 
     if tempdir:
-        if umount_all() == 0:
+        if umount_all(tempdir+"/") == 0:
             if not nocleanup:
-                rm_rf(tempdir)
+                shutil.rmtree(tempdir)
     if partitionmap:
         for part in partitionmap:
             if partitionmap[part]["name"] == "swap" and \
                    partitionmap[part].has_key("on"):
                 swapoff(partitionmap[part]["device"])
                 del partitionmap[part]["on"]
-            if partitionmap[part].has_key("disk") and \
-                   partitionmap[part].has_key("device"):
-                disk = partitionmap[part]["disk"]
-                if diskmap[disk].has_key("image"):
-                    lofree(partitionmap[part]["device"])
-                    del partitionmap[part]["device"]
     if diskmap:
         for disk in diskmap:
-            if diskmap[disk].has_key("image") and \
-                   diskmap[disk].has_key("device"):
-                lofree(diskmap[disk]["device"])
-                del diskmap[disk]["device"]
+            diskmap[disk].close()
+
     sys.exit(code)
 
 #################################### dicts ####################################
@@ -367,6 +916,55 @@ keyboard_models = {
     'us-acentos'          : ['us_intl', 'pc105', '', ''],
     }
 
+##############################################################################
+
+class pr_print:
+    def __init__(self, var):
+        self.pos = 0
+        self.pr(var, 0)
+        self._print("\n", 0)
+        
+    def _print(self, str, indent):
+        s = ""
+        if self.pos == 0:
+            for i in xrange(indent):
+                s += " "
+        s += str
+        sys.stdout.write(s)
+        i = string.rfind(str, "\n")
+        if i != -1:
+            self.pos = len(s) - i - 1
+        else:
+            self.pos += len(s)
+
+    def pr(self, var, indent):
+        if isinstance(var, types.DictType):
+            if len(var) == 0:
+                self._print("{ }", indent)
+                return
+            self._print("{\n", indent)
+            keys = var.keys()
+            keys.sort()
+            for key in keys:
+                self.pr(key, indent+4)
+                self._print(": ", 0)
+                self.pr(var[key], indent+4)
+                self._print("\n", 0)
+            self._print("}", indent)
+        elif isinstance(var, types.ListType):
+            if len(var) == 0:
+                self._print("[ ]", indent)
+                return
+            self._print("[\n", indent)
+            for i in xrange(len(var)):
+                self.pr(var[i], indent+4)
+                self._print("\n", 0)
+            self._print("]", indent)
+        elif isinstance(var, types.StringType):
+            self._print("'%s'" % var, indent)
+        else:
+            self._print(str(var), indent)
+
 #################################### main ####################################
 
 verbose = 0
@@ -377,12 +975,13 @@ confirm = 1
 tempdir = None
 diskmap = None
 partitionmap = None
+devmap = None
 wait = 0
 kudzu = 0
 orig_yum = 0
 target_dir = None
-
-label_prefix = "%x_" % int(time.strftime("%m%d%H%M"))
+label_prefix = ""
+standalone = 0
 
 def usage():
     print """
@@ -390,17 +989,22 @@ Usage: pyrpmkickstart <options> <kickstartfile>
                       [[<disk name>:]<disk image>|<disk device>]*
 
 OPTIONS
-  -h  | --help       Print help.
-  -v  | --verbose    Be verbose, and more, ..
-  -y                 So not ask questions, assume yes.
+  -h  | --help     Print help.
+  -v  | --verbose  Be verbose, and more, ..
+  -y  | --yes      Do not ask questions, assume yes.
 
-  -x  | --xen        Write a simple xen config file.
-  -n  | --nocleanup  Do not cleanup temporary files.
-  -w  | --wait       Wait after installation before umounting.
-  -k  | --kudzu      Run kudzu after installation.
-        --yum        Use yum instead of pyrpmyum.
+  --kudzu          Run kudzu after installation.
+  --label-prefix   Prepend prefix before labels on partitions
+  --no-cleanup     Do not cleanup temporary directory and files.
+  --standalone     Start in standalone mode: start network before running
+                   pre script, swapon swap partitions
+  --wait           Wait after installation before umounting.
+  --xen            Write a simple xen config file.
+  --yum            Use yum instead of pyrpmyum.
 """
+# TODO:  --secure         Secure installation (with firewall enabled)
 
+pyrpm.rpmconfig.supported_signals.extend([signal.SIGSEGV, signal.SIGBUS, signal.SIGABRT, signal.SIGILL, signal.SIGFPE])
 pyrpm.setSignals(exitHandler)
 
 if os.geteuid() != 0:
@@ -408,32 +1012,38 @@ if os.geteuid() != 0:
     exit(1)
 
 try:
-    (opts, args) = getopt.getopt(sys.argv[1:], "hvyxnwk",
-                                 [ "help", "verbose", "xen", "nocleanup",
-                                   "wait", "kudzu" ])
+    (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
+                                 [ "help", "verbose", "yes",
+                                   "kudzu", "label-prefix", "no-cleanup",
+                                   "standalone", "wait", "xen", "yum",
+                                   ])
 except:
     usage()
     exit(1)
 
 for (opt, val) in opts:
-    if opt in ["-h", "--help"]:
+    if opt in [ "-h", "--help" ]:
         usage()
         exit(1)
-    elif opt in ["-v", "--verbose"]:
+    elif opt in [ "-v", "--verbose" ]:
         verbose += 1
         pyrpm.rpmconfig.verbose += 1
-    elif opt == "-y":
+    elif opt in [ "-y", "--yes" ]:
         confirm = 0
-    elif opt in ["-x", "--xen"]:
+    elif opt == "--xen":
         xen = 1
-    elif opt in ["-n", "--nocleanup"]:
+    elif opt == "--no-cleanup":
         nocleanup = 1
-    elif opt in ["-w", "--wait"]:
+    elif opt == "--wait":
         wait = 1
-    elif opt in ["-k", "--kudzu"]:
+    elif opt == "--kudzu":
         kudzu = 1
     elif opt == "--yum":
         orig_yum = 1
+    elif opt == "--label-prefix":
+        label_prefix = "%x_" % int(time.strftime("%m%d%H%M"))
+    elif opt == "--standalone":
+        standalone = 1
     else:
         print "Unknown option '%s'" % opt
         usage()
@@ -449,6 +1059,56 @@ if not os.path.exists(ks_file):
     print "ERROR: '%s' does not exist." % ks_file
     exit(1)
 
+### load kickstart file ###
+
+ks = pyrpm.KickstartConfig(ks_file)
+
+# TODO: start network in standalone mode for pre script
+
+
+# run pre script
+if ks["pre"] and len(ks["pre"]["script"]) > 0:
+    print "Running pre script"
+    pid = os.fork()
+    if pid != 0:
+        (rpid, status) = os.waitpid(pid, 0)
+        if status != 0 and ks["pre"].has_key("erroronfail"):
+            print "ERROR: Pre script failed, aborting."
+            exit(1)
+    else:
+        interpreter = "bin/sh"
+        if ks["pre"].has_key("interpreter"):
+            interpreter = ks["pre"]["interpreter"]
+        pyrpm.runScript(interpreter, ks["pre"]["script"])
+        sys.exit(0)
+
+# parse file again
+ks.clear()
+ks.parse(ks_file)
+
+# sanity checks
+if ks.has_key("install"):
+    if not ks["partition"].has_key("/"):
+        print "ERROR: root partition not defined"
+        exit(1)
+else:
+    print "ERROR: Only installation is supported, aborting."
+    exit(1)
+
+if not keyboard_models.has_key(ks["keyboard"]):
+    print "ERROR: Keyboard model '%s' is not defined, exiting." % \
+          ks["keyboard"]
+    exit(1)
+
+# installation methods
+
+if not ks["nfs"] and not ks["url"]:
+    print "ERROR: Only installation with nfs or url is supported, exiting."
+    exit(1)
+if ks["url"] and not ks["url"]["url"].startswith("file://"):
+    print "ERROR: Unsupported url installation method, exiting."
+    exit(1)
+    
 ### create user supplied diskmap ###
 
 diskmap = { }
@@ -493,55 +1153,7 @@ if len(args) > 1:
             print "ERROR: '%s' already exists in diskmap." % key
             exit(1)
 
-        diskmap[key] = { }
-        if stat.S_ISREG(mode):
-            diskmap[key]["image"] = val
-        elif stat.S_ISBLK(mode):
-            diskmap[key]["device"] = val
-
-### load kickstart file ###
-
-ks = pyrpm.KickstartConfig(ks_file)
-
-# TODO: start network in standalone mode for pre script
-
-# run pre script
-if ks["pre"] and len(ks["pre"]["script"]) > 0:
-    print "Running pre script"
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0 and ks["pre"].has_key("erroronfail"):
-            print "ERROR: Pre script failed, aborting."
-            exit(1)
-    else:
-        interpreter = "bin/sh"
-        if ks["pre"].has_key("interpreter"):
-            interpreter = ks["pre"]["interpreter"]
-        pyrpm.runScript(interpreter, ks["pre"]["script"])
-        sys.exit(0)
-
-# parse file again
-ks.clear()
-ks.parse(ks_file)
-
-# sanity checks
-if ks.has_key("install"):
-    if not ks["partition"].has_key("/"):
-        print "ERROR: root partition not defined"
-        exit(1)
-else:
-    print "ERROR: Only installation is supported, aborting."
-    exit(1)
-
-if not ks["nfs"]:
-    print "ERROR: Only nfs install is supported, exiting."
-    exit(1)
-
-if not keyboard_models.has_key(ks["keyboard"]):
-    print "ERROR: Keyboard model '%s' is not defined, exiting." % \
-          ks["keyboard"]
-    exit(1)
+        diskmap[key] = Disk(val, 1)
 
 ### create system diskmap ###
 
@@ -551,30 +1163,75 @@ if len(diskmap) == 0:
         choice = raw_input("Is this ok [y/N]: ")
         if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
             exit(1)
-    fd = open("/proc/partitions") # get all disks
-    while 1:
-        line = fd.readline()
-        if not line:
-            break
-        if line[:5] == "major":
-            continue
-        line = string.strip(line)
-        if len(line) < 1:
-            continue
-        if line[0] == '#':
-            continue
-        splits = line.split() # major, minor, blocks, name
-        if len(splits) < 4:
-            print "ERROR: '/proc/partitions' malformed."
-            exit(1)
-        if int(splits[1], 16) % 16 == 0: # minor%16=0 for harddisk devices
-            diskmap[splits[3]] = { }
-            diskmap[splits[3]]["device"] = "/dev/"+splits[3]
-    fd.close()
 
-    if len(diskmap) == 0:
-        print "ERROR: No harddisks found."
+if len(diskmap) == 0:
+    try:
+        fd = open("/proc/partitions") # get all disks
+    except Exception, msg:
+        print "ERROR: Failed to open '/proc/partitions':", msg
         exit(1)
+    else:
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            if line[:5] == "major":
+                continue
+            line = string.strip(line)
+            if len(line) < 1:
+                continue
+            if line[0] == '#':
+                continue
+            splits = line.split() # major, minor, blocks, name
+            if len(splits) < 4:
+                print "ERROR: '/proc/partitions' malformed."
+                exit(1)
+            if int(splits[1], 16) % 16 == 0: # minor%16=0 for harddisk devices
+                hd = splits[3]
+                if hd[0:4] == "loop":
+                    continue
+                # remap disk if needed
+                while diskmap.has_key(hd):
+                    if hd[-1] == "z":
+                        raise ValueError, "Too many harddisks for remapping."
+                    i = ord(hd[-1])
+                    hd = "%s%c" % (hd[:-1], chr(i+1))
+                diskmap[hd] = Disk("/dev/"+splits[3])
+        fd.close()
+
+# are there any disks at all?
+if len(diskmap) == 0:
+    print "ERROR: No harddisks specified or found."
+    exit(1)
+
+# print disks
+disks = diskmap.keys()
+disks.sort()
+for disk in disks:
+    if verbose:
+        if diskmap[disk].has_key("image"):
+            print "%s (%s):" % (disk, diskmap[disk]["image"])
+        else:
+            print "%s (%s):" % (disk, diskmap[disk]["device"])
+        d = diskmap[disk]
+        print "  C/H/S: %d/%d/%d bs=%d" % (d["cylinders"], d["heads"], \
+                                             d["sectors"], d["sector_size"])
+        partition = d["partition"]
+        for i in partition.keys():
+            type = "-unknown-"
+            if partition[i]["type"] == parted.PARTITION_PRIMARY:
+                type = "primary"
+            elif partition[i]["type"] & parted.PARTITION_EXTENDED:
+                type = "extended"
+            elif partition[i]["type"] & parted.PARTITION_LOGICAL:
+                type = "logical"
+
+            print "  %d (%s):" % (i, type)
+
+            print "    %d-%d size=%d" % \
+                  (partition[i]["unit-start"], partition[i]["unit-end"],
+                   partition[i]["unit-length"])
+            print "    %s" % partition[i]["fstype"]
 
 ### disk / partition selection ###
 
@@ -585,17 +1242,24 @@ for name in ks["partition"]:
 
     if part.has_key("onpart"):
         onpart = part["onpart"]
-        if onpart[:5] != "/dev/":
+        error = 0
+        try:
+            disk_name = diskName(onpart)
+            i = partitionId(onpart)
+        except:
+            error = 1
+        if error or onpart[:5] != "/dev/":
             print "ERROR: '%s' is not a valid partition name." % onpart
             exit(1)
         onpart = part["onpart"][5:]
+        disk_name = disk_name[5:]
         if onpart in partitionmap:
             print "ERROR: '%s' is used more than once." % part["onpart"]
             exit(1)
         partitionmap[onpart] = { }
         partitionmap[onpart]["name"] = name
-        partitionmap[onpart]["disk"] = diskName(onpart)
-        partitionmap[onpart]["id"] = partitionId(onpart)
+        partitionmap[onpart]["disk"] = disk_name
+        partitionmap[onpart]["id"] = i
         if partitionmap[onpart]["id"] < 1:
             print "ERROR: Partition id '%d' is not valid." % \
                   partitionmap[onpart]["id"]
@@ -611,39 +1275,7 @@ for part in partitionmap:
         print "ERROR: disk '%s' is not defined." % disk_name
         exit(1)
 
-# get loop devices for disks, get parted structure
-for disk in diskmap.keys():
-    if diskmap[disk].has_key("image"):
-        # losetup
-        device = losetup(diskmap[disk]["image"])
-        if not device:
-            print "Unable to get loop device, exiting."
-            lolist()
-            exit(1)
-        diskmap[disk]["device"] = device
-
-    diskmap[disk]["disk"] = Disk(diskmap[disk]["device"])
-
-    if diskmap[disk].has_key("image"):
-        d = diskmap[disk]["disk"]
-
-        if verbose:
-            print "C/H/S: %d/%d/%d" % (d.disk.dev.cylinders, d.disk.dev.heads,
-                                       d.disk.dev.sectors)
-            for i in d.partition:
-                if d.partition[i].type == parted.PARTITION_PRIMARY:
-                    type = "primary"
-                elif d.partition[i].type & parted.PARTITION_LOGICAL:
-                    type = "logical"
-
-                print "%s %d:" % (type, i)
-
-                print "\t%d-%d size=%d bs=%d" % \
-                      (d.partition[i].geom.start, d.partition[i].geom.end,
-                       d.partition[i].geom.length,
-                       d.partition[i].geom.dev.sector_size)
-                if d.partition[i].fs_type and d.partition[i].fs_type.name:
-                    print "\t%s" % d.partition[i].fs_type.name
+# TODO: create partitions
 
 # are all needed partitions there?
 error = 0
@@ -651,40 +1283,68 @@ for part in partitionmap:
     name = partitionmap[part]["name"]
     disk = partitionmap[part]["disk"]
     id = partitionmap[part]["id"]
-    d = diskmap[disk]["disk"]
-    if not id in d.partition:
+    d = diskmap[disk]
+    if not id in d["partition"]:
         print "ERROR: partition '%s' does not exist." % part
         error = 1
     if error:
         continue
-    geom = d.partition[id].geom
-    partitionmap[part]["blocksize"] = geom.dev.sector_size
-    partitionmap[part]["start"] = geom.start * partitionmap[part]["blocksize"]
-    partitionmap[part]["end"] = geom.end * partitionmap[part]["blocksize"]
-    partitionmap[part]["length"] = geom.length
-    partitionmap[part]["size"] = geom.length * partitionmap[part]["blocksize"]
-    if diskmap[disk].has_key("image"):
-        device = losetup(diskmap[disk]["image"], partitionmap[part]["start"])
-        if not device:
-            lolist()
-            print "Unable to get loop device, exiting."
-            exit(1)
-        partitionmap[part]["device"] = device
-    else:
-        partitionmap[part]["device"] = "/dev/"+part
+    p = d["partition"][id]
+    sector_size = diskmap[disk]["sector_size"]
+    partitionmap[part]["start"] = p["start"] * sector_size
+    partitionmap[part]["end"] = p["end"] * sector_size
+    partitionmap[part]["size"] = p["length"] * sector_size
+    partitionmap[part]["device"] = p["device"]
 
-    # TODO: update
-#    if d.partition[id].fs_type and d.partition[id].fs_type.name:
-#        if d.partition[id].fs_type.name in [ "ext2", "ext3" ]:
-#            if not ks["partition"][name].has_key("fstype") or \
-#                   not ks["partition"][name]["fstype"] in [ "ext2", "ext3" ]:
-#                print "ERROR: Partition '%s' does not match filesystem" % part
-#                error = 1
-#        else:
-#            print "ERROR: Filesystem '%s' on '%s' is not supported" % \
-#                  (d.partition[id].fs_type.name, part)
-#            error = 1
+    # check partition types
+    if not p["native_type"]:
+        print "ERROR: Partition '%s' has no type." % part
+        error = 1
+    else:
+        if p["native_type"] == 0x83:
+            if not ks["partition"][name].has_key("fstype") or \
+                   not ks["partition"][name]["fstype"] in [ "ext2", "ext3" ]:
+                print "ERROR: Partition '%s' does not match filesystem" % part
+                error = 1
+        elif p["native_type"] == 0x82:
+            if ks["partition"][name].has_key("fstype") and \
+                   ks["partition"][name]["fstype"] != "swap":
+                print "ERROR: Partition '%s' does not match filesystem" % part
+                error = 1
+        else:
+            print "ERROR: Filesystem '%s' with code 0x%x on '%s' is not supported" % \
+                  (p["fstype"], p["native_type"], part)
+            error = 1
+
+if error:
+    exit(1)
+
+labels = [ ]
+# get all labels
+for disk in diskmap.keys():
+    partition = diskmap[disk]["partition"]
+    for i in partition.keys():
+        label = getLabel(partition[i]["device"])
+        if not label:
+            continue
+        part = "%s%d" % (disk, i)
+        if part in partitionmap:
+            name = partitionmap[part]["name"]
+            partitionmap[part]["label"] = label
+            if ks["partition"][name].has_key("noformat"):
+                labels.append(label)
+        else:
+            labels.append(label)
+
+# create labels
+for part in partitionmap:
+    name = partitionmap[part]["name"]
     label = label_prefix
+
+    if ks["partition"][name].has_key("noformat"):
+        # filesystem marked not to get formatted
+        continue
+
     if ks["partition"][name].has_key("fstype") and \
            ks["partition"][name]["fstype"] in [ "ext2", "ext3" ]:
         label += name
@@ -698,14 +1358,174 @@ for part in partitionmap:
     if len(label) > 16:
         print "WARNING: Label '%s' for '%s' is too long, tuncating to 16 chars." % (label, part)
         label = label[:16]
+
+    # add or increase label id as long as label in labels
+    while label in labels:
+        try:
+            id = getId(label)
+        except:
+            label = label + "1"
+        else:
+            try:
+                l_name = getName(label)
+            except:
+                print "ERROR: '%s' is no valid label name" % label
+                exit(1)
+            label = "%s%d" % (l_name, (id+1))
+#        print "label=%s" % label
+        
     partitionmap[part]["label"] = label
 
-if error:
+if verbose:
+    sys.stdout.write("diskmap=")
+    pr_print(diskmap)
+    sys.stdout.write("partitionmap=")
+    pr_print(partitionmap)
+    sys.stdout.write("labels=")
+    pr_print(labels)
+
+### create temp dir ###
+
+try:
+    tempdir = tempfile.mkdtemp(prefix="pyrpmkickstart_")
+except Exception, msg:
+    print msg
+    exit(1)
+source_dir = tempdir+"/source"
+target_dir = tempdir+"/target"
+stage2_dir = tempdir+"/stage2"
+
+### mount source ###
+
+# create source mount point and mount source (nfs)
+opts = "ro"
+os.mkdir(source_dir)
+if ks["nfs"]:
+    source = "%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
+    fstype = "nfs"
+    args = None
+elif ks["url"]:
+    if ks["url"]["url"].startswith("file://"):
+        source = ks["url"]["url"][7:]
+    else:
+        source = "None"
+    fstype = None
+    args = [ "--rbind" ]
+
+try:
+    mount(source, source_dir, fstype, opts, args)
+except Exception, msg:
+    print msg
     exit(1)
 
-if verbose:
-    print "diskmap=%s" % diskmap
-    print "partitionmap=%s" % partitionmap
+### mount stage2 temporary ###
+
+stage2_img_dir = tempdir+"/tmp"
+os.mkdir(stage2_img_dir)
+stage2 = "%s/RedHat/base/stage2.img" % source_dir
+if not os.path.exists(stage2):
+    stage2 = "%s/Fedora/base/stage2.img" % source_dir
+if not os.path.exists(stage2):
+    print "ERROR: Could not find stage2.img in installation source."
+    exit(1)
+
+try:
+    mount(stage2, stage2_img_dir, fstype=None, options="loop,defaults,ro")
+except Exception, msg:
+    print msg
+    exit(1)
+
+### analyze stage2 ###
+buildstamp = "%s/.buildstamp" % stage2_img_dir
+if not os.path.exists(buildstamp):
+    print "ERROR: Buildstamp information is missing in stage2."
+    exit(1)
+try:
+    fd = open(buildstamp, "r")
+except Exception, msg:
+    print "ERROR: Failed to open buildstamp information in stage2:", msg
+    exit(1)
+lines = fd.readlines()
+fd.close()
+if len(lines) < 3:
+    print "ERROR: Buildstamp information in stage2 is malformed:", lines
+    exit(1)
+
+source_date = string.strip(lines[0])
+source_release = string.strip(lines[1])
+source_version = string.strip(lines[2])
+del lines
+
+if source_release == "Red Hat Enterprise Linux":
+    install_version = "RHEL"
+elif source_release == "Fedora Core":
+    install_version = "FC"
+else:
+    print "ERROR: Unknown source release."
+    exit(1)
+install_version += "-%s" % source_version
+
+### create stage2 chroot ###
+
+# create stage2 mount point and mount ramfs for stage2
+os.mkdir(stage2_dir)
+
+try:
+    mount("None", stage2_dir, fstype="ramfs")
+except Exception, msg:
+    print "ERROR: Unable to create stage2 ramfs:", msg
+    exit(1)
+
+# copy temporary stage2 mount
+print "Copying stage2 image"
+for f in os.listdir(stage2_img_dir):
+    s = "%s/%s" % (stage2_img_dir, f)
+    d = "%s/%s" % (stage2_dir, f)
+    if os.path.isdir(s):
+        shutil.copytree(s, d, symlinks=True)
+    else:
+        shutil.copy2(s, d)
+
+# umount temporary stage2 mount
+umount(stage2_img_dir)
+
+# craete missing dirs and links
+create_dir(stage2_dir, "/bin")
+if not os.path.exists("%s/bin/sh" % stage2_dir):
+    try:
+        os.symlink("../usr/bin/bash", "%s/bin/sh" % stage2_dir)
+    except Exception, msg:
+        print "ERROR: Unable to generate /bin/sh symlink:", msg
+        exit(1)
+if not os.path.exists("%s/bin/bash" % stage2_dir):
+    try:
+        os.symlink("../usr/bin/bash", "%s/bin/bash" % stage2_dir)
+    except Exception, msg:
+        print "ERROR: Unable to generate /bin/bash symlink:", msg
+        exit(1)
+create_dir(stage2_dir, "/dev")
+create_dir(stage2_dir, "/etc")
+if not os.path.exists("%s/etc/mtab" % stage2_dir):
+    try:
+        fd = open("%s/etc/mtab" % stage2_dir, "w")
+    except Exception, msg:
+        print "ERROR: Unable to generate /etc/mtab:", msg
+        exit(1)
+    fd.close()
+create_dir(stage2_dir, "/proc")
+create_dir(stage2_dir, "/var")
+create_dir(stage2_dir, "/var/tmp")
+create_dir(stage2_dir, "/tmp")
+
+# create needed devices
+for disk in diskmap:
+    stats = os.stat(diskmap[disk]["device"])
+    tmpdev = "%s/%s" % (stage2_dir, diskmap[disk]["device"])
+    os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
+for part in partitionmap:
+    stats = os.stat(partitionmap[part]["device"])
+    tmpdev = "%s/%s" % (stage2_dir, partitionmap[part]["device"])
+    os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
 
 ### format partitions ###
 
@@ -732,90 +1552,99 @@ if confirm == 1 and len(to_format) > 0:
     if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
         exit(1)
 
-# format
-for part in to_format:
-    name = partitionmap[part]["name"]
-    label = partitionmap[part]["label"]
-    disk = partitionmap[part]["disk"]
-    partition = ks["partition"][name]
+# change root to stage2
 
-    if partition.has_key("fstype") and \
-           (partition["fstype"] == "ext2" or partition["fstype"] == "ext3"):
-        mke2fs = "/sbin/mke2fs -q -L '%s'" % label
-        if partition["fstype"] == "ext3":
-            mke2fs += " -j"
-        if diskmap[disk].has_key("image"):
-            blocksize = 4096
-            mke2fs += " -b %d" % blocksize
-        print partitionmap[part]
-        mke2fs += " '%s'" % partitionmap[part]["device"]
-        if diskmap[disk].has_key("image"):
-            mke2fs += " %d" % (partitionmap[part]["size"] / blocksize)
+pid = os.fork()
+if pid != 0:
+    (rpid, status) = os.waitpid(pid, 0)
+    if status != 0:
+        exit(1)
+else:
+    os.chroot(stage2_dir)
 
-#        print mke2fs
-        print "Formatting '%s' on '%s' (%s)" % \
-              (part, partitionmap[part]["disk"], name)
+    # format
+    for part in to_format:
+        name = partitionmap[part]["name"]
+        label = partitionmap[part]["label"]
+        disk = partitionmap[part]["disk"]
+        partition = ks["partition"][name]
 
-        pid = os.fork()
-        if pid != 0:
-            (rpid, status) = os.waitpid(pid, 0)
-            if status != 0:
-                print "ERROR: mke2fs failed."
-                exit(1)
-        else:
-            pyrpm.runScript(script=mke2fs)
-            sys.exit(0)
+        if partition.has_key("fstype") and \
+               (partition["fstype"] == "ext2" or partition["fstype"] == "ext3"):
+            mke2fs = "/usr/sbin/mke2fs -q -L '%s'" % label
+            if partition["fstype"] == "ext3":
+                mke2fs += " -j"
+            if diskmap[disk].has_key("image"):
+                blocksize = 4096
+                mke2fs += " -b %d" % blocksize
+            mke2fs += " '%s'" % partitionmap[part]["device"]
+            if diskmap[disk].has_key("image"):
+                mke2fs += " %d" % (partitionmap[part]["size"] / blocksize)
 
-        if partition["fstype"] == "ext3": # set ext options
-            tune2fs = "/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
-                      partitionmap[part]["device"]
+#            print mke2fs
+            print "Formatting '%s' on '%s' (%s)" % \
+                  (part, partitionmap[part]["disk"], name)
 
-#            print tune2fs
-            print "Tuning filesystem '%s' on '%s'" % \
-                  (part, partitionmap[part]["disk"])
             pid = os.fork()
             if pid != 0:
                 (rpid, status) = os.waitpid(pid, 0)
                 if status != 0:
-                    print "ERROR: tune2fs failed."
-                    exit(1)
+                    print "ERROR: mke2fs failed."
+                    sys.exit(1)
             else:
-                pyrpm.runScript(script=tune2fs)
+                pyrpm.runScript(script=mke2fs)
                 sys.exit(0)
 
-    elif name == "swap":
-        mkswap = "/sbin/mkswap -L '%s' '%s' %d >/dev/null" % \
-                 (label, partitionmap[part]["device"],
-                  (partitionmap[part]["size"] / 1024))
+            if partition["fstype"] == "ext3": # set ext options
+                tune2fs = "/usr/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
+                          partitionmap[part]["device"]
 
-#        print mkswap
-        print "Formatting swap on '%s' (%s)" % (partitionmap[part]["disk"],
-                                                name)
-        pid = os.fork()
-        if pid != 0:
-            (rpid, status) = os.waitpid(pid, 0)
-            if status != 0:
-                print "ERROR: mkswap failed."
-                exit(1)
+#                print tune2fs
+                print "Tuning filesystem '%s' on '%s'" % \
+                      (part, partitionmap[part]["disk"])
+                pid = os.fork()
+                if pid != 0:
+                    (rpid, status) = os.waitpid(pid, 0)
+                    if status != 0:
+                        print "ERROR: tune2fs failed."
+                        sys.exit(1)
+                else:
+                    pyrpm.runScript(script=tune2fs)
+                    sys.exit(0)
+
+        elif name == "swap":
+            l = ""
+            if install_version != "RHEL-3" and install_version != "FC-2":
+                # no swap labels for RHEL-3, FC-1
+                l = "-L '%s'" % label
+            mkswap = "/usr/sbin/mkswap %s '%s' %d >/dev/null" % \
+                     (l, partitionmap[part]["device"],
+                      (partitionmap[part]["size"] / 1024))
+
+#            print mkswap
+            print "Formatting swap on '%s' (%s)" % (partitionmap[part]["disk"],
+                                                    name)
+            pid = os.fork()
+            if pid != 0:
+                (rpid, status) = os.waitpid(pid, 0)
+                if status != 0:
+                    print "ERROR: mkswap failed."
+                    sys.exit(1)
+            else:
+                pyrpm.runScript(script=mkswap)
+                sys.exit(0)
         else:
-            pyrpm.runScript(script=mkswap)
-            sys.exit(0)
-    else:
-        print "ERROR: Unknown filesystem for '%s' (%s)" % \
-              (partitionmap[part]["disk"], name)
-        exit(1)
+            print "ERROR: Unknown filesystem for '%s' (%s)" % \
+                  (partitionmap[part]["disk"], name)
+            sys.exit(1)
 
-del to_format
+    del to_format
+    ### format end ###
 
-### create temp dir ###
+    sys.exit(0)
 
-try:
-    tempdir = tempfile.mkdtemp(prefix="pyrpmkickstart_")
-except Exception, msg:
-    print msg
-    exit(1)
-source_dir = tempdir+"/source"
-target_dir = tempdir+"/target"
+# umount real stage2 mount
+umount(stage2_dir)
 
 ### mount target ###
 
@@ -832,10 +1661,11 @@ to_mount.sort()
 
 for mntpnt in to_mount:
     if mntpnt == "swap":
-        # TODO: swapon if in standalone mode
-        if swapon(partitionmap[mountmap[mntpnt]]["device"]) == 1:
-            exit(1)
-        partitionmap[mountmap[mntpnt]]["on"] = None
+        if standalone:
+            # swapon if in standalone mode
+            if swapon(partitionmap[mountmap[mntpnt]]["device"]) == 1:
+                exit(1)
+            partitionmap[mountmap[mntpnt]]["on"] = None
     else:
         if mntpnt == "/":
             dir = target_dir
@@ -858,17 +1688,6 @@ for mntpnt in to_mount:
 
 buildroot = target_dir
 pyrpm.rpmconfig.buildroot = buildroot
-
-### mount source ###
-
-# create source mount point and mount source (nfs)
-os.mkdir(source_dir)
-source = "%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
-try:
-    mount(source, source_dir, fstype="nfs")
-except Exception, msg:
-    print msg
-    exit(1)
 
 ### package selection ###
 
@@ -962,14 +1781,19 @@ if ks["selinux"]:
 
 # append xorg-x11, if we want to configure it
 if ks["xconfig"]:
-    if not "xorg-x11" in pkgs:
-        print "Adding package xorg-x11"
-        pkgs.append("xorg-x11")
+    if install_version == "RHEL-3":
+        xserver = "XFree86"
+    else:
+        xserver = "xorg-x11"
+    if not xserver in pkgs:
+        print "Adding package '%s'" % xserver
+        pkgs.append(xserver)
     if ks["xconfig"].has_key("startxonboot") and not "gdm" in pkgs:
         print "Adding package gdm"
         pkgs.append("gdm")
-        print "Adding package xorg-x11-twm"
-        pkgs.append("xorg-x11-twm")
+        twm = "%s-twm" % xserver
+        print "Adding package '%s'" % twm
+        pkgs.append(twm)
 
 # append kernel
 if not "kernel" in pkgs and not "kernel-smp" in pkgs:
@@ -1004,9 +1828,12 @@ create_dir(buildroot, "/dev")
 create_dir(buildroot, "/etc")
 create_dir(buildroot, "/etc/rpm")
 create_dir(buildroot, "/etc/sysconfig")
+if install_version != "RHEL-3":
+    create_dir(buildroot, "/sys")
+create_dir(buildroot, "/tmp")
 create_dir(buildroot, "/var")
 create_dir(buildroot, "/var/log")
-create_dir(buildroot, "/tmp")
+create_dir(buildroot, "/var/tmp")
 
 # /dev
 if not os.path.exists(buildroot+"/dev/console"):
@@ -1021,6 +1848,9 @@ if not os.path.exists(buildroot+"/etc/sysconfig/kernel"):
     print "Configuring kernel"
     try:
         fd = open(buildroot+"/etc/sysconfig/kernel", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/kernel' failed:", msg
+    else:
         fd.write('# UPDATEDEFAULT specifies if new-kernel-pkg should make\n')
         fd.write('# new kernels the default\n')
         fd.write('UPDATEDEFAULT=yes\n')
@@ -1028,103 +1858,152 @@ if not os.path.exists(buildroot+"/etc/sysconfig/kernel"):
         fd.write('# DEFAULTKERNEL specifies the default kernel package type\n')
         fd.write('DEFAULTKERNEL=kernel\n')
         fd.close()
-    except Exception, msg:
-        print "ERROR: Configuration of '/etc/sysconfig/kernel' failed:", msg
 
 # /etc/fstab
 if not os.path.exists(buildroot+"/etc/fstab"):
-    fd = open(buildroot+"/etc/fstab", "w")
-    partitions = partitionmap.keys()
-    partitions.sort()
-    partitions.reverse()
-    for part in partitions:
-        name = partitionmap[part]["name"]
+    print "Configuring '/etc/fstab'"
+    try:
+        fd = open(buildroot+"/etc/fstab", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/fstab' failed:", msg
+    else:
+        partitions = partitionmap.keys()
+        partitions.sort()
+        partitions.reverse()
+        for part in partitions:
+            name = partitionmap[part]["name"]
 
-        major = minor = 0
-        if ks["partition"][name].has_key("fstype") and name != "swap":
-            fs = ks["partition"][name]["fstype"]
-            major = 1
-            if name == "/":
-                minor = 1
+            major = minor = 0
+            if ks["partition"][name].has_key("fstype") and name != "swap":
+                fs = ks["partition"][name]["fstype"]
+                major = 1
+                if name == "/":
+                    minor = 1
+                else:
+                    minor = 2
+                fd.write("LABEL=%s\t\t%s\t\t%s\tdefaults\t%d %d\n" % \
+                         (partitionmap[part]["label"], name, fs, major, minor))
+            elif name == "swap":
+                continue
             else:
-                minor = 2
-            fd.write("LABEL=%s\t\t%s\t\t%s\tdefaults\t%d %d\n" % \
-                     (partitionmap[part]["label"], name, fs, major, minor))
-        elif name == "swap":
-            continue
+                print "ERROR: Unknown filesystem for '%s' (%s)" % \
+                      (partitionmap[part]["disk"], name)
+                continue
+        if install_version == "RHEL-3":
+            fd.write("none\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n")
+            fd.write("none\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n")
+            fd.write("none\t\t/proc\t\tproc\tdefaults\t0 0\n")
         else:
-            print "ERROR: Unknown filesystem for '%s' (%s)" % \
-                  (partitionmap[part]["disk"], name)
-            continue
-    fd.write("/dev/devpts\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n")
-    fd.write("/dev/shm\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n")
-    fd.write("/dev/proc\t\t/proc\t\tproc\tdefaults\t0 0\n")
-    fd.write("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
-    for part in partitions:
-        if partitionmap[part]["name"] == "swap":
-            fd.write("LABEL=%s\t\t%s\t\t%s\tdefaults\t0 0\n" % \
-                     (partitionmap[part]["label"], partitionmap[part]["name"],
-                      partitionmap[part]["name"]))
-    fd.close()
+            fd.write("/dev/devpts\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n")
+            fd.write("/dev/shm\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n")
+            fd.write("/dev/proc\t\t/proc\t\tproc\tdefaults\t0 0\n")
+        if install_version != "RHEL-3":
+            fd.write("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
+        for part in partitions:
+            if partitionmap[part]["name"] == "swap":
+                if install_version == "RHEL-3" or install_version == "FC-2":
+                    # RHEL-3, FC-2 does not support swap labels
+                    what = "/dev/%s" % part
+                else:
+                    what = "LABEL=%s" % partitionmap[part]["label"]
+                fd.write("%s\t\t%s\t\t%s\tdefaults\t0 0\n" % \
+                         (what, partitionmap[part]["name"],
+                          partitionmap[part]["name"]))
+        fd.close()
 
 # /etc/hosts
 if not os.path.exists(buildroot+"/etc/hosts"):
-    fd = open(buildroot+"/etc/hosts", "w")
-    fd.write("# Do not remove the following line, or various programs\n")
-    fd.write("# that require network functionality will fail.\n")
-    hostname = ""
-    if ks["network"].has_key("hostname") and not ks["network"].has_key("ip"):
-        hostname = "%s\t" % ks["network"]["hostname"]
-    fd.write("127.0.0.1\t\t%slocalhost.localdomain\tlocalhost\n" % hostname)
-    if ks["network"].has_key("hostname") and ks["network"].has_key("ip"):
-        fd.write("%s\t\t%s\n" % (ks["network"]["ip"],
-                                 ks["network"]["hostname"]))
-    fd.close()
+    try:
+        fd = open(buildroot+"/etc/hosts", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/hosts' failed:", msg
+    else:
+        fd.write("# Do not remove the following line, or various programs\n")
+        fd.write("# that require network functionality will fail.\n")
+        hostname = ""
+        if ks["network"].has_key("hostname") and \
+               not ks["network"].has_key("ip"):
+            hostname = "%s\t" % ks["network"]["hostname"]
+        fd.write("127.0.0.1\t\t%slocalhost.localdomain\tlocalhost\n" % \
+                 hostname)
+        if ks["network"].has_key("hostname") and ks["network"].has_key("ip"):
+            fd.write("%s\t\t%s\n" % (ks["network"]["ip"],
+                                     ks["network"]["hostname"]))
+        fd.close()
 
 # /etc/resolv.conf
 if not os.path.exists(buildroot+"/etc/resolv.conf"):
-    fd = open(buildroot+"/etc/resolv.conf", "w")
-    if ks["network"]:
-        if ks["network"].has_key("hostname"):
-            hostname = ks["network"]["hostname"]
-            idx = string.find(hostname, ".")
-            if idx >= 0:
-                domainname = hostname[(idx+1):]
-                fd.write("search %s\n" % domainname)
-        if ks["network"].has_key("nameserver") and \
-               not ks["network"] and ks["network"].has_key("nodns"):
-            fd.write("nameserver %s\n" % ks["network"]["nameserver"])
-    fd.close()
+    try:
+        fd = open(buildroot+"/etc/resolv.conf", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/resolv.conf' failed:", msg
+    else:
+        if ks["network"]:
+            if ks["network"].has_key("hostname"):
+                hostname = ks["network"]["hostname"]
+                idx = string.find(hostname, ".")
+                if idx >= 0:
+                    domainname = hostname[(idx+1):]
+                    fd.write("search %s\n" % domainname)
+            else:
+                fd.write("search localdomain\n")
+            if ks["network"].has_key("nameserver") and \
+                   not ks["network"].has_key("nodns"):
+                fd.write("nameserver %s\n" % ks["network"]["nameserver"])
+            else:
+                fd.write("nameserver 127.0.0.1\n")
+        fd.close()
 
-# /etc/modprobe.conf
-if not os.path.exists(buildroot+"/etc/modprobe.conf"):
-    fd = open(buildroot+"/etc/modprobe.conf", "w")
-    # add options for defined devices in ks["device"]
-    if ks["device"] and len(ks["device"]) > 0:
-        for type in ks["device"]:
-            if ks["device"][type] and len(ks["device"][type]) > 0:
-                for module in ks["device"][type]:
-                    if ks["device"][type][module].has_key("opts"):
-                        fd.write('options %s %s\n' % \
-                                 (module, ks["device"][type][module]["opts"]))
-    fd.close()
+# /etc/modprobe.conf and /etc/modules.conf
+if install_version == "RHEL-3":
+    conf = "/etc/modules.conf"
+else:
+    conf = "/etc/modprobe.conf"
+if not os.path.exists(buildroot+conf):
+    try:
+        fd = open(buildroot+conf, "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '%s' failed:" % conf, msg
+    else:
+        # add options for defined devices in ks["device"]
+        if ks["device"] and len(ks["device"]) > 0:
+            for type in ks["device"]:
+                if ks["device"][type] and len(ks["device"][type]) > 0:
+                    for module in ks["device"][type]:
+                        if ks["device"][type][module].has_key("opts"):
+                            fd.write('options %s %s\n' % \
+                                     (module,
+                                      ks["device"][type][module]["opts"]))
+        fd.close()
 
 # /etc/rpm/platform
 (sysname, nodename, release, version, machine) = os.uname()
 if not os.path.exists(buildroot+"/etc/rpm/platform"):
-    fd = open(buildroot+"/etc/rpm/platform", "w")
-    fd.write("%s-redhat-linux\n" % machine)
-    fd.close()
+    try:
+        fd = open(buildroot+"/etc/rpm/platform", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/rpm/platform' failed:", msg
+    else:
+        fd.write("%s-redhat-linux" % machine)
+        fd.close()
 
 # /var/log/lastlog
 if not os.path.exists(buildroot+"/var/log/lastlog"):
-    fd = open(buildroot+"/var/log/lastlog", "w")
-    fd.close()
+    try:
+        fd = open(buildroot+"/var/log/lastlog", "w")
+    except Exception, msg:
+        print "ERROR: Creation of '/var/log/lastlog' failed:", msg
+    else:
+        fd.close()
 
 # /var/log/messages
 if not os.path.exists(buildroot+"/var/log/messages"):
-    fd = open(buildroot+"/var/log/messages", "w")
-    fd.close()
+    try:
+        fd = open(buildroot+"/var/log/messages", "w")
+    except Exception, msg:
+        print "ERROR: Creation of '/var/log/messages' failed:", msg
+    else:
+        fd.close()
 
 ### installation ###
 
@@ -1134,7 +2013,11 @@ print "Preparing installation"
 os.mkdir("%s/yum.cache" % tempdir)
 os.mkdir("%s/yum.repos.d" % tempdir)
 yum_conf = tempdir+"/yum.conf"
-fd = open(yum_conf, "w")
+try:
+    fd = open(yum_conf, "w")
+except Exception, msg:
+    print "ERROR: Configuration of the yum failed:", msg
+    exit(1)
 fd.write("[main]\n")
 fd.write("cachedir=%s/yum.cache\n" % tempdir)
 fd.write("debuglevel=0\n")
@@ -1149,7 +2032,7 @@ fd.write("reposdir=%s/yum.repos.d\n" % tempdir)
 fd.write("\n")
 fd.write("[dist]\n")
 fd.write("name=dist\n")
-fd.write("baseurl=file:%s/source\n" % tempdir)
+fd.write("baseurl=file:%s\n" % source_dir)
 if ks["packages"].has_key("drop"):
     fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
 fd.close()
@@ -1193,15 +2076,19 @@ if not check_dir(buildroot, "/etc") or \
 ## run kudzu
 if kudzu:
     print "Running kudzu"
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0:
-            print "ERROR: kudzu failed."
+
+    if not os.path.exists(buildroot+"/usr/sbin/kudzu"):
+        print "ERROR: /usr/sbin/kudzu does not exist, skipping."
     else:
-        os.chroot(buildroot)
-        pyrpm.runScript(script="/usr/sbin/kudzu -q -s")
-        sys.exit(0)
+        pid = os.fork()
+        if pid != 0:
+            (rpid, status) = os.waitpid(pid, 0)
+            if status != 0:
+                print "ERROR: kudzu failed."
+        else:
+            os.chroot(buildroot)
+            pyrpm.runScript(script="/usr/sbin/kudzu -q -s")
+            sys.exit(0)
 
 # run authconfig if set
 if ks["authconfig"]:
@@ -1211,46 +2098,51 @@ if ks["authconfig"]:
     if not os.path.exists(buildroot+"/etc/samba"):
         os.mkdir(buildroot+"/etc/samba")
 
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0:
-            print "ERROR: authconfig failed"
+    if not os.path.exists(buildroot+"/usr/bin/authconfig"):
+        print "ERROR: /usr/bin/authconfig does not exist, skipping."
     else:
-        os.chroot(buildroot)
-        authconfig = "/usr/bin/authconfig --kickstart --nostart"
-        for tag in ks["authconfig"]:
-            if ks["authconfig"][tag]:
-                authconfig += " --%s=%s" % (tag, ks["authconfig"][tag])
-            else:
-                authconfig += " --%s" % tag
-#        print authconfig
-        pyrpm.runScript(script=authconfig)
-        sys.exit(0)
+        pid = os.fork()
+        if pid != 0:
+            (rpid, status) = os.waitpid(pid, 0)
+            if status != 0:
+                print "ERROR: authconfig failed"
+        else:
+            os.chroot(buildroot)
+            authconfig = "/usr/bin/authconfig --kickstart --nostart"
+            for tag in ks["authconfig"]:
+                if ks["authconfig"][tag]:
+                    authconfig += " --%s=%s" % (tag, ks["authconfig"][tag])
+                else:
+                    authconfig += " --%s" % tag
+            pyrpm.runScript(script=authconfig)
+            sys.exit(0)
 
 # setting root password
 if ks["rootpw"]:
     print "Setting root password"
 
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0:
-            print "ERROR: Setting root password failed"
+    if not os.path.exists(buildroot+"/usr/sbin/usermod"):
+        print "ERROR: /usr/sbin/usermod does not exist, skipping."
     else:
-        os.chroot(buildroot)
-        password = ks["rootpw"].keys()[0]
-        if not ks["rootpw"][password].has_key("iscrypted"):
-            salt = ""
-            salt_len = 2
-            if ks["authconfig"].has_key("enablemd5"):
-                salt = "$1$"
-                salt_len = 8
-            for i in range(salt_len):
-                salt += random.choice(string.letters+string.digits+"./")
-            password = crypt.crypt(password, salt)
-        pyrpm.runScript(script="/usr/sbin/usermod -p '%s' root" % password)
-        sys.exit(0)
+        pid = os.fork()
+        if pid != 0:
+            (rpid, status) = os.waitpid(pid, 0)
+            if status != 0:
+                print "ERROR: Setting root password failed"
+        else:
+            os.chroot(buildroot)
+            password = ks["rootpw"].keys()[0]
+            if not ks["rootpw"][password].has_key("iscrypted"):
+                salt = ""
+                salt_len = 2
+                if ks["authconfig"].has_key("enablemd5"):
+                    salt = "$1$"
+                    salt_len = 8
+                for i in range(salt_len):
+                    salt += random.choice(string.letters+string.digits+"./")
+                password = crypt.crypt(password, salt)
+            pyrpm.runScript(script="/usr/sbin/usermod -p '%s' root" % password)
+            sys.exit(0)
 
 # /etc/inittab
 if ks["xconfig"] and ks["xconfig"].has_key("startxonboot"):
@@ -1259,6 +2151,9 @@ if ks["xconfig"] and ks["xconfig"].has_key("startxonboot"):
     try:
         fd_in = open(buildroot+"/etc/inittab", "r")
         fd_out = open(buildroot+"/etc/inittab.pyrpmkickstart", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/inittab' failed:", msg
+    else:
         while 1:
             line = fd_in.readline()
             if not line:
@@ -1273,28 +2168,28 @@ if ks["xconfig"] and ks["xconfig"].has_key("startxonboot"):
             fd_out.write(line)
         fd_in.close()
         fd_out.close()
-    except Exception, msg:
-        print "ERROR: Configuration of '/etc/inittab' failed:", msg
-    else:
         os.unlink(buildroot+"/etc/inittab")
         os.rename(buildroot+"/etc/inittab.pyrpmkickstart",
                   buildroot+"/etc/inittab")
 
 # /etc/sysconfig/selinux
-if ks["selinux"]:
+if ks["selinux"] and install_version != "RHEL-3":
     print "Configuring selinux"
 
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0:
-            print "ERROR: Setting root password failed"
+    if not os.path.exists(buildroot+"/usr/sbin/lokkit"):
+        print "ERROR: /usr/sbin/lokkit does not exist, skipping."
     else:
-        os.chroot(buildroot)
-        lokkit = "/usr/sbin/lokkit --quiet --nostart --selinux='%s'" % \
-                 ks["selinux"].keys()[0]
-        pyrpm.runScript(script=lokkit)
-        sys.exit(0)
+        pid = os.fork()
+        if pid != 0:
+            (rpid, status) = os.waitpid(pid, 0)
+            if status != 0:
+                print "ERROR: Configuring selinux failed."
+        else:
+            os.chroot(buildroot)
+            lokkit = "/usr/sbin/lokkit --quiet --nostart --selinux='%s'" % \
+                     ks["selinux"].keys()[0]
+            pyrpm.runScript(script=lokkit)
+            sys.exit(0)
 
 
 # /etc/sysconfig/clock
@@ -1303,6 +2198,9 @@ if ks["timezone"]:
     zone = ks["timezone"].keys()[0]
     try:
         fd = open(buildroot+"/etc/sysconfig/clock", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/clock' failed:", msg
+    else:
         fd.write('ZONE="%s"\n' % zone)
         if ks["timezone"][zone].has_key("utc"):
             fd.write('UTC=true\n')
@@ -1310,40 +2208,45 @@ if ks["timezone"]:
             fd.write('UTC=false\n')
         fd.write('ARC=false\n')
         fd.close()
-    except Exception, msg:
-        print "ERROR: Configuration of '/etc/sysconfig/clock' failed:", msg
 
-    # Create /etc/localtime
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0:
-            print "ERROR: Could not create /etc/localtime."
+    tzfile = "/usr/share/zoneinfo/" + zone
+    if not os.path.exists(buildroot+tzfile):
+        print "ERROR: %s does not exist, skipping." % tzfile
     else:
-        os.chroot(buildroot)
-        tzfile = "/usr/share/zoneinfo/" + zone
-        # do not hardlink /etc/localtime, has to be copy for system-config-date
-#        pyrpm.runScript(script="rm -f /etc/localtime; ln '%s' /etc/localtime 2>/dev/null || cp '%s' /etc/localtime" % (tzfile, tzfile))
-        pyrpm.runScript(script="rm -f /etc/localtime; cp '%s' /etc/localtime" % tzfile)
-        sys.exit(0)
+        # Create /etc/localtime
+        pid = os.fork()
+        if pid != 0:
+            (rpid, status) = os.waitpid(pid, 0)
+            if status != 0:
+                print "ERROR: Could not create /etc/localtime."
+        else:
+            os.chroot(buildroot)
+            # do not hardlink /etc/localtime, has to be copy for
+            # system-config-date
+            pyrpm.runScript(script="rm -f /etc/localtime; cp '%s' /etc/localtime" % tzfile)
+            sys.exit(0)
 
 # /etc/sysconfig/desktop
 print "Configuring desktop"
+desktop = "GNOME"
+if ks["xconfig"] and ks["xconfig"].has_key("defaultdesktop"):
+    desktop = ks["xconfig"]["defaultdesktop"]
 try:
     fd = open(buildroot+"/etc/sysconfig/desktop", "w")
-    desktop = "GNOME"
-    if ks["xconfig"] and ks["xconfig"].has_key("defaultdesktop"):
-        desktop = ks["xconfig"]["defaultdesktop"]
-    fd.write('DESKTOP="%s"\n' % desktop)
-    fd.close()
 except Exception, msg:
     print "ERROR: Configuration of '/etc/sysconfig/desktop' failed:", msg
+else:
+    fd.write('DESKTOP="%s"\n' % desktop)
+    fd.close()
 
 # /etc/sysconfig/i18n
 if ks["langsupport"]:
     print "Configuring languages"
     try:
         fd = open(buildroot+"/etc/sysconfig/i18n", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/i18n' failed:", msg
+    else:
         if ks["langsupport"].has_key("default"):
             fd.write('LANG="%s"\n' % ks["langsupport"]["default"])
             if ks["langsupport"].has_key("supported") and \
@@ -1355,83 +2258,151 @@ if ks["langsupport"]:
                      string.join(ks["langsupport"]["supported"], ":"))
         fd.write('SYSFONT="latarcyrheb-sun16"\n')
         fd.close()
-    except Exception, msg:
-        print "ERROR: Configuration of '/etc/sysconfig/i18n' failed:", msg
 
 # /etc/sysconfig/installinfo
 print "Configuring installinfo"
 try:
     fd = open(buildroot+"/etc/sysconfig/installinfo", "w")
-    fd.write('INSTALLMETHOD=nfs\n')
-    fd.close()
 except Exception, msg:
     print "ERROR: Configuration of '/etc/sysconfig/installinfo' failed:", msg
+else:
+    method = ""
+    for key in [ "cdrom", "harddrive", "nfs", "url" ]:
+        if ks[key]:
+            method = key
+            break
+    fd.write('INSTALLMETHOD=%s\n' % method)
+    fd.close()
 
 # /etc/sysconfig/iptables
 if ks["firewall"] and not ks["firewall"].has_key("disabled"):
     print "Configuring firewall"
 
-    args = [ ]
-    if ks["firewall"].has_key("enabled"):
-        args.append("--enabled")
-    if ks["firewall"].has_key("disabled"):
-        args.append("--disabled")
-    if ks["firewall"].has_key("trusted"):
-        for trusted in ks["firewall"]["trusted"]:
-            args.append("--trusted=%s\n" % trusted)
-    if ks["firewall"].has_key("ports"):
-        for port in ks["firewall"]["ports"]:
-            args.append("--port=%s:%s\n" % (port[0], port[1]))
+    if install_version == "RHEL-3":
+        # lokkit is not able to configure firewall for RHEL-3
 
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0:
-            print "ERROR: Configuration of firewall failed"
+        try:
+            fd = open(buildroot+"/etc/sysconfig/iptables", "w")
+        except Exception, msg:
+            print "ERROR: Configuration of '/etc/sysconfig/iptables' failed:", \
+                  msg
+        else:
+            fd.write('# Firewall configuration written by pyrpmkickstart\n')
+            fd.write('# Manual customization of this file is not recommended.\n')
+            fd.write('*filter\n')
+            fd.write(':INPUT ACCEPT [0:0]\n')
+            fd.write(':FORWARD ACCEPT [0:0]\n')
+            fd.write(':OUTPUT ACCEPT [0:0]\n')
+            fd.write(':RH-Firewall-1-INPUT - [0:0]\n')
+            fd.write('-A INPUT -j RH-Firewall-1-INPUT\n')
+            fd.write('-A FORWARD -j RH-Firewall-1-INPUT\n')
+            fd.write('-A RH-Firewall-1-INPUT -i lo -j ACCEPT\n')
+            # add truted devices
+            if ks["firewall"].has_key("trusted"):
+                for iface in ks["firewall"]["trusted"]:
+                    fd.write('-A RH-Firewall-1-INPUT -i %s -j ACCEPT\n' % iface)
+            fd.write('-A RH-Firewall-1-INPUT -p icmp --icmp-type any -j ACCEPT\n')
+            fd.write('-A RH-Firewall-1-INPUT -p 50 -j ACCEPT\n')
+            fd.write('-A RH-Firewall-1-INPUT -p 51 -j ACCEPT\n')
+            fd.write('-A RH-Firewall-1-INPUT -p udp --dport 5353 -d 224.0.0.251 -j ACCEPT\n')
+            fd.write('-A RH-Firewall-1-INPUT -p udp -m udp --dport 631 -j ACCEPT\n')
+            fd.write('-A RH-Firewall-1-INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT\n')
+            if ks["firewall"].has_key("ports"):
+                ports = ks["firewall"]["ports"][:]
+                ports.sort()
+                for port in ports:
+                    fd.write('-A RH-Firewall-1-INPUT -m state --state NEW -m %s -p %s --dport %d -j ACCEPT\n' % (port[1], port[1], port[0]))
+            fd.write('-A RH-Firewall-1-INPUT -j REJECT --reject-with icmp-host-prohibited\n')
+            fd.write('COMMIT\n')
+            fd.close()
+
+        # enable firewall
+        if ks["firewall"].has_key("enabled"):
+            pid = os.fork()
+            if pid != 0:
+                (rpid, status) = os.waitpid(pid, 0)
+                if status != 0:
+                    print "ERROR: Could not enable firewall."
+            else:
+                os.chroot(buildroot)
+                pyrpm.runScript(script="/sbin/chkconfig iptables on")
+                sys.exit(0)
     else:
-        os.chroot(buildroot)
-        lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % string.join(args)
-        pyrpm.runScript(script=lokkit)
-        sys.exit(0)
+        # use lokkit to configure firewall
 
-    try:
-        fd = open(buildroot+"/etc/sysconfig/system-config-securitylevel", "w")
-        fd.write('# Configuration file for system-config-securitylevel\n')
-        fd.write('\n')
-        for arg in args:
-            fd.write('%s\n' % arg)
-        fd.close()
-    except Exception, msg:
-        print "ERROR: Configuration of '/etc/sysconfig/system-config-securitylevel' failed:", msg
+        if not os.path.exists(buildroot+"/usr/sbin/lokkit"):
+            print "ERROR: /usr/sbin/lokkit does not exist, skipping."
+        else:
+            args = [ ]
+            if ks["firewall"].has_key("enabled"):
+                args.append("--enabled")
+            if ks["firewall"].has_key("disabled"):
+                args.append("--disabled")
+            if ks["firewall"].has_key("trusted"):
+                for trusted in ks["firewall"]["trusted"]:
+                    args.append("--trusted=%s\n" % trusted)
+            if ks["firewall"].has_key("ports"):
+                for port in ks["firewall"]["ports"]:
+                    args.append("--port=%s:%s\n" % (port[0], port[1]))
+
+            pid = os.fork()
+            if pid != 0:
+                (rpid, status) = os.waitpid(pid, 0)
+                if status != 0:
+                    print "ERROR: Configuration of firewall failed"
+            else:
+                os.chroot(buildroot)
+                lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % \
+                         string.join(args)
+                pyrpm.runScript(script=lokkit)
+                sys.exit(0)
+
+            try:
+                fd = open(buildroot+"/etc/sysconfig/system-config-securitylevel", "w")
+            except Exception, msg:
+                print "ERROR: Configuration of '/etc/sysconfig/system-config-securitylevel' failed:", msg
+            else:
+                fd.write('# Configuration file for system-config-securitylevel\n')
+                fd.write('\n')
+                for arg in args:
+                    fd.write('%s\n' % arg)
+                fd.close()
 
 # /etc/sysconfig/keyboard
 if ks["keyboard"]:
     print "Configuring keyboard"
     try:
         fd = open(buildroot+"/etc/sysconfig/keyboard", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/keyboard' failed: ", msg
+    else:
         fd.write('KEYBOARDTYPE="pc"\n')
         fd.write('KEYTABLE="%s"\n' % ks["keyboard"])
         fd.close()
-    except Exception, msg:
-        print "ERROR: Configuration of '/etc/sysconfig/keyboard' failed: ", msg
 
 # /etc/sysconfig/mouse
 print "Configuring generic IMPS/2 mouse"
-pid = os.fork()
-if pid != 0:
-    (rpid, status) = os.waitpid(pid, 0)
-    if status != 0:
-        print "ERROR: mouseconfig failed"
+if not os.path.exists(buildroot+"/usr/sbin/mouseconfig"):
+    print "ERROR: /usr/sbin/mouseconfig does not exist, skipping."
 else:
-    os.chroot(buildroot)
-    pyrpm.runScript(script="/usr/sbin/mouseconfig --noui genericwheelps/2")
-    sys.exit(0)
+    pid = os.fork()
+    if pid != 0:
+        (rpid, status) = os.waitpid(pid, 0)
+        if status != 0:
+            print "ERROR: mouseconfig failed"
+    else:
+        os.chroot(buildroot)
+        pyrpm.runScript(script="/usr/sbin/mouseconfig --noui genericwheelps/2")
+        sys.exit(0)
 
 # setup networking
 if ks["network"]:
     print "Configuring network"
     try:
         fd = open(buildroot+"/etc/sysconfig/network", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/network' failed:", msg
+    else:
         fd.write('NETWORKING=yes\n')
         if ks["network"].has_key("hostname"):
             fd.write('HOSTNAME=%s\n' % ks["network"]["hostname"])
@@ -1440,29 +2411,33 @@ if ks["network"]:
 #        if ks["network"].has_key("gateway"):
 #            fd.write('GATEWAY=%s\n' % ks["network"]["gateway"])
         fd.close()
-        if not os.path.exists(buildroot+"/etc/sysconfig/network-scripts"):
-            os.mkdir(buildroot+"/etc/sysconfig/network-scripts")
 
-        device = "eth0"
-        if ks["network"].has_key("device"):
-            device = ks["network"]["device"]
+    device = "eth0"
+    if ks["network"].has_key("device"):
+        device = ks["network"]["device"]
 
-        if device[:3] == "ctc":
-            type = "CTC"
-        elif device[:4] == "iucv":
-            type = "IUCV"
-        elif device[:2] == "tr":
-            type = '"Token Ring"'
-        else:
-            type = "Ethernet"
+    if device[:3] == "ctc":
+        type = "CTC"
+    elif device[:4] == "iucv":
+        type = "IUCV"
+    elif device[:2] == "tr":
+        type = '"Token Ring"'
+    else:
+        type = "Ethernet"
 
-        bootproto = "none"
-        if ks["network"]["bootproto"] and \
-               ks["network"]["bootproto"] != "static":
-            bootproto = ks["network"]["bootproto"]
+    bootproto = "none"
+    if ks["network"]["bootproto"] and \
+           ks["network"]["bootproto"] != "static":
+        bootproto = ks["network"]["bootproto"]
 
+    if not os.path.exists(buildroot+"/etc/sysconfig/network-scripts"):
+        os.mkdir(buildroot+"/etc/sysconfig/network-scripts")
+    try:
         fd = open(buildroot+"/etc/sysconfig/network-scripts/ifcfg-%s" % \
-                      ks["network"]["device"], "w")
+                  device, "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/sysconfig/network-scripts/ifcfg-%s' failed:" % device, msg
+    else:
         fd.write('DEVICE=%s\n' % device)
         fd.write('BOOTPROTO=%s\n' % bootproto)
         if ks["network"].has_key("gateway"):
@@ -1484,17 +2459,19 @@ if ks["network"]:
         fd.write('TYPE=%s\n' % type)
         fd.close()
 
-        if ks["network"].has_key("wepkey"):
+    if ks["network"].has_key("wepkey"):
+        try:
             fd = open(buildroot+"/etc/sysconfig/network-scripts/keys-%s" % \
                       ks["network"]["device"], "w")
+        except Exception, msg:
+            print "ERROR: Configuration of '/etc/sysconfig/network-scripts/keys-%s' failed:" % ks["network"]["device"], msg
+        else:
             fd.write('KEY=%s\n' % ks["network"]["wepkey"])
             fd.close()
-    except Exception, msg:
-        print "ERROR: Configuration of '/etc/sysconfig/network' failed:", msg
 
 # /etc/X11/xorg.conf
 if ks["xconfig"]:
-    print "Configuring xorg.conf"
+    print "Configuring X"
 
     # default: VGA graphics card, Generic extended super VGA monitor
     card = "Unknown video card"
@@ -1568,8 +2545,17 @@ if ks["xconfig"]:
     if ks["xconfig"].has_key("depth"):
         depth = ks["xconfig"]["depth"]
 
+
+    if install_version == "RHEL-3":
+        conf = "/etc/X11/XF86Config"
+    else:
+        conf = "/etc/X11/xorg.conf"
+
     try:
-        fd = open(buildroot+"/etc/X11/xorg.conf", "w")
+        fd = open(buildroot+conf, "w")
+    except Exception, msg:
+        print "ERROR: Configuration of '/etc/X11/xorg.conf' failed:", msg
+    else:
         fd.write('Section "ServerLayout"\n')
         fd.write('        Identifier   "Default Layout"\n')
         fd.write('        Screen       0 "Screen0" 0 0\n')
@@ -1604,7 +2590,10 @@ if ks["xconfig"]:
         fd.write('        Identifier   "Mouse0"\n')
         fd.write('        Driver       "mouse"\n')
         fd.write('        Option       "Protocol" "IMPS/2"\n')
-        fd.write('        Option       "Device" "/dev/input/mice"\n')
+        if install_version == "RHEL-3":
+            fd.write('        Option       "Device" "/dev/mouse"\n')
+        else:
+            fd.write('        Option       "Device" "/dev/input/mice"\n')
         fd.write('        Option       "ZAxisMapping" "4 5"\n')
         fd.write('        Option       "Emulate3Buttons" "no"\n')
         fd.write('EndSection\n\n')
@@ -1637,13 +2626,12 @@ if ks["xconfig"]:
         fd.write('                Modes    "%s"\n' % resolution)
         fd.write('        EndSubSection\n')
         fd.write('EndSection\n\n')
-        fd.write('Section "DRI"\n')
-        fd.write('        Group        0\n')
-        fd.write('        Mode         0666\n')
-        fd.write('EndSection\n')
+        if install_version != "RHEL-3":
+            fd.write('Section "DRI"\n')
+            fd.write('        Group        0\n')
+            fd.write('        Mode         0666\n')
+            fd.write('EndSection\n')
         fd.close()
-    except Exception, msg:
-        print "ERROR: Configuration of '/etc/X11/xorg.conf' failed:", msg
 
 # /etc/sysconfig/firstboot
 print "Configuring firstboot"
@@ -1651,23 +2639,25 @@ if ks["firstboot"]:
     if ks["firstboot"].has_key("reconfig"):
         try:
             fd = open(buildroot+"/etc/reconfigSys", "w")
-            fd.close()
         except Exception, msg:
             print "ERROR: Configuration of '/etc/reconfigSys' failed:", msg
+        else:
+            fd.close()
     if ks["firstboot"].has_key("disabled"):
         try:
             fd = open(buildroot+"/etc/sysconfig/firstboot", "w")
-            fd.write('RUN_FIRSTBOOT=NO\n')
-            fd.close()
         except Exception, msg:
             print "ERROR: Configuration of '/etc/syscofig/firstboot' failed:",\
                   msg
+        else:
+            fd.write('RUN_FIRSTBOOT=NO\n')
+            fd.close()
 
 # /boot/grub/grub.conf
 if ks["bootloader"] and not (ks["bootloader"].has_key("location") and \
                              ks["bootloader"]["location"] == "none"):
 
-    # TODO: password, md5pass, lba32, update
+    # TODO: update
     prefix = "/boot"
     dir = "/"
     have = "have"
@@ -1701,22 +2691,29 @@ if ks["bootloader"] and not (ks["bootloader"].has_key("location") and \
                          (partitionmap[mountmap[dir]]["id"] - 1))
 
     kernels = [ ]
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0:
-            print "ERROR: Installation failed, aborting."
-            exit(1)
+    if not os.path.exists(buildroot+"/bin/rpm"):
+        print "ERROR: Could determine installed kernels, /bin/rpm does not exist, skipping."
     else:
-        os.chroot(buildroot)
-        # TODO: better
-        pyrpm.runScript(script="rpm -qla 'kernel*' | grep /boot/vmlinuz | cut -d- -f2- >/tmp/installed-kernels 2>/dev/null")
-        sys.exit(0)
+        pid = os.fork()
+        if pid != 0:
+            (rpid, status) = os.waitpid(pid, 0)
+            if status != 0:
+                print "ERROR: Installation failed, aborting."
+                exit(1)
+        else:
+            os.chroot(buildroot)
+            # TODO: better
+            pyrpm.runScript(script="rpm -qla 'kernel*' | grep /boot/vmlinuz | cut -d- -f2- >/tmp/installed-kernels 2>/dev/null")
+            sys.exit(0)
 
+        try:
+            fd = open(buildroot+"/tmp/installed-kernels")
+        except Exception, msg:
+            print "ERROR: Failed to open '/tmp/installed-kernels':", msg
+        else:
+            kernels = fd.readlines()
+            fd.close()
 
-    fd = open(buildroot+"/tmp/installed-kernels")
-    kernels = fd.readlines()
-    fd.close()
     if len(kernels) < 1:
         print "ERROR: No kernels are installed."
         exit(1)
@@ -1735,32 +2732,43 @@ if ks["bootloader"] and not (ks["bootloader"].has_key("location") and \
            ks["bootloader"].has_key("upgrade"):
         print "Configuring grub"
 
-        fd = open(buildroot+"/boot/grub/grub.conf", "w")
-        fd.write('# grub.conf generated by pyrpmkickstart\n')
-        fd.write('#\n')
-        fd.write('# Note that you do not have to rerun grub after making changes to this file\n')
-        fd.write('# NOTICE:  You %s a /boot partition.  This means that\n' % have)
-        fd.write('#          all kernel and initrd paths are relative to %s/, eg.\n' % prefix)
-        fd.write('#          root (%s)\n' % hd_boot)
-        fd.write('#          kernel %s/vmlinuz-version ro root=/dev/%s\n' % \
-                 (prefix, mountmap["/"]))
-        fd.write('#          initrd %s/initrd-version.img\n' % prefix)
-        fd.write('#boot=/dev/%s\n' % location)
-        fd.write('default=0\n')
-        fd.write('timeout=5\n')
-        fd.write('splashimage=(%s)%s/grub/splash.xpm.gz\n' % (hd_boot,
-                                                              prefix))
-        # configure all kernels:
-        for kernel in kernels:
-            kernel = string.strip(kernel)
-            fd.write('title Fedora Core (%s)\n' % kernel)
-            fd.write('\troot (%s)\n' % hd_boot)
-            fd.write('\tkernel %s/vmlinuz-%s ro root=LABEL=%s%s\n' % \
-                     (prefix, kernel, partitionmap[mountmap["/"]]["label"],
-                      append))
-            fd.write('\tinitrd %s/initrd-%s.img\n' % (prefix, kernel))
+        try:
+            fd = open(buildroot+"/boot/grub/grub.conf", "w")
+        except Exception, msg:
+            print "ERROR: Configuration of '/boot/grub/grub.conf' failed:", msg
+        else:
+            fd.write('# grub.conf generated by pyrpmkickstart\n')
+            fd.write('#\n')
+            fd.write('# Note that you do not have to rerun grub after making changes to this file\n')
+            fd.write('# NOTICE:  You %s a /boot partition.  This means that\n' % have)
+            fd.write('#          all kernel and initrd paths are relative to %s/, eg.\n' % prefix)
+            fd.write('#          root (%s)\n' % hd_boot)
+            fd.write('#          kernel %s/vmlinuz-version ro root=/dev/%s\n' % \
+                     (prefix, mountmap["/"]))
+            fd.write('#          initrd %s/initrd-version.img\n' % prefix)
+            fd.write('#boot=/dev/%s\n' % location)
+            fd.write('default=0\n')
+            fd.write('timeout=5\n')
+            fd.write('splashimage=(%s)%s/grub/splash.xpm.gz\n' % (hd_boot,
+                                                                  prefix))
+            if ks["bootloader"].has_key("password"):
+                fd.write('password %s\n' % ks["bootloader"]["password"])
+            if ks["bootloader"].has_key("md5pass"):
+                fd.write('password --md5 %s\n' % ks["bootloader"]["md5pass"])
+            if ks["bootloader"].has_key("lba32"):
+                fd.write('lba32\n')
 
-        fd.close()
+            # configure all kernels:
+            for kernel in kernels:
+                kernel = string.strip(kernel)
+                fd.write('title Fedora Core (%s)\n' % kernel)
+                fd.write('\troot (%s)\n' % hd_boot)
+                fd.write('\tkernel %s/vmlinuz-%s ro root=LABEL=%s%s\n' % \
+                         (prefix, kernel, partitionmap[mountmap["/"]]["label"],
+                          append))
+                fd.write('\tinitrd %s/initrd-%s.img\n' % (prefix, kernel))
+
+            fd.close()
 
         buildroot_copy("/usr/share/grub/i386-redhat/stage1",
                        "/boot/grub/stage1")
@@ -1783,42 +2791,60 @@ if ks["bootloader"] and not (ks["bootloader"].has_key("location") and \
             devmap[partitionmap[part]["device"]] = tmpdev
             os.mknod(buildroot+tmpdev, stats.st_mode, stats.st_rdev)
 
-        fd = open(buildroot+"/tmp/grub-setup", "w")
-        fd.write('/sbin/grub --batch >/tmp/grub-setup.log <<EOF\n')
-        fd.write('device (fd0) /dev/fd0\n')
-        for disk in diskmap:
-            fd.write('device (%s) %s\n' % (hdmap[disk],
-                                           devmap[diskmap[disk]["device"]]))
-            if diskmap[disk].has_key("image"):
-                fd.write('geometry (%s) %d %d %d\n' % \
-                         (hdmap[disk],
-                          diskmap[disk]["disk"].dev.cylinders,
-                          diskmap[disk]["disk"].dev.heads,
-                          diskmap[disk]["disk"].dev.sectors))
-        fd.write('root (%s)\n' % hd_boot)
-        if hdmap.has_key(location):
-            hd = hdmap[location]
+        try:
+            fd = open(buildroot+"/boot/grub/devices.map", "w")
+        except Exception, msg:
+            print "ERROR: Configuration of '/boot/grub/devices.map' failed:", \
+                  msg
         else:
-            hd = "%s,%d" % (hdmap[diskName(location)],
-                            (partitionId(location)-1))
-        fd.write('setup (%s)\n' % hd)
-        fd.write('quit\n')
-        fd.write('EOF\n')
-        fd.close()
+            fd.write('(fd0) /dev/fd0\n')
+            for disk in diskmap:
+                fd.write('(%s) %s\n' % (hdmap[disk], disk))
+            fd.close()
 
-        pid = os.fork()
-        if pid != 0:
-            (rpid, status) = os.waitpid(pid, 0)
-            if status != 0:
-                print "ERROR: grub setup failed"
+        try:
+            fd = open(buildroot+"/tmp/grub-setup", "w")
+        except Exception, msg:
+            print "ERROR: Configuration of '/tmp/grub-setup' failed:", \
+                  msg
         else:
-            os.chroot(buildroot)
-            pyrpm.runScript(script="/bin/sh /tmp/grub-setup")
-            sys.exit(0)
+            fd.write('/sbin/grub --batch >/tmp/grub-setup.log <<EOF\n')
+            for disk in diskmap:
+                fd.write('device (%s) %s\n' % (hdmap[disk],
+                                               devmap[diskmap[disk]["device"]]))
+                if diskmap[disk].has_key("image"):
+                    fd.write('geometry (%s) %d %d %d\n' % \
+                             (hdmap[disk],
+                              diskmap[disk]["cylinders"],
+                              diskmap[disk]["heads"],
+                              diskmap[disk]["sectors"]))
+            fd.write('root (%s)\n' % hd_boot)
+            if hdmap.has_key(location):
+                hd = hdmap[location]
+            else:
+                try:
+                    hd_name = getName(location)
+                    id = getId(location)
+                except:
+                    print "ERROR: Failed to get id for '%s'" % location
+                hd = "%s,%d" % (hdmap[hd_name], (id-1))
+            fd.write('setup (%s)\n' % hd)
+            fd.write('quit\n')
+            fd.write('EOF\n')
+            fd.close()
 
-        # TODO: remove temporary devices
-        for dev in devmap:
-            os.unlink(buildroot+devmap[dev])
+            if not os.path.exists(buildroot+"/sbin/grub"):
+                print "ERROR: /sbin/grub does not exist, skipping."
+            else:
+                pid = os.fork()
+                if pid != 0:
+                    (rpid, status) = os.waitpid(pid, 0)
+                    if status != 0:
+                        print "ERROR: grub setup failed"
+                else:
+                    os.chroot(buildroot)
+                    pyrpm.runScript(script="/bin/sh /tmp/grub-setup")
+                    sys.exit(0)
 
 # run post script
 if ks["post"] and len(ks["post"]["script"]) > 0:
@@ -1842,6 +2868,9 @@ if xen:
     print "Writing xen.conf"
     try:
         fd = open("xen.conf", "w")
+    except Exception, msg:
+        print "ERROR: Configuration of 'xen.conf' failed:", msg
+    else:
         fd.write('kernel = "/boot/vmlinuz-VERSION"\n')
         fd.write('ramdisk = "/boot/initrd-VERSION.img"\n')
         fd.write('memory = 128\n')
@@ -1858,17 +2887,6 @@ if xen:
         fd.write('root = "/dev/sda1"\n')
         fd.write('extra = "ro"\n')
         fd.close()
-    except Exception, msg:
-        print "ERROR: Configuration of 'xen.conf' failed:", msg
 
 # cleanup
 exit(0)
-
-##############################################################################
-
-"""
-########################## TODO ##########################
-
-/etc/modprobe.conf
-/boot/grub/grub.conf
-"""
