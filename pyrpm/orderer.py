@@ -17,8 +17,69 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-""" The Orderer
-...
+"""
+The RpmOrderer
+--------------
+
+The orderer gets lists of packages, which have to get installed, the list of 
+updates, the obsoletes and the erases from a previous running RpmResolver. 
+With these lists, the orderer is feeding a resolver. The orderer is looking 
+only at the changes for a installation. The packages, which will be the same 
+before and after the installation, update or erase, have no effect on the 
+ordering of the changes. The ordering is first done for the installes and 
+then for the erases in reverse order. Two packages A and B where both get 
+erased and package A has a erase dependency on package B, package B has to 
+get removed before package A.
+
+At first, the orderer is creating a relation structure, where a relation 
+describes the dependance of a package from another. This relation structure 
+is a dependency tree. There are two kinds of relations: soft and hard. A soft 
+relation is a normal dependency, which has to be solved after package 
+installation at runtime. The hard relation is a pre requirement, which has to 
+be solved before the dependant package gets installed. For the ordering 
+process, there is an additional sub-kind: virtual. When there is a loop of 
+relations, it has to get broken up. If a loop gets broken up, the orderer has 
+to take care, that removed relations do not drop away. If package A has a 
+relation to package B and this relation has to get removed to breakup a loop, 
+this relation is transfered to all packages which have a relation to A. A 
+virtual relation can be either soft or hard, like a normal relation, 
+depending on the removed relation from A to B and the relation from C to A. 
+If both relations are hard, the virtual relation also becomes hard. 
+
+The second stage is the ordering. At first all post leaf nodes in the relation 
+tree are moved to a new list. A post leaf node is a package, which has no 
+dependant packages. This is done, till there are no more post leaf nodes. The 
+order of the moved packages is important. Here is an exmaple: A -> B -> C -> D
+Package A depends on package B, which depends on C and so on. At first package 
+A gets moved to the list, then B, then C and at least D. If there are no more 
+leaf nodes and the tree is not empty, there have to be loops in the tree. This 
+does not mean that there are only loops, there can be lots of packages in 
+there, which require a package, which is part of a loop. If the tree is empty, 
+the ordering is done, but if there are any, then these loops has to get broken 
+up. The simplest loop is that package A depends on package B and package B 
+depends on package A. If both relations are soft (a soft loop), the one which 
+is part of the most loops gets removed, if both have the same count, the fist 
+is used. If one is hard and the other one soft, the soft relation is the one, 
+but if both are hard (a hard loop), one of them has to get dropped. This loop 
+will be broken up like a soft loop. A hard loop is a bad thing and should 
+never happen, but it could. A hard loop is a result of packaging problems. The 
+breakup of a virtual relation has priority to breaking up any other relation 
+and is done according to the same rules of hard and soft relations.
+When all loops are detected, these loops get sorted according to the number of 
+relations from other packages in the relation tree to all nodes in the loop. 
+The loop with the most dependant packages gets on top of that list. This loop 
+is the one, which gets broken up, because it might free most other dependant 
+packages. 
+
+The third stage is to generate an opertion list with the ordered packages and 
+which takes the updates and obsoletes list into consideration. The operation 
+list is a list of tupels, where each tupel is of the form (operation, package).
+The operation is either "install", "update" or "erase". 
+For a package, which gets updated, and which is in the update or obsolete list 
+(which is an update for one or more installed packages or which obsoletes one 
+or more installed packages) an orderer is generated to order all the packages, 
+which get removed according to the updates and obsoletes list. The package 
+itself is put into the operation list and then the corresponding erases. 
 """
 
 from hashlist import HashList
