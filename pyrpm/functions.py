@@ -1286,13 +1286,17 @@ def buildPkgRefDict(pkgs):
         nva = "%s.%s" % (nv, a)
         nvr = "%s-%s" % (nv, r)
         nvra = "%s.%s" % (nvr, a)
-        en = "%s:%s" % (e, n)
-        ena = "%s:%s" % (e, na)
-        env = "%s:%s" % (e, nv)
-        enva = "%s:%s" % (e, nva)
-        envr = "%s:%s" % (e, nvr)
-        envra = "%s:%s" % (e, nvra)
-        for item in (n, na, nv, nva, nvr, nvra, en, ena, env, enva, envr, envra):
+# Temorarily disabled the epoch prefixed stuff as excludes like "[!g]*.i686"
+# will otherwise fail miserably as they will match 0:glibc-XYZ.i686 :) 
+# We need to enforce the nevra variant here as well
+#        en = "%s:%s" % (e, n)
+#        ena = "%s:%s" % (e, na)
+#        env = "%s:%s" % (e, nv)
+#        enva = "%s:%s" % (e, nva)
+#        envr = "%s:%s" % (e, nvr)
+#        envra = "%s:%s" % (e, nvra)
+#        for item in (n, na, nv, nva, nvr, nvra, en, ena, env, enva, envr, envra):
+        for item in (n, na, nv, nva, nvr, nvra):
             pkgdict.setdefault(item, []).append(pkg)
     return pkgdict
 
