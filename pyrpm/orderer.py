@@ -41,10 +41,11 @@ process, there is an additional sub-kind: virtual. When there is a loop of
 relations, it has to get broken up. If a loop gets broken up, the orderer has 
 to take care, that removed relations do not drop away. If package A has a 
 relation to package B and this relation has to get removed to breakup a loop, 
-this relation is transfered to all packages which have a relation to A. A 
-virtual relation can be either soft or hard, like a normal relation, 
-depending on the removed relation from A to B and the relation from C to A. 
-If both relations are hard, the virtual relation also becomes hard. 
+this relation is transferred to all packages which have a relation to A as a
+virtual relation. A virtual relation can be either soft or hard, like a
+normal relation, depending on the removed relation from A to B and the
+relation from C to A. If both relations are hard, the virtual relation also
+becomes hard. 
 
 The second stage is the ordering. At first all post leaf nodes in the relation 
 tree are moved to a new list. A post leaf node is a package, which has no 
