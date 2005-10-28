@@ -1,4 +1,5 @@
-scripts = oldpyrpm.py pyrpmcheck pyrpmcheckrepo pyrpmcreaterepo \
+scripts = oldpyrpm.py pyrpmcheck pyrpmcheckrepo pyrpmcreatefilereq \
+	pyrpmcreaterepo \
 	pyrpmdbverify pyrpminstall pyrpmkickstart pyrpmrandomizer \
 	pyrpmrebuilddb pyrpmspecinfo pyrpmyum
 EXTRA_DIST = $(scripts)
