@@ -107,9 +107,6 @@ try:
 except:
     print "libxml2 is not imported, do not try to use repodata."
 
-EXTRACT_SOURCE_FOR = [ "anaconda", "anaconda-help", "basesystem", "chkconfig",
-                       "dmraid", "firstboot", "hwdata", "kudzu", "mkinitrd", ]
-
 if sys.version_info < (2, 3):
     from types import StringType
     basestring = StringType
@@ -1365,6 +1362,9 @@ class ReadRpm:
         #self.hdr = header parsed as HdrIndex()
         #self.hdrdatasize = size of header
 
+    def __repr__(self):
+        return self.getFilename()
+
     def printErr(self, err):
         print "%s: %s" % (self.filename, err)
 
@@ -2583,6 +2583,7 @@ def depString(name, flag, version):
         op += "="
     return "%s %s %s" % (name, op, version)
 
+
 class DepList:
 
     def __init__(self):
@@ -2624,13 +2625,17 @@ class DepList:
 
 class RpmResolver:
 
-    def __init__(self):
+    def __init__(self, rpms=None):
         self.filenames_list = FilenamesList()
         self.provides_list = DepList()
         self.obsoletes_list = DepList()
         self.conflicts_list = DepList()
         self.requires_list = DepList()
         self.cache = {}
+        if rpms:
+            for r in rpms:
+                if not r.issrc:
+                    self.addPkg(r)
 
     def addPkg(self, pkg):
         self.filenames_list.addPkg(pkg)
@@ -2649,6 +2654,397 @@ class RpmResolver:
             s += self.filenames_list.search(name)
         self.cache[key] = s
         return s
+
+    def getPkgDependencies(self, pkg, getconfigreq=None):
+        unresolved = []
+        resolved = []
+        for u in pkg.getRequires():
+            if u[0].startswith("rpmlib("): # drop rpmlib requirements
+                continue
+            if not getconfigreq and u[0].startswith("config("):
+                continue
+            s = self.searchDependency(*u)
+            # prefer self dependencies if there are others, too
+            #if len(s) > 1 and pkg in s:
+            #    s = [pkg]
+            if not s:
+                unresolved.append(u)
+            else:
+                resolved.append((u, s))
+        return (unresolved, resolved)
+
+    def getPkgDepResolved(self, pkg):
+        resolved = []
+        for u in pkg.getRequires():
+            name = u[0]
+            if name.startswith("rpmlib(") or name.startswith("config("):
+                continue
+            s = self.searchDependency(*u)
+            if s:
+                resolved.append((u, s))
+        return resolved
+
+
+SOFT    = 0 # normal requirement
+HARD    = 1 # prereq == hard requirement
+VIRTUAL = 2 # added by _dropRelation
+
+class Relation:
+    """Pre and post relations for a package."""
+
+    def __init__(self):
+        self.pre = {}       # RpmPackage => flag
+        self.post = {}      # RpmPackage => 1 or VIRTUAL (value is not used)
+
+class Relations:
+    """List of relations for each package (a dependency graph)."""
+
+    def __init__(self, rpms):
+        self.list = HashList()          # RpmPackage => Relation
+        self.__len__ = self.list.__len__
+        self.__getitem__ = self.list.__getitem__
+        self.has_key = self.list.has_key
+        for pkg in rpms:
+            self.list[pkg] = Relation()
+        # RpmPackage =>
+        # [list of required RpmPackages that were dropped to break a loop]
+        self.dropped_relations = {}
+
+    def removeRelation(self, pkg):
+        """Remove RpmPackage pkg from the dependency graph."""
+        rel = self.list[pkg]
+        # remove all post relations for the matching pre relation packages
+        for r in rel.pre:
+            del self.list[r].post[pkg]
+        # remove all pre relations for the matching post relation packages
+        for r in rel.post:
+            del self.list[r].pre[pkg]
+        del self.list[pkg]
+
+    def separatePostLeafNodes(self, last):
+        """Move topologically sorted "trailing" packages from
+        relations to start of last. Stop when each remaining package has
+        successor (implies a dependency loop)."""
+        # This is O(N * M * hash lookup), can be O(M * hash lookup)
+        while len(self):
+            i = 0
+            found = 0
+            while i < len(self):
+                pkg = self[i]
+                if len(self[pkg].post) == 0:
+                    last.insert(0, pkg)
+                    self.removeRelation(pkg)
+                    found = 1
+                else:
+                    i += 1
+            if found == 0:
+                break
+
+    def getNextLeafNode(self):
+        """Return a node which has no predecessors and on which
+        depend the maximum possible number of other nodes."""
+        # Without the requirement of max(rel.pre) this could be O(1)
+        next = None
+        next_post_len = -1
+        for pkg in self:
+            rel = self[pkg]
+            if len(rel.pre) == 0 and len(rel.post) > next_post_len:
+                next = pkg
+                next_post_len = len(rel.post)
+        if next != None:
+            self.removeRelation(next)
+        return next
+
+    def _detectLoops(self, path, pkg, loops, used):
+        """Do a DFS walk from RpmPackage pkg, add discovered loops to loops.
+        The list of RpmPackages path contains the path from the search root to
+        the current package.  loops is a list of RpmPackage tuples, each tuple
+        contains a loop.  Use hash used (RpmPackage => 1) to mark visited
+        nodes.
+        The tuple in loops starts and ends with the same RpmPackage.  The
+        nodes in the tuple are in reverse dependency order (B is in
+        relations[A].pre)."""
+        used[pkg] = 1
+        for p in self[pkg].pre:
+            # "p in path" is O(N), can be O(1) with another hash.
+            if p in path:
+                w = path[path.index(p):] # make shallow copy of loop
+                w.append(pkg)
+                w.append(p)
+                loops.append(tuple(w))
+            else:
+                w = path[:] # make shallow copy of path
+                w.append(pkg)
+                if not used.has_key(p):
+                    self._detectLoops(w, p, loops, used)
+                # or just path.pop() instead of making a copy?
+
+    def detectLoops(self):
+        """Return a list of loops.
+        Each loop is represented by a tuple in reverse dependency order,
+        starting and ending with the same RpmPackage.  The loops each differ
+        in at least one package, but one package can be in more than one loop
+        (e.g. ABA, ACA)."""
+        loops = []
+        used = {}
+        for pkg in self:
+            if not used.has_key(pkg):
+                self._detectLoops([], pkg, loops, used)
+        return loops
+
+    def genCounter(self, loops):
+        """Count number of times each arcs/edge is represented in the list of
+        loop tuples loops.
+        Return a HashList: RpmPackage A =>
+        HashList: RpmPackage B => number of loops in which A requires B."""
+        counter = HashList()
+        for loop in loops:
+            for j in xrange(len(loop) - 1):
+                # first and last pkg are the same, use once
+                node = loop[j]
+                next = loop[j + 1]
+                if node not in counter:
+                    counter[node] = HashList()
+                if next not in counter[node]:
+                    counter[node][next] = 1
+                else:
+                    counter[node][next] += 1
+        return counter
+
+    def _breakupLoop(self, counter, loop, hard=0):
+        """Remove an arc/edge in loop. Return 1 on success, 0 if no arc to
+        break was found.  Use counter from genCounter. Remove hard arcs
+        only if hard."""
+        virt_max_count_node = None
+        virt_max_count_next = None
+        virt_max_count = 0
+        max_count_node = None
+        max_count_next = None
+        max_count = 0
+        for j in xrange(len(loop) - 1):
+            # first and last node (package) are the same
+            node = loop[j]
+            next = loop[j + 1]
+            # if hard==0 skip HARD requirements
+            if not hard and (self[node].pre[next] & HARD):
+                continue
+            if self[node].pre[next] & VIRTUAL:
+                if virt_max_count < counter[node][next]:
+                    virt_max_count_node = node
+                    virt_max_count_next = next
+                    virt_max_count = counter[node][next]
+            else:
+                if max_count < counter[node][next]:
+                    max_count_node = node
+                    max_count_next = next
+                    max_count = counter[node][next]
+        # prefer to drop virtual relation
+        if virt_max_count_node:
+            self._dropRelation(virt_max_count_node, virt_max_count_next)
+            return 1
+        elif max_count_node:
+            self._dropRelation(max_count_node, max_count_next)
+            return 1
+        return 0
+
+    def _dropRelation(self, node, next):
+        """Drop the "RpmPackage node requires RpmPackage next" arc, this
+        requirement appears count times in current loops.
+        To preserve X->node->next, try to add virtual arcs X->next."""
+        hard = (self[node].pre[next] & HARD)
+        del self[node].pre[next]
+        del self[next].post[node]
+        self.dropped_relations.setdefault(node, []).append(next)
+        # add virtual relation to make sure, that next is
+        # installed before p if the relation was not kicked before
+        for p in self[node].post:
+            if p == next or p == node:
+                continue
+            if p in self.dropped_relations and \
+                next in self.dropped_relations[p]:
+                continue
+            if not next in self[p].pre:
+                req = SOFT
+                if hard and (self[p].pre[node] & HARD):
+                    req = HARD
+                self[p].pre[next] = VIRTUAL | req
+            if not p in self[next].post:
+                self[next].post[p] = VIRTUAL
+
+    def breakupLoop(self, loops, loop):
+        """Remove an arc from loop tuple loop in loops from orderer.Relations
+        relations.
+        Return 1 on success, 0 on failure."""
+        counter = self.genCounter(loops)
+        # breakup soft loop
+        if self._breakupLoop(counter, loop, hard=0):
+            return 1
+        # breakup hard loop; should never fail
+        return self._breakupLoop(counter, loop, hard=1)
+
+    def sortLoops(self, loops):
+        """Return a copy loop tuple list loops from order.Relations relations,
+        ordered by decreasing preference to break them."""
+        # FIXME: We really want only the maximum, not a sorted list.
+        loop_nodes = []                # All nodes in loops; should be a hash?
+        for loop in loops:
+            for j in xrange(len(loop) - 1):
+                # first and last pkg are the same, use once
+                pkg = loop[j]
+                if not pkg in loop_nodes:
+                    loop_nodes.append(pkg)
+        # loop => number of packages required from other loops
+        loop_relations = {}
+        loop_requires = {} # loop => number of packages requiring the loop
+        for loop in loops:
+            loop_relations[loop] = 0
+            loop_requires[loop] = 0
+            for j in xrange(len(loop) - 1):
+                # first and last pkg are the same, use once
+                pkg = loop[j]
+                for p in self[pkg].pre:
+                    if p in loop_nodes and p not in loop:
+                        # p is not in own loop, but in an other loop
+                        loop_relations[loop] += 1
+                for p in self[pkg].post:
+                    if p not in loop:
+                        # p is not in own loop, but in an other loop
+                        loop_requires[loop] += 1
+        mysorted = []
+        for loop in loop_relations:
+            for i in xrange(len(mysorted)):
+                if (loop_relations[loop] < loop_relations[mysorted[i]]) or \
+                       (loop_relations[loop] == loop_relations[mysorted[i]] and \
+                        loop_requires[loop] > loop_requires[mysorted[i]]):
+                    mysorted.insert(i, loop)
+                    break
+            else:
+                mysorted.append(loop)
+        return mysorted
+
+    def _genOrder(self):
+        """Order rpms in orderer.Relations relations.
+        Return an ordered list of RpmPackage's on success, None on error."""
+        order = []
+        last = []
+        while len(self):
+            # remove and save all packages without a post relation in reverse
+            # order
+            # these packages will be appended later to the list
+            self.separatePostLeafNodes(last)
+            if len(self) == 0:
+                break
+            next = self.getNextLeafNode()
+            if next != None:
+                order.append(next)
+            else:
+                loops = self.detectLoops()
+                if len(loops) < 1: # raise AssertionError ?
+                    return None
+                sorted_loops = self.sortLoops(loops)
+                if self.breakupLoop(loops, sorted_loops[0]) != 1:
+                    return None
+        return order + last
+
+
+OP_INSTALL = "install"
+OP_UPDATE = "update"
+OP_ERASE = "erase"
+OP_FRESHEN = "freshen"
+
+def operationFlag(flag, operation):
+    """Return dependency flag for RPMSENSE_* flag during operation."""
+    if isLegacyPreReq(flag) or \
+           (operation == OP_ERASE and isErasePreReq(flag)) or \
+           (operation != OP_ERASE and isInstallPreReq(flag)):
+        return HARD
+    return SOFT
+
+class RpmOrderer:
+
+    def __init__(self, installs, updates, obsoletes, erases, resolver):
+        """Initialize.
+        installs is a list of added RpmPackage's
+        erases a list of removed RpmPackage's (including updated/obsoleted)
+        updates is a hash: new RpmPackage => ["originally" installed RpmPackage
+        	removed by update]
+        obsoletes is a hash: new RpmPackage => ["originally" installed
+        	RpmPackage removed by update]"""
+        self.installs = installs
+        self.updates = updates
+        self.obsoletes = obsoletes
+        self.erases = erases
+        # Only explicitly removed packages, not updated/obsoleted
+        for pkg in self.updates:
+            for p in self.updates[pkg]:
+                if p in self.erases:
+                    self.erases.remove(p)
+        for pkg in self.obsoletes:
+            for p in self.obsoletes[pkg]:
+                if p in self.erases:
+                    self.erases.remove(p)
+        self.resolver = resolver
+
+    def _genEraseOps(self, list):
+        """Return a list of (operation, RpmPackage) for erasing RpmPackage's
+        in list."""
+        if len(list) == 1:
+            return [(OP_ERASE, list[0])]
+        return RpmOrderer([], {}, {}, list, self.resolver).order()
+
+    def genOperations(self, order):
+        """Return a list of (operation, RpmPackage) tuples from ordered list of
+        RpmPackage's order."""
+        operations = []
+        for r in order:
+            if r in self.erases:
+                operations.append((OP_ERASE, r))
+            else:
+                if r in self.updates:
+                    op = OP_UPDATE
+                else:
+                    op = OP_INSTALL
+                operations.append((op, r))
+                if r in self.obsoletes:
+                    operations.extend(self._genEraseOps(self.obsoletes[r]))
+                if r in self.updates:
+                    operations.extend(self._genEraseOps(self.updates[r]))
+        return operations
+
+    def genRelations(self, rpms, operation):
+        """Return orderer.Relations between RpmPackage's in list rpms for
+        operation."""
+        relations = Relations(rpms)
+        for pkg in rpms:
+            resolved = self.resolver.getPkgDepResolved(pkg)
+            for ((name, flag, version), s) in resolved:
+                if pkg in s: # ignore deps resolved also by itself
+                    continue
+                f = operationFlag(flag, operation)
+                i = relations.list[pkg]
+                for pre in s:
+                    # prefer hard requirements, do not overwrite with soft req
+                    if (f & HARD) or pre not in i.pre:
+                        i.pre[pre] = f
+                        relations.list[pre].post[pkg] = 1
+        return relations
+
+    def order(self):
+        order = []
+        if self.installs:
+            relations = self.genRelations(self.installs, OP_INSTALL)
+            order2 = relations._genOrder()
+            if order2 == None:
+                return None
+            order.extend(order2)
+        if self.erases:
+            relations = self.genRelations(self.erases, OP_ERASE)
+            order2 = relations._genOrder()
+            if order2 == None:
+                return None
+            order2.reverse()
+            order.extend(order2)
+        return self.genOperations(order)
 
 
 def cmpByTime(a, b):
@@ -4182,6 +4578,15 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
     if "sources" in files or "Makefile" in files:
         raise ValueError, \
             "src.rpm contains sources/Makefile: %s" % pkg.filename
+    EXTRACT_SOURCE_FOR = ["MAKEDEV", "anaconda", "anaconda-help",
+        "anaconda-product", "basesystem", "booty", "chkconfig",
+        "device-mapper", "dmraid", "firstboot", "glibc-kernheaders", "hwdata",
+        "initscripts", "iscsi-initiator-utils", "kudzu", "mkinitrd",
+        "pam_krb5", "passwd", "redhat-config-kickstart",
+        "redhat-config-netboot", "redhat-config-network",
+        "redhat-config-securitylevel", "rhn-applet", "rhnlib", "rhpl",
+        "sysklogd", "system-config-printer", "system-config-securitylevel",
+        "tux", "udev"]
     sources = []
     if filecache:
         for i in xrange(len(files)):
@@ -4290,10 +4695,7 @@ def createMercurial():
 
 def checkDeps(rpms):
     # Add all packages in.
-    resolver = RpmResolver()
-    for pkg in rpms:
-        if not pkg.issrc:
-            resolver.addPkg(pkg)
+    resolver = RpmResolver(rpms)
     # Check for obsoletes.
     for name in resolver.obsoletes_list.deps.keys():
         for (flag, version, rpm) in resolver.obsoletes_list.deps[name]:
@@ -4343,6 +4745,13 @@ def checkDeps(rpms):
                         continue
                     print "fileconflict for", dirname + basename, "in", \
                         rpm1.getFilename(), "and", rpm2.getFilename()
+    # Order rpms on how they get installed.
+    if None:
+        orderer = RpmOrderer(rpms, {}, {}, [], resolver)
+        operations = orderer.order()
+        if operations == None:
+            raise
+        #print operations
 
 
 def verifyStructure(verbose, packages, phash, tag, useidx=1):
