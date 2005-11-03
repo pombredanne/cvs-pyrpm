@@ -1286,9 +1286,15 @@ def buildPkgRefDict(pkgs):
         nva = "%s.%s" % (nv, a)
         nvr = "%s-%s" % (nv, r)
         nvra = "%s.%s" % (nvr, a)
+        nev = "%s-%s:%s" % (n, e, v)
+        neva = "%s.%s" % (nev, a)
+        nevr = "%s-%s" % (nev, r)
+        nevra = "%s.%s" % (nevr, a)
 # Temorarily disabled the epoch prefixed stuff as excludes like "[!g]*.i686"
 # will otherwise fail miserably as they will match 0:glibc-XYZ.i686 :) 
-# We need to enforce the nevra variant here as well
+# We need to enforce the nevra variant here as well.
+# Fixed now with support of epoch inside of the name just as we use it every-
+# where internally.
 #        en = "%s:%s" % (e, n)
 #        ena = "%s:%s" % (e, na)
 #        env = "%s:%s" % (e, nv)
@@ -1296,10 +1302,13 @@ def buildPkgRefDict(pkgs):
 #        envr = "%s:%s" % (e, nvr)
 #        envra = "%s:%s" % (e, nvra)
 #        for item in (n, na, nv, nva, nvr, nvra, en, ena, env, enva, envr, envra):
-        for item in (n, na, nv, nva, nvr, nvra):
+        for item in (n, na, nv, nva, nvr, nvra, nev, neva, nevr, nevra):
             pkgdict.setdefault(item, []).append(pkg)
     return pkgdict
 
+
+# Use precompiled regex for faster checks
+__fnmatchre__ = re.compile(".*[\*\[\]\{\}\?].*")
 def findPkgByNames(pkgnames, pkgs):
     """Return a list of RpmPackage's from pkgs matching pkgnames.
 
@@ -1313,7 +1322,7 @@ def findPkgByNames(pkgnames, pkgs):
     for pkgname in pkgnames:
         if pkgdict.has_key(pkgname):
             pkglist.extend(pkgdict[pkgname])
-        elif re.match(".*[\*\[\]\{\}\?].*", pkgname):
+        elif __fnmatchre__.match(pkgname):
             restring = fnmatch.translate(pkgname)
             regex = re.compile(restring)
             for item in pkgdict.keys():

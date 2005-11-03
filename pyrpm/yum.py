@@ -238,7 +238,16 @@ class RpmYum:
                 if self.command.endswith("remove"):
                     self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgList()))
                 else:
-                    self.pkgs.extend(findPkgByNames([f,], repopkglist))
+                    # Nice trick to support yum update /usr/bin/foo ;)
+                    if f[0] == '/':
+                        pkg_list = []
+                        for resolver in self.resolvers:
+                            pkg_list.extend(resolver.searchDependency((f, 0, "")))
+                        orderList(pkg_list, self.config.machine)
+                        # We only add the first package where we find that file
+                        self.pkgs.append(pkg_list[0])
+                    else:
+                        self.pkgs.extend(findPkgByNames([f,], repopkglist))
                     if len(self.pkgs) == 0:
                         self.config.printError("Couldn't find package %s, skipping" % f)
         if self.config.timer:
