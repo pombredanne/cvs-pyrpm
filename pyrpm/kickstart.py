@@ -27,7 +27,7 @@ class KickstartConfig(dict):
     REQUIRED_TAGS = [ "authconfig", "bootloader", "keyboard", "lang",
                       "langsupport", "rootpw", "timezone" ]
     # Currently unsupported tags:
-    # driverdisk, logvol, raid, xconfig, volgroup
+    # driverdisk, logvol, raid, volgroup
 
 
     def __init__(self, filename):
@@ -69,7 +69,7 @@ class KickstartConfig(dict):
             if len(line) < 1: continue
             if line[0] == '#': continue
 
-            args = noquote_split(line)
+            args = KickstartConfig.noquote_split(line)
             opt = args[0]
 
             if opt == "%packages":
@@ -116,7 +116,7 @@ class KickstartConfig(dict):
                     if opt in [ "autopart", "autostep", "cdrom", "cmdline",
                                 "install", "interactive", "reboot", "skipx",
                                 "text", "upgrade", "mouse" ]:
-                        self[opt] = None
+                        self[opt] = 1
                     else:
                         print "'%s' is unsupported" % line
                     continue
@@ -170,7 +170,7 @@ class KickstartConfig(dict):
                     if self[opt]:
                         raise ValueError, "%s already set." % opt
 
-                    (_opts, _args) = getopt(args[1:], "",
+                    (_opts, _args) = KickstartConfig.getopt(args[1:], "",
                                             [ "enabled", "enable",
                                               "disabled", "disable", "trust:",
                                               "ssh", "telnet", "smtp",
@@ -182,9 +182,9 @@ class KickstartConfig(dict):
                         if replace_tags and replace_tags.has_key(_opt):
                             _opt = replace_tags[_opt]
                         if _opt == "--enabled" or _opt == "--enable":
-                            self[opt]["enabled"] = None
+                            self[opt]["enabled"] = 1
                         elif _opt == "--disabled" or _opt == "--disable":
-                            self[opt]["disabled"] = None
+                            self[opt]["disabled"] = 1
                         elif _opt == "--trust" and _val:
                             if not self[opt].has_key("trust"):
                                self[opt]["trusted"] = [ ]
@@ -204,7 +204,7 @@ class KickstartConfig(dict):
                             elif _opt == "--http":
                                 self[opt]["ports"].append([80,"tcp"])
                         elif _opt == "--port":
-                            _vals = noquote_split(_val, ",")
+                            _vals = KickstartConfig.noquote_split(_val, ",")
                             for v in _vals:
                                 if not self[opt].has_key("ports"):
                                     self[opt]["ports"] = [ ]
@@ -327,7 +327,8 @@ class KickstartConfig(dict):
         if not self.has_key("install") and self.has_key("update"):
             raise ValueError, "ERROR: No operation defined"
 
-        if self.has_key("install") and not self.has_key("partition"):
+        if self.has_key("install") and not self.has_key("partition") and \
+               not self.has_key("autopart"):
             raise ValueError, \
                   "ERROR: Partition has to be set for an installation."
 
@@ -429,7 +430,7 @@ class KickstartConfig(dict):
 
     def parseArgs(self, tag, argv, allowed_args, replace_tags=None):
         dict = { }
-        (opts, args) = getopt(argv, "", allowed_args)
+        (opts, args) = KickstartConfig.getopt(argv, "", allowed_args)
 
         for (opt, val) in opts:
             if replace_tags and replace_tags.has_key(opt[2:]):
@@ -441,7 +442,7 @@ class KickstartConfig(dict):
                     o = opt[2:]
                 dict[o] = self.stripQuotes(val)
             else:
-                dict[opt[2:]] = None
+                dict[opt[2:]] = 1
 
         return (dict, args)
 
@@ -474,126 +475,136 @@ class KickstartConfig(dict):
                 var = var[1:-1]
         return var
 
-################################## functions ##################################
+    ############################ static functions ############################
 
-# To combine option and value in longopts:
-#   "opt=" for --opt=val
-#   "opt:" for --opt val or --opt=val
-def getopt(args, shortopts, longopts=[ ]):
-    _shortopts = { }
-    _longopts = { }
-    _opts = [ ]
-    _args = args[:]
+    # To combine option and value in longopts:
+    #   "opt=" for --opt=val
+    #   "opt:" for --opt val or --opt=val
+    def getopt(args, shortopts, longopts=[ ]):
+        _shortopts = { }
+        _longopts = { }
+        _opts = [ ]
+        _args = args[:]
 
-    for i in xrange(len(shortopts)):
-        opt = shortopts[i]
-        if i < len(shortopts) - 1 and shortopts[i+1] == ":":
-            _shortopts[opt] = ":"
-            i += 1
-        else:
-            _shortopts[opt] = None
+        for i in xrange(len(shortopts)):
+            opt = shortopts[i]
+            if i < len(shortopts) - 1 and shortopts[i+1] == ":":
+                _shortopts[opt] = ":"
+                i += 1
+            else:
+                _shortopts[opt] = None
 
-    for opt in longopts:
-        if len(opt) < 1:
-            raise ValueError, "Invalid options"
-        if opt[-1] == "=" or opt[-1] == ":":
-            _longopts[opt[0:-1]] = opt[-1]
-        else:
-            _longopts[opt] = None
+        for opt in longopts:
+            if len(opt) < 1:
+                raise ValueError, "Invalid options"
+            if opt[-1] == "=" or opt[-1] == ":":
+                _longopts[opt[0:-1]] = opt[-1]
+            else:
+                _longopts[opt] = None
 
-    idx = 0
-    while len(_args) > idx:
-        arg = _args[idx]
+        idx = 0
+        while len(_args) > idx:
+            arg = _args[idx]
 
-        if arg[0:2] == "--": # longopts
-            a = arg[2:]
-            if a in _longopts:
-                if not _longopts[a]:
-                    _opts.append((arg, None))
-                    _args.pop(idx)
-                    continue
-                elif _longopts[a] == ":":
-                    if len(args) > 1:
+            if arg[0:2] == "--": # longopts
+                a = arg[2:]
+                if a in _longopts:
+                    if not _longopts[a]:
+                        _opts.append((arg, None))
                         _args.pop(idx)
-                        val = _args.pop(idx)
-                        _opts.append((arg, val))
                         continue
-                    else:
-                        raise ValueError, "Missing value for '%s'" % arg
+                    elif _longopts[a] == ":":
+                        if len(args) > 1:
+                            _args.pop(idx)
+                            val = _args.pop(idx)
+                            _opts.append((arg, val))
+                            continue
+                        else:
+                            raise ValueError, "Missing value for '%s'" % arg
 
-            i = arg.find("=")
-            if i > 0: # found '='
-                a = arg[2:i]
-                if a in _longopts and \
-                       (_longopts[a] == "=" or _longopts[a] == ":"):
-                    _opts.append((arg[:i], arg[i+1:]))
-                    _args.pop(idx)
-                    continue
+                i = arg.find("=")
+                if i > 0: # found '='
+                    a = arg[2:i]
+                    if a in _longopts and \
+                           (_longopts[a] == "=" or _longopts[a] == ":"):
+                        _opts.append((arg[:i], arg[i+1:]))
+                        _args.pop(idx)
+                        continue
 
-            raise ValueError, "Invalid option '%s'" % arg
-        elif arg[0] == "-": # shortopts
-            a = arg[1:]
-            for c in a:
-                if c in _shortopts:
-                    if not _shortopts[c]:
-                        _opts.append(("-"+c, None))
-                    elif _shortopts[c] == ":":
-                        if len(a) > 1:
+                raise ValueError, "Invalid option '%s'" % arg
+            elif arg[0] == "-": # shortopts
+                a = arg[1:]
+                for c in a:
+                    if c in _shortopts:
+                        if not _shortopts[c]:
+                            _opts.append(("-"+c, None))
+                        elif _shortopts[c] == ":":
+                            if len(a) > 1:
+                                raise ValueError, "Invalid option '%s'" % arg
+                            _args.pop(idx)
+                            val = _args.pop(idx)
+                            _opts.append((arg, val))
+                        else:
                             raise ValueError, "Invalid option '%s'" % arg
                         _args.pop(idx)
-                        val = _args.pop(idx)
-                        _opts.append((arg, val))
                     else:
                         raise ValueError, "Invalid option '%s'" % arg
-                    _args.pop(idx)
-                else:
-                    raise ValueError, "Invalid option '%s'" % arg
 
-        else: # do not stop on no-opt, continue
-            idx += 1
+            else: # do not stop on no-opt, continue
+                idx += 1
 
-    return (_opts,_args)
+        return (_opts,_args)
+    
+    # make getopt a static class method
+    getopt = staticmethod(getopt)
 
-
-def noquote_split(s, delimiter=None):
-    delimiters = [ " ", "\t", "\r", "\n", "\f", "\v" ]
-    tokens = [ ]
-    single_quote = 0
-    double_quote = 0
-    if delimiter:
-        if isinstance(delimiter, types.ListType):
-            delimiters = delimiter
-        else:
-            delimiters = [ delimiter ]
-    for i in xrange(len(delimiters)):
-        if not isinstance(delimiters[i], types.StringType):
-            raise ValueError, "delimiter is not of type string"
-        if len(delimiters[i]) == 0:
-            delimiters.pop(i)
-
-    b = 0;
-    for i in xrange(len(s)):
-        if s[i] == "'":
-            if single_quote == 0 or double_quote > 0:
-                single_quote += 1
+    def noquote_split(s, delimiter=None):
+        delimiters = [ " ", "\t", "\r", "\n", "\f", "\v" ]
+        tokens = [ ]
+        single_quote = 0
+        double_quote = 0
+        if delimiter:
+            if isinstance(delimiter, types.ListType):
+                delimiters = delimiter
             else:
-                single_quote -= 1
-        if s[i] =="\"":
-            if double_quote == 0 or single_quote > 0:
-                double_quote += 1
-            else:
-                double_quote -= 1
-        if single_quote == 0 and double_quote == 0:
-            for delim in delimiters:
-                l = len(delim)
-                if s[i:i+l] == delim:
-                    if i > 0 and len(s[b:i]) > 0:
-                        tokens.append(s[b:i])
-                    b = i + l
-                    break
-    if len(s[b:]) > 0:
-        tokens.append(s[b:])
+                delimiters = [ delimiter ]
+        for i in xrange(len(delimiters)):
+            if not isinstance(delimiters[i], types.StringType):
+                raise ValueError, "delimiter is not of type string"
+            if len(delimiters[i]) == 0:
+                delimiters.pop(i)
 
-    return tokens
+        b = 0
+        quote = [ ]
+        i = 0
+        while i < len(s):
+            c = ""
+            while i < len(s) and s[i] == "\\":
+                c += s[i]
+                i += 1
+            if i == len(s):
+                break
+            c += s[i]
+            if quote and c == quote[len(quote)-1]:
+                quote.pop(len(quote)-1)
+            else:
+                if c == "'" or c == "\"":
+                    quote.append(c)
+            if len(quote) == 0:
+                for delim in delimiters:
+                    l = len(delim)
+                    if s[i:i+l] == delim:
+                        if i > 0 and len(s[b:i]) > 0:
+                            tokens.append(s[b:i])
+                        b = i + l
+                        break
+            i += 1
+        if len(s[b:]) > 0:
+            tokens.append(s[b:])
+
+        return tokens
+
+    # make noquote_split a static class method
+    noquote_split = staticmethod(noquote_split)
 
 # vim:ts=4:sw=4:showmatch:expandtab
