@@ -837,11 +837,11 @@ def exit(code):
             if not nocleanup:
                 shutil.rmtree(tempdir)
     if partitionmap:
-        for part in partitionmap:
-            if partitionmap[part]["name"] == "swap" and \
-                   partitionmap[part].has_key("on"):
-                swapoff(partitionmap[part]["device"])
-                del partitionmap[part]["on"]
+        for onpart in partitionmap:
+            if partitionmap[onpart]["name"] == "swap" and \
+                   partitionmap[onpart].has_key("on"):
+                swapoff(partitionmap[onpart]["device"])
+                del partitionmap[onpart]["on"]
     if diskmap:
         for disk in diskmap:
             diskmap[disk].close()
@@ -1094,7 +1094,9 @@ ks.parse(ks_file)
 
 # sanity checks
 if ks.has_key("install"):
-    if not ks["partition"].has_key("/"):
+    if not ks["autopart"] and (not ks["partition"] or \
+                               len(ks["partition"]) < 1 or \
+                               not ks["partition"].has_key("/")):
         print "ERROR: root partition not defined"
         exit(1)
 else:
@@ -1279,11 +1281,29 @@ if ks["clearpart"] and not ks["clearpart"].has_key("none"):
 
 ### disk / partition selection ###
 
+autopart = { }
+if ks["autopart"]:
+    autopart["/boot"] = { "fstype": "ext3",
+                          "size": 100 }
+    autopart["/"] = { "fstype": "ext3",
+                      "size": 1,
+                      "grow": 1 }
+    autopart["swap"] = { "size": 100 }
+
 # create partitionmap
 partitionmap = { }
 partitions = { }
-for name in ks["partition"]:
-    part = ks["partition"][name]
+list = [ ]
+if ks["partition"]:
+    list = ks["partition"].keys()[:]
+if ks["autopart"]:
+    list.extend(autopart.keys())
+pyrpm.normalizeList(list)
+for name in list:
+    if ks["partition"] and ks["partition"].has_key(name):
+        part = ks["partition"][name]
+    else:
+        part = autopart[name]
     if part.has_key("onpart"):
         # fixed partition
         onpart = part["onpart"]
@@ -1331,7 +1351,10 @@ for disk in partitions.keys():
     # check to have only onw grow partition per disk
     grow = None
     for name in partitions[disk]:
-        part = ks["partition"][name]
+        if ks["partition"] and ks["partition"].has_key(name):
+            part = ks["partition"][name]
+        else:
+            part = autopart[name]
         if not part.has_key("grow"):
             continue
         if grow:
@@ -1359,7 +1382,10 @@ for disk in partitions.keys():
     # create partitions
     done = 0
     for name in partitions[disk]:
-        part = ks["partition"][name]
+        if ks["partition"] and ks["partition"].has_key(name):
+            part = ks["partition"][name]
+        else:
+            part = autopart[name]
                 
         if done == 1 and create_extended:
             # get freespace
@@ -1404,7 +1430,7 @@ for disk in partitions.keys():
             type = parted.PARTITION_LOGICAL
         else:
             type = parted.PARTITION_PRIMARY
-        if name == "swap" or ks["partition"][name]["fstype"] == "swap":
+        if name == "swap" or part["fstype"] == "swap":
             fstype = "linux-swap"
         else:
             fstype = "ext3"
@@ -1455,8 +1481,8 @@ if len(partitionmap) == 0:
     exit(1)
 
 # check partitionmap with diskmap
-for part in partitionmap:
-    disk = partitionmap[part]["disk"]
+for onpart in partitionmap:
+    disk = partitionmap[onpart]["disk"]
     if not diskmap.has_key(disk):
         print "ERROR: disk '%s' is not defined." % disk
         exit(1)
@@ -1465,42 +1491,45 @@ for part in partitionmap:
 
 # are all needed partitions there?
 error = 0
-for part in partitionmap:
-    name = partitionmap[part]["name"]
-    disk = partitionmap[part]["disk"]
-    id = partitionmap[part]["id"]
+for onpart in partitionmap:
+    name = partitionmap[onpart]["name"]
+    disk = partitionmap[onpart]["disk"]
+    id = partitionmap[onpart]["id"]
     d = diskmap[disk]
     if not id in d["partition"]:
-        print "ERROR: partition '%s' does not exist." % part
+        print "ERROR: partition '%s' does not exist." % onpart
         error = 1
     if error:
         continue
     p = d["partition"][id]
     sector_size = diskmap[disk]["sector_size"]
-    partitionmap[part]["start"] = p["start"] * sector_size
-    partitionmap[part]["end"] = p["end"] * sector_size
-    partitionmap[part]["size"] = p["length"] * sector_size
-    partitionmap[part]["device"] = p["device"]
+    partitionmap[onpart]["start"] = p["start"] * sector_size
+    partitionmap[onpart]["end"] = p["end"] * sector_size
+    partitionmap[onpart]["size"] = p["length"] * sector_size
+    partitionmap[onpart]["device"] = p["device"]
+
+    if ks["partition"] and ks["partition"].has_key(name):
+        part = ks["partition"][name]
+    else:
+        part = autopart[name]    
 
     # check partition types
     if not p["native_type"]:
-        print "ERROR: Partition '%s' has no type." % part
+        print "ERROR: Partition '%s' has no type." % onpart
         error = 1
     else:
-        pass
         if p["native_type"] == 0x83:
-            if not ks["partition"][name].has_key("fstype") or \
-                   not ks["partition"][name]["fstype"] in [ "ext2", "ext3" ]:
-                print "ERROR: Partition '%s' does not match filesystem" % part
+            if not part.has_key("fstype") or \
+                   not part["fstype"] in [ "ext2", "ext3" ]:
+                print "ERROR: Partition '%s' does not match filesystem" % onpart
                 error = 1
         elif p["native_type"] == 0x82:
-            if ks["partition"][name].has_key("fstype") and \
-                   ks["partition"][name]["fstype"] != "swap":
-                print "ERROR: Partition '%s' does not match filesystem" % part
+            if part.has_key("fstype") and part["fstype"] != "swap":
+                print "ERROR: Partition '%s' does not match filesystem" % onpart
                 error = 1
         else:
             print "ERROR: Filesystem '%s' with code 0x%x on '%s' is not supported" % \
-                  (p["fstype"], p["native_type"], part)
+                  (p["fstype"], p["native_type"], onpart)
             error = 1
 
 if error:
@@ -1514,36 +1543,43 @@ for disk in diskmap.keys():
         label = getLabel(partition[i]["device"])
         if not label:
             continue
-        part = "%s%d" % (disk, i)
-        if part in partitionmap:
-            name = partitionmap[part]["name"]
-            partitionmap[part]["label"] = label
-            if ks["partition"][name].has_key("noformat"):
+        onpart = "%s%d" % (disk, i)
+        if onpart in partitionmap:
+            name = partitionmap[onpart]["name"]
+            partitionmap[onpart]["label"] = label
+            if ks["partition"] and ks["partition"].has_key(name):
+                part = ks["partition"][name]
+            else:
+                part = autopart[name]
+            if part.has_key("noformat"):
                 labels.append(label)
         else:
             labels.append(label)
 
 # create labels
-for part in partitionmap:
-    name = partitionmap[part]["name"]
+for onpart in partitionmap:
+    name = partitionmap[onpart]["name"]
     label = label_prefix
+    if ks["partition"] and ks["partition"].has_key(name):
+        part = ks["partition"][name]
+    else:
+        part = autopart[name]
 
-    if ks["partition"][name].has_key("noformat"):
+    if part.has_key("noformat"):
         # filesystem marked not to get formatted
         continue
 
-    if ks["partition"][name].has_key("fstype") and \
-           ks["partition"][name]["fstype"] in [ "ext2", "ext3" ]:
+    if part.has_key("fstype") and part["fstype"] in [ "ext2", "ext3" ]:
         label += name
     elif name == "swap":
-        label += "%s-swap" % part
+        label += "%s-swap" % onpart
     else:
-        print "Could not determine filesystem type of '%s'" % part
+        print "Could not determine filesystem type of '%s'" % onpart
         error = 1
-    if ks["partition"][name].has_key("label"):
-        label = ks["partition"][name]["label"]
+    if part.has_key("label"):
+        label = part["label"]
     if len(label) > 16:
-        print "WARNING: Label '%s' for '%s' is too long, tuncating to 16 chars." % (label, part)
+        print "WARNING: Label '%s' for '%s' is too long, tuncating to 16 chars." % (label, onpart)
         label = label[:16]
 
     # add or increase label id as long as label in labels
@@ -1561,7 +1597,7 @@ for part in partitionmap:
             label = "%s%d" % (l_name, (id+1))
 #        print "label=%s" % label
         
-    partitionmap[part]["label"] = label
+    partitionmap[onpart]["label"] = label
 
 if verbose:
     sys.stdout.write("diskmap=")
@@ -1723,32 +1759,36 @@ for disk in diskmap:
     stats = os.stat(diskmap[disk]["device"])
     tmpdev = "%s/%s" % (stage2_dir, diskmap[disk]["device"])
     os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
-for part in partitionmap:
-    stats = os.stat(partitionmap[part]["device"])
-    tmpdev = "%s/%s" % (stage2_dir, partitionmap[part]["device"])
+for onpart in partitionmap:
+    stats = os.stat(partitionmap[onpart]["device"])
+    tmpdev = "%s/%s" % (stage2_dir, partitionmap[onpart]["device"])
     os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
 
 ### format partitions ###
 
 # prepare to format partitions
 to_format = [ ]
-for part in partitionmap:
-    name = partitionmap[part]["name"]
-    if not ks["partition"][name].has_key("noformat"):
-        to_format.append(part)
+for onpart in partitionmap:
+    name = partitionmap[onpart]["name"]
+    if ks["partition"] and ks["partition"].has_key(name):
+        part = ks["partition"][name]
+    else:
+        part = autopart[name]
+    if not part.has_key("noformat"):
+        to_format.append(onpart)
 to_format.sort()
 to_format.reverse()
 
 if confirm == 1 and len(to_format) > 0:
     print "About to format these partitions:"
-    for part in to_format:
-        name = partitionmap[part]["name"]
-        if diskmap[partitionmap[part]["disk"]].has_key("image"):
-            disk = "%s:%s" % (partitionmap[part]["disk"],
-                              diskmap[partitionmap[part]["disk"]]["image"])
+    for onpart in to_format:
+        name = partitionmap[onpart]["name"]
+        if diskmap[partitionmap[onpart]["disk"]].has_key("image"):
+            disk = "%s:%s" % (partitionmap[onpart]["disk"],
+                              diskmap[partitionmap[onpart]["disk"]]["image"])
         else:
-            disk = partitionmap[part]["disk"]
-        print "\t'%s': '%s' on '%s'" % (name, part, disk)
+            disk = partitionmap[onpart]["disk"]
+        print "\t'%s': '%s' on '%s'" % (name, onpart, disk)
     choice = raw_input("Is this ok [y/N]: ")
     if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
         exit(1)
@@ -1764,27 +1804,30 @@ else:
     os.chroot(stage2_dir)
 
     # format
-    for part in to_format:
-        name = partitionmap[part]["name"]
-        label = partitionmap[part]["label"]
-        disk = partitionmap[part]["disk"]
-        partition = ks["partition"][name]
+    for onpart in to_format:
+        name = partitionmap[onpart]["name"]
+        label = partitionmap[onpart]["label"]
+        disk = partitionmap[onpart]["disk"]
+        if ks["partition"] and ks["partition"].has_key(name):
+            part = ks["partition"][name]
+        else:
+            part = autopart[name]
 
-        if partition.has_key("fstype") and \
-               (partition["fstype"] == "ext2" or partition["fstype"] == "ext3"):
+        if part.has_key("fstype") and \
+               (part["fstype"] == "ext2" or part["fstype"] == "ext3"):
             mke2fs = "/usr/sbin/mke2fs -q -L '%s'" % label
-            if partition["fstype"] == "ext3":
+            if part["fstype"] == "ext3":
                 mke2fs += " -j"
             if diskmap[disk].has_key("image"):
                 blocksize = 4096
                 mke2fs += " -b %d" % blocksize
-            mke2fs += " '%s'" % partitionmap[part]["device"]
+            mke2fs += " '%s'" % partitionmap[onpart]["device"]
             if diskmap[disk].has_key("image"):
-                mke2fs += " %d" % (partitionmap[part]["size"] / blocksize)
+                mke2fs += " %d" % (partitionmap[onpart]["size"] / blocksize)
 
 #            print mke2fs
             print "Formatting '%s' on '%s' (%s)" % \
-                  (part, partitionmap[part]["disk"], name)
+                  (onpart, partitionmap[onpart]["disk"], name)
 
             pid = os.fork()
             if pid != 0:
@@ -1796,14 +1839,14 @@ else:
                 pyrpm.runScript(script=mke2fs)
                 sys.exit(0)
 
-            if partition["fstype"] == "ext3": # set ext options
+            if part["fstype"] == "ext3": # set ext options
                 tune2fs = "/usr/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
-                          partitionmap[part]["device"]
+                          partitionmap[onpart]["device"]
 
 #                print tune2fs
                 if verbose:
                     print "Tuning filesystem '%s' on '%s'" % \
-                          (part, partitionmap[part]["disk"])
+                          (onpart, partitionmap[onpart]["disk"])
                 pid = os.fork()
                 if pid != 0:
                     (rpid, status) = os.waitpid(pid, 0)
@@ -1820,12 +1863,12 @@ else:
                 # no swap labels for RHEL-3, FC-1
                 l = "-L '%s'" % label
             mkswap = "/usr/sbin/mkswap %s '%s' %d >/dev/null" % \
-                     (l, partitionmap[part]["device"],
-                      (partitionmap[part]["size"] / 1024))
+                     (l, partitionmap[onpart]["device"],
+                      (partitionmap[onpart]["size"] / 1024))
 
 #            print mkswap
             print "Formatting '%s' on '%s' (%s)" % \
-                  (part, partitionmap[part]["disk"], name)
+                  (onpart, partitionmap[onpart]["disk"], name)
             pid = os.fork()
             if pid != 0:
                 (rpid, status) = os.waitpid(pid, 0)
@@ -1837,7 +1880,7 @@ else:
                 sys.exit(0)
         else:
             print "ERROR: Unknown filesystem for '%s' (%s)" % \
-                  (partitionmap[part]["disk"], name)
+                  (partitionmap[onpart]["disk"], name)
             sys.exit(1)
 
     del to_format
@@ -1855,10 +1898,10 @@ os.mkdir(target_dir)
 # prepare to format partitions
 to_mount = [ ]
 mountmap = { }
-for part in partitionmap:
-    name = partitionmap[part]["name"]
+for onpart in partitionmap:
+    name = partitionmap[onpart]["name"]
     to_mount.append(name)
-    mountmap[name] = part
+    mountmap[name] = onpart
 to_mount.sort()
 
 for mntpnt in to_mount:
@@ -1880,10 +1923,15 @@ for mntpnt in to_mount:
                     print "ERROR: Could not create '%s': %s" % (dir, msg)
                     exit(1)
 
+        if ks["partition"] and ks["partition"].has_key(name):
+            part = ks["partition"][mntpnt]
+        else:
+            part = autopart[mntpnt]
+        
 #        print "Mounting '%s':" % mntpnt
         try:
             mount(partitionmap[mountmap[mntpnt]]["device"], dir,
-                  fstype=ks["partition"][mntpnt]["fstype"])
+                  fstype=part["fstype"])
         except Exception, msg:
             print msg
             exit(1)
@@ -2073,24 +2121,29 @@ if not os.path.exists(buildroot+"/etc/fstab"):
         partitions = partitionmap.keys()
         partitions.sort()
         partitions.reverse()
-        for part in partitions:
-            name = partitionmap[part]["name"]
+        for onpart in partitions:
+            name = partitionmap[onpart]["name"]
+            if ks["partition"] and ks["partition"].has_key(name):
+                part = ks["partition"][name]
+            else:
+                part = autopart[name]
+            
 
             major = minor = 0
-            if ks["partition"][name].has_key("fstype") and name != "swap":
-                fs = ks["partition"][name]["fstype"]
+            if part.has_key("fstype") and name != "swap":
+                fs = part["fstype"]
                 major = 1
                 if name == "/":
                     minor = 1
                 else:
                     minor = 2
                 fd.write("LABEL=%s\t\t%s\t\t%s\tdefaults\t%d %d\n" % \
-                         (partitionmap[part]["label"], name, fs, major, minor))
+                         (partitionmap[onpart]["label"], name, fs, major, minor))
             elif name == "swap":
                 continue
             else:
                 print "ERROR: Unknown filesystem for '%s' (%s)" % \
-                      (partitionmap[part]["disk"], name)
+                      (partitionmap[onpart]["disk"], name)
                 continue
         if install_version == "RHEL-3":
             fd.write("none\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n")
@@ -2102,16 +2155,16 @@ if not os.path.exists(buildroot+"/etc/fstab"):
             fd.write("/dev/proc\t\t/proc\t\tproc\tdefaults\t0 0\n")
         if install_version != "RHEL-3":
             fd.write("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
-        for part in partitions:
-            if partitionmap[part]["name"] == "swap":
+        for onpart in partitions:
+            if partitionmap[onpart]["name"] == "swap":
                 if install_version == "RHEL-3" or install_version == "FC-2":
                     # RHEL-3, FC-2 does not support swap labels
-                    what = "/dev/%s" % part
+                    what = "/dev/%s" % onpart
                 else:
-                    what = "LABEL=%s" % partitionmap[part]["label"]
+                    what = "LABEL=%s" % partitionmap[onpart]["label"]
                 fd.write("%s\t\t%s\t\t%s\tdefaults\t0 0\n" % \
-                         (what, partitionmap[part]["name"],
-                          partitionmap[part]["name"]))
+                         (what, partitionmap[onpart]["name"],
+                          partitionmap[onpart]["name"]))
         fd.close()
 
 # /etc/hosts
@@ -2987,11 +3040,11 @@ if ks["bootloader"] and not (ks["bootloader"].has_key("location") and \
             tmpdev = "/tmp/%s" % disk
             devmap[diskmap[disk]["device"]] = tmpdev
             os.mknod(buildroot+tmpdev, stats.st_mode, stats.st_rdev)
-        for part in partitionmap:
-            stats = os.stat(partitionmap[part]["device"])
-            tmpdev = "/tmp/%s%d" % (partitionmap[part]["disk"],
-                                    partitionmap[part]["id"])
-            devmap[partitionmap[part]["device"]] = tmpdev
+        for onpart in partitionmap:
+            stats = os.stat(partitionmap[onpart]["device"])
+            tmpdev = "/tmp/%s%d" % (partitionmap[onpart]["disk"],
+                                    partitionmap[onpart]["id"])
+            devmap[partitionmap[onpart]["device"]] = tmpdev
             os.mknod(buildroot+tmpdev, stats.st_mode, stats.st_rdev)
 
         try:
