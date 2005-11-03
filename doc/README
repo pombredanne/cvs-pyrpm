@@ -494,6 +494,11 @@ to increase loop device amount for large disk image installs in
 
 	options loop max_loop=64
 
+Here is the command to install into the disk image "disk2G.img" with the 
+kickstart file "ks.cfg":
+
+	pyrpmkickstart ks.cfg disk2G.img
+
 pyrpmkickstart is able to write a simple xen config file with the option 
 "--xen". You have to replace VERSION with the version of the xen kernel in the 
 resulting "xen.conf" file.
