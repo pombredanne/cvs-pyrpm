@@ -424,7 +424,82 @@ have to fiddle them out yourself, just as you had to do with rpm.
 4.7 pyrpmkickstart
 ------------------
 
-Nothing written yet.
+Usage: pyrpmkickstart <options> <kickstartfile>
+                      [[<disk name>:]<disk image>|<disk device>]*
+
+This tool can install Red Hat Enterprise Linux (>=3) or Fedora Core 
+distributions on hard disks, partitions or disk images. pyrpmkickstart uses 
+a kickstart file for setup and installation of the system. Here is a very 
+simple kickstart file:
+
+	lang en_US
+	langsupport en_US.UTF-8
+	keyboard us
+	mouse
+	timezone 
+	rootpw test
+	install
+	nfs --server=server --dir=/dist/fedora/core/4/i386/os
+	#url --url=file:///dist/fedora/core/4/i386/os
+	bootloader --location=mbr
+	#zerombr yes
+	#clearpart --all --initlabel
+	partition swap --size=100
+	partition /boot --fstype=ext3 --size=100
+	partition / --fstype=ext3 --size=1 --grow
+	auth  --useshadow  --enablemd5 
+	network --bootproto=dhcp --device=eth0
+	firewall --enabled --ssh 
+	selinux --disabled
+	%packages --resolvedeps
+	@base
+	@x
+
+You can create kickstart files with "redhat-config-kickstart" or 
+"system-config-kickstart" according to your needs.
+
+In the kickstart example, pyrpmkickstart will create new partitions in an IDE 
+hard disk or disk image. It is not possible to use "autopart" right now. If 
+you want to use existing partitions, then append "--usepart=/dev/hdaX" to the 
+partition entry. If a partition should not be formatted, then add "--noformat".
+
+The source has to be a installable tree. It is not possible to install from 
+iso images. There are currently two supported installation methods:
+NFS install and url-file install. Contrary to the kickstart documentation, it 
+is possible to install from a local installation tree with 
+"url --url=file://path", where path is a full path name with a leading slash.
+
+The destination is either a hard disk, a partition on a hard disk or a 
+complete disk image (usable e.g. with XEN, QEMU, VMware). If you are using a 
+hard disk, please be careful with "zerombr" and "clearpart" in the kickstart 
+file. These will remove some or all partitions on this hard drive according 
+to the usage. Do not use them, if you want to install on a single partition 
+on your hard drive. You would have to install the bootloader into the root 
+partition of your new install as well: "bootloader --location=partition".
+
+A disk image is similar to a real hard disk for the installer. It assumes, 
+that it is a IDE hard disk and maps it to hda. Qemu emulates a disk image as
+a IDE hard drive internally, so you can use it as is. If you want to use sda 
+instead, you have to map the disk image with "sda:disk.img". This is essential 
+for installation in vmware disk images, because vmware defaults to SCSI disks. 
+Please keep in mind that you have to preallocate the hard disk in vmware to be 
+usable with pyrpmkickstart. Here is the command to easily generate a 2G disk 
+image:
+
+	dd if=/dev/zero of=disk2G.img bs=1M count=2048
+
+Disk image installations are usable by XEN, QEMU and VMware. 
+
+pyrpmkickstart is able to write a simple xen config file with the option 
+"--xen". You have to replace VERSION with the version of the xen kernel in the 
+resulting "xen.conf" file.
+
+Here is the command to use a disk image with QEMU. 
+
+	qemu -m 256 disk2G.img
+
+The default virtual memory size in qemu is 128M, therefore it is advisable to 
+inrease it.
 
 
 4.8 pyrpmrandomizer
