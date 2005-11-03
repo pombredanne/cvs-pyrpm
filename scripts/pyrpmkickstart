@@ -314,7 +314,7 @@ class Disk(dict):
         try:
             self.ped_disk = parted.PedDisk.new(self.ped_device)
         except Exception, msg:
-            print Exception, msg
+#            print Exception, msg
             self.ped_disk = None
         self.reload()
 
@@ -322,13 +322,13 @@ class Disk(dict):
         return (self.ped_disk != None)
         
     def reload(self):
-        if self.has_key("image"):
-            for part in self["partition"].keys():
-                if disk["partition"][part]["device"]:
-                    lofree(self["partition"][part]["device"])
-        self.partition = { }
         if not self.ped_disk:
             return
+        if self.has_key("image"):
+            for part in self["partition"].keys():
+                if self["partition"][part].has_key("device"):
+                    lofree(self["partition"][part]["device"])
+        self.partition = { }
         ped_partition = self.ped_disk.next_partition()
         while ped_partition:
             num = ped_partition.num
@@ -467,11 +467,16 @@ class Disk(dict):
             return dict.__setitem__(self, item, value)
 
     def add_partition(self, i, start, end, type, fstype):
-        part = disk.ped_disk.partition_new(type, fstype, start, end)
+        _fstype = None
+        if fstype:
+            _fstype = parted.file_system_type_get(fstype)
+        part = self.ped_disk.partition_new(type, _fstype, start, end)
         constraint = self.ped_disk.dev.constraint_any()
-        r = disk.ped_disk.add_partition(part, constraint)
+        r = self.ped_disk.add_partition(part, constraint)
+#        if r == None:
+#            raise Exception, "Unable to create partition."
         self.reload()
-        return r
+        return part.num
 
     def delete_partition(self, i):
         partition = self["partition"]
@@ -481,7 +486,7 @@ class Disk(dict):
             return r
         return 0
 
-    def delete_all(self):
+    def delete_all_partitions(self):
         r = self.ped_disk.delete_all()
         self.reload()
         return r
@@ -558,8 +563,8 @@ class Disk(dict):
 ################################## functions ##################################
 
 def mount(what, where, fstype="ext3", options=None, arguments=None):
-    print "Mounting '%s' on '%s'" % (what, where)
-
+    if verbose:
+        print "Mounting '%s' on '%s'" % (what, where)
     opts = ""
     if options:
         opts = "-o '%s'" % options
@@ -577,7 +582,8 @@ def mount(what, where, fstype="ext3", options=None, arguments=None):
 
 
 def umount(what):
-    print "Umounting '%s' " % what
+    if verbose:
+        print "Umounting '%s' " % what
     if not os.path.ismount(what):
         # TODO: ismount is not working for bind mounts
         stat = os.system("umount '%s' 2>/dev/null" % what)
@@ -1205,10 +1211,10 @@ if len(diskmap) == 0:
     exit(1)
 
 # print disks
-disks = diskmap.keys()
-disks.sort()
-for disk in disks:
-    if verbose:
+if verbose:
+    disks = diskmap.keys()
+    disks.sort()
+    for disk in disks:
         if diskmap[disk].has_key("image"):
             print "%s (%s):" % (disk, diskmap[disk]["image"])
         else:
@@ -1233,18 +1239,57 @@ for disk in disks:
                    partition[i]["unit-length"])
             print "    %s" % partition[i]["fstype"]
 
+### clear and generate partitions and disklabels ###
+
+# clearpart, initialize disks
+modified = [ ]
+if ks["clearpart"] and not ks["clearpart"].has_key("none"):
+    disklabel = "msdos"
+    linuxtypes = [ 0x82, 0x83, 0x8e, 0xfd ]
+    drives = diskmap.keys()
+    if ks["clearpart"].has_key("drives"):
+        drives = ks["clearpart"]["drives"]
+        for disk in drives:
+            if diskmap.has_key(disk):
+                continue
+            print "ERROR: clearpart --drives: disk %s is not available" % disk
+            exit(1)
+    for disk in drives:
+        if ks["clearpart"].has_key("initlabel") or \
+               (ks["zerombr"] and ks["zerombr"].has_key("yes")):
+            print "Initializing disk '%s'" % disk
+            diskmap[disk].new_disklabel(disklabel)
+            if not disk in modified:
+                modified.append(disk)
+        elif ks["clearpart"].has_key("all"):
+            print "Removing all partitions on disk '%s'" % disk
+            diskmap[disk].delete_all_partitions()
+            if not disk in modified:
+                modified.append(disk)
+        elif ks["clearpart"].has_key("linux"):
+            partitions = diskmap[disk]["partition"].keys()
+            partitions.reverse()
+            for i in partitions:
+                partition = diskmap[disk]["partition"][i]
+                if partition["native_type"] in linuxtypes:
+                    print "Removing partition %d on %s" % (i, disk)
+                    diskmap[disk].delete_partition(i)
+                    if not disk in modified:
+                        modified.append(disk)
+
 ### disk / partition selection ###
 
 # create partitionmap
 partitionmap = { }
+partitions = { }
 for name in ks["partition"]:
     part = ks["partition"][name]
-
     if part.has_key("onpart"):
+        # fixed partition
         onpart = part["onpart"]
         error = 0
         try:
-            disk_name = diskName(onpart)
+            disk = diskName(onpart)
             i = partitionId(onpart)
         except:
             error = 1
@@ -1252,27 +1297,168 @@ for name in ks["partition"]:
             print "ERROR: '%s' is not a valid partition name." % onpart
             exit(1)
         onpart = part["onpart"][5:]
-        disk_name = disk_name[5:]
+        disk = disk[5:]
         if onpart in partitionmap:
             print "ERROR: '%s' is used more than once." % part["onpart"]
             exit(1)
         partitionmap[onpart] = { }
         partitionmap[onpart]["name"] = name
-        partitionmap[onpart]["disk"] = disk_name
+        partitionmap[onpart]["disk"] = disk
         partitionmap[onpart]["id"] = i
         if partitionmap[onpart]["id"] < 1:
             print "ERROR: Partition id '%d' is not valid." % \
                   partitionmap[onpart]["id"]
             exit(1)
     else:
-        print "ERROR: no partition gived for '%s'" % name
+        # create partition
+        disk = "/dev/hda"
+        if part.has_key("ondisk"):
+            disk = part["ondisk"]
+        if disk[:5] != "/dev/":
+            print "ERROR: '%s' is not a valid disk name." % disk
+            exit(1)
+        disk = disk[5:]
+        if not part.has_key("size"):
+            print "ERROR: No size given for %s." % name
+            exit(1)
+        if not diskmap.has_key(disk):
+            print "ERROR: '%s' is not defined." % onpart
+            exit(1)
+        partitions.setdefault(disk, [ ]).append(name)
+        
+# create partitions
+for disk in partitions.keys():
+    # check to have only onw grow partition per disk
+    grow = None
+    for name in partitions[disk]:
+        part = ks["partition"][name]
+        if not part.has_key("grow"):
+            continue
+        if grow:
+            print "ERRROR: More than one grow partition specified for", \
+                  "disk %s" % disk
+            exit(1)
+        grow = name
+    if grow:
+        # move growing partition to the end of the list
+        partitions[disk].remove(grow)
+        partitions[disk].append(grow)
+
+    create_extended = 0
+    if len(partitions[disk]) + len(diskmap[disk]["partition"]) > 4:
+        if "/boot" in partitions[disk]:
+            partitions[disk].remove("/boot")
+            partitions[disk].insert(0, "/boot")
+        has_extended = 0
+        for i in diskmap[disk]["partition"].keys():
+            if partitionType(diskmap[disk]["partition"]["type"]) == "extended":
+                has_extended = 1
+        if not has_extended:
+            create_extended = 1
+
+    # create partitions
+    done = 0
+    for name in partitions[disk]:
+        part = ks["partition"][name]
+                
+        if done == 1 and create_extended:
+            # get freespace
+            freespace = diskmap[disk]["freespace"]
+
+            biggest = None
+            for free in freespace:
+                if not biggest:
+                    biggest = free
+                else:
+                    print biggest["length"], free["length"]
+                    if biggest["length"] < free["length"]:
+                        biggest = free
+            print "Creating extended partition on disk %s" % disk
+            diskmap[disk].add_partition(0, biggest["start"], biggest["end"],
+                                        parted.PARTITION_EXTENDED, None)
+
+        # get freespace
+        freespace = diskmap[disk]["freespace"]
+
+        size = (((float(part["size"]) * 1024L*1024L) / \
+                 diskmap[disk]["units"]) / \
+                diskmap[disk]["sector_size"])
+#        print "%s: size=%d" % (name, size)
+
+        match = None
+        for free in freespace:
+            if free["length"] >= size:
+                if not match or \
+                       long(match["length"]) > long(free["length"]):
+                    match = free
+            if free["length"] == size:
+                match = free
+                break
+        if not match:
+            print "ERROR: Partition %s does not fit onto %s." % (name, disk)
+            exit(1)
+        if part.has_key("grow") and size < match["unit-length"]:
+            # last partition in list
+            size = match["unit-length"]
+        if match["type"] & parted.PARTITION_LOGICAL:
+            type = parted.PARTITION_LOGICAL
+        else:
+            type = parted.PARTITION_PRIMARY
+        if name == "swap" or ks["partition"][name]["fstype"] == "swap":
+            fstype = "linux-swap"
+        else:
+            fstype = "ext3"
+
+        start = long(match["start"])
+        end = start + size * diskmap[disk]["units"] - 1
+#        print "\tmatch(%d, %d)" % (match["start"], match["end"])
+#        print "\tadd(%d, %d)" % (start, end)
+
+        if end > match["end"]:
+            print "ERROR: Partition %s is too large." % name
+            exit(1)
+        print "Creating new partition '%s' on disk %s." % (name, disk)
+        num = diskmap[disk].add_partition(0, start, end, type, fstype)
+
+        onpart = "%s%d" % (disk, num)
+        partitionmap[onpart] = { }
+        partitionmap[onpart]["name"] = name
+        partitionmap[onpart]["disk"] = disk
+        partitionmap[onpart]["id"] = num
+        done += 1
+
+        if not disk in modified:
+            modified.append(disk)
+
+    if verbose:
+        diskmap[disk].print_info()
+        diskmap[disk].print_partitions()
+
+if len(modified) > 0:
+    choice = raw_input("Is this ok [y/N]: ")
+    if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
         exit(1)
+
+# commit changes
+for disk in modified:
+    try:
+        diskmap[disk].commit()
+    except Exception, msg:
+        if not diskmap[disk].has_key("image"):
+            print msg
+            exit(1)
+    diskmap[disk].reload()
+
+# sanity check
+if len(partitionmap) == 0:
+    print "INTERNAL ERROR: partitionmap is empty."
+    exit(1)
 
 # check partitionmap with diskmap
 for part in partitionmap:
-    disk_name = partitionmap[part]["disk"]
-    if not diskmap.has_key(disk_name):
-        print "ERROR: disk '%s' is not defined." % disk_name
+    disk = partitionmap[part]["disk"]
+    if not diskmap.has_key(disk):
+        print "ERROR: disk '%s' is not defined." % disk
         exit(1)
 
 # TODO: create partitions
@@ -1301,6 +1487,7 @@ for part in partitionmap:
         print "ERROR: Partition '%s' has no type." % part
         error = 1
     else:
+        pass
         if p["native_type"] == 0x83:
             if not ks["partition"][name].has_key("fstype") or \
                    not ks["partition"][name]["fstype"] in [ "ext2", "ext3" ]:
@@ -1405,12 +1592,16 @@ if ks["nfs"]:
     fstype = "nfs"
     args = None
 elif ks["url"]:
+    soure = None
+    fstype = None
+    args = None
     if ks["url"]["url"].startswith("file://"):
         source = ks["url"]["url"][7:]
+        args = [ "--rbind" ]
     else:
-        source = "None"
-    fstype = None
-    args = [ "--rbind" ]
+        # TODO: http and ftp source
+        print "ERROR: Only file urls are currently supported."
+        exit(1)
 
 try:
     mount(source, source_dir, fstype, opts, args)
@@ -1491,6 +1682,14 @@ umount(stage2_img_dir)
 
 # craete missing dirs and links
 create_dir(stage2_dir, "/bin")
+create_dir(stage2_dir, "/dev")
+create_dir(stage2_dir, "/etc")
+create_dir(stage2_dir, "/proc")
+create_dir(stage2_dir, "/tmp")
+create_dir(stage2_dir, "/var")
+create_dir(stage2_dir, "/var/log")
+create_dir(stage2_dir, "/var/tmp")
+
 if not os.path.exists("%s/bin/sh" % stage2_dir):
     try:
         os.symlink("../usr/bin/bash", "%s/bin/sh" % stage2_dir)
@@ -1503,8 +1702,6 @@ if not os.path.exists("%s/bin/bash" % stage2_dir):
     except Exception, msg:
         print "ERROR: Unable to generate /bin/bash symlink:", msg
         exit(1)
-create_dir(stage2_dir, "/dev")
-create_dir(stage2_dir, "/etc")
 if not os.path.exists("%s/etc/mtab" % stage2_dir):
     try:
         fd = open("%s/etc/mtab" % stage2_dir, "w")
@@ -1512,12 +1709,16 @@ if not os.path.exists("%s/etc/mtab" % stage2_dir):
         print "ERROR: Unable to generate /etc/mtab:", msg
         exit(1)
     fd.close()
-create_dir(stage2_dir, "/proc")
-create_dir(stage2_dir, "/var")
-create_dir(stage2_dir, "/var/tmp")
-create_dir(stage2_dir, "/tmp")
 
 # create needed devices
+if not os.path.exists(stage2_dir+"/dev/console"):
+    os.mknod(stage2_dir+"/dev/console", 0666 | stat.S_IFCHR, os.makedev(5, 1))
+if not os.path.exists(stage2_dir+"/dev/null"):
+    os.mknod(stage2_dir+"/dev/null", 0666 | stat.S_IFCHR, os.makedev(1, 3))
+if not os.path.exists(stage2_dir+"/dev/zero"):
+    os.mknod(stage2_dir+"/dev/zero", 0666 | stat.S_IFCHR, os.makedev(1, 5))
+
+# create disk and partition devices
 for disk in diskmap:
     stats = os.stat(diskmap[disk]["device"])
     tmpdev = "%s/%s" % (stage2_dir, diskmap[disk]["device"])
@@ -1600,8 +1801,9 @@ else:
                           partitionmap[part]["device"]
 
 #                print tune2fs
-                print "Tuning filesystem '%s' on '%s'" % \
-                      (part, partitionmap[part]["disk"])
+                if verbose:
+                    print "Tuning filesystem '%s' on '%s'" % \
+                          (part, partitionmap[part]["disk"])
                 pid = os.fork()
                 if pid != 0:
                     (rpid, status) = os.waitpid(pid, 0)
@@ -1622,8 +1824,8 @@ else:
                       (partitionmap[part]["size"] / 1024))
 
 #            print mkswap
-            print "Formatting swap on '%s' (%s)" % (partitionmap[part]["disk"],
-                                                    name)
+            print "Formatting '%s' on '%s' (%s)" % \
+                  (part, partitionmap[part]["disk"], name)
             pid = os.fork()
             if pid != 0:
                 (rpid, status) = os.waitpid(pid, 0)
@@ -1678,7 +1880,7 @@ for mntpnt in to_mount:
                     print "ERROR: Could not create '%s': %s" % (dir, msg)
                     exit(1)
 
-        print "Mounting '%s':" % mntpnt
+#        print "Mounting '%s':" % mntpnt
         try:
             mount(partitionmap[mountmap[mntpnt]]["device"], dir,
                   fstype=ks["partition"][mntpnt]["fstype"])
@@ -1764,22 +1966,23 @@ if ks["packages"].has_key("add"):
 if not "comps" in pkgs:
     pkgs.append("comps")
 
-# append authconfig, if we want to configure it
+# append authconfig
 if ks["authconfig"] and not "authconfig" in pkgs:
     print "Adding package authconfig"
     pkgs.append("authconfig")
 
-# append iptables, if we want to configure it
+# append iptables
 if ks["firewall"] and not ks["firewall"].has_key("disabled") and \
        not "iptables" in pkgs:
     print "Adding package iptables"
     pkgs.append("iptables")
+    if install_version != "RHEL-3":
+        pkgs.append("system-config-securitylevel-tui")
+
+if ks["selinux"] and install_version != "RHEL-3":
     pkgs.append("system-config-securitylevel-tui")
 
-if ks["selinux"]:
-    pkgs.append("system-config-securitylevel-tui")
-
-# append xorg-x11, if we want to configure it
+# append X
 if ks["xconfig"]:
     if install_version == "RHEL-3":
         xserver = "XFree86"
@@ -2050,8 +2253,8 @@ if ks["packages"].has_key("ignoredeps") and \
 if ks.has_key("install"):
     yum += " install "
 elif ks.has_key("update"):
-#    if ks["packages"].has_key("resolvedeps"):
-#        yum += " --autoerase "
+    if ks["packages"].has_key("resolvedeps"):
+        yum += " --autoerase "
     yum += " update "
 yum += string.join(pkgs)
 #print yum
