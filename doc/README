@@ -459,9 +459,9 @@ You can create kickstart files with "redhat-config-kickstart" or
 "system-config-kickstart" according to your needs.
 
 In the kickstart example, pyrpmkickstart will create new partitions in an IDE 
-hard disk or disk image. It is not possible to use "autopart" right now. If 
-you want to use existing partitions, then append "--usepart=/dev/hdaX" to the 
-partition entry. If a partition should not be formatted, then add "--noformat".
+hard disk or disk image. If you want to use existing partitions, then append 
+"--usepart=/dev/hdaX" to the partition entry. If a partition should not be 
+formatted, then add "--noformat".
 
 The source has to be a installable tree. It is not possible to install from 
 iso images. There are currently two supported installation methods:
@@ -488,7 +488,11 @@ image:
 
 	dd if=/dev/zero of=disk2G.img bs=1M count=2048
 
-Disk image installations are usable by XEN, QEMU and VMware. 
+Disk image installations are usable by XEN, QEMU and VMware. Please remember 
+to increase loop device amount for large disk image installs in 
+/etc/modprobe.conf:
+
+	options loop max_loop=64
 
 pyrpmkickstart is able to write a simple xen config file with the option 
 "--xen". You have to replace VERSION with the version of the xen kernel in the 
