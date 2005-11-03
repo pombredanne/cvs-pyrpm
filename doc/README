@@ -436,7 +436,7 @@ simple kickstart file:
 	langsupport en_US.UTF-8
 	keyboard us
 	mouse
-	timezone 
+	timezone EST
 	rootpw test
 	install
 	nfs --server=server --dir=/dist/fedora/core/4/i386/os
