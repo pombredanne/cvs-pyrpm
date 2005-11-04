@@ -1437,6 +1437,7 @@ class RpmDB(RpmDatabase):
         The tag has a single value if not useidx.  Convert the value using
         func."""
         
+        tnamehash = {}
         if not pkg.has_key(tag):
             return
         for idx in xrange(len(pkg[tag])):
@@ -1451,6 +1452,12 @@ class RpmDB(RpmDatabase):
             key = self.__getKey(tag, idx, pkg, useidx, func)
             if tag == "filemd5s" and (key == "" or key == "\x00"):
                 continue
+            # Equal Triggernames aren't added multiple times for the same pkg
+            if tag == "triggername":
+                if tnamehash.has_key(key):
+                    continue
+                else:
+                    tnamehash[key] = 1
             if not db.has_key(key):
                 db[key] = ""
             db[key] += pack("2I", pkgid, idx)
