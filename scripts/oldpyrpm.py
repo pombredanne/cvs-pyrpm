@@ -2883,8 +2883,8 @@ class Relations:
         return self._breakupLoop(counter, loop, hard=1)
 
     def sortLoops(self, loops):
-        """Return a copy loop tuple list loops from order.Relations relations,
-        ordered by decreasing preference to break them."""
+        """Return a copy loop tuple list loops, ordered by decreasing
+        preference to break them."""
         # FIXME: We really want only the maximum, not a sorted list.
         loop_nodes = []                # All nodes in loops; should be a hash?
         for loop in loops:
@@ -4437,7 +4437,7 @@ srpm_repos = [
     ("http://hg.serpentine.com/mercurial/bos/", "hg-bos", None, None, 20),
     ("http://hannibal.lr-s.tudelft.nl/~vincent/py/hg-scripts/",
         "hg-scripts", None, None, None),
-    ("http://www.kernel.org/hg/linux-2.6/", "hg-linux-2.6", None, None, 40),
+    #("http://www.kernel.org/hg/linux-2.6/", "hg-linux-2.6", None, None, 40),
     # Their http server is broken. A new checkout often fails. See the
     # mercurial mailinglists for details.
     ("http://xenbits.xensource.com/xen-unstable.hg/",
@@ -4505,6 +4505,7 @@ def updateMercurialMirrors():
         if dirs:
             continue
         repodir = hgrepo + "/" + reponame
+        #print repodescr
         if not os.path.isdir(repodir):
             os.system("hg clone -q " + repodescr + " " + repodir)
             data = ["[paths]\ndefault = %s\n" % repodescr,
@@ -4521,6 +4522,7 @@ def updateGitMirrors():
         return
     print "Downloading from git mirrors."
     for (repo, dirname, maxchanges) in gitrepos:
+        #print repo
         d = grepodir + "/" + dirname
         if repo.startswith("rsync://"):
             os.system("rsync -aqv --delete " + repo + "/ " + d + ".git")
@@ -5102,7 +5104,8 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
             continue
         if pkg["installcolor"]:
             if pkg["installcolor"] != (getInstallColor(arch),):
-                print pkg.getFilename(), "wrong installcolor", pkg["installcolor"]
+                print pkg.getFilename(), "wrong installcolor", \
+                    pkg["installcolor"]
         if pkg["basenames"] == None and pkg["filestates"] == None:
             pass
         elif pkg["filestates"] != (0,) * len(pkg["basenames"]):
