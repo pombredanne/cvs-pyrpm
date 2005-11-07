@@ -301,7 +301,7 @@ class RpmYum:
         if ops is None:
             return 0
         if len(ops) == 0:
-            self.config.printInfo(0, "Nothing to do.\n")
+            self.config.printInfo(1, "Nothing to do.\n")
             return 1
         self.config.printInfo(1, "The following operations will now be run:\n")
         for (op, pkg) in ops:

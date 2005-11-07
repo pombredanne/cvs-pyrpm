@@ -331,7 +331,10 @@ class RpmController:
                             if not self.config.justdb:
                                 pkg.install(self.db)
                             else:
-                                self.config.printInfo(0, "\n")
+                                if self.config.printhash:
+                                    self.config.printInfo(0, "\n")
+                                else:
+                                    self.config.printInfo(1, "\n")
                         except (IOError, OSError, ValueError), e:
                             self.config.printError("Error installing %s: %s"
                                                    % (pkg.getNEVRA(), e))
@@ -348,7 +351,10 @@ class RpmController:
                             if not self.config.justdb:
                                 pkg.erase(self.db)
                             else:
-                                self.config.printInfo(0, "\n")
+                                if self.config.printhash:
+                                    self.config.printInfo(0, "\n")
+                                else:
+                                    self.config.printInfo(1, "\n")
                         except (IOError, ValueError), e:
                             self.config.printError("Error erasing %s: %s"
                                                    % (pkg.getNEVRA(), e))

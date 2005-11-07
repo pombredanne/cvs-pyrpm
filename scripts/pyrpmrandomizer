@@ -121,13 +121,13 @@ def main():
                 pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgList()
                 pkg = pkglist[random.randrange(0, len(pkglist))]
             yum.setCommand("update")
-            print "Updating package %s" % pkg.getNEVRA()
+            rpmconfig.printInfo(1, "Updating package %s\n" % pkg.getNEVRA())
             resolver.update(pkg)
         else:
             pkglist = resolver.getList()
             pkg = pkglist[random.randrange(0, len(pkglist))]
             yum.setCommand("remove")
-            print "Erasing package %s" % pkg.getNEVRA()
+            rpmconfig.printInfo(1, "Erasing package %s\n" % pkg.getNEVRA())
             resolver.erase(pkg)
         if not yum.runDepRes():
             continue
