@@ -263,6 +263,11 @@ class KickstartConfig(dict):
                                     "bytes-per-inode:", "recommended",
                                     "onbiosdisk" ],
                                   { "usepart": "onpart", "ondrive": "ondisk" })
+                    self.convertLong(self["partition"], "size")
+                    self.convertLong(self["partition"], "maxsize")
+                    self.convertLong(self["partition"], "start")
+                    self.convertLong(self["partition"], "end")
+                    self.convertLong(self["partition"], "bytes-per-inode")
                 # TODO: raid
                 elif opt == "rootpw":
                     self.parseSub(opt, args[1:], [ "iscrypted" ])
@@ -398,31 +403,55 @@ class KickstartConfig(dict):
 
         partitions = [ ]
         disk = { }
-        for name in self["partition"]:
-            part = self["partition"][name]
-            if part.has_key("fstype") and \
-                   part["fstype"] not in [ "ext2", "ext3" ]:
-                raise ValueError, \
-                      "'%s': Filesystem type '%s' is not supported" % \
-                      (name, part["fstype"])
-            if part.has_key("onpart"):
-                if part["onpart"] in partitions:
-                    raise ValueError, "Partition '%s' used multiple times" % \
-                          part["onpart"]
-                partitions.append(part["onpart"])
-            ondisk = "default"
-            if part.has_key("ondisk"):
-                ondisk = part["ondisk"]
-            if not disk.has_key(ondisk):
-                disk[ondisk] = { }
-            if part.has_key("grow"):
-                if disk[ondisk].has_key("grow"):
+        if self["partition"]:
+            for name in self["partition"]:
+                part = self["partition"][name]
+                if part.has_key("fstype") and \
+                       part["fstype"] not in [ "ext2", "ext3" ]:
                     raise ValueError, \
-                          "More than one grow partition on '%s'" % \
-                          disk[ondisk]
-                disk[ondisk]["grow"] = name
-        del partitions
-        del disk
+                          "'%s': Filesystem type '%s' is not supported" % \
+                          (name, part["fstype"])
+                if part.has_key("onpart"):
+                    if part["onpart"] in partitions:
+                        raise ValueError, \
+                              "Partition '%s' used multiple times" % \
+                              part["onpart"]
+                    partitions.append(part["onpart"])
+                if part.has_key("grow") and not part.has_key("size"):
+                    raise ValueError, \
+                          "Growing partition '" + part["onpart"] + \
+                          "' has no size."
+                if part.has_key("maxsize") and not part.has_key("grow"):
+                    raise ValueError, \
+                          "Maxsize given for partition '" + part["onpart"] + \
+                          "', but it is no growing partition."
+                if part.has_key("start"):
+                    if not part.has_key("end") and \
+                           not part.has_key("size"):
+                        raise ValueError, \
+                              "Partition '" + part["onpart"] + \
+                              "' has set start, but no end or size."
+                    if not part.has_key("ondisk"):
+                        raise ValueError, \
+                              "Partition '" + part["onpart"] + \
+                              "' has set start, but no disk."
+                elif not part.has_key("recommended") and \
+                         not part.has_key("size"):
+                    raise ValueError, \
+                          "Partition '" + part["onpart"] + "' has no size."
+                ondisk = "default"
+                if part.has_key("ondisk"):
+                    ondisk = part["ondisk"]
+                if not disk.has_key(ondisk):
+                    disk[ondisk] = { }
+                if part.has_key("grow"):
+                    if disk[ondisk].has_key("grow"):
+                        raise ValueError, \
+                              "More than one grow partition on '%s'" % \
+                              disk[ondisk]
+                    disk[ondisk]["grow"] = name
+            del partitions
+            del disk
 
         if self["url"]:
             if not self["url"].has_key("url"):
@@ -474,6 +503,13 @@ class KickstartConfig(dict):
                    (var[0] == "'" and var[-1] == "'"):
                 var = var[1:-1]
         return var
+
+    def convertLong(self, dict, key):
+        if dict.has_key(key):
+            try:
+                dict[key] = long(dict[key])
+            except Exception, msg:
+                print "'%s'=%s is no valid long value." % (key, dict[key])
 
     ############################ static functions ############################
 
