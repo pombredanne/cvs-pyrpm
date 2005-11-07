@@ -287,19 +287,19 @@ class Disk(dict):
         diskType[type.name] = type
         type = parted.disk_type_get_next(type)
     
-    def __init__(self, name, alloc_loop=0):            
+    def __init__(self, name, alloc_loop=0, as_image=0):            
         self.ped_disk = None
         self.partition = { }
         self.alloc_loop = alloc_loop
-        self.open(name)
+        self.open(name, as_image)
 
-    def open(self, name):
+    def open(self, name, as_image=0):
         device = name
         mode = os.stat(device).st_mode
 
-        if stat.S_ISBLK(mode):
+        if stat.S_ISBLK(mode) and not as_image:
             self["device"] = device
-        elif stat.S_ISREG(mode):
+        elif stat.S_ISREG(mode) or as_image:
             self["image"] = device
             device = losetup(self["image"])
             if not device:
@@ -988,6 +988,7 @@ orig_yum = 0
 target_dir = None
 label_prefix = ""
 standalone = 0
+disk_image = 0
 
 def usage():
     print """
@@ -1007,6 +1008,7 @@ OPTIONS
   --wait           Wait after installation before umounting.
   --xen            Write a simple xen config file.
   --yum            Use yum instead of pyrpmyum.
+  --disk-image     Treat even devices as disk images.
 """
 # TODO:  --secure         Secure installation (with firewall enabled)
 
@@ -1022,6 +1024,7 @@ try:
                                  [ "help", "verbose", "yes",
                                    "kudzu", "label-prefix", "no-cleanup",
                                    "standalone", "wait", "xen", "yum",
+                                   "disk-image", 
                                    ])
 except:
     usage()
@@ -1050,6 +1053,8 @@ for (opt, val) in opts:
         label_prefix = "%x_" % int(time.strftime("%m%d%H%M"))
     elif opt == "--standalone":
         standalone = 1
+    elif opt == "--disk-image":
+        disk_image = 1
     else:
         print "Unknown option '%s'" % opt
         usage()
@@ -1100,6 +1105,7 @@ if ks.has_key("install"):
         print "ERROR: root partition not defined"
         exit(1)
 else:
+    # TODO: update checks
     print "ERROR: Only installation is supported, aborting."
     exit(1)
 
@@ -1161,7 +1167,7 @@ if len(args) > 1:
             print "ERROR: '%s' already exists in diskmap." % key
             exit(1)
 
-        diskmap[key] = Disk(val, 1)
+        diskmap[key] = Disk(val, alloc_loop=1, as_image=disk_image)
 
 ### create system diskmap ###
 
@@ -1204,7 +1210,7 @@ if len(diskmap) == 0:
                         raise ValueError, "Too many harddisks for remapping."
                     i = ord(hd[-1])
                     hd = "%s%c" % (hd[:-1], chr(i+1))
-                diskmap[hd] = Disk("/dev/"+splits[3])
+                diskmap[hd] = Disk("/dev/"+splits[3], as_image=disk_image)
         fd.close()
 
 # are there any disks at all?
@@ -1286,7 +1292,7 @@ if ks["autopart"]:
     autopart["/boot"] = { "fstype": "ext3",
                           "size": 100 }
     autopart["/"] = { "fstype": "ext3",
-                      "size": 1,
+                      "size": 650,
                       "grow": 1 }
     autopart["swap"] = { "size": 100 }
 
@@ -1406,8 +1412,8 @@ for disk in partitions.keys():
         # get freespace
         freespace = diskmap[disk]["freespace"]
 
-        size = (((float(part["size"]) * 1024L*1024L) / \
-                 diskmap[disk]["units"]) / \
+        size = (((long(part["size"]) * 1024L*1024L) / \
+                 diskmap[disk]["units"] + diskmap[disk]["sector_size"] - 1) / \
                 diskmap[disk]["sector_size"])
 #        print "%s: size=%d" % (name, size)
 
@@ -1470,9 +1476,10 @@ for disk in modified:
     try:
         diskmap[disk].commit()
     except Exception, msg:
-        if not diskmap[disk].has_key("image"):
-            print msg
-            exit(1)
+        print msg
+#        if not diskmap[disk].has_key("image"):
+#            print msg
+#            exit(1)
     diskmap[disk].reload()
 
 # sanity check
