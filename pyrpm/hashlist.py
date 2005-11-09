@@ -66,6 +66,13 @@ class HashList:
             return key
         return None
 
+    def setdefault(self, key, value=None):
+        """Returns self[key] if it exists, otherwise returns value and sets
+        self[key]=value."""
+        if not self.hash.has_key(key):
+            self.hash[key] = value
+        return self.hash[key]
+
     def pop(self, idx):
         """Remove idx'th (0-based) key and its value.
 
