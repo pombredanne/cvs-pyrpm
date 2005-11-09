@@ -245,7 +245,8 @@ class RpmYum:
                             pkg_list.extend(resolver.searchDependency((f, 0, "")))
                         orderList(pkg_list, self.config.machine)
                         # We only add the first package where we find that file
-                        self.pkgs.append(pkg_list[0])
+                        if len(pkg_list) > 0:
+                            self.pkgs.append(pkg_list[0])
                     else:
                         self.pkgs.extend(findPkgByNames([f,], repopkglist))
                     if len(self.pkgs) == 0:
