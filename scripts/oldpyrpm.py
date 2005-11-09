@@ -2539,6 +2539,9 @@ class FilenamesList:
             path.setdefault(i, {})
         for i in xrange(len(basenames)):
             dirname = dirnames[dirindexes[i]]
+            # The index "i" is only used for fileconflict checks, so
+            # maybe we should store this information somewhere else
+            # to save memory for the default case?
             path[dirname].setdefault(basenames[i], []).append((pkg, i))
 
     def removePkg(self, pkg):
@@ -2625,17 +2628,16 @@ class DepList:
 
 class RpmResolver:
 
-    def __init__(self, rpms=None):
+    def __init__(self, rpms=[]):
         self.filenames_list = FilenamesList()
         self.provides_list = DepList()
         self.obsoletes_list = DepList()
         self.conflicts_list = DepList()
         self.requires_list = DepList()
         self.cache = {}
-        if rpms:
-            for r in rpms:
-                if not r.issrc:
-                    self.addPkg(r)
+        for r in rpms:
+            if not r.issrc:
+                self.addPkg(r)
 
     def addPkg(self, pkg):
         self.filenames_list.addPkg(pkg)
@@ -4726,25 +4728,34 @@ def checkDeps(rpms):
                     depString(name, flag, version), "with", pkg.getFilename()
     # Check for fileconflicts.
     for dirname in resolver.filenames_list.path.keys():
-        for basename in resolver.filenames_list.path[dirname].keys():
-            s = resolver.filenames_list.path[dirname][basename]
+        pathdirname = resolver.filenames_list.path[dirname]
+        for basename in pathdirname.keys():
+            s = pathdirname[basename]
             if len(s) < 2:
                 continue
             for j in xrange(len(s) - 1):
                 (rpm1, i1) = s[j]
-                if not S_ISREG(rpm1["filemodes"][i1]):
-                    continue
+                filemodesi1 = rpm1["filemodes"][i1]
+                #if not S_ISREG(filemodesi1):
+                #    continue
+                filemd5si1 = rpm1["filemd5s"][i1]
+                filecolorsi1 = None
+                if rpm1["filecolors"]:
+                    filecolorsi1 = rpm1["filecolors"][i1]
                 for k in xrange(j + 1, len(s)):
                     (rpm2, i2) = s[k]
-                    if not S_ISREG(rpm2["filemodes"][i2]):
+                    filemodesi2 = rpm2["filemodes"][i2]
+                    #if not S_ISREG(filemodesi2):
+                    #    continue
+                    # No fileconflict if mode and md5sum match.
+                    if filemd5si1 == rpm2["filemd5s"][i2] and \
+                        filemodesi1 == filemodesi2:
                         continue
-                    if rpm1["filemd5s"][i1] == rpm2["filemd5s"][i2] and \
-                        rpm1["filemodes"][i1] == rpm2["filemodes"][i2]:
-                        continue
-                    if rpm1["filecolors"] and rpm2["filecolors"] and \
-                        rpm1["filecolors"][i1] and rpm2["filecolors"][i2] and \
-                        rpm1["filecolors"][i1] != rpm2["filecolors"][i2]:
-                        continue
+                    # No fileconflict for multilib elf32/elf64 files.
+                    if filecolorsi1 and rpm2["filecolors"]:
+                        filecolorsi2 = rpm2["filecolors"][i2]
+                        if filecolcolorsi2 and filecolcorsi1 != filecolorsi2:
+                            continue
                     print "fileconflict for", dirname + basename, "in", \
                         rpm1.getFilename(), "and", rpm2.getFilename()
     # Order rpms on how they get installed.
