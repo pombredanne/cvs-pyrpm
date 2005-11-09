@@ -1889,6 +1889,10 @@ class ReadRpm:
             provs.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
         return provs
 
+    def addProvides(self, phash):
+        for (name, flag, version) in self.getProvides():
+            phash.setdefault(name, []).append((flag, version, self))
+
     def getRequires(self):
         return self.__getDeps("requirename", "requireflags", "requireversion")
 
@@ -1899,6 +1903,10 @@ class ReadRpm:
     def getConflicts(self):
         return self.__getDeps("conflictname", "conflictflags",
             "conflictversion")
+
+    def addDeps(self, name, flag, version, phash):
+        for (n, f, v) in self.__getDeps(name, flag, version):
+            phash.setdefault((n, f, v), []).append(self)
 
     def getTriggers(self):
         deps = self.__getDeps("triggername", "triggerflags", "triggerversion")
@@ -2590,9 +2598,6 @@ def depString(name, flag, version):
 class DepList:
 
     def __init__(self):
-        self.clear()
-
-    def clear(self):
         self.deps = {}
 
     def addPkg(self, rpm, deps):
@@ -2631,9 +2636,9 @@ class RpmResolver:
     def __init__(self, rpms=[]):
         self.filenames_list = FilenamesList()
         self.provides_list = DepList()
-        self.obsoletes_list = DepList()
-        self.conflicts_list = DepList()
-        self.requires_list = DepList()
+        self.obsoletes_list = {}
+        self.conflicts_list = {}
+        self.requires_list = {}
         self.cache = {}
         for r in rpms:
             if not r.issrc:
@@ -2641,10 +2646,13 @@ class RpmResolver:
 
     def addPkg(self, pkg):
         self.filenames_list.addPkg(pkg)
-        self.provides_list.addPkg(pkg, pkg.getProvides())
-        self.obsoletes_list.addPkg(pkg, pkg.getObsoletes())
-        self.conflicts_list.addPkg(pkg, pkg.getConflicts())
-        self.requires_list.addPkg(pkg, pkg.getRequires())
+        pkg.addProvides(self.provides_list.deps)
+        pkg.addDeps("obsoletename", "obsoleteflags", "obsoleteversion",
+            self.obsoletes_list)
+        pkg.addDeps("conflictname", "conflictflags", "conflictversion",
+            self.conflicts_list)
+        pkg.addDeps("requirename", "requireflags", "requireversion",
+            self.requires_list)
         self.cache = {}
 
     def searchDependency(self, name, flag, version):
@@ -2656,35 +2664,6 @@ class RpmResolver:
             s += self.filenames_list.search(name)
         self.cache[key] = s
         return s
-
-    def getPkgDependencies(self, pkg, getconfigreq=None):
-        unresolved = []
-        resolved = []
-        for u in pkg.getRequires():
-            if u[0].startswith("rpmlib("): # drop rpmlib requirements
-                continue
-            if not getconfigreq and u[0].startswith("config("):
-                continue
-            s = self.searchDependency(*u)
-            # prefer self dependencies if there are others, too
-            #if len(s) > 1 and pkg in s:
-            #    s = [pkg]
-            if not s:
-                unresolved.append(u)
-            else:
-                resolved.append((u, s))
-        return (unresolved, resolved)
-
-    def getPkgDepResolved(self, pkg):
-        resolved = []
-        for u in pkg.getRequires():
-            name = u[0]
-            if name.startswith("rpmlib(") or name.startswith("config("):
-                continue
-            s = self.searchDependency(*u)
-            if s:
-                resolved.append((u, s))
-        return resolved
 
 
 SOFT    = 0 # normal requirement
@@ -3016,18 +2995,23 @@ class RpmOrderer:
     def genRelations(self, rpms, operation):
         """Return orderer.Relations between RpmPackage's in list rpms for
         operation."""
+        resolver = self.resolver
         relations = Relations(rpms)
-        for pkg in rpms:
-            resolved = self.resolver.getPkgDepResolved(pkg)
-            for ((name, flag, version), s) in resolved:
-                if pkg in s: # ignore deps resolved also by itself
+        for (n, f, v) in resolver.requires_list.keys():
+            if n[:7] in ("rpmlib(", "config("):
+                continue
+            rpms = resolver.requires_list[(n, f, v)]
+            resolved = resolver.searchDependency(n, f, v)
+            if resolved:
+                f2 = operationFlag(f, operation)
+            for pkg in rpms:
+                if pkg in resolved: # ignore deps resolved also by itself
                     continue
-                f = operationFlag(flag, operation)
                 i = relations.list[pkg]
-                for pre in s:
+                for pre in resolved:
                     # prefer hard requirements, do not overwrite with soft req
-                    if (f & HARD) or pre not in i.pre:
-                        i.pre[pre] = f
+                    if (f2 & HARD) or pre not in i.pre:
+                        i.pre[pre] = f2
                         relations.list[pre].post[pkg] = 1
         return relations
 
@@ -4701,31 +4685,34 @@ def checkDeps(rpms):
     # Add all packages in.
     resolver = RpmResolver(rpms)
     # Check for obsoletes.
-    for name in resolver.obsoletes_list.deps.keys():
-        for (flag, version, rpm) in resolver.obsoletes_list.deps[name]:
-            for pkg in resolver.searchDependency(name, flag, version):
+    for (name, flag, version) in resolver.obsoletes_list.keys():
+        orpms = resolver.obsoletes_list[(name, flag, version)]
+        for pkg in resolver.searchDependency(name, flag, version):
+            for rpm in orpms:
                 if rpm.getNEVR0() == pkg.getNEVR0():
                     continue
                 if rpm["name"] != name:
                     print "Warning:", pkg.getFilename(), "is obsoleted by", \
-                        depString(name, flag, version), "from", rpm.getFilename()
-    # Check all requires.
-    for name in resolver.requires_list.deps.keys():
-        if name.startswith("rpmlib("):
-            continue
-        for (flag, version, rpm) in resolver.requires_list.deps[name]:
-            if not resolver.searchDependency(name, flag, version):
-                print "Warning:", rpm.getFilename(), \
-                    "did not find a package for:", \
-                    depString(name, flag, version)
+                        depString(name, flag, version), "from", \
+                        rpm.getFilename()
     # Check all conflicts.
-    for name in resolver.conflicts_list.deps.keys():
-        for (flag, version, rpm) in resolver.conflicts_list.deps[name]:
-            for pkg in resolver.searchDependency(name, flag, version):
+    for (name, flag, version) in resolver.conflicts_list.keys():
+        crpms = resolver.conflicts_list[(name, flag, version)]
+        for pkg in resolver.searchDependency(name, flag, version):
+            for rpm in crpms:
                 if rpm.getNEVR0() == pkg.getNEVR0():
                     continue
                 print "Warning:", rpm.getFilename(), "contains a conflict", \
                     depString(name, flag, version), "with", pkg.getFilename()
+    # Check all requires.
+    for (name, flag, version) in resolver.requires_list.keys():
+        if name[:7] == "rpmlib(":
+            continue
+        if not resolver.searchDependency(name, flag, version):
+            for rpm in resolver.requires_list[(name, flag, version)]:
+                print "Warning:", rpm.getFilename(), \
+                    "did not find a package for:", \
+                    depString(name, flag, version)
     # Check for fileconflicts.
     for dirname in resolver.filenames_list.path.keys():
         pathdirname = resolver.filenames_list.path[dirname]
@@ -4754,7 +4741,7 @@ def checkDeps(rpms):
                     # No fileconflict for multilib elf32/elf64 files.
                     if filecolorsi1 and rpm2["filecolors"]:
                         filecolorsi2 = rpm2["filecolors"][i2]
-                        if filecolcolorsi2 and filecolcorsi1 != filecolorsi2:
+                        if filecolorsi2 and filecolorsi1 != filecolorsi2:
                             continue
                     print "fileconflict for", dirname + basename, "in", \
                         rpm1.getFilename(), "and", rpm2.getFilename()
