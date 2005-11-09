@@ -105,19 +105,6 @@ class ProvidesList:
                 if evrCompare(evr2, flag, evr):
                     ret.append(rpm)
 
-        if not arch or arch == "noarch":   # all rpms are matching
-            return ret
-
-        # drop all packages which are not arch compatible
-        i = 0
-        while i < len(ret):
-            r = ret[i]
-            if r["arch"] == "noarch" or archDuplicate(r["arch"], arch) or \
-                   archCompat(r["arch"], arch) or archCompat(arch, r["arch"]):
-                i += 1
-            else:
-                ret.pop(i)
-
         return ret
 
 # ----------------------------------------------------------------------------
@@ -160,19 +147,6 @@ class ConflictsList(ProvidesList):
             if rangeCompare(flag, evr, f, evrSplit(v)):
                 ret.append(rpm)
                 continue
-
-        if not arch or arch == "noarch":   # all rpms are matching
-            return ret
-
-        # drop all packages which are not arch compatible
-        i = 0
-        while i < len(ret):
-            r = ret[i]
-            if r["arch"] == "noarch" or archDuplicate(r["arch"], arch) or \
-                   archCompat(r["arch"], arch) or archCompat(arch, r["arch"]):
-                i += 1
-            else:
-                ret.pop(i)
 
         return ret
 
@@ -519,9 +493,6 @@ class RpmResolver(RpmList):
             if u[0].startswith("rpmlib("): # drop rpmlib requirements
                 continue
             s = self.searchDependency(u, pkg["arch"])
-            if len(s) > 1 and pkg in s:
-                # prefer self dependencies if there are others, too
-                s = [pkg]
             if len(s) == 0: # found nothing
                 if self.config.checkinstalled == 0 and \
                        pkg in self.installed_unresolved and \
