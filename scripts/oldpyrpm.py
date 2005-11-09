@@ -4734,9 +4734,12 @@ def checkDeps(rpms):
                     filemodesi2 = rpm2["filemodes"][i2]
                     #if not S_ISREG(filemodesi2):
                     #    continue
-                    # No fileconflict if mode and md5sum match.
+                    # No fileconflict if mode/md5sum/user/group match.
                     if filemd5si1 == rpm2["filemd5s"][i2] and \
-                        filemodesi1 == filemodesi2:
+                        filemodesi1 == filemodesi2 and \
+                        rpm1["fileusername"][i1] == rpm2["fileusername"][i2] \
+                        and rpm1["filegroupname"][i1] == \
+                            rpm2["filegroupname"][i2]:
                         continue
                     # No fileconflict for multilib elf32/elf64 files.
                     if filecolorsi1 and rpm2["filecolors"]:
@@ -5218,14 +5221,11 @@ def checkSymlinks(repo):
                 % (rpm["name"], f, link)
 
 def checkDirs(repo):
-    """Check if any two dirs in a repository differ in user/group/mode."""
-    dirs = {}
     # collect all directories
     for rpm in repo:
         if not rpm.filenames:
             continue
-        for (f, mode, user, group) in zip(rpm.filenames, rpm["filemodes"],
-            rpm["fileusername"], rpm["filegroupname"]):
+        for f in rpm.filenames:
             # check if startup scripts are in wrong directory
             if f.startswith("/etc/init.d/"):
                 print "init.d:", rpm.filename, f
@@ -5233,20 +5233,6 @@ def checkDirs(repo):
             if not rpm["name"].endswith("-debuginfo") and \
                 f.startswith("/usr/lib/debug"):
                 print "debug stuff in normal package:", rpm.filename, f
-            # collect all directories into "dirs"
-            if not S_ISDIR(mode):
-                continue
-            dirs.setdefault(f, []).append( (f, user, group, mode,
-                rpm.filename) )
-    # check if all dirs have same user/group/mode
-    for d in dirs.values():
-        if len(d) < 2:
-            continue
-        (user, group, mode) = (d[0][1], d[0][2], d[0][3])
-        for i in xrange(1, len(d)):
-            if d[i][1] != user or d[i][2] != group or d[i][3] != mode:
-                print "dir check failed for ", d
-                break
 
 dupes = [ ("glibc", "i386"),
           ("nptl-devel", "i386"),
