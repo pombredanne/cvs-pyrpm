@@ -21,6 +21,27 @@
 
 import types
 
+##############################################################################
+#
+# Partitions
+#   partition ("swap" | (<name> --fstype:)) [<global options>] \
+#                                           [<placement options>]
+#
+# Global options:
+#   --fsoptions:
+#   --label:
+#   --bytes-per-inode:
+#   --onbiosdisk
+#
+# Placement options:
+#   1) --usepart: [--noformat]
+#   2) [ --asprimary ] --start: --ondisk: ( --size: | --end: )
+#   3) [ --asprimary ] [ --ondisk: ] --size: [ --grow [ --maxsize: ] ]
+#   4) [ --asprimary ] [ --ondisk: ] --recommended
+#
+##############################################################################
+
+
 ################################### classes ###################################
 
 class KickstartConfig(dict):
@@ -116,7 +137,7 @@ class KickstartConfig(dict):
                     if opt in [ "autopart", "autostep", "cdrom", "cmdline",
                                 "install", "interactive", "reboot", "skipx",
                                 "text", "upgrade", "mouse" ]:
-                        self[opt] = 1
+                        self[opt] = None
                     else:
                         print "'%s' is unsupported" % line
                     continue
@@ -182,9 +203,9 @@ class KickstartConfig(dict):
                         if replace_tags and replace_tags.has_key(_opt):
                             _opt = replace_tags[_opt]
                         if _opt == "--enabled" or _opt == "--enable":
-                            self[opt]["enabled"] = 1
+                            self[opt]["enabled"] = None
                         elif _opt == "--disabled" or _opt == "--disable":
-                            self[opt]["disabled"] = 1
+                            self[opt]["disabled"] = None
                         elif _opt == "--trust" and _val:
                             if not self[opt].has_key("trust"):
                                self[opt]["trusted"] = [ ]
@@ -471,7 +492,7 @@ class KickstartConfig(dict):
                     o = opt[2:]
                 dict[o] = self.stripQuotes(val)
             else:
-                dict[opt[2:]] = 1
+                dict[opt[2:]] = None
 
         return (dict, args)
 
