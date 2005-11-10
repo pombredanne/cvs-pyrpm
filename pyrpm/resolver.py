@@ -78,14 +78,9 @@ class ProvidesList:
         for (name, flag, version) in rpm["provides"]:
             self._removeProvide(name, flag, version, rpm)
 
-    def search(self, name, flag, version, arch=None):
+    def search(self, name, flag, version):
         """Return a list of RpmPackage's matching the Requires:
-        (name, RPMSENSE_* flag, EVR string).
-
-        If arch is not None, return only packages which can satisfy requires
-        by package with arch: if neither of the architectures is noarch,
-        they must have same base arch or one must be compatible with the
-        other."""
+        (name, RPMSENSE_* flag, EVR string)."""
 
         if not self.provide.has_key(name):
             return [ ]
@@ -124,15 +119,10 @@ class ConflictsList(ProvidesList):
         for (name, flag, version) in rpm["conflicts"]:
             self._removeProvide(name, flag, version, rpm)
 
-    def search(self, name, flag, version, arch=None):
+    def search(self, name, flag, version):
         # s/Conflicts/Obsoletes/ in ObsoletesList
         """Return a list of RpmPackage's with Conflicts: matching
-        (name, RPMSENSE_* flag, EVR string).
-
-        If arch is not None, return only packages which can satisfy requires
-        by package with arch: if neither of the architectures is noarch,
-        they must have same base arch or one must be compatible with the
-        other."""
+        (name, RPMSENSE_* flag, EVR string)."""
 
         if not self.provide.has_key(name):
             return [ ]
@@ -233,14 +223,13 @@ class RpmResolver(RpmList):
             # check Obsoletes: for our Provides:
             for dep in pkg["provides"]:
                 (name, flag, version) = dep
-                s = self.obsoletes_list.search(name, flag, version,
-                                               pkg["arch"])
+                s = self.obsoletes_list.search(name, flag, version)
                 if self._checkObsoletes(pkg, dep, s, operation):
                     return self.CONFLICT
             # check conflicts for filenames
             for f in pkg["filenames"]:
                 dep = (f, 0, "")
-                s = self.obsoletes_list.search(f, 0, "", pkg["arch"])
+                s = self.obsoletes_list.search(f, 0, "")
                 if self._checkObsoletes(pkg, dep, s, operation):
                     return self.CONFLICT
 
@@ -463,14 +452,11 @@ class RpmResolver(RpmList):
             del self.obsoletes[old_pkg]
     # ----
 
-    def searchDependency(self, dep, arch=None):
+    def searchDependency(self, dep):
         """Return list of RpmPackages from self.list providing
-        (name, RPMSENSE_* flag, EVR string) dep.
-
-        If arch is not none, return only packages which can satisfy Requires:
-        by package with arch."""
+        (name, RPMSENSE_* flag, EVR string) dep."""
         (name, flag, version) = dep
-        s = self.provides_list.search(name, flag, version, arch)
+        s = self.provides_list.search(name, flag, version)
         if name[0] == '/': # all filenames are beginning with a '/'
             s += self.filenames_list.search(name)
         return s
@@ -492,7 +478,7 @@ class RpmResolver(RpmList):
         for u in pkg["requires"]:
             if u[0].startswith("rpmlib("): # drop rpmlib requirements
                 continue
-            s = self.searchDependency(u, pkg["arch"])
+            s = self.searchDependency(u)
             if len(s) == 0: # found nothing
                 if self.config.checkinstalled == 0 and \
                        pkg in self.installed_unresolved and \
@@ -568,7 +554,7 @@ class RpmResolver(RpmList):
                 for u in pkg["requires"]:
                     if u[0].startswith("rpmlib("): # drop rpmlib requirements
                         continue
-                    s = self.searchDependency(u, pkg["arch"])
+                    s = self.searchDependency(u)
                     if len(s) > 0: # found something
                         continue
                     if self.config.checkinstalled == 0 and \
