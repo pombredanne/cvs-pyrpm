@@ -116,7 +116,7 @@ def mkstemp_mkfifo(dirname, pre):
 
     Return absolute file path.  Raise IOError if no file name is available,
     OSError."""
-    
+
     names = _get_candidate_names()
     for _ in xrange(TMP_MAX):
         name = names.next()
@@ -687,7 +687,7 @@ def parseYumOptions(argv, yum):
     Return list of non-option operands on success, None if a help message
     should be written.  sys.exit () on --version, some invalid arguments
     or errors in config files."""
-    
+
     # Argument parsing
     try:
       opts, args = getopt.getopt(argv, "?vhc:r:y",
@@ -850,7 +850,7 @@ def readPackages(dbpath):
 
     Return ({ package id => RpmPackage }, PGPKeyRing).  Raise bsddb.error.
     Skip invalid packages and invalid tags, using config.rpmconfig to warn."""
-    
+
     packages = {}
     keyring = openpgp.PGPKeyRing()
     db = hashopen(os.path.join(dbpath, "Packages"), "r")
@@ -981,7 +981,7 @@ def envraSplit(envra):
 
     Return (E, N, V, R, A).  Default epoch, version, release and arch to None
     if not specified."""
-    
+
     # Find the epoch separator
     i = envra.find(":")
     if i >= 0:
@@ -1132,7 +1132,7 @@ def pkgCompare(p1, p2):
 
     Return an integer with the same sign as (p1 - p2).  The packages should
     have same %name for the comparison to be meaningful."""
-    
+
     return labelCompare((p1.getEpoch(), p1["version"], p1["release"]),
                         (p2.getEpoch(), p2["version"], p2["release"]))
 
@@ -1142,7 +1142,7 @@ def rangeCompare(flag1, evr1, flag2, evr2):
 
     Return 1 if they do, 0 otherwise.  Assumes at least one of RPMSENSE_EQUAL,
     RPMSENSE_LESS or RPMSENSE_GREATER is each of flag1 and flag2."""
-    
+
     sense = labelCompare(evr1, evr2)
     result = 0
     if sense < 0 and  \
@@ -1181,13 +1181,13 @@ def depString((name, flag, version)):
 def archCompat(parch, arch):
     """Return True if package with architecture parch can be installed on
     machine with arch arch."""
-    
+
     return (parch == "noarch" or arch == "noarch" or parch == arch or
             parch in arch_compats.get(arch, []))
 
 def archDuplicate(parch, arch):
     """Return True if parch and arch have the same base arch."""
-    
+
     return (parch == arch
             or buildarchtranslate[parch] == buildarchtranslate[arch])
 
@@ -1196,7 +1196,7 @@ def filterArchCompat(list, arch):
     installed on arch arch.
 
     Warn using config.rpmconfig about dropped packages."""
-    
+
     i = 0
     while i < len(list):
         if archCompat(list[i]["arch"], arch):
@@ -1208,7 +1208,7 @@ def filterArchCompat(list, arch):
 
 def normalizeList(list):
     """Modify list to contain every entry at most once."""
-    
+
     if len(list) < 2:
         return
     h = { }
@@ -1290,7 +1290,7 @@ def buildPkgRefDict(pkgs):
         nevr = "%s-%s" % (nev, r)
         nevra = "%s.%s" % (nevr, a)
 # Temorarily disabled the epoch prefixed stuff as excludes like "[!g]*.i686"
-# will otherwise fail miserably as they will match 0:glibc-XYZ.i686 :) 
+# will otherwise fail miserably as they will match 0:glibc-XYZ.i686 :)
 # We need to enforce the nevra variant here as well.
 # Fixed now with support of epoch inside of the name just as we use it every-
 # where internally.
@@ -1367,7 +1367,7 @@ def run_main(main):
     """Run main, handling --hotshot.
 
     The return value from main, if not None, is a return code."""
-    
+
     dohotshot = 0
     if len(sys.argv) >= 2 and sys.argv[1] == "--hotshot":
         dohotshot = 1

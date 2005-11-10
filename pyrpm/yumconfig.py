@@ -41,15 +41,15 @@ class Conf:
 
         Don't report error if filename does not exist and create_if_missing.
         Raise IOError."""
-        
+
         self.commenttype = commenttype
         self.separators = separators
         self.separator = separator
         # A cache for self.findnextcodeline():
         # (separators, commenttype) => RE for non-empty, non-comment lines
-        self.codedict = {} 
+        self.codedict = {}
         # A cache for self.getfields(): regexp => compiled RE
-        self.splitdict = {} 
+        self.splitdict = {}
         self.merge = merge
         self.create_if_missing = create_if_missing
         # self.line is a "point" -- 0 is before the first line;
@@ -63,20 +63,20 @@ class Conf:
 
     def rewind(self):
         """Seek to the first line."""
-        
+
         self.line = 0
 
     def nextline(self):
         """Seek to the next line, if any."""
 
         self.line = min([self.line + 1, len(self.lines)])
-        
+
     def findnextline(self, regexp):
         """Starting at the current line, skip all lines not containing a match
         to regexp.
 
         Return 1 if found a match, 0 otherwise."""
-        
+
         if not hasattr(regexp, "search"):
             regexp = re.compile(regexp)
         while self.line < len(self.lines):
@@ -84,12 +84,12 @@ class Conf:
                 return 1
             self.line = self.line + 1
         return 0
-    
+
     def findnextcodeline(self):
         """Starting at the current line, skip all empty or comment lines.
 
         Return 1 if found a "value" line, 0 otherwise."""
-        
+
         # optional whitespace followed by non-comment character
         # defines a codeline.  blank lines, lines with only whitespace,
         # and comment lines do not count.
@@ -102,7 +102,7 @@ class Conf:
 
     def getline(self):
         """Return current line, or '' if past EOF."""
-        
+
         if self.line >= len(self.lines):
             return ''
         return self.lines[self.line]
@@ -125,7 +125,7 @@ class Conf:
 
     def setfields(self, list):
         """Replace current line with fields list, or append it if at EOF."""
-    
+
         if self.line < len(self.lines):
             self.deleteline()
         self.insertlinelist(list)
@@ -138,20 +138,20 @@ class Conf:
     def insertlinelist(self, linelist):
         """Insert line with fields linelist to self.lines at current
         position."""
-        
+
         self.insertline(string.joinfields(linelist, self.separator))
 
     def sedline(self, pat, repl):
         """Replace pat with repl in current line."""
-        
+
         if self.line < len(self.lines):
             self.lines[self.line] = re.sub(pat, repl, self.lines[self.line])
 
     def deleteline(self):
         """Remove current line from self.lines."""
-        
+
         self.lines[self.line:self.line+1] = []
-    
+
     def chmod(self, mode=-1):
         """Set file permissions to enforce in write () to mode.
 
@@ -163,7 +163,7 @@ class Conf:
         """Read (not parse) the config file into self.lines.
 
         Raise IOError."""
-        
+
         self.lines = []
         if self.create_if_missing and not os.path.isfile(self.filename):
             return
@@ -281,7 +281,7 @@ class YumConf(Conf):
 
     def extendValue(self, value):
         """Return value with all known $vars replaced by their values."""
-        
+
         for var in YumConf.Variables:
             if value.find("$" + var) != -1:
                 value = value.replace("$" + var, self.__dict__[var])
@@ -289,7 +289,7 @@ class YumConf(Conf):
 
     def checkVar(self, stanza, varname):
         """Return True if varname is allowed in stanza."""
-        
+
         if stanza == "main":
             return varname in YumConf.MainVarnames
         else:
@@ -299,7 +299,7 @@ class YumConf(Conf):
         """Read and parse all config files to self.vars.
 
         Raise IOError."""
-        
+
         self.vars = {}
         self.filename = self.myfilename
         Conf.read(self)
@@ -369,7 +369,7 @@ class YumConf(Conf):
 
         Return [name, value] (both with leading and trailing white space
         stripped), or None if the line is invalid."""
-        
+
         v = self.getfields()
 
         try:
@@ -409,7 +409,7 @@ class YumConf(Conf):
         values or stanza headers.
 
         Return 1 if found a "valid" line, 0 otherwise."""
-        
+
         # cannot rename, because of inherited class
         # XXX base class does not call this
         return self.findnextline('^[\t ]*[\[0-9A-Za-z_]+.*')
@@ -426,7 +426,7 @@ class YumConf(Conf):
         header.
 
         Return a stanza name if found, None otherwise."""
-        
+
         # leave the current line at the first line of the stanza
         # (the first line after the [stanza_name] entry)
         while self.findnextline('^[\t ]*\[.*\]'):
@@ -444,12 +444,12 @@ class YumConf(Conf):
         """Return a YumConfSubDict for stanza.
 
         Raise KeyError."""
-        
+
         return self.vars[stanza]
 
     def keys(self):
         """Return a list of known stanza names."""
-        
+
         # no need to return list in order here, I think.
         return self.vars.keys()
 

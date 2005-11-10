@@ -22,7 +22,7 @@ import os, copy, sys, time, signal
 
 class RpmMessageHandler:
     """A closure for message output."""
-    
+
     def __init__(self, config, prefix="", suffix="\n"):
         self.config = config            # FIXME: write-only
         self.prefix = prefix

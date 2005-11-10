@@ -191,7 +191,7 @@ class Partition(dict):
         0xfe: "LANstep",          # SpeedStor >1024 cyl. or LANstep
         0xff: "BBT",              # Xenix Bad Block Table
         }
-    
+
     def __init__(self, ped_partition):
         self.ped_partition = ped_partition
 
@@ -285,8 +285,8 @@ class Disk(dict):
     while type:
         diskType[type.name] = type
         type = parted.disk_type_get_next(type)
-    
-    def __init__(self, name, alloc_loop=0, as_image=0):            
+
+    def __init__(self, name, alloc_loop=0, as_image=0):
         self.ped_disk = None
         self.__clear_partitions()
         self.alloc_loop = alloc_loop
@@ -300,7 +300,7 @@ class Disk(dict):
         self.freespace = [ ]
         self.freespace_primary = [ ]
         self.freespace_logical = [ ]
-        
+
     def open(self, name, as_image=0):
         device = name
         mode = os.stat(device).st_mode
@@ -317,13 +317,13 @@ class Disk(dict):
         else:
             print "ERROR: %s: Unsupported device type." % device
             return
-        
+
         self.ped_device = parted.PedDevice.get(self["device"])
         self.reload()
 
     def has_disklabel(self):
         return (self.ped_disk != None)
-        
+
     def reload(self):
         if not self.ped_disk:
             try:
@@ -661,7 +661,7 @@ def umount_all(dir):
     except Exception:
         print "ERROR: Unable to open '/proc/mount2' for reading."
         return
-        
+
     while 1:
         line = fd.readline()
         if not line:
@@ -789,7 +789,7 @@ def getId(name):
         i += int(tmp[-1])
         tmp = tmp[:-1]
     return i
-    
+
 def partitionId(name):
     if len(name) < 2:
         raise ValueError, "'%s' is no valid partition name" % name
@@ -968,7 +968,7 @@ class pr_print:
         self.pos = 0
         self.pr(var, 0)
         self._print("\n", 0)
-        
+
     def _print(self, str, indent):
         s = ""
         if self.pos == 0:
@@ -1064,7 +1064,7 @@ try:
                                  [ "help", "verbose", "yes",
                                    "kudzu", "label-prefix", "no-cleanup",
                                    "standalone", "wait", "xen", "yum",
-                                   "disk-image", 
+                                   "disk-image",
                                    ])
 except:
     usage()
@@ -1162,7 +1162,7 @@ if not ks["nfs"] and not ks["url"]:
 if ks["url"] and not ks["url"]["url"].startswith("file://"):
     print "ERROR: Unsupported url installation method, exiting."
     exit(1)
-    
+
 ### create user supplied diskmap ###
 
 diskmap = { }
@@ -1469,7 +1469,7 @@ for disk in to_create.keys():
         else:
             if len(diskmap[disk]["extended"]) == 0:
                 # create extended partition
-                
+
                 freespace = diskmap[disk]["freespace"]
                 match = freespace[0]
 
@@ -1603,7 +1603,7 @@ for onpart in partitionmap:
     partitionmap[onpart]["size"] = p["length"] * sector_size
     partitionmap[onpart]["device"] = p["device"]
 
-    part = partitions[name]    
+    part = partitions[name]
 
     # check partition types
     if not p["native_type"]:
@@ -1682,7 +1682,7 @@ for onpart in partitionmap:
                 exit(1)
             label = "%s%d" % (l_name, (id+1))
 #        print "label=%s" % label
-        
+
     partitionmap[onpart]["label"] = label
 
 #if verbose:
@@ -2008,7 +2008,7 @@ for mntpnt in to_mount:
                     exit(1)
 
         part = partitions[mntpnt]
-        
+
 #        print "Mounting '%s':" % mntpnt
         try:
             mount(partitionmap[mountmap[mntpnt]]["device"], dir,

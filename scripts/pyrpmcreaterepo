@@ -395,7 +395,7 @@ def doPkgMetadata(cmds):
                     fhash[regex] = 1
         cmds['dir-pattern-match'].extend(fhash.keys())
         cmds['file-pattern-match'].extend(fhash.keys())
-     
+
         if not cmds['quiet']:
             print "\nPass 2: Generating repodata files"
 

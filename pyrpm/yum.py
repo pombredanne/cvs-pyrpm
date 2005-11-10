@@ -620,7 +620,7 @@ class RpmYum:
             if upkg in self.erase_list or upkg in self.opresolver:
                 continue
             # Only try to update if the package itself or the update package
-            # are noarch or if they are buildarchtranslate or arch compatible. 
+            # are noarch or if they are buildarchtranslate or arch compatible.
             # Some exception needs to be done for filerequirements.
             if not (is_filereq or \
                     archDuplicate(upkg["arch"], pkg["arch"]) or \

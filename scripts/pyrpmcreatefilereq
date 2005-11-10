@@ -54,7 +54,7 @@ def readFileReqList(dir):
         reader = libxml2.newTextReaderFilename(dir+"/filereq.xml.gz")
     except libxml2.libxmlError:
         return filereqhash
-   
+
     while reader.Read() == 1:
         if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT or \
            reader.Name() != "filereq":

@@ -611,7 +611,7 @@ class KickstartConfig(dict):
                 idx += 1
 
         return (_opts,_args)
-    
+
     # make getopt a static class method
     getopt = staticmethod(getopt)
 

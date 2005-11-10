@@ -715,7 +715,7 @@ class RpmStreamIO(RpmIO):
 
         def __createRegionData(self):
             """Return region tag data for current index list."""
-            
+
             tag = self.region
             type = RPM_BIN
             offset = -(len(self.indexlist) * 16) - 16
@@ -1049,12 +1049,12 @@ class RpmDatabase:
     # FIXME: not used
     def getPackage(self, nevra):
         """Return a RpmPackage with NEVRA nevra, or None if not found."""
-        
+
         return self.pkglist.get(nevra)
 
     def getPkgList(self):
         """Return a list of RpmPackages in the database."""
-        
+
         return self.pkglist.values()
 
     def isInstalled(self, pkg):
@@ -1214,7 +1214,7 @@ class RpmDB(RpmDatabase):
             pkg.source = "rpmdb:/"+os.path.join(dbpath, pkg.getNEVRA())
             try:
                 pkg["provides"] = pkg.getProvides()
-                pkg["requires"] = pkg.getRequires() 
+                pkg["requires"] = pkg.getRequires()
                 pkg["obsoletes"] = pkg.getObsoletes()
                 pkg["conflicts"] = pkg.getConflicts()
                 pkg["triggers"] = pkg.getTriggers()
@@ -1408,7 +1408,7 @@ class RpmDB(RpmDatabase):
 
         The tag has a single value if not useidx.  Convert the value using
         func."""
-        
+
         if not pkg.has_key(tag):
             return
         if useidx:
@@ -1436,7 +1436,7 @@ class RpmDB(RpmDatabase):
 
         The tag has a single value if not useidx.  Convert the value using
         func."""
-        
+
         tnamehash = {}
         if not pkg.has_key(tag):
             return
@@ -1593,7 +1593,7 @@ class RpmSQLiteDB(RpmDatabase):
             pkg.generateFileNames()
             try:
                 pkg["provides"] = pkg.getProvides()
-                pkg["requires"] = pkg.getRequires() 
+                pkg["requires"] = pkg.getRequires()
                 pkg["obsoletes"] = pkg.getObsoletes()
                 pkg["conflicts"] = pkg.getConflicts()
                 pkg["triggers"] = pkg.getTriggers()
@@ -1741,7 +1741,7 @@ create table %s (
     def __readTags(self, cu, rowid, pkg, tag):
         """Read values of tag with name tag to RpmPackage pkg with ID rowid
         using cu."""
-        
+
         cu.execute("select val from %s where id=%d order by idx", (tag, rowid))
         for row in cu.fetchall():
             if not pkg.has_key(tag):
@@ -1955,7 +1955,7 @@ class RpmRepo(RpmDatabase):
 
     def __parseNode(self, reader):
         """Parse <package> tags from libxml2.xmlTextReader reader."""
-        
+
         while reader.Read() == 1:
             if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT or \
                (reader.Name() != "package" and reader.Name() != "filereq"):
@@ -1991,8 +1991,8 @@ class RpmRepo(RpmDatabase):
                     continue
 
     def __isExcluded(self, pkg):
-        """Return True if RpmPackage pkg is excluded by configuration.""" 
-        
+        """Return True if RpmPackage pkg is excluded by configuration."""
+
         excludes = functions.findPkgByNames(self.excludes, [pkg])
         return len(excludes) > 0
 
@@ -2145,7 +2145,7 @@ class RpmRepo(RpmDatabase):
         reader.
 
         Raise ValueError on invalid data."""
-        
+
         pkg = package.RpmPackage(self.config, "dummy", db = self)
         pkg["signature"] = {}
         pkg["signature"]["size_in_sig"] = [0,]
@@ -2239,7 +2239,7 @@ class RpmRepo(RpmDatabase):
         libxml2.xmlTextReader reader for package with arch arch.
 
         Raise ValueError on invalid data."""
-        
+
         filelist = []
         version, release, epoch = None, None, None
         while reader.Read() == 1:
@@ -2418,7 +2418,7 @@ class RpmRepo(RpmDatabase):
 
         Return [namelist, flaglist, versionlist].  Raise ValueError on invalid
         input."""
-        
+
         plist = [[], [], []]
         while reader.Read() == 1:
             if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT and \
