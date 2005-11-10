@@ -856,69 +856,69 @@ def BuildArchTranslate(arch):
 
 # arch => compatible archs, best match first
 arch_compats = {
-    "athlon": ("i686", "i586", "i486", "i386"),
-    "i686": ("i586", "i486", "i386"),
-    "i586": ("i486", "i386"),
-    "i486": ("i386",),
+    "athlon": ["i686", "i586", "i486", "i386"],
+    "i686": ["i586", "i486", "i386"],
+    "i586": ["i486", "i386"],
+    "i486": ["i386",],
 
-    "x86_64": ("amd64", "athlon", "i686", "i586", "i486", "i386"),
-    "amd64": ("x86_64", "athlon", "i686", "i586", "i486", "i386"),
-    "ia32e": ("x86_64", "athlon", "i686", "i586", "i486", "i386"),
+    "x86_64": ["amd64", "athlon", "i686", "i586", "i486", "i386"],
+    "amd64": ["x86_64", "athlon", "i686", "i586", "i486", "i386"],
+    "ia32e": ["x86_64", "athlon", "i686", "i586", "i486", "i386"],
 
-    "ia64": ("i686", "i586", "i486", "i386"),
+    "ia64": ["i686", "i586", "i486", "i386"],
 
-    "alphaev67": ("alphaev6", "alphapca56", "alphaev56", "alphaev5", "alpha",
-        "axp"),
-    "alphaev6": ("alphapca56", "alphaev56", "alphaev5", "alpha", "axp"),
-    "alphapca56": ("alphaev56", "alphaev5", "alpha", "axp"),
-    "alphaev56": ("alphaev5", "alpha", "axp"),
-    "alphaev5": ("alpha", "axp"),
-    "alpha": ("axp",),
+    "alphaev67": ["alphaev6", "alphapca56", "alphaev56", "alphaev5", "alpha",
+        "axp"],
+    "alphaev6": ["alphapca56", "alphaev56", "alphaev5", "alpha", "axp"],
+    "alphapca56": ["alphaev56", "alphaev5", "alpha", "axp"],
+    "alphaev56": ["alphaev5", "alpha", "axp"],
+    "alphaev5": ["alpha", "axp"],
+    "alpha": ["axp",],
 
-    "osfmach3_i686": ("i686", "osfmach3_i586", "i586", "osfmach3_i486", "i486",
-        "osfmach3_i386", "i486", "i386"),
-    "osfmach3_i586": ("i586", "osfmach3_i486", "i486", "osfmach3_i386", "i486",
-        "i386"),
-    "osfmach3_i486": ("i486", "osfmach3_i386", "i486", "i386"),
-    "osfmach3_i386": ("i486", "i386"),
+    "osfmach3_i686": ["i686", "osfmach3_i586", "i586", "osfmach3_i486", "i486",
+        "osfmach3_i386", "i486", "i386"],
+    "osfmach3_i586": ["i586", "osfmach3_i486", "i486", "osfmach3_i386", "i486",
+        "i386"],
+    "osfmach3_i486": ["i486", "osfmach3_i386", "i486", "i386"],
+    "osfmach3_i386": ["i486", "i386"],
 
-    "osfmach3_ppc": ("ppc", "rs6000"),
-    "powerpc": ("ppc", "rs6000"),
-    "powerppc": ("ppc", "rs6000"),
-    "ppc8260": ("ppc", "rs6000"),
-    "ppc8560": ("ppc", "rs6000"),
-    "ppc32dy4": ("ppc", "rs6000"),
-    "ppciseries": ("ppc", "rs6000"),
-    "ppcpseries": ("ppc", "rs6000"),
-    "ppc64": ("ppc", "rs6000"),
-    "ppc": ("rs6000",),
-    "ppc64pseries": ("ppc64", "ppc", "rs6000"),
-    "ppc64iseries": ("ppc64", "ppc", "rs6000"),
+    "osfmach3_ppc": ["ppc", "rs6000"],
+    "powerpc": ["ppc", "rs6000"],
+    "powerppc": ["ppc", "rs6000"],
+    "ppc8260": ["ppc", "rs6000"],
+    "ppc8560": ["ppc", "rs6000"],
+    "ppc32dy4": ["ppc", "rs6000"],
+    "ppciseries": ["ppc", "rs6000"],
+    "ppcpseries": ["ppc", "rs6000"],
+    "ppc64": ["ppc", "rs6000"],
+    "ppc": ["rs6000",],
+    "ppc64pseries": ["ppc64", "ppc", "rs6000"],
+    "ppc64iseries": ["ppc64", "ppc", "rs6000"],
 
-    "sun4c": ("sparc",),
-    "sun4d": ("sparc",),
-    "sun4m": ("sparc",),
-    "sun4u": ("sparc64", "sparcv9", "sparc"),
-    "sparc64": ("sparcv9", "sparc"),
-    "sparcv9": ("sparc",),
-    "sparcv8": ("sparc",),
+    "sun4c": ["sparc",],
+    "sun4d": ["sparc",],
+    "sun4m": ["sparc",],
+    "sun4u": ["sparc64", "sparcv9", "sparc"],
+    "sparc64": ["sparcv9", "sparc"],
+    "sparcv9": ["sparc",],
+    "sparcv8": ["sparc",],
 
-    "hppa2.0": ("hppa1.2", "hppa1.1", "hppa1.0", "parisc"),
-    "hppa1.2": ("hppa1.1", "hppa1.0", "parisc"),
-    "hppa1.1": ("hppa1.0", "parisc"),
-    "hppa1.0": ("parisc",),
+    "hppa2.0": ["hppa1.2", "hppa1.1", "hppa1.0", "parisc"],
+    "hppa1.2": ["hppa1.1", "hppa1.0", "parisc"],
+    "hppa1.1": ["hppa1.0", "parisc"],
+    "hppa1.0": ["parisc",],
 
-    "armv4l": ("armv3l",),
+    "armv4l": ["armv3l",],
 
-    "atarist": ("m68kmint",),
-    "atariste": ("m68kmint",),
-    "ataritt": ("m68kmint",),
-    "falcon": ("m68kmint",),
-    "atariclone": ("m68kmint",),
-    "milan": ("m68kmint",),
-    "hades": ("m68kmint",),
+    "atarist": ["m68kmint",],
+    "atariste": ["m68kmint",],
+    "ataritt": ["m68kmint",],
+    "falcon": ["m68kmint",],
+    "atariclone": ["m68kmint",],
+    "milan": ["m68kmint",],
+    "hades": ["m68kmint",],
 
-    "s390x": ("s390",),
+    "s390x": ["s390",],
 }
 
 def archCompat(parch, arch):
@@ -2541,7 +2541,7 @@ class FilenamesList:
             if pkg["oldfilenames"] == None:
                 return
             (basenames, dirindexes, dirnames) = \
-                genBasenames(self["oldfilenames"])
+                genBasenames(pkg["oldfilenames"])
         path = self.path
         for i in dirnames:
             path.setdefault(i, {})
@@ -2948,9 +2948,9 @@ class RpmOrderer:
         installs is a list of added RpmPackage's
         erases a list of removed RpmPackage's (including updated/obsoleted)
         updates is a hash: new RpmPackage => ["originally" installed RpmPackage
-        	removed by update]
+            removed by update]
         obsoletes is a hash: new RpmPackage => ["originally" installed
-        	RpmPackage removed by update]"""
+            RpmPackage removed by update]"""
         self.installs = installs
         self.updates = updates
         self.obsoletes = obsoletes
@@ -3041,7 +3041,7 @@ class RpmTree:
     def __init__(self):
         self.h = {}
 
-    def addRpm(self, filename):
+    def addRpm(self, filename, byname=None):
         if isinstance(filename, basestring):
             rpm = ReadRpm(filename)
             if rpm.readHeader(rpmsigtag, rpmtag):
@@ -3050,7 +3050,10 @@ class RpmTree:
             rpm.closeFd()
         else:
             rpm = filename
-        self.h.setdefault( (rpm["name"], rpm.getArch()) , []).append(rpm)
+        if byname:
+            self.h.setdefault(rpm["name"], []).append(rpm)
+        else:
+            self.h.setdefault( (rpm["name"], rpm.getArch()) , []).append(rpm)
         return rpm
 
     def addDirectory(self, dirname):
@@ -3076,17 +3079,23 @@ class RpmTree:
         for v in self.h.values():
             v.sort(pkgCompare)
 
-    def keepNewest(self):
+    def keepNewest(self, arch=None):
         for r in self.h.keys():
             v = self.h[r]
             newest = v[0]
-            for rpm in v:
-                if pkgCompare(newest, rpm) < 0:
+            for rpm in v[1:]:
+                pkgcmp = pkgCompare(newest, rpm)
+                if pkgcmp < 0:
                     newest = rpm
+                elif arch and (pkgcmp == 0):
+                    dist = machineDistance(newest["arch"], arch)
+                    newdist = machineDistance(rpm["arch"], arch)
+                    if newdist < dist:
+                        newest = rpm
             self.h[r] = [newest]
 
-    def getPkgsNewest(self):
-        self.keepNewest()
+    def getPkgsNewest(self, arch=None):
+        self.keepNewest(arch)
         pkgs = []
         for p in self.h.values():
             pkgs.extend(p)
@@ -5234,25 +5243,6 @@ def checkDirs(repo):
                 f.startswith("/usr/lib/debug"):
                 print "debug stuff in normal package:", rpm.filename, f
 
-dupes = [ ("glibc", "i386"),
-          ("nptl-devel", "i386"),
-          ("openssl", "i386"),
-          ("kernel", "i586"),
-          ("kernel", "athlon"),
-          ("kernel", "ia32e"),
-          ("kernel-unsupported", "athlon"),
-          ("kernel-unsupported", "ia32e"),
-          ("kernel-smp", "i686"),
-          ("kernel-smp", "athlon"),
-          ("kernel-smp-unsupported", "athlon"),
-          ("kernel-smp-devel", "i686"),
-          ("kernel-xen0", "i686"),
-          ("kernel-xenU", "i686"),
-          ("kernel-devel", "i586"),
-          ("GFS-kernel", "i586"),
-          ("gnbd-kernel", "i586"),
-          ("dlm-kernel", "i586"),
-          ("cman-kernel", "i586") ]
 def checkProvides(repo, checkrequires=1):
     provides = {}
     requires = {}
@@ -5260,8 +5250,6 @@ def checkProvides(repo, checkrequires=1):
         for r in rpm.getRequires():
             requires.setdefault(r[0], []).append(rpm.getFilename())
     for rpm in repo:
-        if (rpm["name"], rpm["arch"]) in dupes:
-            continue
         for p in rpm.getProvides():
             provides.setdefault(p, []).append(rpm)
     if provides.keys():
@@ -5512,13 +5500,16 @@ def main():
                 rpm.filenames = rpm.getFilenames()
             checkDirs(repo)
             checkSymlinks(repo)
-            checkProvides(repo, checkrequires=1)
-        if strict or checkdeps:
-            repo2 = []
+            r = RpmTree()
             for rpm in repo:
-                if (rpm["name"], rpm["arch"]) in dupes:
-                    continue
-                repo2.append(rpm)
+                r.addRpm(rpm, 1)
+            repo2 = r.getPkgsNewest(arch)
+            checkProvides(repo2, checkrequires=1)
+        if strict or checkdeps:
+            r = RpmTree()
+            for rpm in repo:
+                r.addRpm(rpm, 1)
+            repo2 = r.getPkgsNewest(arch)
             checkDeps(repo2)
         if wait:
             import time
