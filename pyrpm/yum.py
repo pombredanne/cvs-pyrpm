@@ -217,8 +217,7 @@ class RpmYum:
                    archCompat(pkg["arch"], self.config.machine):
                     self.pkgs.append(pkg)
                 else:
-                    self.config.printWarning(1, "%s: Incompatible architecture"
-                                             % f)
+                    self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % f)
             elif os.path.isdir(f):
                 for g in os.listdir(f):
                     fn = os.path.join(f, g)
@@ -234,6 +233,8 @@ class RpmYum:
                        pkg.isSourceRPM() or \
                        archCompat(pkg["arch"], self.config.machine):
                         self.pkgs.append(pkg)
+                    else:
+                        self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
             else:
                 if self.command.endswith("remove"):
                     self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgList()))

@@ -310,13 +310,11 @@ class RpmIO:
         raise NotImplementedError
 
 class RpmStreamIO(RpmIO):
-    def __init__(self, config, source, verify=None, strict=None, hdronly=None):
+    def __init__(self, config, source, hdronly=None):
         RpmIO.__init__(self, config, source)
         self.fd = None
         self.cpio = None
-        self.verify = verify            # Verify lead and index entries
-        self.strict = strict  # Report legacy tags and packages not named %name
-        self.hdronly = hdronly          # Don't return payload from read()
+        self.hdronly = hdronly # Don't return payload from read()
         self.issrc = 0  # 0:binary rpm 1:source rpm
         self.where = 0  # 0:lead 1:separator 2:sig 3:header 4:files
         self.idx = 0 # Current index
@@ -438,8 +436,6 @@ class RpmStreamIO(RpmIO):
         if leaddata[:4] != RPM_HEADER_LEAD_MAGIC:
             raise ValueError, "no rpm magic found"
         self.issrc = (leaddata[7] == "\01")
-        if self.verify:
-            self.__verifyLead(leaddata)
         return ("magic", leaddata[:4])
 
     def __readSig(self):
@@ -475,23 +471,6 @@ class RpmStreamIO(RpmIO):
             self.hdr[tag] = self.__parseTag(index, storedata)
         return (tag, self.hdr[tag])
 
-    def __verifyLead(self, leaddata):
-        """Verify RPM lead leaddata.
-
-        Raise ValueError on invalid data."""
-
-        (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
-            unpack("!4s2c2h66s2h16x", leaddata)
-        if major not in ('\x03', '\x04') or minor != '\x00' or \
-            sigtype != 5 or rpmtype not in (0, 1):
-            raise ValueError, "Unsupported RPM file format"
-        if osnum not in (1, 255, 256):
-            raise ValueError, "Package operating system doesn't match"
-        name = name.rstrip('\x00')
-        if self.strict:
-            if os.path.basename(self.source)[:len(name)] != name:
-                raise ValueError, "File name doesn't match package name"
-
     def __readIndex(self, pad, issig=None):
         """Read and verify header index and data.
 
@@ -508,103 +487,7 @@ class RpmStreamIO(RpmIO):
         fmt2 = functions.readExact(self.fd, storeSize)
         if pad != 1:
             functions.readExact(self.fd, (pad - (storeSize % pad)) % pad)
-        if self.verify:
-            self.__verifyIndex(fmt, fmt2, indexNo, storeSize, issig)
         return (indexNo, storeSize, data, fmt, fmt2, 16 + len(fmt) + len(fmt2))
-
-    def __verifyIndex(self, fmt, fmt2, indexNo, storeSize, issig):
-        """Verify header with index fmt (with indexNo entries), data area fmt
-        (of size storeSize).
-
-        Return tag data length.  Raise ValueError on invalid data."""
-
-        checkSize = 0
-        for i in xrange(0, indexNo * 16, 16):
-            index = unpack("!4I", fmt[i:i + 16])
-            ttype = index[1]
-            # FIXME: this doesn't actually check alignment
-            # alignment for some types of data
-            if ttype == RPM_INT16:
-                checkSize += (2 - (checkSize % 2)) % 2
-            elif ttype == RPM_INT32:
-                checkSize += (4 - (checkSize % 4)) % 4
-            elif ttype == RPM_INT64:
-                checkSize += (8 - (checkSize % 8)) % 8
-            checkSize += self.__verifyTag(index, fmt2, issig)
-        if checkSize != storeSize:
-            # XXX: add a check for very old rpm versions here, seems this
-            # is triggered for a few RHL5.x rpm packages
-            raise ValueError, \
-                  "storeSize/checkSize is %d/%d" % (storeSize, checkSize)
-
-    def __verifyTag(self, index, fmt, issig):
-        """Verify a tag with index entry index in data area fmt.
-
-        Raise ValueError on invalid data; only print error messages on
-        suspicious, but non-fatal errors."""
-
-        (tag, ttype, offset, count) = index
-        if issig:
-            if not rpmsigtag.has_key(tag):
-                raise ValueError, "rpmsigtag has no tag %d" % tag
-            t = rpmsigtag[tag]
-            if t[1] != None and t[1] != ttype:
-                raise ValueError, "sigtag %d has wrong type %d" % (tag, ttype)
-        else:
-            if not rpmtag.has_key(tag):
-                raise ValueError, "rpmtag has no tag %d" % tag
-            t = rpmtag[tag]
-            if t[1] != None and t[1] != ttype:
-                if t[1] == RPM_ARGSTRING and (ttype == RPM_STRING or
-                                              ttype == RPM_STRING_ARRAY):
-                    pass    # special exception case for RPMTAG_GROUP (1016)
-                elif t[0] == 1016 and \
-                         ttype == RPM_STRING: # XXX hardcoded exception
-                    pass
-                else:
-                    raise ValueError, "tag %d has wrong type %d" % (tag, ttype)
-        if t[2] != None and t[2] != count:
-            raise ValueError, "tag %d has wrong count %d" % (tag, count)
-        if (t[3] & 1) and self.strict:
-            self.config.printError("%s: tag %d is marked legacy"
-                                   % (self.source, tag))
-        if self.issrc:
-            if (t[3] & 4):
-                self.config.printError("%s: tag %d should be for binary rpms"
-                                       % (self.source, tag))
-        else:
-            if (t[3] & 2):
-                self.config.printError("%s: tag %d should be for src rpms"
-                                       % (self.source, tag))
-        if count == 0:
-            raise ValueError, "zero length tag"
-        if ttype < 1 or ttype > 9:
-            raise ValueError, "unknown rpmtype %d" % ttype
-        if ttype == RPM_INT32:
-            count = count * 4
-        elif ttype == RPM_STRING_ARRAY or \
-            ttype == RPM_I18NSTRING:
-            size = 0
-            for _ in xrange(0, count):
-                end = fmt.index('\x00', offset) + 1
-                size += end - offset
-                offset = end
-            count = size
-        elif ttype == RPM_STRING:
-            if count != 1:
-                raise ValueError, "tag string count wrong"
-            count = fmt.index('\x00', offset) - offset + 1
-        elif ttype == RPM_CHAR or ttype == RPM_INT8:
-            pass
-        elif ttype == RPM_INT16:
-            count = count * 2
-        elif ttype == RPM_INT64:
-            count = count * 8
-        elif ttype == RPM_BIN:
-            pass
-        else:
-            raise ValueError, "unknown tag header"
-        return count
 
     def __parseTag(self, index, fmt):
         """Parse value of tag with index from data in fmt.
@@ -826,8 +709,8 @@ class RpmStreamIO(RpmIO):
 
 
 class RpmFileIO(RpmStreamIO):
-    def __init__(self, config, source, verify=None, strict=None, hdronly=None):
-        RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
+    def __init__(self, config, source, hdronly=None):
+        RpmStreamIO.__init__(self, config, source, hdronly)
 
     def __openFile(self, mode="r"):
         """Open self.source, mark it close-on-exec.
@@ -924,8 +807,8 @@ class RpmFileIO(RpmStreamIO):
         functions.updateDigestFromFile(digest, fd, offset + 16)
 
 class RpmFtpIO(RpmStreamIO):
-    def __init__(self, config, source, verify=None, strict=None, hdronly=None):
-        RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
+    def __init__(self, config, source, hdronly=None):
+        RpmStreamIO.__init__(self, config, source, hdronly)
 
     def open(self, unused_mode="r"):
         try:
@@ -940,8 +823,8 @@ class RpmFtpIO(RpmStreamIO):
 
 
 class RpmHttpIO(RpmStreamIO):
-    def __init__(self, config, source, verify=None, strict=None, hdronly=None):
-        RpmStreamIO.__init__(self, config, source, verify, strict, hdronly)
+    def __init__(self, config, source, hdronly=None):
+        RpmStreamIO.__init__(self, config, source, hdronly)
 
     def open(self, unused_mode="r"):
         try:
@@ -1993,6 +1876,10 @@ class RpmRepo(RpmDatabase):
     def __isExcluded(self, pkg):
         """Return True if RpmPackage pkg is excluded by configuration."""
 
+        if not self.config.ignorearch and \
+           not functions.archCompat(pkg["arch"], self.config.machine):
+            self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
+            return 1
         excludes = functions.findPkgByNames(self.excludes, [pkg])
         return len(excludes) > 0
 
@@ -2662,23 +2549,22 @@ class RpmCompsXML:
         return 1
 
 
-def getRpmIOFactory(config, source, verify=None, strict=None, hdronly=None):
+def getRpmIOFactory(config, source, hdronly=None):
     """Get a RpmIO implementation for package "URI" source.
 
-    Configure it to verify lead and index entries if verify; report legacy tags
-    and packages not named %name if strict; don't return payload from read()
-    if hdronly.  Default to file:/ if no scheme is provided."""
+    Don't return payload from read() if hdronly.
+    Default to file:/ if no scheme is provided."""
 
     if   source[:5] == 'ftp:/':
-        return RpmFtpIO(config, source, verify, strict, hdronly)
+        return RpmFtpIO(config, source, hdronly)
     elif source[:6] == 'file:/':
-        return RpmFileIO(config, source, verify, strict, hdronly)
+        return RpmFileIO(config, source, hdronly)
     elif source[:6] == 'http:/':
-        return RpmHttpIO(config, source, verify, strict, hdronly)
+        return RpmHttpIO(config, source, hdronly)
     elif source[:6] == 'pydb:/':
-        return RpmFileIO(config, source[6:], verify, strict, hdronly)
+        return RpmFileIO(config, source[6:], hdronly)
     else:
-        return RpmFileIO(config, source, verify, strict, hdronly)
+        return RpmFileIO(config, source, hdronly)
     return None
 
 

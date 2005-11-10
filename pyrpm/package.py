@@ -172,16 +172,14 @@ class RpmUserCache:
 
 
 class RpmPackage(RpmData):
-    def __init__(self, config, source, verify=None, strict=None, hdronly=None,
-                 db=None):
+    def __init__(self, config, source, verify=None, hdronly=None, db=None):
         RpmData.__init__(self, config)
         self.config = config
         self.clear()
         self.source = source
         self.verify = verify    # Verify file format constraints and signatures
-        self.strict = strict # Report legacy tags and packages not named %name*
-        self.hdronly = hdronly          # Don't open the payload
-        self.db = db                    # RpmDatabase
+        self.hdronly = hdronly  # Don't open the payload
+        self.db = db            # RpmDatabase
         self.io = None
         # Ranges are (starting position or None, length)
         self.range_signature = (None, None) # Signature header
@@ -211,8 +209,7 @@ class RpmPackage(RpmData):
 
         if self.io != None:
             return
-        self.io = getRpmIOFactory(self.config, self.source, self.verify,
-                                  self.strict, self.hdronly)
+        self.io = getRpmIOFactory(self.config, self.source, self.hdronly)
         self.io.open(mode)
 
     def close(self):
