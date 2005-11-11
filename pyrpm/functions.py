@@ -783,11 +783,13 @@ def parseYumOptions(argv, yum):
         rpmconfig.debug = rpmconfig.verbose - 2
 
     if rpmconfig.arch != None:
-        if not rpmconfig.test and not rpmconfig.justdb:
-            print >> sys.stderr, "Arch option can only be used for tests"
+        if not rpmconfig.test and \
+           not rpmconfig.justdb and \
+           not rpmconfig.ignorearch:
+            rpmconfig.printError("Arch option can only be used for tests")
             sys.exit(1)
         if not buildarchtranslate.has_key(rpmconfig.arch):
-            print >> sys.stderr, "Unknown arch %s" % rpmconfig.arch
+            rpmconfig.printError("Unknown arch %s" % rpmconfig.arch)
             sys.exit(1)
         rpmconfig.machine = rpmconfig.arch
 
