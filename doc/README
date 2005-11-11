@@ -704,7 +704,8 @@ This is how the rpmdb is being checked:
    same time.
  - `-q` and `\--quiet` output less progress information. `-v` or `\--verbose`
    add more output information. `\--rpmdbpath /var/lib/rpm/` can specify the
-   directory which contains the database files.
+   directory which contains the database files. `--nofileconflicts` disables
+   the checks for fileconflicts.
  - For special setups you might want to specify `\--releasever 4`,
    `\--arch i686` or `\--buildroot /mnt/build` (buildroot is actually only
    used to read the yum config files.
@@ -762,7 +763,10 @@ Here some options that can be useful:
  - Specify a cache directory to hold data from yum repopsitories via
    `\--cachedir ~/.pyrpm/cache/`.
  - Dependency and fileconflict checking is done if either `\--strict` or
-   `\--checkdeps` is added.
+   `\--checkdeps` is added. `\--nofileconflicts` is disabling fileconflict
+   checking.
+ - `\--runorderer` is ordering the set of rpms according to their dependencies
+   in a way they should get installed.
 
 Example usages:
 -----------------------
