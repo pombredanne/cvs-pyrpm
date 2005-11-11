@@ -38,6 +38,7 @@
 
 #
 # TODO:
+# - keepNewest() is keeping both noarch and i386 arch rpms
 # - DepList() should move into RpmResolver()
 # - How todo save shell escapes for os.system()
 # - Can we write fileconflicts only once per package?
@@ -4731,7 +4732,6 @@ def checkDeps(rpms, checkfileconflicts, runorderer):
                     continue
                 if rpm["name"] != name:
                     print "Warning:", pkg.getFilename(), "is obsoleted by", \
-                        depString(name, flag, version), "from", \
                         rpm.getFilename()
                     resolver.removePkg(pkg)
     # Check all conflicts.
@@ -4743,8 +4743,8 @@ def checkDeps(rpms, checkfileconflicts, runorderer):
             for rpm in orpms:
                 if rpm.getNEVR0() == pkg.getNEVR0():
                     continue
-                print "Warning:", rpm.getFilename(), "contains a conflict", \
-                    depString(name, flag, version), "with", pkg.getFilename()
+                print "Warning:", rpm.getFilename(), \
+                    "contains a conflict with", pkg.getFilename()
     # Check all requires.
     deps = resolver.requires_list.keys()
     deps.sort()
