@@ -5500,6 +5500,7 @@ def main():
                 args.append(p.filename)
                 if p["rpm:header-range:end"]:
                     headerend[p.filename] = p["rpm:header-range:end"] + 1
+        checkarchs = []
         for a in args:
             a = Uri2Filename(a)
             b = [a]
@@ -5520,24 +5521,33 @@ def main():
                 #    print rpm.getFilename()
                 #    print f
                 if checkdeps or strict or wait:
+                    if rpm["name"] == "kernel" and not rpm.issrc and \
+                        rpm["arch"] not in checkarchs:
+                        checkarchs.append(rpm["arch"])
                     repo.append(rpm)
                 del rpm
-        if strict or checkdeps:
-            rtree = RpmTree()
-            for rpm in repo:
-                if not archCompat(rpm["arch"], arch):
-                    print "arch not compatibel for", rpm.getFilename()
-                    continue
-                rtree.addRpm(rpm, 1)
-            installrpms = rtree.getPkgsNewest(arch)
         if strict:
             for rpm in repo:
                 rpm.filenames = rpm.getFilenames()
             checkDirs(repo)
             checkSymlinks(repo)
-            checkProvides(installrpms)
         if strict or checkdeps:
-            checkDeps(installrpms)
+            if checkarchs:
+                for arch in checkarchs:
+                    print "-------------------------------"
+                    print "check arch", arch, "now:"
+                    rtree = RpmTree()
+                    for rpm in repo:
+                        if not archCompat(rpm["arch"], arch):
+                            print "arch not compatibel for", rpm.getFilename()
+                            continue
+                        rtree.addRpm(rpm, 1)
+                    installrpms = rtree.getPkgsNewest(arch)
+                    if strict:
+                        checkProvides(installrpms)
+                    checkDeps(installrpms)
+            else:
+                print "No arch defined to check, are kernels missing?"
         if wait:
             import time
             print "ready"
