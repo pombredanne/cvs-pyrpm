@@ -2537,7 +2537,8 @@ def genBasenames(oldfilenames):
 class FilenamesList:
     """A mapping from filenames to rpm packages."""
 
-    def __init__(self):
+    def __init__(self, checkfileconflicts=1):
+        self.checkfileconflicts = checkfileconflicts
         self.path = {} # dirname => { basename => (RpmPackage, index) }
 
     def addPkg(self, pkg):
@@ -2554,12 +2555,14 @@ class FilenamesList:
         path = self.path
         for i in dirnames:
             path.setdefault(i, {})
-        for i in xrange(len(basenames)):
-            dirname = dirnames[dirindexes[i]]
-            # The index "i" is only used for fileconflict checks, so
-            # maybe we should store this information somewhere else
-            # to save memory for the default case?
-            path[dirname].setdefault(basenames[i], []).append((pkg, i))
+        if self.checkfileconflicts:
+            for i in xrange(len(basenames)):
+                dirname = dirnames[dirindexes[i]]
+                path[dirname].setdefault(basenames[i], []).append((pkg, i))
+        else:
+            for i in xrange(len(basenames)):
+                dirname = dirnames[dirindexes[i]]
+                path[dirname].setdefault(basenames[i], []).append(pkg)
 
     def removePkg(self, pkg):
         """Remove all files from RpmPackage pkg from self."""
@@ -2568,8 +2571,12 @@ class FilenamesList:
             return
         dirnames = pkg["dirnames"]
         dirindexes = pkg["dirindexes"]
-        for i in xrange(len(basenames)):
-            self.path[dirnames[dirindexes[i]]][basenames[i]].remove((pkg, i))
+        if self.checkfileconflicts:
+            for i in xrange(len(basenames)):
+                self.path[dirnames[dirindexes[i]]][basenames[i]].remove((pkg, i))
+        else:
+            for i in xrange(len(basenames)):
+                self.path[dirnames[dirindexes[i]]][basenames[i]].remove(pkg)
 
     def search(self, name):
         """Return list of packages providing file with name."""
@@ -2577,7 +2584,9 @@ class FilenamesList:
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
         ret = self.path.get(dirname, {}).get(basename, [])
-        return [ r[0] for r in ret ]
+        if self.checkfileconflicts:
+            return [ r[0] for r in ret ]
+        return ret
 
 
 # split EVR string in epoch, version and release
@@ -2634,9 +2643,9 @@ class DepList:
 
 class RpmResolver:
 
-    def __init__(self, rpms=[]):
+    def __init__(self, rpms, checkfileconflicts):
         self.rpms = []
-        self.filenames_list = FilenamesList()
+        self.filenames_list = FilenamesList(checkfileconflicts)
         self.provides_list = DepList()
         self.obsoletes_list = {}
         self.conflicts_list = {}
@@ -3103,11 +3112,13 @@ class RpmTree:
                     newdist = machineDistance(rpm["arch"], arch)
                     if newdist < dist:
                         if verbose:
-                            print "select", rpm.getFilename(), "over", newest.getFilename()
+                            print "select", rpm.getFilename(), "over", \
+                                 newest.getFilename()
                         newest = rpm
                     else:
                         if verbose:
-                            print "select", newest.getFilename(), "over", rpm.getFilename()
+                            print "select", newest.getFilename(), "over", \
+                                rpm.getFilename()
             self.h[r] = [newest]
 
     def getPkgsNewest(self, arch=None, verbose=None):
@@ -4706,9 +4717,9 @@ def createMercurial():
         os.system("cd %s && { git repack; git prune-packed; }" % repodir)
 
 
-def checkDeps(rpms):
+def checkDeps(rpms, checkfileconflicts, runorderer):
     # Add all packages in.
-    resolver = RpmResolver(rpms)
+    resolver = RpmResolver(rpms, checkfileconflicts)
     # Check for obsoletes.
     deps = resolver.obsoletes_list.keys()
     deps.sort()
@@ -4746,46 +4757,48 @@ def checkDeps(rpms):
                     "did not find a package for:", \
                     depString(name, flag, version)
     # Check for fileconflicts.
-    dirnames = resolver.filenames_list.path.keys()
-    dirnames.sort()
-    for dirname in dirnames:
-        pathdirname = resolver.filenames_list.path[dirname]
-        basenames = pathdirname.keys()
-        basenames.sort()
-        for basename in basenames:
-            s = pathdirname[basename]
-            if len(s) < 2:
-                continue
-            for j in xrange(len(s) - 1):
-                (rpm1, i1) = s[j]
-                filemodesi1 = rpm1["filemodes"][i1]
-                #if not S_ISREG(filemodesi1):
-                #    continue
-                filemd5si1 = rpm1["filemd5s"][i1]
-                filecolorsi1 = None
-                if rpm1["filecolors"]:
-                    filecolorsi1 = rpm1["filecolors"][i1]
-                for k in xrange(j + 1, len(s)):
-                    (rpm2, i2) = s[k]
-                    filemodesi2 = rpm2["filemodes"][i2]
-                    #if not S_ISREG(filemodesi2):
+    if checkfileconflicts:
+        dirnames = resolver.filenames_list.path.keys()
+        dirnames.sort()
+        for dirname in dirnames:
+            pathdirname = resolver.filenames_list.path[dirname]
+            basenames = pathdirname.keys()
+            basenames.sort()
+            for basename in basenames:
+                s = pathdirname[basename]
+                if len(s) < 2:
+                    continue
+                for j in xrange(len(s) - 1):
+                    (rpm1, i1) = s[j]
+                    filemodesi1 = rpm1["filemodes"][i1]
+                    #if not S_ISREG(filemodesi1):
                     #    continue
-                    # No fileconflict if mode/md5sum/user/group match.
-                    if filemd5si1 == rpm2["filemd5s"][i2] and \
-                        filemodesi1 == filemodesi2 and \
-                        rpm1["fileusername"][i1] == rpm2["fileusername"][i2] \
-                        and rpm1["filegroupname"][i1] == \
-                            rpm2["filegroupname"][i2]:
-                        continue
-                    # No fileconflict for multilib elf32/elf64 files.
-                    if filecolorsi1 and rpm2["filecolors"]:
-                        filecolorsi2 = rpm2["filecolors"][i2]
-                        if filecolorsi2 and filecolorsi1 != filecolorsi2:
+                    filemd5si1 = rpm1["filemd5s"][i1]
+                    filecolorsi1 = None
+                    if rpm1["filecolors"]:
+                        filecolorsi1 = rpm1["filecolors"][i1]
+                    for k in xrange(j + 1, len(s)):
+                        (rpm2, i2) = s[k]
+                        filemodesi2 = rpm2["filemodes"][i2]
+                        #if not S_ISREG(filemodesi2):
+                        #    continue
+                        # No fileconflict if mode/md5sum/user/group match.
+                        if filemd5si1 == rpm2["filemd5s"][i2] and \
+                            filemodesi1 == filemodesi2 \
+                            and rpm1["fileusername"][i1] == \
+                                rpm2["fileusername"][i2] \
+                            and rpm1["filegroupname"][i1] == \
+                                rpm2["filegroupname"][i2]:
                             continue
-                    print "fileconflict for", dirname + basename, "in", \
-                        rpm1.getFilename(), "and", rpm2.getFilename()
+                        # No fileconflict for multilib elf32/elf64 files.
+                        if filecolorsi1 and rpm2["filecolors"]:
+                            filecolorsi2 = rpm2["filecolors"][i2]
+                            if filecolorsi2 and filecolorsi1 != filecolorsi2:
+                                continue
+                        print "fileconflict for", dirname + basename, "in", \
+                            rpm1.getFilename(), "and", rpm2.getFilename()
     # Order rpms on how they get installed.
-    if None:
+    if runorderer:
         orderer = RpmOrderer(resolver.rpms, {}, {}, [], resolver)
         operations = orderer.order()
         if operations == None:
@@ -4960,7 +4973,7 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
     return rethash
 
 def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
-    arch, verbose):
+    arch, verbose, checkfileconflicts):
     from binascii import b2a_hex
     if verbose:
         print "Reading rpmdb, this can take some time..."
@@ -5149,7 +5162,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
             print pkg.getFilename(), "wrong filestates", pkg["filestates"]
         if pkg["instprefix"] != None:
             print pkg.getFilename(), "instprefix", pkg["instprefix"]
-    checkDeps(packages.values())
+    checkDeps(packages.values(), checkfileconflicts, 0)
     if verbose:
         print "Done."
     return None
@@ -5367,6 +5380,8 @@ def main():
     checksrpms = 0
     rpmdbpath = "/var/lib/rpm/"
     checkarch = 0
+    checkfileconflicts = 1
+    runorderer = 0
     buildroot = ""
     checkrpmdb = 0
     checkdeps = 0
@@ -5379,7 +5394,7 @@ def main():
          "distroverpkg", "strict",
          "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
-         "excludes=",
+         "excludes=", "nofileconflicts", "runorderer",
          "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
          "checkrpmdb", "checkdeps", "buildroot=", "installroot=", "root=",
          "version", "baseurl=", "createrepo", "mercurial"])
@@ -5412,6 +5427,10 @@ def main():
             payload = 1
         elif opt == "--nopayload":
             payload = 0
+        elif opt == "--nofileconflicts":
+            checkfileconflicts = 0
+        elif opt == "--runorderer":
+            runorderer = 1
         elif opt == "--wait":
             wait = 1
         elif opt == "--noverify":
@@ -5469,7 +5488,7 @@ def main():
         checkArch(args[0])
     elif checkrpmdb:
         if readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
-            arch, verbose):
+            arch, verbose, checkfileconflicts):
             return 1
     elif createrepo:
         for a in args:
@@ -5534,18 +5553,20 @@ def main():
         if strict or checkdeps:
             if checkarchs:
                 for arch in checkarchs:
-                    print "-------------------------------"
-                    print "check arch", arch, "now:"
+                    print "--------------------------------------------------"
+                    print "check as if kernel has the", \
+                        "architecture \"%s\" now:" % arch
                     rtree = RpmTree()
                     for rpm in repo:
                         if not archCompat(rpm["arch"], arch):
-                            print "arch not compatibel for", rpm.getFilename()
+                            print "removed due to incompatibel arch:", \
+                                rpm.getFilename()
                             continue
                         rtree.addRpm(rpm, 1)
                     installrpms = rtree.getPkgsNewest(arch)
                     if strict:
                         checkProvides(installrpms)
-                    checkDeps(installrpms)
+                    checkDeps(installrpms, checkfileconflicts, runorderer)
             else:
                 print "No arch defined to check, are kernels missing?"
         if wait:
