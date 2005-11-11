@@ -5382,6 +5382,7 @@ def main():
     checkarch = 0
     checkfileconflicts = 1
     runorderer = 0
+    specifyarch = 0
     buildroot = ""
     checkrpmdb = 0
     checkdeps = 0
@@ -5410,6 +5411,7 @@ def main():
             configfiles.append(val)
         elif opt == "--arch":
             arch = val
+            specifyarch = 1
         elif opt == "--releasever":
             releasever = val
         elif opt == "--distroverpkg":
@@ -5551,6 +5553,8 @@ def main():
             checkDirs(repo)
             checkSymlinks(repo)
         if strict or checkdeps:
+            if specifyarch:
+                checkarchs = [arch,]
             if checkarchs:
                 for arch in checkarchs:
                     print "--------------------------------------------------"
