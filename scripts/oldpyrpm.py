@@ -3041,7 +3041,7 @@ class RpmTree:
     def __init__(self):
         self.h = {}
 
-    def addRpm(self, filename, byname=None):
+    def addRpm(self, filename, basearch=None):
         if isinstance(filename, basestring):
             rpm = ReadRpm(filename)
             if rpm.readHeader(rpmsigtag, rpmtag):
@@ -3050,8 +3050,9 @@ class RpmTree:
             rpm.closeFd()
         else:
             rpm = filename
-        if byname:
-            self.h.setdefault(rpm["name"], []).append(rpm)
+        if basearch:
+            key = (rpm["name"], BuildArchTranslate(rpm.getArch()))
+            self.h.setdefault(key, []).append(rpm)
         else:
             self.h.setdefault( (rpm["name"], rpm.getArch()) , []).append(rpm)
         return rpm
@@ -3079,7 +3080,7 @@ class RpmTree:
         for v in self.h.values():
             v.sort(pkgCompare)
 
-    def keepNewest(self, arch=None):
+    def keepNewest(self, arch=None, verbose=None):
         for r in self.h.keys():
             v = self.h[r]
             newest = v[0]
@@ -3091,11 +3092,16 @@ class RpmTree:
                     dist = machineDistance(newest["arch"], arch)
                     newdist = machineDistance(rpm["arch"], arch)
                     if newdist < dist:
+                        if verbose:
+                            print "select", rpm.getFilename(), "over", newest.getFilename()
                         newest = rpm
+                    else:
+                        if verbose:
+                            print "select", newest.getFilename(), "over", rpm.getFilename()
             self.h[r] = [newest]
 
-    def getPkgsNewest(self, arch=None):
-        self.keepNewest(arch)
+    def getPkgsNewest(self, arch=None, verbose=None):
+        self.keepNewest(arch, verbose)
         pkgs = []
         for p in self.h.values():
             pkgs.extend(p)
@@ -5502,14 +5508,20 @@ def main():
             checkSymlinks(repo)
             r = RpmTree()
             for rpm in repo:
+                if not archCompat(rpm["arch"], arch):
+                    print "arch not compatibel for", rpm.getFilename()
+                    continue
                 r.addRpm(rpm, 1)
             repo2 = r.getPkgsNewest(arch)
             checkProvides(repo2, checkrequires=1)
         if strict or checkdeps:
             r = RpmTree()
             for rpm in repo:
+                if not archCompat(rpm["arch"], arch):
+                    print "arch not compatibel for", rpm.getFilename()
+                    continue
                 r.addRpm(rpm, 1)
-            repo2 = r.getPkgsNewest(arch)
+            repo2 = r.getPkgsNewest(arch, 1)
             checkDeps(repo2)
         if wait:
             import time
