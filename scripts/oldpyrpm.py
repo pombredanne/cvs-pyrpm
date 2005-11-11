@@ -1074,7 +1074,7 @@ def stringCompare(str1, str2):
         # start of the comparison data, search digits or alpha chars
         j1 = i1
         j2 = i2
-        if _xisdigit(str1[j1]):
+        if j1 < lenstr1 and _xisdigit(str1[j1]):
             while j1 < lenstr1 and _xisdigit(str1[j1]): j1 += 1
             while j2 < lenstr2 and _xisdigit(str2[j2]): j2 += 1
             isnum = 1
@@ -4719,6 +4719,9 @@ def createMercurial():
 
 
 def checkDeps(rpms, checkfileconflicts, runorderer):
+    # Calling .sort() below does take a little/tiny bit of time, but has the
+    # advantage of a deterministic order as well as having errors output in
+    # sorted order, so they are easier to read.
     # Add all packages in.
     resolver = RpmResolver(rpms, checkfileconflicts)
     # Check for obsoletes.
@@ -4768,11 +4771,11 @@ def checkDeps(rpms, checkfileconflicts, runorderer):
                 s = pathdirname[basename]
                 if len(s) < 2:
                     continue
+                # We could also only check with the next entry and then
+                # report one errror for a filename with all rpms listed.
                 for j in xrange(len(s) - 1):
                     (rpm1, i1) = s[j]
                     filemodesi1 = rpm1["filemodes"][i1]
-                    #if not S_ISREG(filemodesi1):
-                    #    continue
                     filemd5si1 = rpm1["filemd5s"][i1]
                     filecolorsi1 = None
                     if rpm1["filecolors"]:
@@ -4780,8 +4783,6 @@ def checkDeps(rpms, checkfileconflicts, runorderer):
                     for k in xrange(j + 1, len(s)):
                         (rpm2, i2) = s[k]
                         filemodesi2 = rpm2["filemodes"][i2]
-                        #if not S_ISREG(filemodesi2):
-                        #    continue
                         # No fileconflict if mode/md5sum/user/group match.
                         if filemd5si1 == rpm2["filemd5s"][i2] and \
                             filemodesi1 == filemodesi2 \
