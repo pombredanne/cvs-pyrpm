@@ -38,6 +38,7 @@
 
 #
 # TODO:
+# - DepList() should move into RpmResolver()
 # - How todo save shell escapes for os.system()
 # - Can we write fileconflicts only once per package?
 # - Make info in depString() more complete.
@@ -1893,6 +1894,10 @@ class ReadRpm:
         for (name, flag, version) in self.getProvides():
             phash.setdefault(name, []).append((flag, version, self))
 
+    def removeProvides(self, phash):
+        for (name, flag, version) in self.getProvides():
+            phash[name].remove((flag, version, self))
+
     def getRequires(self):
         return self.__getDeps("requirename", "requireflags", "requireversion")
 
@@ -1907,6 +1912,10 @@ class ReadRpm:
     def addDeps(self, name, flag, version, phash):
         for (n, f, v) in self.__getDeps(name, flag, version):
             phash.setdefault((n, f, v), []).append(self)
+
+    def removeDeps(self, name, flag, version, phash):
+        for (n, f, v) in self.__getDeps(name, flag, version):
+            phash[(n, f, v)].remove(self)
 
     def getTriggers(self):
         deps = self.__getDeps("triggername", "triggerflags", "triggerversion")
@@ -2600,14 +2609,6 @@ class DepList:
     def __init__(self):
         self.deps = {}
 
-    def addPkg(self, rpm, deps):
-        for (name, flag, version) in deps:
-            self.deps.setdefault(name, []).append((flag, version, rpm))
-
-    def removePkg(self, rpm, deps):
-        for (name, flag, version) in deps:
-            self.deps[name].remove( (flag, version, rpm) )
-
     def search(self, name, flag, version):
         deps = self.deps.get(name, [])
         if not deps:
@@ -2634,17 +2635,18 @@ class DepList:
 class RpmResolver:
 
     def __init__(self, rpms=[]):
+        self.rpms = []
         self.filenames_list = FilenamesList()
         self.provides_list = DepList()
         self.obsoletes_list = {}
         self.conflicts_list = {}
         self.requires_list = {}
-        self.cache = {}
         for r in rpms:
             if not r.issrc:
                 self.addPkg(r)
 
     def addPkg(self, pkg):
+        self.rpms.append(pkg)
         self.filenames_list.addPkg(pkg)
         pkg.addProvides(self.provides_list.deps)
         pkg.addDeps("obsoletename", "obsoleteflags", "obsoleteversion",
@@ -2653,16 +2655,24 @@ class RpmResolver:
             self.conflicts_list)
         pkg.addDeps("requirename", "requireflags", "requireversion",
             self.requires_list)
-        self.cache = {}
+
+    def removePkg(self, pkg):
+        if pkg not in self.rpms:
+            return
+        self.rpms.remove(pkg)
+        self.filenames_list.removePkg(pkg)
+        pkg.removeProvides(self.provides_list.deps)
+        pkg.removeDeps("obsoletename", "obsoleteflags", "obsoleteversion",
+            self.obsoletes_list)
+        pkg.removeDeps("conflictname", "conflictflags", "conflictversion",
+            self.conflicts_list)
+        pkg.removeDeps("requirename", "requireflags", "requireversion",
+            self.requires_list)
 
     def searchDependency(self, name, flag, version):
-        key = (name, flag, version)
-        if self.cache.has_key(key):
-            return self.cache[key]
         s = self.provides_list.search(name, flag, version)
         if name[0] == "/" and version == "":
             s += self.filenames_list.search(name)
-        self.cache[key] = s
         return s
 
 
@@ -4700,7 +4710,9 @@ def checkDeps(rpms):
     # Add all packages in.
     resolver = RpmResolver(rpms)
     # Check for obsoletes.
-    for (name, flag, version) in resolver.obsoletes_list.keys():
+    deps = resolver.obsoletes_list.keys()
+    deps.sort()
+    for (name, flag, version) in deps:
         orpms = resolver.obsoletes_list[(name, flag, version)]
         for pkg in resolver.searchDependency(name, flag, version):
             for rpm in orpms:
@@ -4710,17 +4722,22 @@ def checkDeps(rpms):
                     print "Warning:", pkg.getFilename(), "is obsoleted by", \
                         depString(name, flag, version), "from", \
                         rpm.getFilename()
+                    resolver.removePkg(pkg)
     # Check all conflicts.
-    for (name, flag, version) in resolver.conflicts_list.keys():
-        crpms = resolver.conflicts_list[(name, flag, version)]
+    deps = resolver.conflicts_list.keys()
+    deps.sort()
+    for (name, flag, version) in deps:
+        orpms = resolver.conflicts_list[(name, flag, version)]
         for pkg in resolver.searchDependency(name, flag, version):
-            for rpm in crpms:
+            for rpm in orpms:
                 if rpm.getNEVR0() == pkg.getNEVR0():
                     continue
                 print "Warning:", rpm.getFilename(), "contains a conflict", \
                     depString(name, flag, version), "with", pkg.getFilename()
     # Check all requires.
-    for (name, flag, version) in resolver.requires_list.keys():
+    deps = resolver.requires_list.keys()
+    deps.sort()
+    for (name, flag, version) in deps:
         if name[:7] == "rpmlib(":
             continue
         if not resolver.searchDependency(name, flag, version):
@@ -4729,9 +4746,13 @@ def checkDeps(rpms):
                     "did not find a package for:", \
                     depString(name, flag, version)
     # Check for fileconflicts.
-    for dirname in resolver.filenames_list.path.keys():
+    dirnames = resolver.filenames_list.path.keys()
+    dirnames.sort()
+    for dirname in dirnames:
         pathdirname = resolver.filenames_list.path[dirname]
-        for basename in pathdirname.keys():
+        basenames = pathdirname.keys()
+        basenames.sort()
+        for basename in basenames:
             s = pathdirname[basename]
             if len(s) < 2:
                 continue
@@ -4765,7 +4786,7 @@ def checkDeps(rpms):
                         rpm1.getFilename(), "and", rpm2.getFilename()
     # Order rpms on how they get installed.
     if None:
-        orderer = RpmOrderer(rpms, {}, {}, [], resolver)
+        orderer = RpmOrderer(resolver.rpms, {}, {}, [], resolver)
         operations = orderer.order()
         if operations == None:
             raise
@@ -5249,7 +5270,7 @@ def checkDirs(repo):
                 f.startswith("/usr/lib/debug"):
                 print "debug stuff in normal package:", rpm.filename, f
 
-def checkProvides(repo, checkrequires=1):
+def checkProvides(repo):
     provides = {}
     requires = {}
     for rpm in repo:
@@ -5265,7 +5286,7 @@ def checkProvides(repo, checkrequires=1):
         if len(provides[p]) <= 1:
             continue
         # if no require can match this, ignore duplicates
-        if checkrequires and not requires.has_key(p[0]):
+        if not requires.has_key(p[0]):
             continue
         x = []
         for rpm in provides[p]:
@@ -5501,28 +5522,22 @@ def main():
                 if checkdeps or strict or wait:
                     repo.append(rpm)
                 del rpm
+        if strict or checkdeps:
+            rtree = RpmTree()
+            for rpm in repo:
+                if not archCompat(rpm["arch"], arch):
+                    print "arch not compatibel for", rpm.getFilename()
+                    continue
+                rtree.addRpm(rpm, 1)
+            installrpms = rtree.getPkgsNewest(arch)
         if strict:
             for rpm in repo:
                 rpm.filenames = rpm.getFilenames()
             checkDirs(repo)
             checkSymlinks(repo)
-            r = RpmTree()
-            for rpm in repo:
-                if not archCompat(rpm["arch"], arch):
-                    print "arch not compatibel for", rpm.getFilename()
-                    continue
-                r.addRpm(rpm, 1)
-            repo2 = r.getPkgsNewest(arch)
-            checkProvides(repo2, checkrequires=1)
+            checkProvides(installrpms)
         if strict or checkdeps:
-            r = RpmTree()
-            for rpm in repo:
-                if not archCompat(rpm["arch"], arch):
-                    print "arch not compatibel for", rpm.getFilename()
-                    continue
-                r.addRpm(rpm, 1)
-            repo2 = r.getPkgsNewest(arch, 1)
-            checkDeps(repo2)
+            checkDeps(installrpms)
         if wait:
             import time
             print "ready"
