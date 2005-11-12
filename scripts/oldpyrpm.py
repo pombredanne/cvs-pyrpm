@@ -38,11 +38,7 @@
 
 #
 # TODO:
-# - keepNewest() is keeping both noarch and i386 arch rpms
-# - DepList() should move into RpmResolver()
 # - How todo save shell escapes for os.system()
-# - Can we write fileconflicts only once per package?
-# - Make info in depString() more complete.
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
 # - Reading yum.conf we immediately replace 'releasever' instead of
@@ -2611,35 +2607,29 @@ def depString(name, flag, version):
         op += ">"
     if flag & RPMSENSE_EQUAL:
         op += "="
-    return "%s %s %s" % (name, op, version)
+    return "(%s %s %s)" % (name, op, version)
 
-
-class DepList:
-
-    def __init__(self):
-        self.deps = {}
-
-    def searchDependency(self, name, flag, version):
-        deps = self.deps.get(name, [])
-        if not deps:
-            return []
-        if isinstance(version, basestring):
-            evr = evrSplit(version)
-        else:
-            evr = version
-        ret = []
-        for (f, v, rpm) in deps:
-            if rpm in ret:
-                continue
-            if version == "" or rangeCompare(flag, evr, f, evrSplit(v)):
-                ret.append(rpm)
-            elif v == "":
-                if rpm.strict:
-                    print "Warning:", rpm.getFilename(), \
-                        "should have a flag/version added for the provides", \
-                        depString(name, flag, version)
-                ret.append(rpm)
-        return ret
+def searchDependency(name, flag, version, mydeps):
+    deps = mydeps.get(name, [])
+    if not deps:
+        return []
+    if isinstance(version, basestring):
+        evr = evrSplit(version)
+    else:
+        evr = version
+    ret = []
+    for (f, v, rpm) in deps:
+        if rpm in ret:
+            continue
+        if version == "" or rangeCompare(flag, evr, f, evrSplit(v)):
+            ret.append(rpm)
+        elif v == "":
+            if rpm.strict:
+                print "Warning:", rpm.getFilename(), \
+                    "should have a flag/version added for the provides", \
+                    depString(name, flag, version)
+            ret.append(rpm)
+    return ret
 
 
 class RpmResolver:
@@ -2647,7 +2637,7 @@ class RpmResolver:
     def __init__(self, rpms, checkfileconflicts):
         self.rpms = []
         self.filenames_list = FilenamesList(checkfileconflicts)
-        self.provides_list = DepList()
+        self.provides_list = {}
         self.obsoletes_list = {}
         self.conflicts_list = {}
         self.requires_list = {}
@@ -2658,7 +2648,7 @@ class RpmResolver:
     def addPkg(self, pkg):
         self.rpms.append(pkg)
         self.filenames_list.addPkg(pkg)
-        pkg.addProvides(self.provides_list.deps)
+        pkg.addProvides(self.provides_list)
         pkg.addDeps("obsoletename", "obsoleteflags", "obsoleteversion",
             self.obsoletes_list)
         pkg.addDeps("conflictname", "conflictflags", "conflictversion",
@@ -2671,7 +2661,7 @@ class RpmResolver:
             return
         self.rpms.remove(pkg)
         self.filenames_list.removePkg(pkg)
-        pkg.removeProvides(self.provides_list.deps)
+        pkg.removeProvides(self.provides_list)
         pkg.removeDeps("obsoletename", "obsoleteflags", "obsoleteversion",
             self.obsoletes_list)
         pkg.removeDeps("conflictname", "conflictflags", "conflictversion",
@@ -2680,7 +2670,7 @@ class RpmResolver:
             self.requires_list)
 
     def searchDependency(self, name, flag, version):
-        s = self.provides_list.searchDependency(name, flag, version)
+        s = searchDependency(name, flag, version, self.provides_list)
         if name[0] == "/" and version == "":
             s += self.filenames_list.searchDependency(name)
         return s
