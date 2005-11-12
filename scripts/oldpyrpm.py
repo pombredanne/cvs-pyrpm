@@ -681,6 +681,8 @@ for v in rpmtag.values():
 del v
 
 # Additional tags which can be in the rpmdb /var/lib/rpm/Packages.
+# Some of these have the data copied over from the signature
+# header which is not stored in rpmdb.
 rpmdbtag = {
     "origdirindexes": [1119, RPM_INT32, None, 1],
     "origdirnames": [1121, RPM_STRING_ARRAY, None, 1],
@@ -937,15 +939,13 @@ def archDuplicate(parch, arch):
 def machineDistance(arch1, arch2):
     """Return machine distance between arch1 and arch2, as defined by
     arch_compats."""
-    if arch1 == "noarch" or arch2 == "noarch":
+    if arch1 == "noarch":
         return 0 # noarch is very good
     if arch1 == arch2:
         return 1 # second best is same arch
     # Everything else is determined by the "distance" in the arch_compats
     # array. If both archs are not compatible we return an insanely high
     # distance.
-    if arch2 in arch_compats.get(arch1, []):
-        return arch_compats[arch1].index(arch2) + 2
     if arch1 in arch_compats.get(arch2, []):
         return arch_compats[arch2].index(arch1) + 2
     return 999   # incompatible archs, distance is very high
@@ -2579,7 +2579,7 @@ class FilenamesList:
             for i in xrange(len(basenames)):
                 self.path[dirnames[dirindexes[i]]][basenames[i]].remove(pkg)
 
-    def search(self, name):
+    def searchDependency(self, name):
         """Return list of packages providing file with name."""
         (dirname, basename) = os.path.split(name)
         if len(dirname) > 0 and dirname[-1] != "/":
@@ -2619,7 +2619,7 @@ class DepList:
     def __init__(self):
         self.deps = {}
 
-    def search(self, name, flag, version):
+    def searchDependency(self, name, flag, version):
         deps = self.deps.get(name, [])
         if not deps:
             return []
@@ -2680,9 +2680,9 @@ class RpmResolver:
             self.requires_list)
 
     def searchDependency(self, name, flag, version):
-        s = self.provides_list.search(name, flag, version)
+        s = self.provides_list.searchDependency(name, flag, version)
         if name[0] == "/" and version == "":
-            s += self.filenames_list.search(name)
+            s += self.filenames_list.searchDependency(name)
         return s
 
 
@@ -2697,7 +2697,7 @@ class Relation:
         self.pre = {}       # RpmPackage => flag
         self.post = {}      # RpmPackage => 1 or VIRTUAL (value is not used)
 
-class Relations:
+class RpmRelations:
     """List of relations for each package (a dependency graph)."""
 
     def __init__(self, rpms):
@@ -3016,7 +3016,7 @@ class RpmOrderer:
         """Return orderer.Relations between RpmPackage's in list rpms for
         operation."""
         resolver = self.resolver
-        relations = Relations(rpms)
+        relations = RpmRelations(rpms)
         for (n, f, v) in resolver.requires_list.keys():
             if n[:7] in ("rpmlib(", "config("):
                 continue
@@ -3051,6 +3051,29 @@ class RpmOrderer:
             order2.reverse()
             order.extend(order2)
         return self.genOperations(order)
+
+
+def selectNewestRpm(rpms, arch, verbose):
+    """Select one package out of rpms that has the highest version
+    number."""
+    newest = rpms[0]
+    for rpm in rpms[1:]:
+        pkgcmp = pkgCompare(newest, rpm)
+        if pkgcmp < 0:
+            newest = rpm
+        elif arch and (pkgcmp == 0):
+            dist = machineDistance(newest["arch"], arch)
+            newdist = machineDistance(rpm["arch"], arch)
+            if newdist < dist:
+                if verbose:
+                    print "select", rpm.getFilename(), "over", \
+                         newest.getFilename()
+                newest = rpm
+            else:
+                if verbose:
+                    print "select", newest.getFilename(), "over", \
+                        rpm.getFilename()
+    return newest
 
 
 def cmpByTime(a, b):
@@ -3100,33 +3123,33 @@ class RpmTree:
         for v in self.h.values():
             v.sort(pkgCompare)
 
-    def keepNewest(self, arch=None, verbose=None):
+    def keepNewest(self, arch=None, verbose=1):
         for r in self.h.keys():
-            v = self.h[r]
-            newest = v[0]
-            for rpm in v[1:]:
-                pkgcmp = pkgCompare(newest, rpm)
-                if pkgcmp < 0:
-                    newest = rpm
-                elif arch and (pkgcmp == 0):
-                    dist = machineDistance(newest["arch"], arch)
-                    newdist = machineDistance(rpm["arch"], arch)
-                    if newdist < dist:
-                        if verbose:
-                            print "select", rpm.getFilename(), "over", \
-                                 newest.getFilename()
-                        newest = rpm
-                    else:
-                        if verbose:
-                            print "select", newest.getFilename(), "over", \
-                                rpm.getFilename()
-            self.h[r] = [newest]
+            self.h[r] = [selectNewestRpm(self.h[r], arch, verbose)]
 
-    def getPkgsNewest(self, arch=None, verbose=None):
+    def getPkgsNewest(self, arch=None, verbose=1):
         self.keepNewest(arch, verbose)
         pkgs = []
         for p in self.h.values():
             pkgs.extend(p)
+        if arch:
+            # Add all rpms into a hash by their name.
+            h = {}
+            for rpm in pkgs:
+                h.setdefault(rpm["name"], []).append(rpm)
+            # By name find the newest rpm and then decide if a noarch
+            # rpm is the newest (and all others are deleted) or if an
+            # arch-dependent rpm is newest and all noarchs are removed.
+            for rpms in h.values():
+                newest = selectNewestRpm(rpms, arch, verbose)
+                if newest["arch"] == "noarch":
+                    for r in rpms:
+                        if r != newest:
+                            pkgs.remove(r)
+                else:
+                    for r in rpms:
+                        if r["arch"] == "noarch":
+                            pkgs.remove(r)
         return pkgs
 
     def sort_unify(self):
@@ -4389,10 +4412,6 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             repo.read()
             if not readdebug:
                 repo.delDebuginfo()
-            for nevra in repo.pkglist.keys():
-                pkg = repo.pkglist[nevra]
-                if not archCompat(pkg["arch"], arch):
-                    del repo.pkglist[nevra]
             if readcompsfile:
                 repo.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
             repos.append(repo)
