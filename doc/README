@@ -770,10 +770,10 @@ Here some options that can be useful:
 
 Example usages:
 -----------------------
-oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/i386/Fedora/RPMS
-oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/SRPMS
 find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null | xargs -0 oldpyrpm.py --nodigest --nopayload
 locate '*.rpm' | xargs oldpyrpm.py --nodigest --nopayload
+oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/i386/Fedora/RPMS
+oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/SRPMS
 -----------------------
 
 Only read in the needed rpm tags and do dependency checking without further
@@ -781,5 +781,6 @@ debug checks. This shows the full speed of the current implementation and
 finishes in under 14 seconds for FC-development on some laptop:
 -----------------------
 time oldpyrpm.py --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/development/i386/Fedora/RPMS
+time oldpyrpm.py --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/4/i386/os/Fedora/RPMS /mirror/fedora/updates/4/i386 /mirror/fedora-extras/4/i386
 -----------------------
 
