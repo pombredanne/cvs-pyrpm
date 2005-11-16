@@ -180,7 +180,8 @@ class RpmPackage(RpmData):
         self.verify = verify    # Verify file format constraints and signatures
         self.hdronly = hdronly  # Don't open the payload
         self.db = db            # RpmDatabase
-        self.io = None
+        self.io = None          # Our rpm IO class
+        self.issrc = None       # Stored from rpm IO class after read
         # Ranges are (starting position or None, length)
         self.range_signature = (None, None) # Signature header
         self.range_header = (None, None) # Main header
@@ -238,6 +239,7 @@ class RpmPackage(RpmData):
         self.__readHeader(tags, ntags)
         if self.verify and self.verifyOneSignature() == -1:
             raise ValueError, "Signature verification failed."""
+        self.issrc = self.io.issrc
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
@@ -481,8 +483,8 @@ class RpmPackage(RpmData):
         """Return 1 if the package is a SRPM."""
 
         # XXX: is it a right method how to detect it by header?
-        if self.io:
-            return self.io.issrc
+        if self.issrc != None:
+            return self.issrc
         if self["sourcerpm"] == None:
             return 1
         return 0
