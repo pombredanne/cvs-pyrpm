@@ -1,10 +1,10 @@
-                              RPM database internals
-                              ----------------------
+RPM database internals
+~~~~~~~~~~~~~~~~~~~~~~
 
 This document describes the reverse engineered info from the various files in
 /var/lib/rpm. All files are db4 files, either hash or btree based. With the
-excpetion of Packages all files have the corresponding rpmtag based value as
-key. The data the consists of integer pairs which contain the package id and
+exception of Packages all files have the corresponding rpmtag based value as
+key. The data consists of integer pairs which contain the package id and
 the index at which this entry can be found in the rpm header of that tag. The
 values are 4 byte integers in host byte order. For some tags the index doesn't
 make any sense. In those cases the index value will always be set to 0.
@@ -27,11 +27,13 @@ Dirnames (btree):
 
 Filemd5s (hash):
  key: md5sum (4 * 4 byte int, no hex string!)
- values: list of 2-tuples: installid (4 byte int), basenameindex (4 byte int)
+ values: list of 2-tuples: installid (4 byte int), filemd5sindex (4 byte int)
+ Only stored if file md5sum exists and if the file is a regular file (usually
+ equivalent)
 
 Group (hash):
  key: Groupname (string)
- values: list of 2-tuples: installid (4 byte int), groupindex (4 byte int) (always 0)
+ values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
 
 Installtid (btree):
  key: Installtime of transaction (4 byte int, time() value)
@@ -44,7 +46,7 @@ Name (hash):
 Packages (hash):
  key: Installid (4 byte int)
  values: Complete binary rpm header with some  additional information from
-         signature without lead:
+         signature without lead.
 
 Providename (hash):
  key: Providename (string)
@@ -78,9 +80,11 @@ Sigmd5 (hash):
 Triggername (hash):
  key: Triggername (string)
  values: list of 2-tuples: installid (4 byte int), triggerindex (4 byte int)
+ Only contains the first entry for each name from a package
 
 
-
+Example
+~~~~~~~
 
 Now an example of the connection between the package headers which are stored
 in Packages and the rest of the files.

@@ -50,7 +50,7 @@ def main():
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
         usage()
-        return 1
+        return 0
 
     operation = None
     for (opt, val) in opts:
@@ -58,29 +58,29 @@ def main():
             if operation != None:
                 print "Only one operation at a time is allow."
                 usage()
-                return 1
+                return 0
             operation = OP_INSTALL
         elif opt in ["-U", "--upgrade"]:
             if operation != None:
                 print "Only one operation at a time is allow."
                 usage()
-                return 1
+                return 0
             operation = OP_UPDATE
         elif opt in ["-F", "--freshen"]:
             if operation != None:
                 print "Only one operation at a time is allow."
                 usage()
-                return 1
+                return 0
             operation = OP_FRESHEN
         elif opt in ["-e", "--erase"]:
             if operation != None:
                 print "Only one operation at a time is allow."
                 usage()
-                return 1
+                return 0
             operation = OP_ERASE
         elif opt in ['-?', "--help"]:
             usage()
-            return 0
+            return 1
         elif opt in ["-v", "--verbose"]:
             rpmconfig.verbose += 1
         elif opt in ["-w", "--warning"]:
@@ -96,7 +96,7 @@ def main():
             rpmconfig.printhash = 0
         elif opt == "--version":
             print "pyrpminstall", __version__
-            return 0
+            return 1
         elif opt == "--dbpath":
             rpmconfig.dbpath = val
         elif opt == "--force":
@@ -134,21 +134,22 @@ def main():
     if not args:
         print "Error no packages to install"
         usage()
-        return 1
+        return 0
 
     pydb = getRpmDBFactory(rpmconfig, rpmconfig.dbpath, rpmconfig.buildroot)
     control = RpmController(rpmconfig, operation, pydb)
     control.handleFiles(args)
     ops = control.getOperations()
-    if ops is None:
-        sys.exit(1)
+    if ops == None:
+        return 0
     if rpmconfig.test:
         rpmconfig.printError("test run stopped")
     else:
-        if control.runOperations(ops) == 0:
-            sys.exit(1)
+        return control.runOperations(ops)
+    return 1
 
 if __name__ == '__main__':
-    run_main(main)
+    if not run_main(main):
+        sys.exit(1)
 
 # vim:ts=4:sw=4:showmatch:expandtab
