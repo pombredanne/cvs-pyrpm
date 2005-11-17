@@ -1162,6 +1162,12 @@ if not ks["nfs"] and not ks["url"]:
 if ks["url"] and not ks["url"]["url"].startswith("file://"):
     print "ERROR: Unsupported url installation method, exiting."
     exit(1)
+if ks["repo"]:
+    for repo in ks["repo"]:
+        if not ks["repo"][repo]["url"].startswith("file://") and \
+               not ks["repo"][repo]["url"].startswith("nfs://"):
+            print "ERROR: Unsupported url for repo, exiting."
+            exit(1)
 
 ### create user supplied diskmap ###
 
@@ -1285,7 +1291,8 @@ if ks["clearpart"] and not ks["clearpart"].has_key("none"):
             exit(1)
     for disk in drives:
         if ks["clearpart"].has_key("initlabel") or \
-               (ks["zerombr"] and ks["zerombr"].has_key("yes")):
+               (ks["zerombr"] and ks["zerombr"].has_key("yes")) or \
+               not diskmap[disk].has_disklabel():
             print "Initializing disk '%s'" % disk
             diskmap[disk].new_disklabel(disklabel)
             if not disk in modified:
@@ -1703,6 +1710,7 @@ except Exception, msg:
 source_dir = tempdir+"/source"
 target_dir = tempdir+"/target"
 stage2_dir = tempdir+"/stage2"
+repo_dir = tempdir+"/repo"
 
 ### mount source ###
 
@@ -1778,81 +1786,48 @@ else:
     exit(1)
 install_version += "-%s" % source_version
 
-### create stage2 chroot ###
+### mount repos ###
 
-# create stage2 mount point and mount ramfs for stage2
-os.mkdir(stage2_dir)
+repos = { }
+repo_count = 0
+if ks["repo"]:
+    # create repo base directory
+    os.mkdir(repo_dir)
 
-try:
-    mount("None", stage2_dir, fstype="ramfs")
-except Exception, msg:
-    print "ERROR: Unable to create stage2 ramfs:", msg
-    exit(1)
+    for repo in ks["repo"]:
+        dir = "%s/%04d" % (repo_dir, repo_count)
+        os.mkdir(dir)
 
-# copy temporary stage2 mount
-print "Copying stage2 image"
-# copytree does not like to get a signal
-pyrpm.blockSignals()
-for f in os.listdir(stage2_img_dir):
-    s = "%s/%s" % (stage2_img_dir, f)
-    d = "%s/%s" % (stage2_dir, f)
-    if os.path.isdir(s):
-        shutil.copytree(s, d, symlinks=True)
-    else:
-        shutil.copy2(s, d)
-pyrpm.unblockSignals()
+        soure = None
+        fstype = None
+        opts = "ro"
+        args = None
 
-# umount temporary stage2 mount
-umount(stage2_img_dir)
-stage2_img_dir = None
+        # nfs source
+        if ks["repo"][repo]["url"].startswith("nfs://"):
+            s = string.splitfields(ks["repo"][repo]["url"][6:], "/", 1)
+            source = "%s:/%s" % (s[0], s[1])
+            fstype = "nfs"
+            args = None
+        # file source
+        elif ks["repo"][repo]["url"].startswith("file://"):
+            source = ks["repo"][repo]["url"][7:]
+            args = [ "--rbind" ]
+        else:
+            # TODO: http and ftp source
+            print "ERROR: Only nfs and file urls are currently supported " + \
+                  "for repos."
+            exit(1)
 
-# craete missing dirs and links
-create_dir(stage2_dir, "/bin")
-create_dir(stage2_dir, "/dev")
-create_dir(stage2_dir, "/etc")
-create_dir(stage2_dir, "/proc")
-create_dir(stage2_dir, "/tmp")
-create_dir(stage2_dir, "/var")
-create_dir(stage2_dir, "/var/log")
-create_dir(stage2_dir, "/var/tmp")
+        # mount the repo
+        try:
+            mount(source, dir, fstype, opts, args)
+        except Exception, msg:
+            print msg
+            exit(1)
 
-if not os.path.exists("%s/bin/sh" % stage2_dir):
-    try:
-        os.symlink("../usr/bin/bash", "%s/bin/sh" % stage2_dir)
-    except Exception, msg:
-        print "ERROR: Unable to generate /bin/sh symlink:", msg
-        exit(1)
-if not os.path.exists("%s/bin/bash" % stage2_dir):
-    try:
-        os.symlink("../usr/bin/bash", "%s/bin/bash" % stage2_dir)
-    except Exception, msg:
-        print "ERROR: Unable to generate /bin/bash symlink:", msg
-        exit(1)
-if not os.path.exists("%s/etc/mtab" % stage2_dir):
-    try:
-        fd = open("%s/etc/mtab" % stage2_dir, "w")
-    except Exception, msg:
-        print "ERROR: Unable to generate /etc/mtab:", msg
-        exit(1)
-    fd.close()
-
-# create needed devices
-if not os.path.exists(stage2_dir+"/dev/console"):
-    os.mknod(stage2_dir+"/dev/console", 0666 | stat.S_IFCHR, os.makedev(5, 1))
-if not os.path.exists(stage2_dir+"/dev/null"):
-    os.mknod(stage2_dir+"/dev/null", 0666 | stat.S_IFCHR, os.makedev(1, 3))
-if not os.path.exists(stage2_dir+"/dev/zero"):
-    os.mknod(stage2_dir+"/dev/zero", 0666 | stat.S_IFCHR, os.makedev(1, 5))
-
-# create disk and partition devices
-for disk in diskmap:
-    stats = os.stat(diskmap[disk]["device"])
-    tmpdev = "%s/%s" % (stage2_dir, diskmap[disk]["device"])
-    os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
-for onpart in partitionmap:
-    stats = os.stat(partitionmap[onpart]["device"])
-    tmpdev = "%s/%s" % (stage2_dir, partitionmap[onpart]["device"])
-    os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
+        repos[name] = dir
+        repo_count += 1
 
 ### format partitions ###
 
@@ -1880,100 +1855,183 @@ if confirm == 1 and len(to_format) > 0:
     if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
         exit(1)
 
-# change root to stage2
+# if there is something to format:
+# 1) copy stage2
+# 2) format partitions
+# 3) free stage2 copy
+if len(to_format) > 0:
 
-pid = os.fork()
-if pid != 0:
-    (rpid, status) = os.waitpid(pid, 0)
-    if status != 0:
+    ### create stage2 chroot ###
+
+    # create stage2 mount point and mount ramfs for stage2
+    os.mkdir(stage2_dir)
+
+    try:
+        mount("None", stage2_dir, fstype="ramfs")
+    except Exception, msg:
+        print "ERROR: Unable to create stage2 ramfs:", msg
         exit(1)
-else:
-    os.chroot(stage2_dir)
 
-    # format
-    for onpart in to_format:
-        name = partitionmap[onpart]["name"]
-        label = partitionmap[onpart]["label"]
-        disk = partitionmap[onpart]["disk"]
-        part = partitions[name]
+    # copy temporary stage2 mount
+    print "Preparing to format"
+    # copytree does not like to get a signal
+    pyrpm.blockSignals()
+    for f in os.listdir(stage2_img_dir):
+        s = "%s/%s" % (stage2_img_dir, f)
+        d = "%s/%s" % (stage2_dir, f)
+        if os.path.isdir(s):
+            shutil.copytree(s, d, symlinks=True)
+        else:
+            shutil.copy2(s, d)
+    pyrpm.unblockSignals()
 
-        if part.has_key("fstype") and \
-               (part["fstype"] == "ext2" or part["fstype"] == "ext3"):
-            mke2fs = "/usr/sbin/mke2fs -q -L '%s'" % label
-            if part["fstype"] == "ext3":
-                mke2fs += " -j"
-            if diskmap[disk].has_key("image"):
-                blocksize = 4096
-                mke2fs += " -b %d" % blocksize
-            mke2fs += " '%s'" % partitionmap[onpart]["device"]
-            if diskmap[disk].has_key("image"):
-                mke2fs += " %d" % (partitionmap[onpart]["size"] / blocksize)
+    # umount temporary stage2 mount
+    umount(stage2_img_dir)
+    stage2_img_dir = None
+
+    # craete missing dirs and links
+    create_dir(stage2_dir, "/bin")
+    create_dir(stage2_dir, "/dev")
+    create_dir(stage2_dir, "/etc")
+    create_dir(stage2_dir, "/proc")
+    create_dir(stage2_dir, "/tmp")
+    create_dir(stage2_dir, "/var")
+    create_dir(stage2_dir, "/var/log")
+    create_dir(stage2_dir, "/var/tmp")
+
+    if not os.path.exists("%s/bin/sh" % stage2_dir):
+        try:
+            os.symlink("../usr/bin/bash", "%s/bin/sh" % stage2_dir)
+        except Exception, msg:
+            print "ERROR: Unable to generate /bin/sh symlink:", msg
+            exit(1)
+    if not os.path.exists("%s/bin/bash" % stage2_dir):
+        try:
+            os.symlink("../usr/bin/bash", "%s/bin/bash" % stage2_dir)
+        except Exception, msg:
+            print "ERROR: Unable to generate /bin/bash symlink:", msg
+            exit(1)
+    if not os.path.exists("%s/etc/mtab" % stage2_dir):
+        try:
+            fd = open("%s/etc/mtab" % stage2_dir, "w")
+        except Exception, msg:
+            print "ERROR: Unable to generate /etc/mtab:", msg
+            exit(1)
+        fd.close()
+
+    # create needed devices
+    if not os.path.exists(stage2_dir+"/dev/console"):
+        os.mknod(stage2_dir+"/dev/console", 0666 | stat.S_IFCHR,
+                 os.makedev(5, 1))
+    if not os.path.exists(stage2_dir+"/dev/null"):
+        os.mknod(stage2_dir+"/dev/null", 0666 | stat.S_IFCHR, os.makedev(1, 3))
+    if not os.path.exists(stage2_dir+"/dev/zero"):
+        os.mknod(stage2_dir+"/dev/zero", 0666 | stat.S_IFCHR, os.makedev(1, 5))
+
+    # create disk and partition devices
+    for disk in diskmap:
+        stats = os.stat(diskmap[disk]["device"])
+        tmpdev = "%s/%s" % (stage2_dir, diskmap[disk]["device"])
+        os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
+    for onpart in partitionmap:
+        stats = os.stat(partitionmap[onpart]["device"])
+        tmpdev = "%s/%s" % (stage2_dir, partitionmap[onpart]["device"])
+        os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
+
+    # change root to stage2 and format partitions
+
+    pid = os.fork()
+    if pid != 0:
+        (rpid, status) = os.waitpid(pid, 0)
+        if status != 0:
+            exit(1)
+    else:
+        os.chroot(stage2_dir)
+
+        # format
+        for onpart in to_format:
+            name = partitionmap[onpart]["name"]
+            label = partitionmap[onpart]["label"]
+            disk = partitionmap[onpart]["disk"]
+            part = partitions[name]
+
+            if part.has_key("fstype") and \
+                   (part["fstype"] == "ext2" or part["fstype"] == "ext3"):
+                mke2fs = "/usr/sbin/mke2fs -q -L '%s'" % label
+                if part["fstype"] == "ext3":
+                    mke2fs += " -j"
+                if diskmap[disk].has_key("image"):
+                    blocksize = 4096
+                    mke2fs += " -b %d" % blocksize
+                mke2fs += " '%s'" % partitionmap[onpart]["device"]
+                if diskmap[disk].has_key("image"):
+                    mke2fs += " %d" % (partitionmap[onpart]["size"] / blocksize)
 
 #            print mke2fs
-            print "Formatting '%s' on '%s' (%s)" % \
-                  (onpart, partitionmap[onpart]["disk"], name)
+                print "Formatting '%s' on '%s' (%s)" % \
+                      (onpart, partitionmap[onpart]["disk"], name)
 
-            pid = os.fork()
-            if pid != 0:
-                (rpid, status) = os.waitpid(pid, 0)
-                if status != 0:
-                    print "ERROR: mke2fs failed."
-                    sys.exit(1)
-            else:
-                pyrpm.runScript(script=mke2fs)
-                sys.exit(0)
-
-            if part["fstype"] == "ext3": # set ext options
-                tune2fs = "/usr/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
-                          partitionmap[onpart]["device"]
-
-#                print tune2fs
-                if verbose:
-                    print "Tuning filesystem '%s' on '%s'" % \
-                          (onpart, partitionmap[onpart]["disk"])
                 pid = os.fork()
                 if pid != 0:
                     (rpid, status) = os.waitpid(pid, 0)
                     if status != 0:
-                        print "ERROR: tune2fs failed."
+                        print "ERROR: mke2fs failed."
                         sys.exit(1)
                 else:
-                    pyrpm.runScript(script=tune2fs)
+                    pyrpm.runScript(script=mke2fs)
                     sys.exit(0)
 
-        elif name == "swap":
-            l = ""
-            if install_version != "RHEL-3" and install_version != "FC-2":
-                # no swap labels for RHEL-3, FC-1
-                l = "-L '%s'" % label
-            mkswap = "/usr/sbin/mkswap %s '%s' %d >/dev/null" % \
-                     (l, partitionmap[onpart]["device"],
-                      (partitionmap[onpart]["size"] / 1024))
+                if part["fstype"] == "ext3": # set ext options
+                    tune2fs = "/usr/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
+                              partitionmap[onpart]["device"]
+
+#                print tune2fs
+                    if verbose:
+                        print "Tuning filesystem '%s' on '%s'" % \
+                              (onpart, partitionmap[onpart]["disk"])
+                    pid = os.fork()
+                    if pid != 0:
+                        (rpid, status) = os.waitpid(pid, 0)
+                        if status != 0:
+                            print "ERROR: tune2fs failed."
+                            sys.exit(1)
+                    else:
+                        pyrpm.runScript(script=tune2fs)
+                        sys.exit(0)
+
+            elif name == "swap":
+                l = ""
+                if install_version != "RHEL-3" and install_version != "FC-2":
+                    # no swap labels for RHEL-3, FC-1
+                    l = "-L '%s'" % label
+                mkswap = "/usr/sbin/mkswap %s '%s' %d >/dev/null" % \
+                         (l, partitionmap[onpart]["device"],
+                          (partitionmap[onpart]["size"] / 1024))
 
 #            print mkswap
-            print "Formatting '%s' on '%s' (%s)" % \
-                  (onpart, partitionmap[onpart]["disk"], name)
-            pid = os.fork()
-            if pid != 0:
-                (rpid, status) = os.waitpid(pid, 0)
-                if status != 0:
-                    print "ERROR: mkswap failed."
-                    sys.exit(1)
+                print "Formatting '%s' on '%s' (%s)" % \
+                      (onpart, partitionmap[onpart]["disk"], name)
+                pid = os.fork()
+                if pid != 0:
+                    (rpid, status) = os.waitpid(pid, 0)
+                    if status != 0:
+                        print "ERROR: mkswap failed."
+                        sys.exit(1)
+                else:
+                    pyrpm.runScript(script=mkswap)
+                    sys.exit(0)
             else:
-                pyrpm.runScript(script=mkswap)
-                sys.exit(0)
-        else:
-            print "ERROR: Unknown filesystem for '%s' (%s)" % \
-                  (partitionmap[onpart]["disk"], name)
-            sys.exit(1)
+                print "ERROR: Unknown filesystem for '%s' (%s)" % \
+                      (partitionmap[onpart]["disk"], name)
+                sys.exit(1)
 
-    del to_format
-    ### format end ###
+        del to_format
+        ### format end ###
 
-    sys.exit(0)
+        sys.exit(0)
 
-# umount real stage2 mount
-umount(stage2_dir)
+    # umount real stage2 mount
+    umount(stage2_dir)
 
 ### mount target ###
 
@@ -2348,12 +2406,19 @@ fd.write("exactarch=1\n")
 fd.write("retries=20\n")
 fd.write("obsoletes=1\n")
 fd.write("reposdir=%s/yum.repos.d\n" % tempdir)
+if ks["packages"].has_key("drop"):
+    fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
 fd.write("\n")
 fd.write("[dist]\n")
 fd.write("name=dist\n")
-fd.write("baseurl=file:%s\n" % source_dir)
-if ks["packages"].has_key("drop"):
-    fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
+fd.write("baseurl=file://%s\n" % source_dir)
+fd.write("\n")
+# add repos
+for repo in repos:
+    fd.write("[%s]\n" % repo)
+    fd.write("name=%s\n" % repo)
+    fd.write("baseurl=file://%s\n" % repos[repo])
+    fd.write("\n")
 fd.close()
 
 # yum
