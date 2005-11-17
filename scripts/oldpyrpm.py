@@ -40,6 +40,7 @@
 # TODO:
 # - How todo save shell escapes for os.system()
 # - Can we find a better place for addon info like "mdistance"?
+# - Move archCompat() and machineDistance() together into one check.
 # - Add a check if releasever is not set.
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -5613,7 +5614,8 @@ def main():
         time1 = time.clock()
         repos = readRepos(releasever, configfiles, arch, buildroot, 0, 1)
         time2 = time.clock()
-        print "needed", time2 - time1, "seconds to read the repos"
+        if configfiles:
+            print "needed", time2 - time1, "seconds to read the repos"
         if repos == None:
             return 1
         headerend = {}
