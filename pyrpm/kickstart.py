@@ -290,6 +290,8 @@ class KickstartConfig(dict):
                     self.convertLong(self["partition"], "end")
                     self.convertLong(self["partition"], "bytes-per-inode")
                 # TODO: raid
+                elif opt == "repo":
+                    self.parseSub(opt, args[1:], [ "url:" ])
                 elif opt == "rootpw":
                     self.parseSub(opt, args[1:], [ "iscrypted" ])
                 elif opt == "selinux":
@@ -456,6 +458,8 @@ class KickstartConfig(dict):
                         raise ValueError, \
                               "Partition '" + part["onpart"] + \
                               "' has set start, but no disk."
+                elif part.has_key("onpart"):
+                    pass
                 elif not part.has_key("recommended") and \
                          not part.has_key("size"):
                     raise ValueError, \
@@ -474,9 +478,13 @@ class KickstartConfig(dict):
             del partitions
             del disk
 
+        if self["repo"]:
+            if not self["url"].has_key("url"):
+                raise ValueError, "url not set for repo."
+
         if self["url"]:
             if not self["url"].has_key("url"):
-                raise ValueError, "url not set."
+                raise ValueError, "url not set for url."
 
     def parseArgs(self, tag, argv, allowed_args, replace_tags=None):
         dict = { }
