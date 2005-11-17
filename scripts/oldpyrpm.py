@@ -20,7 +20,7 @@
 #
 # Read .rpm packages from python. Implemented completely in python without
 # using the rpmlib C library. Use "oldpyrpm.py -h" to get a list of possible
-# options.
+# options and http://people.redhat.com/laroche/pyrpm/ also has some docu.
 # This python script depends on libxml2 and urlgrabber for some functionality.
 #
 # Tested with all rpm packages from RHL5.2, 6.x, 7.x, 8.0, 9,
@@ -39,6 +39,8 @@
 #
 # TODO:
 # - How todo save shell escapes for os.system()
+# - Can we find a better place for addon info like "mdistance"?
+# - Add a check if releasever is not set.
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
 # - Reading yum.conf we immediately replace 'releasever' instead of
@@ -741,6 +743,14 @@ importanttags = {"name":1, "epoch":1, "version":1, "release":1, "arch":1,
     "filemtimes":1, "filedevices":1, "fileinodes":1, "filesizes":1,
     "filemd5s":1, "filerdevs":1, "filelinktos":1, "fileflags":1,
     "filecolors":1, "archivesize":1}
+
+def getImportantTags():
+    # only read in important tags
+    for i in importanttags.keys():
+        value = rpmtag[i]
+        importanttags[i] = value
+        importanttags[value[0]] = value
+    return importanttags
 
 
 # Info within the sig header.
@@ -3047,22 +3057,32 @@ def selectNewestRpm(rpms, arch, verbose):
     """Select one package out of rpms that has the highest version
     number."""
     newest = rpms[0]
-    for rpm in rpms[1:]:
-        pkgcmp = pkgCompare(newest, rpm)
-        if pkgcmp < 0:
-            newest = rpm
-        elif arch and (pkgcmp == 0):
-            dist = machineDistance(newest["arch"], arch)
-            newdist = machineDistance(rpm["arch"], arch)
-            if newdist < dist:
+    if arch == None:
+        for rpm in rpms[1:]:
+            if pkgCompare(newest, rpm) < 0:
                 if verbose:
                     print "select", rpm.getFilename(), "over", \
-                         newest.getFilename()
+                        newest.getFilename()
                 newest = rpm
-            else:
+        return newest
+    if len(rpms) == 1:
+        return newest
+    if newest.mdistance == None:
+        newest.mdistance = machineDistance(newest["arch"], arch)
+    for rpm in rpms[1:]:
+        if rpm.mdistance == None:
+            rpm.mdistance = machineDistance(rpm["arch"], arch)
+        if rpm.mdistance < newest.mdistance:
+            if verbose:
+                print "select", rpm.getFilename(), "over", \
+                    newest.getFilename()
+            newest = rpm
+        elif rpm.mdistance == newest.mdistance:
+            if pkgCompare(newest, rpm) < 0:
                 if verbose:
-                    print "select", newest.getFilename(), "over", \
-                        rpm.getFilename()
+                    print "select", rpm.getFilename(), "over", \
+                        newest.getFilename()
+                newest = rpm
     return newest
 
 
@@ -3083,11 +3103,10 @@ class RpmTree:
             rpm.closeFd()
         else:
             rpm = filename
+        arch = rpm.getArch()
         if basearch:
-            key = (rpm["name"], BuildArchTranslate(rpm.getArch()))
-            self.h.setdefault(key, []).append(rpm)
-        else:
-            self.h.setdefault( (rpm["name"], rpm.getArch()) , []).append(rpm)
+            arch = BuildArchTranslate(arch)
+        self.h.setdefault( (rpm["name"], arch) , []).append(rpm)
         return rpm
 
     def addDirectory(self, dirname):
@@ -3117,7 +3136,11 @@ class RpmTree:
         for r in self.h.keys():
             self.h[r] = [selectNewestRpm(self.h[r], arch, verbose)]
 
-    def getPkgsNewest(self, arch=None, verbose=1):
+    def getPkgsNewest(self, arch=None, verbose=0):
+        if arch:
+            for rpms in self.h.values():
+                for rpm in rpms:
+                    rpm.mdistance = None
         self.keepNewest(arch, verbose)
         pkgs = []
         for p in self.h.values():
@@ -3628,7 +3651,14 @@ class RpmRepo:
     def delDebuginfo(self):
         for nevra in self.pkglist.keys():
             pkg = self.pkglist[nevra]
-            if pkg["name"].endswith("-debuginfo"):
+            # or should we search for "-debuginfo" only?
+            if pkg["name"].endswith("-debuginfo") or \
+                pkg["name"] == "glibc-debuginfo-common":
+                del self.pkglist[nevra]
+
+    def delSrc(self):
+        for nevra in self.pkglist.keys():
+            if self.pkglist[nevra].issrc:
                 del self.pkglist[nevra]
 
     def __removeExcluded(self):
@@ -4376,7 +4406,7 @@ class YumConf(Conf):
 
 
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
-    readcompsfile=0):
+    readsrc, readcompsfile=0):
     # Read in /etc/yum.conf config files.
     repos = []
     for c in configfiles:
@@ -4402,6 +4432,8 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             repo.read()
             if not readdebug:
                 repo.delDebuginfo()
+            if not readsrc:
+                repo.delSrc()
             if readcompsfile:
                 repo.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
             repos.append(repo)
@@ -4905,8 +4937,10 @@ def verifyStructure(verbose, packages, phash, tag, useidx=1):
                 if verbose > 2:
                     print key, phashtid
 
-def readPackages(dbpath, verbose):
+def readPackages(dbpath, verbose, keepdata=1, hdrtags=None):
     import bsddb, cStringIO
+    if hdrtags == None:
+        hdrtags = rpmdbtag
     packages = {}
     pkgdata = {}
     keyring = None #openpgp.PGPKeyRing()
@@ -4940,13 +4974,14 @@ def readPackages(dbpath, verbose):
         else:
             fd = cStringIO.StringIO(data)
             pkg = ReadRpm("rpmdb", fd=fd)
-            pkg.readHeader(None, rpmdbtag, 1, 1)
+            pkg.readHeader(None, hdrtags, keepdata, 1)
             if pkg["name"] == "gpg-pubkey":
                 #for k in openpgp.parsePGPKeys(pkg["description"]):
                 #    keyring.addKey(k)
                 pkg["group"] = (pkg["group"],)
             packages[tid] = pkg
-            pkgdata[tid] = data
+            if keepdata:
+                pkgdata[tid] = data
         try:
             (tid, data) = db.next()
         except:
@@ -5055,7 +5090,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     for pkg in checkdupes.keys():
         if len(checkdupes[pkg]) > 1:
             print "Warning: more than one package installed for %s." % pkg
-    repos = readRepos(releasever, configfiles, arch, buildroot, 1)
+    repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0)
     if repos == None:
         return 1
     for tid in packages.keys():
@@ -5390,7 +5425,7 @@ def main():
     checksrpms = 0
     rpmdbpath = "/var/lib/rpm/"
     checkarch = 0
-    checkfileconflicts = 1
+    checkfileconflicts = 0
     runorderer = 0
     specifyarch = 0
     buildroot = ""
@@ -5400,12 +5435,14 @@ def main():
     createrepo = 0
     mercurial = 0
     releasever = None
+    updaterpms = 0
     (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
         ["help", "verbose", "quiet", "arch=", "releasever=",
          "distroverpkg", "strict",
          "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
-         "excludes=", "nofileconflicts", "runorderer",
+         "excludes=", "nofileconflicts", "fileconflicts", "runorderer",
+         "updaterpms",
          "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
          "checkrpmdb", "checkdeps", "buildroot=", "installroot=", "root=",
          "version", "baseurl=", "createrepo", "mercurial"])
@@ -5441,8 +5478,12 @@ def main():
             payload = 0
         elif opt == "--nofileconflicts":
             checkfileconflicts = 0
+        elif opt == "--fileconflicts":
+            checkfileconflicts = 1
         elif opt == "--runorderer":
             runorderer = 1
+        elif opt == "--updaterpms":
+            updaterpms = 1
         elif opt == "--wait":
             wait = 1
         elif opt == "--noverify":
@@ -5511,18 +5552,68 @@ def main():
             repo.createRepo(baseurl)
     elif mercurial:
         createMercurial()
+    elif updaterpms:
+        import time
+        hdrtags = getImportantTags()
+
+        time1 = time.clock()
+        print "Reading the rpmdb in", rpmdbpath
+        (packages, keyring, maxtid, pkgdata, swapendian) = readPackages(rpmdbpath,
+            verbose, 0, hdrtags)
+        for pkg in packages.values():
+            if not releasever and pkg["name"] in distroverpkg:
+                releasever = pkg["version"]
+        time2 = time.clock()
+        print len(packages.keys()), "rpm packages in rpmdb"
+        print "needed", time2 - time1, "seconds to read the rpmdb"
+
+        if not configfiles:
+            configfiles.append("/etc/yum.conf")
+        time1 = time.clock()
+        repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0)
+        if repos == None:
+            return 1
+        time2 = time.clock()
+        numrpms = 0
+        for r in repos:
+            numrpms += len(r.pkglist.keys())
+        print numrpms, "rpm packages in the repos"
+        print "needed", time2 - time1, "seconds to read the repos"
+
+        time1 = time.clock()
+        rtree = RpmTree()
+        for rpm in packages.values():
+            rtree.addRpm(rpm, 1)
+        for r in repos:
+            for rpm in r.pkglist.values():
+                if rpm.issrc:
+                    print "src.rpm found, this should never happen!!!!!!!!!!!"
+                    continue
+                if not archCompat(rpm["arch"], arch):
+                    print "removed due to incompatibel arch:", \
+                        rpm.getFilename()
+                    continue
+                rtree.addRpm(rpm, 1)
+        installrpms = rtree.getPkgsNewest(arch)
+        checkDeps(installrpms, checkfileconflicts, runorderer)
+        time2 = time.clock()
+        print "checked", len(installrpms), "rpm packages"
+        print "needed", time2 - time1, "seconds to check this tree"
+        if wait:
+            print "ready"
+            time.sleep(30)
     else:
+        import time
         keepdata = 1
         hdrtags = rpmtag
         if verify == 0 and nodigest == 1:
             keepdata = 0
             if small:
-                for i in importanttags.keys():
-                    value = rpmtag[i]
-                    importanttags[i] = value
-                    importanttags[value[0]] = value
-                hdrtags = importanttags
-        repos = readRepos(releasever, configfiles, arch, buildroot, 0)
+                hdrtags = getImportantTags()
+        time1 = time.clock()
+        repos = readRepos(releasever, configfiles, arch, buildroot, 0, 1)
+        time2 = time.clock()
+        print "needed", time2 - time1, "seconds to read the repos"
         if repos == None:
             return 1
         headerend = {}
@@ -5531,6 +5622,7 @@ def main():
                 args.append(p.filename)
                 if p["rpm:header-range:end"]:
                     headerend[p.filename] = p["rpm:header-range:end"] + 1
+        time1 = time.clock()
         checkarchs = []
         for a in args:
             a = Uri2Filename(a)
@@ -5557,6 +5649,8 @@ def main():
                         checkarchs.append(rpm["arch"])
                     repo.append(rpm)
                 del rpm
+        time2 = time.clock()
+        print "needed", time2 - time1, "seconds to read the rpm packages"
         if strict:
             for rpm in repo:
                 rpm.filenames = rpm.getFilenames()
@@ -5566,12 +5660,16 @@ def main():
             if specifyarch:
                 checkarchs = [arch,]
             if checkarchs:
+                print "checking", len(repo), "rpm packages"
                 for arch in checkarchs:
+                    time1 = time.clock()
                     print "--------------------------------------------------"
                     print "check as if kernel has the", \
                         "architecture \"%s\" now:" % arch
                     rtree = RpmTree()
                     for rpm in repo:
+                        if rpm.issrc:
+                            continue
                         if not archCompat(rpm["arch"], arch):
                             print "removed due to incompatibel arch:", \
                                 rpm.getFilename()
@@ -5581,10 +5679,11 @@ def main():
                     if strict:
                         checkProvides(installrpms)
                     checkDeps(installrpms, checkfileconflicts, runorderer)
+                    time2 = time.clock()
+                    print "needed", time2 - time1, "seconds to check this tree"
             else:
                 print "No arch defined to check, are kernels missing?"
         if wait:
-            import time
             print "ready"
             time.sleep(30)
     return 0
