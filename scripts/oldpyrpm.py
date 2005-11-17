@@ -40,8 +40,6 @@
 # TODO:
 # - How todo save shell escapes for os.system()
 # - Can we find a better place for addon info like "mdistance"?
-# - Move archCompat() and machineDistance() together into one check.
-# - Add a check if releasever is not set.
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
 # - Reading yum.conf we immediately replace 'releasever' instead of
@@ -744,14 +742,12 @@ importanttags = {"name":1, "epoch":1, "version":1, "release":1, "arch":1,
     "filemtimes":1, "filedevices":1, "fileinodes":1, "filesizes":1,
     "filemd5s":1, "filerdevs":1, "filelinktos":1, "fileflags":1,
     "filecolors":1, "archivesize":1}
-
-def getImportantTags():
-    # only read in important tags
-    for i in importanttags.keys():
-        value = rpmtag[i]
-        importanttags[i] = value
-        importanttags[value[0]] = value
-    return importanttags
+for v in importanttags.keys():
+    value = rpmtag[v]
+    importanttags[v] = value
+    importanttags[value[0]] = value
+del value
+del v
 
 
 # Info within the sig header.
@@ -931,17 +927,6 @@ arch_compats = {
 
     "s390x": ["s390",],
 }
-
-def archCompat(parch, arch):
-    """Return True if package with architecture parch can be installed on
-    machine with architecture arch."""
-    return (parch == "noarch" or parch == arch or
-            parch in arch_compats.get(arch, []))
-
-def archDuplicate(parch, arch):
-    """Return True if parch and arch have the same base arch."""
-    return (parch == arch or
-            BuildArchTranslate(parch) == BuildArchTranslate(arch))
 
 def machineDistance(arch1, arch2):
     """Return machine distance between arch1 and arch2, as defined by
@@ -3056,7 +3041,8 @@ class RpmOrderer:
 
 def selectNewestRpm(rpms, arch, verbose):
     """Select one package out of rpms that has the highest version
-    number."""
+    number. This relies on [rpms].mdistance to be set before calling
+    this function. """
     newest = rpms[0]
     if arch == None:
         for rpm in rpms[1:]:
@@ -3068,11 +3054,7 @@ def selectNewestRpm(rpms, arch, verbose):
         return newest
     if len(rpms) == 1:
         return newest
-    if newest.mdistance == None:
-        newest.mdistance = machineDistance(newest["arch"], arch)
     for rpm in rpms[1:]:
-        if rpm.mdistance == None:
-            rpm.mdistance = machineDistance(rpm["arch"], arch)
         if rpm.mdistance < newest.mdistance:
             if verbose:
                 print "select", rpm.getFilename(), "over", \
@@ -3138,10 +3120,6 @@ class RpmTree:
             self.h[r] = [selectNewestRpm(self.h[r], arch, verbose)]
 
     def getPkgsNewest(self, arch=None, verbose=0):
-        if arch:
-            for rpms in self.h.values():
-                for rpm in rpms:
-                    rpm.mdistance = None
         self.keepNewest(arch, verbose)
         pkgs = []
         for p in self.h.values():
@@ -5072,7 +5050,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     checkdupes = {}
     for pkg in packages.values():
         if dbpath != "/var/lib/rpm" and pkg["name"] in ("kernel", "kernel-smp"):
-            if arch != pkg["arch"] and not archCompat(pkg["arch"], arch):
+            if machineDistance(pkg["arch"], arch) == 999:
                 arch = pkg["arch"]
                 print "Change 'arch' setting to be:", arch
         if not releasever and pkg["name"] in distroverpkg:
@@ -5081,7 +5059,8 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
             checkdupes.setdefault("%s.%s" % (pkg["name"], pkg["arch"]),
                 []).append(pkg)
     for pkg in packages.values():
-        if pkg["name"] != "gpg-pubkey" and not archCompat(pkg["arch"], arch):
+        if pkg["name"] != "gpg-pubkey" and \
+            machineDistance(pkg["arch"], arch) == 999:
             print "Warning: did not expect package with this arch: %s" % \
                 pkg.getFilename()
         if pkg["arch"] != "noarch" and \
@@ -5435,7 +5414,7 @@ def main():
     baseurl = None
     createrepo = 0
     mercurial = 0
-    releasever = None
+    releasever = ""
     updaterpms = 0
     (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
         ["help", "verbose", "quiet", "arch=", "releasever=",
@@ -5555,12 +5534,11 @@ def main():
         createMercurial()
     elif updaterpms:
         import time
-        hdrtags = getImportantTags()
 
         time1 = time.clock()
         print "Reading the rpmdb in", rpmdbpath
         (packages, keyring, maxtid, pkgdata, swapendian) = readPackages(rpmdbpath,
-            verbose, 0, hdrtags)
+            verbose, 0, importanttags)
         for pkg in packages.values():
             if not releasever and pkg["name"] in distroverpkg:
                 releasever = pkg["version"]
@@ -5587,10 +5565,8 @@ def main():
             rtree.addRpm(rpm, 1)
         for r in repos:
             for rpm in r.pkglist.values():
-                if rpm.issrc:
-                    print "src.rpm found, this should never happen!!!!!!!!!!!"
-                    continue
-                if not archCompat(rpm["arch"], arch):
+                rpm.mdistance = machineDistance(rpm["arch"], arch)
+                if rpm.mdistance == 999:
                     print "removed due to incompatibel arch:", \
                         rpm.getFilename()
                     continue
@@ -5610,7 +5586,7 @@ def main():
         if verify == 0 and nodigest == 1:
             keepdata = 0
             if small:
-                hdrtags = getImportantTags()
+                hdrtags = importanttags
         time1 = time.clock()
         repos = readRepos(releasever, configfiles, arch, buildroot, 0, 1)
         time2 = time.clock()
@@ -5672,7 +5648,8 @@ def main():
                     for rpm in repo:
                         if rpm.issrc:
                             continue
-                        if not archCompat(rpm["arch"], arch):
+                        rpm.mdistance = machineDistance(rpm["arch"], arch)
+                        if rpm.mdistance == 999:
                             print "removed due to incompatibel arch:", \
                                 rpm.getFilename()
                             continue
