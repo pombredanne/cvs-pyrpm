@@ -478,6 +478,22 @@ class RpmRelations:
 
     # ----
 
+    def orderIterationFunc(self):
+        """ Overload this function to get a call into the order process
+        each time the iteration starts."""
+        # Remember: Do not change any contents!
+        return
+
+    # ---
+
+    def orderLoopFunc(self, loops):
+        """ Overload this function to get a call into the order process
+        each time loops are detected."""
+        # Remember: Do not change any contents!
+        return
+
+    # ---
+
     def genOrder(self):
         """Order rpms in orderer.RpmRelations relations.
 
@@ -487,6 +503,10 @@ class RpmRelations:
         idx = 1
         last = [ ]
         while len(self) > 0:
+            # for each iteration, call orderIterationFunc
+            # see function description
+            self.orderIterationFunc()
+
             # remove and save all packages without a post relation in reverse
             # order
             # these packages will be appended later to the list
@@ -527,6 +547,11 @@ class RpmRelations:
                         s = ", ".join([pkg.getNEVRA() for pkg in loops[i]])
                         self.config.printDebug(2, "  %d: %s" % (i, s))
                 sorted_loops = self.sortLoops(loops)
+
+                # for loop detection, call orderLoopFunc
+                # see function description
+                self.orderLoopFunc(sorted_loops)
+                
                 if self.breakupLoop(loops, sorted_loops[0]) != 1:
                     self.config.printError("Unable to breakup loop.")
                     return None
