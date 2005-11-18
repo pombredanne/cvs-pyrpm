@@ -1059,10 +1059,9 @@ def stringCompare(str1, str2):
             while j2 < lenstr2 and _xisalpha(str2[j2]): j2 += 1
             isnum = 0
         # check if we already hit the end
-        # FIXME: return 0 if both at end?
         if j1 == i1: return -1
         if j2 == i2:
-            if isnum: return 1 # FIXME: why only if isnum?
+            if isnum: return 1
             return -1
         if isnum:
             # ignore leading "0" for numbers (1 == 000001)
