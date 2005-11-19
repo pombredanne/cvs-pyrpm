@@ -1338,7 +1338,7 @@ def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
     tags, if defined, specifies tags to load.  Raise ValueError on invalid
     data, IOError."""
 
-    pkg = package.RpmPackage(config, source, verify, strict, hdronly, db)
+    pkg = package.RpmPackage(config, source, verify, hdronly, db)
     pkg.read(tags=tags)
     pkg.close()
     return pkg
