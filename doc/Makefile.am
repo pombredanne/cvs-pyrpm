@@ -1,5 +1,13 @@
-EXTRA_DIST = README README.html README.rpmdb classes.fig pycheckrc
+EXTRA_DIST = pyrpm.txt pyrpm-devel.txt pyrpm-tools.txt pyrpm-links.txt pycheckrc
 
-README.html: README
-	asciidoc -b html4 README > README.html
+pyrpm.html: pyrpm.txt
+	asciidoc -b html4 $< > $@
 
+pyrpm-tools.html: pyrpm-tools.txt
+	asciidoc -b html4 $< > $@
+
+pyrpm-tools.html: pyrpm-tools.txt
+	asciidoc -b html4 $< > $@
+
+pyrpm-links.html: pyrpm-links.txt
+	asciidoc -b html4 $< > $@

@@ -282,7 +282,8 @@ rpmtag = {
     "optflags": (1122, RPM_STRING, None, 4), # optimization flags for gcc
     "pubkeys": (266, RPM_STRING_ARRAY, None, 4),
     "sourcepkgid": (1146, RPM_BIN, 16, 4), # md5 from srpm (header+payload)
-    "immutable": (63, RPM_BIN, 16, 0), # content of this tag is unclear
+    "immutable": (63, RPM_BIN, 16, 0), # IIiI: tag, type, -(nr_idx-1)*16, 16 
+    "image": (61, RPM_BIN, 16, 0),     # IIiI: tag, type, -(nr_idx-1)*16, 16
     # less important information:
     "buildtime": (1006, RPM_INT32, 1, 0), # time of rpm build
     "buildhost": (1007, RPM_STRING, None, 0), # hostname where rpm was built

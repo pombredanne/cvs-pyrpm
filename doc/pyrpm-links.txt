@@ -1,0 +1,67 @@
+Pointers to related projects
+----------------------------
+
+rpm is available from link:http://www.rpm.org/[] and
+link:http://www.wraptastic.org/[].
+Mailinglist at link:https://listman.redhat.com/mailman/listinfo/rpm-list[].
+The binary rpm format is described at
+link:http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html[].
+
+yum is available from link:http://linux.duke.edu/projects/yum/[]
+with the development mailinglist at
+link:https://lists.linux.duke.edu/mailman/listinfo/yum-devel/[].
+
+The new metadata for yum repositories (also named repodata) is discussed at
+link:http://linux.duke.edu/projects/metadata/[].
+It also includes the
+link:http://linux.duke.edu/projects/metadata/generate/[createrepo] tool.
+
+urlgrabber is available from
+link:http://linux.duke.edu/projects/urlgrabber[].
+
+repoview is available from
+link:http://linux.duke.edu/projects/mini/repoview/[].
+
+rpmlint is checking for packaging errors. It is available at
+link:http://people.mandriva.com/%7eflepied/projects/rpmlint/[http://people.mandriva.com/~flepied/projects/rpmlint/].
+
+Smart is written in python and combines several different binary
+packaging formats within one packaging tool. It is available at
+link:http://smartpm.org/[].
+
+up2date and rhnlib are the client software for
+link:http://rhn.redhat.com/[Red Hat Network] and can be downloaded from
+link:http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/[].
+
+Anaconda is the Red Hat installation tool and can be downloaded at
+link:http://elvis.redhat.com/anaconda/[],
+link:http://fedora.redhat.com/projects/anaconda-installer/[] and
+link:http://fedora.linux.duke.edu/wiki/Anaconda[].
+
+Conary has looked at rpm history and defines a new distribution format that
+enables rollbacks and easier customization on the client side. Available at
+link:http://www.rpath.com/[] and link:http://wiki.conary.com/[].
+
+apt4rpm is adapting the Debian packaging tool to also work with rpm packages.
+Available from link:http://apt4rpm.sourceforge.net/[].
+
+deltarpm is working on reducing the network traffic for rpm based updates.
+Available at link:ftp://ftp.suse.com/pub/projects/deltarpm/[].
+
+FAI (Fully Automatic Installation) for Debian. Available from
+link:http://www.informatik.uni-koeln.de/fai/[].
+
+OpenPKG cross-platform rpm-based software packaging, available at
+link:http://www.openpkg.org/[].
+
+Rebuild rpm packages and manage build roots via mach, available from
+link:http://thomas.apestaart.org/projects/mach/[] and further info
+at link:http://fedoraproject.org/wiki/UsingMach[].
+Fedora Extras is using link:http://fedoraproject.org/wiki/Projects/Plague[].
+
+Fedora Core Live CDs at link:http://fedoraproject.org/wiki/LiveCD[]
+and link:http://fedoraproject.org/wiki/DerivedDistributions[].
+
+Here should be a link on how rpm packages for Fedora Extras are checked
+to make them real nice, stable and conforming to Red Hat and comunity
+standards.

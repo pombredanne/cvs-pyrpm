@@ -1,0 +1,54 @@
+PyRPM
+=====
+
+// This document contains asciidoc (http://www.methods.co.nz/asciidoc/) data
+// and you should probably read the corresponding .html page.
+
+The current version of this document is available at 
+link:http://people.redhat.com/laroche/pyrpm/readme.html[] and you
+can send in changes to its link:http://www.methods.co.nz/asciidoc/[asciidoc]
+source available at link:http://people.redhat.com/laroche/pyrpm/readme.txt[].
+
+
+Overview
+-------- 
+
+PyRPM is an experimental project to look at rpm package management. It is 
+a python module and a collection of scripts that provide similar functionality
+as rpm, yum and co. It is written from ground up and is implemented only in
+python. It mainly deals with rpm packages, the rpm database `rpmdb` in 
+`/var/lib/rpm`, comps.xml files and yum repositories (called repo data).
+
+The reason for this project was to have a codebase with which we can test and
+verify rpm, rpmdb and yum itself and experiment with new features and
+implementations very quickly. Python is Red Hat's in-house defacto standard,
+so using python to do rapid prototyping was only logical.
+
+The code itself is still very small and modular. We're constantly looking
+to improve the code, make it more production ready and remove duplicate
+functionality. Results from this project back to rpm and co are very important
+for us to improve the current available Linux tools and not rush with only
+adding another project for this. Next to working on good algorithms and sane
+implementations, most code is backed up with verify and testing scripts.
+
+
+Warning
+-------
+
+The PyRPM project is by no means meant to be a full replacement of rpm or yum.
+In its current state we feel confident that in general it won't break
+anything, but the code isn't production quality yet. 
+
+The check scripts can be safely used as they won't modify anything on your
+system, so feel free to use them at your convenience.
+
+We personally have been using the yum replacement very extensively and even
+used it to update our own systems, but that's not even remotely a guarantee
+that it will work on your machine. It has only been run by a few people until
+now.
+
+Using it to set up buildroots on the other hand should be very safe as this
+all happens in a very contained environment (sandbox principle). 
+
+Please let us know of any problems you encounter, if possible with some
+reproducible testcases so we can figure out what might have happend.

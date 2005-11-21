@@ -1,14 +1,12 @@
-Detailed tool descriptions
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Tool descriptions
+=================
 
 In order to understand what each of the tools really does this section describes
 the behaviour of the tools in more detail for each tool.
-Please also look at `tests/test10` to see actual tests we invoke ourselves from
-time to time.
 
 
 pyrpmcheck
-~~~~~~~~~~
+----------
 
 There are currently 4 basic tests in pyrpmcheck. The first checks for all
 packages if any two dirs differ in user/group/mode. The second check looks for
@@ -18,7 +16,7 @@ last check simply checks if any package names appear in the various given dirs.
 This check is only useful for FC and FC-Extras, as there should be no overlap
 there.
 
-Check some common problems with packages and interdependancies for
+Check some common problems with packages and interdependencies for
 Fedora Core Devel:
 -----------------------
 pyrpmcheck /mirror/fedora/development/i386/Fedora/RPMS
@@ -26,7 +24,7 @@ pyrpmcheck /mirror/fedora/development/i386/Fedora/RPMS
 
 
 pyrpmcheckrepo
-~~~~~~~~~~~~~~
+--------------
 
 This tool should actually be renamed (and will so soon) to pyrpmcheckinstall as
 that's what it does. What the tool does it to simulate an installation (just
@@ -48,32 +46,49 @@ pyrpmcheckrepo -r /mnt/foo install /mirror/fedora/4/i386/os/Fedora/RPMS update /
 
 
 pyrpmcreaterepo
-~~~~~~~~~~~~~~~
+---------------
 
-Here we've take the code from the original createrepo and replaced the rpmlib
-based access to rpm headers with our code. This code is not complete until now.
+Using the original createrepo as a basis we integrated our pyrpm code into it
+instead of using rpmlib.
+
+Create a repo for FC-4:
+-----------------------
+pyrpmcreaterepo /mirror/fedora/4/i386/os/
+-----------------------
 
 
 pyrpmdbconvert
-~~~~~~~~~~~~~~
+--------------
 
-Nothing written yet. This supports changing over from the current rpmdb to
-e.g. a sqlite database.
+Converts one rpm database to another. The 2 currently supported databases are
+rpmdb (DB4 based) and a SQLite rpm database. It can be used to either convert
+a rpm database from one format to another or to recreate a rpm database.
+
+Convert you system rpmdb into a sqlite database:
+-----------------------
+pyrpmconvertdb /var/lib/rpm sqlitedb://var/lib/rpm.sqlite
+-----------------------
+
+Rebuild your database:
+-----------------------
+pyrpmconvertdb /var/lib/rpm /var/lib/rpm.rebuild
+-----------------------
+
 
 
 pyrpmdbverify
-~~~~~~~~~~~~~
+-------------
 
-This tool actually really reads all DB4 files in /var/lib/rpm (or, if you
-use the `\--dbpath` option, in that directory) and tries to cross check the entries
-with the rpm header that is found in /var/lib/rpm/Packages. The README.rpmdb
-contains a lot more detail about the structure of rpmdb. Simply put we check
-if for every entry in every file there is a corresponding entry in Packages
-and vice versa. There are some exceptions and special cases, but all known ones
-are handled correctly. The one check that is very unreliable is the SHA1 header
-checksum tests as this test has to rely on a very specific ordering of the
-rpm binary header and about the tags that appear in the original rpm. If those
-assupmtions don't hold this checksum can't be computed correctly.
+This tool actually really reads all DB4 files in /var/lib/rpm (or, if you use
+the `\--dbpath` option, in that directory) and tries to cross check the entries
+with the rpm header that is found in Packages. The pyrpm-devel documentation
+contains a lot more detail about the structure of link:pyrpm-devel.txt#rpmdb[rpmdb]. Simply put we check if for every entry in every file there is a
+corresponding entry in Packages and vice versa. There are some exceptions and
+special cases, but all known ones are handled correctly. The one check that is
+very unreliable is the SHA1 header checksum tests as this test has to rely on a
+very specific ordering of the rpm binary header and about the tags that appear
+in the original rpm. If those assupmtions don't hold this checksum can't be
+computed correctly.
 
 Link to a page with more information on rpmdb repair information is available at
 link:http://www.rpm.org/hintskinks/repairdb/[].
@@ -88,9 +103,14 @@ Same, but this time we use external rpms to verify against, too
 pyrpmdbverify /mirror/fedora/development/i386/Fedora/RPMS
 -----------------------
 
+Verify our rpm database in our FC-4 buildroot using external rpms as well
+-----------------------
+pyrpmdbverify --dbpath /mnt/build/fc4-i386 /mirror/fedora/4/i386/os/Fedora/RPMS
+-----------------------
+
 
 pyrpminstall
-~~~~~~~~~~~~
+------------
 
 Simply put this tool allows you to install, update and erase rpms just like
 you would with rpm itself. It supports most of the common options from rpm
@@ -100,7 +120,7 @@ have to fiddle them out yourself, just as you had to do with rpm.
 
 
 pyrpmkickstart
-~~~~~~~~~~~~~~
+--------------
 
 Usage: pyrpmkickstart <options> <kickstartfile>
                       [[<disk name>:]<disk image>|<disk device>]*
@@ -110,28 +130,30 @@ distributions on hard disks, partitions or disk images. pyrpmkickstart uses
 a kickstart file for setup and installation of the system. Here is a very
 simple kickstart file:
 
-        lang en_US
-        langsupport en_US.UTF-8
-        keyboard us
-        mouse
-        timezone EST
-        rootpw test
-        install
-        nfs --server=server --dir=/dist/fedora/core/4/i386/os
-        #url --url=file:///dist/fedora/core/4/i386/os
-        bootloader --location=mbr
-        #zerombr yes
-        #clearpart --all --initlabel
-        partition swap --size=100
-        partition /boot --fstype=ext3 --size=100
-        partition / --fstype=ext3 --size=1 --grow
-        auth  --useshadow  --enablemd5 
-        network --bootproto=dhcp --device=eth0
-        firewall --enabled --ssh
-        selinux --disabled
-        %packages --resolvedeps
-        @base
-        @x
+----------------------------------------------------------------------------
+lang en_US
+langsupport en_US.UTF-8
+keyboard us
+mouse
+timezone EST
+rootpw test
+install
+nfs --server=server --dir=/dist/fedora/core/4/i386/os
+#url --url=file:///dist/fedora/core/4/i386/os
+bootloader --location=mbr
+#zerombr yes
+#clearpart --all --initlabel
+partition swap --size=100
+partition /boot --fstype=ext3 --size=100
+partition / --fstype=ext3 --size=1 --grow
+auth  --useshadow  --enablemd5 
+network --bootproto=dhcp --device=eth0
+firewall --enabled --ssh
+selinux --disabled
+%packages --resolvedeps
+@base
+@x
+----------------------------------------------------------------------------
 
 You can create kickstart files with "redhat-config-kickstart" or
 "system-config-kickstart" according to your needs.
@@ -190,7 +212,7 @@ inrease it.
 
 
 pyrpmrandomizer
-~~~~~~~~~~~~~~~
+---------------
 
 This is our main stresstest tool. With it you can run literally thousands of
 update and erase operations in a buildroot and after several days scan the
@@ -212,7 +234,7 @@ pyrpmrandomizer --servicehack -y -v -c fc3-updates-i386.conf -r /mnt/build/test 
 
 
 pyrpmrebuilddb
-~~~~~~~~~~~~~~
+--------------
 
 Ever had to use `rpm \--rebuilddb`? Well, here is our version of it. It tries to
 do the same thing as rpm where it takes /var/lib/rpm/Packages and rebuilds the
@@ -222,7 +244,7 @@ Currently `/var/lib/rpm/Pubkeys` is not yet rebuild.
 
 
 pyrpmspecinfo
-~~~~~~~~~~~~~
+-------------
 
 As we often have to work with specfiles, too, we've written a small tool with
 which we can extrace the different sections from a specfile in order to use
@@ -230,7 +252,7 @@ that info via pipe in other tools.
 
 
 pyrpmyum
-~~~~~~~~
+--------
 
 Our main workhorse and real puppy. This tool, as the name already suggests is
 basically a yum replacement of sorts. It uses the same command line options as
@@ -259,7 +281,7 @@ pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 install "*"
 -----------------------
 
 Update kdebase in `/mnt/build/fc-devel-i386` buildroot to latest version,
-resolving all dependancies:
+resolving all dependencies:
 -----------------------
 pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 update kdebase
 -----------------------
@@ -283,7 +305,7 @@ pyrpmyum -y -v -c fc-devel-i386.conf -r /mnt/build/fc-devel-i386 remove glibc
 
 
 oldpyrpm.py
-~~~~~~~~~~~
+-----------
 
 This script does not depend on the rest of the pyrpm module, but is all
 copied into one file. It is not as complete as the new pyrpm code, but
@@ -359,7 +381,7 @@ This is how the rpmdb is being checked:
    arch setting by looking at the installed kernels. So you can copy the
    rpmdb files onto a central server to check them all.
  - Check if only packages with the correct architecture are installed. Make
-   sure no arch-dependant rpm and a noarch package are installed at the
+   sure no arch-dependent rpm and a noarch package are installed at the
    same time.
  - `-q` and `\--quiet` output less progress information. `-v` or `\--verbose`
    add more output information. `\--rpmdbpath /var/lib/rpm/` can specify the
@@ -430,7 +452,7 @@ Here some options that can be useful:
    in a way they should get installed.
 
 Example usages:
------------------------
+
 find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null | xargs -0 oldpyrpm.py --nodigest --nopayload
 locate '*.rpm' | xargs oldpyrpm.py --nodigest --nopayload
 oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/i386/Fedora/RPMS

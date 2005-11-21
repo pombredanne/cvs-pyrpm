@@ -763,6 +763,11 @@ class RpmPackage(RpmData):
         """Generate basenames, dirnames and dirindexes for old packages from
         oldfilenames"""
 
+        # Don't recreate basnames/dirnames/dirindexes if we already have them.
+        if self.has_key("dirnames") or self.has_key("basenames") or \
+           self.has_key("dirindexes"):
+            return
+
         if self["oldfilenames"] != None and len(self["oldfilenames"]) > 0:
             self["basenames"] = [ ]
             self["dirnames"] = [ ]

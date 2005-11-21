@@ -3,7 +3,7 @@ PyRPM Undercovered (Developer notes)
 
 
 Overview
-~~~~~~~~
+--------
 
 In this readme we want to provide some more technical information about RPM
 and PyRPM itself and how everything works. Some of the collected information
@@ -12,7 +12,7 @@ detail. See the related projects section at the end of this file.
 
 
 Developer Notes
-~~~~~~~~~~~~~~~
+---------------
 
 Use `pychecker` or `pylint` to improve code quality, 4 space indents and
 no tabs. Most scripts support giving `\--hotshot` as first option to run
@@ -24,7 +24,7 @@ link:mailto:twoerner@redhat.com[Thomas Woerner].
 
 
 Is Python the right language?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 Python is a very good scripting language. Very nice for fast prototyping
 and implementing new features. We currently see limits if too much data
@@ -40,7 +40,7 @@ To a lesser degree also a few python modules could see improvements:
 
 
 RPM basic principles
-~~~~~~~~~~~~~~~~~~~~
+--------------------
 
 At first we want to provide some high level information about how rpm works
 without going into too much techincal detail. This should help understand how
@@ -50,8 +50,9 @@ and what problems it solves (and again, which it can't solve and which we try
 to solve in our yum derivate). Afterwards we will go more into the rpm binary format and the format of yum repositories as well as several interessting points
 about the way rpm works and the problems that appear with doing to.
 
+
 What are dependencies?
-~~~~~~~~~~~~~~~~~~~~~~
+----------------------
 
 Rpms whole concept is based on socalled dependencies which define the relation
 between packages. Those are simply expressed using Requires and Provides. In
@@ -78,7 +79,7 @@ Requires and provides can be versioned and have additional flags like <, <=, ==,
 
 
 What are obsoletes?
-~~~~~~~~~~~~~~~~~~~
+-------------------
 
 Sometimes it is necessary to replace an installed package with a new package
 that provides the same functionality as the installed one. By obsoleting that
@@ -88,7 +89,7 @@ and have flags just like requires and provides.
 
 
 What are conflicts?
-~~~~~~~~~~~~~~~~~~~
+-------------------
 
 In rpm you can specify that your package conflicts with something another
 package provides. This can be used so that e.g. packages that are know not
@@ -99,7 +100,7 @@ Conflicts can be versioned and have flags just like requires and provides.
 
 
 What are fileconflicts?
-~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------
 
 If you look at a set of rpm packages, then a fileconflict is any duplicate
 filename where two files differ in their filemode (file permissions as well
@@ -113,7 +114,7 @@ ignore them. yum within Fedora Core has fileconflict detection enabled.
 
 
 How does dependency check work?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------
 
 Dependency checking is fairly simple: For a given set of packages take all
 requirements and check for every requirement if any package provides this
@@ -121,7 +122,7 @@ requirement, possibly restricted by it's version and flags.
 
 
 How does ordering work?
-~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------
 
 Given a set of packages to determine the order in which the packages need to
 be installed (or removed) a dependency graph is constructed. All packages with
@@ -143,7 +144,7 @@ package needs some specific binaries in one of it pre or post scripts.
 
 
 How does dependency resolving work?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------------
 
 Now that we know how dependency checks and ordering works the next step is
 dependency resolving. Here we need to leave the space of a single set of rpms
@@ -161,7 +162,7 @@ using R.
 
 
 What is special about multilib systems?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 Multilib systems (mixed 32 and 64bit systems like AMD64 or S390x) have some
 special rules that apply to them as on those architectures both 32bit and 64bit
@@ -174,17 +175,19 @@ differ then the "higher" color wins, meaning the 64bit binary. No file conflicts
 will be done for that case either.
 
 
-General Notes about the Rpm Format
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+How does a binary rpm look like?
+--------------------------------
 
 For RPM there are nowadays several "formats" in which you can find information
 about rpm packages. The most typical one is of course the binary rpm header
 which is part of every binart rpm package. A typical binary rpm package looks
 like this:
 
+-------------------------------------------
 +------+-----------+--------+-------------+
-| Lead | Signature | Header | Gziped CPIO +
+| Lead | Signature | Header | Gziped CPIO |
 +------+-----------+--------+-------------+
+-------------------------------------------
 
 The lead has a fixed size of 96 bytes and contains some very basic information
 about the binary rpm. It can also generally be used to determine if a file is
@@ -194,9 +197,11 @@ easily identify them.
 The signature and the header are stored as rpm header structures. Rpm header
 structures look like this:
 
+-------------------------------------------------------
 +-------+---------+-----------+-----------+-----------+
 | Magic | IndexNr | StoreSize | Indexdata | Storedata |
 +-------+---------+-----------+-----------+-----------+
+-------------------------------------------------------
 
 The Magic is a hardcoded value, IndexNr the number of index entries and
 StoreSize the size in bytes of the store data.
@@ -204,9 +209,11 @@ StoreSize the size in bytes of the store data.
 Indexdata consists of IndexNr index entries each of which is 16 bytes. Each
 index entry looks like this:
 
+-------------------------------
 +-----+------+--------+-------+
 | Tag | Type | Offset | Count |
 +-----+------+--------+-------+
+-------------------------------
 
 Tag specifies which tag this entry is about. Type specifies the type of the
 tage. Offset specifies at which offset in the Storedata the data begins for
@@ -237,13 +244,172 @@ Other less common storage formats include databases like SQLite or MySQL which
 e.g yum uses to convert the repodata format to a more usable form locally.
 
 Apart from that rpm itself extracts quite a bit of the information from rpm
-binary headers and writes them in various db4 files in /var/lib/rpm. For a
-very detailed and in depth description of the format take a look at the
-README.rpmdb file coming with pyrpm.
+binary headers and writes them in various db4 files in /var/lib/rpm. 
+
+
+RPM database internals
+----------------------
+
+This section describes the structure from the various files in
+/var/lib/rpm. All files are db4 files, either hash or btree based. With the
+exception of Packages all files have the corresponding rpmtag based value as
+key. The data consists of integer pairs which contain the package id and
+the index at which this entry can be found in the rpm header of that tag. The
+values are 4 byte integers in host byte order. For some tags the index doesn't
+make any sense. In those cases the index value will always be set to 0.
+
+
+Filelist
+~~~~~~~~
+
+Basenames (hash)::
+ * key: Basename (string)
+ * values: list of 2-tuples: installid (4 byte int), basenameindex (4 byte int)
+
+Conflictname (hash)::
+ * key: Conflictname (string)
+ * values: list of 2-tuples: installid (4 byte int), conflictindex (4 byte int)
+
+Dirnames (btree)::
+ * key: Dirname (string)
+ * values: list of 2-tuples: installid (4 byte int), dirindex (4 byte int)
+
+Filemd5s (hash)::
+ * key: md5sum (4 * 4 byte int, no hex string!)
+ * values: list of 2-tuples: installid (4 byte int), filemd5sindex (4 byte int)
+
+ Only stored if file md5sum exists and if the file is a regular file (usually
+ equivalent)
+
+Group (hash)::
+ * key: Groupname (string)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Installtid (btree)::
+ * key: Installtime of transaction (4 byte int, time() value)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Name (hash)::
+ * key: Packagename (string)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Packages (hash)::
+ * key: Installid (4 byte int)
+ * values: Complete binary rpm header with some  additional information from
+           signature without lead.
+
+Providename (hash)::
+ * key: Providename (string)
+ * values: list of 2-tuples: installid (4 byte int), providenameindex (4 byte int)
+
+Provideversion (btree)::
+ * key: Provideversion (string)
+ * values: list of 2-tuples: installid (4 byte int), provideversionindex (4 byte int)
+
+Pubkeys (hash)::
+ * key: unknown yet
+ * values: unknown yet
+
+Requirename (hash)::
+ * key: Requirename (string)
+ * values: list of 2-tuples: installid (4 byte int), requirenameindex (4 byte int)
+
+ Only contains the requirenames of not install prereqs
+
+Requireversion (btree)::
+ * key: Requireversion (string)
+ * values: list of 2-tuples: installid (4 byte int), requireversionindex (4 byte int)
+
+Sha1header (hash)::
+ * key: Sha1header (string) (just as the value from the header)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Sigmd5 (hash)::
+ * key: md5sum from header (4 * 4 byte int)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Triggername (hash)::
+ * key: Triggername (string)
+ * values: list of 2-tuples: installid (4 byte int), triggerindex (4 byte int)
+
+ Only contains the first entry for each name from a package
+
+
+Example
+~~~~~~~
+
+Now an example of the connection between the package headers which are stored
+in Packages and the rest of the files.
+
+The connection between /var/lib/rpm/Packages and the other files looks like
+this:
+
+/var/lib/rpm/Packages:
+^^^^^^^^^^^^^^^^^^^^^^
+'----------'-----------'-----
+ Package id Requirename Index
+-----------------------------
+ 5          a           0
+            b           1
+ 8          c           0
+            a           1
+            b           2
+-----------------------------
+
+
+/var/lib/rpm/Requirename:
+^^^^^^^^^^^^^^^^^^^^^^^^^
+'-----------'----------'-----
+ Requirename Package Id Index
+-----------------------------
+ a           5          0
+             8          1
+ b           5          1
+             8          2
+ c           8          0
+-----------------------------
+
+That means the complete /var/lib/rpm files can be cross checked with
+/var/lib/rpm/Packages and can be regenerated from that file as well.
+
+An exception is Installtid. This db file contains as keys the TID which is a
+unique time in seconds since 1970 that reflects a complete transaction. Every
+header in Packages contains that TID as "installtid" tag. The values of the
+Installtid db file are again pairs of integers with a package id as first
+value and the second value always 0. Here a small example:
+
+
+/var/lib/rpm/Packages:
+^^^^^^^^^^^^^^^^^^^^^^
+'----------'-----------
+ Package id Install Tid 
+-----------------------
+ 5          1000000
+ 8          1000000
+ 6          1234567
+ 9          1234567
+ 7          2345678
+-----------------------
+
+/var/lib/rpm/Installtid:
+^^^^^^^^^^^^^^^^^^^^^^^^
+'-----------'----------'-----
+ Install Tid Package ID Index
+-----------------------------
+ 1000000     5          0
+             8          0
+ 1234567     6          0
+             9          0
+ 2345678     7          0
+-----------------------------
+
+As you can see it can happen that package ID's get reused, in our example 6.
+This can happen if a package gets deleted and the ID "dropped". So there is
+unfortunately no autoincrementing ID for the packages.
 
 
 Huge Dependency Data
-~~~~~~~~~~~~~~~~~~~~
+--------------------
 
 The data eating up RAM in rpm headers are descriptions, changelogs and
 filelists.
@@ -280,7 +446,7 @@ now.
 
 
 Storing Complete Dep Graphs
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------
 
 It would also be possible to store dependency graphs that contain data for
 the resolver to select the right rpm packages plus the orderer to specify
@@ -293,7 +459,7 @@ todo.
 
 
 Notes about the Repo-Metadata
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 The following things should be noted about the repo metadata. yum is using
 the repodata only within the resolver part to determine a set of rpms that
@@ -320,74 +486,7 @@ resolver:
    (Repo data adds a "pre" flag if the RPMSENSE_PREREQ flag is set. That
    information is actually not complete to identify install prereq versus
    an erase prereq.)
- - The `primary.xml.gz` file contains a subset of the included files. See
-   below for a discussion on the limits of that.
+ - The `primary.xml.gz` file contains a subset of the included files. Because
+   of thise some operations cannot be equivalently with binary rpms or
+   repodata headers.
 
-
-Pointers to related projects
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-rpm is available from link:http://www.rpm.org/[] and
-link:http://www.wraptastic.org/[].
-Mailinglist at link:https://listman.redhat.com/mailman/listinfo/rpm-list[].
-The binary rpm format is described at
-link:http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html[].
-
-yum is available from link:http://linux.duke.edu/projects/yum/[]
-with the development mailinglist at
-link:https://lists.linux.duke.edu/mailman/listinfo/yum-devel/[].
-
-The new metadata for yum repositories (also named repodata) is discussed at
-link:http://linux.duke.edu/projects/metadata/[].
-It also includes the
-link:http://linux.duke.edu/projects/metadata/generate/[createrepo] tool.
-
-urlgrabber is available from
-link:http://linux.duke.edu/projects/urlgrabber[].
-
-repoview is available from
-link:http://linux.duke.edu/projects/mini/repoview/[].
-
-rpmlint is checking for packaging errors. It is available at
-link:http://people.mandriva.com/%7eflepied/projects/rpmlint/[http://people.mandriva.com/~flepied/projects/rpmlint/].
-
-Smart is written in python and combines several different binary
-packaging formats within one packaging tool. It is available at
-link:http://smartpm.org/[].
-
-up2date and rhnlib are the client software for
-link:http://rhn.redhat.com/[Red Hat Network] and can be downloaded from
-link:http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/[].
-
-Anaconda is the Red Hat installation tool and can be downloaded at
-link:http://elvis.redhat.com/anaconda/[],
-link:http://fedora.redhat.com/projects/anaconda-installer/[] and
-link:http://fedora.linux.duke.edu/wiki/Anaconda[].
-
-Conary has looked at rpm history and defines a new distribution format that
-enables rollbacks and easier customization on the client side. Available at
-link:http://www.rpath.com/[] and link:http://wiki.conary.com/[].
-
-apt4rpm is adapting the Debian packaging tool to also work with rpm packages.
-Available from link:http://apt4rpm.sourceforge.net/[].
-
-deltarpm is working on reducing the network traffic for rpm based updates.
-Available at link:ftp://ftp.suse.com/pub/projects/deltarpm/[].
-
-FAI (Fully Automatic Installation) for Debian. Available from
-link:http://www.informatik.uni-koeln.de/fai/[].
-
-OpenPKG cross-platform rpm-based software packaging, available at
-link:http://www.openpkg.org/[].
-
-Rebuild rpm packages and manage build roots via mach, available from
-link:http://thomas.apestaart.org/projects/mach/[] and further info
-at link:http://fedoraproject.org/wiki/UsingMach[].
-Fedora Extras is using link:http://fedoraproject.org/wiki/Projects/Plague[].
-
-Fedora Core Live CDs at link:http://fedoraproject.org/wiki/LiveCD[]
-and link:http://fedoraproject.org/wiki/DerivedDistributions[].
-
-Here should be a link on how rpm packages for Fedora Extras are checked
-to make them real nice, stable and conforming to Red Hat and comunity
-standards.
