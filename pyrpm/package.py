@@ -239,7 +239,8 @@ class RpmPackage(RpmData):
         self.__readHeader(tags, ntags)
         if self.verify and self.verifyOneSignature() == -1:
             raise ValueError, "Signature verification failed."""
-        self.issrc = self.io.issrc
+        if self.io:
+            self.issrc = self.io.issrc
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()

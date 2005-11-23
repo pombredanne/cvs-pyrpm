@@ -106,7 +106,7 @@ def main():
     random.seed(12345)
     yum.setCommand("update")
     while count > 0:
-        if not yum.repos_read:
+        if not yum.repos_read and len(frepo.getPkgList()) > 0:
             yum.repos.append(frepo)
             r = RpmResolver(rpmconfig, frepo.getPkgList())
             yum.resolvers.append(r)

@@ -709,11 +709,11 @@ class RpmStreamIO(RpmIO):
         # Also those rpms already had the archivesize in the normal header
         # as well, so we need to put 
         if header.has_key("rpmversion"):
-            if header["rpmversion"] == "3.0" or header["rpmversion"] == "3.0.3":
+            if   header["rpmversion"].startswith("3."):
                 install_keys=[257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1047, 1099, 1112, 1113, 1116, 1117, 1118, 1127, 1128]
                 h = self.__GeneratedHeader(rpmtag, rpmtagname, 61)
                 return h.outputHeader(header, padding, skip_tags, install_keys)
-            elif header["rpmversion"] == "4.0.3":
+            elif header["rpmversion"].startswith("4.0."):
                 install_keys=[257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1099, 1127, 1128]
                 h = self.__GeneratedHeader(rpmtag, rpmtagname, 63)
                 return h.outputHeader(header, padding, skip_tags, install_keys)

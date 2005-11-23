@@ -369,28 +369,18 @@ class RpmYum:
         # List of filereqs we already checked
         self.filereqs = []
         self.iteration = 1
-        # Mark if we might need to reread the repositories
-        if self.config.nofileconflicts:
-            self.reread = 0
-        else:
-            self.reread = 1
         # As long as we have unresolved dependencies and need to handle some
-        # conflicts continue this loop
+        # conflicts continue this loop a few times until we're sure we can't
+        # resolve the problems we still have.
         count = 0
-        while count < 3:
-            ret1 = self.__handleUnresolvedDeps()
-            if ret1:
+        while count < 2:
+            if self.__handleUnresolvedDeps():
                 count = 0
-                continue
-            ret2 = self.__handleConflicts()
-            if ret2:
-                count = 0
-                continue
+                if self.__handleConflicts():
+                    return 1
             count += 1
-        if not ret1 and not ret2: # FIXME: this is always true
-            return 1
         unresolved = self.opresolver.getUnresolvedDependencies()
-        self.config.printInfo("Couldn't resolve all dependencies.\n")
+        self.config.printInfo(1, "Couldn't resolve all dependencies.\n")
         for pkg in unresolved.keys():
             self.config.printInfo(1, "Unresolved dependencies for %s\n" %
                                      pkg.getNEVRA())
@@ -402,14 +392,10 @@ class RpmYum:
         """Try to install/remove packages to reduce the number of unresolved
         dependencies.
 
-        Return 1 if there were unresolved dependencies and all were resolved, 0
-        otherwise (even if there are no unresolved dependencies)."""
+        Return 1 if there are no unresolved dependencies or all unresolved
+        dependencies were resolved, 0 otherwise."""
 
         unresolved = self.opresolver.getUnresolvedDependencies()
-        # Check special case first: If we don't do any work here anymore
-        # return 0
-        if len(unresolved) == 0:
-            return 0
         # Otherwise get first unresolved dep and then try to solve it as long
         # as we have unresolved deps. If we fail to resolve a dep we try the
         # next one until only unresolvable deps remain.
@@ -507,12 +493,11 @@ class RpmYum:
     def __handleConflicts(self):
         """Try to update packages to fix conflicts in self.opresolver.
 
-        Return 1 after doing something to (hopefully) improve the situation, 0
-        otherwise (even if there are no conflicts)."""
+        Return 1 if all conflicts have been resolved or no more conflicts are
+        there, otherwise return 0."""
 
-        ret = 0
-        handled_conflict = 1
         conflicts = self.opresolver.getConflicts()
+        handled_conflict = 1
         while len(conflicts) > 0 and handled_conflict:
             handled_conflict = 0
             for pkg1 in conflicts:
@@ -520,21 +505,17 @@ class RpmYum:
                     if   c[1] & RPMSENSE_LESS != 0:
                         if self.__findUpdatePkg(pkg2) > 0:
                             handled_conflict = 1
-                            ret = 1
                             break
                     elif c[1] & RPMSENSE_GREATER != 0:
                         if self.__findUpdatePkg(pkg1) > 0:
                             handled_conflict = 1
-                            ret = 1
                             break
                     else:
                         if   self.__findUpdatePkg(pkg1) > 0:
                             handled_conflict = 1
-                            ret = 1
                             break
                         elif self.__findUpdatePkg(pkg2) > 0:
                             handled_conflict = 1
-                            ret = 1
                             break
                 if handled_conflict:
                     break
@@ -548,18 +529,16 @@ class RpmYum:
                     for (c, pkg2) in conflicts[pkg1]:
                         if self.__findUpdatePkg(pkg2) > 0:
                             handled_fileconflict = 1
-                            ret = 1
                             break
                         elif self.__findUpdatePkg(pkg1) > 0:
                             handled_fileconflict = 1
-                            ret = 1
                             break
                     if handled_fileconflict:
                         break
                 conflicts = self.opresolver.getFileConflicts()
         if not (handled_conflict and handled_fileconflict) and self.autoerase:
-            ret = self.__handleConflictAutoerases()
-        return ret
+            return self.__handleConflictAutoerases()
+        return (handled_conflict and handled_fileconflict)
 
     def __handleObsoletes(self, pkg):
         """Try to replace RpmPackage pkg in self.opresolver by a package

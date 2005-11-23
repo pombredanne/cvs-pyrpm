@@ -1,13 +1,10 @@
-EXTRA_DIST = pyrpm.txt pyrpm-devel.txt pyrpm-tools.txt pyrpm-links.txt pycheckrc
+DOCFILES = pyrpm.txt pyrpm-devel.txt pyrpm-tools.txt pyrpm-links.txt
+EXTRA_DIST = $(DOCFILES) pycheckrc
 
-pyrpm.html: pyrpm.txt
+all: $(DOCFILES:.txt=.html)
+
+.txt.html:
 	asciidoc -b html4 $< > $@
 
-pyrpm-tools.html: pyrpm-tools.txt
-	asciidoc -b html4 $< > $@
-
-pyrpm-tools.html: pyrpm-tools.txt
-	asciidoc -b html4 $< > $@
-
-pyrpm-links.html: pyrpm-links.txt
-	asciidoc -b html4 $< > $@
+clean:
+	rm -rf $(DOCFILES:.txt=.html)
