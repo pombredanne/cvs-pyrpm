@@ -457,6 +457,8 @@ class RpmYum:
                     modified_repo = 1
             if modified_repo:
                 self.opresolver.reloadDependencies()
+                if len(self.opresolver.searchDependency(dep)) > 0:
+                    return 1
         # Now for all other cases we need to find packages in our repos
         # that resolve the given dependency
         pkg_list = [ ]
