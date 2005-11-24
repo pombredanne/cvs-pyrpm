@@ -17,9 +17,6 @@ Developer Notes
 Use `pychecker` or `pylint` to improve code quality, 4 space indents and
 no tabs. Most scripts support giving `\--hotshot` as first option to run
 them with the hotshot python profiler.
-Send patches to link:mailto:laroche@redhat.com[Florian La Roche],
-link:mailto:pknirsch@redhat.com[Phil Knirsch] and
-link:mailto:twoerner@redhat.com[Thomas Woerner].
 `oldpyrpm.py` has some TODO items listed in the source.
 
 
