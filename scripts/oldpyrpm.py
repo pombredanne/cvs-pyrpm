@@ -38,8 +38,8 @@
 
 #
 # TODO:
+# - remove RpmTree() again?
 # - How todo save shell escapes for os.system()
-# - Can we find a better place for addon info like "mdistance"?
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
 # - Reading yum.conf we immediately replace 'releasever' instead of
@@ -941,6 +941,15 @@ def machineDistance(arch1, arch2):
     if arch1 in arch_compats.get(arch2, []):
         return arch_compats[arch2].index(arch1) + 2
     return 999   # incompatible archs, distance is very high
+
+def setMachineDistance(arch):
+    h = {}
+    archs = arch_compats.get(arch, [])
+    archs.append("noarch")
+    archs.append(arch)
+    for a in archs:
+        h[a] = machineDistance(a, arch)
+    return h
 
 # check arch names against this list
 possible_archs = {"noarch":1, "i386":1, "i486":1, "i586":1, "i686":1,
@@ -2513,18 +2522,33 @@ class HashList:
 
 def genBasenames(oldfilenames):
     (basenames, dirindexes, dirnames) = ([], [], [])
+    (olddirname, olddirindex) = (None, 0)
     for filename in oldfilenames:
         (dirname, basename) = os.path.split(filename)
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
-        try:
-            dirindex = dirnames.index(dirname)
-        except ValueError:
-            dirnames.append(dirname)
-            dirindex = dirnames.index(dirname)
+        if dirname == olddirname:
+            dirindex = olddirindex
+        else:
+            try:
+                dirindex = dirnames.index(dirname)
+            except ValueError:
+                dirnames.append(dirname)
+                dirindex = len(dirnames) - 1
+            (olddirname, olddirindex) = (dirname, dirindex)
         basenames.append(basename)
         dirindexes.append(dirindex)
     return (basenames, dirindexes, dirnames)
+
+def genBasenames2(oldfilenames):
+    (basenames, dirnames) = ([], [])
+    for filename in oldfilenames:
+        (dirname, basename) = os.path.split(filename)
+        if len(dirname) > 0 and dirname[-1] != "/":
+            dirname += "/"
+        basenames.append(basename)
+        dirnames.append(dirname)
+    return (basenames, dirnames)
 
 
 class FilenamesList:
@@ -2536,26 +2560,27 @@ class FilenamesList:
 
     def addPkg(self, pkg):
         """Add all files from RpmPackage pkg to self."""
+        path = self.path
         basenames = pkg["basenames"]
         if basenames != None:
             dirindexes = pkg["dirindexes"]
             dirnames = pkg["dirnames"]
+            for dirname in dirnames:
+                path.setdefault(dirname, {})
+            dirnames = [ dirnames[di] for di in dirindexes ]
         else:
             if pkg["oldfilenames"] == None:
                 return
-            (basenames, dirindexes, dirnames) = \
-                genBasenames(pkg["oldfilenames"])
-        path = self.path
-        for i in dirnames:
-            path.setdefault(i, {})
+            (basenames, dirnames) = genBasenames2(pkg["oldfilenames"])
+            for dirname in dirnames:
+                path.setdefault(dirname, {})
         if self.checkfileconflicts:
-            for i in xrange(len(basenames)):
-                dirname = dirnames[dirindexes[i]]
-                path[dirname].setdefault(basenames[i], []).append((pkg, i))
+            for (dirname, basename, i) in zip(dirnames, basenames, \
+                xrange(len(basenames))):
+                path[dirname].setdefault(basename, []).append((pkg, i))
         else:
-            for i in xrange(len(basenames)):
-                dirname = dirnames[dirindexes[i]]
-                path[dirname].setdefault(basenames[i], []).append(pkg)
+            for (dirname, basename) in zip(dirnames, basenames):
+                path[dirname].setdefault(basename, []).append(pkg)
 
     def removePkg(self, pkg):
         """Remove all files from RpmPackage pkg from self."""
@@ -3039,10 +3064,9 @@ class RpmOrderer:
         return self.genOperations(order)
 
 
-def selectNewestRpm(rpms, arch, verbose):
+def selectNewestRpm(rpms, arch, arch_hash, verbose):
     """Select one package out of rpms that has the highest version
-    number. This relies on [rpms].mdistance to be set before calling
-    this function. """
+    number."""
     newest = rpms[0]
     if arch == None:
         for rpm in rpms[1:]:
@@ -3054,21 +3078,25 @@ def selectNewestRpm(rpms, arch, verbose):
         return newest
     if len(rpms) == 1:
         return newest
+    newestarch = arch_hash.get(newest["arch"], 999)
     for rpm in rpms[1:]:
-        if rpm.mdistance < newest.mdistance:
+        rpmarch = arch_hash.get(rpm["arch"], 999)
+        if rpmarch < newestarch:
             if verbose > 3:
                 print "select", rpm.getFilename(), "over", \
                     newest.getFilename()
             newest = rpm
-        elif rpm.mdistance == newest.mdistance:
+            newestarch = rpmarch
+        elif rpmarch == newestarch:
             if pkgCompare(newest, rpm) < 0:
                 if verbose > 3:
                     print "select", rpm.getFilename(), "over", \
                         newest.getFilename()
                 newest = rpm
+                newestarch = rpmarch
     return newest
 
-def getPkgsNewest(rpms, arch=None, verbose=0, basearch=0):
+def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0, basearch=0):
     # Add all rpms by name,basearch into a hash.
     h = {}
     for rpm in rpms:
@@ -3079,7 +3107,7 @@ def getPkgsNewest(rpms, arch=None, verbose=0, basearch=0):
     # For each basearch select one newest rpm.
     pkgs = []
     for r in h.keys():
-        pkgs.append(selectNewestRpm(h[r], arch, verbose))
+        pkgs.append(selectNewestRpm(h[r], arch, arch_hash, verbose))
     if arch:
         # Add all rpms into a hash by their name.
         h = {}
@@ -3089,7 +3117,7 @@ def getPkgsNewest(rpms, arch=None, verbose=0, basearch=0):
         # rpm is the newest (and all others are deleted) or if an
         # arch-dependent rpm is newest and all noarchs are removed.
         for rpms in h.values():
-            newest = selectNewestRpm(rpms, arch, verbose)
+            newest = selectNewestRpm(rpms, arch, arch_hash, verbose)
             if newest["arch"] == "noarch":
                 for r in rpms:
                     if r != newest:
@@ -3148,9 +3176,9 @@ class RpmTree:
         for v in self.h.values():
             v.sort(pkgCompare)
 
-    def keepNewest(self, arch=None, verbose=1):
+    def keepNewest(self):
         for r in self.h.keys():
-            self.h[r] = [selectNewestRpm(self.h[r], arch, verbose)]
+            self.h[r] = [selectNewestRpm(self.h[r], None, None, 1)]
 
     def sort_unify(self):
         self.sortVersions()
@@ -3803,9 +3831,9 @@ class RpmRepo:
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
         if self.pkglist.has_key(nevra):
             pkg = self.pkglist[nevra]
-            #pkg["oldfilenames"] = filelist
-            (pkg["basenames"], pkg["dirindexes"], pkg["dirnames"]) = \
-                genBasenames(filelist)
+            pkg["oldfilenames"] = filelist
+            #(pkg["basenames"], pkg["dirindexes"], pkg["dirnames"]) = \
+            #    genBasenames(filelist)
 
     def __generateFormat(self, node, pkg, formatns):
         node.newChild(formatns, "license", escape(pkg["license"]))
@@ -3920,9 +3948,9 @@ class RpmRepo:
             #    pass
             #else:
             #    print name
-        #pkg["oldfilenames"] = filelist
-        (pkg["basenames"], pkg["dirindexes"], pkg["dirnames"]) = \
-            genBasenames(filelist)
+        pkg["oldfilenames"] = filelist
+        #(pkg["basenames"], pkg["dirindexes"], pkg["dirnames"]) = \
+        #    genBasenames(filelist)
 
     def __filterDuplicateDeps(self, deps):
         fdeps = []
@@ -4449,12 +4477,14 @@ hgrepo = "/home/devel/test/hgrepo"
 hgcgi = "/home/devel/test/hgrepo-cgi"
 hgfiles = "/home/devel/test/filecache"
 mirror = "/var/www/html/mirror/"
+if not os.path.isdir(mirror):
+    mirror = "/home/mirror"
 fedora = mirror + "fedora/"
 rhelupdates = mirror + "updates-rhel/"
 srpm_repos = [
     # Fedora Core
-    #("Fedora Core development", "FC-development",
-    # [fedora + "development/SRPMS"], None, 30),
+    ("Fedora Core development", "FC-development",
+     [fedora + "development/SRPMS"], None, 30),
     ("Fedora Core 4", "FC4",
      [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
       fedora + "updates/testing/4/SRPMS"], None, 30),
@@ -5058,10 +5088,11 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     verifyStructure(verbose, packages, sha1header, "install_sha1header", 0)
     verifyStructure(verbose, packages, sigmd5, "install_md5", 0)
     verifyStructure(verbose, packages, triggername, "triggername")
+    arch_hash = setMachineDistance(arch)
     checkdupes = {}
     for pkg in packages.values():
         if dbpath != "/var/lib/rpm" and pkg["name"] in ("kernel", "kernel-smp"):
-            if machineDistance(pkg["arch"], arch) == 999:
+            if arch_hash.get(pkg["arch"], 999) == 999:
                 arch = pkg["arch"]
                 print "Change 'arch' setting to be:", arch
         if not releasever and pkg["name"] in distroverpkg:
@@ -5071,7 +5102,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
                 []).append(pkg)
     for pkg in packages.values():
         if pkg["name"] != "gpg-pubkey" and \
-            machineDistance(pkg["arch"], arch) == 999:
+            arch_hash.get(pkg["arch"], 999) == 999:
             print "Warning: did not expect package with this arch: %s" % \
                 pkg.getFilename()
         if pkg["arch"] != "noarch" and \
@@ -5549,6 +5580,7 @@ def main():
     elif updaterpms:
         import time
 
+        arch_hash = setMachineDistance(arch)
         # Read all packages in rpmdb.
         if verbose > 2:
             time1 = time.clock()
@@ -5556,11 +5588,10 @@ def main():
             print "Reading the rpmdb in %s." % rpmdbpath
         (packages, keyring, maxtid, pkgdata, swapendian) = \
             readPackages(rpmdbpath, verbose, 0, importanttags)
-        # Set releasever based on all rpmdb packages and set mdistance.
+        # Set releasever based on all rpmdb packages.
         for pkg in packages.values():
             if pkg["name"] == "gpg-pubkey":
                 continue
-            pkg.mdistance = machineDistance(pkg["arch"], arch)
             if not releasever and pkg["name"] in distroverpkg:
                 releasever = pkg["version"]
         if verbose > 2:
@@ -5586,21 +5617,29 @@ def main():
             print "Needed", time2 - time1, "seconds to read the repos", \
                 "(%d rpm packages)." % numrpms
 
-        # Set mdistance for repo packges and sort them to only keep the newest.
+        # For timing purposes also read filelists:
+        if verbose > 2:
+            time1 = time.clock()
+        for repo in repos:
+            repo.importFilelist()
+        if verbose > 2:
+            time2 = time.clock()
+            print "Needed", time2 - time1, "secs to read the repo filelists."
+
+        # Sort repo packages to only keep the newest.
         if verbose > 2:
             time1 = time.clock()
         repos2 = []
         for r in repos:
             rpms = []
             for rpm in r.pkglist.values():
-                rpm.mdistance = machineDistance(rpm["arch"], arch)
-                if rpm.mdistance == 999:
+                if arch_hash.get(rpm["arch"], 999) == 999:
                     if verbose > 3:
                         print "Removed due to incompatibel arch:", \
                             rpm.getFilename()
                     continue
                 rpms.append(rpm)
-            rpms = getPkgsNewest(rpms, arch, verbose, 1)
+            rpms = getPkgsNewest(rpms, arch, arch_hash, verbose, 1)
             repos2.append(rpms)
         if verbose > 2:
             time2 = time.clock()
@@ -5626,7 +5665,7 @@ def main():
             if r[0]["name"] in installonlypkgs:
                 # XXX check if there is a newer "kernel" around
                 continue
-            newest = selectNewestRpm(r, arch, verbose)
+            newest = selectNewestRpm(r, arch, arch_hash, verbose)
             if newest == r[0]:
                 continue
             eraserpms.append(r[0])
@@ -5634,7 +5673,7 @@ def main():
         # Check noarch constraints.
         if None:
           for rpms in h.values():
-            newest = selectNewestRpm(rpms, arch, verbose)
+            newest = selectNewestRpm(rpms, arch, arch_hash, verbose)
             if newest["arch"] == "noarch":
                 for r in rpms:
                     if r != newest:
@@ -5643,7 +5682,7 @@ def main():
                 for r in rpms:
                     if r["arch"] == "noarch":
                         pkgs.remove(r)
-        #installrpms = getPkgsNewest(rtree.getPkgs(), arch, verbose, 1)
+        #installrpms = getPkgsNewest(rtree.getPkgs(), arch, arch_hash, verbose, 1)
         #checkDeps(installrpms, checkfileconflicts, runorderer)
         if verbose > 2:
             time2 = time.clock()
@@ -5654,6 +5693,7 @@ def main():
 
     else:
         import time
+        arch_hash = setMachineDistance(arch)
         keepdata = 1
         hdrtags = rpmtag
         if verify == 0 and nodigest == 1:
@@ -5721,13 +5761,13 @@ def main():
                     for rpm in repo:
                         if rpm.issrc:
                             continue
-                        rpm.mdistance = machineDistance(rpm["arch"], arch)
-                        if rpm.mdistance == 999:
+                        if arch_hash.get(rpm["arch"], 999) == 999:
                             print "removed due to incompatibel arch:", \
                                 rpm.getFilename()
                             continue
                         rtree.addRpm(rpm, 1)
-                    installrpms = getPkgsNewest(rtree.getPkgs(), arch, verbose, 1)
+                    installrpms = getPkgsNewest(rtree.getPkgs(), arch,
+                        arch_hash, verbose, 1)
                     if strict:
                         checkProvides(installrpms)
                     checkDeps(installrpms, checkfileconflicts, runorderer)
