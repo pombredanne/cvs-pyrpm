@@ -19,3 +19,8 @@ maintainer:
 	./configure
 	make build
 
+upload:
+	scp -p scripts/oldpyrpm.py people.redhat.com:public_html/pyrpm/pyrpm.py
+	scp -p doc/*.html people.redhat.com:public_html/pyrpm/
+	scp -p doc/*.txt people.redhat.com:public_html/pyrpm/txt/
+
