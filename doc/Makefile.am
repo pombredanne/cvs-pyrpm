@@ -8,3 +8,4 @@ all: $(DOCFILES:.txt=.html)
 
 clean:
 	rm -rf $(DOCFILES:.txt=.html)
+

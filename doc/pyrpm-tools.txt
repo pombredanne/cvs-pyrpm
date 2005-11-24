@@ -455,6 +455,7 @@ Here some options that can be useful:
 
 Example usages:
 
+-----------------------
 find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null | xargs -0 oldpyrpm.py --nodigest --nopayload
 locate '*.rpm' | xargs oldpyrpm.py --nodigest --nopayload
 oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/i386/Fedora/RPMS
@@ -467,4 +468,5 @@ finishes in under 14 seconds for FC-development on some laptop:
 -----------------------
 time oldpyrpm.py --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/development/i386/Fedora/RPMS
 time oldpyrpm.py --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/4/i386/os/Fedora/RPMS /mirror/fedora/updates/4/i386 /mirror/fedora-extras/4/i386
+-----------------------
 
