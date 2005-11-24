@@ -30,7 +30,7 @@ make DESTDIR=${RPM_BUILD_ROOT} install
 rm -rf ${RPM_BUILD_ROOT}
 
 %files
-%doc doc/README doc/README.html doc/README.rpmdb doc/classes.fig
+%doc doc/*.html doc/*.txt
 %{_bindir}/*
 %{_datadir}/pyrpm/
 
