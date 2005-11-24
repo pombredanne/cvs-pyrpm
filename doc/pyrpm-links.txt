@@ -1,5 +1,5 @@
 Pointers to related projects
-----------------------------
+============================
 
 rpm is available from link:http://www.rpm.org/[] and
 link:http://www.wraptastic.org/[].
