@@ -1748,6 +1748,9 @@ class RpmRepo(RpmDatabase):
         self.pkglist[pkg.getNEVRA()] = pkg
         return 1
 
+    def isFilelistImported(self):
+        return self.filelist_imported
+
     def importFilelist(self):
         """Parse filelists.xml.gz if it was not parsed before.
 
@@ -2102,7 +2105,6 @@ class RpmRepo(RpmDatabase):
             elif name == "format":
                 self.__parseFormat(reader, pkg)
         pkg.header_read = 1
-        pkg.generateFileNames()
         pkg["provides"] = pkg.getProvides()
         pkg["requires"] = pkg.getRequires()
         pkg["obsoletes"] = pkg.getObsoletes()
@@ -2165,11 +2167,14 @@ class RpmRepo(RpmDatabase):
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
         pkg = self.pkglist.get(nevra)
         if pkg:
-            filelist.extend(pkg["filenames"])
-            functions.normalizeList(filelist)
+            # get rid of old dirnames, dirindexes and basenames
+            if pkg.has_key("dirnames"):
+                del pkg["dirnames"]
+            if pkg.has_key("dirindexes"):
+                del pkg["dirindexes"]
+            if pkg.has_key("basenames"):
+                del pkg["basenames"]
             pkg["oldfilenames"] = filelist
-            pkg.generateFileNames()
-            del pkg["oldfilenames"]
 
     def __generateFormat(self, node, pkg):
         """Add RPM-specific tags under libxml2.xmlNode node for RpmPackage

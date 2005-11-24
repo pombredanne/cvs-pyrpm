@@ -54,13 +54,17 @@ class FilenamesList:
         """Clear the mapping."""
 
         self.path = { } # dirname => { basename => RpmPackage }
+        self.oldfilenames = { }
 
     def addPkg(self, pkg):
         """Add all files from RpmPackage pkg to self."""
 
+        if pkg.has_key("oldfilenames"):
+            for f in pkg["oldfilenames"]:
+                self.oldfilenames.setdefault(f, []).append(pkg)
+            return
         basenames = pkg["basenames"]
         if basenames == None:
-            # XXX we should also support "oldfilenames"
             return
         dirindexes = pkg["dirindexes"]
         dirnames = pkg["dirnames"]
@@ -74,6 +78,16 @@ class FilenamesList:
     def removePkg(self, pkg):
         """Remove all files from RpmPackage pkg from self."""
 
+        if pkg.has_key("oldfilenames"):
+            for f in pkg["oldfilenames"]:
+                if not self.oldfilenames.has_key(f) or \
+                   not pkg in self.oldfilenames[f]:
+                    continue
+                self.oldfilenames[f].remove(pkg)
+                if len(self.oldfilenames[f]) == 0:
+                    del self.oldfilenames[f]
+            return
+                
         basenames = pkg["basenames"]
         if basenames == None:
             # XXX we should also support "oldfilenames"
@@ -97,10 +111,14 @@ class FilenamesList:
         The list may point to internal structures of FilenamesList and may be
         changed by calls to addPkg() and removePkg()."""
 
+        pkglist = [ ]
+        if self.oldfilenames.has_key(name):
+            pkglist.extend(self.oldfilenames[name])
         (dirname, basename) = os.path.split(name)
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
-        return self.path.get(dirname, {}).get(basename, [])
+        pkglist.extend(self.path.get(dirname, {}).get(basename, []))
+        return pkglist
 
 
 # RPM Constants - based from rpmlib.h and elsewhere

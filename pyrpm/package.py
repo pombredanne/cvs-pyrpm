@@ -31,20 +31,27 @@ class _RpmFilenamesIterator:
     def __init__(self, pkg):
         self.pkg = pkg
         self.idx = -1
+        self.has_oldfilenames = self.pkg.has_key("oldfilenames")
 
     def __iter__(self):
         return self
 
     def __len__(self):
+        if self.has_oldfilenames:
+            return len(self.pkg["oldfilenames"])
         if self.pkg["basenames"] != None and self.pkg["dirnames"] != None:
             return len(self.pkg["basenames"])
         return 0
 
     def __getitem__(self, i):
+        if self.has_oldfilenames:
+            return self.pkg["oldfilenames"][i]
         return self.pkg["dirnames"][self.pkg["dirindexes"][i]] \
                + self.pkg["basenames"][i]
 
     def index(self, name):
+        if self.has_oldfilenames:
+            return self.pkg["oldfilenames"].index(name)
         basename = os.path.basename(name)
         i = 0
         while i < len(self.pkg["basenames"]):
@@ -61,6 +68,9 @@ class _RpmFilenamesIterator:
 
     def next(self):
         self.idx += 1
+        if self.has_oldfilenames:
+            if self.idx == len(self.pkg["oldfilenames"]):
+                raise StopIteration
         if not self.pkg.has_key("basenames") or \
                self.idx == len(self.pkg["basenames"]):
             raise StopIteration
@@ -783,7 +793,6 @@ class RpmPackage(RpmData):
                 except ValueError:
                     self["dirnames"].append(dirname)
                     dirindex = self["dirnames"].index(dirname)
-
                 self["basenames"].append(basename)
                 self["dirindexes"].append(dirindex)
 

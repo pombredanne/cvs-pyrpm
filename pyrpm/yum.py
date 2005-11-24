@@ -447,6 +447,8 @@ class RpmYum:
         if dep[0][0] == "/" and not dep[0] in self.filereqs:
             self.filereqs.append(dep[0])
             for i in xrange(len(self.repos)):
+                if self.repos[i].isFilelistImported():
+                    continue
                 if not self.repos[i]._matchesFile(dep[0]):
                     self.config.printWarning(1, "Importing filelist from repository %s for filereq %s" % (self.repos[i].reponame, dep[0]))
                     self.repos[i].importFilelist()
