@@ -9,7 +9,7 @@ build: dist-bzip2
 changelog:
 	rcs2log -v | sed -e 's|@.*\.redhat\.com|@redhat.com|g' > ChangeLog
 
-CLEANFILES := COPYING INSTALL pyrpm.spec $(notdir $(wildcard *.pyc))  pyrpm-*.tar.bz2 pyrpm-*.tar.gz $(notdir $(wildcard *~)) $(notdir $(wildcard *\#)) $(notdir $(wildcard \.\#*))
+CLEANFILES := pyrpm.spec $(notdir $(wildcard *.pyc)) pyrpm-*.tar.bz2 pyrpm-*.tar.gz $(notdir $(wildcard *~)) $(notdir $(wildcard *\#)) $(notdir $(wildcard \.\#*))
 
 maintainer:
 	rm -rf pyrpm-*.tar.bz2
