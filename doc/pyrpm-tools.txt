@@ -1,5 +1,5 @@
-Tool descriptions
-=================
+PyRPM Tool descriptions
+=======================
 
 In order to understand what each of the tools really does this section describes
 the behaviour of the tools in more detail for each tool.
@@ -52,6 +52,7 @@ Using the original createrepo as a basis we integrated our pyrpm code into it
 instead of using rpmlib.
 
 Create a repo for FC-4:
+
 -----------------------
 pyrpmcreaterepo /mirror/fedora/4/i386/os/
 -----------------------
@@ -70,6 +71,7 @@ pyrpmconvertdb /var/lib/rpm sqlitedb://var/lib/rpm.sqlite
 -----------------------
 
 Rebuild your database:
+
 -----------------------
 pyrpmconvertdb /var/lib/rpm /var/lib/rpm.rebuild
 -----------------------

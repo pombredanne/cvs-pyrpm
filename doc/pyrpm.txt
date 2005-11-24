@@ -5,9 +5,9 @@ PyRPM
 // and you should probably read the corresponding .html page.
 
 The current version of this document is available at 
-link:http://people.redhat.com/laroche/pyrpm/readme.html[] and you
+link:http://people.redhat.com/laroche/pyrpm/pyrpm.html[] and you
 can send in changes to its link:http://www.methods.co.nz/asciidoc/[asciidoc]
-source available at link:http://people.redhat.com/laroche/pyrpm/readme.txt[].
+source files (*.txt).
 
 
 Overview
@@ -52,3 +52,13 @@ all happens in a very contained environment (sandbox principle).
 
 Please let us know of any problems you encounter, if possible with some
 reproducible testcases so we can figure out what might have happend.
+
+
+Other PyRPM Project Pages
+-------------------------
+
+- The available tools are described in link:pyrpm-tools.html[].
+- A collection of related projects are listed in link:pyrpm-links.html[].
+- Background information and more development related docu is
+  available in link:pyrpm-devel.html[].
+
