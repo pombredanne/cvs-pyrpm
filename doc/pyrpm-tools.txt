@@ -65,7 +65,7 @@ Converts one rpm database to another. The 2 currently supported databases are
 rpmdb (DB4 based) and a SQLite rpm database. It can be used to either convert
 a rpm database from one format to another or to recreate a rpm database.
 
-Convert you system rpmdb into a sqlite database:
+Convert your system rpmdb into a sqlite database:
 -----------------------
 pyrpmconvertdb /var/lib/rpm sqlitedb://var/lib/rpm.sqlite
 -----------------------
@@ -454,7 +454,6 @@ Here some options that can be useful:
    in a way they should get installed.
 
 Example usages:
-
 -----------------------
 find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null | xargs -0 oldpyrpm.py --nodigest --nopayload
 locate '*.rpm' | xargs oldpyrpm.py --nodigest --nopayload
