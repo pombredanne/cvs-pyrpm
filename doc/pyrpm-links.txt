@@ -62,6 +62,10 @@ Fedora Extras is using link:http://fedoraproject.org/wiki/Projects/Plague[].
 Fedora Core Live CDs at link:http://fedoraproject.org/wiki/LiveCD[]
 and link:http://fedoraproject.org/wiki/DerivedDistributions[].
 
+`fedora-rpmdevtools` from link:http://fedoraproject.org/wiki/Extras[Fedora Extras]
+contains `rpminfo` to check binary rpm packages or installed machines.
+E.g. to search strange rpath settings, pic for shared libs.
+
 Here should be a link on how rpm packages for Fedora Extras are checked
 to make them real nice, stable and conforming to Red Hat and comunity
 standards.
