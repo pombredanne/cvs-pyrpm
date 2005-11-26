@@ -3348,17 +3348,19 @@ def buildPkgRefDict(pkgs):
             pkgdict.setdefault(item, []).append(pkg)
     return pkgdict
 
+__fnmatchre__ = re.compile(".*[\*\[\]\{\}\?].*")
 def parsePackages(pkgs, requests, casematch=1):
     """Matches up the user request versus a pkg list. For installs/updates
        available pkgs should be the 'others list' for removes it should be
        the installed list of pkgs. Takes an optional casematch option to
        determine if case should be matched exactly."""
-    pkgdict = buildPkgRefDict(pkgs)
+    if requests:
+        pkgdict = buildPkgRefDict(pkgs)
     (exactmatch, matched, unmatched) = ([], [], [])
     for request in requests:
         if pkgdict.has_key(request):
             exactmatch.extend(pkgdict[request])
-        elif re.match(".*[\*\[\]\{\}\?].*", request):
+        elif __fnmatchre__.match(request):
             restring = fnmatch.translate(request)
             if casematch:
                 regex = re.compile(restring)
@@ -4478,7 +4480,7 @@ hgcgi = "/home/devel/test/hgrepo-cgi"
 hgfiles = "/home/devel/test/filecache"
 mirror = "/var/www/html/mirror/"
 if not os.path.isdir(mirror):
-    mirror = "/home/mirror"
+    mirror = "/home/mirror/"
 fedora = mirror + "fedora/"
 rhelupdates = mirror + "updates-rhel/"
 srpm_repos = [
