@@ -4509,8 +4509,6 @@ srpm_repos = [
     ("http://selenic.com/hg/", "hg", None, None, 20),
     ("http://hg.serpentine.com/mercurial/mq/", "mq", None, None, 20),
     ("http://hg.serpentine.com/mercurial/bos/", "hg-bos", None, None, 20),
-    ("http://hannibal.lr-s.tudelft.nl/~vincent/py/hg-scripts/",
-        "hg-scripts", None, None, None),
     #("http://www.kernel.org/hg/linux-2.6/", "hg-linux-2.6", None, None, 40),
     # Their http server is broken. A new checkout often fails. See the
     # mercurial mailinglists for details.
@@ -4574,12 +4572,13 @@ def createCGI():
     mainindex.append("h = hgweb.hgwebdir(config)\nh.run()\n")
     writeFile(hgcgi + "/index.cgi", mainindex, 0755)
 
-def updateMercurialMirrors():
+def updateMercurialMirrors(verbose):
     for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
         if dirs:
             continue
         repodir = hgrepo + "/" + reponame
-        #print repodescr
+        if verbose > 2:
+            print repodescr
         if not os.path.isdir(repodir):
             os.system("hg clone -q " + repodescr + " " + repodir)
             data = ["[paths]\ndefault = %s\n" % repodescr,
@@ -4590,7 +4589,7 @@ def updateMercurialMirrors():
         else:
             os.system("cd %s && { hg pull -q; hg update -m -q; }" % repodir)
 
-def updateGitMirrors():
+def updateGitMirrors(verbose):
     if not os.path.isdir(grepodir):
         print "No directory", grepodir, "is setup."
         return
@@ -4599,7 +4598,8 @@ def updateGitMirrors():
 
     print "Downloading from git mirrors."
     for (repo, dirname, maxchanges) in gitrepos:
-        #print repo
+        if verbose > 2:
+            print repo
         d = grepodir + "/" + dirname
         if repo.startswith("rsync://"):
             os.system("rsync -aqv --delete " + repo + "/ " + d + ".git")
@@ -4642,7 +4642,7 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
 
     changelogtime = None
     if oldpkg and oldpkg["changelogtime"]:
-        changelogtime = old["changelogtime"][0]
+        changelogtime = oldpkg["changelogtime"][0]
     if os.path.exists("%s/%s" % (pkgdir, specfile)):
         checksum = getChecksum("%s/%s" % (pkgdir, specfile))
         # same spec file in repo and in rpm: nothing to do
@@ -4757,18 +4757,20 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
     if tmpfile != None:
         os.unlink(tmpfile)
 
-def createMercurial():
+def createMercurial(verbose):
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
         print "Error: Paths for mercurial not setup."
         return
     createCGI()
-    updateGitMirrors()
-    updateMercurialMirrors()
+    updateGitMirrors(verbose)
+    updateMercurialMirrors(verbose)
     # Create and initialize repos if still missing.
     for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
         repodir = grepodir + "/" + reponame
         if not dirs or not os.path.isdir(dirs[0]):
             continue
+        if verbose > 2:
+            print repodescr
         if os.path.isdir(repodir):
             firsttime = 0
         else:
@@ -5595,7 +5597,7 @@ def main():
             repo = RpmRepo(a, excludes)
             repo.createRepo(baseurl)
     elif mercurial:
-        createMercurial()
+        createMercurial(verbose)
     elif updaterpms:
         arch_hash = setMachineDistance(arch)
         # Read all packages in rpmdb.
