@@ -4510,6 +4510,7 @@ srpm_repos = [
     ("http://hg.serpentine.com/mercurial/mq/", "mq", None, None, 20),
     ("http://hg.serpentine.com/mercurial/bos/", "hg-bos", None, None, 20),
     #("http://www.kernel.org/hg/linux-2.6/", "hg-linux-2.6", None, None, 40),
+    ("http://hg.rpath.com/conary/", "conary", None, None, 20),
     # Their http server is broken. A new checkout often fails. See the
     # mercurial mailinglists for details.
     ("http://xenbits.xensource.com/xen-unstable.hg/",
