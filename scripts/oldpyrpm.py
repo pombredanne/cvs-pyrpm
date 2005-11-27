@@ -38,6 +38,10 @@
 
 #
 # TODO:
+# - Use a different dir for checked out git repos, so they stay small.
+# - Optionally import the full tree for the initial import (e.g. FC releases).
+# - Optionally also sort by time for e.g. FC updates dirs.
+# - Also use changelog data instead of only looking at the time?
 # - remove RpmTree() again?
 # - How todo save shell escapes for os.system()
 # - Can doVerify() be called on rpmdb data or if the sig header is
@@ -96,7 +100,8 @@ __doc__ = """Manage everything around Linux RPM packages."""
 import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
-import os, os.path, md5, sha, pwd, grp, zlib, gzip, errno, re, fnmatch, glob
+import os, os.path, pwd, grp, zlib, gzip, errno, re, fnmatch, glob, time
+import md5, sha
 from types import DictType, IntType, ListType
 from struct import pack, unpack
 try:
@@ -1970,7 +1975,6 @@ class ReadRpm:
 
     def getChangeLog(self, num=-1, newer=None):
         """ Return the changlog entry in one string. """
-        import time
         ctext = self["changelogtext"]
         if not ctext:
             return ""
@@ -4451,12 +4455,6 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
     return repos
 
 
-def getChangeLogDiff(old, new):
-    t = None
-    if old["changelogtime"]:
-        t = old["changelogtime"][0]
-    return new.getChangeLog(newer=t)
-
 def writeFile(filename, data, mode=None):
     (fd, tmpfile) = mkstemp_file(os.path.dirname(filename), special=1)
     fd.write("".join(data))
@@ -4642,12 +4640,33 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
     i = pkg.getSpecfile(files)
     specfile = files[i]
 
+    changelogtime = None
+    if oldpkg and oldpkg["changelogtime"]:
+        changelogtime = old["changelogtime"][0]
     if os.path.exists("%s/%s" % (pkgdir, specfile)):
         checksum = getChecksum("%s/%s" % (pkgdir, specfile))
         # same spec file in repo and in rpm: nothing to do
         if checksum == pkg["filemd5s"][i]:
             return
-
+        # If we don't have the previous package anymore, but there is still
+        # a specfile, read the time of the last changelog entry.
+        if changelogtime == None:
+            l = open("%s/%s" % (pkgdir, specfile), "r").readlines()
+            while l:
+                if l[0] == "%changelog\n":
+                    l.pop(0)
+                    break
+                l.pop(0)
+            if l:
+                l = l[0].split()
+            if l and l[0] == "*" and len(l) >= 5:
+                try:
+                    import calendar
+                    changelogtime = time.strptime(" ".join(l[1:5]),
+                        "%a %b %d %Y")
+                    changelogtime = calendar.timegm(changelogtime)
+                except:
+                    pass
     os.system('rm -rf "%s"' % pkgdir)
     makeDirs(pkgdir)
     extractRpm(pkg, pkgdir + "/")
@@ -4704,18 +4723,18 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
     # XXX: also checkin the data into a per-package repo
     os.system("cd %s && { find . -path ./.git -prune -o -type f -print | sed -e 's|^./||' | xargs git-update-index --add --refresh; }" % pkgdir)
     os.system('cd %s && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
+    # Add changelog text:
     (fd, tmpfile) = mkstemp_file("/tmp", special=1)
+    fd.write("update to %s" % pkg.getNVR())
     if oldpkg:
-        fd.write("update %s from %s-%s to %s-%s\n\nchangelog:\n\n" % \
-            (pkg["name"], oldpkg["version"], oldpkg["release"],
-            pkg["version"], pkg["release"]) + \
-            getChangeLogDiff(oldpkg, pkg))
-    else:
-        fd.write("import %s-%s-%s" % \
-            (pkg["name"], pkg["version"], pkg["release"]))
+        fd.write(" (from %s-%s)" % (oldpkg["version"], oldpkg["release"]))
+    if changelogtime:
+        fd.write("\n" + pkg.getChangeLog(newer=changelogtime))
+    fd.write("\n")
     fd.close()
     del fd
     changelog = "-F " + tmpfile
+    # Add a user name and email:
     user = "cvs@devel.redhat.com"
     email = user
     if pkg["changelogname"]:
@@ -4729,8 +4748,6 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
             user = user[:user.rfind(" <")]
     # XXX if we monitor trees, we could change the checkin time to
     # first day of release of the rpm package instead of rpm buildtime
-    # XXX git knows about an "order" file which gives information on
-    # how to order files for a diff: "*.spec" (.spec first)
     buildtime = str(pkg.hdr.getOne("buildtime"))
     os.system("cd " + repodir + " && GIT_AUTHOR_NAME=\"" + user + \
         "\" GIT_AUTHOR_EMAIL=\"" + email + "\" GIT_AUTHOR_DATE=" + \
@@ -5580,8 +5597,6 @@ def main():
     elif mercurial:
         createMercurial()
     elif updaterpms:
-        import time
-
         arch_hash = setMachineDistance(arch)
         # Read all packages in rpmdb.
         if verbose > 2:
@@ -5694,7 +5709,6 @@ def main():
                 print "Updating to %s." % rpm.getFilename()
 
     else:
-        import time
         arch_hash = setMachineDistance(arch)
         keepdata = 1
         hdrtags = rpmtag
@@ -5779,7 +5793,6 @@ def main():
                 print "No arch defined to check, are kernels missing?"
 
     if wait:
-        import time
         print "Ready."
         time.sleep(30)
     return 0
