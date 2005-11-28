@@ -162,16 +162,20 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
     if prog == None:
         prog = "/bin/sh"
     if prog == "/bin/sh" and script == None:
-        return None
-    if not os.path.exists(tmpdir):
+        return (0, None)
+    if chroot != None:
+        tdir = chroot+"/"+tmpdir
+    else:
+        tdir = tmpdir
+    if not os.path.exists(tdir):
         try:
-            os.makedirs(os.path.dirname(tmpdir), mode=0755)
+            os.makedirs(os.path.dirname(tdir), mode=0755)
         except:
             pass
         try:
-            os.makedirs(tmpdir, mode=01777)
+            os.makedirs(tdir, mode=01777)
         except:
-            return None
+            return (0, None)
     if isinstance(prog, TupleType):
         args = prog
     else:
@@ -182,7 +186,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
         # FIXME: assumes delayldconfig is checked after all runScript
         # invocations
         rpmconfig.delayldconfig = 1
-        return None
+        return (0, None)
     elif rpmconfig.delayldconfig:
         rpmconfig.delayldconfig = 0
         runScript("/sbin/ldconfig", force=1)
@@ -193,8 +197,10 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
         os.write(fd, script)
         os.close(fd)
         fd = None
-        args.append(tmpfilename)
-
+        if chroot != None:
+            args.append(tmpfilename[len(chroot)+1:])
+        else:
+            args.append(tmpfilename)
         args += otherargs
     (rfd, wfd) = os.pipe()
 
