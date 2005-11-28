@@ -692,7 +692,7 @@ def parseYumOptions(argv, yum):
     try:
       opts, args = getopt.getopt(argv, "?vhc:r:y",
         ["help", "verbose",
-         "hash", "version", "quiet", "dbpath=", "root=",
+         "hash", "version", "quiet", "dbpath=", "root=", "installroot=", 
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "excludedocs", "excludeconfigs",
@@ -709,7 +709,7 @@ def parseYumOptions(argv, yum):
             return None
         elif opt in ["-v", "--verbose"]:
             rpmconfig.verbose += 1
-        elif opt in ["-r", "--root"]:
+        elif opt in ["-r", "--root", "--installroot"]:
             rpmconfig.buildroot = val
         elif opt == "-c":
             rpmconfig.yumconf = val
@@ -1290,18 +1290,6 @@ def buildPkgRefDict(pkgs):
         neva = "%s.%s" % (nev, a)
         nevr = "%s-%s" % (nev, r)
         nevra = "%s.%s" % (nevr, a)
-# Temorarily disabled the epoch prefixed stuff as excludes like "[!g]*.i686"
-# will otherwise fail miserably as they will match 0:glibc-XYZ.i686 :)
-# We need to enforce the nevra variant here as well.
-# Fixed now with support of epoch inside of the name just as we use it every-
-# where internally.
-#        en = "%s:%s" % (e, n)
-#        ena = "%s:%s" % (e, na)
-#        env = "%s:%s" % (e, nv)
-#        enva = "%s:%s" % (e, nva)
-#        envr = "%s:%s" % (e, nvr)
-#        envra = "%s:%s" % (e, nvra)
-#        for item in (n, na, nv, nva, nvr, nvra, en, ena, env, enva, envr, envra):
         for item in (n, na, nv, nva, nvr, nvra, nev, neva, nevr, nevra):
             pkgdict.setdefault(item, []).append(pkg)
     return pkgdict

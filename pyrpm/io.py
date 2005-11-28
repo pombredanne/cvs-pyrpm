@@ -1691,6 +1691,7 @@ class RpmRepo(RpmDatabase):
         Load PGP keys from URLs in key_urls."""
 
         RpmDatabase.__init__(self, config, source, buildroot)
+        self.baseurl = None
         self.excludes = excludes.split()
         self.reponame = reponame
         self.key_urls = key_urls
@@ -1702,44 +1703,46 @@ class RpmRepo(RpmDatabase):
 
     def read(self):
         self.is_read = 1 # FIXME: write-only
-        filename = _uriToFilename(self.source)
-        filename = functions.cacheLocal(os.path.join(filename, "repodata/primary.xml.gz"), self.reponame, 1)
-        if not filename:
-            return 0
-        try:
-            reader = libxml2.newTextReaderFilename(filename)
-        except libxml2.libxmlError:
-            return 0
-        self.__parseNode(reader)
-        for url in self.key_urls:
-            url = _uriToFilename(url)
-            filename = functions.cacheLocal(url, self.reponame, 1)
-            try:
-                f = file(filename)
-                key_data = f.read()
-                f.close()
-            except IOError, e:
-                self.config.printError("Error reading GPG key %s: %s"
-                                       % (filename, e))
+        for uri in self.source:
+            filename = _uriToFilename(uri)
+            filename = functions.cacheLocal(os.path.join(filename, "repodata/primary.xml.gz"), self.reponame, 1)
+            if not filename:
                 continue
             try:
-                keys = openpgp.parsePGPKeys(key_data)
-            except ValueError, e:
-                self.config.printError("Invalid GPG key %s: %s" % (url, e))
+                reader = libxml2.newTextReaderFilename(filename)
+            except libxml2.libxmlError:
                 continue
-            for k in keys:
-                self.keyring.addKey(k)
-        filename = _uriToFilename(self.source)
-        filename = functions.cacheLocal(os.path.join(filename, "filereq.xml.gz"), self.reponame, 1)
-        # If we can't find the filereq.xml.gz file it doesn't matter
-        if not filename:
-            return 1
-        try:
-            reader = libxml2.newTextReaderFilename(filename)
-        except libxml2.libxmlError:
-            return 1
-        self.__parseNode(reader)
-        return 1
+            self.baseurl = uri
+            self.__parseNode(reader)
+            for url in self.key_urls:
+                url = _uriToFilename(url)
+                filename = functions.cacheLocal(url, self.reponame, 1)
+                try:
+                    f = file(filename)
+                    key_data = f.read()
+                    f.close()
+                except IOError, e:
+                    self.config.printError("Error reading GPG key %s: %s"
+                                           % (filename, e))
+                    continue
+                try:
+                    keys = openpgp.parsePGPKeys(key_data)
+                except ValueError, e:
+                    self.config.printError("Invalid GPG key %s: %s" % (url, e))
+                    continue
+                for k in keys:
+                    self.keyring.addKey(k)
+            filename = _uriToFilename(uri)
+            filename = functions.cacheLocal(os.path.join(filename, "filereq.xml.gz"), self.reponame, 1)
+            # If we can't find the filereq.xml.gz file it doesn't matter
+            if not filename:
+                return 1
+            try:
+                reader = libxml2.newTextReaderFilename(filename)
+            except libxml2.libxmlError:
+                return 1
+            self.__parseNode(reader)
+        return 0
 
     def addPkg(self, pkg, unused_nowrite=None):
         # Doesn't know how to write things out, so nowrite is ignored
@@ -1756,9 +1759,13 @@ class RpmRepo(RpmDatabase):
 
         Return 1 on success, 0 on failure."""
 
+        # We need to have successfully read a repo from one source before we
+        # can import it's filelist.
+        if not self.baseurl or not self.is_read:
+            return 0
         if self.filelist_imported:
             return 1
-        filename = _uriToFilename(self.source)
+        filename = _uriToFilename(self.baseurl)
         filename = functions.cacheLocal(os.path.join(filename, "repodata/filelists.xml.gz"),
                               self.reponame, 1)
         if not filename:
@@ -2094,7 +2101,7 @@ class RpmRepo(RpmDatabase):
                     pkg["signature"]["sha1header"] = reader.Value()
             elif name == "location":
                 try:
-                    pkg.source = self.source + "/" + props["href"]
+                    pkg.source = self.baseurl + "/" + props["href"]
                 except KeyError:
                     raise ValueError, "Missing href= in <location>"
             elif name == "size":

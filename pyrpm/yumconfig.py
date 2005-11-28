@@ -282,9 +282,13 @@ class YumConf(Conf):
     def extendValue(self, value):
         """Return value with all known $vars replaced by their values."""
 
+        tval = value.lower()
         for var in YumConf.Variables:
-            if value.find("$" + var) != -1:
-                value = value.replace("$" + var, self.__dict__[var])
+            pos = tval.find("$" + var)
+            while pos != -1:
+                tval = tval[:pos] + self.__dict__[var] + tval[pos+len(var)+1:]
+                value = value[:pos] + self.__dict__[var] + value[pos+len(var)+1:]
+                pos = tval.find("$" + var)
         return value
 
     def checkVar(self, stanza, varname):

@@ -100,10 +100,30 @@ class RpmYum:
                 pass
             else:
                 sec = conf[key]
-                if not sec.has_key("baseurl"):
-                    printError("%s: No baseurl for this section in conf file." % key)
+                if sec.has_key("baseurl"):
+                    baseurls = sec["baseurl"][:]
+                else:
+                    baseurls = []
+                # If we have mirrorlist grab it, read it and add the extended
+                # lines to our baseurls, just like yum does.
+                if sec.has_key("mirrorlist"):
+                    dirname = mkstemp_dir("/tmp", "mirrorlist")
+                    for mlist in sec["mirrorlist"]:
+                        mlist = conf.extendValue(mlist)
+                        self.config.printInfo(2, "Getting mirrorlist from %s\n" % mlist)
+                        fname = cacheLocal(mlist, dirname, 1)
+                        if fname:
+                            lines = open(fname).readlines()
+                            os.unlink(fname)
+                        else:
+                            lines = []
+                        for l in lines:
+                            l = l.replace("$ARCH", "$BASEARCH")[:-1]
+                            baseurls.append(conf.extendValue(l))
+                    os.rmdir(dirname)
+                if len(baseurls) == 0:
+                    printError("%s: No baseurls/mirrorlist for this section in conf file." % key)
                     sys.exit(1)
-                baseurl = sec["baseurl"][0]
                 if not sec.has_key("exclude"):
                     excludes = ""
                 else:
@@ -112,11 +132,16 @@ class RpmYum:
                     keys = []
                 else:
                     keys = sec["gpgkey"]
-                if self.__addSingleRepo(baseurl, excludes, key, keys) == 0:
+                if self.config.timer:
+                    time1 = clock()
+                self.config.printInfo(1, "Reading repository %s.\n" % key)
+                if self.__addSingleRepo(baseurls, excludes, key, keys) == 0:
                     sys.exit(1)
+                if self.config.timer:
+                    self.config.printInfo(0, "Reading repo took %s seconds\n" % (clock() - time1))
                 if self.config.compsfile == None:
                     # May stay None on download error
-                    self.config.compsfile = cacheLocal(baseurl + \
+                    self.config.compsfile = cacheLocal(self.repos[-1].baseurl +\
                                             "/repodata/comps.xml", key)
 
     def __addSingleRepo(self, baseurl, excludes, reponame, key_urls):
@@ -128,8 +153,7 @@ class RpmYum:
         repo = RpmRepo(self.config, baseurl, self.config.buildroot, excludes,
                        reponame, key_urls)
         if repo.read() == 0:
-            self.config.printError("Error reading the repository at %s"
-                                   % baseurl)
+            self.config.printError("Error reading the repository")
             return 0
         self.repos.append(repo)
         r = RpmResolver(self.config, repo.getPkgList())
@@ -142,13 +166,18 @@ class RpmYum:
         Return 1 in success, 0 on error (after warning the user)."""
 
         self.erase_list = []
+        if self.config.timer:
+            time1 = clock()
         # Create and read db
+        self.config.printInfo(1, "Reading local RPM database.\n")
         self.pydb = getRpmDBFactory(self.config, self.config.dbpath,
                                     self.config.buildroot)
         self.pydb.open()
         if not self.pydb.read():
             self.config.printError("Error reading the RPM database")
             return 0
+        if self.config.timer:
+            self.config.printInfo(0, "Reading local RPM database took %s seconds\n" % (clock() - time1))
         for pkg in self.pydb.getPkgList():
             if "redhat-release" in [ dep[0] for dep in pkg["provides"] ]:
                 rpmconfig.relver = pkg["version"]
@@ -172,6 +201,7 @@ class RpmYum:
 
         if self.config.timer:
             time1 = clock()
+        self.config.printInfo(1, "Selecting packages for operation\n")
         # Generate list of all packages in all repos
         repopkglist = []
         for repo in self.resolvers:
@@ -339,7 +369,7 @@ class RpmYum:
         self.__obsoleteslist = []
         for repo in self.resolvers:
             for pkg in repo.getList():
-                if pkg.has_key("obsoletes"):
+                if len(pkg["obsoletes"]) > 0:
                     self.__obsoleteslist.append(pkg)
 
     def __appendPkg(self, pkg):
@@ -372,13 +402,21 @@ class RpmYum:
         # As long as we have unresolved dependencies and need to handle some
         # conflicts continue this loop a few times until we're sure we can't
         # resolve the problems we still have.
-        count = 0
-        while count < 2:
+        fail_count = 0
+        succ_count = 0
+        while fail_count < 3:
             if self.__handleUnresolvedDeps():
-                count = 0
-                if self.__handleConflicts():
-                    return 1
-            count += 1
+                fail_count = 0
+            else:
+                succ_count = 0
+            if self.__handleConflicts():
+                fail_count = 0
+            else:
+                succ_count = 0
+            fail_count += 1
+            succ_count += 1
+            if succ_count > 2:
+                return 1
         unresolved = self.opresolver.getUnresolvedDependencies()
         self.config.printInfo(1, "Couldn't resolve all dependencies.\n")
         for pkg in unresolved.keys():
@@ -586,7 +624,6 @@ class RpmYum:
         for repo in self.resolvers:
             pkg_list.extend([p for p in repo.getList()
                              if p["name"] == pkg["name"]])
-            #pkg_list.extend(findPkgByNames([pkg["name"],], repo.getList()))
         return self.__handleUpdatePkglist(pkg, pkg_list)
 
     def __handleUpdatePkglist(self, pkg, pkg_list, is_filereq=0):

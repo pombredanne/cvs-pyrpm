@@ -58,6 +58,9 @@ class FakeRepo:
     def importFilelist(self):
         return 1
 
+    def isFilelistImported(self):
+        return 1
+
     def _matchesFile(self, fname):
         return 1
 

@@ -1,6 +1,10 @@
 DOCFILES = pyrpm.txt pyrpm-devel.txt pyrpm-tools.txt pyrpm-links.txt
 EXTRA_DIST = $(DOCFILES) pycheckrc
 
+# Not needed, we use %doc in the specfile
+#docdir = $(datadir)/doc/$(PACKAGE)
+#doc_DATA = $(DOCFILES:.txt=.html)
+
 all: $(DOCFILES:.txt=.html)
 
 .txt.html:
