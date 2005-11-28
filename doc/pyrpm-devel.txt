@@ -26,10 +26,20 @@ Is Python the right language?
 Python is a very good scripting language. Very nice for fast prototyping
 and implementing new features. We currently see limits if too much data
 needs to be processed. This is happening with parsing xml data as well
-as with the huge amount of dependency data in rpm packages.
+as with the huge amount of dependency data in rpm packages (where all
+files in rpm packages can also be used for dependencies, those are
+about 350000 files in FC-development).
 
-To a lesser degree also a few python modules could see improvements:
+These python modules could see some improvements:
 
+ - python-elementtree is about 3 times faster in reading in the comps.xml
+   file compared to libxml2. elementtree still does some internal automatic
+   detection and conversion between data encodings that looks like it might
+   add overhead.
+   Migrating to python-elementtree should either be done for the complete
+   code or not at all. Since libxml2 is the default xml library, we'll
+   stick with it for now.
+   XML processing is one of the biggest CPU consumers right now.
  - gzip decompression should offer a filetype object with .read().
    The current hacks in the class PyGZIP should go away.
  - bsddb access seems very slow (reading rpmdb)
