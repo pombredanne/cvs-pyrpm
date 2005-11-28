@@ -260,7 +260,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False, t
         cret.rstrip()
         rpmconfig.printError("Script %s failed: %s" % (args, cret))
     # FIXME: should we be swallowing the script output?
-    return rusage_val
+    return (status, rusage_val)
 
 def installFile(rfi, infd, size, useAttrs=True):
     """Install a file described by RpmFileInfo rfi, with input of given size

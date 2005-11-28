@@ -381,8 +381,8 @@ class RpmPackage(RpmData):
             numPkgs = str(db.getNumPkgs(self["name"])+1)
         if self["preinprog"] != None and not self.config.noscripts:
             try:
-                rusage = runScript(self["preinprog"], self["prein"], [numPkgs],
-                                   rusage = self.config.rusage)
+                (status, rusage) = runScript(self["preinprog"], self["prein"],
+                                         [numPkgs], rusage = self.config.rusage)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running pre install script: %s" \
                     % (self.getNEVRA(), e))
@@ -399,8 +399,8 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None and not self.config.noscripts:
             try:
-                rusage = runScript(self["postinprog"], self["postin"],
-                                   [numPkgs], rusage = self.config.rusage)
+                (status, rusage) = runScript(self["postinprog"], self["postin"],
+                                         [numPkgs], rusage = self.config.rusage)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running post install script: %s" \
                     % (self.getNEVRA(), e))
@@ -425,8 +425,8 @@ class RpmPackage(RpmData):
             numPkgs = str(db.getNumPkgs(self["name"])-1)
         if self["preunprog"] != None and not self.config.noscripts:
             try:
-                rusage = runScript(self["preunprog"], self["preun"], [numPkgs],
-                                   rusage = self.config.rusage)
+                (status, rusage) = runScript(self["preunprog"], self["preun"],
+                                         [numPkgs], rusage = self.config.rusage)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running pre uninstall script: %s" \
                     % (self.getNEVRA(), e))
@@ -481,8 +481,8 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None and not self.config.noscripts:
             try:
-                rusage = runScript(self["postunprog"], self["postun"],
-                                   [numPkgs], rusage = self.config.rusage)
+                (status, rusage) = runScript(self["postunprog"], self["postun"],
+                                         [numPkgs], rusage = self.config.rusage)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running post uninstall script: %s" \
                     % (self.getNEVRA(), e))
