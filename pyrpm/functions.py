@@ -191,7 +191,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
         rpmconfig.delayldconfig = 0
         runScript("/sbin/ldconfig", force=1)
     if script != None:
-        (fd, tmpfilename) = mkstemp_file(tmpdir, "rpm-tmp.")
+        (fd, tmpfilename) = mkstemp_file(tdir, "rpm-tmp.")
         # test for open fds:
         # script = "ls -l /proc/$$/fd >> /$$.out\n" + script
         os.write(fd, script)
