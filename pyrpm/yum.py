@@ -94,7 +94,7 @@ class RpmYum:
                                      self.config.buildroot, file, "")
         except IOError, e:
             printError("Error reading configuration: %s" % e)
-            sys.exit(1)
+            return 0
         for key in conf.keys():
             if key == "main":
                 pass
@@ -123,7 +123,7 @@ class RpmYum:
                     os.rmdir(dirname)
                 if len(baseurls) == 0:
                     printError("%s: No baseurls/mirrorlist for this section in conf file." % key)
-                    sys.exit(1)
+                    return 0
                 if not sec.has_key("exclude"):
                     excludes = ""
                 else:
@@ -136,13 +136,14 @@ class RpmYum:
                     time1 = clock()
                 self.config.printInfo(1, "Reading repository %s.\n" % key)
                 if self.__addSingleRepo(baseurls, excludes, key, keys) == 0:
-                    sys.exit(1)
+                    return 0
                 if self.config.timer:
                     self.config.printInfo(0, "Reading repo took %s seconds\n" % (clock() - time1))
                 if self.config.compsfile == None:
                     # May stay None on download error
                     self.config.compsfile = cacheLocal(self.repos[-1].baseurl +\
                                             "/repodata/comps.xml", key)
+        return 1
 
     def __addSingleRepo(self, baseurl, excludes, reponame, key_urls):
         """Add a repository at baseurl as reponame.
@@ -153,7 +154,7 @@ class RpmYum:
         repo = RpmRepo(self.config, baseurl, self.config.buildroot, excludes,
                        reponame, key_urls)
         if repo.read() == 0:
-            self.config.printError("Error reading the repository")
+            self.config.printError("Error reading repository %s" % reponame)
             return 0
         self.repos.append(repo)
         r = RpmResolver(self.config, repo.getPkgList())
@@ -183,7 +184,8 @@ class RpmYum:
                 rpmconfig.relver = pkg["version"]
         if os.path.isfile(self.config.yumconf):
             if not self.repos_read:
-                self.addRepo(self.config.yumconf)
+                if not self.addRepo(self.config.yumconf):
+                    return 0
         else:
             printWarning(1, "Couldn't find given yum config file, skipping read of repos")
         self.repos_read = 1
@@ -498,8 +500,9 @@ class RpmYum:
                 if not self.repos[i]._matchesFile(dep[0]):
                     self.config.printWarning(1, "Importing filelist from repository %s for filereq %s" % (self.repos[i].reponame, dep[0]))
                     self.repos[i].importFilelist()
-                    r = RpmResolver(self.config, self.repos[i].getPkgList())
-                    self.resolvers[i] = r
+                    self.resolvers[i].reloadDependencies()
+                    #r = RpmResolver(self.config, self.repos[i].getPkgList())
+                    #self.resolvers[i] = r
                     modified_repo = 1
             if modified_repo:
                 self.opresolver.reloadDependencies()
