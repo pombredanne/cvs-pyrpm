@@ -352,7 +352,7 @@ class KickstartConfig(dict):
             if not self[tag]:
                 raise ValueError, "ERROR: %s is required." % tag
 
-        if not self.has_key("install") and self.has_key("update"):
+        if not self.has_key("install") and not self.has_key("upgrade"):
             raise ValueError, "ERROR: No operation defined"
 
         if self.has_key("install") and not self.has_key("partition") and \
