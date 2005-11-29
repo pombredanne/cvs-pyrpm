@@ -1387,8 +1387,6 @@ def run_main(main):
         s.strip_dirs().sort_stats("cumulative").print_stats(100)
         os.unlink(htfilename)
     else:
-        ret = main()
-        if ret != None:
-            sys.exit(ret)
+        return main()
 
 # vim:ts=4:sw=4:showmatch:expandtab

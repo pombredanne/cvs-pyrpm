@@ -399,39 +399,45 @@ class RpmYum:
         # List of filereqs we already checked
         self.filereqs = []
         self.iteration = 1
-        # As long as we have unresolved dependencies and need to handle some
-        # conflicts continue this loop a few times until we're sure we can't
-        # resolve the problems we still have.
-        fail_count = 0
-        succ_count = 0
-        while fail_count < 3:
-            if self.__handleUnresolvedDeps():
-                fail_count = 0
+        # As long as either __handleUnresolvedDeps() or __handleConflicts()
+        # changes something to the package set we need to continue the loop.
+        # Afterwards there may still be unresolved deps or conflicts for which
+        # we then have to check.
+        nowork_count = 0
+        while nowork_count < 3:
+            if not self.__handleUnresolvedDeps():
+                nowork_count += 1
             else:
-                succ_count = 0
-            if self.__handleConflicts():
-                fail_count = 0
+                nowork_count = 0
+            if not self.__handleConflicts():
+                nowork_count += 1
             else:
-                succ_count = 0
-            fail_count += 1
-            succ_count += 1
-            if succ_count > 2:
-                return 1
+                nowork_count = 0
         unresolved = self.opresolver.getUnresolvedDependencies()
-        self.config.printInfo(1, "Couldn't resolve all dependencies.\n")
-        for pkg in unresolved.keys():
-            self.config.printInfo(1, "Unresolved dependencies for %s\n" %
-                                     pkg.getNEVRA())
-            for dep in unresolved[pkg]:
-                self.config.printInfo(1, "\t" + depString(dep)+"\n")
+        conflicts = self.opresolver.getConflicts()
+        if len(unresolved) > 0:
+            self.config.printInfo(1, "Unresolvable dependencies:\n")
+            for pkg in unresolved.keys():
+                self.config.printInfo(1, "Unresolved dependencies for %s\n" %
+                                         pkg.getNEVRA())
+                for dep in unresolved[pkg]:
+                    self.config.printInfo(1, "\t" + depString(dep)+"\n")
+        if len(conflicts) > 0:
+            self.config.printInfo(1, "Unresolvable conflicts:.\n")
+            for pkg in conflicts.keys():
+                self.config.printInfo(1, "Unresolved conflict for %s\n" %
+                                         pkg.getNEVRA())
+                for dep in unresolved[pkg]:
+                    self.config.printInfo(1, "\t" + depString(dep)+"\n")
+        if len(unresolved) == 0 and len(conflicts) == 0:
+            return 1
         return 0
 
     def __handleUnresolvedDeps(self):
         """Try to install/remove packages to reduce the number of unresolved
         dependencies.
 
-        Return 1 if there are no unresolved dependencies or all unresolved
-        dependencies were resolved, 0 otherwise."""
+        Return 1 if some package changes have been done, 0 otherwise."""
 
         unresolved = self.opresolver.getUnresolvedDependencies()
         # Otherwise get first unresolved dep and then try to solve it as long
@@ -439,6 +445,7 @@ class RpmYum:
         # next one until only unresolvable deps remain.
         ppos = 0
         dpos = 0
+        ret = 0
         while len(unresolved) > 0:
             pkg = unresolved.keys()[ppos]
             dep = unresolved[pkg][dpos]
@@ -450,6 +457,7 @@ class RpmYum:
             # If we were able to resolve this dep in any way we reget the
             # deps and do the next internal iteration
             if self.__resolveDep(pkg, dep):
+                ret = 1
                 unresolved = self.opresolver.getUnresolvedDependencies()
                 ppos = 0
                 dpos = 0
@@ -462,8 +470,8 @@ class RpmYum:
                 # End of story: There are no more resolvable unresolved deps,
                 # so we end here.
                 if ppos >= len(unresolved.keys()):
-                    return 0
-        return 1
+                    return ret
+        return ret
 
     def __resolveDep(self, pkg, dep):
         """Attempt to resolve (name, RPMSENSE_* flag, EVR string) dependency of
@@ -540,6 +548,7 @@ class RpmYum:
 
         conflicts = self.opresolver.getConflicts()
         handled_conflict = 1
+        ret = 0
         while len(conflicts) > 0 and handled_conflict:
             handled_conflict = 0
             for pkg1 in conflicts:
@@ -547,17 +556,21 @@ class RpmYum:
                     if   c[1] & RPMSENSE_LESS != 0:
                         if self.__findUpdatePkg(pkg2) > 0:
                             handled_conflict = 1
+                            ret = 1
                             break
                     elif c[1] & RPMSENSE_GREATER != 0:
                         if self.__findUpdatePkg(pkg1) > 0:
                             handled_conflict = 1
+                            ret = 1
                             break
                     else:
                         if   self.__findUpdatePkg(pkg1) > 0:
                             handled_conflict = 1
+                            ret = 1
                             break
                         elif self.__findUpdatePkg(pkg2) > 0:
                             handled_conflict = 1
+                            ret = 1
                             break
                 if handled_conflict:
                     break
@@ -571,16 +584,18 @@ class RpmYum:
                     for (c, pkg2) in conflicts[pkg1]:
                         if self.__findUpdatePkg(pkg2) > 0:
                             handled_fileconflict = 1
+                            ret = 1
                             break
                         elif self.__findUpdatePkg(pkg1) > 0:
                             handled_fileconflict = 1
+                            ret = 1
                             break
                     if handled_fileconflict:
                         break
                 conflicts = self.opresolver.getFileConflicts()
         if not (handled_conflict and handled_fileconflict) and self.autoerase:
             return self.__handleConflictAutoerases()
-        return (handled_conflict and handled_fileconflict)
+        return ret
 
     def __handleObsoletes(self, pkg):
         """Try to replace RpmPackage pkg in self.opresolver by a package
@@ -702,7 +717,9 @@ class RpmYum:
 
     def __doConflictAutoerase(self, pkg1, pkg2):
         """Resolve one single conflict by semi intelligently selecting one of
-        the two packages to be autoereased."""
+        the two packages to be autoereased.
+
+        Return 1 if one package was successfully removed, 0 otherwise."""
 
         ret = 0
         self.config.printInfo(1, "Resolving conflicts for %s:%s\n" % (pkg1.getNEVRA(), pkg2.getNEVRA()))
