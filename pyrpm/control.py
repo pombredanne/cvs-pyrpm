@@ -218,10 +218,7 @@ class RpmController:
             self.config.printError("No updates are necessary.")
             return 1
         self.triggerlist = _Triggers(self.config)
-        onlysrpms = 1
         for (op, pkg) in operations:
-            if not pkg.isSourceRPM():
-                onlysrpms = 0
             if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
                 self.triggerlist.addPkg(pkg)
                 if pkg.source.startswith("http://"):
@@ -289,10 +286,7 @@ class RpmController:
                 del operations
                 gc.collect()
                 if self.config.buildroot:
-                    if onlysrpms:
-                        os.chdir(self.config.buildroot)
-                    else:
-                        os.chroot(self.config.buildroot)
+                    os.chroot(self.config.buildroot)
                 # We're in a buildroot now, reset the buildroot in the db object
                 self.db.setBuildroot(None)
                 # Now reopen database

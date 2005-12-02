@@ -710,6 +710,26 @@ class RpmStreamIO(RpmIO):
         # as well, so we need to put 
         if header.has_key("rpmversion"):
             if   header["rpmversion"].startswith("3."):
+                # In rpm 3.x there was only the oldfilenames tag, but rpm
+                # stores the basenames/dirnames/dirindexes as additional tags
+                # to the /var/lib/rpm/Packages header as well, so we need to
+                # generate them.
+                header.generateFileNames()
+                # For rpm 3.x we need to add a self provide to the provides,
+                # those were missing back in the old days. Only add it though
+                # if it isn't already there.
+                found_selfprovide = 0
+                for p in header["provides"]:
+                    if p[0] != header["name"]:
+                        continue
+                    if (p[1] & RPMSENSE_EQUAL) != 8:
+                        continue
+                    if p[2] == header.getEVR():
+                        found_selfprovide = 1
+                if not found_selfprovide:
+                    header.setdefault("providename", []).append(header["name"])
+                    header.setdefault("provideflag", []).append(RPMSENSE_EQUAL)
+                    header.setdefault("provideversion", []).append(header.getEVR())
                 install_keys=[257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1047, 1099, 1112, 1113, 1116, 1117, 1118, 1127, 1128]
                 h = self.__GeneratedHeader(rpmtag, rpmtagname, 61)
                 return h.outputHeader(header, padding, skip_tags, install_keys)

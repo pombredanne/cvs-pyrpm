@@ -706,7 +706,7 @@ def parseYumOptions(argv, yum):
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "excludedocs", "excludeconfigs",
          "oldpackage", "autoerase", "servicehack", "installpkgs=", "arch=",
-         "checkinstalled", "rusage"])
+         "checkinstalled", "rusage", "resolvesrpm", "srpmdir="])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -785,6 +785,10 @@ def parseYumOptions(argv, yum):
             rpmconfig.arch = val
         elif opt == "--checkinstalled":
             rpmconfig.checkinstalled = 1
+        elif opt == "--resolvesrpm":
+            rpmconfig.resolvesrpm = 1
+        elif opt == "--srpmdir":
+            rpmconfig.srpmdir = val
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1
@@ -963,6 +967,22 @@ def printError(msg):
 
 def raiseFatal(msg):
     raise ValueError, "Fatal: %s\n" % msg
+
+# Exact reimplementation of glibc's bsearch algorithm. Used by rpm to
+# generate dirnames, dirindexes and basenames from oldfilenames (and we need
+# to do it the same way).
+def bsearch(key, list, len):
+    l = 0
+    u = len
+    while l < u:
+        idx = (l + u) / 2;
+        if   key < list[idx]:
+            u = idx
+        elif key > list[idx]:
+            l = idx + 1
+        else:
+            return idx
+    return -1
 
 # ----------------------------------------------------------------------------
 

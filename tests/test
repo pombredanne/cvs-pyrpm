@@ -5,22 +5,34 @@ from pyrpm import *
 
 rpms = []
 for i in sys.argv[1:]:
-    rpm = RpmPackage(rpmconfig, "file://"+i, verify=0)
+    rpm = RpmPackage(rpmconfig, "file://"+i)
     try:
         rpm.read()
     except (IOError, ValueError), e:
         sys.stderr.write("%s: %s\n" % (i, e))
         continue
-    print rpm.range_signature
-    print rpm.range_header
-    print rpm.range_payload
-    print rpm["signature"]["size_in_sig"]
-    print rpm.has_key("epoch")
-    print zip(rpm["basenames"], rpm["filelinktos"], rpm["filemd5s"], rpm["filesizes"])
-    print rpm["basenames"]
-    print rpm["dirnames"]
-    print rpm["dirindexes"]
+    if not rpm.has_key("basenames"):
+        continue
+    flist = []
     for f in rpm["filenames"]:
-	rfi = rpm.getRpmFileInfo(f)
-	print rfi.filename, rfi.filecolor
-#    rpms.append(rpm)
+        flist.append(f)
+    rpm["oldfilenames"] = flist
+    orig_dirnames = rpm["dirnames"]
+    orig_dirindexes = rpm["dirindexes"]
+    orig_basenames = rpm["basenames"]
+    del rpm["dirnames"], rpm["dirindexes"], rpm["basenames"]
+    rpm.generateFileNames()
+    for i in xrange(len(rpm["basenames"])):
+        if orig_basenames[i] != rpm["basenames"][i]:
+            print "Basename difference for pkg %s at index %i: %s != %s" % (rpm.getNEVRA(), i, orig_basenames[i], rpm["basenames"][i])
+        if orig_dirindexes[i] != rpm["dirindexes"][i]:
+            print "Dirindexes difference for pkg %s at index %i: %s != %s" % (rpm.getNEVRA(), i, orig_dirindexes[i], rpm["dirindexes"][i])
+    for i in xrange(len(rpm["dirnames"])):
+        if orig_dirnames[i] != rpm["dirnames"][i]:
+            print "Dirnames difference for pkg %s at index %i: %s != %s" % (rpm.getNEVRA(), i, orig_dirnames[i], rpm["dirnames"][i])
+    print "dirnames = ", rpm["dirnames"]
+    print "dirindexes = ", rpm["dirindexes"]
+    print "basenames = ", rpm["basenames"]
+#    for f in rpm["filenames"]:
+#	rfi = rpm.getRpmFileInfo(f)
+#	print rfi.filename, rfi.filecolor

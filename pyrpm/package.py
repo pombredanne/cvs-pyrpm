@@ -788,11 +788,11 @@ class RpmPackage(RpmData):
                 dirname = os.path.dirname(filename)
                 if dirname[-1] != "/":
                     dirname += "/"
-                try:
-                    dirindex = self["dirnames"].index(dirname)
-                except ValueError:
+                dirindex = bsearch(dirname, self["dirnames"],
+                                   len(self["dirnames"]))
+                if dirindex < 0:
                     self["dirnames"].append(dirname)
-                    dirindex = self["dirnames"].index(dirname)
+                    dirindex = len(self["dirnames"]) - 1
                 self["basenames"].append(basename)
                 self["dirindexes"].append(dirindex)
 
@@ -801,8 +801,12 @@ class RpmPackage(RpmData):
 
         self.rpmusercache = RpmUserCache(self.config)
         self.rfilist = {}
+        issrc = self.isSourceRPM()
         for filename in self["filenames"]:
-            self.rfilist[filename] = self.getRpmFileInfo(filename)
+            rfi = self.getRpmFileInfo(filename)
+            if issrc:
+                rfi.filename = self.config.srpmdir + "/" + rfi.filename
+            self.rfilist[filename] = rfi
 
     def __possibleHardLink(self, rfi):
         """Add the given RpmFileInfo rfi as a possible hardlink"""

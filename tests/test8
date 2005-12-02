@@ -4,13 +4,13 @@ import sys
 from pyrpm import *
 
 for i in sys.argv[1:]:
-    pkg = RpmPackage(rpmconfig, i, verify=1)
+    pkg = RpmPackage(rpmconfig, i)
     try:
         pkg.read()
     except (IOError, ValueError), e:
         sys.stderr.write("%s: %s\n" % (i, e))
         continue
-    pkg.source = "file:///var/tmp/"+i
+    pkg.source = "file:///var/tmp/"+os.path.basename(i)
     try:
         pkg.close()
         pkg.open("w")

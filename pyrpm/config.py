@@ -69,8 +69,8 @@ class RpmConfig:
         self.excludeconfigs = 0
         self.checkinstalled = 0
         self.exactarch = 0           # same base arch is not enough for updates
-        self.tid = int(time.time())     # FIXME: make sure it is unique?
-        self.tscolor = 0            # Transaction color, needed for rpmdb
+        self.tid = int(time.time())  # Install time id.
+        self.tscolor = 0             # Transaction color, needed for rpmdb
         self.compsfile = None
         self.resolvertags = ("name", "epoch", "version", "release", "arch",
             "providename", "provideflags", "provideversion", "requirename",
@@ -79,18 +79,21 @@ class RpmConfig:
             "conflictversion", "filesizes", "filemodes", "filemd5s",
             "filelinktos", "fileflags", "filecolors", "fileverifyflags",
             "dirindexes", "basenames", "dirnames", "oldfilenames", "sourcerpm",
-            "md5", "sha1header") # Tags used by RpmResolver
-        self.timer = 0                  # Output timing information
+            "md5", "sha1header")         # Tags used by RpmResolver
+        self.timer = 0                   # Output timing information
         self.ldconfig = 0             # Number of ldconfig calls optimized away
-        self.delayldconfig = 0          # A delayed ldconfig call is pending
-        self.service = 0                # Install /sbin/service with "exit 0"
+        self.delayldconfig = 0           # A delayed ldconfig call is pending
+        self.service = 0                 # Install /sbin/service with "exit 0"
         self.yumconf = '/etc/yum.conf'
-        self.relver  = '3'              # Release version, needed by YumConfig
-        self.arch = None                # If explicitly selected, for --test
+        self.relver  = '3'               # Release version, needed by YumConfig
+        self.arch = None                 # If explicitly selected, for --test
         self.tmpdir = None
         self.supported_signals = [ signal.SIGINT, signal.SIGTERM,
                                    signal.SIGHUP ]
-        self.signals = [ ]              # Stack of saved signal halders
+        self.signals = [ ]               # Stack of saved signal halders
+        self.srpmdir = "/usr/src/redhat/SOURCES" # Dir where srpms will be
+                                                 # installed to
+        self.resolvesrpm = 0             # Flag to enabled srpm resolving
 
     def readConfig(filename="/etc/pyrpm.conf"):
         return execfile(filename)

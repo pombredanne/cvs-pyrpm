@@ -168,8 +168,10 @@ class RpmResolver(RpmList):
     FILE_CONFLICT = -12
     # ----
 
-    def __init__(self, config, installed):
+    def __init__(self, config, installed, is_repo = None):
         RpmList.__init__(self, config, installed)
+        if is_repo:
+            return
         # fill in installed_ structures
         check_installed = self.config.checkinstalled
         self.config.checkinstalled = 1

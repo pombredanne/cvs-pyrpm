@@ -138,7 +138,7 @@ class RpmYum:
                 if self.__addSingleRepo(baseurls, excludes, key, keys) == 0:
                     return 0
                 if self.config.timer:
-                    self.config.printInfo(0, "Reading repo took %s seconds\n" % (clock() - time1))
+                    self.config.printInfo(0, "Reading repository took %s seconds\n" % (clock() - time1))
                 if self.config.compsfile == None:
                     # May stay None on download error
                     self.config.compsfile = cacheLocal(self.repos[-1].baseurl +\
@@ -157,7 +157,7 @@ class RpmYum:
             self.config.printError("Error reading repository %s" % reponame)
             return 0
         self.repos.append(repo)
-        r = RpmResolver(self.config, repo.getPkgList())
+        r = RpmResolver(self.config, repo.getPkgList(), 1)
         self.resolvers.append(r)
         return 1
 
@@ -297,10 +297,13 @@ class RpmYum:
         if self.config.timer:
             time1 = clock()
         # "fake" Source RPMS to be noarch rpms without any reqs/deps etc.
+        # except if we want pyrpmyum to install the buildprereqs from the
+        # srpm.
         for pkg in self.pkgs:
             if pkg.isSourceRPM():
                 pkg["arch"] = "noarch"
-                pkg["requires"] = []
+                if not self.config.resolvesrpm:
+                    pkg["requires"] = []
                 pkg["provides"] = []
                 pkg["conflicts"] = []
                 pkg["obsoletes"] = []
@@ -350,7 +353,7 @@ class RpmYum:
             self.config.printInfo(0, "Warning: Following packages will be automatically removed from your system:\n")
             for pkg in self.erase_list:
                 self.config.printInfo(0, "\t%s\n" % pkg.getNEVRA())
-        if self.confirm:
+        if self.confirm and not self.config.test:
             choice = raw_input("Is this ok [y/N]: ")
             if len(choice) == 0 or (choice[0] != "y" and choice[0] != "Y"):
                 return 1
@@ -499,10 +502,12 @@ class RpmYum:
                     continue
                 if not self.repos[i]._matchesFile(dep[0]):
                     self.config.printWarning(1, "Importing filelist from repository %s for filereq %s" % (self.repos[i].reponame, dep[0]))
+                    if self.config.timer:
+                        time1 = clock()
                     self.repos[i].importFilelist()
                     self.resolvers[i].reloadDependencies()
-                    #r = RpmResolver(self.config, self.repos[i].getPkgList())
-                    #self.resolvers[i] = r
+                    if self.config.timer:
+                        self.config.printInfo(1, "Importing filelist took %s seconds\n" % (clock() - time1))
                     modified_repo = 1
             if modified_repo:
                 self.opresolver.reloadDependencies()
