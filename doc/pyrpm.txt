@@ -6,10 +6,8 @@ PyRPM
 
 The current location of the PyRPM project is at
 link:http://people.redhat.com/laroche/pyrpm/[].
-The newest version of this document is available at 
-link:http://people.redhat.com/laroche/pyrpm/pyrpm.html[] and you
-can also read its link:http://www.methods.co.nz/asciidoc/[asciidoc]
-source files at link:http://people.redhat.com/laroche/pyrpm/txt/[].
+The newest version can be downloaded from
+link:http://people.redhat.com/laroche/pyrpm/download/[].
 
 Please send patches to link:mailto:laroche@redhat.com[Florian La Roche],
 link:mailto:pknirsch@redhat.com[Phil Knirsch] and
