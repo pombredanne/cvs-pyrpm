@@ -5721,9 +5721,9 @@ def main():
                 hdrtags = importanttags
         time1 = time.clock()
         repos = readRepos(releasever, configfiles, arch, buildroot, 0, 1)
-        time2 = time.clock()
-        if configfiles:
-            print "needed", time2 - time1, "seconds to read the repos"
+        if configfiles and verbose > 2:
+            time2 = time.clock()
+            print "Needed", time2 - time1, "seconds to read the repos."
         if repos == None:
             return 1
         headerend = {}
@@ -5759,8 +5759,10 @@ def main():
                         checkarchs.append(rpm["arch"])
                     repo.append(rpm)
                 del rpm
-        time2 = time.clock()
-        print "needed", time2 - time1, "seconds to read the rpm packages"
+        if verbose > 2:
+            time2 = time.clock()
+            print "Needed", time2 - time1, "seconds to read", len(repo), \
+                "rpm packages."
         if strict:
             for rpm in repo:
                 rpm.filenames = rpm.getFilenames()
@@ -5770,18 +5772,16 @@ def main():
             if specifyarch:
                 checkarchs = [arch,]
             if checkarchs:
-                print "checking", len(repo), "rpm packages"
                 for arch in checkarchs:
                     time1 = time.clock()
-                    print "--------------------------------------------------"
-                    print "check as if kernel has the", \
+                    print "Check as if kernel has the", \
                         "architecture \"%s\" now:" % arch
                     rtree = RpmTree()
                     for rpm in repo:
                         if rpm.issrc:
                             continue
                         if arch_hash.get(rpm["arch"], 999) == 999:
-                            print "removed due to incompatibel arch:", \
+                            print "Removed due to incompatibel arch:", \
                                 rpm.getFilename()
                             continue
                         rtree.addRpm(rpm, 1)
@@ -5791,7 +5791,7 @@ def main():
                         checkProvides(installrpms)
                     checkDeps(installrpms, checkfileconflicts, runorderer)
                     time2 = time.clock()
-                    print "needed", time2 - time1, "seconds to check this tree"
+                    print "Needed", time2 - time1, "sec to check this tree."
             else:
                 print "No arch defined to check, are kernels missing?"
 
