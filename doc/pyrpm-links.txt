@@ -58,6 +58,9 @@ Rebuild rpm packages and manage build roots via mach, available from
 link:http://thomas.apestaart.org/projects/mach/[] and further info
 at link:http://fedoraproject.org/wiki/UsingMach[].
 Fedora Extras is using link:http://fedoraproject.org/wiki/Projects/Plague[].
+Caos is using link:http://www.kainx.org/mezzanine/[] to
+build and manage rpm packages with their wiki page at
+link:https://wiki.caosity.org/tiki-index.php?page=Package+Maintenance&bl[].
 
 Fedora Core Live CDs at link:http://fedoraproject.org/wiki/LiveCD[]
 and link:http://fedoraproject.org/wiki/DerivedDistributions[].
