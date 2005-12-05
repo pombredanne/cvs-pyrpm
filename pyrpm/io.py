@@ -719,13 +719,14 @@ class RpmStreamIO(RpmIO):
                 # those were missing back in the old days. Only add it though
                 # if it isn't already there.
                 found_selfprovide = 0
-                for p in header["provides"]:
-                    if p[0] != header["name"]:
-                        continue
-                    if (p[1] & RPMSENSE_EQUAL) != 8:
-                        continue
-                    if p[2] == header.getEVR():
-                        found_selfprovide = 1
+                if header["provides"]:
+                    for p in header["provides"]:
+                        if p[0] != header["name"]:
+                            continue
+                        if (p[1] & RPMSENSE_EQUAL) != 8:
+                            continue
+                        if p[2] == header.getEVR():
+                            found_selfprovide = 1
                 if not found_selfprovide:
                     header.setdefault("providename", []).append(header["name"])
                     header.setdefault("provideflag", []).append(RPMSENSE_EQUAL)
