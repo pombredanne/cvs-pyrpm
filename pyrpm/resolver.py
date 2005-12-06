@@ -671,6 +671,8 @@ class RpmResolver(RpmList):
             # no conflicts if there is no new package
             return conflicts
 
+        if self.config.timer:
+            time1 = time.clock()
         for (dirname, dirhash) in self.filenames_list.path.iteritems():
             for _filename in dirhash.keys():
                 if len(dirhash[_filename]) < 2:
@@ -686,6 +688,9 @@ class RpmResolver(RpmList):
                         if s[j] not in conflicts:
                             conflicts[s[j]] = [ ]
                         conflicts[s[j]].append((filename, s[k]))
+
+        if self.config.timer:
+            self.config.printInfo(0, "fileconflict checking took %s seconds\n" % (clock() - time1))
 
         return conflicts
     # ----
