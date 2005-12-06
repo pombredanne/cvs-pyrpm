@@ -1,3 +1,472 @@
+2005-12-06  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.30, pyrpm/__init__.py 1.37: - new release
+
+	* scripts/oldpyrpm.py 1.145: - getPkgsNewest():
+	  - add possibility to remove .src.rpm packages
+	  - also check for incompatibel packages and remove them
+	- adapt calling functions to the above changes
+
+	* pyrpm/yum.py 1.84: - add timer info for selectNewestRpms()
+
+	* pyrpm/resolver.py 1.95: - add timing info for fileconflict checking
+
+	* pyrpm/control.py 1.76:
+	- hack to check deps only once, needs re-org to get
+	  this more cleanly done
+
+	* pyrpm/yum.py 1.83:
+	- hacky hack to improve performance until new code is in place
+
+	* pyrpm/yum.py 1.82: - additional fix to print conflicts
+
+	* pyrpm/yum.py 1.81: - fix printing found conflicts
+
+2005-12-05  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/io.py 1.115:
+	- fix traceback if no "provides" are present at all
+
+2005-12-04  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-links.txt 1.4: - add the caos rpm system
+
+2005-12-03  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.144: - output cleanup
+
+	* Makefile.am 1.18: - remove upload again for people.redhat.com
+
+2005-12-02  Florian La Roche  <laroche@redhat.com>
+
+	* Makefile.am 1.17, doc/pyrpm.txt 1.4: - reorg the docu place
+
+2005-12-02  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/config.py 1.47, pyrpm/control.py 1.75, pyrpm/functions.py 1.148, pyrpm/io.py 1.114, pyrpm/package.py 1.102, pyrpm/resolver.py 1.94, pyrpm/yum.py 1.80, tests/test 1.19, tests/test8 1.3:
+	- Included 2 new undocumented options (for now) to pyrpmyum:
+	  o --resolvesrpm     Resolves all buildrequires if you install srpms and
+	                      installes the required packages
+	  o --srpmdir         Directory where the source rpm files will be written to.
+	                      Default is /usr/src/redhat/SOURCES
+	- Removed all cruft where we missused the buildroot as target directory for
+	  srpms.
+	- Implemented a bsearch() function that works identical to the glibc one. Needed
+	  for converting oldfilenames to basenames/dirnames/dirindexes exactly like rpm.
+	- Need to generate basenames/dirnames/dirindexes for old rpm 3.x headers if we
+	  want to store them in the rpmdb. Make sure we generate the lists exactly
+	  like rpm (as there is a bug in rpm we have to "simulate").
+	- Rpm 3.x headers didn't have a self provide. Add it to the header if it's
+	  missing for those rpms, just like rpm does.
+	- Don't create some unecessary lists for repo and rpmdb resolvers anymore.
+	- Use the config.srpmdir for installing srpm files properly.
+	- Fixed some text messages
+	- Don't remove the requires from srpms if the --resolvesrpm has been used.
+	- Don't want confirmation for --test runs (kinda silly to ask that ;)
+	- Some changes to my testscripts to verify the latest changes.
+
+2005-11-29  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.79:
+	- Fixed several sys.exit() calls at the wrong places.
+	- RpmYum::addRepo() now returns 1 on success, as expected.
+
+	* pyrpm/yum.py 1.78, pyrpm/functions.py 1.147:
+	- Fixed run_main() to not do the sys.exit() itself but leave it up to the
+	  calling script to handle the failure
+	- Reworked the dependency loop once more, this time hopefully fixed for good.
+	  Ran some tests with it that all ended correctly.
+	- Fixed a little code documentation.
+
+2005-11-29  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.33: [tw]
+	- enabled upgrade via kickstart
+	- using new chroot feature and status of runScript
+	- new functions: loadComps and compsLangsupport to get packages from additional
+	  repos, if enabled with option --repo-comps
+	- added checks for format programs and bash in stage2
+	- fixed title of boot entries in grub.conf to use the source release
+
+	* pyrpm/kickstart.py 1.12: [tw] fixed usage of wrong tag update
+
+2005-11-28  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.146:
+	- Hopefully final fix the the chroot stuff :)
+
+	* pyrpm/functions.py 1.145:
+	- Fixed the new chroot option. Need to make sure that if we switch into the
+	  chroot the tmpfilename path is stripped from the args.
+
+	* pyrpm/functions.py 1.144:
+	- Added chroot parameter to runscript to make Thomas happy :)
+
+2005-11-28  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-devel.txt 1.3: - add some comments about python-elementtree
+
+2005-11-28  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.143, pyrpm/package.py 1.101:
+	- Fixed runScript() to return status and rusage (so we can actually check if
+	  a script failed or no. ;)
+
+	* pyrpm/functions.py 1.142, pyrpm/io.py 1.113, pyrpm/yum.py 1.77, pyrpm/yumconfig.py 1.21, scripts/pyrpmrandomizer 1.14, doc/Makefile.am 1.11:
+	- Added --installroot= option to yum for compatibility
+	- Removed some old unused commented out code.
+	- Added support for mirrorlist and baseurls from yum.conf
+	- Added some more useful printInfo and timing output to see what/where the code
+	  is at the moment.
+	- Fixed a bug in RpmYum::__generateObsoletesList() where too many packages were
+	  added to the list. Speeds things up for 1st and 2nd phase of obsolete handling
+
+2005-11-27  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.143: - add mirroring of the conary repository
+
+	* scripts/oldpyrpm.py 1.142: - remove one repo with hg scripts
+	- fix old -> oldpkg typo
+	- print repos being mirrored/setup for "verbose > 2"
+
+	* scripts/oldpyrpm.py 1.141: - "import time" at the beginning
+	- read time of last changelog entry from specfile if no previous
+	  rpm package is available
+
+2005-11-26  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.140:
+	- small performance changes to parsePackages()
+
+	* doc/pyrpm-links.txt 1.3: - add pointer to rpminfo from Thomas Woerner
+
+2005-11-24  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.139:
+	- add setMachineDistance() that computes machineDistance for all
+	  possible 'arch' settings in rpms and stores that in arch_hash
+	- optimize FilenamesList.addPkg()
+	- "oldfilenames" for repodata is faster, but takes slightly more space
+	- enable FC-development to be checked into git on my laptop
+
+	* doc/pyrpm-tools.txt 1.4: - typo in docu
+
+	* doc/Makefile.am 1.10, doc/pyrpm-tools.txt 1.3:
+	- correct example sections
+
+2005-11-24  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.76:
+	- Fix bug where when we import the filelist the triggering file dep might then
+	  already be resolved by the import but we would still try to resolve it which
+	  could horribly fail.
+
+	* pyrpm/base.py 1.51, pyrpm/io.py 1.112, pyrpm/package.py 1.100, pyrpm/yum.py 1.75:
+	- Support the use of oldfilenames if available (used for repos to speed things
+	  up there)
+	- Fixed multiple recreations of reporesolvers for filereqs
+
+2005-11-24  Florian La Roche  <laroche@redhat.com>
+
+	* Makefile.am 1.16: - add an upload target
+
+	* doc/pyrpm-devel.txt 1.2, doc/pyrpm.txt 1.3: - change project links
+
+	* doc/pyrpm-tools.txt 1.2, doc/pyrpm.txt 1.2:
+	- add links to the other docu files
+	- fix two places where asciidoc has made the text a new headline
+	- point to new docu correctly
+
+	* Makefile.am 1.15:
+	- do not remove COPYING and INSTALL, they are also checked into cvs
+
+	* pyrpm.spec.in 1.13: - adjust for new docu form
+
+	* doc/pyrpm-links.txt 1.2: - different headline now
+
+	* scripts/oldpyrpm.py 1.138:
+	- add another newline into changelog entries
+	- RpmResolver: ignore gpg-pubkey entries
+	- selectNewestRpm(): set good verbose level for output
+	- getPkgsNewest(): move this into a normal function from RpmTree()
+	- RpmRepo:readRepos(): use "readsrc" better
+	- extractSrpm: finetune extracted rpm package list
+	- extractSrpm: fix setting the changelog for the update case
+	- adjust list of available mirror data
+	- some more additions for "--updaterpms" to read in the data
+	- "--wait" is now a general option
+
+2005-11-23  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.74, scripts/pyrpmrandomizer 1.13, pyrpm/package.py 1.99, pyrpm/io.py 1.111, doc/Makefile.am 1.9:
+	- Updated doc/Makefile.am to actually generate the html docs. Still need to
+	  install them properly, will nag Harald how to do this right with autoFOO(tm)
+	- Fixed the version checks for the new rpm-3 and rpm-4.0 header generation.
+	- Fixed bug in RpmPackage::read() where the self.io could be None if the
+	  package came from a repo or database.
+	- Reworked the depesolver in yum a little to really return false in case some
+	  deps couldn't be resolved properly.
+	- Fixed small bug in pyrpmrandomizer where the FakeRepo would still get added
+	  even if it had 0 packages in it (which caused the package selector later to
+	  traceback).
+
+2005-11-21  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/base.py 1.50, pyrpm/io.py 1.110, pyrpm/package.py 1.98, scripts/pyrpmdbverify 1.27, README 1.9, doc/Makefile.am 1.8, doc/README 1.30, doc/README.rpmdb 1.5, doc/README.tools 1.2, doc/pyrpm-devel.txt 1.1, doc/pyrpm-links.txt 1.1, doc/pyrpm-tools.txt 1.1, doc/pyrpm.txt 1.1:
+	- Restructuring of documentation once more.
+	- Some more additions to the docu.
+	- Add legacy rpmdb support to pyrpm. Rpm 4.0.3, 3.0.3 and 3.0 headers should now
+	  be written correctly to rpmdb (VMware and IBM-Java packages).
+
+2005-11-19  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/functions.py 1.141:
+	- fix bug where still "strict" was given as param
+
+2005-11-18  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/functions.py 1.140: - we stay compatibel to /bin/rpm
+
+2005-11-17  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.137: - remove archDuplicate(), never used
+	- remove archCompat() as machineDistance() is giving the
+	  same information
+	- move setting rpm.mdistance into upper functions to
+	  selectNewestRpms(), this is a bad hack
+
+2005-11-17  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/orderer.py 1.37: [tw]
+	[tw]
+	- added RpmRelations::orderIterationFunc and RpmRelations::orderLoopFunc to get
+	  calls into the ordering process - e.g. for rpmgraph
+
+	* scripts/pyrpmkickstart 1.32: [tw]
+	- added repo support:
+	  repo <name> --url=nfs://<server><path>
+	  repo <name> --url=file://<path>
+	  where <path> is a full qualified path name with a leading "/"
+	- initialize disk if there is no disklabel
+	- first evaluate if there are partitions to format, then copy stage2 image
+	- moved exclude in yum.conf to the main section
+	- add repos to yum.conf
+
+	* pyrpm/kickstart.py 1.11: [tw]
+	- added repo support:
+
+	  repo <name> --url=nfs://<server><path>
+	  repo <name> --url=file://<path>
+
+	  where <path> is a full qualified path name with a leading "/"
+
+2005-11-17  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.136:
+	- only output stats for repos if we actually read them
+
+	* scripts/oldpyrpm.py 1.135:
+	- selectNewestRpm(): first sort by arch distance, then by version numbers,
+	  so we never go from e.g. a i686 rpm to a i386, even if newer i386 rpms
+	  show up
+	- RpmTree(), slightly reduce code size
+	- RpmRepo: delDebuginfo(): add glibc-debuginfo-common as special case, bad
+	- RpmRepo: add delSrc() to remove src.rpm packages
+	- readRepos: add option to read/ignore src.rpms
+	- readPackages:
+	  - option to keep the raw data as well as the data for the parsed headers
+	  - option to specify which header tags to read
+	- change default to ignore fileconflicts, add option --fileconflicts to
+	  enable them again
+	- add option --updaterpms to start looking at update algorithm
+	- add timing stats and number of rpm package stats to the verify part
+	- do not even include src.rpms to check dependencies for trees
+
+2005-11-16  Philip Knirsch  <pknirsch@redhat.com>
+
+	* tests/rpmdbtestName 1.1, scripts/pyrpminstall 1.25, scripts/pyrpmrandomizer 1.12, scripts/pyrpmrebuilddb 1.12, scripts/pyrpmyum 1.49, scripts/pyrpmcheck 1.15, scripts/pyrpmcheckrepo 1.12, scripts/pyrpmcreatefilereq 1.5, scripts/pyrpmdbconvert 1.4, scripts/pyrpmdbverify 1.26, doc/README 1.29, doc/README.rpmdb 1.4, doc/README.tools 1.1, INSTALL 1.2, README 1.8:
+	- Tons of documentation updates and restructuring. Needs some more work to have
+	  them crosslinked with asciidoc, but that's next.
+	- Unified the way our scripts work and their return values. Correct exit(1) is
+	  now done in all error cases so bash scripts can check if an error occured.
+
+	* pyrpm/package.py 1.97:
+	- Fix for issrc (which gets thrown over board after a close() call).
+
+2005-11-13  Florian La Roche  <laroche@redhat.com>
+
+	* doc/README 1.28: - add example on how to check FC-4 + Fedora Extras 4
+
+2005-11-12  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.134:
+	- depString() add surrounding brackets to output
+	- replace class DepList() with function searchDependency()
+
+	* scripts/oldpyrpm.py 1.133: - clean up machineDistance()
+	- rename search() -> searchDependency()
+	- rename Relations() -> RpmRelations()
+	- new function selectNewestRpm()
+	- getPkgsNewest(): do not select noarch and arch-dependent
+	  packages together, one of both needs to be removed
+	- readRepos(): do not delete rpms not suitable for the arch,
+	  that will be done later on
+
+2005-11-11  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.139:
+	- Use proper output interface for error messages in parseYumOptions()
+	- Fix wrong behaviour where ignorearch wouldn't let you install arch
+	  incompatible packages without --justdb or --test
+
+2005-11-11  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.132:
+	- fixed a bug in stringCompare() where we tried to access
+	  beyond the end
+	- removed dead code
+	- added comments on implementation
+
+	* scripts/oldpyrpm.py 1.131:
+	- give less data on reporting conflicts/obsoletes
+	- note that noarch/arch do not get selected properly and need fixing
+
+	* scripts/oldpyrpm.py 1.130:
+	- if a certain arch is given, don't use the kernel archs for checking
+
+	* doc/README 1.27: - add new options
+
+	* scripts/oldpyrpm.py 1.129:
+	- preserve some memory if no fileconflict checks are done
+	- allow disabling the fileconflict checks: --nofileconflicts
+	- add an option to run the orderer: --runorderer
+	- better error reports for dependency problems
+
+	* scripts/oldpyrpm.py 1.128:
+	- look at the kernel arch settings to determine a list of
+	  archs to check with
+
+	* scripts/oldpyrpm.py 1.127: - DepList(): remove unused functions
+	- RpmResolver(): remve the search cache, this was a temp item
+	  to check possible performance improvements
+	- RpmResolver(): allow deleting packages
+	- remove obsoleted packages from tests
+	- checkDeps(): go in sorted order through checks
+	- only once create the list of rpms to check for installs
+
+	* scripts/oldpyrpm.py 1.126:
+	- filter out packages not suitable for our arch
+	- correctly work also on multilib systems
+	- print rpms deleted/ignored during for the checks
+
+2005-11-10  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.138, pyrpm/io.py 1.109, pyrpm/package.py 1.96, pyrpm/yum.py 1.73:
+	- Dropped the whole verify code from RpmStreamIO
+	- Properly filter the packages from dirs and repos depending on arch
+
+2005-11-10  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.125:
+	- use lists instead of tuples for arch_compat to make machineDistance to work
+	- add support to select also based on arch via machineDistance
+	- remove "dupes" to e.g. remove i386 rpms if also i686 rpms exist
+
+	* pyrpm/resolver.py 1.93:
+	- no need to depend on the arch anymore for searching packages
+
+	* scripts/pyrpmcreatefilereq 1.4, scripts/pyrpmcreaterepo 1.9, scripts/pyrpmkickstart 1.31, scripts/pyrpmspecinfo 1.8, pyrpm/yumconfig.py 1.20, pyrpm/yum.py 1.72, pyrpm/kickstart.py 1.10, pyrpm/orderer.py 1.36, pyrpm/config.py 1.46, pyrpm/functions.py 1.137, pyrpm/io.py 1.108:
+	- remove trailing whitespace
+
+2005-11-09  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.30: [tw]
+	- fixed Partition unit calculation for start and end
+	- added __clear_partitions to Disk to create partition structures
+	- moved PedDevice creation over to reload function
+	- create freespace, freespace_primary, freespace_logical, primary, extended
+	  and logical lists in Disk::reload(), return these lists in
+	  Disk::__getitem__()
+	- fixed missing disklabel bug in Disk::print_info() and
+	  Disk::print_partitions() for empty disks
+	- umount stage2_img_dir in exit if it is set
+	- fixed malformed patch of default interpreter for scripts
+	- use Disk::print_info() and Disk::print_partitions() in verbose mode instead
+	  of own code
+	- better autopart handling
+	- renamed old partitions list to partition everywhere to make it consistent
+	- new parition code to honour --asprimary partition option
+	- exact calculation of patition sizes with cylinders
+	- use comps information for addition of all packages and groups
+	- add "base-x" instead of xserver and sub-package if xconfig is set
+	- use none as device for all distibutions for /dev/pts, /dev/shm and /proc
+
+	* pyrpm/resolver.py 1.92: [tw]
+	- dropped arch comparing code from ProvidesList::search and
+	  ConflictsList::search
+	  This code has to get integrated into yum
+	- return all macthing packages even if there is an additional self provide
+
+	* pyrpm/kickstart.py 1.9: [tw]
+	- reverting to value None for value-less options
+
+	* pyrpm/orderer.py 1.35: [tw]
+	- renamed Relation to RpmRelation
+	- integrated isHardRelation as isHard and isVirtualRelation as isVirtual as
+	  static methods into RpmRelation
+	- renamed _Relations to RpmRelations
+	- moved all functions which are modifying RpmRelations structures into
+	  RpmRelations class
+	- the RpmOrderer is using RpmRelations to get the ordered package list
+
+	* pyrpm/hashlist.py 1.21: [tw]
+	- fixed setdefault
+
+	* pyrpm/hashlist.py 1.20: [tw]
+	- added setdefault function to be compatible with hash
+
+2005-11-09  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.71:
+	- Fixed bug when no packages were found for file based updates.
+
+2005-11-09  Florian La Roche  <laroche@redhat.com>
+
+	* doc/README 1.26: - add info on how to send changes to the docu
+	- write description about fileconflicts
+
+	* scripts/oldpyrpm.py 1.124:
+	- for fileconflict checks also look at fileusername and filegroupname
+	- checkDirs() remove code that is now also part of the fileconflicts
+	  check
+
+2005-11-09  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.136: - Dropped wrong raise in runScript()
+	- Reworked the printError() usage in runScript()
+
+2005-11-09  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.123:
+	- check requires not via the loop over packages, but just take
+	  the data from the requires data in the resolver
+
+	* scripts/oldpyrpm.py 1.122: - mini optims for fileconflict check
+	- fileconflicts: check all files, not just regular files
+
+2005-11-08  Karsten Hopp  <karsten@redhat.com>
+
+	* tests/daily-weekly-checks 1.1:
+	add script to run some checks p.e. via crontab. Checks for RHEL3/4 -> U1 ->...->Ux are currently missing
+
+2005-11-07  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.121: - small config tweaks
+
+	* configure.in 1.29, pyrpm/__init__.py 1.36: - release 0.35
+
+	* ChangeLog 1.15: - update ChangeLog
+
 2005-11-07  Philip Knirsch  <pknirsch@redhat.com>
 
 	* scripts/pyrpmrandomizer 1.11, pyrpm/control.py 1.74, pyrpm/yum.py 1.70:
