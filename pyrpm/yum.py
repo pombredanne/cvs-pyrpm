@@ -430,9 +430,9 @@ class RpmYum:
         if len(conflicts) > 0:
             self.config.printInfo(1, "Unresolvable conflicts:.\n")
             for pkg in conflicts.keys():
-                self.config.printInfo(1, "Unresolved conflict for %s\n" %
+                self.config.printInfo(1, "Unresolved conflicts for %s\n" %
                                          pkg.getNEVRA())
-                for dep in unresolved[pkg]:
+                for dep in conflicts[pkg]:
                     self.config.printInfo(1, "\t" + depString(dep)+"\n")
         if len(unresolved) == 0 and len(conflicts) == 0:
             return 1
