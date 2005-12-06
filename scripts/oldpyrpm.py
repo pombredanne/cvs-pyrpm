@@ -3100,10 +3100,12 @@ def selectNewestRpm(rpms, arch, arch_hash, verbose):
                 newestarch = rpmarch
     return newest
 
-def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0, basearch=0):
+def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0, basearch=0, nosrc=0):
     # Add all rpms by name,basearch into a hash.
     h = {}
     for rpm in rpms:
+        if nosrc and rpm.issrc:
+            continue
         rarch = rpm.getArch()
         if basearch:
             rarch = BuildArchTranslate(rarch)
@@ -3116,6 +3118,12 @@ def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0, basearch=0):
         # Add all rpms into a hash by their name.
         h = {}
         for rpm in pkgs:
+            # Remove all rpms not suitable for this arch.
+            if arch_hash.get(rpm["arch"], 999) == 999:
+                if verbose > 3:
+                    print "Removed due to incompatibel arch:", \
+                        rpm.getFilename()
+                continue
             h.setdefault(rpm["name"], []).append(rpm)
         # By name find the newest rpm and then decide if a noarch
         # rpm is the newest (and all others are deleted) or if an
@@ -5651,16 +5659,8 @@ def main():
             time1 = time.clock()
         repos2 = []
         for r in repos:
-            rpms = []
-            for rpm in r.pkglist.values():
-                if arch_hash.get(rpm["arch"], 999) == 999:
-                    if verbose > 3:
-                        print "Removed due to incompatibel arch:", \
-                            rpm.getFilename()
-                    continue
-                rpms.append(rpm)
-            rpms = getPkgsNewest(rpms, arch, arch_hash, verbose, 1)
-            repos2.append(rpms)
+            repos2.append(getPkgsNewest(r.pkglist.values(), arch, arch_hash,
+                verbose, 1))
         if verbose > 2:
             time2 = time.clock()
             print "Needed", time2 - time1, "seconds to sort the repos."
@@ -5776,17 +5776,8 @@ def main():
                     time1 = time.clock()
                     print "Check as if kernel has the", \
                         "architecture \"%s\" now:" % arch
-                    rtree = RpmTree()
-                    for rpm in repo:
-                        if rpm.issrc:
-                            continue
-                        if arch_hash.get(rpm["arch"], 999) == 999:
-                            print "Removed due to incompatibel arch:", \
-                                rpm.getFilename()
-                            continue
-                        rtree.addRpm(rpm, 1)
-                    installrpms = getPkgsNewest(rtree.getPkgs(), arch,
-                        arch_hash, verbose, 1)
+                    installrpms = getPkgsNewest(repo, arch, arch_hash,
+                        verbose, 1, 1)
                     if strict:
                         checkProvides(installrpms)
                     checkDeps(installrpms, checkfileconflicts, runorderer)
