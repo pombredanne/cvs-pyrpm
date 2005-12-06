@@ -404,16 +404,22 @@ class RpmYum:
         # List of filereqs we already checked
         self.filereqs = []
         self.iteration = 1
+        unresolved = self.opresolver.getUnresolvedDependencies()
+        if not unresolved:
+            conflicts = self.opresolver.getConflicts()
+            if len(conflicts) == 0:
+                return 1
         # As long as either __handleUnresolvedDeps() or __handleConflicts()
         # changes something to the package set we need to continue the loop.
         # Afterwards there may still be unresolved deps or conflicts for which
         # we then have to check.
         nowork_count = 0
         while nowork_count < 3:
-            if not self.__handleUnresolvedDeps():
+            if not self.__handleUnresolvedDeps(unresolved):
                 nowork_count += 1
             else:
                 nowork_count = 0
+            unresolved = None
             if not self.__handleConflicts():
                 nowork_count += 1
             else:
@@ -438,13 +444,14 @@ class RpmYum:
             return 1
         return 0
 
-    def __handleUnresolvedDeps(self):
+    def __handleUnresolvedDeps(self, unresolved = None):
         """Try to install/remove packages to reduce the number of unresolved
         dependencies.
 
         Return 1 if some package changes have been done, 0 otherwise."""
 
-        unresolved = self.opresolver.getUnresolvedDependencies()
+        if unresolved == None:
+            unresolved = self.opresolver.getUnresolvedDependencies()
         # Otherwise get first unresolved dep and then try to solve it as long
         # as we have unresolved deps. If we fail to resolve a dep we try the
         # next one until only unresolvable deps remain.
