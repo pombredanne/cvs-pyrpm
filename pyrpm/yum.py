@@ -308,7 +308,11 @@ class RpmYum:
                 pkg["conflicts"] = []
                 pkg["obsoletes"] = []
         # Filter newest packages
+        if self.config.timer:
+            time3 = clock()
         self.pkgs = selectNewestPkgs(self.pkgs)
+        if self.config.timer:
+            self.config.printInfo(0, "selectNewestPkgs took %s seconds\n" % (clock() - time3))
         # Add packages to be processed to our operation resolver
         for pkg in self.pkgs:
             self.__appendPkg(pkg)
