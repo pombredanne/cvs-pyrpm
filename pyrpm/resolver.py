@@ -690,7 +690,7 @@ class RpmResolver(RpmList):
                         conflicts[s[j]].append((filename, s[k]))
 
         if self.config.timer:
-            self.config.printInfo(0, "fileconflict checking took %s seconds\n" % (clock() - time1))
+            self.config.printInfo(0, "fileconflict checking took %s seconds\n" % (time.clock() - time1))
 
         return conflicts
     # ----
