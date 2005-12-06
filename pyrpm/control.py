@@ -158,7 +158,12 @@ class RpmController:
         if self.config.timer:
             time1 = clock()
         self.__preprocess()
+        # hack: getOperations() is called from yum.py where deps are already
+        # and from scripts/pyrpminstall where we still need todo dep checking.
+        # This should get re-worked to clean this up.
+        nodeps = 1
         if resolver == None:
+            nodeps = 0
             resolver = RpmResolver(self.config, self.db.getPkgList())
             for r in self.rpms:
                 # Ignore errors from RpmResolver, the functions already warn
@@ -174,7 +179,7 @@ class RpmController:
                 else:
                     self.config.printError("Unknown operation")
         del self.rpms
-        if not self.config.nodeps and resolver.resolve() != 1:
+        if not self.config.nodeps and not nodeps and resolver.resolve() != 1:
             return None
         if self.config.timer:
             self.config.printInfo(0, "resolver took %s seconds\n" % (clock() - time1))
