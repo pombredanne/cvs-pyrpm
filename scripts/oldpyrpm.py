@@ -3165,11 +3165,8 @@ class RpmTree:
         return rpm
 
     def addDirectory(self, dirname):
-        files = map(lambda v, dirname=dirname: "%s/%s" % (dirname, v),
-            os.listdir(dirname))
-        for f in files:
-            if f.endswith(".rpm"):
-                self.addRpm(f)
+        for f in findRpms(dirname):
+            self.addRpm(f)
 
     def getNames(self):
         rpmnames = self.h.keys()
@@ -3435,12 +3432,11 @@ flagmap = {
 filerc = re.compile("^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$")
 dirrc = re.compile("^(.*bin/.*|/etc/.*)$")
 
-def findRpms(dir, uselstat=None, verbose=0):
+def findRpms(dir, files=[], uselstat=None, verbose=0):
     s = os.stat
     if uselstat:
         s = os.lstat
     dirs = [ dir ]
-    files = []
     while dirs:
         d = dirs.pop()
         for f in os.listdir(d):
@@ -3453,7 +3449,6 @@ def findRpms(dir, uselstat=None, verbose=0):
             else:
                 if verbose:
                     print "ignoring", path
-    files.sort()
     return files
 
 def utf8String(string):
@@ -3540,6 +3535,7 @@ class RpmRepo:
         filename = self.filename
         self.filerequires = []
         filenames = findRpms(filename)
+        filenames.sort()
         i = 0
         while i < len(filenames):
             path = filenames[i]
@@ -5738,11 +5734,7 @@ def main():
             a = Uri2Filename(a)
             b = [a]
             if not a.endswith(".rpm") and not isUrl(a) and os.path.isdir(a):
-                b = []
-                for c in os.listdir(a):
-                    fn = "%s/%s" % (a, c)
-                    if c.endswith(".rpm"): # and os.path.isfile(fn):
-                        b.append(fn)
+                b = findRpms(a)
             for a in b:
                 #print a
                 rpm = verifyRpm(a, verify, strict, payload, nodigest, hdrtags,
