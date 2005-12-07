@@ -2286,6 +2286,17 @@ class ReadRpm:
         return 0
 
 
+def readRpm(filenames, rpmsigtag, rpmtag):
+    rpms = []
+    for filename in filenames:
+        rpm = ReadRpm(filename)
+        if rpm.readHeader(rpmsigtag, rpmtag):
+            print "Cannot read %s.\n" % filename
+            continue
+        rpm.closeFd()
+        rpms.append(rpm)
+    return rpms
+
 def verifyRpm(filename, verify, strict, payload, nodigest, hdrtags, keepdata,
     headerend):
     """Read in a complete rpm and verify its integrity."""
@@ -3301,11 +3312,8 @@ class RpmCSV:
         return 1
 
 def checkCSV():
-    r = RpmTree()
-    r.addDirectory("/home/mirror/fedora/development/i386/Fedora/RPMS")
-    pkgs = []
-    for p in r.h.values():
-        pkgs.extend(p)
+    pkgs = findRpms("/home/mirror/fedora/development/i386/Fedora/RPMS")
+    pkgs = readRpm(pkgs, rpmsigtag, rpmtag)
     csv = RpmCSV()
     for p in pkgs:
         csv.addPkg(p)
@@ -4787,14 +4795,14 @@ def createMercurial(verbose):
         if not filecache:
             filecache = hgfiles + "/" + reponame
         makeDirs(filecache)
-        r = RpmTree()
+        pkgs = []
         for d in dirs:
-            if os.path.isdir(d):
-                r.addDirectory(d)
+            findRpms(d, pkgs)
+        pkgs = readRpm(pkgs, rpmsigtag, rpmtag)
         if firsttime:
-            pkgs = r.getPkgs(1)
+            pkgs.sort(cmpByTime)
         else:
-            pkgs = getPkgsNewest(r.getPkgs())
+            pkgs = getPkgsNewest(pkgs)
         oldpkgs = {}
         for pkg in pkgs:
             name = pkg["name"]
