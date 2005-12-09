@@ -920,15 +920,15 @@ def readPackages(dbpath):
                     else:
                         pkg[rpmtagname[tag]] = tagval
             if pkg["name"] == "gpg-pubkey":
-                continue # FIXME
-                try:
-                    keys = openpgp.parsePGPKeys(pkg["description"])
-                except ValueError, e:
-                    rpmconfig.printError("Invalid key package %s: %s"
-                                         % (pkg["name"], e))
-                    continue
-                for k in keys:
-                    keyring.addKey(k)
+#                continue # FIXME
+#                try:
+#                    keys = openpgp.parsePGPKeys(pkg["description"])
+#                except ValueError, e:
+#                    rpmconfig.printError("Invalid key package %s: %s"
+#                                         % (pkg["name"], e))
+#                    continue
+#                for k in keys:
+#                    keyring.addKey(k)
                 pkg["group"] = (pkg["group"],)
             pkg.generateFileNames()
             pkg.source = "rpmdb:"+os.path.join(dbpath, pkg.getNEVRA())

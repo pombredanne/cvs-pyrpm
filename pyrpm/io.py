@@ -719,18 +719,25 @@ class RpmStreamIO(RpmIO):
                 # those were missing back in the old days. Only add it though
                 # if it isn't already there.
                 found_selfprovide = 0
-                if header["provides"]:
-                    for p in header["provides"]:
-                        if p[0] != header["name"]:
+                if header["providename"]:
+                    for i in xrange(len(header["providename"])):
+                        if header["providename"][i] != header["name"]:
                             continue
-                        if (p[1] & RPMSENSE_EQUAL) != 8:
+                        if (header["provideflags"][i] & RPMSENSE_EQUAL) != \
+                           RPMSENSE_EQUAL:
                             continue
-                        if p[2] == header.getEVR():
+                        if header["provideversion"][i] == header.getVR():
                             found_selfprovide = 1
                 if not found_selfprovide:
-                    header.setdefault("providename", []).append(header["name"])
-                    header.setdefault("provideflag", []).append(RPMSENSE_EQUAL)
-                    header.setdefault("provideversion", []).append(header.getEVR())
+                    header.setdefault("providename", [])
+                    header["providename"] = list(header["providename"])
+                    header["providename"].append(header["name"])
+                    header.setdefault("provideflags", [])
+                    header["provideflags"] = list(header["provideflags"])
+                    header["provideflags"].append(RPMSENSE_EQUAL)
+                    header.setdefault("provideversion", [])
+                    header["provideversion"] = list(header["provideversion"])
+                    header["provideversion"].append(header.getVR())
                 install_keys=[257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1047, 1099, 1112, 1113, 1116, 1117, 1118, 1127, 1128]
                 h = self.__GeneratedHeader(rpmtag, rpmtagname, 61)
                 return h.outputHeader(header, padding, skip_tags, install_keys)

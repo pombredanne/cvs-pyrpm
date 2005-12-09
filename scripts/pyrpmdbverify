@@ -249,6 +249,9 @@ def verifyPackages():
     rpmio = RpmFileIO(rpmconfig, "dummy")
     packages_db = hashopen(dbpath+"/Packages", "r")
     for id in packages.keys():
+        # Don't try to verify that structure of gpg-pubkey packages yet.
+        if packages[id]["name"] == "gpg-pubkey":
+            continue
         packages[id]["archivesize"] = packages[id]["signature"]["payloadsize"]
         (headerindex, headerdata) = rpmio._generateHeader(packages[id], 4)
         data1 = headerindex[16:]+headerdata

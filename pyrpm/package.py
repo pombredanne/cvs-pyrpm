@@ -908,6 +908,11 @@ class RpmPackage(RpmData):
             return "0"
         return str(e[0])
 
+    def getVR(self):
+        """Return %version-%release."""
+
+        return "%s-%s" % (self["version"], self["release"])
+
     def getEVR(self):
         """Return [%epoch:]%version-%release."""
 
