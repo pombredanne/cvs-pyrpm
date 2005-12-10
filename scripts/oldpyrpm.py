@@ -2004,6 +2004,21 @@ class ReadRpm:
            from the signature header and some other info about the installed
            package. This routine tries to get the unmodified data of the
            original rpm header."""
+        # "immutable1" is set for old rpm headers for the entry in rpmdb.
+        if self["immutable1"] != None:
+            (tag, ttype, offset, count) = unpack("!4I", self.hdrdata[3][0:16])
+            if tag != 61 or ttype != RPM_BIN or count != 16:
+                return None
+            storeSize = offset
+            (tag, ttype, offset, count) = unpack("!2IiI",
+                self.hdrdata[4][offset:offset + 16])
+            if tag != 61 or (-offset % 16 != 0) or \
+                ttype != RPM_BIN or count != 16:
+                return None
+            indexNo = (-offset - 16) / 16
+            fmt = self.hdrdata[3][16:(indexNo + 1) * 16]
+            fmt2 = self.hdrdata[4][:storeSize]
+            return (indexNo, storeSize, fmt, fmt2)
         if self["immutable"] == None:
             return None
         (tag, ttype, offset, count) = unpack("!4I", self.hdrdata[3][0:16])
@@ -2016,7 +2031,7 @@ class ReadRpm:
             ttype != RPM_BIN or count != 16:
             return None
         indexNo = -offset / 16
-        fmt = self.hdrdata[3][:indexNo*16]
+        fmt = self.hdrdata[3][:indexNo * 16]
         fmt2 = self.hdrdata[4][:storeSize]
         return (indexNo, storeSize, fmt, fmt2)
 
