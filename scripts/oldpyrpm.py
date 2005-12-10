@@ -42,7 +42,6 @@
 # - Optionally import the full tree for the initial import (e.g. FC releases).
 # - Optionally also sort by time for e.g. FC updates dirs.
 # - Also use changelog data instead of only looking at the time?
-# - remove RpmTree() again?
 # - How todo save shell escapes for os.system()
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -2286,11 +2285,11 @@ class ReadRpm:
         return 0
 
 
-def readRpm(filenames, rpmsigtag, rpmtag):
+def readRpm(filenames, sigtag, tag):
     rpms = []
     for filename in filenames:
         rpm = ReadRpm(filename)
-        if rpm.readHeader(rpmsigtag, rpmtag):
+        if rpm.readHeader(sigtag, tag):
             print "Cannot read %s.\n" % filename
             continue
         rpm.closeFd()
@@ -3111,7 +3110,8 @@ def selectNewestRpm(rpms, arch, arch_hash, verbose):
                 newestarch = rpmarch
     return newest
 
-def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0, basearch=0, nosrc=0):
+def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0,
+    basearch=0, nosrc=0):
     # Add all rpms by name,basearch into a hash.
     h = {}
     for rpm in rpms:
@@ -3151,68 +3151,25 @@ def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0, basearch=0, nosrc=
                         pkgs.remove(r)
     return pkgs
 
-
-def cmpByTime(a, b):
-    return cmp(a["buildtime"][0], b["buildtime"][0])
-
-class RpmTree:
-
-    def __init__(self):
-        self.h = {}
-
-    def addRpm(self, filename, basearch=None):
-        if isinstance(filename, basestring):
-            rpm = ReadRpm(filename)
-            if rpm.readHeader(rpmsigtag, rpmtag):
-                print "Cannot read %s.\n" % filename
-                return None
-            rpm.closeFd()
-        else:
-            rpm = filename
-        arch = rpm.getArch()
-        if basearch:
-            arch = BuildArchTranslate(arch)
-        self.h.setdefault( (rpm["name"], arch) , []).append(rpm)
-        return rpm
-
-    def addDirectory(self, dirname):
-        for f in findRpms(dirname):
-            self.addRpm(f)
-
-    def getNames(self):
-        rpmnames = self.h.keys()
-        rpmnames.sort()
-        return rpmnames
-
-    def getPkgs(self, sortbytime=0):
-        pkgs = []
-        for p in self.h.values():
-            pkgs.extend(p)
-        if sortbytime:
-            pkgs.sort(cmpByTime)
-        return pkgs
-
-    def sortVersions(self):
-        for v in self.h.values():
-            v.sort(pkgCompare)
-
-    def keepNewest(self):
-        for r in self.h.keys():
-            self.h[r] = [selectNewestRpm(self.h[r], None, None, 1)]
-
-    def sort_unify(self):
-        self.sortVersions()
-        # Remove identical rpms and print a warning about further rpms
-        # who might add new patches without changing version/release.
-        for v in self.h.values():
-            i = 0
-            while i < len(v) - 1:
-                if pkgCompare(v[i], v[i + 1]) == 0:
-                    if not sameSrcRpm(v[i], v[i + 1]):
-                        print "duplicate rpms:", v[i].filename, v[i + 1].filename
-                    v.remove(v[i])
-                else:
-                    i += 1
+def findRpms(dir, uselstat=None, verbose=0):
+    s = os.stat
+    if uselstat:
+        s = os.lstat
+    dirs = [ dir ]
+    files = []
+    while dirs:
+        d = dirs.pop()
+        for f in os.listdir(d):
+            path = "%s/%s" % (d, f)
+            st = s(path)
+            if S_ISDIR(st.st_mode):
+                dirs.append(path)
+            elif S_ISREG(st.st_mode) and f.endswith(".rpm"):
+                files.append(path)
+            else:
+                if verbose:
+                    print "ignoring", path
+    return files
 
 
 class RpmInfo:
@@ -3439,25 +3396,6 @@ flagmap = {
 # Files included in primary.xml.
 filerc = re.compile("^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$")
 dirrc = re.compile("^(.*bin/.*|/etc/.*)$")
-
-def findRpms(dir, files=[], uselstat=None, verbose=0):
-    s = os.stat
-    if uselstat:
-        s = os.lstat
-    dirs = [ dir ]
-    while dirs:
-        d = dirs.pop()
-        for f in os.listdir(d):
-            path = "%s/%s" % (d, f)
-            st = s(path)
-            if S_ISDIR(st.st_mode):
-                dirs.append(path)
-            elif S_ISREG(st.st_mode) and f.endswith(".rpm"):
-                files.append(path)
-            else:
-                if verbose:
-                    print "ignoring", path
-    return files
 
 def utf8String(string):
     """hands back a unicoded string"""
@@ -4770,6 +4708,9 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
     if tmpfile != None:
         os.unlink(tmpfile)
 
+def cmpByTime(a, b):
+    return cmp(a["buildtime"][0], b["buildtime"][0])
+
 def createMercurial(verbose):
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
         print "Error: Paths for mercurial not setup."
@@ -4797,7 +4738,7 @@ def createMercurial(verbose):
         makeDirs(filecache)
         pkgs = []
         for d in dirs:
-            findRpms(d, pkgs)
+            pkgs.extend(findRpms(d))
         pkgs = readRpm(pkgs, rpmsigtag, rpmtag)
         if firsttime:
             pkgs.sort(cmpByTime)
@@ -5285,26 +5226,37 @@ def checkSrpms():
     for d in directories:
         if not os.path.isdir(d):
             continue
-        r = RpmTree()
-        r.addDirectory(d)
-        r.sort_unify()
-        for v in r.h.values():
+        rpms = findRpms(d)
+        rpms = readRpm(rpms, rpmsigtag, rpmtag)
+        h = {}
+        for rpm in rpms:
+            h.setdefault(rpm["name"], []).append(rpm)
+        for v in h.values():
+            v.sort(pkgCompare)
             for i in xrange(len(v) - 1):
                 if v[i].hdr.getOne("buildtime") > \
                     v[i + 1].hdr.getOne("buildtime"):
                     print "buildtime inversion:", v[i].filename, \
                         v[i + 1].filename
     directories.append("/var/www/html/mirror/rhn/SRPMS")
-    r = RpmTree()
+    rpms = []
     for d in directories:
         if os.path.isdir(d):
-            r.addDirectory(d)
-    r.sort_unify()
-    for rp in r.getNames():
-        v = r.h[rp]
-        print "%s:" % v[0]["name"]
-        for s in v:
-            print "\t%s" % s.getFilename()
+            rpms.extend(findRpms(d))
+    rpms = readRpm(rpms, rpmsigtag, rpmtag)
+    h = {}
+    for rpm in rpms:
+        h.setdefault(rpm["name"], []).append(rpm)
+    for v in h.values():
+        v.sort(pkgCompare)
+        i = 0
+        while i < len(v) - 1:
+            if pkgCompare(v[i], v[i + 1]) == 0:
+                if not sameSrcRpm(v[i], v[i + 1]):
+                    print "duplicate rpms:", v[i].filename, v[i + 1].filename
+                v.remove(v[i])
+            else:
+                i += 1
 
 def cmpA(h1, h2):
     return cmp(h1[0], h2[0])
@@ -5312,9 +5264,16 @@ def cmpA(h1, h2):
 def checkArch(path):
     print "Mark the arch where a src.rpm would not get built:\n"
     arch = ["i386", "x86_64", "ia64", "ppc", "s390", "s390x"]
-    r = RpmTree()
-    r.addDirectory(path)
-    r.keepNewest() # Only look at the newest src.rpms.
+    rpms = findRpms(path)
+    rpms = readRpm(rpms, rpmsigtag, rpmtag)
+    # Only look at the newest src.rpms.
+    h = {}
+    for rpm in rpms:
+        h.setdefault(rpm["name"], []).append(rpm)
+    rpmnames = h.keys()
+    rpmnames.sort()
+    for r in rpmnames:
+        h[r] = [selectNewestRpm(h[r], None, None, 1)]
     # Print table of archs to look at.
     for i in xrange(len(arch) + 2):
         s = ""
@@ -5325,7 +5284,7 @@ def checkArch(path):
                 s = s + "  "
         print "%29s  %s" % ("", s)
     showrpms = []
-    for rp in r.getNames():
+    for rp in rpmnames:
         srpm = r.h[rp][0]
         builds = {}
         showit = 0
