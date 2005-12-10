@@ -5192,8 +5192,9 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
         # data does not have an extra crc.)
         sha1header = pkg["install_sha1header"]
         if sha1header == None:
-            print "Warning: package", pkg.getFilename(), \
-                "does not have a sha1 header"
+            if verbose:
+                print "Warning: package", pkg.getFilename(), \
+                    "does not have a sha1 header"
             continue
         lead = pack("!8s2I", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
             indexNo, storeSize)
