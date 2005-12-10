@@ -46,7 +46,8 @@ apt4rpm is adapting the Debian packaging tool to also work with rpm packages.
 Available from link:http://apt4rpm.sourceforge.net/[].
 
 deltarpm is working on reducing the network traffic for rpm based updates.
-Available at link:ftp://ftp.suse.com/pub/projects/deltarpm/[].
+Available at link:ftp://ftp.suse.com/pub/projects/deltarpm/[]. Similar project
+at link:http://www.wombat.ie/software/rpmdc/releasenotes-0.1.1.html[].
 
 FAI (Fully Automatic Installation) for Debian. Available from
 link:http://www.informatik.uni-koeln.de/fai/[].
