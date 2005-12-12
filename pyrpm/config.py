@@ -93,8 +93,6 @@ class RpmConfig:
         self.signals = [ ]               # Stack of saved signal halders
         self.srpmdir = "/usr/src/redhat/SOURCES" # Dir where srpms will be
                                                  # installed to
-        self.resolvesrpm = 0             # Flag to enabled srpm resolving
-
     def readConfig(filename="/etc/pyrpm.conf"):
         return execfile(filename)
 

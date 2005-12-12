@@ -302,8 +302,6 @@ class RpmYum:
         for pkg in self.pkgs:
             if pkg.isSourceRPM():
                 pkg["arch"] = "noarch"
-                if not self.config.resolvesrpm:
-                    pkg["requires"] = []
                 pkg["provides"] = []
                 pkg["conflicts"] = []
                 pkg["obsoletes"] = []

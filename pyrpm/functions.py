@@ -706,7 +706,7 @@ def parseYumOptions(argv, yum):
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "excludedocs", "excludeconfigs",
          "oldpackage", "autoerase", "servicehack", "installpkgs=", "arch=",
-         "checkinstalled", "rusage", "resolvesrpm", "srpmdir="])
+         "checkinstalled", "rusage", "srpmdir="])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -785,8 +785,6 @@ def parseYumOptions(argv, yum):
             rpmconfig.arch = val
         elif opt == "--checkinstalled":
             rpmconfig.checkinstalled = 1
-        elif opt == "--resolvesrpm":
-            rpmconfig.resolvesrpm = 1
         elif opt == "--srpmdir":
             rpmconfig.srpmdir = val
 

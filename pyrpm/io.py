@@ -2501,7 +2501,7 @@ class RpmCompsXML:
             if node.type != "element":
                 node = node.next
                 continue
-            if node.name == "group":
+            if node.name == "group" or node.name == "category":
                 self.__parseGroup(node.children)
             elif node.name == "grouphierarchy":
                 ret = self.__parseGroupHierarchy(node.children)
@@ -2582,7 +2582,7 @@ class RpmCompsXML:
             if node.type != "element":
                 node = node.next
                 continue
-            if   node.name == "groupreq":
+            if   node.name == "groupreq" or node.name == "groupid":
                 glist["groupreqs"].append(node.content)
             elif node.name == "metapkg":
                 gtype = node.prop("type")
