@@ -846,11 +846,7 @@ def selectNewestPkgs(pkglist):
             rethash[key2] = pkg
     for key in rethash.keys():
         if key.endswith(".noarch") and rethash[key]["arch"] != "noarch":
-            # FIXME: why the try: except:?
-            try:
-                del rethash[key]
-            except:
-                pass
+            del rethash[key]
     retlist = []
     rv = rethash.values()
     for pkg in pkglist:

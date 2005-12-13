@@ -2180,16 +2180,17 @@ class RpmRepo(RpmDatabase):
         filelist = []
         version, release, epoch = None, None, None
         while reader.Read() == 1:
-            if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT and \
-               reader.NodeType() != libxml2.XML_READER_TYPE_END_ELEMENT:
+            ntype = reader.NodeType()
+            if ntype != libxml2.XML_READER_TYPE_ELEMENT and \
+               ntype != libxml2.XML_READER_TYPE_END_ELEMENT:
                 continue
             name = reader.Name()
-            if reader.NodeType() == libxml2.XML_READER_TYPE_END_ELEMENT:
+            if ntype == libxml2.XML_READER_TYPE_END_ELEMENT:
                 if name == "package":
                     break
                 continue
-            props = self.__getProps(reader)
             if   name == "version":
+                props = self.__getProps(reader)
                 version = props.get("ver")
                 release = props.get("rel")
                 epoch   = props.get("epoch")

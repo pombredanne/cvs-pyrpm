@@ -226,14 +226,28 @@ class RpmYum:
                     for pkg in self.opresolver.getList():
                         self.pkgs.append(pkg)
                 else:
-                    for pkg in self.opresolver.getList():
-                        self.__handleObsoletes(pkg)
+                    # Hardcode the inverse package obsolete code here as we
+                    # need to use the reverse logic to later cases.
+                    for opkg in self.__obsoleteslist:
+                        #if opkg in self.opresolver or opkg in self.erase_list:
+                        #    continue
+                        for u in opkg["obsoletes"]:
+                            s = self.opresolver.searchDependency(u)
+                            if len(s) == 0:
+                                continue
+                            if self.opresolver.update(opkg) > 0:
+                                break
+                    rhash = {}
+                    for pkg in repopkglist:
+                        rhash.setdefault(pkg["name"], []).append(pkg)
                     for pkg in self.opresolver.getList():
                         name = pkg["name"]
-                        for rpkg in repopkglist:
-                            if rpkg["name"] == name:
-                                if not self.__handleObsoletes(pkg):
-                                    self.pkgs.append(rpkg)
+                        if not rhash.has_key(name):
+                            continue
+                        for rpkg in rhash[name]:
+                            if rpkg in self.opresolver:
+                                continue
+                            self.pkgs.append(rpkg)
         # Look for packages we need/want to install. Arguments can either be
         # direct filenames or package nevra's with * wildcards
         for f in args:
@@ -294,8 +308,6 @@ class RpmYum:
         Return 1."""
         # ... or 0 if __runDepResolution fails, which currently can't happen.
 
-        if self.config.timer:
-            time1 = clock()
         # "fake" Source RPMS to be noarch rpms without any reqs/deps etc.
         # except if we want pyrpmyum to install the buildprereqs from the
         # srpm.
@@ -307,18 +319,24 @@ class RpmYum:
                 pkg["obsoletes"] = []
         # Filter newest packages
         if self.config.timer:
-            time3 = clock()
+            time1 = clock()
         self.pkgs = selectNewestPkgs(self.pkgs)
         if self.config.timer:
-            self.config.printInfo(0, "selectNewestPkgs took %s seconds\n" % (clock() - time3))
+            self.config.printInfo(0, "selectNewestPkgs took %s seconds\n" % (clock() - time1))
+        if self.config.timer:
+            time1 = clock()
         # Add packages to be processed to our operation resolver
         for pkg in self.pkgs:
             self.__appendPkg(pkg)
-            if  self.command.endswith("update") or \
-                self.command.endswith("upgrade") :
-                self.__handleObsoletes(pkg)
+#            if  self.command.endswith("update") or \
+#                self.command.endswith("upgrade") :
+#                self.__handleObsoletes(pkg)
+        if self.config.timer:
+            self.config.printInfo(0, "adding packages to opresolver took %s seconds\n" % (clock() - time1))
         self.pkgs = []
         ret = 1
+        if self.config.timer:
+            time1 = clock()
         if not self.config.nodeps:
             ret = self.__runDepResolution()
         if self.config.timer:
@@ -682,7 +700,7 @@ class RpmYum:
                 continue
             ret = self.opresolver.update(upkg)
             if ret > 0:
-                self.__handleObsoletes(upkg)
+#                self.__handleObsoletes(upkg)
                 break
         return ret
 
