@@ -51,6 +51,7 @@ at link:http://www.wombat.ie/software/rpmdc/releasenotes-0.1.1.html[].
 
 FAI (Fully Automatic Installation) for Debian. Available from
 link:http://www.informatik.uni-koeln.de/fai/[].
+Pointers to the Debian build system are at link:http://buildd.net/[].
 
 OpenPKG cross-platform rpm-based software packaging, available at
 link:http://www.openpkg.org/[].
