@@ -1891,10 +1891,12 @@ class RpmRepo(RpmDatabase):
         """Parse <package> tags from libxml2.xmlTextReader reader."""
 
         while reader.Read() == 1:
-            if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT or \
-               (reader.Name() != "package" and reader.Name() != "filereq"):
+            ntype = reader.NodeType()
+            name = reader.Name()
+            if ntype != libxml2.XML_READER_TYPE_ELEMENT or \
+               (name != "package" and name != "filereq"):
                 continue
-            if reader.Name() == "filereq":
+            if name == "filereq":
                 if reader.Read() != 1:
                     break
                 self.filereqs.append(reader.Value())

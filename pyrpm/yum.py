@@ -245,8 +245,6 @@ class RpmYum:
                         if not rhash.has_key(name):
                             continue
                         for rpkg in rhash[name]:
-                            if rpkg in self.opresolver:
-                                continue
                             self.pkgs.append(rpkg)
         # Look for packages we need/want to install. Arguments can either be
         # direct filenames or package nevra's with * wildcards
@@ -328,9 +326,6 @@ class RpmYum:
         # Add packages to be processed to our operation resolver
         for pkg in self.pkgs:
             self.__appendPkg(pkg)
-#            if  self.command.endswith("update") or \
-#                self.command.endswith("upgrade") :
-#                self.__handleObsoletes(pkg)
         if self.config.timer:
             self.config.printInfo(0, "adding packages to opresolver took %s seconds\n" % (clock() - time1))
         self.pkgs = []

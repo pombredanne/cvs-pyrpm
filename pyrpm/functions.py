@@ -817,42 +817,35 @@ def selectNewestPkgs(pkglist):
     Return a list of the "best" packages, selecting the highest EVR.arch for
     each base arch."""
 
-    # %name.noarch => some RpmPackage with that %name
-    # %name.$basearch => RpmPackage with highest EVR for that %name.$basearch
-    rethash = {}
+    pkghash = {}
+    disthash = {}
+    dhash = calcDistanceHash(rpmconfig.machine)
     for pkg in pkglist:
-        key1 = pkg["name"]+".noarch"
-        key2 = pkg["name"]+"."+buildarchtranslate[pkg["arch"]]
-        if not rethash.has_key(key1):
-            rethash[key1] = pkg
-            rethash[key2] = pkg
-            continue
-        if rethash.has_key(key2):
-            opkg = rethash[key2]
+        name = pkg["name"]
+        dist = dhash[pkg["arch"]]
+        if not pkghash.has_key(name):
+            pkghash[name] = pkg
+            disthash[name] = dist
         else:
-            opkg = rethash[key1]
-        if pkg["arch"] != "noarch" and opkg["arch"] != "noarch" and \
-           not archDuplicate(pkg["arch"], opkg["arch"]):
-            assert not rethash.has_key(key2)
-            rethash[key2] = pkg
-            continue
-        ret = pkgCompare(opkg, pkg)
-        if   ret < 0:
-            rethash[key1] = pkg
-            rethash[key2] = pkg
-        elif ret == 0 and \
-             opkg["arch"] in arch_compats[pkg["arch"]]:
-            rethash[key1] = pkg
-            rethash[key2] = pkg
-    for key in rethash.keys():
-        if key.endswith(".noarch") and rethash[key]["arch"] != "noarch":
-            del rethash[key]
+            if dist < disthash[name]:
+                pkghash[name] = pkg
+                disthash[name] = dist
+            if dist == disthash[name] and pkgCompare(pkghash[name], pkg) < 0:
+                pkghash[name] = pkg
+                disthash[name] = dist
     retlist = []
-    rv = rethash.values()
     for pkg in pkglist:
-        if pkg in rv:
+        if pkghash.get(pkg["name"]) == pkg:
             retlist.append(pkg)
     return retlist
+
+def calcDistanceHash(arch):
+    """Calculate a machine distance hash for all arches for the given arch"""
+
+    disthash = {}
+    for tarch in arch_compats.keys():
+        disthash[tarch] = machineDistance(arch, tarch)
+    return disthash
 
 def readPackages(dbpath):
     """Read packages from rpmdb dbpath/Packages.
