@@ -20,6 +20,8 @@
 import fcntl, bsddb, libxml2, os, os.path, sys, struct, time
 import zlib, gzip, sha, md5, string, stat, openpgp, re, sqlite
 (pack, unpack) = (struct.pack, struct.unpack)
+from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
+
 from binascii import b2a_hex, a2b_hex
 from types import TupleType
 try:
@@ -1893,7 +1895,7 @@ class RpmRepo(RpmDatabase):
         while reader.Read() == 1:
             ntype = reader.NodeType()
             name = reader.Name()
-            if ntype != libxml2.XML_READER_TYPE_ELEMENT or \
+            if ntype != XML_READER_TYPE_ELEMENT or \
                (name != "package" and name != "filereq"):
                 continue
             if name == "filereq":
@@ -1920,11 +1922,7 @@ class RpmRepo(RpmDatabase):
                                              "%s: missing arch= in <package>"
                                              % pkg.getNEVRA())
                     continue
-                try:
-                    self.__parseFilelist(reader, props["name"], arch)
-                except ValueError, e:
-                    self.config.printWarning(0, "%s: %s" % (pkg.getNEVRA(), e))
-                    continue
+                self.__parseFilelist(reader, props["name"], arch)
 
     def __isExcluded(self, pkg):
         """Return True if RpmPackage pkg is excluded by configuration."""
@@ -2090,15 +2088,15 @@ class RpmRepo(RpmDatabase):
         pkg["signature"] = {}
         pkg["signature"]["size_in_sig"] = [0,]
         while reader.Read() == 1:
-            if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT and \
-               reader.NodeType() != libxml2.XML_READER_TYPE_END_ELEMENT:
+            ntype = reader.NodeType()
+            if ntype != XML_READER_TYPE_ELEMENT and \
+               ntype != XML_READER_TYPE_END_ELEMENT:
                 continue
             name = reader.Name()
-            if reader.NodeType() == libxml2.XML_READER_TYPE_END_ELEMENT:
+            if ntype == XML_READER_TYPE_END_ELEMENT:
                 if name == "package":
                     break
                 continue
-            props = self.__getProps(reader)
             if    name == "name":
                 if reader.Read() != 1:
                     break
@@ -2110,6 +2108,7 @@ class RpmRepo(RpmDatabase):
                 if pkg["arch"] != "src":
                     pkg["sourcerpm"] = ""
             elif name == "version":
+                props = self.__getProps(reader)
                 try:
                     pkg["version"] = props["ver"]
                     pkg["release"] = props["rel"]
@@ -2117,6 +2116,7 @@ class RpmRepo(RpmDatabase):
                 except KeyError:
                     raise ValueError, "Missing attributes of <version>"
             elif name == "checksum":
+                props = self.__getProps(reader)
                 try:
                     type_ = props["type"]
                 except KeyError:
@@ -2130,11 +2130,13 @@ class RpmRepo(RpmDatabase):
                         break
                     pkg["signature"]["sha1header"] = reader.Value()
             elif name == "location":
+                props = self.__getProps(reader)
                 try:
                     pkg.source = self.baseurl + "/" + props["href"]
                 except KeyError:
                     raise ValueError, "Missing href= in <location>"
             elif name == "size":
+                props = self.__getProps(reader)
                 try:
                     pkg["signature"]["size_in_sig"][0] += int(props["package"])
                 except KeyError:
@@ -2183,11 +2185,11 @@ class RpmRepo(RpmDatabase):
         version, release, epoch = None, None, None
         while reader.Read() == 1:
             ntype = reader.NodeType()
-            if ntype != libxml2.XML_READER_TYPE_ELEMENT and \
-               ntype != libxml2.XML_READER_TYPE_END_ELEMENT:
+            if ntype != XML_READER_TYPE_ELEMENT and \
+               ntype != XML_READER_TYPE_END_ELEMENT:
                 continue
             name = reader.Name()
-            if ntype == libxml2.XML_READER_TYPE_END_ELEMENT:
+            if ntype == XML_READER_TYPE_END_ELEMENT:
                 if name == "package":
                     break
                 continue
@@ -2291,11 +2293,12 @@ class RpmRepo(RpmDatabase):
 
         pkg["oldfilenames"] = []
         while reader.Read() == 1:
-            if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT and \
-               reader.NodeType() != libxml2.XML_READER_TYPE_END_ELEMENT:
+            ntype = reader.NodeType()
+            if ntype != XML_READER_TYPE_ELEMENT and \
+               ntype != XML_READER_TYPE_END_ELEMENT:
                 continue
             name = reader.Name()
-            if reader.NodeType() == libxml2.XML_READER_TYPE_END_ELEMENT:
+            if ntype == XML_READER_TYPE_END_ELEMENT:
                 if name == "format":
                     break
                 continue
@@ -2364,16 +2367,17 @@ class RpmRepo(RpmDatabase):
 
         plist = [[], [], []]
         while reader.Read() == 1:
-            if reader.NodeType() != libxml2.XML_READER_TYPE_ELEMENT and \
-               reader.NodeType() != libxml2.XML_READER_TYPE_END_ELEMENT:
+            ntype = reader.NodeType()
+            if ntype != XML_READER_TYPE_ELEMENT and \
+               ntype != XML_READER_TYPE_END_ELEMENT:
                 continue
             name = reader.Name()
-            if reader.NodeType() == libxml2.XML_READER_TYPE_END_ELEMENT:
+            if ntype == XML_READER_TYPE_END_ELEMENT:
                 if name == ename:
                     break
                 continue
-            props = self.__getProps(reader)
             if name == "rpm:entry":
+                props = self.__getProps(reader)
                 try:
                     name = props["name"]
                 except KeyError:
