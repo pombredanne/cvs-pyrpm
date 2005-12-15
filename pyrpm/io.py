@@ -1892,16 +1892,21 @@ class RpmRepo(RpmDatabase):
     def __parseNode(self, reader):
         """Parse <package> tags from libxml2.xmlTextReader reader."""
 
-        while reader.Read() == 1:
-            ntype = reader.NodeType()
-            name = reader.Name()
+        # Make local variables for heavy used functions to speed up this loop
+        Readf = reader.Read
+        NodeTypef = reader.NodeType
+        Namef = reader.Name
+        Valuef = reader.Value
+        while Readf() == 1:
+            ntype = NodeTypef()
+            name = Namef()
             if ntype != XML_READER_TYPE_ELEMENT or \
                (name != "package" and name != "filereq"):
                 continue
             if name == "filereq":
-                if reader.Read() != 1:
+                if Readf() != 1:
                     break
-                self.filereqs.append(reader.Value())
+                self.filereqs.append(Valuef())
                 continue
             props = self.__getProps(reader)
             if props.get("type") == "rpm":
@@ -2073,9 +2078,13 @@ class RpmRepo(RpmDatabase):
         """Return a dictionary (name => value) of attributes of current tag
         from libxml2.xmlTextReader reader."""
 
+        # Make local variables for heavy used functions to speed up this loop
+        MoveToNextAttributef = reader.MoveToNextAttribute
+        Namef = reader.Name
+        Valuef = reader.Value
         props = {}
-        while reader.MoveToNextAttribute():
-            props[reader.Name()] = reader.Value()
+        while MoveToNextAttributef():
+            props[Namef()] = Valuef()
         return props
 
     def __parsePackage(self, reader):
@@ -2084,27 +2093,32 @@ class RpmRepo(RpmDatabase):
 
         Raise ValueError on invalid data."""
 
+        # Make local variables for heavy used functions to speed up this loop
+        Readf = reader.Read
+        NodeTypef = reader.NodeType
+        Namef = reader.Name
+        Valuef = reader.Value
         pkg = package.RpmPackage(self.config, "dummy", db = self)
         pkg["signature"] = {}
         pkg["signature"]["size_in_sig"] = [0,]
-        while reader.Read() == 1:
-            ntype = reader.NodeType()
+        while Readf() == 1:
+            ntype = NodeTypef()
             if ntype != XML_READER_TYPE_ELEMENT and \
                ntype != XML_READER_TYPE_END_ELEMENT:
                 continue
-            name = reader.Name()
+            name = Namef()
             if ntype == XML_READER_TYPE_END_ELEMENT:
                 if name == "package":
                     break
                 continue
             if    name == "name":
-                if reader.Read() != 1:
+                if Readf() != 1:
                     break
-                pkg["name"] = reader.Value()
+                pkg["name"] = Valuef()
             elif name == "arch":
-                if reader.Read() != 1:
+                if Readf() != 1:
                     break
-                pkg["arch"] = reader.Value()
+                pkg["arch"] = Valuef()
                 if pkg["arch"] != "src":
                     pkg["sourcerpm"] = ""
             elif name == "version":
@@ -2122,13 +2136,13 @@ class RpmRepo(RpmDatabase):
                 except KeyError:
                     raise ValueError, "Missing type= in <checksum>"
                 if   type_ == "md5":
-                    if reader.Read() != 1:
+                    if Readf() != 1:
                         break
-                    pkg["signature"]["md5"] = reader.Value()
+                    pkg["signature"]["md5"] = Valuef()
                 elif type_ == "sha":
-                    if reader.Read() != 1:
+                    if Readf() != 1:
                         break
-                    pkg["signature"]["sha1header"] = reader.Value()
+                    pkg["signature"]["sha1header"] = Valuef()
             elif name == "location":
                 props = self.__getProps(reader)
                 try:
@@ -2181,14 +2195,19 @@ class RpmRepo(RpmDatabase):
 
         Raise ValueError on invalid data."""
 
+        # Make local variables for heavy used functions to speed up this loop
+        Readf = reader.Read
+        NodeTypef = reader.NodeType
+        Namef = reader.Name
+        Valuef = reader.Value
         filelist = []
         version, release, epoch = None, None, None
-        while reader.Read() == 1:
-            ntype = reader.NodeType()
+        while Readf() == 1:
+            ntype = NodeTypef()
             if ntype != XML_READER_TYPE_ELEMENT and \
                ntype != XML_READER_TYPE_END_ELEMENT:
                 continue
-            name = reader.Name()
+            name = Namef()
             if ntype == XML_READER_TYPE_END_ELEMENT:
                 if name == "package":
                     break
@@ -2199,9 +2218,9 @@ class RpmRepo(RpmDatabase):
                 release = props.get("rel")
                 epoch   = props.get("epoch")
             elif name == "file":
-                if reader.Read() != 1:
+                if Readf() != 1:
                     break
-                filelist.append(reader.Value())
+                filelist.append(Valuef())
         if version is None or release is None or epoch is None:
             raise ValueError, "Missing version information"
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
@@ -2291,21 +2310,26 @@ class RpmRepo(RpmDatabase):
 
         Raise ValueError on invalid input."""
 
+        # Make local variables for heavy used functions to speed up this loop
+        Readf = reader.Read
+        NodeTypef = reader.NodeType
+        Namef = reader.Name
+        Valuef = reader.Value
         pkg["oldfilenames"] = []
-        while reader.Read() == 1:
-            ntype = reader.NodeType()
+        while Readf() == 1:
+            ntype = NodeTypef()
             if ntype != XML_READER_TYPE_ELEMENT and \
                ntype != XML_READER_TYPE_END_ELEMENT:
                 continue
-            name = reader.Name()
+            name = Namef()
             if ntype == XML_READER_TYPE_END_ELEMENT:
                 if name == "format":
                     break
                 continue
             elif name == "rpm:sourcerpm":
-                if reader.Read() != 1:
+                if Readf() != 1:
                     break
-                pkg["sourcerpm"] = reader.Value()
+                pkg["sourcerpm"] = Valuef()
             elif name == "rpm:header-range":
                 props = self.__getProps(reader)
                 try:
@@ -2330,9 +2354,9 @@ class RpmRepo(RpmDatabase):
                 plist = self.__parseDeps(reader, name)
                 pkg["conflictname"], pkg["conflictflags"], pkg["conflictversion"] = plist
             elif name == "file":
-                if reader.Read() != 1:
+                if Readf() != 1:
                     break
-                pkg["oldfilenames"].append(reader.Value())
+                pkg["oldfilenames"].append(Valuef())
 
     def __filterDuplicateDeps(self, deps):
         """Return the list of (name, flags, release) dependencies deps with
@@ -2365,13 +2389,18 @@ class RpmRepo(RpmDatabase):
         Return [namelist, flaglist, versionlist].  Raise ValueError on invalid
         input."""
 
+        # Make local variables for heavy used functions to speed up this loop
+        Readf = reader.Read
+        NodeTypef = reader.NodeType
+        Namef = reader.Name
+        Valuef = reader.Value
         plist = [[], [], []]
-        while reader.Read() == 1:
-            ntype = reader.NodeType()
+        while Readf() == 1:
+            ntype = NodeTypef()
             if ntype != XML_READER_TYPE_ELEMENT and \
                ntype != XML_READER_TYPE_END_ELEMENT:
                 continue
-            name = reader.Name()
+            name = Namef()
             if ntype == XML_READER_TYPE_END_ELEMENT:
                 if name == ename:
                     break
