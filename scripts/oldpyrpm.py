@@ -4779,7 +4779,7 @@ def createMercurial(verbose):
             extractSrpm(reponame, pkg, pkgdir, filecache, repodir,
                 oldpkgs.get(name))
             oldpkgs[name] = pkg
-        os.system("cd %s && { git repack; git prune-packed; }" % repodir)
+        os.system("cd %s && { git repack -a -d; git prune-packed; }" % repodir)
 
 
 def checkDeps(rpms, checkfileconflicts, runorderer):
