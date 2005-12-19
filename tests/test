@@ -30,9 +30,11 @@ for i in sys.argv[1:]:
     for i in xrange(len(rpm["dirnames"])):
         if orig_dirnames[i] != rpm["dirnames"][i]:
             print "Dirnames difference for pkg %s at index %i: %s != %s" % (rpm.getNEVRA(), i, orig_dirnames[i], rpm["dirnames"][i])
-    print "dirnames = ", rpm["dirnames"]
-    print "dirindexes = ", rpm["dirindexes"]
-    print "basenames = ", rpm["basenames"]
+    print rpm["rpmversion"]
+    print rpm["archivesize"]
+#    print "dirnames = ", rpm["dirnames"]
+#    print "dirindexes = ", rpm["dirindexes"]
+#    print "basenames = ", rpm["basenames"]
 #    for f in rpm["filenames"]:
 #	rfi = rpm.getRpmFileInfo(f)
 #	print rfi.filename, rfi.filecolor

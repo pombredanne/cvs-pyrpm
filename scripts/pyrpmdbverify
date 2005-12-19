@@ -21,10 +21,15 @@ from pyrpm import *
 
 def usage():
     print """
-pyrpmdbverify [-h, --help] [--dbpath=] [PACKAGES | DIRS]
+pyrpmdbverify [-h, --help] [--dbpath=] [-c YUMCONFIG] [PACKAGES | DIRS]
 
---help:    This usage ;)
---dbpath:  Specifies a different path for the rpmdb. Default is /var/lib/rpm
+--help:       This usage ;)
+--dbpath:     Specifies a different path for the rpmdb. Default is /var/lib/rpm
+--nointernal: Disable rpmdb interal check.
+--noexternal: Disable rpmdb check against repo or command line packages.
+-c:           Use the yum repositories specified in the given config file to
+              test the rpms against. Can be used together with additional
+              packages.
 PACKAGES | DIRS: Optional single rpms or directories of rpms against which the
                  the headers from the rpmdb will be checked against.
 """
@@ -258,18 +263,18 @@ def verifyPackages():
         data2 = packages_db[pack("I", id)][8:]
         if data1 != data2:
             print "Error packages: Self generated header different from original stored header for package %s" % packages[id].getNEVRA()
-#            print len(data1), len(data2)
-#            (indexNo, storeSize) = unpack("!2I", headerindex[8:16])
-#            print indexNo, storeSize
-#            (indexNo, storeSize) = unpack("!2I", packages_db[pack("I", id)][:8])
-#            print indexNo, storeSize
-#            sstart = len(data1) - storeSize
-#            for idx in xrange(indexNo):
-#                index1 = unpack("!4I", data1[idx*16:(idx+1)*16])
-#                index2 = unpack("!4I", data2[idx*16:(idx+1)*16])
-#                print index1, index2
-#                if data1[sstart+index1[2]:] != data2[sstart+index2[2]:]:
-#                    print "DATA STARTING FROM HERE DIFFERENT!"
+            print len(data1), len(data2)
+            (indexNo, storeSize) = unpack("!2I", headerindex[8:16])
+            print indexNo, storeSize
+            (indexNo, storeSize) = unpack("!2I", packages_db[pack("I", id)][:8])
+            print indexNo, storeSize
+            sstart = len(data1) - storeSize
+            for idx in xrange(indexNo):
+                index1 = unpack("!4I", data1[idx*16:(idx+1)*16])
+                index2 = unpack("!4I", data2[idx*16:(idx+1)*16])
+                print index1, index2
+                if data1[sstart+index1[2]:] != data2[sstart+index2[2]:]:
+                    print "DATA STARTING FROM HERE DIFFERENT!"
         (headerindex, headerdata) = rpmio._generateHeader(packages[id], 1, [257, 261, 262, 264, 265, 267, 269, 1008, 1029, 1046, 1099, 1127, 1128])
         if packages[id]["signature"].has_key("sha1header"):
             if packages[id]["signature"]["sha1header"] == sha.new(headerindex+headerdata).hexdigest():

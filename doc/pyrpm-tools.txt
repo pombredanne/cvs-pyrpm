@@ -91,6 +91,9 @@ very unreliable is the SHA1 header checksum tests as this test has to rely on a
 very specific ordering of the rpm binary header and about the tags that appear
 in the original rpm. If those assupmtions don't hold this checksum can't be
 computed correctly.
+Additional binary packages or a yum config file with yum repositories can be
+specified to test the rpmdb headers against those packages for additional
+verification.
 
 Link to a page with more information on rpmdb repair information is available at
 link:http://www.rpm.org/hintskinks/repairdb/[].
@@ -108,6 +111,12 @@ pyrpmdbverify /mirror/fedora/development/i386/Fedora/RPMS
 Verify our rpm database in our FC-4 buildroot using external rpms as well
 -----------------------
 pyrpmdbverify --dbpath /mnt/build/fc4-i386 /mirror/fedora/4/i386/os/Fedora/RPMS
+-----------------------
+
+Verify our rpm database in our FC-4 buildroot using external rpms using a yum
+repository:
+-----------------------
+pyrpmdbverify -c fc4-i386.conf --dbpath /mnt/build/fc4-i386
 -----------------------
 
 
