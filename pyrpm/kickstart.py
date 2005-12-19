@@ -19,7 +19,7 @@
 # AUTHOR: Thomas Woerner <twoerner@redhat.com>
 #
 
-import types
+import types, string
 
 ##############################################################################
 #
@@ -238,9 +238,7 @@ class KickstartConfig(dict):
                             print "'%s': option '%s' not recognized" % (line,
                                                                         _opt)
                     for arg in _args:
-                        if not self[opt].has_key("devices"):
-                            self[opt]["devices"] = [ ]
-                        self[opt]["devices"].append(arg)
+                        self[opt].setdefault("devices", [ ]).append(arg)
                 elif opt == "firstboot":
                     self.parseSimple(opt, args[1:],
                                      [ "enable", "enabled", "disable",
@@ -269,6 +267,11 @@ class KickstartConfig(dict):
                                        "netmask:", "hostname:", "ethtool:",
                                        "essid:", "wepkey:", "onboot:",
                                        "class:" ])
+                    if self[opt].has_key("nameserver"):
+                        splits = string.split(self[opt]["nameserver"], ",")
+                        self[opt]["nameserver"] = [ ]
+                        for split in splits:
+                            self[opt]["nameserver"].append(string.strip(split))
                 elif opt == "nfs":
                     self.parseSimple(opt, args[1:],
                                      [ "server:", "dir:" ])
@@ -308,7 +311,9 @@ class KickstartConfig(dict):
                                      [ "noprobe", "card:", "videoram:",
                                        "monitor:", "hsync:", "vsync:",
                                        "defaultdesktop:", "startxonboot",
-                                       "resolution:", "depth:" ])
+                                       "resolution:", "depth:", "driver:" ],
+                                     { "startX": "startxonboot",
+                                       "videoRam": "videoram" })
                 # TODO: volgroup
                 else:
                     print "'%s' is unsupported" % line
@@ -479,12 +484,19 @@ class KickstartConfig(dict):
             del disk
 
         if self["repo"]:
-            if not self["url"].has_key("url"):
-                raise ValueError, "url not set for repo."
+            for name in self["repo"]:
+                repo = self["repo"][name]
+                if not repo.has_key("url"):
+                    raise ValueError, "url not set for repo %s." % repo
 
         if self["url"]:
             if not self["url"].has_key("url"):
                 raise ValueError, "url not set for url."
+
+        if self["xconfig"]:
+            if self["xconfig"].has_key("card") and \
+                   self["xconfig"].has_key("driver"):
+                raise ValueError, "xconfig: card and driver specified."
 
     def parseArgs(self, tag, argv, allowed_args, replace_tags=None):
         dict = { }
