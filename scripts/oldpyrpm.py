@@ -4451,9 +4451,11 @@ def writeFile(filename, data, mode=None):
 #    Allow from all
 #</Directory>
 hgauthor = "Florian La Roche <laroche@redhat.com>"
-hgrepo = "/home/devel/test/hgrepo"
-hgcgi = "/home/devel/test/hgrepo-cgi"
-hgfiles = "/home/devel/test/filecache"
+rootdir = "/home/devel/test"
+hgrepo = "$rootdir/hgrepo"
+hgcgi = "$rootdir/hgrepo-cgi"
+hgfiles = "$rootdir/filecache"
+grepodir = "$rootdir/gitrepos"
 mirror = "/var/www/html/mirror/"
 if not os.path.isdir(mirror):
     mirror = "/home/mirror/"
@@ -4495,8 +4497,6 @@ srpm_repos = [
         "xen-unstable", None, None, 30),
     ("http://thunk.org/hg/e2fsprogs/", "e2fsprogs", None, None, 20),
 ]
-
-grepodir = "/home/devel/test/gitrepos"
 
 kgit = "rsync://rsync.kernel.org/pub/scm/"
 gitrepos = (
@@ -4581,7 +4581,7 @@ def updateGitMirrors(verbose):
             print repo
         d = grepodir + "/" + dirname
         if repo.startswith("rsync://"):
-            os.system("rsync -aqv --delete " + repo + "/ " + d + ".git")
+            os.system("rsync -aqvH --delete " + repo + "/ " + d + ".git")
         else:
             if not os.path.isdir(d + ".git"):
                 os.system("git clone -q " + repo + " " + d)
@@ -4779,7 +4779,7 @@ def createMercurial(verbose):
             extractSrpm(reponame, pkg, pkgdir, filecache, repodir,
                 oldpkgs.get(name))
             oldpkgs[name] = pkg
-        os.system("cd %s && { git repack -a -d; git prune-packed; }" % repodir)
+        os.system("cd %s && { git repack -d; git prune-packed; }" % repodir)
 
 
 def checkDeps(rpms, checkfileconflicts, runorderer):
@@ -5053,7 +5053,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     if verbose:
         if verbose > 2:
             time2 = time.clock()
-            print "Needed", time2 - time1, "seconds to read Packages ", \
+            print "Needed", time2 - time1, "seconds to read Packages", \
                 "(%d rpm packages)." % len(packages.keys())
         print "Reading the other files in %s..." % dbpath
         if verbose > 2:
