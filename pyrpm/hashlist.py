@@ -33,6 +33,10 @@ class HashList:
         self.has_key = self.hash.has_key
         self.keys = self.hash.keys
 
+    def clear(self):
+        self.list = [ ] # keys
+        self.hash = { } # key => value        
+
     def __getitem__(self, key):
         """self[key] = value, or None if key does not exist.
 
