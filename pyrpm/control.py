@@ -106,19 +106,6 @@ class RpmController:
         if not self.db.read():
             raise ValueError, "Fatal: Couldn't read database"
 
-    # FIXME: not used
-    def handlePkgs(self, pkglist):
-        """Add RpmPackage's from pkglist, to be acted upon."""
-
-        if self.config.timer:
-            time1 = clock()
-        for pkg in pkglist:
-            self.rpms.append(pkg)
-        if len(self.rpms) == 0:
-            self.config.printInfo(2, "Nothing to do.\n")
-        if self.config.timer:
-            self.config.printInfo(0, "handlePkgs() took %s seconds\n" % (clock() - time1))
-
     def handleFiles(self, args):
         """Add packages with names (for OP_ERASE) or "URI"s (for other
         operations) from args, to be acted upon.
