@@ -20,7 +20,7 @@
 #
 
 import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, \
-       signal, types, shutil
+       signal, types, shutil, re
 import parted
 
 PYRPMDIR = os.path.abspath("..")
@@ -1039,9 +1039,10 @@ orig_yum = 0
 target_dir = None
 label_prefix = ""
 standalone = 0
-disk_image = 0
 stage2_img_dir = None
 repo_comps = 0
+upgrade = None
+no_stage2 = 0
 
 def usage():
     print """
@@ -1061,9 +1062,15 @@ OPTIONS
   --wait           Wait after installation before umounting.
   --xen            Write a simple xen config file.
   --yum            Use yum instead of pyrpmyum.
-  --disk-image     Treat even devices as disk images.
   --repo-comps     Load comps file in repos and use them for package and group
-                   selection
+                   selection.
+  --no-stage2      Do not mount stage2.img from installation source, use host
+                   system tools to format partitions. This will not work for
+                   all host and client system combinations, but could help 
+                   with others.
+  --upgrade=<part> Upgrade installation in partition <part>. This is only
+                   useful for upgrades and if there is more than one
+                   installation on the supplied disks.
 """
 # TODO  --secure         Secure installation with firewall enabled in standalone mode
 
@@ -1079,7 +1086,7 @@ try:
                                  [ "help", "verbose", "yes",
                                    "kudzu", "label-prefix", "no-cleanup",
                                    "standalone", "wait", "xen", "yum",
-                                   "disk-image", "repo-comps", ])
+                                   "repo-comps", "no-stage2", "upgrade=", ])
 except:
     usage()
     exit(1)
@@ -1107,10 +1114,12 @@ for (opt, val) in opts:
         label_prefix = "%x_" % int(time.strftime("%m%d%H%M"))
     elif opt == "--standalone":
         standalone = 1
-    elif opt == "--disk-image":
-        disk_image = 1
     elif opt == "--repo-comps":
         repo_comps = 1
+    elif opt == "--no-stage2":
+        no_stage2 = 1
+    elif opt == "--upgrade":
+        upgrade = val
     else:
         print "Unknown option '%s'" % opt
         usage()
@@ -1184,6 +1193,34 @@ if ks["repo"]:
             print "ERROR: Unsupported url for repo, exiting."
             exit(1)
 
+### system disks ###
+
+system_disks = [ ]
+try:
+    fd = open("/proc/partitions") # get all disks
+except Exception, msg:
+    print "ERROR: Failed to open '/proc/partitions':", msg
+    exit(1)
+else:
+    while 1:
+        line = fd.readline()
+        if not line:
+            break
+        line = string.strip(line)
+        if len(line) < 1 or line[0] == '#':
+            continue
+        if line[:5] == "major":
+            continue
+        splits = line.split() # major, minor, blocks, name
+        if len(splits) < 4:
+            print "ERROR: '/proc/partitions' malformed."
+            exit(1)
+        if int(splits[1], 16) % 16 == 0: # minor%16=0 for harddisk devices
+            hd = splits[3]
+            if hd[0:4] == "loop":
+                continue
+            system_disks.append("/dev/"+hd)
+
 ### create user supplied diskmap ###
 
 diskmap = { }
@@ -1220,10 +1257,14 @@ if len(args) > 1:
             if not key:
                 print "ERROR: Unable to find an unused name for '%s'" % val
                 exit(1)
-            print "Using '%s' as '%s'" % (val, key)
+            print "Using '%s' as disk '%s'" % (val, key)
         if not key:
             print "ERROR: Unsupported type of '%s'." % val
             exit(1)
+        disk_image = 0
+        if val not in system_disks:
+            print "Using '%s' as disk '%s'." % (val, key)
+            disk_image = 1
         if diskmap.has_key(key):
             print "ERROR: '%s' already exists in diskmap." % key
             exit(1)
@@ -1239,38 +1280,9 @@ if len(diskmap) == 0:
         if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
             exit(1)
 
-if len(diskmap) == 0:
-    try:
-        fd = open("/proc/partitions") # get all disks
-    except Exception, msg:
-        print "ERROR: Failed to open '/proc/partitions':", msg
-        exit(1)
-    else:
-        while 1:
-            line = fd.readline()
-            if not line:
-                break
-            if len(line) < 1 or line[0] == '#':
-                continue
-            if line[:5] == "major":
-                continue
-            line = string.strip(line)
-            splits = line.split() # major, minor, blocks, name
-            if len(splits) < 4:
-                print "ERROR: '/proc/partitions' malformed."
-                exit(1)
-            if int(splits[1], 16) % 16 == 0: # minor%16=0 for harddisk devices
-                hd = splits[3]
-                if hd[0:4] == "loop":
-                    continue
-                # remap disk if needed
-                while diskmap.has_key(hd):
-                    if hd[-1] == "z":
-                        raise ValueError, "Too many harddisks for remapping."
-                    i = ord(hd[-1])
-                    hd = "%s%c" % (hd[:-1], chr(i+1))
-                diskmap[hd] = Disk("/dev/"+splits[3], as_image=disk_image)
-        fd.close()
+    for disk in system_disks:
+        hd = disk[5:] # strip '/dev/'
+        diskmap[hd] = Disk(disk, as_image=0)
 
 # are there any disks at all?
 if len(diskmap) == 0:
@@ -1360,11 +1372,14 @@ if ks.has_key("install"):
 else:
     # search for installations and load fstab file
     # generate partitions according to fstab entries as onpart and noformat
+
+    print "Serching for installations"
     
     fstemp_dir = tempdir+"/fstemp"
     os.mkdir(fstemp_dir)
 
-    fstab = None
+    fstabs = { }
+    release = { }
     labelmap = { }
     for disk in diskmap:
         partition = diskmap[disk]["partition"]
@@ -1373,7 +1388,8 @@ else:
             if label in labelmap:
                 print "ERROR: label %s is not unique" % label
                 exit(1)
-            labelmap[label] = "/dev/%s%s" % (disk, part)
+            onpart = "%s%s" % (disk, part)
+            labelmap[label] = onpart
             
             if partition[part]["fstype"] in [ "ext2", "ext3" ] and \
                    partition[part]["native_type"] == 0x83:
@@ -1381,25 +1397,65 @@ else:
                 # try to mount partition and search for fstab
                 try:
                     mount(partition[part]["device"], fstemp_dir,
-                          fstype=partition[part]["fstype"])
+                          fstype=partition[part]["fstype"], options="ro")
                 except Exception, msg:
                     pass
                 else:
                     f = fstemp_dir + "/etc/fstab"
-                    if not os.path.exists(f) or not os.path.isfile(f):
-                        f = fstemp_dir + "/fstab"
+                    # anaconda does not support updates where /etc is
+                    # an extra filesystem
+                    #if not os.path.exists(f) or not os.path.isfile(f):
+                    #    f = fstemp_dir + "/fstab"
                     if os.path.exists(f) and os.path.isfile(f):
                         try:
                             fd = open(f, "r")
                         except:
                             pass
                         else:
-                            if fstab and len(fstab) > 0:
-                                print "ERROR: Found more than one fstab file"
-                                exit(1)
-                            fstab = fd.readlines()
+                            lines = fd.readlines()
+                            fstabs[onpart] = [ ]
+                            for line in lines:
+                                splits = string.split(line)
+                                if (splits[4] == "1" and \
+                                    splits[5] in ["1", "2"]) or \
+                                    splits[1] == "swap":
+                                    fstabs[onpart].append(line)
+                            fd.close()
+                    f = fstemp_dir + "/etc/redhat-release"
+                    if os.path.exists(f) and os.path.isfile(f):
+                        try:
+                            fd = open(f, "r")
+                        except:
+                            pass
+                        else:
+                            release[onpart] = string.strip(fd.readline())
                             fd.close()
                     umount(fstemp_dir)
+                    if not release.has_key(onpart) or \
+                           not fstabs.has_key(onpart):
+                        if release.has_key(onpart):
+                            del release[onpart]
+                        if fstabs.has_key(onpart):
+                            del fstabs[onpart]
+
+    if len(fstabs) < 1:
+        print "ERROR: Could not find any installation."
+        exit(1)
+
+    print "Available installations:"
+    for onpart in release:
+        print "%s: %s" % (onpart, release[onpart])
+
+    if upgrade:
+        if not upgrade in fstabs.keys():
+            print "ERROR: Could not find %s." % upgrade
+            exit(1)
+        else:
+            fstab = fstabs[upgrade]
+    elif len(fstabs) > 1:
+        print "ERROR: More than one installation found, exiting."
+        exit(1)
+
     if fstab:
         for line in fstab:
             if not line or len(line) < 1 or line[0] == "#":
@@ -1430,17 +1486,16 @@ for name in partitions.keys():
     if part.has_key("onpart"):
         # fixed partition
         onpart = part["onpart"]
+        if onpart[:5] == "/dev/":
+            # remove leading '/dev/'
+            onpart = onpart[5:]
         error = 0
         try:
             disk = diskName(onpart)
             i = partitionId(onpart)
         except:
-            error = 1
-        if error or onpart[:5] != "/dev/":
             print "ERROR: '%s' is not a valid partition name." % onpart
             exit(1)
-        onpart = part["onpart"][5:]
-        disk = disk[5:]
         if onpart in partitionmap:
             print "ERROR: '%s' is used more than once." % part["onpart"]
             exit(1)
@@ -1454,13 +1509,9 @@ for name in partitions.keys():
             exit(1)
     else:
         # create partition
-        disk = "/dev/hda"
+        disk = "hda"
         if part.has_key("ondisk"):
             disk = part["ondisk"]
-        if disk[:5] != "/dev/":
-            print "ERROR: '%s' is not a valid disk name." % disk
-            exit(1)
-        disk = disk[5:]
         if not part.has_key("size"):
             print "ERROR: No size given for %s." % name
             exit(1)
@@ -1783,6 +1834,20 @@ for onpart in partitionmap:
 
     partitionmap[onpart]["label"] = label
 
+error = 0
+for disk in diskmap:
+    if not os.path.exists(diskmap[disk]["device"]):
+        print "ERROR: Disk %s: %s is no valid device." % \
+              (disk, diskmap[disk]["device"])
+        error = 1
+for onpart in partitionmap:
+    if not os.path.exists(partitionmap[onpart]["device"]):
+        print "ERROR: Partition %s: %s is no valid device." % \
+              (onpart, partitionmap[onpart]["device"])
+        error = 1
+if error:
+    exit(1)
+
 #if verbose:
 #    sys.stdout.write("diskmap=")
 #    pr_print(diskmap)
@@ -1820,41 +1885,74 @@ except Exception, msg:
 
 ### mount stage2 temporary ###
 
-stage2_img_dir = tempdir+"/tmp"
-os.mkdir(stage2_img_dir)
-stage2 = "%s/RedHat/base/stage2.img" % source_dir
-if not os.path.exists(stage2):
-    stage2 = "%s/Fedora/base/stage2.img" % source_dir
-if not os.path.exists(stage2):
-    print "ERROR: Could not find stage2.img in installation source."
-    exit(1)
+if not no_stage2:
+    stage2_img_dir = tempdir+"/tmp"
+    os.mkdir(stage2_img_dir)
+    stage2 = "%s/RedHat/base/stage2.img" % source_dir
+    if not os.path.exists(stage2):
+        stage2 = "%s/Fedora/base/stage2.img" % source_dir
+    if not os.path.exists(stage2):
+        print "ERROR: Could not find stage2.img in installation source."
+        exit(1)
 
-try:
-    mount(stage2, stage2_img_dir, fstype=None, options="loop,defaults,ro")
-except Exception, msg:
-    print msg
-    exit(1)
+    try:
+        mount(stage2, stage2_img_dir, fstype=None, options="loop,defaults,ro")
+    except Exception, msg:
+        print msg
+        exit(1)
 
-### analyze stage2 ###
-buildstamp = "%s/.buildstamp" % stage2_img_dir
-if not os.path.exists(buildstamp):
-    print "ERROR: Buildstamp information is missing in stage2."
-    exit(1)
-try:
-    fd = open(buildstamp, "r")
-except Exception, msg:
-    print "ERROR: Failed to open buildstamp information in stage2:", msg
-    exit(1)
-lines = fd.readlines()
-fd.close()
-if len(lines) < 3:
-    print "ERROR: Buildstamp information in stage2 is malformed:", lines
-    exit(1)
+    ### analyze stage2 ###
+    buildstamp = "%s/.buildstamp" % stage2_img_dir
+    if not os.path.exists(buildstamp):
+        print "ERROR: Buildstamp information is missing in stage2."
+        exit(1)
+    try:
+        fd = open(buildstamp, "r")
+    except Exception, msg:
+        print "ERROR: Failed to open buildstamp information in stage2:", msg
+        exit(1)
+    lines = fd.readlines()
+    fd.close()
+    if len(lines) < 3:
+        print "ERROR: Buildstamp information in stage2 is malformed:", lines
+        exit(1)
 
-source_date = string.strip(lines[0])
-source_release = string.strip(lines[1])
-source_version = string.strip(lines[2])
-del lines
+    source_date = string.strip(lines[0])
+    source_release = string.strip(lines[1])
+    source_version = string.strip(lines[2])
+    del lines
+
+else: # no_stage2
+    dir = "%s/RedHat/RPMS" % source_dir
+    source_release = "Red Hat Enterprise Linux"
+    release = "redhat"
+    if not os.path.exists(dir) or not os.path.isdir(dir):
+        dir = "%s/Fedora/RPMS" % source_dir
+        source_release = "Fedora Core"
+        release = "fedora"
+    if not os.path.exists(dir) or not os.path.isdir(dir):
+        print "ERROR: No valid installation source."
+        exit(1)
+    list = os.listdir(dir)
+    s = [ ]
+    regex = re.compile('%s-release-.*\.rpm' % release)
+    for l in list:
+        if regex.match(l):
+            s.append(l)
+    if len(s) != 1:
+        print "ERROR: Could not find release package in installation source."
+        exit(1)
+    splits = string.split(s[0], "-")
+    i = 0
+    while i < len(splits[2]) and splits[2][i] >= '0' and splits[2][i] <= '9':
+        i += 1
+    source_version = splits[2][:i]
+    if len(source_version) == 0:
+       print "ERROR: No valid version of installation source"
+       exit(1)
+    i = string.find(s[0], "rawhide")
+    if i != -1:
+        source_version += ".90" # fix for rawhide (bad)
 
 if source_release == "Red Hat Enterprise Linux":
     install_version = "RHEL"
@@ -1942,97 +2040,110 @@ if confirm == 1 and len(to_format) > 0:
 # 3) free stage2 copy
 if len(to_format) > 0:
 
-    ### create stage2 chroot ###
+    if not no_stage2:
+        ### create stage2 chroot ###
 
-    # copy temporary stage2 mount
-    print "Preparing to format"
+        # copy temporary stage2 mount
+        print "Preparing to format"
 
-    # create stage2 mount point and mount ramfs for stage2
-    os.mkdir(stage2_dir)
+        # create stage2 mount point and mount ramfs for stage2
+        os.mkdir(stage2_dir)
 
-    try:
-        mount("None", stage2_dir, fstype="ramfs")
-    except Exception, msg:
-        print "ERROR: Unable to create stage2 ramfs:", msg
-        exit(1)
-
-    # copytree does not like to get a signal
-    pyrpm.blockSignals()
-    for f in os.listdir(stage2_img_dir):
-        s = "%s/%s" % (stage2_img_dir, f)
-        d = "%s/%s" % (stage2_dir, f)
-        if os.path.isdir(s):
-            shutil.copytree(s, d, symlinks=True)
-        else:
-            shutil.copy2(s, d)
-    pyrpm.unblockSignals()
-
-    # craete missing dirs and links
-    create_dir(stage2_dir, "/bin")
-    create_dir(stage2_dir, "/dev")
-    create_dir(stage2_dir, "/etc")
-    create_dir(stage2_dir, "/proc")
-    create_dir(stage2_dir, "/tmp")
-    create_dir(stage2_dir, "/var")
-    create_dir(stage2_dir, "/var/log")
-    create_dir(stage2_dir, "/var/tmp")
-
-    if not os.path.exists("%s/usr/sbin/mke2fs" % stage2_dir):
-        print "ERROR: /usr/sbin/mke2fs is missing."
-        exit(1)
-    if not os.path.exists("%s/usr/sbin/tune2fs" % stage2_dir):
-        print "ERROR: /usr/sbin/tune2fs is missing."
-        exit(1)
-    if not os.path.exists("%s/usr/sbin/mkswap" % stage2_dir):
-        print "ERROR: /usr/sbin/mkswap is missing."
-        exit(1)
-    
-    if not os.path.exists("%s/bin/sh" % stage2_dir):
         try:
-            os.symlink("../usr/bin/bash", "%s/bin/sh" % stage2_dir)
+            mount("None", stage2_dir, fstype="ramfs")
         except Exception, msg:
-            print "ERROR: Unable to generate /bin/sh symlink:", msg
+            print "ERROR: Unable to create stage2 ramfs:", msg
             exit(1)
-    if not os.path.exists("%s/bin/bash" % stage2_dir):
-        try:
-            os.symlink("../usr/bin/bash", "%s/bin/bash" % stage2_dir)
-        except Exception, msg:
-            print "ERROR: Unable to generate /bin/bash symlink:", msg
+
+        # copytree does not like to get a signal
+        pyrpm.blockSignals()
+        for f in os.listdir(stage2_img_dir):
+            s = "%s/%s" % (stage2_img_dir, f)
+            d = "%s/%s" % (stage2_dir, f)
+            if os.path.isdir(s):
+                shutil.copytree(s, d, symlinks=True)
+            else:
+                shutil.copy2(s, d)
+        pyrpm.unblockSignals()
+
+        # craete missing dirs and links
+        create_dir(stage2_dir, "/bin")
+        create_dir(stage2_dir, "/dev")
+        create_dir(stage2_dir, "/etc")
+        create_dir(stage2_dir, "/proc")
+        create_dir(stage2_dir, "/tmp")
+        create_dir(stage2_dir, "/var")
+        create_dir(stage2_dir, "/var/log")
+        create_dir(stage2_dir, "/var/tmp")
+
+        if not os.path.exists("%s/usr/sbin/mke2fs" % stage2_dir):
+            print "ERROR: /usr/sbin/mke2fs is missing."
             exit(1)
-    if not os.path.exists("%s/etc/mtab" % stage2_dir):
-        try:
-            fd = open("%s/etc/mtab" % stage2_dir, "w")
-        except Exception, msg:
-            print "ERROR: Unable to generate /etc/mtab:", msg
+        if not os.path.exists("%s/usr/sbin/tune2fs" % stage2_dir):
+            print "ERROR: /usr/sbin/tune2fs is missing."
             exit(1)
-        fd.close()
+        if not os.path.exists("%s/usr/sbin/mkswap" % stage2_dir):
+            print "ERROR: /usr/sbin/mkswap is missing."
+            exit(1)
 
-    # create needed devices
-    if not os.path.exists(stage2_dir+"/dev/console"):
-        os.mknod(stage2_dir+"/dev/console", 0666 | stat.S_IFCHR,
-                 os.makedev(5, 1))
-    if not os.path.exists(stage2_dir+"/dev/null"):
-        os.mknod(stage2_dir+"/dev/null", 0666 | stat.S_IFCHR, os.makedev(1, 3))
-    if not os.path.exists(stage2_dir+"/dev/zero"):
-        os.mknod(stage2_dir+"/dev/zero", 0666 | stat.S_IFCHR, os.makedev(1, 5))
+        if not os.path.exists("%s/bin/sh" % stage2_dir):
+            try:
+                os.symlink("../usr/bin/bash", "%s/bin/sh" % stage2_dir)
+            except Exception, msg:
+                print "ERROR: Unable to generate /bin/sh symlink:", msg
+                exit(1)
+        if not os.path.exists("%s/bin/bash" % stage2_dir):
+            try:
+                os.symlink("../usr/bin/bash", "%s/bin/bash" % stage2_dir)
+            except Exception, msg:
+                print "ERROR: Unable to generate /bin/bash symlink:", msg
+                exit(1)
+        if not os.path.exists("%s/etc/mtab" % stage2_dir):
+            try:
+                fd = open("%s/etc/mtab" % stage2_dir, "w")
+            except Exception, msg:
+                print "ERROR: Unable to generate /etc/mtab:", msg
+                exit(1)
+            fd.close()
 
-    # create disk and partition devices
-    for disk in diskmap:
-        stats = os.stat(diskmap[disk]["device"])
-        tmpdev = "%s/%s" % (stage2_dir, diskmap[disk]["device"])
-        os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
-    for onpart in partitionmap:
-        stats = os.stat(partitionmap[onpart]["device"])
-        tmpdev = "%s/%s" % (stage2_dir, partitionmap[onpart]["device"])
-        os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
+        # create needed devices
+        if not os.path.exists(stage2_dir+"/dev/console"):
+            os.mknod(stage2_dir+"/dev/console", 0666 | stat.S_IFCHR,
+                     os.makedev(5, 1))
+        if not os.path.exists(stage2_dir+"/dev/null"):
+            os.mknod(stage2_dir+"/dev/null", 0666 | stat.S_IFCHR,
+                     os.makedev(1, 3))
+        if not os.path.exists(stage2_dir+"/dev/zero"):
+            os.mknod(stage2_dir+"/dev/zero", 0666 | stat.S_IFCHR,
+                     os.makedev(1, 5))
 
-    # test if bash is runnable in changeroot
-    (status, rusage) = pyrpm.runScript( \
+        # create disk and partition devices
+        for disk in diskmap:
+            stats = os.stat(diskmap[disk]["device"])
+            tmpdev = "%s/%s" % (stage2_dir, diskmap[disk]["device"])
+            os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
+        for onpart in partitionmap:
+            stats = os.stat(partitionmap[onpart]["device"])
+            tmpdev = "%s/%s" % (stage2_dir, partitionmap[onpart]["device"])
+            os.mknod(tmpdev, stats.st_mode, stats.st_rdev)
+
+        # test if bash is runnable in changeroot
+        (status, rusage) = pyrpm.runScript( \
             script="/bin/bash --version 2>&1 >/dev/null", chroot=stage2_dir)
-    if status != 0:
-        print "/bin/bash in stage2 is not usable, exiting."
-        sys.exit(1)
-    
+        if status != 0:
+            print "/bin/bash in stage2 is not usable, exiting."
+            sys.exit(1)
+
+        mke2fs_prog = "/usr/sbin/mke2fs"
+        tune2fs_prog = "/usr/sbin/tune2fs"
+        mkswap_prog = "/usr/sbin/mkswap"
+        chroot = stage2_dir
+    else: # no stage2
+        mke2fs_prog = "/sbin/mke2fs"
+        tune2fs_prog = "/sbin/tune2fs"
+        mkswap_prog = "/sbin/mkswap"
+        chroot = None
+        
     ### format partitions ###
     
     for onpart in to_format:
@@ -2043,7 +2154,7 @@ if len(to_format) > 0:
 
         if part.has_key("fstype") and \
                (part["fstype"] == "ext2" or part["fstype"] == "ext3"):
-            mke2fs = "/usr/sbin/mke2fs -q -L '%s'" % label
+            mke2fs = "%s -q -L '%s'" % (mke2fs_prog, label)
             if part["fstype"] == "ext3":
                 mke2fs += " -j"
             if diskmap[disk].has_key("image"):
@@ -2057,15 +2168,14 @@ if len(to_format) > 0:
             print "Formatting '%s' on '%s' (%s)" % \
                   (onpart, partitionmap[onpart]["disk"], name)
 
-            (status, rusage) = pyrpm.runScript(script=mke2fs,
-                                               chroot=stage2_dir)
+            (status, rusage) = pyrpm.runScript(script=mke2fs, chroot=chroot)
             if status != 0:
                 print "ERROR: mke2fs failed."
                 exit(1)
 
             if part["fstype"] == "ext3": # set ext options
-                tune2fs = "/usr/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
-                          partitionmap[onpart]["device"]
+                tune2fs = "%s -c 0 -i 0 -O dir_index '%s'" % \
+                          (tune2fs_prog, partitionmap[onpart]["device"])
 
 #                print tune2fs
                 if verbose:
@@ -2073,7 +2183,7 @@ if len(to_format) > 0:
                           (onpart, partitionmap[onpart]["disk"])
 
                 (status, rusage) = pyrpm.runScript(script=tune2fs,
-                                                   chroot=stage2_dir)
+                                                   chroot=chroot)
                 if status != 0:
                     print "ERROR: tune2fs failed."
                     exit(1)
@@ -2083,16 +2193,15 @@ if len(to_format) > 0:
             if install_version != "RHEL-3" and install_version != "FC-2":
                 # no swap labels for RHEL-3, FC-1
                 l = "-L '%s'" % label
-            mkswap = "/usr/sbin/mkswap %s '%s' %d >/dev/null" % \
-                     (l, partitionmap[onpart]["device"],
+            mkswap = "%s %s '%s' %d >/dev/null" % \
+                     (mkswap_prog, l, partitionmap[onpart]["device"],
                       (partitionmap[onpart]["size"] / 1024))
 
 #            print mkswap
             print "Formatting '%s' on '%s' (%s)" % \
                   (onpart, partitionmap[onpart]["disk"], name)
 
-            (status, rusage) = pyrpm.runScript(script=mkswap,
-                                               chroot=stage2_dir)
+            (status, rusage) = pyrpm.runScript(script=mkswap, chroot=chroot)
             if status != 0:
                 print "ERROR: mkswap failed."
                 exit(1)
@@ -2104,12 +2213,14 @@ if len(to_format) > 0:
     del to_format
     ### format end ###
 
-    # umount real stage2 mount
-    umount(stage2_dir)
+    if not no_stage2:
+        # umount real stage2 mount
+        umount(stage2_dir)
 
-# umount temporary stage2 mount
-umount(stage2_img_dir)
-stage2_img_dir = None
+if not no_stage2:
+    # umount temporary stage2 mount
+    umount(stage2_img_dir)
+    stage2_img_dir = None
 
 ### mount target ###
 
@@ -2415,7 +2526,8 @@ if ks.has_key("install") and not os.path.exists(buildroot+"/etc/resolv.conf"):
                 fd.write("search localdomain\n")
             if ks["network"].has_key("nameserver") and \
                    not ks["network"].has_key("nodns"):
-                fd.write("nameserver %s\n" % ks["network"]["nameserver"])
+                for server in ks["network"]["nameserver"]:
+                    fd.write("nameserver %s\n" % server)
             else:
                 fd.write("nameserver 127.0.0.1\n")
         fd.close()
@@ -2519,8 +2631,8 @@ fd.write("reposdir=%s/yum.repos.d\n" % tempdir)
 if ks.has_key("install") and ks["packages"] and ks["packages"].has_key("drop"):
     fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
 fd.write("\n")
-fd.write("[dist]\n")
-fd.write("name=dist\n")
+fd.write("[dist %s]\n" % install_version)
+fd.write("name=dist %s\n" % install_version)
 fd.write("baseurl=file://%s\n" % source_dir)
 fd.write("\n")
 # add repos
@@ -2937,7 +3049,7 @@ if ks.has_key("install") and ks["xconfig"]:
 
     # default: VGA graphics card, Generic extended super VGA monitor
     card = "Unknown video card"
-    card_driver = "vga"
+    driver = "vga"
     videoram = 0
     monitor = "Unknown monitor"
     hsync = "31.5 - 37.9"
@@ -2945,59 +3057,98 @@ if ks.has_key("install") and ks["xconfig"]:
     resolution = "800x600"
     depth = 16
     user_hsync = user_vsync = None
+    options = [ ]
 
     # keyboard
     (kbd_layout, kbd_model, kbd_variant, kbd_options) = \
                  keyboard_models[ks["keyboard"]]
 
+    kscard = None
     if ks["xconfig"].has_key("card"):
-        fd = open ('/usr/share/hwdata/Cards')
-        found = 0
-        while 1:
-            line = fd.readline()
-            if not line:
-                break
-            line = string.strip(line)
-            if len(line) < 1 or line[0] == "#":
-                continue
-            if not found:
-                if line[:4] != "NAME":
+        kscard = ks["xconfig"]["card"]
+    ksdriver = None
+    if ks["xconfig"].has_key("driver"):
+        ksdriver = ks["xconfig"]["driver"]
+    ksoptions = [ ]
+
+    if os.path.exists(buildroot+'/usr/share/hwdata/Cards'):
+        try:
+            fd = open(buildroot+'/usr/share/hwdata/Cards')
+        except:
+            print "ERROR: Unable to open graphics card database."
+        else:
+            # TODO: honour SEE tags in file
+            found = 0
+            _card = None
+            _driver = None
+            _options = [ ]
+            while 1:
+                line = fd.readline()
+                if not line:
+                    break
+                line = string.strip(line)
+                if len(line) < 1 or line[0] == "#":
                     continue
-                name = string.strip(line[4:])
-                if name == ks["xconfig"]["card"]:
-                    found = 1
-            elif string.strip(line[:6]) == "DRIVER":
-                card = ks["xconfig"]["card"]
-                card_driver = string.strip(line[6:])
-                found = 2
-                break
-        fd.close()
-        if found != 2:
-            print "ERROR: Card not found in hardware database."
+
+                if line[:4] == "NAME":
+                    if kscard and kscard == _card:
+                        card = _card
+                        driver =_driver
+                        options = _options
+                        found = 1
+                        break
+                    _card = string.strip(line[4:])
+                    _driver = None
+                    _options = [ ]
+                elif line[:6] == "DRIVER":
+                    _driver = string.strip(line[6:])
+                elif line[:4] == "LINE":
+                    _options.append(string.strip(line[4:]))
+                else:
+                    continue
+            fd.close()
+            if not found:
+                print "ERROR: Card not found in graphics card database."
+
+    elif os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
+        # There is no usable name in the videodrivers file, so fake it
+        if ksdriver:
+            driver = ksdriver
+            card = driver + ' (generic)'
+        else:
+            print "ERROR: Driver not specified for xconfig, " +\
+                  "using default configuration."
+    else:
+        print "ERROR: Could not find hardware database for video drivers."
+
     if ks["xconfig"].has_key("videoram"):
         videoram = ks["xconfig"]["videoram"]
     if ks["xconfig"].has_key("monitor"):
-        fd = open ('/usr/share/hwdata/MonitorsDB')
-        found = 0
-        while 1:
-            line = fd.readline()
-            if not line:
-                break
-            line = string.strip(line)
-            if len(line) < 1 or line[0] == "#":
-                continue
-            args = string.split(line, ";")
-            if len(args) < 5:
-                continue
-            if string.strip(args[1]) == ks["xconfig"]["monitor"]:
-                monitor = ks["xconfig"]["monitor"]
-                hsync = string.strip(args[3])
-                vsync = string.strip(args[4])
-                found = 1
-                break
-        fd.close()
-        if found != 1:
-            print "ERROR: Monitor not found in hardware database."
+        try:
+            fd = open(buildroot+'/usr/share/hwdata/MonitorsDB')
+        except:
+            print "ERROR: Unable to open monitor database."
+        else:
+            found = 0
+            while 1:
+                line = fd.readline()
+                if not line:
+                    break
+                line = string.strip(line)
+                if len(line) < 1 or line[0] == "#":
+                    continue
+                args = string.split(line, ";")
+                if len(args) < 5:
+                    continue
+                if string.strip(args[1]) == ks["xconfig"]["monitor"]:
+                    monitor = ks["xconfig"]["monitor"]
+                    hsync = string.strip(args[3])
+                    vsync = string.strip(args[4])
+                    found = 1
+                    break
+            fd.close()
+            if found != 1:
+                print "ERROR: Monitor not found in hardware database."
     if ks["xconfig"].has_key("hsync"): # overwrite with user supplied value
         hsync = ks["xconfig"]["hsync"]
     if ks["xconfig"].has_key("vsync"):
@@ -3073,9 +3224,12 @@ if ks.has_key("install") and ks["xconfig"]:
         fd.write('        Identifier   "Videocard0"\n')
         fd.write('        VendorName   "Videocard vendor"\n')
         fd.write('        BoardName    "%s"\n' % card)
-        fd.write('        Driver       "%s"\n' % card_driver)
+        fd.write('        Driver       "%s"\n' % driver)
         if videoram:
             fd.write('        VideoRam     %s\n' % videoram)
+        if len(options) > 0:
+            for option in options:
+                fd.write('        %s\n' % option)
         fd.write('EndSection\n\n')
         fd.write('Section "Screen"\n')
         fd.write('        Identifier   "Screen0"\n')
@@ -3175,8 +3329,22 @@ if ks["bootloader"] and not (ks["bootloader"].has_key("location") and \
     if len(kernels) < 1:
         print "ERROR: No kernels are installed."
         exit(1)
-    kernels.sort()
-    kernels.reverse()
+
+    # sort kernel versions with evrCompare
+    _kernels = [ ]
+    for i in xrange(len(kernels)):
+        kernel = kernels[i]
+        found = 0
+        for j in xrange(len(_kernels)):
+            k = _kernels[j]
+            if pyrpm.evrCompare(kernel, pyrpm.RPMSENSE_GREATER, k):
+                _kernels.insert(j, kernel)
+                found = 1
+                break
+        if not found:
+            _kernels.append(kernel)
+    kernels = _kernels
+    del _kernels
 
     location = "mbr"
     if ks["bootloader"].has_key("location"):
@@ -3341,7 +3509,7 @@ if xen:
             else:
                 fd.write('disk = [ "phy:%s,%s,r" ]\n' % \
                          (diskmap[disk]["device"], disk))
-        fd.write('root = "/dev/sda1"\n')
+        fd.write('root = "%s"\n' % mountmap["/"])
         fd.write('extra = "ro"\n')
         fd.close()
 
