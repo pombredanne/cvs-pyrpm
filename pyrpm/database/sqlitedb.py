@@ -27,7 +27,7 @@ class RpmSQLiteDB(memorydb.RpmMemoryDB):
     # Tags stored in separate tables
     tagnames = ["providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex", "i18ntable", "summary", "description", "changelogtime", "changelogname", "changelogtext", "prefixes", "pubkeys", "group", "dirindexes", "dirnames", "basenames", "fileusername", "filegroupname", "filemodes", "filemtimes", "filedevices", "fileinodes", "filesizes", "filemd5s", "filerdevs", "filelinktos", "fileflags", "fileverifyflags", "fileclass", "filelangs", "filecolors", "filedependsx", "filedependsn", "classdict", "dependsdict", "policies", "filecontexts", "oldfilenames"]
     def __init__(self, config, source, buildroot=None):
-        RpmDatabase.__init__(self, config, source, buildroot)
+        memorydb.RpmMemoryDB.__init__(self, config, source, buildroot)
         self.cx = None
 
     def open(self):
@@ -75,7 +75,7 @@ class RpmSQLiteDB(memorydb.RpmMemoryDB):
                 self.config.printError("Error in package %s: %s"
                                        % pkg.getNEVRA(), e)
                 continue
-            self._addPkg(pkg)
+            memorydb.RpmMemoryDB.addPkg(self, pkg)
             pkg.io = None
             pkg.header_read = 1
         try:
@@ -88,14 +88,13 @@ class RpmSQLiteDB(memorydb.RpmMemoryDB):
         return 1
 
     def addPkg(self, pkg, nowrite=None):
-        self._addPkg(pkg)
+        if not self.cx:
+            return 0
+
+        memorydb.RpmMemoryDB.addPkg(self, pkg)
 
         if nowrite:
             return 1
-
-        if not self.cx:
-            self._erasePkg(pkg)
-            return 0
 
         self.__initDB()
         cu = self.cx.cursor()
@@ -127,19 +126,18 @@ class RpmSQLiteDB(memorydb.RpmMemoryDB):
         try:
             cu.execute("commit")
         except:
-            self._erasePkg(pkg)
+            memorydb.RpmMemoryDB.removePkg(self, pkg)
             return 0
         return 1
 
     def erasePkg(self, pkg, nowrite=None):
-        self._erasePkg(pkg)
+        if not self.cx:
+            return 0
+
+	memorydb.RpmMemoryDB.removePkg(self, pkg)
 
         if nowrite:
             return 1
-
-        if not self.cx:
-            self._addPkg(pkg)
-            return 0
 
         self.__initDB()
         cu = self.cx.cursor()
@@ -150,7 +148,7 @@ class RpmSQLiteDB(memorydb.RpmMemoryDB):
         try:
             cu.execute("commit")
         except:
-            self._addPkg(pkg)
+            memorydb.RpmMemoryDB.addPkg(self, pkg)
             return 0
         return 1
 
@@ -240,3 +238,5 @@ create table %s (
             else:
                 val = str(pkg[tag][idx])
             cu.execute("insert into %s (id, idx, val) values (%d, %d, %s)", (tag, rowid, idx, val))
+
+# vim:ts=4:sw=4:showmatch:expandtab

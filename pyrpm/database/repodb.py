@@ -767,3 +767,5 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 plist[1].append(flags + prereq)
                 plist[2].append(ver)
         return plist
+
+# vim:ts=4:sw=4:showmatch:expandtab

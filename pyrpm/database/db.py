@@ -144,3 +144,5 @@ class RpmDatabase:
 
     def _getDBPath(self):
         raise NotImplementedError
+
+# vim:ts=4:sw=4:showmatch:expandtab

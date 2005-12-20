@@ -209,5 +209,4 @@ class RpmMemoryDB(db.RpmDatabase):
         else:
             return tsource
 
-# ----------------------------------------------------------------------------
-
+# vim:ts=4:sw=4:showmatch:expandtab

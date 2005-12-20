@@ -458,3 +458,5 @@ class RpmDB(memorydb.RpmMemoryDB):
             return liststr.split(",")
         except:
             return []
+
+# vim:ts=4:sw=4:showmatch:expandtab

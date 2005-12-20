@@ -40,3 +40,5 @@ def getRpmDBFactory(config, source, root=None):
     elif source[:10] == 'sqlitedb:/':
         return sqlitedb.RpmSQLiteDB(config, source[10:], root)
     return rpmdb.RpmDB(config, source, root)
+
+# vim:ts=4:sw=4:showmatch:expandtab

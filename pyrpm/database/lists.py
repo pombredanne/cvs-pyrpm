@@ -487,3 +487,5 @@ class TriggersList(ConflictsList):
 
         for (name, flag, version, scriptprog, scripts) in rpm[self.TAG]:
             self._remove(name, flag, version, rpm)
+
+# vim:ts=4:sw=4:showmatch:expandtab
