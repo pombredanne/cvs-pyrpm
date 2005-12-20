@@ -247,6 +247,7 @@ class RpmYum:
                             self.pkgs.append(rpkg)
         # Look for packages we need/want to install. Arguments can either be
         # direct filenames or package nevra's with * wildcards
+        dict = None
         for f in args:
             if os.path.isfile(f) and f.endswith(".rpm"):
                 try:
@@ -280,7 +281,9 @@ class RpmYum:
                         self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
             else:
                 if self.command.endswith("remove"):
-                    self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgs()))
+                    if dict == None:
+                        dict = buildPkgRefDict(self.pydb.getPkgs())
+                    self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgs(), dict))
                 else:
                     # Nice trick to support yum update /usr/bin/foo ;)
                     if f[0] == '/':
@@ -292,7 +295,9 @@ class RpmYum:
                         if len(pkg_list) > 0:
                             self.pkgs.append(pkg_list[0])
                     else:
-                        self.pkgs.extend(findPkgByNames([f,], repopkglist))
+                        if dict == None:
+                            dict = buildPkgRefDict(repopkglist)
+                        self.pkgs.extend(findPkgByNames([f,], repopkglist, dict))
                     if len(self.pkgs) == 0:
                         self.config.printError("Couldn't find package %s, skipping" % f)
         if self.config.timer:

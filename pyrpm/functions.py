@@ -1314,7 +1314,7 @@ def buildPkgRefDict(pkgs):
 
 # Use precompiled regex for faster checks
 __fnmatchre__ = re.compile(".*[\*\[\]\{\}\?].*")
-def findPkgByNames(pkgnames, pkgs):
+def findPkgByNames(pkgnames, pkgs, dict=None):
     """Return a list of RpmPackage's from pkgs matching pkgnames.
 
     pkgnames is a list of names, each name can contain epoch, version, release
@@ -1322,7 +1322,10 @@ def findPkgByNames(pkgnames, pkgs):
     pattern. The resulting list contains all matches in arbitrary order, and
     it may contain a single package more than once."""
 
-    pkgdict = buildPkgRefDict(pkgs)
+    if dict != None:
+        pkgdict = dict
+    else:
+        pkgdict = buildPkgRefDict(pkgs)
     pkglist = []
     for pkgname in pkgnames:
         if pkgdict.has_key(pkgname):
