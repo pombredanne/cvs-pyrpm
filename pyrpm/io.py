@@ -32,7 +32,6 @@ except:
 from base import *
 import functions
 import package
-import database.lists as lists
 
 def _uriToFilename(uri):
     """Convert a file:/ URI or a local path to a local path."""
