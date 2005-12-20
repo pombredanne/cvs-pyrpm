@@ -378,7 +378,7 @@ class RpmPackage(RpmData):
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preinprog"] != None or self["postinprog"] != None:
-            numPkgs = str(db.getNumPkgs(self["name"])+1)
+            numPkgs = str(len(db.getPkgsByName(self["name"]))+1)
         if self["preinprog"] != None and not self.config.noscripts:
             try:
                 (status, rusage) = runScript(self["preinprog"], self["prein"],
@@ -422,7 +422,7 @@ class RpmPackage(RpmData):
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preunprog"] != None or self["postunprog"] != None:
-            numPkgs = str(db.getNumPkgs(self["name"])-1)
+            numPkgs = str(len(db.getPkgsByName(self["name"]))-1)
         if self["preunprog"] != None and not self.config.noscripts:
             try:
                 (status, rusage) = runScript(self["preunprog"], self["preun"],
@@ -449,7 +449,7 @@ class RpmPackage(RpmData):
                 self.config.printInfo(0, "#"*(npos-pos))
             pos = npos
             f = files[i]
-            if db.isDuplicate(f):
+            if db.isFileDuplicate(f):
                 self.config.printDebug(1, "File/Dir %s still in db, not removing..." % f)
                 continue
             if os.path.isdir(f):
@@ -646,7 +646,7 @@ class RpmPackage(RpmData):
         # File is not a regular file -> just do it
         if not S_ISREG(rfi.mode):
             return 1
-        plist = db.filenames.search(rfi.filename)
+        plist = db.searchFilenames(rfi.filename)
         # File not already in db -> write it
         if len(plist) == 0:
             return 1

@@ -26,6 +26,7 @@ from control import RpmController
 from package import RpmPackage
 from functions import *
 from io import *
+import database
 
 
 class RpmYum:
@@ -42,8 +43,6 @@ class RpmYum:
         self.pkgs = []
         # List of RpmRepo's
         self.repos = [ ]
-        # List of repository resolvers
-        self.resolvers = [ ]
         # Internal list of packages that are have to be erased
         self.erase_list = []
         # Our database
@@ -151,14 +150,12 @@ class RpmYum:
         Return 1 on success 0 on errror (after warning the user).  Exclude
         packages matching whitespace-separated excludes."""
 
-        repo = RpmRepo(self.config, baseurl, self.config.buildroot, excludes,
-                       reponame, key_urls)
+        repo = database.repodb.RpmRepoDB(self.config, baseurl, self.config.buildroot,
+                                  excludes, reponame, key_urls)
         if repo.read() == 0:
             self.config.printError("Error reading repository %s" % reponame)
             return 0
         self.repos.append(repo)
-        r = RpmResolver(self.config, repo.getPkgList(), 1)
-        self.resolvers.append(r)
         return 1
 
     def prepareTransaction(self):
@@ -171,15 +168,15 @@ class RpmYum:
             time1 = clock()
         # Create and read db
         self.config.printInfo(1, "Reading local RPM database.\n")
-        self.pydb = getRpmDBFactory(self.config, self.config.dbpath,
-                                    self.config.buildroot)
+        self.pydb = database.getRpmDBFactory(self.config, self.config.dbpath,
+                                             self.config.buildroot)
         self.pydb.open()
         if not self.pydb.read():
             self.config.printError("Error reading the RPM database")
             return 0
         if self.config.timer:
             self.config.printInfo(0, "Reading local RPM database took %s seconds\n" % (clock() - time1))
-        for pkg in self.pydb.getPkgList():
+        for pkg in self.pydb.getPkgs():
             if "redhat-release" in [ dep[0] for dep in pkg["provides"] ]:
                 rpmconfig.relver = pkg["version"]
         if os.path.isfile(self.config.yumconf):
@@ -189,7 +186,10 @@ class RpmYum:
         else:
             printWarning(1, "Couldn't find given yum config file, skipping read of repos")
         self.repos_read = 1
-        self.opresolver = RpmResolver(self.config, self.pydb.getPkgList())
+        db = database.memorydb.RpmMemoryDB(self.config, None)
+        db.addPkgs(self.pydb.getPkgs())
+        self.opresolver = RpmResolver(self.config, db)
+        del db
         self.pkgs = []
         self.__generateObsoletesList()
         return 1
@@ -206,8 +206,8 @@ class RpmYum:
         self.config.printInfo(1, "Selecting packages for operation\n")
         # Generate list of all packages in all repos
         repopkglist = []
-        for repo in self.resolvers:
-            repopkglist.extend(repo.getList())
+        for repo in self.repos:
+            repopkglist.extend(repo.getPkgs())
         # If we do a group operation handle it accordingly
         if self.command.startswith("group"):
             if self.config.compsfile == None:
@@ -223,8 +223,7 @@ class RpmYum:
         else:
             if len(args) == 0:
                 if self.command.endswith("remove"):
-                    for pkg in self.opresolver.getList():
-                        self.pkgs.append(pkg)
+                    self.pkgs.extend(self.opresolver.getDatabase().getPkgs())
                 else:
                     # Hardcode the inverse package obsolete code here as we
                     # need to use the reverse logic to later cases.
@@ -232,7 +231,7 @@ class RpmYum:
                         #if opkg in self.opresolver or opkg in self.erase_list:
                         #    continue
                         for u in opkg["obsoletes"]:
-                            s = self.opresolver.searchDependency(u)
+                            s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
                             if len(s) == 0:
                                 continue
                             if self.opresolver.update(opkg) > 0:
@@ -240,7 +239,7 @@ class RpmYum:
                     rhash = {}
                     for pkg in repopkglist:
                         rhash.setdefault(pkg["name"], []).append(pkg)
-                    for pkg in self.opresolver.getList():
+                    for pkg in self.opresolver.getDatabase().getPkgs():
                         name = pkg["name"]
                         if not rhash.has_key(name):
                             continue
@@ -281,13 +280,13 @@ class RpmYum:
                         self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
             else:
                 if self.command.endswith("remove"):
-                    self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgList()))
+                    self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgs()))
                 else:
                     # Nice trick to support yum update /usr/bin/foo ;)
                     if f[0] == '/':
                         pkg_list = []
-                        for resolver in self.resolvers:
-                            pkg_list.extend(resolver.searchDependency((f, 0, "")))
+                        for repo in self.repos:
+                            pkg_list.extend(repo.searchDependency(f, 0, ""))
                         orderList(pkg_list, self.config.machine)
                         # We only add the first package where we find that file
                         if len(pkg_list) > 0:
@@ -360,7 +359,7 @@ class RpmYum:
             self.config.printInfo(1, "\t%s %s\n" % (op, pkg.getNEVRA()))
         i = 0
         while i < len(self.erase_list):
-            if self.erase_list[i] not in self.pydb.getPkgList():
+            if self.erase_list[i] not in self.pydb.getPkgs():
                 self.erase_list.pop(i)
             else:
                 i += 1
@@ -387,8 +386,8 @@ class RpmYum:
         obsolete something and store it in self.__obsoleteslist."""
 
         self.__obsoleteslist = []
-        for repo in self.resolvers:
-            for pkg in repo.getList():
+        for repo in self.repos:
+            for pkg in repo.getPkgs():
                 if len(pkg["obsoletes"]) > 0:
                     self.__obsoleteslist.append(pkg)
 
@@ -527,20 +526,20 @@ class RpmYum:
                     if self.config.timer:
                         time1 = clock()
                     self.repos[i].importFilelist()
-                    self.resolvers[i].reloadDependencies()
+                    self.repos[i].reloadDependencies()
                     if self.config.timer:
                         self.config.printInfo(1, "Importing filelist took %s seconds\n" % (clock() - time1))
                     modified_repo = 1
             if modified_repo:
-                self.opresolver.reloadDependencies()
-                if len(self.opresolver.searchDependency(dep)) > 0:
+                self.opresolver.getDatabase().reloadDependencies()
+                if len(self.opresolver.getDatabase().searchDependency(dep[0], dep[1], dep[2])) > 0:
                     return 1
         # Now for all other cases we need to find packages in our repos
         # that resolve the given dependency
         pkg_list = [ ]
         self.config.printInfo(2, "\t" + depString(dep) + "\n")
-        for repo in self.resolvers:
-            for upkg in repo.searchDependency(dep):
+        for repo in self.repos:
+            for upkg in repo.searchDependency(dep[0], dep[1], dep[2]):
                 if upkg in pkg_list:
                     continue
                 pkg_list.append(upkg)
@@ -638,12 +637,12 @@ class RpmYum:
         while 1:
             found = 0
             for opkg in self.__obsoleteslist:
-                if opkg in self.opresolver or opkg in self.erase_list:
+                if opkg in self.opresolver.getDatabase() or opkg in self.erase_list:
                     continue
                 if pkg["name"] == opkg["name"]:
                     continue
                 for u in opkg["obsoletes"]:
-                    s = self.opresolver.searchDependency(u)
+                    s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
                     if not pkg in s:
                             continue
                     if self.opresolver.update(opkg) > 0:
@@ -666,9 +665,8 @@ class RpmYum:
         (after warning the user)."""
 
         pkg_list = []
-        for repo in self.resolvers:
-            pkg_list.extend([p for p in repo.getList()
-                             if p["name"] == pkg["name"]])
+        for repo in self.repos:
+            pkg_list.extend(repo.getPkgsByName(pkg["name"]))
         return self.__handleUpdatePkglist(pkg, pkg_list)
 
     def __handleUpdatePkglist(self, pkg, pkg_list, is_filereq=0):
@@ -683,7 +681,7 @@ class RpmYum:
         orderList(pkg_list, self.config.machine)
         ret = 0
         for upkg in pkg_list:
-            if upkg in self.erase_list or upkg in self.opresolver:
+            if upkg in self.erase_list or upkg in self.opresolver.getDatabase():
                 continue
             # Only try to update if the package itself or the update package
             # are noarch or if they are buildarchtranslate or arch compatible.
@@ -757,10 +755,10 @@ class RpmYum:
             pkg = pkg2
         elif pkg2 in self.erase_list:
             pkg = pkg1
-        elif self.pydb.isInstalled(pkg1) and \
+        elif pkg1 in self.pydb and \
              not pkg1 in self.erase_list:
             pkg = pkg1
-        elif self.pydb.isInstalled(pkg2) and \
+        elif pkg2 in self.pydb and \
              not pkg2 in self.erase_list:
             pkg = pkg2
         elif machineDistance(pkg2["arch"], self.config.machine) < \

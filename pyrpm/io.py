@@ -32,7 +32,7 @@ except:
 from base import *
 import functions
 import package
-
+import database.lists as lists
 
 def _uriToFilename(uri):
     """Convert a file:/ URI or a local path to a local path."""
@@ -887,7 +887,7 @@ class RpmHttpIO(RpmStreamIO):
         return None
 
 
-class RpmDatabase:
+class RpmDatabase_OLD:
     """A persistent RPM database storage."""
     # FIXME: doesn't support adding/removing gpg keys
 
@@ -900,7 +900,7 @@ class RpmDatabase:
         self.config = config
         self.source = source
         self.buildroot = buildroot
-        self.filenames = FilenamesList()
+        self.filenames = lists.FilenamesList()
         self.pkglist = {}            # nevra => RpmPackage for non-key packages
         self.keyring = openpgp.PGPKeyRing()
         self.is_read = 0                # 1 if the database was already read
@@ -990,17 +990,16 @@ class RpmDatabase:
 
         return pkg in self.pkglist.values()
 
-    def isDuplicate(self, dirname, filename=None):
+    def isDuplicate(self, filename):
         """Return True if a file is contained in more than one package in the
         database.
 
         The file can be specified either as a single absolute path ("dirname")
         or as a (dirname, filename) pair."""
 
-        if filename == None:
-            (dirname, basename) = os.path.split(dirname)
-            if len(dirname) > 0 and dirname[-1] != "/":
-                dirname += "/"
+        (dirname, basename) = os.path.split(filename)
+        if len(dirname) > 0 and dirname[-1] != "/":
+            dirname += "/"
         if dirname == "/etc/init.d/" or dirname == "/etc/rc.d/init.d/":
             num = 0
             d = self.filenames.path.get("/etc/rc.d/init.d/")
@@ -1039,7 +1038,7 @@ class RpmDatabase:
             return tsource
 
 
-class RpmDB(RpmDatabase):
+class RpmDB_OLD(RpmDatabase_OLD):
     """Standard RPM database storage in BSD db."""
 
     def __init__(self, config, source, buildroot=None):
@@ -1471,7 +1470,7 @@ class RpmDB(RpmDatabase):
         except:
             return []
 
-class RpmSQLiteDB(RpmDatabase):
+class RpmSQLiteDB_OLD(RpmDatabase_OLD):
     """RPM database storage in an SQLite database."""
 
     # Tags stored in the Packages table
@@ -1694,7 +1693,7 @@ create table %s (
             cu.execute("insert into %s (id, idx, val) values (%d, %d, %s)", (tag, rowid, idx, val))
 
 
-class RpmRepo(RpmDatabase):
+class RpmRepo_OLD(RpmDatabase_OLD):
     """A (mostly) read-only RPM database storage in repodata XML.
 
     This is not a full implementation of RpmDatabase: notably the file database
@@ -2655,19 +2654,6 @@ def getRpmIOFactory(config, source, hdronly=None):
     else:
         return RpmFileIO(config, source, hdronly)
     return None
-
-
-def getRpmDBFactory(config, source, root=None):
-    """Get a RpmDatabase implementation for database "URI" source under
-    root.
-
-    Default to rpmdb:/ if no scheme is provided."""
-
-    if   source[:7] == 'rpmdb:/':
-        return RpmDB(config, source[7:], root)
-    elif source[:10] == 'sqlitedb:/':
-        return RpmSQLiteDB(config, source[10:], root)
-    return RpmDB(config, source, root)
 
 
 # vim:ts=4:sw=4:showmatch:expandtab

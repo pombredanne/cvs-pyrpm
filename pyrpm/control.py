@@ -151,7 +151,7 @@ class RpmController:
         nodeps = 1
         if resolver == None:
             nodeps = 0
-            resolver = RpmResolver(self.config, self.db.getPkgList())
+            resolver = RpmResolver(self.config, self.db.getPkgs())
             for r in self.rpms:
                 # Ignore errors from RpmResolver, the functions already warn
                 # the user if necessary.
@@ -227,7 +227,7 @@ class RpmController:
                                                % pkg.source)
                         return 0
                     pkg.source = cached
-        for pkg in self.db.getPkgList():
+        for pkg in self.db.getPkgs():
             self.triggerlist.addPkg(pkg)
         numops = len(operations)
         gc.collect()
@@ -385,7 +385,7 @@ class RpmController:
 
         Return 1 if found, 0 if not."""
 
-        pkgs = findPkgByNames([pkgname,], self.db.getPkgList())
+        pkgs = findPkgByNames([pkgname,], self.db.getPkgs())
         if len(pkgs) == 0:
             return 0
         self.rpms.append(pkgs[0])
@@ -425,12 +425,12 @@ class RpmController:
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERIN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
         os.umask(022)
-        tnumPkgs = str(self.db.getNumPkgs(pkg["name"])+1)
+        tnumPkgs = str(len(self.db.getPkgsByName(pkg["name"]))+1)
         # any-%triggerin
         for (prog, script, spkg) in tlist:
             if spkg == pkg:
                 continue
-            snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
+            snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
             try:
                 runScript(prog, script, [snumPkgs, tnumPkgs])
             except (IOError, OSError), e:
@@ -457,7 +457,7 @@ class RpmController:
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
         os.umask(022)
-        tnumPkgs = str(self.db.getNumPkgs(pkg["name"])-1)
+        tnumPkgs = str(len(self.db.getPkgsByName(pkg["name"]))-1)
         # old-%triggerun
         for (prog, script, spkg) in tlist:
             if spkg != pkg:
@@ -471,7 +471,7 @@ class RpmController:
         for (prog, script, spkg) in tlist:
             if spkg == pkg:
                 continue
-            snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
+            snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
             try:
                 runScript(prog, script, [snumPkgs, tnumPkgs])
             except (IOError, OSError), e:
@@ -489,7 +489,7 @@ class RpmController:
         tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERPOSTUN, pkg.getEVR())
         # Set umask to 022, especially important for scripts
         os.umask(022)
-        tnumPkgs = str(self.db.getNumPkgs(pkg["name"])-1)
+        tnumPkgs = str(len(self.db.getPkgsByName(pkg["name"]))-1)
         # old-%triggerpostun
         for (prog, script, spkg) in tlist:
             if spkg != pkg:
@@ -503,7 +503,7 @@ class RpmController:
         for (prog, script, spkg) in tlist:
             if spkg == pkg:
                 continue
-            snumPkgs = str(self.db.getNumPkgs(spkg["name"]))
+            snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
             try:
                 runScript(prog, script, [snumPkgs, tnumPkgs])
             except (IOError, OSError), e:

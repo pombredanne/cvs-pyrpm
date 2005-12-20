@@ -542,6 +542,7 @@ def getFreeCachespace(config, operations):
     Return 1 if there is enough space (with 30 MB slack), 0 otherwise (after
     warning the user)."""
 
+    return 1
     cachedir = "/var/cache/pyrm/"
     while 1:
         try:

@@ -86,7 +86,7 @@ itself is put into the operation list and then the corresponding erases.
 from hashlist import HashList
 from base import *
 from resolver import RpmResolver
-
+import database
 
 class RpmRelation:
     """Pre and post relations for a package (a node in the dependency
@@ -127,35 +127,33 @@ class RpmRelations:
         # [list of required RpmPackages that were dropped to break a loop]
         self.dropped_relations = { }
 
-        # generate todo list for installs
-        resolver = RpmResolver(self.config, rpms)
+        db = database.memorydb.RpmMemoryDB(self.config, None)
+        db.addPkgs(rpms)
+        resolver = RpmResolver(self.config, db, nocheck=1)
+        del db
 
-        for name in resolver:
-            for r in resolver[name]:
-                self.config.printDebug(1, "Generating relations for %s" % \
-                                       r.getNEVRA())
-                (unresolved, resolved) = resolver.getPkgDependencies(r)
-                # ignore unresolved, we are only looking at the changes,
-                # therefore not all symbols are resolvable in these changes
-                empty = 1
-                for ((name, flag, version), s) in resolved:
-                    if name.startswith("config("): # drop config requirements
-                        continue
-                    # drop requirements which are resolved by the package
-                    # itself
-                    if r in s:
-                        continue
-                    f = self._operationFlag(flag, operation)
-                    for r2 in s:
-                        self.append(r, r2, f)
-                    empty = 0
-                if empty:
-                    self.config.printDebug(1, "No relations found for %s, " % \
-                                           r.getNEVRA() + \
-                                           "generating empty relations")
-                    self.append(r, None, 0)
+        for pkg in rpms:
+            self.config.printDebug(1, "Generating relations for %s" % \
+                                   pkg.getNEVRA())
+            resolved = resolver.getResolvedPkgDependencies(pkg)
+            # ignore unresolved, we are only looking at the changes,
+            # therefore not all symbols are resolvable in these changes
+            empty = 1
+            for ((name, flag, version), s) in resolved:
+                if name.startswith("config("): # drop config requirements
+                    continue
+                f = self._operationFlag(flag, operation)
+                for pkg2 in s:
+                    self.append(pkg, pkg2, f)
+                empty = 0
+            if empty:
+                self.config.printDebug(1, "No relations found for %s, " % \
+                                       pkg.getNEVRA() + \
+                                       "generating empty relations")
+                self.append(pkg, None, 0)
 
         del resolver
+
         if self.config.debug > 1:
             # print relations
             self.config.printDebug(2, "\t==== relations (%d) " % len(self) +\
@@ -659,7 +657,6 @@ class RpmOrderer:
             if order2 == None:
                 return None
             order.extend(order2)
-
         # order erases
         if self.erases and len(self.erases) > 0:
             # generate relations
