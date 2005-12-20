@@ -18,7 +18,7 @@
 #
 
 import os
-import functions
+import pyrpm.functions
 
 class FilenamesList:
     """A mapping from filenames to RpmPackages."""
