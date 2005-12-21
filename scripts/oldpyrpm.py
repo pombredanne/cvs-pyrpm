@@ -4452,11 +4452,12 @@ def writeFile(filename, data, mode=None):
 #</Directory>
 hgauthor = "Florian La Roche <laroche@redhat.com>"
 rootdir = "/home/devel/test"
-hgrepo = "$rootdir/hgrepo"
-hgcgi = "$rootdir/hgrepo-cgi"
-hgfiles = "$rootdir/filecache"
-grepodir = "$rootdir/gitrepos"
+hgrepo = rootdir + "/hgrepo"
+hgcgi = rootdir + "/hgrepo-cgi"
+hgfiles = rootdir + "/filecache"
+grepodir = rootdir + "/gitrepos"
 mirror = "/var/www/html/mirror/"
+srepodir = rootdir + "/unpacked"
 if not os.path.isdir(mirror):
     mirror = "/home/mirror/"
 fedora = mirror + "fedora/"
@@ -4653,14 +4654,14 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
         if f not in files and f not in ("Makefile", "sources"):
             fsrc = pkgdir + "/" + f
             os.unlink(fsrc)
-            os.system("cd %s && git-update-index --remove %s" % (pkgdir, f))
+            os.system("cd %s && GIT_DIR=%s/%s git-update-index --remove %s" % (pkgdir, grepodir, reponame, f))
     if "sources" in files or "Makefile" in files:
         raise ValueError, \
             "src.rpm contains sources/Makefile: %s" % pkg.filename
     EXTRACT_SOURCE_FOR = ["MAKEDEV", "anaconda", "anaconda-help",
         "anaconda-product", "basesystem", "booty", "chkconfig",
         "device-mapper", "dmraid", "firstboot", "glibc-kernheaders", "hwdata",
-        "initscripts", "iscsi-initiator-utils", "kudzu", "mkinitrd",
+        "initscripts", "kudzu", "mkinitrd",
         "pam_krb5", "passwd", "redhat-config-kickstart",
         "redhat-config-netboot", "redhat-config-network",
         "redhat-config-securitylevel", "redhat-logos", "redhat-release",
@@ -4700,8 +4701,10 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
         "include ../pyrpm/Makefile.srpm\n",
         "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
     # XXX: also checkin the data into a per-package repo
+    os.environ["GIT_DIR"] = "%s/%s" % (grepodir, reponame)
     os.system("cd %s && { find . -path ./.git -prune -o -type f -print | sed -e 's|^./||' | xargs git-update-index --add --refresh; }" % pkgdir)
     os.system('cd %s && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
+    del os.environ["GIT_DIR"]
     # Add changelog text:
     (fd, tmpfile) = mkstemp_file("/tmp", special=1)
     fd.write("update to %s" % pkg.getNVR())
@@ -4732,7 +4735,7 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
         "\" GIT_AUTHOR_EMAIL=\"" + email + "\" GIT_AUTHOR_DATE=" + \
         buildtime + " GIT_COMMITTER_NAME=\"" + user + \
         "\" GIT_COMMITTER_EMAIL=\"" + email + "\" GIT_COMMITTER_DATE=" + \
-        buildtime + " git commit " + changelog)
+        buildtime + " GIT_DIR=" + grepodir + "/" + reponame +" git commit " + changelog)
     if tmpfile != None:
         os.unlink(tmpfile)
 
@@ -4741,7 +4744,7 @@ def cmpByTime(a, b):
 
 def createMercurial(verbose):
     if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
-        print "Error: Paths for mercurial not setup."
+        print "Error: Paths for mercurial not setup. " + hgrepo + " " + hgfiles
         return
     createCGI()
     updateGitMirrors(verbose)
@@ -4749,6 +4752,7 @@ def createMercurial(verbose):
     # Create and initialize repos if still missing.
     for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
         repodir = grepodir + "/" + reponame
+        unpackdir = srepodir + "/" + reponame
         if not dirs or not os.path.isdir(dirs[0]):
             continue
         if verbose > 2:
@@ -4758,11 +4762,12 @@ def createMercurial(verbose):
         else:
             firsttime = 1
             makeDirs(repodir)
-            os.system("cd %s && { git init-db; ln -sf %s/.git ../%s.git; }" % \
-                (repodir, reponame, reponame))
-            writeFile(repodir + "/.git/description", [repodescr + "\n"])
+            os.system("cd %s && { GIT_DIR=%s git init-db; }" % \
+                (repodir, repodir ))
+            writeFile(repodir + "/description", [repodescr + "\n"])
         if not filecache:
             filecache = hgfiles + "/" + reponame
+        makeDirs(unpackdir)
         makeDirs(filecache)
         pkgs = []
         for d in dirs:
@@ -4775,11 +4780,11 @@ def createMercurial(verbose):
         oldpkgs = {}
         for pkg in pkgs:
             name = pkg["name"]
-            pkgdir = repodir + "/" + name
+            pkgdir = unpackdir + "/" + name
             extractSrpm(reponame, pkg, pkgdir, filecache, repodir,
                 oldpkgs.get(name))
             oldpkgs[name] = pkg
-        os.system("cd %s && { git repack -d; git prune-packed; }" % repodir)
+        os.system("cd %s && { GIT_DIR=%s git repack -d; GIT_DIR=%s git prune-packed; }" % (unpackdir, repodir, repodir))
 
 
 def checkDeps(rpms, checkfileconflicts, runorderer):
