@@ -4751,7 +4751,7 @@ def createMercurial(verbose):
     updateMercurialMirrors(verbose)
     # Create and initialize repos if still missing.
     for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
-        repodir = grepodir + "/" + reponame
+        repodir = grepodir + "/" + reponame + ".git"
         unpackdir = srepodir + "/" + reponame
         if not dirs or not os.path.isdir(dirs[0]):
             continue
