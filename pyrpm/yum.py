@@ -20,10 +20,10 @@
 
 from gc import collect
 from time import clock, time
-from hashlist import HashList
 from resolver import RpmResolver
 from control import RpmController
 from package import RpmPackage
+from comps import RpmCompsXML
 from functions import *
 from io import *
 import database

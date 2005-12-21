@@ -656,6 +656,19 @@ def getFreeDiskspace(config, operations):
 
     return ret
 
+def _uriToFilename(uri):
+    """Convert a file:/ URI or a local path to a local path."""
+
+    if not uri.startswith("file:/"):
+        filename = uri
+    else:
+        filename = uri[5:]
+        if len(filename) > 1 and filename[1] == "/":
+            idx = filename[2:].find("/")
+            if idx != -1:
+                filename = filename[idx+2:]
+    return filename
+
 def cacheLocal(url, subdir, force=0):
     """Copy file from HTTP url to subdir/$(basename url).
 

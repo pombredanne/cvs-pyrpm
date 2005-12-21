@@ -19,7 +19,6 @@ import libxml2, re
 from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
 import memorydb
 from pyrpm.base import *
-from pyrpm.io import _uriToFilename
 import pyrpm.functions as functions
 import pyrpm.package as package
 import pyrpm.openpgp as openpgp
@@ -65,7 +64,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
     def read(self):
         self.is_read = 1 # FIXME: write-only
         for uri in self.source:
-            filename = _uriToFilename(uri)
+            filename = functions._uriToFilename(uri)
             filename = functions.cacheLocal(os.path.join(filename, "repodata/primary.xml.gz"), self.reponame, 1)
             if not filename:
                 continue
@@ -76,7 +75,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             self.baseurl = uri
             self.__parseNode(reader)
             for url in self.key_urls:
-                url = _uriToFilename(url)
+                url = functions._uriToFilename(url)
                 filename = functions.cacheLocal(url, self.reponame, 1)
                 try:
                     f = file(filename)
@@ -93,7 +92,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     continue
                 for k in keys:
                     self.keyring.addKey(k)
-            filename = _uriToFilename(uri)
+            filename = functions._uriToFilename(uri)
             filename = functions.cacheLocal(os.path.join(filename, "filereq.xml.gz"), self.reponame, 1)
             # If we can't find the filereq.xml.gz file it doesn't matter
             if not filename:
@@ -125,7 +124,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             return 0
         if self.filelist_imported:
             return 1
-        filename = _uriToFilename(self.baseurl)
+        filename = functions._uriToFilename(self.baseurl)
         filename = functions.cacheLocal(os.path.join(filename, "repodata/filelists.xml.gz"),
                               self.reponame, 1)
         if not filename:
@@ -147,7 +146,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self.filerequires = []
         self.config.printInfo(1, "Pass 1: Parsing package headers for file requires.\n")
         self.__readDir(self.source, "")
-        filename = _uriToFilename(self.source)
+        filename = functions._uriToFilename(self.source)
         datapath = os.path.join(filename, "repodata")
         if not os.path.isdir(datapath):
             try:
@@ -245,8 +244,11 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 except ValueError, e:
                     self.config.printWarning(0, "%s: %s" % (pkg.getNEVRA(), e))
                     continue
-                if pkg["arch"] == "src" or self.__isExcluded(pkg):
+                # pkg can be None if it is excluded
+                if pkg == None:
                     continue
+                #if pkg["arch"] == "src" or self.__isExcluded(pkg):
+                #    continue
                 pkg["yumreponame"] = self.reponame
                 self.addPkg(pkg)
             if props.has_key("name"):
@@ -262,6 +264,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
     def __isExcluded(self, pkg):
         """Return True if RpmPackage pkg is excluded by configuration."""
 
+        if pkg["arch"] == "src":
+            return 1
         if not self.config.ignorearch and \
            not functions.archCompat(pkg["arch"], self.config.machine):
             self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
@@ -431,6 +435,12 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         pkg = package.RpmPackage(self.config, "dummy", db = self)
         pkg["signature"] = {}
         pkg["signature"]["size_in_sig"] = [0,]
+        pname = None
+        pepoch = None
+        pversion = None
+        prelease = None
+        parch = None
+        excheck = 0
         while Readf() == 1:
             ntype = NodeTypef()
             if ntype != XML_READER_TYPE_ELEMENT and \
@@ -444,21 +454,31 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if    name == "name":
                 if Readf() != 1:
                     break
-                pkg["name"] = Valuef()
+                pname = Valuef()
+                pkg["name"] = pname
             elif name == "arch":
                 if Readf() != 1:
                     break
-                pkg["arch"] = Valuef()
-                if pkg["arch"] != "src":
+                parch = Valuef()
+                pkg["arch"] = parch
+                if parch != "src":
                     pkg["sourcerpm"] = ""
             elif name == "version":
                 props = self.__getProps(reader)
                 try:
-                    pkg["version"] = props["ver"]
-                    pkg["release"] = props["rel"]
-                    pkg["epoch"] = [int(props["epoch"]),]
+                    pversion = props["ver"]
+                    prelease = props["rel"]
+                    pepoch = [int(props["epoch"]),]
                 except KeyError:
                     raise ValueError, "Missing attributes of <version>"
+                pkg["version"] = pversion
+                pkg["release"] = pname
+                pkg["epoch"] = pepoch
+            elif not excheck and pname != None and pepoch != None and \
+               pversion != None and prelease != None and parch != None:
+                excheck = 1
+                if self.__isExcluded(pkg):
+                    return None
             elif name == "checksum":
                 props = self.__getProps(reader)
                 try:
