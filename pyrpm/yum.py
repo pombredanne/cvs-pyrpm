@@ -94,8 +94,11 @@ class RpmYum:
         except IOError, e:
             printError("Error reading configuration: %s" % e)
             return 0
+        gexcludes = ""
         for key in conf.keys():
             if key == "main":
+                if conf[key].has_key("exclude"):
+                gexcludes = conf[key]["exclude"] + " "
                 pass
             else:
                 sec = conf[key]
@@ -134,7 +137,7 @@ class RpmYum:
                 if self.config.timer:
                     time1 = clock()
                 self.config.printInfo(1, "Reading repository %s.\n" % key)
-                if self.__addSingleRepo(baseurls, excludes, key, keys) == 0:
+                if self.__addSingleRepo(baseurls, gexcludes + excludes, key, keys) == 0:
                     return 0
                 if self.config.timer:
                     self.config.printInfo(0, "Reading repository took %s seconds\n" % (clock() - time1))
