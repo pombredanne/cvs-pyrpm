@@ -182,7 +182,7 @@ class RpmYum:
             if "redhat-release" in [ dep[0] for dep in pkg["provides"] ]:
                 rpmconfig.relver = pkg["version"]
         if os.path.isfile(self.config.yumconf):
-            if not self.repos_read:
+            if not self.repos_read and not self.command == "remove":
                 if not self.addRepo(self.config.yumconf):
                     return 0
         else:
