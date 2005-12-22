@@ -98,8 +98,7 @@ class RpmYum:
         for key in conf.keys():
             if key == "main":
                 if conf[key].has_key("exclude"):
-                gexcludes = conf[key]["exclude"] + " "
-                pass
+                    gexcludes = conf[key]["exclude"] + " "
             else:
                 sec = conf[key]
                 if sec.has_key("baseurl"):
