@@ -130,28 +130,31 @@ class RpmRelations:
         db = database.memorydb.RpmMemoryDB(self.config, None)
         db.addPkgs(rpms)
         resolver = RpmResolver(self.config, db, nocheck=1)
-        del db
 
-        for pkg in rpms:
+        for pkg in db.getPkgs():
             self.config.printDebug(1, "Generating relations for %s" % \
                                    pkg.getNEVRA())
             resolved = resolver.getResolvedPkgDependencies(pkg)
             # ignore unresolved, we are only looking at the changes,
             # therefore not all symbols are resolvable in these changes
-            empty = 1
+            l = len(self)
             for ((name, flag, version), s) in resolved:
                 if name.startswith("config("): # drop config requirements
                     continue
                 f = self._operationFlag(flag, operation)
                 for pkg2 in s:
+                    if pkg2 == pkg:
+                        continue
                     self.append(pkg, pkg2, f)
-                empty = 0
-            if empty:
+            if len(self) == l:
+                # if there are no new relations, then pkg has either no
+                # relations or only self-relations
                 self.config.printDebug(1, "No relations found for %s, " % \
                                        pkg.getNEVRA() + \
                                        "generating empty relations")
                 self.append(pkg, None, 0)
 
+        del db
         del resolver
 
         if self.config.debug > 1:
@@ -649,25 +652,34 @@ class RpmOrderer:
 
         # order installs
         if self.installs and len(self.installs) > 0:
-            # generate relations
-            relations = RpmRelations(self.config, self.installs, OP_INSTALL)
+            if len(self.installs) == 1:
+                # special case: one package to install, no ordering required
+                order.extend(self.installs)
+            else:
+                # generate relations
+                relations = RpmRelations(self.config, self.installs,
+                                         OP_INSTALL)
 
-            # order package list
-            order2 = relations.genOrder()
-            if order2 == None:
-                return None
-            order.extend(order2)
+                # order package list
+                order2 = relations.genOrder()
+                if order2 == None:
+                    return None
+                order.extend(order2)
         # order erases
         if self.erases and len(self.erases) > 0:
-            # generate relations
-            relations = RpmRelations(self.config, self.erases, OP_ERASE)
+            if len(self.erases) == 1:
+                # special case: one package to erase, no ordering required
+                order.extend(self.erases)
+            else:
+                # generate relations
+                relations = RpmRelations(self.config, self.erases, OP_ERASE)
 
-            # order package list
-            order2 = relations.genOrder()
-            if order2 == None:
-                return None
-            order2.reverse()
-            order.extend(order2)
+                # order package list
+                order2 = relations.genOrder()
+                if order2 == None:
+                    return None
+                order2.reverse()
+                order.extend(order2)
 
         return order
 
