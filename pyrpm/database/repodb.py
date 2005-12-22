@@ -228,9 +228,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         Valuef = reader.Value
         while Readf() == 1:
             ntype = NodeTypef()
+            if ntype != XML_READER_TYPE_ELEMENT:
+                continue
             name = Namef()
-            if ntype != XML_READER_TYPE_ELEMENT or \
-               (name != "package" and name != "filereq"):
+            if name != "package" and name != "filereq":
                 continue
             if name == "filereq":
                 if Readf() != 1:
@@ -238,7 +239,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 self.filereqs.append(Valuef())
                 continue
             props = self.__getProps(reader)
-            if props.get("type") == "rpm":
+            if   props.get("type") == "rpm":
                 try:
                     pkg = self.__parsePackage(reader)
                 except ValueError, e:
@@ -251,7 +252,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 #    continue
                 pkg["yumreponame"] = self.reponame
                 self.addPkg(pkg)
-            if props.has_key("name"):
+            elif props.has_key("name"):
                 try:
                     arch = props["arch"]
                 except KeyError:
@@ -472,7 +473,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 except KeyError:
                     raise ValueError, "Missing attributes of <version>"
                 pkg["version"] = pversion
-                pkg["release"] = pname
+                pkg["release"] = prelease
                 pkg["epoch"] = pepoch
             elif not excheck and pname != None and pepoch != None and \
                pversion != None and prelease != None and parch != None:

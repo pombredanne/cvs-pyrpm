@@ -20,8 +20,9 @@
 
 import os.path, sys, pwd, grp, md5, sha
 from stat import S_ISREG
-from functions import *
 from io import getRpmIOFactory
+from base import RpmFileInfo, RPM_HEADER_INDEX_MAGIC, RPM_HEADER_LEAD_MAGIC, RPMFILE_GHOST, RPMFILE_CONFIG, RPMFILE_NOREPLACE, RPM_STRING, RPM_BIN, RPM_STRING_ARRAY, RPM_I18NSTRING, RPM_INT8, RPM_INT16, RPM_INT32, RPM_INT64, RPMSENSE_EQUAL, arch_compats
+import functions
 import openpgp
 
 
@@ -381,8 +382,7 @@ class RpmPackage(RpmData):
             numPkgs = str(len(db.getPkgsByName(self["name"]))+1)
         if self["preinprog"] != None and not self.config.noscripts:
             try:
-                (status, rusage) = runScript(self["preinprog"], self["prein"],
-                                         [numPkgs], rusage = self.config.rusage)
+                (status, rusage) = functions.runScript(self["preinprog"], self["prein"], [numPkgs], rusage = self.config.rusage)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running pre install script: %s" \
                     % (self.getNEVRA(), e))
@@ -399,8 +399,7 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None and not self.config.noscripts:
             try:
-                (status, rusage) = runScript(self["postinprog"], self["postin"],
-                                         [numPkgs], rusage = self.config.rusage)
+                (status, rusage) = functions.runScript(self["postinprog"], self["postin"], [numPkgs], rusage = self.config.rusage)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running post install script: %s" \
                     % (self.getNEVRA(), e))
@@ -425,8 +424,7 @@ class RpmPackage(RpmData):
             numPkgs = str(len(db.getPkgsByName(self["name"]))-1)
         if self["preunprog"] != None and not self.config.noscripts:
             try:
-                (status, rusage) = runScript(self["preunprog"], self["preun"],
-                                         [numPkgs], rusage = self.config.rusage)
+                (status, rusage) = functions.runScript(self["preunprog"], self["preun"], [numPkgs], rusage = self.config.rusage)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running pre uninstall script: %s" \
                     % (self.getNEVRA(), e))
@@ -481,8 +479,7 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None and not self.config.noscripts:
             try:
-                (status, rusage) = runScript(self["postunprog"], self["postun"],
-                                         [numPkgs], rusage = self.config.rusage)
+                (status, rusage) = functions.runScript(self["postunprog"], self["postun"], [numPkgs], rusage = self.config.rusage)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running post uninstall script: %s" \
                     % (self.getNEVRA(), e))
@@ -589,7 +586,6 @@ class RpmPackage(RpmData):
         # We don't need those lists earlier, so we create them "on-the-fly"
         # before we actually start extracting files.
         self.__generateFileInfoList()
-        #self.__generateHardLinkList()
         self.hardlinks = {}
         (filename, cpio, filesize) = self.io.read()
         nfiles = len(files)
@@ -614,7 +610,7 @@ class RpmPackage(RpmData):
                     if filesize == 0 and S_ISREG(rfi.mode): # Only hardlink reg
                         self.__possibleHardLink(rfi)
                     else:
-                        installFile(rfi, cpio, filesize, not issrc)
+                        functions.installFile(rfi, cpio, filesize, not issrc)
                         # Many scripts have problems like e.g. openssh is
                         # stopping all sshd (also outside of a chroot if
                         # it is de-installed. Real hacky workaround:
@@ -663,7 +659,7 @@ class RpmPackage(RpmData):
             if self["arch"] == "noarch":
                 return 1
             for pkg in plist:
-                if not archDuplicate(self["arch"], pkg["arch"]) and \
+                if not functions.archDuplicate(self["arch"], pkg["arch"]) and \
                    self["arch"] in arch_compats[pkg["arch"]]:
                     return 0
             return 1
@@ -678,7 +674,7 @@ class RpmPackage(RpmData):
             try:
                 f = open(rfi.filename)
                 m = md5.new()
-                updateDigestFromFile(m, f)
+                functions.updateDigestFromFile(m, f)
                 f.close()
                 md5sum = m.hexdigest()
             except IOError, e:
@@ -749,7 +745,7 @@ class RpmPackage(RpmData):
                 try:
                     f = open(rfi.filename)
                     m = md5.new()
-                    updateDigestFromFile(m, f)
+                    functions.updateDigestFromFile(m, f)
                     f.close()
                     md5sum = m.hexdigest()
                 except IOError, e:
@@ -788,8 +784,8 @@ class RpmPackage(RpmData):
                 dirname = os.path.dirname(filename)
                 if dirname[-1] != "/":
                     dirname += "/"
-                dirindex = bsearch(dirname, self["dirnames"],
-                                   len(self["dirnames"]))
+                dirindex = functions.bsearch(dirname, self["dirnames"],
+                                             len(self["dirnames"]))
                 if dirindex < 0:
                     self["dirnames"].append(dirname)
                     dirindex = len(self["dirnames"]) - 1
@@ -825,8 +821,8 @@ class RpmPackage(RpmData):
         if not links:
             return
         for hrfi in links:
-            makeDirs(hrfi.filename)
-            createLink(rfi.filename, hrfi.filename)
+            functions.makeDirs(hrfi.filename)
+            functions.createLink(rfi.filename, hrfi.filename)
         del self.hardlinks[key]
 
     def __removeHardlinks(self, rfi):
@@ -844,7 +840,7 @@ class RpmPackage(RpmData):
         issrc = self.isSourceRPM()
         for key in self.hardlinks.keys():
             rfi = self.hardlinks[key].pop(0)
-            installFile(rfi, None, 0, not issrc)
+            functions.installFile(rfi, None, 0, not issrc)
             self.__handleHardlinks(rfi)
 
     def getRpmFileInfo(self, filename):
@@ -1023,21 +1019,21 @@ class RpmPackage(RpmData):
     def __lt__(self, pkg):
         if not isinstance(pkg, RpmData):
             return 0
-        return pkgCompare(self, pkg) < 0
+        return functions.pkgCompare(self, pkg) < 0
 
     def __le__(self, pkg):
         if not isinstance(pkg, RpmData):
             return 0
-        return pkgCompare(self, pkg) <= 0
+        return functions.pkgCompare(self, pkg) <= 0
 
     def __ge__(self, pkg):
         if not isinstance(pkg, RpmData):
             return 1
-        return pkgCompare(self, pkg) >= 0
+        return functions.pkgCompare(self, pkg) >= 0
 
     def __gt__(self, pkg):
         if not isinstance(pkg, RpmData):
             return 1
-        return pkgCompare(self, pkg) > 0
+        return functions.pkgCompare(self, pkg) > 0
 
 # vim:ts=4:sw=4:showmatch:expandtab

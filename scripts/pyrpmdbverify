@@ -471,7 +471,7 @@ def main():
         if os.path.isfile(yumconf):
             yum.addRepo(yumconf)
         for repo in yum.repos:
-            plist = repo.getPkgList()
+            plist = repo.getPkgs()
             for pkg in plist:
                 pkg.clear()
                 pkg.open()

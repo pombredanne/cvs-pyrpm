@@ -52,7 +52,7 @@ class FakeRepo:
     def __init__(self, pkglist):
         self.pkglist = pkglist
 
-    def getPkgList(self):
+    def getPkgs(self):
         return self.pkglist
 
     def importFilelist(self):
@@ -109,25 +109,25 @@ def main():
     random.seed(12345)
     yum.setCommand("update")
     while count > 0:
-        if not yum.repos_read and len(frepo.getPkgList()) > 0:
+        if not yum.repos_read and len(frepo.getPkgs()) > 0:
             yum.repos.append(frepo)
-            r = RpmResolver(rpmconfig, frepo.getPkgList())
+            r = RpmResolver(rpmconfig, frepo.getPkgs())
             yum.resolvers.append(r)
         if yum.prepareTransaction() == 0:
             break
         resolver = yum.opresolver
         count -= 1
         if count % 2:
-            pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgList()
+            pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgs()
             pkg = pkglist[random.randrange(0, len(pkglist))]
             while pkg["name"].find("-debuginfo") >= 0:
-                pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgList()
+                pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgs()
                 pkg = pkglist[random.randrange(0, len(pkglist))]
             yum.setCommand("update")
             rpmconfig.printInfo(1, "Updating package %s\n" % pkg.getNEVRA())
             resolver.update(pkg)
         else:
-            pkglist = resolver.getList()
+            pkglist = resolver.getDatabase().getPkgs()
             pkg = pkglist[random.randrange(0, len(pkglist))]
             yum.setCommand("remove")
             rpmconfig.printInfo(1, "Erasing package %s\n" % pkg.getNEVRA())

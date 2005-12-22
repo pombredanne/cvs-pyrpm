@@ -61,7 +61,7 @@ def main():
     tpydb = getRpmDBFactory(rpmconfig, args[1], rpmconfig.buildroot)
 
     spydb.read()
-    for pkg in spydb.getPkgList():
+    for pkg in spydb.getPkgs():
         tpydb.addPkg(pkg)
 
     return 1
