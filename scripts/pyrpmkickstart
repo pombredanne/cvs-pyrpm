@@ -860,6 +860,7 @@ def exit(code):
         if umount_all(tempdir+"/") == 0:
             if not nocleanup:
                 shutil.rmtree(tempdir)
+#        tempdir = None
     if partitionmap:
         for onpart in partitionmap:
             if partitionmap[onpart]["name"] == "swap" and \
@@ -1257,7 +1258,6 @@ if len(args) > 1:
             if not key:
                 print "ERROR: Unable to find an unused name for '%s'" % val
                 exit(1)
-            print "Using '%s' as disk '%s'" % (val, key)
         if not key:
             print "ERROR: Unsupported type of '%s'." % val
             exit(1)
@@ -1484,10 +1484,10 @@ to_create = { }
 for name in partitions.keys():
     part = partitions[name]
     if part.has_key("onpart"):
-        # fixed partition
+        # partition is defined
         onpart = part["onpart"]
+        # remove leading '/dev/' to be compatible with old kickstart versions
         if onpart[:5] == "/dev/":
-            # remove leading '/dev/'
             onpart = onpart[5:]
         error = 0
         try:
@@ -1509,16 +1509,28 @@ for name in partitions.keys():
             exit(1)
     else:
         # create partition
-        disk = "hda"
+        ondisk = "hda"
+        # TODO: use SCSI disks
+        # Not possible right now, because there is no hardware detection.
+        # Therefore the SCSI driver is not in the initrd.
+        #if not diskmap.has_key(ondisk):
+        #    if diskmap.has_key("sda"):
+        #         ondisk = "sda"
+        if not diskmap.has_key(ondisk):
+            if diskmap.has_key("dasda"):
+                ondisk = "dasda"
         if part.has_key("ondisk"):
-            disk = part["ondisk"]
+            ondisk = part["ondisk"]
+            # drop leading '/dev/' to be compatible with old kickstart versions
+            if ondisk[:5] == "/dev/":
+                ondisk = ondisk[5:]
         if not part.has_key("size"):
             print "ERROR: No size given for %s." % name
             exit(1)
-        if not diskmap.has_key(disk):
-            print "ERROR: '%s' is not defined." % disk
+        if not diskmap.has_key(ondisk):
+            print "ERROR: '%s' is not defined." % ondisk
             exit(1)
-        to_create.setdefault(disk, [ ]).append(name)
+        to_create.setdefault(ondisk, [ ]).append(name)
 
 # create primary and logical lists
 for disk in to_create.keys():
@@ -2315,6 +2327,7 @@ if ks.has_key("install"):
             if not desktop in groups:
                 print "Adding group %s" % desktop
                 pkgs.extend(comps.getPackageNames(desktop))
+        # TODO: add xorg driver package for FC-5
 
         # add comps package (FC-4)
         if not "comps" in pkgs:
@@ -2647,7 +2660,7 @@ fd.close()
 if orig_yum:
     yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf, buildroot)
 else:
-    yum = "PYTHONPATH=%s %s/scripts/pyrpmyum -y -c '%s' -r '%s'" % \
+    yum = "PYTHONPATH=%s %s/scripts/pyrpmyum -y --hash -c '%s' -r '%s'" % \
           (PYRPMDIR, PYRPMDIR, yum_conf, buildroot)
     # --servicehack
 if ks["packages"] and ks["packages"].has_key("ignoredeps") and \
@@ -2671,9 +2684,10 @@ if pid != 0:
             print "ERROR: Upgrade failed, aborting."
         exit(1)
 else:
-    os.system(yum)
+    if os.system(yum) != 0:
+        sys.exit(255)
     sys.exit(0)
-
+    
 ### configuration ###
 
 # check system dirs
