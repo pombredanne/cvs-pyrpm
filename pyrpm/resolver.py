@@ -411,8 +411,12 @@ class RpmResolver:
                pkg2["arch"] != "noarch" and \
                pkg1_fi.filecolor != pkg2_fi.filecolor and \
                pkg1_fi.filecolor > 0 and pkg2_fi.filecolor > 0:
-            # TODO: user and group
             return 0
+
+        # check if user and group are identical
+        if pkg1_fi.uid != pkg2_fi.uid and \
+               pkg1_fi.gid != pkg2_fi.gid:
+            return 1
         # ignore directories
         if S_ISDIR(pkg1_fi.mode) and S_ISDIR(pkg2_fi.mode):
             return 0
