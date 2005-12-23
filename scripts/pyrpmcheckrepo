@@ -65,7 +65,7 @@ def main():
     rpmconfig.test = 1
 
     # No default repo
-    rpmconfig.yumconf = '/etc/nosuchconf'
+    rpmconfig.yumconf = ['/etc/nosuchconf']
 
     # Don't do any diskchecks
     rpmconfig.ignoresize = 1
@@ -99,7 +99,7 @@ def main():
     upargs = args[pos+1:]
 
     if os.path.isfile(upargs[0]) and not upargs[0].endswith(".rpm"):
-        rpmconfig.yumconf = upargs[0]
+        rpmconfig.yumconf = [upargs[0]]
         upargs = upargs[1:]
 
     yum.setCommand("update")

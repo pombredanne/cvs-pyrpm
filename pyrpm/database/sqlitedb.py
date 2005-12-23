@@ -15,8 +15,13 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import memorydb
-import sqlite
+
+import sqlite, os, os.path, string
+from types import TupleType
+from binascii import b2a_hex, a2b_hex
+
+import memorydb, pyrpm.package
+from pyrpm.base import rpmtag, RPM_BIN, RPM_INT8, RPM_INT16, RPM_INT32, RPM_INT64
 
 
 class RpmSQLiteDB(memorydb.RpmMemoryDB):
@@ -53,7 +58,7 @@ class RpmSQLiteDB(memorydb.RpmMemoryDB):
         cu.execute("begin")
         cu.execute("select rowid, "+string.join(self.pkgnames, ",")+" from Packages")
         for row in cu.fetchall():
-            pkg = package.RpmPackage(self.config, "dummy")
+            pkg = pyrpm.package.RpmPackage(self.config, "dummy")
             pkg["install_id"] = row[0]
             for i in xrange(len(self.pkgnames)):
                 if row[i+1] != None:

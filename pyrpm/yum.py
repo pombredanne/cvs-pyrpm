@@ -181,12 +181,13 @@ class RpmYum:
         for pkg in self.pydb.getPkgs():
             if "redhat-release" in [ dep[0] for dep in pkg["provides"] ]:
                 rpmconfig.relver = pkg["version"]
-        if os.path.isfile(self.config.yumconf):
-            if not self.repos_read and not self.command == "remove":
-                if not self.addRepo(self.config.yumconf):
-                    return 0
-        else:
-            printWarning(1, "Couldn't find given yum config file, skipping read of repos")
+        for yumconf in self.config.yumconf:
+            if os.path.isfile(yumconf):
+                if not self.repos_read and not self.command == "remove":
+                    if not self.addRepo(yumconf):
+                        return 0
+            else:
+                printWarning(1, "Couldn't find given yum config file, skipping read of repo %s" % yumconf)
         self.repos_read = 1
         db = database.memorydb.RpmMemoryDB(self.config, None)
         db.addPkgs(self.pydb.getPkgs())

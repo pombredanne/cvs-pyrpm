@@ -418,7 +418,7 @@ def main():
     external_check = 1
 
     # No yum config file by default
-    yumconf = None
+    yumconf = []
 
     # Argument parsing
     try:
@@ -441,7 +441,7 @@ def main():
         elif opt == "--noexternal":
             external_check = 0
         elif opt == "-c":
-            yumconf = val
+            yumconf.append(val)
 
     readRpmDB()
     for pkg in packages.values():
@@ -464,12 +464,13 @@ def main():
             except (IOError, ValueError), e:
                 sys.stderr.write("%s: %s\n" % (arg, e))
 
-    if yumconf:
+    if len(yumconf) > 0:
         print "Reading package headers from yum repository. Please wait..."
         rpmconfig.nofileconflicts = 1
         yum = RpmYum(rpmconfig)
-        if os.path.isfile(yumconf):
-            yum.addRepo(yumconf)
+        for yc in yumconf:
+            if os.path.isfile(yc):
+                yum.addRepo(yc)
         for repo in yum.repos:
             plist = repo.getPkgs()
             for pkg in plist:

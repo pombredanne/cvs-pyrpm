@@ -727,6 +727,7 @@ def parseYumOptions(argv, yum):
         return None
 
     # Argument handling
+    new_yumconf = 0
     for (opt, val) in opts:
         if   opt in ['-?', "--help"]:
             return None
@@ -735,7 +736,10 @@ def parseYumOptions(argv, yum):
         elif opt in ["-r", "--root", "--installroot"]:
             rpmconfig.buildroot = val
         elif opt == "-c":
-            rpmconfig.yumconf = val
+            if not new_yumconf:
+                rpmconfig.yumconf = []
+                new_yumconf = 1
+            rpmconfig.yumconf.append(val)
         elif opt == "--quiet":
             rpmconfig.debug = 0
             rpmconfig.warning = 0
