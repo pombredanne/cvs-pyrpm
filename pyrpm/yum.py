@@ -362,7 +362,16 @@ class RpmYum:
             self.config.printInfo(1, "Nothing to do.\n")
             return 1
         self.config.printInfo(1, "The following operations will now be run:\n")
+        ipkgs = 0
+        upkgs = 0
+        epkgs = 0
         for (op, pkg) in ops:
+            if   op == OP_INSTALL:
+                ipkgs += 1
+            elif op == OP_UPDATE:
+                upkgs += 1
+            elif op == OP_ERASE:
+                epkgs += 1
             self.config.printInfo(1, "\t%s %s\n" % (op, pkg.getNEVRA()))
         i = 0
         while i < len(self.erase_list):
@@ -374,6 +383,8 @@ class RpmYum:
             self.config.printInfo(0, "Warning: Following packages will be automatically removed from your system:\n")
             for pkg in self.erase_list:
                 self.config.printInfo(0, "\t%s\n" % pkg.getNEVRA())
+        if self.confirm:
+            self.config.printInfo(0, "Installing %d packages, updating %d packages, erasing %d packages\n" % (ipkgs, upkgs, epkgs))
         if self.confirm and not self.config.test:
             choice = raw_input("Is this ok [y/N]: ")
             if len(choice) == 0 or (choice[0] != "y" and choice[0] != "Y"):
@@ -422,6 +433,7 @@ class RpmYum:
 
         Return 1 after reaching a steady state."""
 
+        self.config.printInfo(1, "Resolving dependencies...\n")
         # List of filereqs we already checked
         self.filereqs = []
         self.iteration = 1
@@ -448,19 +460,19 @@ class RpmYum:
         unresolved = self.opresolver.getUnresolvedDependencies()
         conflicts = self.opresolver.getConflicts()
         if len(unresolved) > 0:
-            self.config.printInfo(1, "Unresolvable dependencies:\n")
+            self.config.printError("Unresolvable dependencies:\n")
             for pkg in unresolved.keys():
-                self.config.printInfo(1, "Unresolved dependencies for %s\n" %
-                                         pkg.getNEVRA())
+                self.config.printError("Unresolved dependencies for %s\n" %
+                                       pkg.getNEVRA())
                 for dep in unresolved[pkg]:
-                    self.config.printInfo(1, "\t" + depString(dep)+"\n")
+                    self.config.printError("\t" + depString(dep)+"\n")
         if len(conflicts) > 0:
-            self.config.printInfo(1, "Unresolvable conflicts:\n")
+            self.config.printError("Unresolvable conflicts:\n")
             for pkg in conflicts.keys():
-                self.config.printInfo(1, "Unresolved conflicts for %s\n" %
-                                         pkg.getNEVRA())
+                self.config.printError("Unresolved conflicts for %s\n" %
+                                       pkg.getNEVRA())
                 for (dep, r) in conflicts[pkg]:
-                    self.config.printInfo(1, "\t" + depString(dep)+"\n")
+                    self.config.printError("\t" + depString(dep)+"\n")
         if len(unresolved) == 0 and len(conflicts) == 0:
             return 1
         return 0
@@ -482,10 +494,10 @@ class RpmYum:
         while len(unresolved) > 0:
             pkg = unresolved.keys()[ppos]
             dep = unresolved[pkg][dpos]
-            self.config.printInfo(1, "Dependency iteration %s\n" %
+            self.config.printInfo(2, "Dependency iteration %s\n" %
                                      str(self.iteration))
             self.iteration += 1
-            self.config.printInfo(1, "Resolving dependency for %s\n" %
+            self.config.printInfo(2, "Resolving dependency for %s\n" %
                                      pkg.getNEVRA())
             # If we were able to resolve this dep in any way we reget the
             # deps and do the next internal iteration
