@@ -8,5 +8,6 @@ pyrpm.spec
 scripts/Makefile
 doc/Makefile
 pyrpm/Makefile
+pyrpm/database/Makefile
 tests/Makefile
 ])
