@@ -22,7 +22,7 @@
 import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, \
        signal, types, shutil, re
 
-PYRPMDIR = os.path.abspath("..")
+PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 
@@ -38,7 +38,7 @@ def umount_all(dir):
     try:
         fd = open("/proc/mounts", "r")
     except Exception:
-        print "ERROR: Unable to open '/proc/mount2' for reading."
+        print "ERROR: Unable to open '/proc/mounts' for reading."
         return
 
     while 1:
