@@ -724,3 +724,8 @@ def swapLabel(device):
             return l[:i]
     return l
 
+def getLabel(device):
+    label = ext2Label(device)
+    if not label:
+        label = swapLabel(device)
+    return label
