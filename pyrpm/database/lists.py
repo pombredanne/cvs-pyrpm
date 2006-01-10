@@ -37,7 +37,7 @@ class FilenamesList:
 
         if pkg.has_key("oldfilenames"):
             for f in pkg["oldfilenames"]:
-                self.oldfilenames.setdefault(f, []).append(pkg)
+                self.oldfilenames.setdefault(f, [ ]).append(pkg)
             return
         basenames = pkg["basenames"]
         if basenames == None:
@@ -46,10 +46,10 @@ class FilenamesList:
         dirnames = pkg["dirnames"]
         path = self.path
         for i in dirnames:
-            path.setdefault(i, {})
+            path.setdefault(i, { })
         for i in xrange(len(basenames)):
             dirname = dirnames[dirindexes[i]]
-            path[dirname].setdefault(basenames[i], []).append(pkg)
+            path[dirname].setdefault(basenames[i], [ ]).append(pkg)
 
     def removePkg(self, pkg):
         """Remove all files from RpmPackage pkg from self."""
@@ -85,9 +85,8 @@ class FilenamesList:
         (dirname, basename) = os.path.split(filename)
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
-
-        if self.path.has_key(dirname) and self.path[dirname].has_key(filename):
-            return len(self.path[dirname][filename]) > 0
+        if self.path.has_key(dirname) and self.path[dirname].has_key(basename):
+            return len(self.path[dirname][basename]) > 0
         return 0
 
     def duplicates(self):
