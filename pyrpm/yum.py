@@ -101,6 +101,9 @@ class RpmYum:
                     gexcludes = conf[key]["exclude"] + " "
             else:
                 sec = conf[key]
+                # Honor disabled repos :)
+                if sec.has_key("enabled") and sec["enabled"] == "0":
+                    continue
                 if sec.has_key("baseurl"):
                     baseurls = sec["baseurl"][:]
                 else:

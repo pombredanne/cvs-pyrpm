@@ -472,8 +472,10 @@ class RpmPackage(RpmData):
                         if not (rfi.flags & RPMFILE_GHOST):
                             self.config.printWarning(2, "Couldn't remove file %s from pkg %s" \
                                 % (f, self.source))
+        if nfiles == 0:
+            nfiles = 1
         if self.config.printhash:
-            self.config.printInfo(0, "\n")
+            self.config.printInfo(0, "#\n"*(30-int(30*n/nfiles)))
         else:
             self.config.printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
