@@ -690,7 +690,7 @@ class RpmStreamIO(RpmIO):
         # Old rpms have the provide stored in the additional headers after
         # the header image tag.
         # Also those rpms already had the archivesize in the normal header
-        # as well, so we need to put 
+        # as well, so we need to put
         if header.has_key("rpmversion"):
             if   header["rpmversion"].startswith("3."):
                 # In rpm 3.x there was only the oldfilenames tag, but rpm

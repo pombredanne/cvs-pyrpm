@@ -36,7 +36,7 @@ class RpmMemoryDB(db.RpmDatabase):
         self.clear()
         self.__len__ = self.pkgs.__len__
         self.__getitem__ = self.pkgs.__getitem__
-        
+
     def __contains__(self, pkg):
         name = pkg["name"]
         if self.names.has_key(name) and pkg in self.names[name]:
@@ -112,10 +112,10 @@ class RpmMemoryDB(db.RpmDatabase):
         if self.names.has_key(name):
             return self.names[name]
         return [ ]
-    
+
     def getPkgs(self):
         return self.pkgs
-    
+
     def getNames(self):
         return self.names.keys()
 
@@ -129,7 +129,7 @@ class RpmMemoryDB(db.RpmDatabase):
 
     def getProvides(self):
         return self.provides_list
-    
+
     def getFilenames(self):
         return self.filenames_list
 
@@ -141,7 +141,7 @@ class RpmMemoryDB(db.RpmDatabase):
 
     def getRequires(self):
         return self.requires_list
-    
+
     def getConflicts(self):
         return self.conflicts_list
 
@@ -171,7 +171,7 @@ class RpmMemoryDB(db.RpmDatabase):
 
     def searchProvides(self, name, flag, version):
         return self.provides_list.search(name, flag, version)
-    
+
     def searchFilenames(self, filename):
         return self.filenames_list.search(filename)
 

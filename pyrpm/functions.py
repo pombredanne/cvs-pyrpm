@@ -715,7 +715,7 @@ def parseYumOptions(argv, yum):
     try:
       opts, args = getopt.getopt(argv, "?vhc:r:y",
         ["help", "verbose",
-         "hash", "version", "quiet", "dbpath=", "root=", "installroot=", 
+         "hash", "version", "quiet", "dbpath=", "root=", "installroot=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
          "noorder", "noscripts", "notriggers", "excludedocs", "excludeconfigs",

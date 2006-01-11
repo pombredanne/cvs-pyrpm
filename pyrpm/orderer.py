@@ -552,7 +552,7 @@ class RpmRelations:
                 # for loop detection, call orderLoopFunc
                 # see function description
                 self.orderLoopFunc(sorted_loops)
-                
+
                 if self.breakupLoop(loops, sorted_loops[0]) != 1:
                     self.config.printError("Unable to breakup loop.")
                     return None
@@ -584,9 +584,9 @@ class RpmOrderer:
         installs is a list of added RpmPackage's
         erases a list of removed RpmPackage's (including updated/obsoleted)
         updates is a hash: new RpmPackage => ["originally" installed RpmPackage
-        	removed by update]
+            removed by update]
         obsoletes is a hash: new RpmPackage => ["originally" installed
-        	RpmPackage removed by update]
+            RpmPackage removed by update]
         installs, updates and obsoletes can be None."""
 
         self.config = config

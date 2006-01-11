@@ -63,7 +63,7 @@ class FilenamesList:
                 if len(self.oldfilenames[f]) == 0:
                     del self.oldfilenames[f]
             return
-                
+
         basenames = pkg["basenames"]
         if basenames == None:
             # XXX we should also support "oldfilenames"

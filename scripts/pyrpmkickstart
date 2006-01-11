@@ -348,7 +348,7 @@ OPTIONS
                    selection.
   --no-stage2      Do not mount stage2.img from installation source, use host
                    system tools to format partitions. This will not work for
-                   all host and client system combinations, but could help 
+                   all host and client system combinations, but could help
                    with others.
   --upgrade=<part> Upgrade installation in partition <part>. This is only
                    useful for upgrades and if there is more than one
@@ -655,7 +655,7 @@ else:
     # generate partitions according to fstab entries as onpart and noformat
 
     print "Serching for installations"
-    
+
     fstemp_dir = tempdir+"/fstemp"
     os.mkdir(fstemp_dir)
 
@@ -671,7 +671,7 @@ else:
                 exit(1)
             onpart = "%s%s" % (disk, part)
             labelmap[label] = onpart
-            
+
             if partition[part]["fstype"] in [ "ext2", "ext3" ] and \
                    partition[part]["native_type"] == 0x83:
 
@@ -1465,9 +1465,9 @@ if len(to_format) > 0:
         tune2fs_prog = "/sbin/tune2fs"
         mkswap_prog = "/sbin/mkswap"
         chroot = None
-        
+
     ### format partitions ###
-    
+
     for onpart in to_format:
         name = partitionmap[onpart]["name"]
         label = partitionmap[onpart]["label"]
@@ -2002,7 +2002,7 @@ else:
     if os.system(yum) != 0:
         sys.exit(255)
     sys.exit(0)
-    
+
 ### configuration ###
 
 # check system dirs

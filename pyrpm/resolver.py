@@ -102,7 +102,7 @@ class RpmResolver:
         # new RpmPackage
         # => ["originally" installed RpmPackage removed by update]
         self.updates = { }
-        self.erases = [ ] # Removed RpmPackage's        
+        self.erases = [ ] # Removed RpmPackage's
 
         # new RpmPackage =>
         # ["originally" installed RpmPackage obsoleted by update]

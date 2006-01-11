@@ -40,7 +40,7 @@ class RpmDatabase:
         self.clear()
         self.keyring = openpgp.PGPKeyRing()
         self.is_read = 0                # 1 if the database was already read
-        
+
     def __contains__(self, pkg):
         return None
 
@@ -81,7 +81,7 @@ class RpmDatabase:
 
     def searchName(self, name):
         raise NotImplementedError
-    
+
     def getPkgs(self, dep):
         raise NotImplementedError
 

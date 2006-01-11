@@ -139,7 +139,7 @@ class RpmSQLiteDB(memorydb.RpmMemoryDB):
         if not self.cx:
             return 0
 
-	memorydb.RpmMemoryDB.removePkg(self, pkg)
+        memorydb.RpmMemoryDB.removePkg(self, pkg)
 
         if nowrite:
             return 1
