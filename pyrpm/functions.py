@@ -18,7 +18,7 @@
 
 
 import fcntl, os, os.path, struct, sys, resource, re, getopt, errno, signal
-import shutil, fnmatch
+import shutil, fnmatch, sha, md5
 from types import TupleType, ListType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from bsddb import hashopen
@@ -694,6 +694,31 @@ def cacheLocal(url, subdir, force=0):
         else:
             return None
     return f
+
+def checksumCacheLocal(url, subdir, type):
+    """Calculates and returns the checksum for a give URL and corresponding
+    subdir. The type parameter is either "sha" or "md5".
+
+    Returns None if no cache file for the given URL is there or a wrong type
+    was given, otherwise the calculated checksum."""
+    digest = None
+    if   type == "sha":
+        digest = sha.new()
+    elif type == "md5":
+        digest = md5.new()
+    else:
+        return (None, None)
+    if url.startswith("http://") or url.startswith("ftp://"):
+        fname = os.path.join("/var/cache/pyrpm", subdir)
+        fname = os.path.join(fname, os.path.basename(url))
+    else:
+        fname = _uriToFilename(url)
+    try:
+        fd = open(fname)
+        updateDigestFromFile(digest, fd)
+        return (digest.hexdigest(), fname)
+    except:
+        return (None, None)
 
 def parseBoolean(str):
     """Convert str to a boolean.

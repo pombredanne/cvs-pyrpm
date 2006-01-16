@@ -54,6 +54,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self.baseurl = None
         self.excludes = excludes.split()
         self.reponame = reponame
+        self.repomd = None
         self.key_urls = key_urls
         self.filelist_imported  = 0
         # Files included in primary.xml
@@ -64,8 +65,9 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
     def read(self):
         self.is_read = 1 # FIXME: write-only
         for uri in self.source:
+            # First we try and read the repomd file as a starting point.
             filename = functions._uriToFilename(uri)
-            filename = functions.cacheLocal(os.path.join(filename, "repodata/primary.xml.gz"), self.reponame, 1)
+            filename = functions.cacheLocal(os.path.join(filename, "repodata/repomd.xml"), self.reponame, 1)
             if not filename:
                 continue
             try:
@@ -73,6 +75,27 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             except libxml2.libxmlError:
                 continue
             self.baseurl = uri
+            self.repomd = self.__parseNode(reader)
+            # If we have either a local cache of the primary.xml.gz file or if
+            # it is already local (nfs or local file system) we calculate it's
+            # checksum and compare it with the one from repomd. If they are
+            # the same we don't need to cache it again and can directly use it.
+            filename = functions._uriToFilename(uri)
+            filename = os.path.join(filename, "repodata/primary.xml.gz")
+            (csum, destfile) = functions.checksumCacheLocal(filename, self.reponame, "sha")
+            if self.repomd.has_key("primary") and \
+               self.repomd["primary"].has_key("checksum") and \
+               csum == self.repomd["primary"]["checksum"]:
+                filename = destfile
+            else:
+                filename = functions._uriToFilename(uri)
+                filename = functions.cacheLocal(os.path.join(filename, "repodata/primary.xml.gz"), self.reponame, 1)
+            if not filename:
+                continue
+            try:
+                reader = libxml2.newTextReaderFilename(filename)
+            except libxml2.libxmlError:
+                continue
             self.__parseNode(reader)
             for url in self.key_urls:
                 url = functions._uriToFilename(url)
@@ -92,6 +115,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     continue
                 for k in keys:
                     self.keyring.addKey(k)
+            # Last but not least if we can find the filereq.xml.gz file use it
+            # and import the files from there into our packages.
             filename = functions._uriToFilename(uri)
             filename = functions.cacheLocal(os.path.join(filename, "filereq.xml.gz"), self.reponame, 1)
             # If we can't find the filereq.xml.gz file it doesn't matter
@@ -231,13 +256,15 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if ntype != XML_READER_TYPE_ELEMENT:
                 continue
             name = Namef()
-            if name != "package" and name != "filereq":
+            if name != "package" and name != "filereq" and name != "repomd":
                 continue
             if name == "filereq":
                 if Readf() != 1:
                     break
                 self.filereqs.append(Valuef())
                 continue
+            if name == "repomd":
+                return self.__parseRepomd(reader)
             props = self.__getProps(reader)
             if   props.get("type") == "rpm":
                 try:
@@ -421,6 +448,64 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         while MoveToNextAttributef():
             props[Namef()] = Valuef()
         return props
+
+    def __parseRepomd(self, reader):
+        """Parse repomd.xml for SHA1 checks of the files.
+        Returns a hash of the form:
+          name -> {location, checksum, timestamp, open-checksum}"""
+        rethash = {}
+        # Make local variables for heavy used functions to speed up this loop
+        Readf = reader.Read
+        NodeTypef = reader.NodeType
+        Namef = reader.Name
+        Valuef = reader.Value
+        tmphash = {}
+        fname = None
+        while Readf() == 1:
+            ntype = NodeTypef()
+            if ntype != XML_READER_TYPE_ELEMENT and \
+               ntype != XML_READER_TYPE_END_ELEMENT:
+                continue
+            name = Namef()
+            if ntype == XML_READER_TYPE_END_ELEMENT:
+                if name == "repomd":
+                    break
+                continue
+            if   name == "data":
+                props = self.__getProps(reader)
+                fname = props.get("type")
+                if not fname:
+                    break
+                tmphash = {}
+                rethash[fname] = tmphash
+            elif name == "location":
+                props = self.__getProps(reader)
+                loc = props.get("href")
+                if loc:
+                    tmphash["location"] = loc
+            elif name == "checksum":
+                props = self.__getProps(reader)
+                type = props.get("type")
+                if type != "sha":
+                    self.config.printWarning(1, "Unsupported checksum type %s in repomd.xml for file %s" % (type, fname))
+                    continue
+                if Readf() != 1:
+                    break
+                tmphash["checksum"] = Valuef()
+            elif name == "timestamp":
+                if Readf() != 1:
+                    break
+                tmphash["timestamp"] = Valuef()
+            elif name == "open-checksum":
+                props = self.__getProps(reader)
+                type = props.get("type")
+                if type != "sha":
+                    self.config.printWarning(1, "Unsupported open-checksum type %s in repomd.xml for file %s" % (type, fname))
+                    continue
+                if Readf() != 1:
+                    break
+                tmphash["open-checksum"] = Valuef()
+        return rethash
 
     def __parsePackage(self, reader):
         """Parse a package from current <package> tag at libxml2.xmlTextReader
