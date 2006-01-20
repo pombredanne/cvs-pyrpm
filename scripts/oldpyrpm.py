@@ -38,6 +38,7 @@
 
 #
 # TODO:
+# - set RPM_INSTALL_PREFIX for scripts
 # git repos:
 # - Use a different dir for checked out git repos, so they stay small.
 # - Optionally import the full tree for the initial import (e.g. FC releases).
@@ -5256,7 +5257,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     if verbose:
         if verbose > 2:
             time2 = time.clock()
-            print "Needed", time2 - time1, "check the rpmdb data."
+            print "Needed", time2 - time1, "seconds to check the rpmdb data."
         print "Done."
     return None
 
