@@ -9,7 +9,7 @@
 # version 2005-03-09-01
 #
 
-import sys, os
+import sys, os, time
 import pyrpm
 
 def usage():
@@ -20,13 +20,10 @@ def usage():
   -v  | --verbose             be verbose, and more, ..
   -E  | --ignore-epoch        ignore epoch in provides and requires
   -i                          install packages
-  -U                          update packages
   -e                          erase packages
+  -R                          no resolve call
+  -d <dir>                    load files from dir
   --installed <dir>           directory with installed rpms
-
-This program prints a treee for package dependencies.
-The asterisc in the listing is shown after dependencies, which are resolved in
-a tree before. 
 
 """ % sys.argv[0]
 
@@ -53,27 +50,24 @@ ignore_epoch = 0
 verbose = 0
 installed_dir = None
 installed = [ ]
+dir = None
+resolve = 1
 
-tags = [ "name", "epoch", "version", "release", "arch",
-         "providename", "provideflags", "provideversion", "requirename",
-         "requireflags", "requireversion", "obsoletename", "obsoleteflags",
-         "obsoleteversion", "conflictname", "conflictflags",
-         "conflictversion", "filesizes", "filemodes", "filemd5s",
-         "dirindexes", "basenames", "dirnames" ]
-
+tags = pyrpm.rpmconfig.resolvertags
 
 def main():
     global ignore_epoch, tags
     global verbose, installed_dir, installed
     global rpms
+    global dir
     
-    if len(sys.argv) == 1:
-        usage()
-        sys.exit(0)
+#    if len(sys.argv) == 1:
+#        usage()
+#        sys.exit(0)
 
     ops = [ ]
     i = 1
-    op = pyrpm.OP_INSTALL
+    op = pyrpm.OP_UPDATE
     while i < len(sys.argv):
         if sys.argv[i] == "-h" or sys.argv[i] == "--help":
             usage()
@@ -87,20 +81,38 @@ def main():
             verbose += 1
         elif sys.argv[i] == "-i":
             op = pyrpm.OP_INSTALL
-        elif sys.argv[i] == "-U":
-            op = pyrpm.OP_UPDATE
         elif sys.argv[i] == "-F":
             op = pyrpm.OP_FRESHEN
         elif sys.argv[i] == "-e":
             op = pyrpm.OP_ERASE
+        elif sys.argv[i] == "-R":
+            resolve = 0
         elif sys.argv[i] == "-E"or sys.argv[i] == "--ignore-epoch":
             ignore_epoch = 1
         elif sys.argv[i] == "--installed":
             i += 1
             installed_dir = sys.argv[i]+"/"
+        elif sys.argv[i] == "-d":
+            i += 1
+            dir = sys.argv[i]
         else:
             ops.append((op, sys.argv[i]))
         i += 1
+
+    if dir:
+        if not os.path.exists(dir) or not os.path.isdir(dir):
+            print "%s does not exists or is not a directory." % dir
+            sys.exit(1)
+        print "Loading rpm packages from %s" % dir
+        list = os.listdir(dir)
+        list.sort
+        for entry in list:
+            if not entry or not entry[-4:] == ".rpm":
+                continue
+            n = dir+"/"+entry
+            if not os.path.isfile(n):
+                continue
+            ops.append((op, n))
 
     pyrpm.rpmconfig.debug = verbose
     pyrpm.rpmconfig.warning = verbose
@@ -108,9 +120,9 @@ def main():
 
     pyrpm.rpmconfig.checkinstalled = 0
 
-    if len(ops) == 0:
-        usage()
-        sys.exit(0)        
+#    if len(ops) == 0:
+#        usage()
+#        sys.exit(0)        
 
     # -- load installed
 
@@ -135,13 +147,15 @@ def main():
             print
             del list    
 
-    resolver = pyrpm.RpmResolver(pyrpm.rpmconfig, installed)
-
+    pyrpm.rpmconfig.checkinstalled = 0
+    pyrpm.rpmconfig.nofileconflicts = 1
+    
     print "==============================================================="
-
+    print "Loading Packages"
     # -- load install/update/erase
 
     i = 1
+    _ops = [ ]
     for op, f in ops:
         if verbose > 0:
             progress_write("Reading %d/%d " % (i, len(ops)))
@@ -153,7 +167,25 @@ def main():
             print msg
             print "Loading of %s failed, exiting." % f
             sys.exit(-1)
-        r.close()
+        _ops.append((op, r))
+        i += 1
+    if verbose > 0 and len(ops) > 0:
+        print
+    ops = _ops
+
+    print "==============================================================="
+    print "Feeding resolver"
+
+    db = pyrpm.database.memorydb.RpmMemoryDB(pyrpm.rpmconfig, None)
+    db.addPkgs(installed)
+    resolver = pyrpm.RpmResolver(pyrpm.rpmconfig, db)
+    del db
+
+    i = 1
+    l = len(ops)
+    for op, r in ops:
+        if verbose > 0:
+            progress_write("Feeding %d/%d " % (i, len(ops)))
         if op == pyrpm.OP_INSTALL:
             ret = resolver.install(r)
         elif op == pyrpm.OP_UPDATE:
@@ -162,49 +194,71 @@ def main():
             ret = resolver.freshen(r)
         else: # op == pyrpm.OP_ERASE
             ret = resolver.erase(r)
-        if ret != pyrpm.RpmResolver.OK:
-            print ret
-            sys.exit(0)
+        if ret != pyrpm.RpmResolver.OK and \
+               ret != pyrpm.RpmResolver.ALREADY_ADDED and \
+               ret != pyrpm.RpmResolver.ALREADY_INSTALLED:
+            if ret == pyrpm.RpmResolver.OLD_PACKAGE:
+                print "old package: %s" % r.getNEVRA()
+            elif ret == pyrpm.RpmResolver.NOT_INSTALLED:
+                print "not installed: %s" % r.getNEVRA()
+            elif ret == pyrpm.RpmResolver.UPDATE_FAILED:
+                print "update failed: %s" % r.getNEVRA()
+            elif ret == pyrpm.RpmResolver.ARCH_INCOMPAT:
+                print "arch incompat: %s" % r.getNEVRA()
+            elif ret == pyrpm.RpmResolver.OBSOLETE_FAILED:
+                print "obsolete failed: %s" % r.getNEVRA()
+            elif ret == pyrpm.RpmResolver.CONFLICT:
+                print "conflict: %s" % r.getNEVRA()
+            elif ret == pyrpm.RpmResolver.FILE_CONFLICT:
+                print "file conflicts: %s" % r.getNEVRA()
+            else:
+                print ret
         i += 1
     if verbose > 0 and len(ops) > 0:
         print
     del ops
 
-    if len(resolver.installs) == 0 and len(resolver.erases) == 0:
-        print "Nothing to do."
-        sys.exit(0)
+    print "==============================================================="
 
-    # -----------------------------------------------------------------------
-        
-    print "- Installed unresolved -----------------------------------------"
+    print "- Installed unresolved ----------------------------------------"
     for pkg in resolver.installed_unresolved:
         print pkg.getNEVRA()
         for c in resolver.installed_unresolved[pkg]:
             print "\t%s" % pyrpm.depString(c)
-    print "- Installed conflicts ------------------------------------------"
+    print "- Installed conflicts -----------------------------------------"
     for pkg in resolver.installed_conflicts:
         print pkg.getNEVRA()
         for (c,rpm) in resolver.installed_conflicts[pkg]:
             print "\t%s: %s" % (pyrpm.depString(c), rpm.getNEVRA())
-    print "- Installed file conflicts -------------------------------------"
+    print "- Installed file conflicts ------------------------------------"
     for pkg in resolver.installed_file_conflicts:
         print pkg.getNEVRA()
-        for (c,rpm) in resolver.installed_file_conflicts[pkg]:
-            print "\t%s: %s" % (pyrpm.depString(c), rpm.getNEVRA())
-#    print "- Conflicts ----------------------------------------------------"
-#    for name in resolver.conflicts.provide:
-#        for (flag,ver,rpm) in resolver.conflicts.provide[name]:
-#            print "%s\n\t%s" % (rpm.getNEVRA(), pyrpm.depString((name, flag, ver)))
-#    print "- File Conflicts -----------------------------------------------"
+        for (f,rpm) in resolver.installed_file_conflicts[pkg]:
+            print "\t%s: %s" % (f, rpm.getNEVRA())
+
+    if len(resolver.installs) == 0 and len(resolver.erases) == 0:
+        print "Nothing to do."
+        sys.exit(0)
+
+    print "- Conflicts ---------------------------------------------------"
+    conflicts = resolver.getConflicts()
+    for pkg in conflicts:
+        for d,rpm in conflicts[pkg]:
+            print "%s, %s:\n\t%s" % (pkg.getNEVRA(), rpm.getNEVRA(),
+                                    pyrpm.depString(d))
+
+#    print "- File Conflicts ----------------------------------------------"
+#    pyrpm.rpmconfig.nofileconflicts = 0
 #    fconflicts = resolver.getFileConflicts()
 #    for pkg in fconflicts:
 #        print pkg.getNEVRA()
 #        for (f,p) in fconflicts[pkg]:
 #            print "\t%s: %s" % (f, p.getNEVRA())
+#    pyrpm.rpmconfig.nofileconflicts = 1
 
-    print "----------------------------------------------------------------"
+    print "---------------------------------------------------------------"
 
-    if resolver.resolve() != 1:
+    if resolve == 1 and resolver.resolve() != 1:
         sys.exit(-1)
 
 #    for pkg in resolver.installs:
@@ -227,29 +281,37 @@ def main():
 #            print "%s: (%s): %s" % (pkg.getNEVRA(), dep[0], reqs)
 #    sys.exit(0)
 
-#    print "installs:"
+#    print "- Installs ----------------------------------------------------"
 #    for pkg in resolver.installs:
 #        print "\t%s" % pkg.getNEVRA()
-#    print "updates:"
+#    print "- Updates -----------------------------------------------------"
 #    for pkg in resolver.updates:
 #        print "\t%s" % pkg.getNEVRA()
 #        for p in resolver.updates[pkg]:
 #            print "\t\t%s" % p.getNEVRA()
-#    print "obsoletes:"
+#    print "- Obsoletes ---------------------------------------------------"
 #    for pkg in resolver.obsoletes:
 #        print "\t%s" % pkg.getNEVRA()
 #        for p in resolver.obsoletes[pkg]:
 #            print "\t\t%s" % p.getNEVRA()
-#    print "erases:"
+#    print "- Erases ------------------------------------------------------"
 #    for pkg in resolver.erases:
 #        print "\t%s" % pkg.getNEVRA()
+#    print "---------------------------------------------------------------"
 
-
-    orderer = pyrpm.RpmOrderer(pyrpm.rpmconfig,
-                               resolver.installs, resolver.updates,
-                               resolver.obsoletes, resolver.erases)
+    installs = resolver.installs
+    updates = resolver.updates
+    obsoletes = resolver.obsoletes
+    erases = resolver.erases
     del resolver
+
+    orderer = pyrpm.RpmOrderer(pyrpm.rpmconfig, installs, updates, obsoletes,
+                               erases)
+
+    cl = time.time()
     operations = orderer.order()
+    print "orderer.order(): time=%f" % (time.time() - cl)
+    
     del orderer
 
     if operations == None:
