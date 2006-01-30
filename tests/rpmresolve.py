@@ -10,6 +10,10 @@
 #
 
 import sys, os, time
+
+PYRPMDIR = ".."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
 import pyrpm
 
 def usage():
@@ -22,6 +26,7 @@ def usage():
   -i                          install packages
   -e                          erase packages
   -R                          no resolve call
+  -O                          no operation list output
   -d <dir>                    load files from dir
   --installed <dir>           directory with installed rpms
 
@@ -52,6 +57,7 @@ installed_dir = None
 installed = [ ]
 dir = None
 resolve = 1
+output_op = 1
 
 tags = pyrpm.rpmconfig.resolvertags
 
@@ -87,6 +93,8 @@ def main():
             op = pyrpm.OP_ERASE
         elif sys.argv[i] == "-R":
             resolve = 0
+        elif sys.argv[i] == "-O":
+            output_op = 0
         elif sys.argv[i] == "-E"or sys.argv[i] == "--ignore-epoch":
             ignore_epoch = 1
         elif sys.argv[i] == "--installed":
@@ -317,8 +325,9 @@ def main():
     if operations == None:
         sys.exit(-1)
 
-    for op,pkg in operations:
-        print op, pkg.source
+    if output_op:
+        for op,pkg in operations:
+            print op, pkg.source
 
     sys.exit(0)
 
