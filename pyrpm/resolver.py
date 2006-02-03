@@ -556,13 +556,24 @@ class RpmResolver:
             if u[0].startswith("rpmlib("): # drop rpmlib requirements
                 continue
             s = self.database.searchDependency(u[0], u[1], u[2])
-            if len(s) == 0: # found nothing
+#            # drop self script prereq and self script postun
+#            # these prereqs can not be solved by the package itself
+#            if len(s) > 0 and pkg in s and isLegacyPreReq(u[1]) and \
+#                   (u[1] & RPMSENSE_SCRIPT_PRE != 0 or \
+#                    u[1] & RPMSENSE_SCRIPT_POSTUN != 0):
+#                if len(s) == 1:
+#                    s = [ ]
+#                else:
+#                    s.remove(pkg)
+            if len(s) == 0: # unresolved
                 if self.config.checkinstalled == 0 and \
                        pkg in self.installed_unresolved and \
                        u in self.installed_unresolved[pkg]:
                     continue
                 unresolved.append(u)
             else: # resolved
+                if pkg in s and len(s) > 1:
+                    s = [pkg]
                 resolved.append((u, s))
         return (unresolved, resolved)
     # ----
@@ -584,7 +595,9 @@ class RpmResolver:
             if u[0].startswith("rpmlib("): # drop rpmlib requirements
                 continue
             s = self.database.searchDependency(u[0], u[1], u[2])
-            if len(s) > 0: # found something
+            if len(s) > 0: # resolved
+                if pkg in s and len(s) > 1:
+                    s = [pkg]
                 resolved.append((u, s))
         return resolved
     # ----
@@ -652,6 +665,15 @@ class RpmResolver:
                     if u[0].startswith("rpmlib("): # drop rpmlib requirements
                         continue
                     s = self.database.searchDependency(u[0], u[1], u[2])
+#                    # drop self script prereq and self script postun
+#                    # these prereqs can not be solved by the package itself
+#                    if len(s) > 0 and pkg in s and isLegacyPreReq(u[1]) and \
+#                           (u[1] & RPMSENSE_SCRIPT_PRE != 0 or \
+#                            u[1] & RPMSENSE_SCRIPT_POSTUN != 0):
+#                        if len(s) == 1:
+#                            s = [ ]
+#                        else:
+#                            s.remove(pkg)
                     if len(s) > 0: # found something
                         continue
                     if self.config.checkinstalled == 0 and \
