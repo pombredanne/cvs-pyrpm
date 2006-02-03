@@ -213,15 +213,14 @@ class RpmController:
         for (op, pkg) in operations:
             if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
                 self.triggerlist.addPkg(pkg)
-                if pkg.source.startswith("http://"):
-                    if pkg.has_key("yumreponame"):
-                        reponame = pkg["yumreponame"]
+                if pkg.source.startswith("http://") or pkg.has_key("yumrepo"):
+                    if pkg.has_key("yumrepo"):
+                        nc = pkg["yumrepo"].getNetworkCache()
                     else:
-                        reponame = "default"
+                        nc = NetworkCache(self.config, "/", os.path.join(self.config.cachedir, "default"))
                     self.config.printInfo(1, "Caching network package %s\n" % \
                                           pkg.getNEVRA())
-                    cached = cacheLocal(pkg.source,
-                                        os.path.join(reponame, "packages"))
+                    cached = nc.cache(pkg.source)
                     if cached is None:
                         self.config.printError("Error downloading %s"
                                                % pkg.source)

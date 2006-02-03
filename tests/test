@@ -30,8 +30,12 @@ for i in sys.argv[1:]:
     for i in xrange(len(rpm["dirnames"])):
         if orig_dirnames[i] != rpm["dirnames"][i]:
             print "Dirnames difference for pkg %s at index %i: %s != %s" % (rpm.getNEVRA(), i, orig_dirnames[i], rpm["dirnames"][i])
-    print rpm["rpmversion"]
-    print rpm["archivesize"]
+    for i in xrange(len(rpm["requirename"])):
+        if isLegacyPreReq(rpm["requireflags"][i]) or \
+           isErasePreReq(rpm["requireflags"][i]):
+            if rpm["requirename"][i].startswith("rpmlib("):
+                continue
+            print rpm.getNEVRA(), rpm["requirename"][i]
 #    print "dirnames = ", rpm["dirnames"]
 #    print "dirindexes = ", rpm["dirindexes"]
 #    print "basenames = ", rpm["basenames"]

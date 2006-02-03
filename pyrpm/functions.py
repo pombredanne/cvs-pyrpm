@@ -543,7 +543,7 @@ def getFreeCachespace(config, operations):
     warning the user)."""
 
     return 1
-    cachedir = "/var/cache/pyrm/"
+    cachedir = rpmconfig.cachedir
     while 1:
         try:
             os.stat(cachedir)
@@ -659,7 +659,7 @@ def getFreeDiskspace(config, operations):
 def _uriToFilename(uri):
     """Convert a file:/ URI or a local path to a local path."""
 
-    if not uri.startswith("file:/"):
+    if not uri.startswith("file://"):
         filename = uri
     else:
         filename = uri[5:]
@@ -677,7 +677,7 @@ def cacheLocal(url, subdir, force=0):
 
     if not url.startswith("http://"): # FIXME: ftp:// ?
         return url
-    destdir = os.path.join("/var/cache/pyrpm", subdir)
+    destdir = os.path.join(rpmconfig.cachedir, subdir)
     if not os.path.isdir(destdir):
         os.makedirs(destdir)
     destfile = os.path.join(destdir, os.path.basename(url))
@@ -709,7 +709,7 @@ def checksumCacheLocal(url, subdir, type):
     else:
         return (None, None)
     if url.startswith("http://") or url.startswith("ftp://"):
-        fname = os.path.join("/var/cache/pyrpm", subdir)
+        fname = os.path.join(rpmconfig.cachedir, subdir)
         fname = os.path.join(fname, os.path.basename(url))
     else:
         fname = _uriToFilename(url)

@@ -19,6 +19,7 @@ import libxml2, re
 from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
 import memorydb
 from pyrpm.base import *
+from pyrpm.cache import NetworkCache
 import pyrpm.functions as functions
 import pyrpm.package as package
 import pyrpm.openpgp as openpgp
@@ -61,35 +62,34 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self._filerc = re.compile('^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$')
         self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
         self.filereqs = []      # Filereqs, if available
+        self.nc = None
 
     def read(self):
         self.is_read = 1 # FIXME: write-only
         for uri in self.source:
             # First we try and read the repomd file as a starting point.
-            filename = functions._uriToFilename(uri)
-            filename = functions.cacheLocal(os.path.join(filename, "repodata/repomd.xml"), self.reponame, 1)
+            self.nc = NetworkCache(self.config, uri, os.path.join(self.config.cachedir, self.reponame))
+            filename = self.nc.cache("repodata/repomd.xml", 1)
             if not filename:
                 continue
             try:
                 reader = libxml2.newTextReaderFilename(filename)
             except libxml2.libxmlError:
                 continue
+            # Create our network cache object
             self.baseurl = uri
             self.repomd = self.__parseNode(reader)
             # If we have either a local cache of the primary.xml.gz file or if
             # it is already local (nfs or local file system) we calculate it's
             # checksum and compare it with the one from repomd. If they are
             # the same we don't need to cache it again and can directly use it.
-            filename = functions._uriToFilename(uri)
-            filename = os.path.join(filename, "repodata/primary.xml.gz")
-            (csum, destfile) = functions.checksumCacheLocal(filename, self.reponame, "sha")
+            (csum, destfile) = self.nc.checksum("repodata/primary.xml.gz", "sha")
             if self.repomd.has_key("primary") and \
                self.repomd["primary"].has_key("checksum") and \
                csum == self.repomd["primary"]["checksum"]:
                 filename = destfile
             else:
-                filename = functions._uriToFilename(uri)
-                filename = functions.cacheLocal(os.path.join(filename, "repodata/primary.xml.gz"), self.reponame, 1)
+                filename = self.nc.cache("repodata/primary.xml.gz", 1)
             if not filename:
                 continue
             try:
@@ -98,8 +98,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 continue
             self.__parseNode(reader)
             for url in self.key_urls:
-                url = functions._uriToFilename(url)
-                filename = functions.cacheLocal(url, self.reponame, 1)
+                filename = self.nc.cache(url, 1)
                 try:
                     f = file(filename)
                     key_data = f.read()
@@ -117,8 +116,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     self.keyring.addKey(k)
             # Last but not least if we can find the filereq.xml.gz file use it
             # and import the files from there into our packages.
-            filename = functions._uriToFilename(uri)
-            filename = functions.cacheLocal(os.path.join(filename, "filereq.xml.gz"), self.reponame, 1)
+            filename = self.nc.cache("filereq.xml.gz", 1)
             # If we can't find the filereq.xml.gz file it doesn't matter
             if not filename:
                 return 1
@@ -128,6 +126,9 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 return 1
             self.__parseNode(reader)
         return 0
+
+    def getNetworkCache(self):
+        return self.nc
 
     def addPkg(self, pkg, unused_nowrite=None):
         # Doesn't know how to write things out, so nowrite is ignored
@@ -149,9 +150,16 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             return 0
         if self.filelist_imported:
             return 1
-        filename = functions._uriToFilename(self.baseurl)
-        filename = functions.cacheLocal(os.path.join(filename, "repodata/filelists.xml.gz"),
-                              self.reponame, 1)
+        # Same as with primary.xml.gz: If we already have a local version and
+        # it matches the checksum found in repomd then we don't need to
+        # download it again.
+        (csum, destfile) = self.nc.checksum("repodata/filelists.xml.gz", "sha")
+        if self.repomd.has_key("filelists") and \
+           self.repomd["filelists"].has_key("checksum") and \
+           csum == self.repomd["filelists"]["checksum"]:
+            filename = destfile
+        else:
+            filename = self.nc.cache("repodata/filelists.xml.gz", 1)
         if not filename:
             return 0
         try:
@@ -277,7 +285,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     continue
                 #if pkg["arch"] == "src" or self.__isExcluded(pkg):
                 #    continue
-                pkg["yumreponame"] = self.reponame
+                pkg["yumrepo"] = self
                 self.addPkg(pkg)
             elif props.has_key("name"):
                 try:
@@ -582,7 +590,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             elif name == "location":
                 props = self.__getProps(reader)
                 try:
-                    pkg.source = self.baseurl + "/" + props["href"]
+                    pkg.source = props["href"]
                 except KeyError:
                     raise ValueError, "Missing href= in <location>"
             elif name == "size":

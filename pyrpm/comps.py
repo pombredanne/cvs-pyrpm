@@ -25,7 +25,7 @@ class RpmCompsXML:
     def __init__(self, config, source):
         """Initialize the parser.
 
-        source is an URL to comps.xml."""
+        source is a filename to comps.xml."""
 
         self.config = config
         self.source = source
@@ -40,11 +40,8 @@ class RpmCompsXML:
 
         Return 1 on success, 0 on failure."""
 
-        filename = functions.cacheLocal(functions._uriToFilename(self.source), "", 1)
-        if filename is None:
-            return 0
         try:
-            doc = libxml2.parseFile (filename)
+            doc = libxml2.parseFile (self.source)
             root = doc.getRootElement()
         except libxml2.libxmlError:
             return 0

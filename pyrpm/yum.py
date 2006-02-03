@@ -133,20 +133,22 @@ class RpmYum:
                 else:
                     excludes = sec["exclude"]
                 if not sec.has_key("gpgkey"):
-                    keys = []
+                    gpgkeys = []
                 else:
-                    keys = sec["gpgkey"]
+                    gpgkeys = sec["gpgkey"]
                 if self.config.timer:
                     time1 = clock()
                 self.config.printInfo(1, "Reading repository %s.\n" % key)
-                if self.__addSingleRepo(baseurls, gexcludes + excludes, key, keys) == 0:
+                if self.__addSingleRepo(baseurls, gexcludes + excludes,
+                                        key, gpgkeys) == 0:
                     return 0
                 if self.config.timer:
                     self.config.printInfo(0, "Reading repository took %s seconds\n" % (clock() - time1))
                 if self.config.compsfile == None:
                     # May stay None on download error
-                    self.config.compsfile = cacheLocal(self.repos[-1].baseurl +\
-                                            "/repodata/comps.xml", key)
+                    nc = self.repos[-1].getNetworkCache()
+                    if nc:
+                        self.config.compsfile = nc.cache("repodata/comps.xml")
         return 1
 
     def __addSingleRepo(self, baseurl, excludes, reponame, key_urls):

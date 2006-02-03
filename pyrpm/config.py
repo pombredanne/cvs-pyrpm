@@ -93,6 +93,8 @@ class RpmConfig:
         self.signals = [ ]               # Stack of saved signal halders
         self.srpmdir = "/usr/src/redhat/SOURCES" # Dir where srpms will be
                                                  # installed to
+        self.cachedir = "/var/cache/pyrpm"      # Directory for cached files
+
     def readConfig(filename="/etc/pyrpm.conf"):
         return execfile(filename)
 
