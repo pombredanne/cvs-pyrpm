@@ -293,8 +293,8 @@ class KickstartConfig(dict):
                     self.convertLong(self["partition"], "end")
                     self.convertLong(self["partition"], "bytes-per-inode")
                 # TODO: raid
-                elif opt == "repo":
-                    self.parseSub(opt, args[1:], [ "url:" ])
+                elif opt == "repo" or opt == "repository":
+                    self.parseSub("repository", args[1:], [ "url:" ])
                 elif opt == "rootpw":
                     self.parseSub(opt, args[1:], [ "iscrypted" ])
                 elif opt == "selinux":
@@ -406,8 +406,10 @@ class KickstartConfig(dict):
                    len(self["clearpart"]) != 1:
                 raise ValueError, "clearpart: none mixed with other tags."
 
-        if self["device"] and self["device"].keys() not in [ "scsi", "eth" ]:
-            raise ValueError, "device: type not valid."
+        if self["device"]:
+            for key in self["device"].keys():
+                if key not in [ "scsi", "eth" ]:
+                    raise ValueError, "device: type %s not valid." % key
 
         if self["firstboot"] and self["firstboot"].has_key("enabled") and \
                self["firstboot"].has_key("disabled"):
@@ -483,11 +485,11 @@ class KickstartConfig(dict):
             del partitions
             del disk
 
-        if self["repo"]:
-            for name in self["repo"]:
-                repo = self["repo"][name]
+        if self["repository"]:
+            for name in self["repository"]:
+                repo = self["repository"][name]
                 if not repo.has_key("url"):
-                    raise ValueError, "url not set for repo %s." % repo
+                    raise ValueError, "url not set for repository %s." % repo
 
         if self["url"]:
             if not self["url"].has_key("url"):
