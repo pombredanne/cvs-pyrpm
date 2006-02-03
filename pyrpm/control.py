@@ -171,6 +171,7 @@ class RpmController:
         if self.config.timer:
             self.config.printInfo(0, "resolver took %s seconds\n" % (clock() - time1))
             time1 = clock()
+        self.config.printInfo(1, "Ordering transaction...\n")
         orderer = RpmOrderer(self.config, resolver.installs, resolver.updates,
                              resolver.obsoletes, resolver.erases)
         del resolver
