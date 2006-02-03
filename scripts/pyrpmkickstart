@@ -21,10 +21,12 @@
 
 import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, \
        signal, types, shutil, re
+import pprint
 
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
+PYBINDIR = os.path.dirname(sys.argv[0])
 
 import pyrpm
 
@@ -105,54 +107,6 @@ keyboard_models = {
     }
 
 ################################## functions ##################################
-
-class pr_print:
-    def __init__(self, var):
-        self.pos = 0
-        self.pr(var, 0)
-        self._print("\n", 0)
-
-    def _print(self, str, indent):
-        s = ""
-        if self.pos == 0:
-            for i in xrange(indent):
-                s += " "
-        s += str
-        sys.stdout.write(s)
-        i = string.rfind(str, "\n")
-        if i != -1:
-            self.pos = len(s) - i - 1
-        else:
-            self.pos += len(s)
-
-    def pr(self, var, indent):
-        if isinstance(var, types.DictType):
-            if len(var) == 0:
-                self._print("{ }", indent)
-                return
-            self._print("{\n", indent)
-            keys = var.keys()
-            keys.sort()
-            for key in keys:
-                self.pr(key, indent+4)
-                self._print(": ", 0)
-                self.pr(var[key], indent+4)
-                self._print("\n", 0)
-            self._print("}", indent)
-        elif isinstance(var, types.ListType):
-            if len(var) == 0:
-                self._print("[ ]", indent)
-                return
-            self._print("[\n", indent)
-            for i in xrange(len(var)):
-                self.pr(var[i], indent+4)
-                self._print("\n", 0)
-            self._print("]", indent)
-        elif isinstance(var, types.StringType):
-            self._print("'%s'" % var, indent)
-        else:
-            self._print(str(var), indent)
-
 
 def umount_all(dir):
     # umount target dir and included mount points
@@ -279,9 +233,9 @@ def exit(code):
 
 def loadComps(dir):
     # load comps file for groups and default packages
-    comps_xml = "%s/repodata/comps.xml" % dir
+    comps_xml = "%s/RedHat/base/comps.xml" % dir
     if not os.path.exists(comps_xml):
-        comps_xml = "%s/RedHat/base/comps.xml" % dir
+        comps_xml = "%s/Fedora/base/comps.xml" % dir
     if not os.path.exists(comps_xml):
         return None
     comps = pyrpm.RpmCompsXML(pyrpm.rpmconfig, comps_xml)
@@ -348,7 +302,7 @@ OPTIONS
                    selection.
   --no-stage2      Do not mount stage2.img from installation source, use host
                    system tools to format partitions. This will not work for
-                   all host and client system combinations, but could help
+                   all host and client system combinations, but could help 
                    with others.
   --upgrade=<part> Upgrade installation in partition <part>. This is only
                    useful for upgrades and if there is more than one
@@ -468,11 +422,11 @@ if not ks["nfs"] and not ks["url"]:
 if ks["url"] and not ks["url"]["url"].startswith("file://"):
     print "ERROR: Unsupported url installation method, exiting."
     exit(1)
-if ks["repo"]:
-    for repo in ks["repo"]:
-        if not ks["repo"][repo]["url"].startswith("file://") and \
-               not ks["repo"][repo]["url"].startswith("nfs://"):
-            print "ERROR: Unsupported url for repo, exiting."
+if ks["repository"]:
+    for repo in ks["repository"]:
+        if not ks["repository"][repo]["url"].startswith("file://") and \
+               not ks["repository"][repo]["url"].startswith("nfs://"):
+            print "ERROR: Unsupported url for repository, exiting."
             exit(1)
 
 ### system disks ###
@@ -655,7 +609,7 @@ else:
     # generate partitions according to fstab entries as onpart and noformat
 
     print "Serching for installations"
-
+    
     fstemp_dir = tempdir+"/fstemp"
     os.mkdir(fstemp_dir)
 
@@ -671,7 +625,7 @@ else:
                 exit(1)
             onpart = "%s%s" % (disk, part)
             labelmap[label] = onpart
-
+            
             if partition[part]["fstype"] in [ "ext2", "ext3" ] and \
                    partition[part]["native_type"] == 0x83:
 
@@ -738,6 +692,8 @@ else:
             exit(1)
         else:
             fstab = fstabs[upgrade]
+    elif len(fstabs) == 1:
+        fstab = fstabs.values()[0]
     elif len(fstabs) > 1:
         print "ERROR: More than one installation found, exiting."
         exit(1)
@@ -1148,11 +1104,11 @@ if error:
 
 #if verbose:
 #    sys.stdout.write("diskmap=")
-#    pr_print(diskmap)
+#    pprint.pprint(diskmap)
 #    sys.stdout.write("partitionmap=")
-#    pr_print(partitionmap)
+#    pprint.pprint(partitionmap)
 #    sys.stdout.write("labels=")
-#    pr_print(labels)
+#    pprint.pprint(labels)
 
 ### mount source ###
 
@@ -1192,7 +1148,7 @@ if not no_stage2:
     if not os.path.exists(stage2):
         stage2 = "%s/Fedora/base/stage2.img" % source_dir
     if not os.path.exists(stage2):
-        print "ERROR: Could not find stage2.img in installation source."
+        print "ERROR: Could not find stage2 image in installation source."
         exit(1)
 
     fstype = None # no fstype needed for compressed rom fs
@@ -1279,6 +1235,7 @@ elif source_release == "Fedora Core":
 else:
     print "ERROR: Unknown source release."
     exit(1)
+install_release = install_version
 install_version += "-%s" % source_version
 
 print "Installation source: %s %s" % (source_release, source_version)
@@ -1287,11 +1244,11 @@ print "Installation source: %s %s" % (source_release, source_version)
 
 repos = { }
 repo_count = 0
-if ks["repo"]:
+if ks["repository"]:
     # create repo base directory
     os.mkdir(repo_dir)
 
-    for repo in ks["repo"]:
+    for repo in ks["repository"]:
         dir = "%s/%04d" % (repo_dir, repo_count)
         os.mkdir(dir)
 
@@ -1301,14 +1258,14 @@ if ks["repo"]:
         args = None
 
         # nfs source
-        if ks["repo"][repo]["url"].startswith("nfs://"):
-            s = string.splitfields(ks["repo"][repo]["url"][6:], "/", 1)
+        if ks["repository"][repo]["url"].startswith("nfs://"):
+            s = string.splitfields(ks["repository"][repo]["url"][6:], "/", 1)
             source = "%s:/%s" % (s[0], s[1])
             fstype = "nfs"
             args = None
         # file source
-        elif ks["repo"][repo]["url"].startswith("file://"):
-            source = ks["repo"][repo]["url"][7:]
+        elif ks["repository"][repo]["url"].startswith("file://"):
+            source = ks["repository"][repo]["url"][7:]
             args = [ "--rbind" ]
         else:
             # TODO: http and ftp source
@@ -1454,7 +1411,7 @@ if len(to_format) > 0:
             script="/bin/bash --version 2>&1 >/dev/null", chroot=stage2_dir)
         if status != 0:
             print "/bin/bash in stage2 is not usable, exiting."
-            sys.exit(1)
+            exit(1)
 
         mke2fs_prog = "/usr/sbin/mke2fs"
         tune2fs_prog = "/usr/sbin/tune2fs"
@@ -1465,9 +1422,9 @@ if len(to_format) > 0:
         tune2fs_prog = "/sbin/tune2fs"
         mkswap_prog = "/sbin/mkswap"
         chroot = None
-
+        
     ### format partitions ###
-
+    
     for onpart in to_format:
         name = partitionmap[onpart]["name"]
         label = partitionmap[onpart]["label"]
@@ -1530,7 +1487,7 @@ if len(to_format) > 0:
         else:
             print "ERROR: Unknown filesystem for '%s' (%s)" % \
                   (partitionmap[onpart]["disk"], name)
-            sys.exit(1)
+            exit(1)
 
     del to_format
     ### format end ###
@@ -1644,8 +1601,14 @@ if ks.has_key("install"):
                 print "Adding group %s" % desktop
                 pkgs.extend(comps.getPackageNames(desktop))
         # TODO: add xorg driver package for FC-5
+        if install_release == "FC" and install_version > "FC-4":
+#            if ks["xconfig"].has_key("driver"):
+#                pkgs.append("xorg-x11-drv-%s" % ks["xconfig"]["driver"])
+#            else:
+            if not "xorg-x11-drivers" in pkgs:
+                pkgs.append("xorg-x11-drivers")
 
-        # add comps package (FC-4)
+        # add comps package
         if not "comps" in pkgs:
             pkgs.append("comps")
 
@@ -1694,7 +1657,7 @@ if ks.has_key("install"):
         for repo in repos:
             _comps = loadComps(repos[repo])
             if _comps:
-                print "Using additional comps in repo %s" % repo
+                print "Using additional comps in repository %s" % repo
                 if "everything" in groups:
                     for group in _comps.grouphash.values():
                         if group.has_key("packagelist"):
@@ -1729,7 +1692,7 @@ if ks.has_key("install"):
 
 
 # create essential directories and files
-os.umask(000)
+os.umask(022)
 
 create_dir(buildroot, "/boot")
 create_dir(buildroot, "/boot/grub")
@@ -1740,9 +1703,11 @@ create_dir(buildroot, "/etc/sysconfig")
 if install_version != "RHEL-3":
     create_dir(buildroot, "/sys")
 create_dir(buildroot, "/tmp")
+os.chmod(buildroot+"/tmp", 1777)
 create_dir(buildroot, "/var")
 create_dir(buildroot, "/var/log")
 create_dir(buildroot, "/var/tmp")
+os.chmod(buildroot+"/var/tmp", 1777)
 
 # /dev
 if not os.path.exists(buildroot+"/dev/console"):
@@ -1873,11 +1838,19 @@ if ks.has_key("install"):
         except Exception, msg:
             print "ERROR: Configuration of '%s' failed:" % conf, msg
         else:
+            adapter = 0
             # add options for defined devices in ks["device"]
             if ks["device"] and len(ks["device"]) > 0:
                 for type in ks["device"]:
                     if ks["device"][type] and len(ks["device"][type]) > 0:
                         for module in ks["device"][type]:
+                            if type == "scsi":
+                                if adapter == 0:
+                                    fd.write('alias scsi_hostadapter %s\n' % \
+                                             module)
+                                else:
+                                    fd.write('alias scsi_hostadapter%d %s\n' % \
+                                             adapter, module)
                             if ks["device"][type][module].has_key("opts"):
                                 fd.write('options %s %s\n' % \
                                          (module,
@@ -1891,6 +1864,7 @@ if ks.has_key("install") and not os.path.exists(buildroot+"/etc/rpm/platform"):
     except Exception, msg:
         print "ERROR: Configuration of '/etc/rpm/platform' failed:", msg
     else:
+        # TODO: use arch of installed system
         fd.write("%s-redhat-linux" % pyrpm.rpmconfig.machine)
         fd.close()
 
@@ -1974,11 +1948,9 @@ fd.close()
 # yum
 if orig_yum:
     yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf, buildroot)
-elif PYRPMDIR == "..":
-    yum = "PYTHONPATH=%s %s/scripts/pyrpmyum -y --hash -c '%s' -r '%s'" % \
-          (PYRPMDIR, PYRPMDIR, yum_conf, buildroot)
 else:
-    yum = "pyrpmyum -y --hash -c '%s' -r '%s'" % (yum_conf, buildroot)
+    yum = "PYTHONPATH=%s PATH=%s:${PATH} pyrpmyum -y --hash -c '%s' -r '%s'" %\
+          (PYRPMDIR, PYBINDIR, yum_conf, buildroot)
     # --servicehack
 if ks["packages"] and ks["packages"].has_key("ignoredeps") and \
        ks["packages"].has_key("ignoremissing"):
@@ -2004,7 +1976,7 @@ else:
     if os.system(yum) != 0:
         sys.exit(255)
     sys.exit(0)
-
+    
 ### configuration ###
 
 # check system dirs
@@ -2386,7 +2358,7 @@ if ks.has_key("install") and ks["xconfig"]:
     hsync = "31.5 - 37.9"
     vsync = "50 - 61"
     resolution = "800x600"
-    depth = 16
+    depth = 8
     user_hsync = user_vsync = None
     options = [ ]
 
@@ -2403,43 +2375,46 @@ if ks.has_key("install") and ks["xconfig"]:
     ksoptions = [ ]
 
     if os.path.exists(buildroot+'/usr/share/hwdata/Cards'):
-        try:
-            fd = open(buildroot+'/usr/share/hwdata/Cards')
-        except:
-            print "ERROR: Unable to open graphics card database."
+        if ksdriver and not kscard:
+            print "ERROR: Card not specified, using default configuration."
         else:
-            # TODO: honour SEE tags in file
-            found = 0
-            _card = None
-            _driver = None
-            _options = [ ]
-            while 1:
-                line = fd.readline()
-                if not line:
-                    break
-                line = string.strip(line)
-                if len(line) < 1 or line[0] == "#":
-                    continue
-
-                if line[:4] == "NAME":
-                    if kscard and kscard == _card:
-                        card = _card
-                        driver =_driver
-                        options = _options
-                        found = 1
+            try:
+                fd = open(buildroot+'/usr/share/hwdata/Cards')
+            except:
+                print "ERROR: Unable to open graphics card database."
+            else:
+                # TODO: honour SEE tags in file
+                found = 0
+                _card = None
+                _driver = None
+                _options = [ ]
+                while 1:
+                    line = fd.readline()
+                    if not line:
                         break
-                    _card = string.strip(line[4:])
-                    _driver = None
-                    _options = [ ]
-                elif line[:6] == "DRIVER":
-                    _driver = string.strip(line[6:])
-                elif line[:4] == "LINE":
-                    _options.append(string.strip(line[4:]))
-                else:
-                    continue
-            fd.close()
-            if not found:
-                print "ERROR: Card not found in graphics card database."
+                    line = string.strip(line)
+                    if len(line) < 1 or line[0] == "#":
+                        continue
+
+                    if line[:4] == "NAME":
+                        if kscard and kscard == _card:
+                            card = _card
+                            driver =_driver
+                            options = _options
+                            found = 1
+                            break
+                        _card = string.strip(line[4:])
+                        _driver = None
+                        _options = [ ]
+                    elif line[:6] == "DRIVER":
+                        _driver = string.strip(line[6:])
+                    elif line[:4] == "LINE":
+                        _options.append(string.strip(line[4:]))
+                    else:
+                        continue
+                fd.close()
+                if not found:
+                    print "ERROR: Card not found in graphics card database."
 
     elif os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
         # There is no usable name in the videodrivers file, so fake it
@@ -2728,6 +2703,7 @@ if ks["bootloader"] and not (ks["bootloader"].has_key("location") and \
 
             fd.close()
 
+        # TODO: use arch of installed system
         machine = pyrpm.buildarchtranslate[pyrpm.rpmconfig.machine]
         buildroot_copy("/usr/share/grub/%s-redhat/stage1" % machine,
                        "/boot/grub/stage1")
