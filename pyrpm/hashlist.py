@@ -30,6 +30,7 @@ class HashList:
 
         self.__len__ = self.list.__len__
         self.__repr__ = self.list.__repr__
+        self.index = self.list.index
         self.has_key = self.hash.has_key
         self.keys = self.hash.keys
 

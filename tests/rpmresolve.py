@@ -66,6 +66,7 @@ def main():
     global verbose, installed_dir, installed
     global rpms
     global dir
+    global output_op
     
 #    if len(sys.argv) == 1:
 #        usage()

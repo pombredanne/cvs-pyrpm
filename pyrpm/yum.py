@@ -90,7 +90,7 @@ class RpmYum:
         try:
             conf = yumconfig.YumConf(self.config.relver, self.config.machine,
                                      buildarchtranslate[self.config.machine],
-                                     self.config.buildroot, file, "")
+                                     self.config.buildroot, file)
         except IOError, e:
             printError("Error reading configuration: %s" % e)
             return 0

@@ -36,43 +36,25 @@ describes the dependance of a package from another. This relation structure
 is a dependency tree. There are two kinds of relations: soft and hard. A soft
 relation is a normal dependency, which has to be solved after package
 installation at runtime. The hard relation is a pre requirement, which has to
-be solved before the dependant package gets installed. For the ordering
-process, there is an additional sub-kind: virtual. When there is a loop of
-relations, it has to get broken up. If a loop gets broken up, the orderer has
-to take care, that removed relations do not drop away. If package A has a
-relation to package B and this relation has to get removed to breakup a loop,
-this relation is transferred to all packages which have a relation to A as a
-virtual relation. A virtual relation can be either soft or hard, like a
-normal relation, depending on the removed relation from A to B and the
-relation from C to A. If both relations are hard, the virtual relation also
-becomes hard.
+be solved before the dependant package gets installed.
 
-The second stage is the ordering. At first all post leaf nodes in the relation
-tree are moved to a new list. A post leaf node is a package, which has no
-dependant packages. This is done, till there are no more post leaf nodes. The
-order of the moved packages is important. Here is an exmaple: A -> B -> C -> D
-Package A depends on package B, which depends on C and so on. At first package
-A gets moved to the list, then B, then C and at least D. If there are no more
-leaf nodes and the tree is not empty, there have to be loops in the tree. This
-does not mean that there are only loops, there can be lots of packages in
-there, which require a package, which is part of a loop. If the tree is empty,
-the ordering is done, but if there are any, then these loops has to get broken
-up. The simplest loop is that package A depends on package B and package B
-depends on package A. If both relations are soft (a soft loop), the one which
-is part of the most loops gets removed, if both have the same count, the fist
-is used. If one is hard and the other one soft, the soft relation is the one,
-but if both are hard (a hard loop), one of them has to get dropped. This loop
-will be broken up like a soft loop. A hard loop is a bad thing and should
-never happen, but it could. A hard loop is a result of packaging problems. The
-breakup of a virtual relation has priority to breaking up any other relation
-and is done according to the same rules of hard and soft relations.
-When all loops are detected, these loops get sorted according to the number of
-relations from other packages in the relation tree to all nodes in the loop.
-The loop with the most dependant packages gets on top of that list. This loop
-is the one, which gets broken up, because it might free most other dependant
-packages.
 
-The third stage is to generate an opertion list with the ordered packages and
+The second stage is detecting strongly connected components. These are maximal
+groups of packages that are reachable from each other. These components are
+merged into on single node in the relation graph and all relations from
+outside are changed to this new node. After this the relation graph is cycle
+free!
+
+As a third stage every package get a weight assigned. The weights are designed
+that the order of weights is compatible to the order given by the graph. Then
+the nodes are collected in order of their weight (highest weight first).
+Connected components are broken up when collected.
+
+
+
+
+
+The final stage is to generate an opertion list with the ordered packages and
 which takes the updates and obsoletes list into consideration. The operation
 list is a list of tupels, where each tupel is of the form (operation, package).
 The operation is either "install", "update" or "erase".
@@ -87,6 +69,7 @@ from hashlist import HashList
 from base import *
 from resolver import RpmResolver
 import database
+import time
 
 class RpmRelation:
     """Pre and post relations for a package (a node in the dependency
@@ -94,11 +77,12 @@ class RpmRelation:
 
     SOFT    = 0 # normal requirement
     HARD    = 1 # prereq
-    VIRTUAL = 2 # added by _dropRelation
 
     def __init__(self):
-        self.pre = { }                  # RpmPackage => flag
-        self.post = { }        # RpmPackage => 1 or VIRTUAL (value is not used)
+        self.pre = { }         # RpmPackage => flag
+        self.post = { }        # RpmPackage => 1 (value is not used)
+        self.weight = 0        # # of pkgs depending on this package
+        self.weight_edges = 0
 
     def __str__(self):
         return "%d %d" % (len(self.pre), len(self.post))
@@ -106,10 +90,6 @@ class RpmRelation:
     def isHard(flag):
         return (flag & RpmRelation.HARD == RpmRelation.HARD)
     isHard = staticmethod(isHard)
-
-    def isVirtual(flag):
-        return (flag & RpmRelation.VIRTUAL == RpmRelation.VIRTUAL)
-    isVirtual = staticmethod(isVirtual)
 
 # ----
 
@@ -209,230 +189,31 @@ class RpmRelations:
         rel = self.list[pkg]
         # remove all post relations for the matching pre relation packages
         for r in rel.pre:
+            # XXX may be raise an exception here?
             del self.list[r].post[pkg]
         # remove all pre relations for the matching post relation packages
         for r in rel.post:
             del self.list[r].pre[pkg]
         del self.list[pkg]
-
     # ----
 
-    def detectLoops(self):
-        """Return a list of loops in orderer.RpmRelations relations.
-
-        Each loop is represented by a tuple in reverse dependency order,
-        starting and ending with the same RpmPackage.  The loops each differ
-        in at least one package, but one package can be in more than one loop
-        (e.g. ABA, ACA)."""
-
-        loops = [ ]
-        used =  { }
-        for pkg in self:
-            if not used.has_key(pkg):
-                self._detectLoops([ ], pkg, loops, used)
-        return loops
-
-    # ----
-
-    def _detectLoops(self, path, pkg, loops, used):
-        """Do a DFS walk in orderer.RpmRelations relations from RpmPackage pkg,
-        add discovered loops to loops.
-
-        The list of RpmPackages path contains the path from the search root to
-        the current package.  loops is a list of RpmPackage tuples, each tuple
-        contains a loop.  Use hash used (RpmPackage => 1) to mark visited
-        nodes.
-
-        The tuple in loops starts and ends with the same RpmPackage.  The
-        nodes in the tuple are in reverse dependency order (B is in
-        relations[A].pre)."""
-
-        if pkg in used:
-            return
-        used[pkg] = 1
-        for p in self[pkg].pre:
-            # "p in path" is O(N), can be O(1) with another hash.
-            if len(path) > 0 and p in path:
-                w = path[path.index(p):] # make shallow copy of loop
-                w.append(pkg)
-                w.append(p)
-                loops.append(tuple(w))
-            else:
-                w = path[:] # make shallow copy of path
-                w.append(pkg)
-                self._detectLoops(w, p, loops, used)
-                # or just path.pop() instead of making a copy?
-
-    # ----
-
-    def breakupLoop(self, loops, loop):
-        """Remove an arc from loop tuple loop in loops from
-        orderer.RpmRelations relations.
-
-        Return 1 on success, 0 on failure."""
-
-        counter = self.genCounter(loops)
-
-        # breakup soft loop
-        if self._breakupLoop(counter, loop, hard=0):
-            return 1
-
-        # breakup hard loop; should never fail
-        return self._breakupLoop(counter, loop, hard=1)
-
-    # ----
-
-    def _breakupLoop(self, counter, loop, hard=0):
-        """Remove an arc in loop tuple loop from orderer.RpmRelations
-        relations..
-
-        Return 1 on success, 0 if no arc to break was found.  Use counter from
-        genCounter.  Remove hard arcs only if hard."""
-
-        virt_max_count_node = None
-        virt_max_count_next = None
-        virt_max_count = 0
-        max_count_node = None
-        max_count_next = None
-        max_count = 0
-        for j in xrange(len(loop) - 1):
-            # first and last node (package) are the same
-            node = loop[j]
-            next = loop[j+1]
-            if RpmRelation.isHard(self[node].pre[next]) and not hard:
-                continue
-            if RpmRelation.isVirtual(self[node].pre[next]):
-                if virt_max_count < counter[node][next]:
-                    virt_max_count_node = node
-                    virt_max_count_next = next
-                    virt_max_count = counter[node][next]
-            else:
-                if max_count < counter[node][next]:
-                    max_count_node = node
-                    max_count_next = next
-                    max_count = counter[node][next]
-
-        # prefer to drop virtual relation
-        if virt_max_count_node:
-            self._dropRelation(virt_max_count_node, virt_max_count_next,
-                               virt_max_count)
-            return 1
-        elif max_count_node:
-            self._dropRelation(max_count_node, max_count_next, max_count)
-            return 1
-
-        return 0
-
-    # ----
-
-    def genCounter(self, loops):
-        """Count number of times each arcs is represented in the list of loop
-        tuples loops.
-
-        Return a HashList: RpmPackage A =>
-        HashList :RpmPackage B => number of loops in which A requires B."""
-
-        counter = HashList()
-        for loop in loops:
-            for j in xrange(len(loop) - 1):
-                # first and last pkg are the same, use once
-                node = loop[j]
-                next = loop[j+1]
-                if node not in counter:
-                    counter[node] = HashList()
-                if next not in counter[node]:
-                    counter[node][next] = 1
-                else:
-                    counter[node][next] += 1
-        return counter
-
-    # ----
-
-    def _dropRelation(self, node, next, count):
-        """Drop the "RpmPackage node requires RpmPackage next" arc, this
-        requirement appears count times in current loops in
-        orderer.RpmRelations relations.
-
-        To preserve X->node->next, try to add virtual arcs X->next."""
+    def removeRelation(self, node, next, quiet=False):
+        """Drop the "RpmPackage node requires RpmPackage next" arc"""
 
         hard = RpmRelation.isHard(self[node].pre[next])
 
-        txt = "Removing"
-        if hard:
-            txt = "Zapping"
-        if RpmRelation.isVirtual(self[node].pre[next]):
-            txt += " virtual"
-        self.config.printDebug(1, "%s requires for %s from %s (%d)" % \
-                   (txt, next.getNEVRA(), node.getNEVRA(), count))
+        if not quiet:
+            txt = "Removing"
+            if hard:
+                txt = "Zapping"
+            
+            self.config.printDebug(1, "%s requires for %s from %s" % \
+                                   (txt, next.getNEVRA(), node.getNEVRA()))
         del self[node].pre[next]
         del self[next].post[node]
         if not node in self.dropped_relations:
             self.dropped_relations[node] = [ ]
         self.dropped_relations[node].append(next)
-
-        # add virtual relation to make sure, that next is
-        # installed before p if the relation was not kicked before
-        for p in self[node].post:
-            if p == next or p == node:
-                continue
-            if p in self.dropped_relations and \
-               next in self.dropped_relations[p]:
-                continue
-            self.config.printDebug(1, "%s: Adding virtual requires for %s" % \
-                                   (p.getNEVRA(), next.getNEVRA()))
-
-            if not next in self[p].pre:
-                req = RpmRelation.SOFT
-                if hard and RpmRelation.isHard(self[p].pre[node]):
-                    req = RpmRelation.HARD
-                self[p].pre[next] = RpmRelation.VIRTUAL | req
-            if not p in self[next].post:
-                self[next].post[p] = RpmRelation.VIRTUAL
-
-    # ----
-
-    def sortLoops(self, loops):
-        """Return a copy loop tuple list loops from order.RpmRelations
-        relations, ordered by decreasing preference to break them."""
-
-        loop_nodes = [ ] # All nodes in loops
-        for loop in loops:
-            for j in xrange(len(loop) - 1):
-                # first and last pkg are the same, use once
-                pkg = loop[j]
-                if not pkg in loop_nodes:
-                    loop_nodes.append(pkg)
-
-        # loop => number of packages required from other loops
-        loop_relations = { }
-        loop_requires = { } # loop => number of packages requiring the loop
-        for loop in loops:
-            loop_relations[loop] = 0
-            loop_requires[loop] = 0
-            for j in xrange(len(loop) - 1):
-                # first and last pkg are the same, use once
-                pkg = loop[j]
-                for p in self[pkg].pre:
-                    if p in loop_nodes and p not in loop:
-                        # p is not in own loop, but in an other loop
-                        loop_relations[loop] += 1
-                for p in self[pkg].post:
-                    if p not in loop:
-                        # p is not in own loop, but in an other loop
-                        loop_requires[loop] += 1
-
-        sorted = [ ]
-        for loop in loop_relations:
-            for i in xrange(len(sorted)):
-                if (loop_relations[loop] < loop_relations[sorted[i]]) or \
-                       (loop_relations[loop] == loop_relations[sorted[i]] and \
-                        loop_requires[loop] > loop_requires[sorted[i]]):
-                    sorted.insert(i, loop)
-                    break
-            else:
-                sorted.append(loop)
-
-        return sorted
 
     # ----
 
@@ -443,39 +224,75 @@ class RpmRelations:
         Stop when each remaining package has successor (implies a dependency
         loop)."""
 
-        # This is O(N * M * hash lookup), can be O(M * hash lookup)
+        i = 0
+        found = 0
         while len(self) > 0:
-            i = 0
-            found = 0
-            while i < len(self):
-                pkg = self[i]
-                if len(self[pkg].post) == 0:
-                    list.insert(0, pkg)
-                    self.remove(pkg)
-                    found = 1
-                else:
-                    i += 1
-            if found == 0:
-                break
+            pkg = self[i]
+            if len(self[pkg].post) == 0:
+                list.append(pkg)
+                self.remove(pkg)
+                found = 1
+            else:
+                i += 1
+            if i == len(self):
+                if found == 0:
+                    break
+                i = 0
+                found = 0
 
     # ----
 
-    def getNextLeafNode(self):
-        """Return a node from orderer.RpmRelations relations which has no
-        predecessors.
+    def _calculateWeights2(self, pkg, leafs):
+        """For each package generate a dict of all packages that depend on it.
+        At last use the length of the dict as weight. 
+        """
+        # Uncomment weight line in ConnectedComponent.__init__() to use this
+        if self[pkg].weight == 0:
+            weight = { pkg : pkg }
+        else:
+            weight =  self[pkg].weight
+            
+        for p in self[pkg].pre:
+            rel = self[p]
+            if rel.weight == 0:
+                rel.weight = weight.copy()
+                rel.weight[p] = p
+            else:
+                rel.weight.update(weight)
+            rel.weight_edges += 1
+            if rel.weight_edges == len(rel.post):
+                leafs.append(p)
 
-        Return None if there is no such node, otherwise select a node on which
-        depend the maximum possible number of other nodes."""
+        if self[pkg].weight == 0:
+            self[pkg].weight = 1
+        else:
+            self[pkg].weight = len(weight)
 
-        # Without the requirement of max(rel.pre) this could be O(1)
-        next = None
-        next_post_len = -1
+    def _calculateWeights(self, pkg, leafs):
+        """Weight of a package is sum of the (weight+1) of all packages
+        depending on it
+        """
+        weight =  self[pkg].weight + 1
+        for p in self[pkg].pre:
+            rel = self[p]
+            rel.weight += weight
+            rel.weight_edges += 1
+            if rel.weight_edges == len(rel.post):
+                leafs.append(p)
+
+    def calculateWeights(self):
+        leafs = []
+        for pkg in self: 
+            if not self[pkg].post: # post leaf node
+                self._calculateWeights(pkg, leafs)
+
+        while leafs:
+            self._calculateWeights(leafs.pop(), leafs)
+
+        weights = { }
         for pkg in self:
-            rel = self[pkg]
-            if len(rel.pre) == 0 and len(rel.post) > next_post_len:
-                next = pkg
-                next_post_len = len(rel.post)
-        return next
+            weights.setdefault(self[pkg].weight, [ ]).append(pkg)
+        return weights
 
     # ----
 
@@ -493,76 +310,118 @@ class RpmRelations:
         # Remember: Do not change any contents!
         return
 
-    # ---
+    # ----
+
+    def processLeafNodes(self, order, leaflist=None):
+        """Move topologically sorted "trailing" packages from
+        orderer.RpmRelations relations to start of list.
+
+        """
+        if leaflist is None:
+            leaflist = self # loop over all pkgs
+
+        # do a bucket sort
+        leafs = {} # len(post) -> [leaf pkgs]
+        for pkg in leaflist:
+            if not self[pkg].pre:
+                post = len(self[pkg].post)
+                leafs.setdefault(post, []).append(pkg)
+        
+        if leafs:
+            max_post = max(leafs)
+
+        while leafs:
+            # remove leaf node
+            leaf = leafs[max_post].pop()
+            rels = self[leaf]
+            self.remove(leaf)
+            order.append(leaf)
+            self.config.printDebug(2, "%s" % (leaf.getNEVRA()))
+            # check post nodes if they got a leaf now
+            new_max = max_post
+            for pkg in rels.post:
+                if not self[pkg].pre:
+                    post = len(self[pkg].post)
+                    leafs.setdefault(post, []).append(pkg)
+                    if post > new_max: new_max = post
+            if not leafs[max_post]:
+                del leafs[max_post]
+                if leafs:
+                    max_post = max(leafs)
+            else:
+                max_post = new_max
+
+    # ----
 
     def genOrder(self):
         """Order rpms in orderer.RpmRelations relations.
 
         Return an ordered list of RpmPackage's on success, None on error."""
 
+        length = len(self)
+
+        #t1 = time.time()
+        self.config.printDebug(1, "Start ordering")
+
         order = [ ]
-        idx = 1
+
         last = [ ]
-        while len(self) > 0:
-            # for each iteration, call orderIterationFunc
-            # see function description
-            self.orderIterationFunc()
 
-            # remove and save all packages without a post relation in reverse
-            # order
-            # these packages will be appended later to the list
-            self.separatePostLeafNodes(last)
-
-            if len(self) == 0:
-                break
-
-            next = self.getNextLeafNode()
-            if next != None:
-                order.append(next)
-                self.remove(next)
-                self.config.printDebug(2, "%d: %s" % (idx, next.getNEVRA()))
-                idx += 1
-            else:
-                if self.config.debug > 0:
-                    self.config.printDebug(1, "-- LOOP --")
-                    self.config.printDebug(2,
+        if len(self)>0: # There are some loops
+            if self.config.debug > 0:
+                self.config.printDebug(1, "-- LOOP --")
+                self.config.printDebug(2,
                                            "\n===== remaining packages =====")
-                    for pkg2 in self:
-                        rel2 = self[pkg2]
-                        self.config.printDebug(2, "%s" % pkg2.getNEVRA())
-                        for r in rel2.pre:
-                            # print nevra and flag
-                            self.config.printDebug(2, "\t%s (%d)" %
-                                       (r.getNEVRA(), rel2.pre[r]))
-                    self.config.printDebug(2,
-                                           "===== remaining packages =====\n")
+                for pkg2 in self:
+                    rel2 = self[pkg2]
+                    self.config.printDebug(2, "%s" % pkg2.getNEVRA())
+                    for r in rel2.pre:
+                        # print nevra and flag
+                        self.config.printDebug(2, "\t%s (%d)" %
+                                               (r.getNEVRA(), rel2.pre[r]))
+                self.config.printDebug(2,
+                                       "===== remaining packages =====\n")
 
-                loops = self.detectLoops()
-                if len(loops) < 1:
-                    # raise AssertionError ?
-                    self.config.printError("Unable to detect loops.")
-                    return None
-                if self.config.debug > 1:
-                    self.config.printDebug(2, "Loops:")
-                    for i in xrange(len(loops)):
-                        s = ", ".join([pkg.getNEVRA() for pkg in loops[i]])
-                        self.config.printDebug(2, "  %d: %s" % (i, s))
-                sorted_loops = self.sortLoops(loops)
+            connected_components = ConnectedComponentsDetector(self).detect(self)
+            weights = self.calculateWeights()
 
-                # for loop detection, call orderLoopFunc
-                # see function description
-                self.orderLoopFunc(sorted_loops)
+            if len(connected_components) < 1:
+                # raise AssertionError ?
+                self.config.printError("Unable to detect loops.")
+                return None
+            if self.config.debug > 1:
+                self.config.printDebug(2, "Strongly connected components:")
+                for i in xrange(len(connected_components)):
+                    s = ", ".join([pkg.getNEVRA() for pkg in
+                                   connected_components[i].pkgs])
+                    self.config.printDebug(2, "  %d: %s" % (i, s))
 
-                if self.breakupLoop(loops, sorted_loops[0]) != 1:
-                    self.config.printError("Unable to breakup loop.")
-                    return None
 
-        if self.config.debug > 1:
-            for r in last:
-                self.config.printDebug(2, "%d: %s" % (idx, r.getNEVRA()))
-                idx += 1
+        weight_keys = weights.keys()
+        weight_keys.sort()
+        weight_keys.reverse()
 
-        return (order + last)
+        for key in weight_keys:
+            if key == -1: continue
+            for pkg in weights[key]:
+
+                if isinstance(pkg, ConnectedComponent):
+                    self.config.printDebug(2, "%s %s" % (key, pkg))
+                    for p in pkg.pkgs:
+                        self.config.printDebug(2, "\t%s" % p.getNEVRA())
+                    pkg.breakUp(order)
+                    self.remove(pkg)
+                else:
+                    self.config.printDebug(2, "%s %s" % (key, pkg.getNEVRA()))
+                    self.remove(pkg)
+                    order.append(pkg)
+                    
+        #self.config.printDebug(0, "Ordering finished (%s s)" %
+        #                       (time.time()-t1))
+
+        print len(order), "/", length, "(", len(connected_components), ")"
+
+        return order
 
     # ----
 
@@ -574,6 +433,425 @@ class RpmRelations:
                (operation != OP_ERASE and isInstallPreReq(flag)):
             return RpmRelation.HARD # hard requirement
         return RpmRelation.SOFT # soft requirement
+
+# ----------------------------------------------------------------------------
+            
+class Loop(HashList):
+
+    def __init__(self, relations, pkgs):
+        HashList.__init__(self)
+        self.relations = relations
+
+        # start with pkg with smallest hash number
+        # to be able to detect identical loops
+        min_hash = None
+        min_idx = 0
+        for i in xrange(len(pkgs)):
+            if min_hash is None or hash(pkgs[i])<min_hash:
+                min_hash = hash(pkgs[i])
+                min_idx = i
+
+        for i in xrange(min_idx, len(pkgs)):
+            self[pkgs[i]] = pkgs[i]
+        for i in xrange(min_idx):
+            self[pkgs[i]] = pkgs[i]
+
+    # ----
+
+    def __cmp__(self, other):
+        """compare loops:
+
+        Sort by size first, use hash values of the pkgs from te beginning then 
+        """
+        result = cmp(len(self), len(other))
+        if result == 0:
+            for i in xrange(len(self)): # both have same lenght
+                result = cmp(hash(self[i]), hash(other[i]))
+                if result != 0:
+                    return result
+        return result
+
+    # ----
+
+    def __iter__(self):
+        """Return Iterator. Iterator returns (Node, Next) Tuples.
+        """
+        idx = 1
+        while idx < len(self):
+            yield (self.list[idx-1], self.list[idx])
+            idx += 1
+        yield (self.list[-1], self.list[0])
+
+    # ----
+
+    def containsRequirement(self, pkg, pre):
+        if pkg in self and pre in self:
+            idx = self.index(pre)
+            return self[idx-1] is pkg
+        return False
+    
+    # ----
+
+    def containsHardRequirement(self):
+        """Does the loop contain any hard relations"""
+        for pkg, pre in self:
+            if RpmRelation.isHard(self.relations[pkg].pre[pre]):
+                return True
+        return False
+
+    # ----
+
+    def breakUp(self):
+        """Searches for the relation that has the maximum distance
+        from hard requirements and removes it.
+        Returns (Node, Next) of the removed requirement.
+
+        Assumes self.containsHardRequirement() == True"""
+        
+        # find the requirement that has the largest distance
+        # to a hard requirement
+
+        distances = [0]
+        for pkg, pre in self:
+            if RpmRelation.isHard(self.relations[pkg].pre[pre]):
+                distances.append(0)
+            else:
+                distances.append(distances[-1]+1)
+
+        for idx in xrange(len(distances)):
+            if distances[idx] == 0 and idx > 0:
+                break
+            else:
+                distances[idx] += distances[-1]
+
+        max = -1
+        max_idx = 0
+        for idx in xrange(len(distances)):
+            if distances[idx]>max:
+                max = distances[idx]
+                max_idx = idx
+
+        self.relations.removeRelation(self[max_idx-1], self[max_idx])
+
+        return (self[max_idx-1], self[max_idx])
+
+# ----------------------------------------------------------------------------
+
+class ConnectedComponent:
+    """Contains a Strongly Connected Component (SCC).
+    This is a number (maximal) number of nodes that are all reachable from
+    each other. In other words the components consists of loops touching
+    each other.
+
+    Automatically changes all relations of its pkgs from/to outside the
+    component to itself. After all components have been created the graph
+    is cycle free. 
+
+    Mimics RpmPackage.
+    """
+    
+    def __init__(self, relations, pkgs):
+        """relations: the RpmRelations object containing the loops
+        """
+
+        self.relations = relations
+
+        relations.append(self, None, 0)
+        
+        self.pkgs = { }
+        for pkg in pkgs:
+            self.pkgs[pkg] = pkg
+            relations[pkg].weight = -1
+
+        for pkg in pkgs:
+            to_remove = [ ]
+            for pre in relations[pkg].pre:
+                if not pre in self.pkgs:
+                    to_remove.append(pre)
+
+            for p in to_remove:
+                flag = relations[pkg].pre[p]
+                relations.removeRelation(pkg, p, quiet=True)
+                relations.append(self, p, flag)
+
+
+            to_remove = [ ]
+            for post in relations[pkg].post:
+                if not post in self.pkgs:
+                    to_remove.append(post)
+                    
+            for p in to_remove:
+                flag = relations[pkg].post[p]
+                relations.removeRelation(p, pkg, quiet=True)
+                relations.append(p, self, flag)
+
+        relations[self].weight = len(self.pkgs)
+        # uncomment for use of the dict based weight algorithm
+        # relations[self].weight = self.pkgs.copy()
+        
+
+    # ----
+
+    def __len__(self):
+        return len(self.pkgs)
+
+    # ----
+
+    def __str__(self):
+        return repr(self)
+
+    # ----
+
+    def getNEVRA(self):
+        return "Component: " + ",".join([pkg.getNEVRA() for pkg in self.pkgs]) 
+
+    # ----
+
+    def detectLoops(self):
+        """Sets self.loops.
+        self.loops is sorted with Loop.__cmp__() and the loops are unique.
+        """
+
+        loops = [ ]
+        self._detectLoops([ ], self.pkgs.iterkeys().next(), loops)
+        # remove duplicates
+        loops.sort()
+        previous = Loop(self.relations, [])
+        self.loops = []
+        for loop in loops:
+            if loop != previous:
+                self.loops.append(loop)
+            previous = loop
+
+    # ----
+
+    def _detectLoops(self, path, pkg, loops):
+        """Do a DFS walk in orderer.RpmRelations relations from RpmPackage pkg,
+        add discovered loops to loops.
+
+        The list of RpmPackages path contains the path from the search root to
+        the current package.  loops is a list of Loop objects.
+        """
+
+        for p in self.relations[pkg].pre:
+            # "p in path" is O(N), can be O(1) with another hash.
+            if len(path) > 0 and p in path:
+                w = path[path.index(p):] # make shallow copy of loop
+                w.append(pkg)
+                w.append(p)
+                loops.append(Loop(self.relations, w))
+            else:
+                path.append(pkg)
+                self._detectLoops(path, p, loops)
+                path.pop()
+
+    # ----
+
+    def isLeaf(self):
+        """Return if any package within the component depends on packages
+        that are not part of the component itself.
+        """
+
+        return not self.relations[self].pre
+
+    # ----
+
+    def processLeafNodes(self, order):
+        """Remove all leaf nodes with the component and append them to order
+        """
+        while True:
+            # Without the requirement of max(rel.pre) this could be O(1)
+            next = None
+            next_post_len = -1
+            for pkg in self.pkgs:
+                if (len(self.relations[pkg].pre) == 0 and
+                    len(self.relations[pkg].post) > next_post_len):
+                    next = pkg
+                    next_post_len = len(self.relations[pkg].post)
+            if next:
+                self.relations.remove(next)
+                order.append(next)
+                del self.pkgs[next]
+            else:
+                return
+
+    # ----
+        
+    def removeSubComponent(self, component):
+        """Remove all packages of a sub component from own package list"""
+        for pkg in component.pkgs:
+            del self.pkgs[pkg]
+            
+    # ----
+
+    def genCounter(self):
+        """Count number of times each arcs is represented in the list of loop
+        tuples loops.
+
+        Return a HashList: RpmPackage A =>
+        HashList :RpmPackage B => number of loops in which A requires B."""
+
+        counter = HashList()
+        for loop in self.loops:
+            for node, next in loop:
+                # first and last pkg are the same, use once
+                if node not in counter:
+                    counter[node] = HashList()
+                if next not in counter[node]:
+                    counter[node][next] = 1
+                else:
+                    counter[node][next] += 1
+        return counter
+
+    # ----
+
+    def breakUp(self, order):
+        """Remove this component from the graph by breaking it apart.
+        
+        Assumes that the LoopGroup is a leaf
+        """
+
+        self.detectLoops()
+
+        hardloops = [l for l in self.loops
+                     if l.containsHardRequirement()]
+
+        if hardloops:
+            # loops with hard requirements found!
+            # break up  one of these loops and recursivly try again
+            
+            # break up smallest loop
+            pkg, pre = hardloops[0].breakUp() 
+
+            self.processLeafNodes(order)
+
+            components = ConnectedComponentsDetector(self.relations).detect(self.pkgs)
+            while components:
+                found = False
+                for component in components:
+                    if component.isLeaf():
+                        self.removeSubComponent(component)
+                        component.breakUp(order)
+                        components.remove(component)
+                        self.relations.remove(component)
+                        found = True
+                        break
+                if not found:
+                    self.config.printError("Can't find leaf component!")
+                    raise AssertionError  # XXX
+                self.processLeafNodes(order)
+        else:
+            # No loops with hard requirements found, breaking up everything
+            while self.loops:
+                # find most used relation
+                counter = self.genCounter()
+
+                max_count_node = None
+                max_count_next = None
+                max_count = 0
+                        
+                for node in counter:
+                    for next in counter[node]:
+                        if counter[node][next] > max_count:
+                             max_count_node = node
+                             max_count_next = next
+                             max_count = counter[node][next]
+                                                                     
+                self.relations.removeRelation(max_count_node, max_count_next)
+                # remove loops that got broken up 
+                self.loops = [l for l in self.loops
+                         if not l.containsRequirement(max_count_node,
+                                                      max_count_next)]
+            # collect the nodes after all loops got broken up
+            self.processLeafNodes(order)
+    
+# ----------------------------------------------------------------------------
+
+class ConnectedComponentsDetector:
+    '''Use Gabow algorithm to detect strongly connected components:
+        Do a depth first traversal and number the nodes.
+        "root node": the node of a SCC that is visited first 
+        Keep two stacks:
+          1. stack of all still possible root nodes
+          2. stack of all visited but still unknown nodes (pkg stack)
+        If we reach a unknown node just descent.
+        If we reach an unprocessed node it has a smaller number than the
+         node we came from and all nodes with higher numbers than this
+         node can be reach from it. So we must remove those nodes
+         from the root stack.
+        If we reach a node already processed (part of a SCC (of possibly
+         only one node size)) there is no way form this node to our current.
+         Just ignore this way.
+        If we go back in the recusion the following can happen:
+        1. Our node has been removed from the root stack. It is part of a
+           SCC -> do nothing
+        2. Our node is top on the root stack: the pkg stack contains a SCC
+           from the position of our node up -> remove it including our node
+           also remove the node from the root stack
+        '''
+
+    def __init__(self, relations):
+        self.relations = relations
+
+    # ----
+
+    def detect(self, pkgs):
+        """Returns a list of all strongly ConnectedComponents"""
+        self.states = {} # attach numbers to packages
+        self.root_stack = [] # stack of possible root nodes
+        self.pkg_stack = [] # stack of all nodes visited and not processed yet
+        self.sccs = [] # already found strongly connected components
+        self.pkg_cnt = 0 # number of current package
+
+        # continue until all nodes have been visited
+        for pkg in pkgs:
+            if not self.states.has_key(pkg):
+                self._process(pkg)
+        return [ConnectedComponent(self.relations, pkgs) for pkgs in self.sccs]
+
+    # ----
+
+    def _process(self, pkg):
+        """Descent recursivly"""
+        states = self.states
+        root_stack = self.root_stack
+        pkg_stack = self.pkg_stack
+
+        self.pkg_cnt += 1
+        states[pkg] = self.pkg_cnt
+        # push pkg to both stacks
+        pkg_stack.append(pkg)
+        root_stack.append(pkg)
+
+        for next in self.relations[pkg].pre:
+            if states.has_key(next):
+                if states[next] > 0:
+                    # if visited but not finished
+                    # remove all pkgs with higher number from root stack
+                    i = len(root_stack)-1
+                    while i >= 0 and states[root_stack[i]] > states[next]:
+                        i -= 1
+                    del root_stack[i+1:]
+            else:
+                # visit
+                self._process(next)
+
+        # going up in the recursion
+        # if pkg is a root node (top on root stack)
+        if root_stack[-1] is pkg:
+            if pkg_stack[-1] is pkg:
+                # only one node SCC, drop it
+                pkg_stack.pop()
+                states[pkg] = 0 # set to "already processed"
+            else:
+                # get non trivial SCC from stack
+                idx = pkg_stack.index(pkg)
+                scc = pkg_stack[idx:]
+                del pkg_stack[idx:]
+                for p in scc:
+                    states[p] = 0 # set to "already processed"
+                self.sccs.append(scc)
+            root_stack.pop()
 
 # ----------------------------------------------------------------------------
 
