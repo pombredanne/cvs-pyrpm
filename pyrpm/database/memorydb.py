@@ -1,8 +1,6 @@
-#!/usr/bin/python
 #
-# (c) 2004, 2005 Red Hat, Inc.
-#
-# AUTHOR: Thomas Woerner <twoerner@redhat.com>
+# Copyright (C) 2004, 2005 Red Hat, Inc.
+# Author: Thomas Woerner <twoerner@redhat.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
@@ -16,7 +14,6 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
 #
 
 import db

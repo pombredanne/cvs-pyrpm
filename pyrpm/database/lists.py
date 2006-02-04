@@ -1,7 +1,6 @@
 #
 # Copyright (C) 2004, 2005 Red Hat, Inc.
-#
-# AUTHOR: Thomas Woerner <twoerner@redhat.com>
+# Author: Thomas Woerner <twoerner@redhat.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by

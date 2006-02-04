@@ -1,4 +1,3 @@
-#!/usr/bin/python
 #
 # Copyright (C) 2004, 2005 Red Hat, Inc.
 # Author: Thomas Woerner
@@ -15,7 +14,6 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
 #
 
 import os, stat, string
@@ -729,3 +727,5 @@ def getLabel(device):
     if not label:
         label = swapLabel(device)
     return label
+
+# vim:ts=4:sw=4:showmatch:expandtab

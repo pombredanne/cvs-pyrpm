@@ -1,4 +1,3 @@
-#!/usr/bin/python
 #
 # Copyright (C) 2005 Red Hat, Inc.
 # Copyright (C) 2005 Harald Hoyer <harald@redhat.com>

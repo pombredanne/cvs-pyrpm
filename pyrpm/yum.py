@@ -1,4 +1,3 @@
-#!/usr/bin/python
 #
 # Copyright 2004, 2005 Red Hat, Inc.
 # Author: Phil Knirsch
