@@ -206,7 +206,7 @@ class RpmRelations:
             txt = "Removing"
             if hard:
                 txt = "Zapping"
-            
+
             self.config.printDebug(1, "%s requires for %s from %s" % \
                                    (txt, next.getNEVRA(), node.getNEVRA()))
         del self[node].pre[next]
@@ -244,14 +244,14 @@ class RpmRelations:
 
     def _calculateWeights2(self, pkg, leafs):
         """For each package generate a dict of all packages that depend on it.
-        At last use the length of the dict as weight. 
+        At last use the length of the dict as weight.
         """
         # Uncomment weight line in ConnectedComponent.__init__() to use this
         if self[pkg].weight == 0:
             weight = { pkg : pkg }
         else:
             weight =  self[pkg].weight
-            
+
         for p in self[pkg].pre:
             rel = self[p]
             if rel.weight == 0:
@@ -282,7 +282,7 @@ class RpmRelations:
 
     def calculateWeights(self):
         leafs = []
-        for pkg in self: 
+        for pkg in self:
             if not self[pkg].post: # post leaf node
                 self._calculateWeights(pkg, leafs)
 
@@ -326,7 +326,7 @@ class RpmRelations:
             if not self[pkg].pre:
                 post = len(self[pkg].post)
                 leafs.setdefault(post, []).append(pkg)
-        
+
         if leafs:
             max_post = max(leafs)
 
@@ -415,7 +415,7 @@ class RpmRelations:
                     self.config.printDebug(2, "%s %s" % (key, pkg.getNEVRA()))
                     self.remove(pkg)
                     order.append(pkg)
-                    
+
         #self.config.printDebug(0, "Ordering finished (%s s)" %
         #                       (time.time()-t1))
 
@@ -435,7 +435,7 @@ class RpmRelations:
         return RpmRelation.SOFT # soft requirement
 
 # ----------------------------------------------------------------------------
-            
+
 class Loop(HashList):
 
     def __init__(self, relations, pkgs):
@@ -461,7 +461,7 @@ class Loop(HashList):
     def __cmp__(self, other):
         """compare loops:
 
-        Sort by size first, use hash values of the pkgs from te beginning then 
+        Sort by size first, use hash values of the pkgs from te beginning then
         """
         result = cmp(len(self), len(other))
         if result == 0:
@@ -489,7 +489,7 @@ class Loop(HashList):
             idx = self.index(pre)
             return self[idx-1] is pkg
         return False
-    
+
     # ----
 
     def containsHardRequirement(self):
@@ -507,7 +507,7 @@ class Loop(HashList):
         Returns (Node, Next) of the removed requirement.
 
         Assumes self.containsHardRequirement() == True"""
-        
+
         # find the requirement that has the largest distance
         # to a hard requirement
 
@@ -545,11 +545,11 @@ class ConnectedComponent:
 
     Automatically changes all relations of its pkgs from/to outside the
     component to itself. After all components have been created the graph
-    is cycle free. 
+    is cycle free.
 
     Mimics RpmPackage.
     """
-    
+
     def __init__(self, relations, pkgs):
         """relations: the RpmRelations object containing the loops
         """
@@ -557,7 +557,7 @@ class ConnectedComponent:
         self.relations = relations
 
         relations.append(self, None, 0)
-        
+
         self.pkgs = { }
         for pkg in pkgs:
             self.pkgs[pkg] = pkg
@@ -579,7 +579,7 @@ class ConnectedComponent:
             for post in relations[pkg].post:
                 if not post in self.pkgs:
                     to_remove.append(post)
-                    
+
             for p in to_remove:
                 flag = relations[pkg].post[p]
                 relations.removeRelation(p, pkg, quiet=True)
@@ -588,7 +588,7 @@ class ConnectedComponent:
         relations[self].weight = len(self.pkgs)
         # uncomment for use of the dict based weight algorithm
         # relations[self].weight = self.pkgs.copy()
-        
+
 
     # ----
 
@@ -603,7 +603,7 @@ class ConnectedComponent:
     # ----
 
     def getNEVRA(self):
-        return "Component: " + ",".join([pkg.getNEVRA() for pkg in self.pkgs]) 
+        return "Component: " + ",".join([pkg.getNEVRA() for pkg in self.pkgs])
 
     # ----
 
@@ -676,12 +676,12 @@ class ConnectedComponent:
                 return
 
     # ----
-        
+
     def removeSubComponent(self, component):
         """Remove all packages of a sub component from own package list"""
         for pkg in component.pkgs:
             del self.pkgs[pkg]
-            
+
     # ----
 
     def genCounter(self):
@@ -707,7 +707,7 @@ class ConnectedComponent:
 
     def breakUp(self, order):
         """Remove this component from the graph by breaking it apart.
-        
+
         Assumes that the LoopGroup is a leaf
         """
 
@@ -719,9 +719,9 @@ class ConnectedComponent:
         if hardloops:
             # loops with hard requirements found!
             # break up  one of these loops and recursivly try again
-            
+
             # break up smallest loop
-            pkg, pre = hardloops[0].breakUp() 
+            pkg, pre = hardloops[0].breakUp()
 
             self.processLeafNodes(order)
 
@@ -749,28 +749,28 @@ class ConnectedComponent:
                 max_count_node = None
                 max_count_next = None
                 max_count = 0
-                        
+
                 for node in counter:
                     for next in counter[node]:
                         if counter[node][next] > max_count:
                              max_count_node = node
                              max_count_next = next
                              max_count = counter[node][next]
-                                                                     
+
                 self.relations.removeRelation(max_count_node, max_count_next)
-                # remove loops that got broken up 
+                # remove loops that got broken up
                 self.loops = [l for l in self.loops
                          if not l.containsRequirement(max_count_node,
                                                       max_count_next)]
             # collect the nodes after all loops got broken up
             self.processLeafNodes(order)
-    
+
 # ----------------------------------------------------------------------------
 
 class ConnectedComponentsDetector:
     '''Use Gabow algorithm to detect strongly connected components:
         Do a depth first traversal and number the nodes.
-        "root node": the node of a SCC that is visited first 
+        "root node": the node of a SCC that is visited first
         Keep two stacks:
           1. stack of all still possible root nodes
           2. stack of all visited but still unknown nodes (pkg stack)

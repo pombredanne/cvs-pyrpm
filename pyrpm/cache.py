@@ -89,7 +89,7 @@ class NetworkCache:
 
     def clear(self, uri=None):
         """Clears either the single given uri/file or the whole cache"""
-        # XXX: Will clear the whole cache tree if no filename is given 
+        # XXX: Will clear the whole cache tree if no filename is given
         if not filename:
             return
         if self.isCached(uri):
