@@ -38,8 +38,7 @@ class RpmMemoryDB(db.RpmDatabase):
         self.__getitem__ = self.pkgs.__getitem__
 
     def __contains__(self, pkg):
-        name = pkg["name"]
-        if self.names.has_key(name) and pkg in self.names[name]:
+        if pkg in self.names.get(pkg["name"], []):
             return pkg
         return None
 
@@ -70,7 +69,7 @@ class RpmMemoryDB(db.RpmDatabase):
     # add package
     def addPkg(self, pkg):
         name = pkg["name"]
-        if self.names.has_key(name) and pkg in self.names[name]:
+        if pkg in self.names.get(name, []):
             return self.ALREADY_INSTALLED
         self.pkgs.append(pkg)
         self.names.setdefault(name, [ ]).append(pkg)
@@ -92,7 +91,7 @@ class RpmMemoryDB(db.RpmDatabase):
     # remove package
     def removePkg(self, pkg):
         name = pkg["name"]
-        if not self.names.has_key(name) or not pkg in self.names[name]:
+        if not pkg in self.names.get(name, []):
             return self.NOT_INSTALLED
         self.pkgs.remove(pkg)
         self.names[name].remove(pkg)
@@ -109,9 +108,7 @@ class RpmMemoryDB(db.RpmDatabase):
         return self.OK
 
     def searchName(self, name):
-        if self.names.has_key(name):
-            return self.names[name]
-        return [ ]
+        return self.names.get(name, [ ])
 
     def getPkgs(self):
         return self.pkgs
@@ -123,9 +120,7 @@ class RpmMemoryDB(db.RpmDatabase):
         return self.names.has_key(name)
 
     def getPkgsByName(self, name):
-        if self.names.has_key(name):
-            return self.names[name]
-        return [ ]
+        return self.names.get(name, [ ])
 
     def getProvides(self):
         return self.provides_list

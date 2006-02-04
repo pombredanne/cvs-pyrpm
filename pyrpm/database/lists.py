@@ -85,9 +85,7 @@ class FilenamesList:
         (dirname, basename) = os.path.split(filename)
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
-        if self.path.has_key(dirname) and self.path[dirname].has_key(basename):
-            return len(self.path[dirname][basename]) > 0
-        return 0
+        return len(self.path.get(dirname, {}, get(basename, {})) > 0
 
     def duplicates(self):
         dups = { }
