@@ -1949,8 +1949,8 @@ fd.close()
 if orig_yum:
     yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf, buildroot)
 else:
-    yum = "PYTHONPATH=%s PATH=%s:${PATH} pyrpmyum -y --hash -c '%s' -r '%s'" %\
-          (PYRPMDIR, PYBINDIR, yum_conf, buildroot)
+    yum = "PATH=%s:${PATH}; export PATH; PYTHONPATH=%s pyrpmyum -y --hash -c '%s' -r '%s'" %\
+          (PYBINDIR, PYRPMDIR, yum_conf, buildroot)
     # --servicehack
 if ks["packages"] and ks["packages"].has_key("ignoredeps") and \
        ks["packages"].has_key("ignoremissing"):
