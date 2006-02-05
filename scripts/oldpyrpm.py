@@ -1998,7 +1998,6 @@ class ReadRpm:
             hdrdata[3], hdrdata[4]):
             self.printErr("(rpm-%s) writeHeader() would write a different " \
                 "normal header" % self["rpmversion"])
-        return
 
     def getImmutableRegion(self):
         """rpmdb data has the original header data and then adds some items
@@ -2711,8 +2710,6 @@ class RpmResolver:
             self.requires_list)
 
     def removePkg(self, pkg):
-        if pkg not in self.rpms:
-            return
         self.rpms.remove(pkg)
         self.filenames_list.removePkg(pkg)
         pkg.removeProvides(self.provides_list)
@@ -4805,10 +4802,11 @@ def checkDeps(rpms, checkfileconflicts, runorderer):
             for rpm in orpms:
                 if rpm.getNEVR0() == pkg.getNEVR0():
                     continue
-                if rpm["name"] != name:
-                    print "Warning:", pkg.getFilename(), "is obsoleted by", \
-                        rpm.getFilename()
-                    resolver.removePkg(pkg)
+                if rpm["name"] == name or not pkg in resolver.rpms:
+                    continue
+                print "Warning:", pkg.getFilename(), "is obsoleted by", \
+                    rpm.getFilename()
+                resolver.removePkg(pkg)
     # Check all conflicts.
     deps = resolver.conflicts_list.keys()
     deps.sort()
