@@ -1724,8 +1724,9 @@ class ReadRpm:
         if basenames == None:
             return []
         dirnames = self["dirnames"]
-        return [ "%s%s" % (dirnames[d], b)
-                 for (d, b) in zip(self["dirindexes"], basenames) ]
+        dirindexes = self["dirindexes"]
+        return [ "%s%s" % (dirnames[dirindexes[i]], basenames[i])
+                 for i in xrange(len(basenames)) ]
 
     def readPayload(self, func, filenames=None, extract=None):
         self.__openFd(96 + self.sigdatasize + self.hdrdatasize)
@@ -2604,12 +2605,11 @@ class FilenamesList:
             for dirname in dirnames:
                 path.setdefault(dirname, {})
         if self.checkfileconflicts:
-            for (dirname, basename, i) in zip(dirnames, basenames,
-                xrange(len(basenames))):
-                path[dirname].setdefault(basename, []).append((pkg, i))
+            for i in xrange(len(basenames)):
+                path[dirnames[i]].setdefault(basenames[i], []).append((pkg, i))
         else:
-            for (dirname, basename) in zip(dirnames, basenames):
-                path[dirname].setdefault(basename, []).append(pkg)
+            for i in xrange(len(basenames)):
+                path[dirnames[i]].setdefault(basenames[i], []).append(pkg)
 
     def removePkg(self, pkg):
         """Remove all files from RpmPackage pkg from self."""
@@ -2623,12 +2623,11 @@ class FilenamesList:
                 return
             (basenames, dirnames) = genBasenames2(pkg["oldfilenames"])
         if self.checkfileconflicts:
-            for (dirname, basename, i) in zip(dirnames, basenames,
-                xrange(len(basenames))):
-                self.path[dirname][basename].remove((pkg, i))
+            for i in xrange(len(basenames)):
+                self.path[dirnames[i]][basenames[i]].remove((pkg, i))
         else:
-            for (dirname, basename) in zip(dirnames, basenames):
-                self.path[dirname][basename].remove(pkg)
+            for i in xrange(len(basenames)):
+                self.path[dirnames[i]][basenames[i]].remove(pkg)
 
     def searchDependency(self, name):
         """Return list of packages providing file with name."""
