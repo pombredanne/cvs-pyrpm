@@ -40,7 +40,6 @@
 # TODO:
 # - set RPM_INSTALL_PREFIX for scripts
 # git repos:
-# - Use a different dir for checked out git repos, so they stay small.
 # - Optionally import the full tree for the initial import (e.g. FC releases).
 # - Optionally also sort by time for e.g. FC updates dirs.
 # - Also use changelog data instead of only looking at the time?
@@ -1170,13 +1169,13 @@ def setPerms(filename, uid, gid, mode, mtime):
         os.utime(filename, (mtime, mtime))
 
 def Uri2Filename(filename):
-    """Try changing s file:// url into a local filename, pass
+    """Try changing a file:// url into a local filename, pass
     everything else through."""
-    if filename.startswith("file:/"):
+    if filename[:6] == "file:/":
         filename = filename[5:]
         if filename[1] == "/":
             idx = filename[2:].index("/")
-            filename = filename[idx+2:]
+            filename = filename[idx + 2:]
     return filename
 
 def isUrl(filename):
@@ -1307,9 +1306,9 @@ class CPIO:
                 return 1
             if filename[:2] == "./":
                 filename = filename[1:]
-            if not self.issrc and not filename.startswith("/"):
+            if not self.issrc and filename[:1] != "/":
                 filename = "%s%s" % ("/", filename)
-            if len(filename) > 1 and filename[-1] == "/":
+            if filename[-1:] == "/":
                 filename = filename[:-1]
             if extract:
                 func(filename, int(data[54:62], 16), self.__readDataPad,
@@ -2335,10 +2334,10 @@ def extractRpm(filename, buildroot, owner=None):
         rpm = filename
     rpm.buildroot = buildroot
     if rpm.issrc:
-        if not buildroot.endswith("/") and buildroot != "":
-            buildroot = buildroot + "/"
+        if buildroot[-1:] != "/" and buildroot != "":
+            buildroot += "/"
     else:
-        while buildroot.endswith("/"):
+        while buildroot[-1:] == "/":
             buildroot = buildroot[:-1]
     rpm.buildroot = buildroot
     rpm.owner = owner
@@ -2555,7 +2554,7 @@ def genBasenames(oldfilenames):
     (olddirname, olddirindex) = (None, 0)
     for filename in oldfilenames:
         (dirname, basename) = os.path.split(filename)
-        if len(dirname) > 0 and dirname[-1] != "/":
+        if dirname[-1:] != "/":
             dirname += "/"
         if dirname == olddirname:
             dirindex = olddirindex
@@ -2574,7 +2573,7 @@ def genBasenames2(oldfilenames):
     (basenames, dirnames) = ([], [])
     for filename in oldfilenames:
         (dirname, basename) = os.path.split(filename)
-        if len(dirname) > 0 and dirname[-1] != "/":
+        if dirname[-1:] != "/":
             dirname += "/"
         basenames.append(basename)
         dirnames.append(dirname)
@@ -2605,7 +2604,7 @@ class FilenamesList:
             for dirname in dirnames:
                 path.setdefault(dirname, {})
         if self.checkfileconflicts:
-            for (dirname, basename, i) in zip(dirnames, basenames, \
+            for (dirname, basename, i) in zip(dirnames, basenames,
                 xrange(len(basenames))):
                 path[dirname].setdefault(basename, []).append((pkg, i))
         else:
@@ -2615,21 +2614,26 @@ class FilenamesList:
     def removePkg(self, pkg):
         """Remove all files from RpmPackage pkg from self."""
         basenames = pkg["basenames"]
-        if basenames == None:
-            return
-        dirnames = pkg["dirnames"]
-        dirindexes = pkg["dirindexes"]
-        if self.checkfileconflicts:
-            for i in xrange(len(basenames)):
-                self.path[dirnames[dirindexes[i]]][basenames[i]].remove((pkg, i))
+        if basenames != None:
+            dirindexes = pkg["dirindexes"]
+            dirnames = pkg["dirnames"]
+            dirnames = [ dirnames[di] for di in dirindexes ]
         else:
-            for i in xrange(len(basenames)):
-                self.path[dirnames[dirindexes[i]]][basenames[i]].remove(pkg)
+            if pkg["oldfilenames"] == None:
+                return
+            (basenames, dirnames) = genBasenames2(pkg["oldfilenames"])
+        if self.checkfileconflicts:
+            for (dirname, basename, i) in zip(dirnames, basenames,
+                xrange(len(basenames))):
+                self.path[dirname][basename].remove((pkg, i))
+        else:
+            for (dirname, basename) in zip(dirnames, basenames):
+                self.path[dirname][basename].remove(pkg)
 
     def searchDependency(self, name):
         """Return list of packages providing file with name."""
         (dirname, basename) = os.path.split(name)
-        if len(dirname) > 0 and dirname[-1] != "/":
+        if dirname[-1:] != "/":
             dirname += "/"
         ret = self.path.get(dirname, {}).get(basename, [])
         if self.checkfileconflicts:
@@ -3489,7 +3493,7 @@ class RpmRepo:
 
     def createRepo(self, baseurl):
         # Strip trailing slashes.
-        while len(self.filename) > 1 and self.filename[-1] == "/":
+        while self.filename[-1:] == "/":
             self.filename = self.filename[:-1]
         rt = {}
         for i in ("name", "epoch", "version", "release", "arch",
@@ -4264,8 +4268,7 @@ class YumConf(Conf):
             self.chroot = ""
         else:
             self.chroot = chroot
-            if chroot and chroot[-1] != "/" and (not reposdir or
-                reposdir[1] != "/"):
+            if chroot[-1:] != "/" and reposdir[:1] != "/":
                 self.chroot += "/"
         self.reposdir = reposdir
         self.releasever = releasever
@@ -4465,14 +4468,14 @@ fedora = mirror + "fedora/"
 rhelupdates = mirror + "updates-rhel/"
 srpm_repos = [
     # Fedora Core
-    ("Fedora Core development", "FC-development",
-     [fedora + "development/SRPMS"], None, 30),
-    ("Fedora Core 4", "FC4",
-     [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
-      fedora + "updates/testing/4/SRPMS"], None, 30),
-    ("Fedora Core 3", "FC3",
-     [fedora + "3/SRPMS", fedora + "updates/3/SRPMS",
-      fedora + "updates/testing/3/SRPMS"], None, 30),
+    #("Fedora Core development", "FC-development",
+    # [fedora + "development/SRPMS"], None, 30),
+    #("Fedora Core 4", "FC4",
+    # [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
+    #  fedora + "updates/testing/4/SRPMS"], None, 30),
+    #("Fedora Core 3", "FC3",
+    # [fedora + "3/SRPMS", fedora + "updates/3/SRPMS",
+    #  fedora + "updates/testing/3/SRPMS"], None, 30),
     #("Fedora Core 2", "FC2",
     # [fedora + "2/SRPMS", fedora + "updates/2/SRPMS",
     #  fedora + "updates/testing/2/SRPMS"], None, 30),
@@ -4510,7 +4513,7 @@ gitrepos = (
     (kgit + "cogito/cogito.git", "cogito", 20),
     (kgit + "linux/hotplug/udev.git", "udev", None),
     ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct", None),
-    (kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6", 40),
+    #(kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6", 40),
 )
 
 def createCGI():
@@ -4583,7 +4586,7 @@ def updateGitMirrors(verbose):
             print repo
         d = grepodir + "/" + dirname
         if repo.startswith("rsync://"):
-            os.system("rsync -aqvH --delete " + repo + "/ " + d + ".git")
+            os.system("rsync -rltqvH --delete " + repo + "/ " + d + ".git")
         else:
             if not os.path.isdir(d + ".git"):
                 os.system("git clone -q " + repo + " " + d)
@@ -5376,7 +5379,7 @@ def checkSymlinks(repo):
             rpm["filelinktos"]):
             if not S_ISLNK(mode):
                 continue
-            if not link.startswith("/"):
+            if link[:1] != "/":
                 link = "%s/%s" % (os.path.dirname(f), link)
             link = os.path.normpath(link)
             if allfiles.has_key(link):
@@ -5578,14 +5581,14 @@ def main():
                 rpmdbpath += "/"
         elif opt == "--cachedir":
             cachedir = val
-            if not cachedir.endswith("/"):
+            if cachedir[-1:] != "/":
                 cachedir += "/"
         elif opt == "--checkrpmdb":
             checkrpmdb = 1
         elif opt == "--checkdeps":
             checkdeps = 1
         elif opt in ("--buildroot", "--installroot", "--root"):
-            #if not val.startswith("/"):
+            #if val[:1] != "/":
             #    print "buildroot should start with a /"
             #    return 1
             buildroot = os.path.abspath(val)
