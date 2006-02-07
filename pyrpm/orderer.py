@@ -44,14 +44,9 @@ merged into on single node in the relation graph and all relations from
 outside are changed to this new node. After this the relation graph is cycle
 free!
 
-As a third stage every package get a weight assigned. The weights are designed
-that the order of weights is compatible to the order given by the graph. Then
-the nodes are collected in order of their weight (highest weight first).
-Connected components are broken up when collected.
-
-
-
-
+After this we can collect the leaf packages until all packages are processed.
+When collecting a conneced component it is broken up and the containing
+packages are collected.
 
 The final stage is to generate an opertion list with the ordered packages and
 which takes the updates and obsoletes list into consideration. The operation
@@ -62,6 +57,19 @@ For a package, which gets updated, and which is in the update or obsolete list
 or more installed packages) an orderer is generated to order all the packages,
 which get removed according to the updates and obsoletes list. The package
 itself is put into the operation list and then the corresponding erases.
+
+
+Weight based collection strategies
+==================================
+
+One way to collect packages is to assign weights to them and collect them in
+the reversed order of the weights. To make this work every package must have
+a higher weight than all packages depending on it.
+
+Possible weights are:
+
+ * Number of packages depending on the package
+ * maximal path from a leaf node
 """
 
 from hashlist import HashList
@@ -185,6 +193,8 @@ class RpmRelations:
     def remove(self, pkg):
         """Remove RpmPackage pkg from the dependency graph"""
 
+        
+
         rel = self.list[pkg]
         # remove all post relations for the matching pre relation packages
         for r in rel.pre:
@@ -213,6 +223,19 @@ class RpmRelations:
         if not node in self.dropped_relations:
             self.dropped_relations[node] = [ ]
         self.dropped_relations[node].append(next)
+
+    # ----
+
+    def collect(self, pkg, order):
+        """Move package from the relations graph to the order list
+        Handle ConnectedComponent.
+        """
+        self.debugCollect(pkg, order)
+        if isinstance(pkg, ConnectedComponent):
+            pkg.breakUp(order)
+        else:
+            order.append(pkg)        
+        self.remove(pkg)
 
     # ----
 
@@ -267,6 +290,8 @@ class RpmRelations:
         else:
             self[pkg].weight = len(weight)
 
+    # ----
+
     def _calculateWeights(self, pkg, leafs):
         """Weight of a package is sum of the (weight+1) of all packages
         depending on it
@@ -278,6 +303,8 @@ class RpmRelations:
             rel.weight_edges += 1
             if rel.weight_edges == len(rel.post):
                 leafs.append(p)
+
+    # ----
 
     def calculateWeights(self):
         leafs = []
@@ -295,17 +322,27 @@ class RpmRelations:
 
     # ----
 
-    def orderIterationFunc(self):
-        """ Overload this function to get a call into the order process
-        each time the iteration starts."""
+    def debugConnectedComponents(self, components):
+        """ Overload this function to get a call after the connected components
+        were found.
+        """
         # Remember: Do not change any contents!
         return
 
     # ---
 
-    def orderLoopFunc(self, loops):
-        """ Overload this function to get a call into the order process
-        each time loops are detected."""
+    def debugBreakupComponents(self, component, subcomponents):
+        """ Overload this function to get a call before resursivly break up
+        a component.
+        """
+        # Remember: Do not change any contents!
+        return
+
+    # ----
+
+    def debugCollect(self, pkg, order):
+        """Overload this function to get a call within collect()
+        """
         # Remember: Do not change any contents!
         return
 
@@ -333,8 +370,7 @@ class RpmRelations:
             # remove leaf node
             leaf = leafs[max_post].pop()
             rels = self[leaf]
-            self.remove(leaf)
-            order.append(leaf)
+            self.collect(leaf, order)
             self.config.printDebug(2, "%s" % (leaf.getNEVRA()))
             # check post nodes if they got a leaf now
             new_max = max_post
@@ -343,6 +379,7 @@ class RpmRelations:
                     post = len(self[pkg].post)
                     leafs.setdefault(post, []).append(pkg)
                     if post > new_max: new_max = post
+            # select new (highest) bucket
             if not leafs[max_post]:
                 del leafs[max_post]
                 if leafs:
@@ -359,66 +396,41 @@ class RpmRelations:
 
         length = len(self)
 
-        #t1 = time.time()
         self.config.printDebug(1, "Start ordering")
 
         order = [ ]
 
-        last = [ ]
+        connected_components = ConnectedComponentsDetector(self).detect(self)
 
-        if len(self)>0: # There are some loops
-            if self.config.debug > 0:
-                self.config.printDebug(1, "-- LOOP --")
-                self.config.printDebug(2,
-                                           "\n===== remaining packages =====")
-                for pkg2 in self:
-                    rel2 = self[pkg2]
-                    self.config.printDebug(2, "%s" % pkg2.getNEVRA())
-                    for r in rel2.pre:
-                        # print nevra and flag
-                        self.config.printDebug(2, "\t%s (%d)" %
-                                               (r.getNEVRA(), rel2.pre[r]))
-                self.config.printDebug(2,
-                                       "===== remaining packages =====\n")
+        # call debug code
+        self.debugConnectedComponents(connected_components)
 
-            connected_components = ConnectedComponentsDetector(self).detect(self)
-            weights = self.calculateWeights()
-
-            if len(connected_components) < 1:
-                # raise AssertionError ?
-                self.config.printError("Unable to detect loops.")
-                return None
+        if connected_components:
+            # debug output the components
+            self.config.printDebug(1, "-- STRONLY CONNECTED COMPONENTS --")
             if self.config.debug > 1:
-                self.config.printDebug(2, "Strongly connected components:")
                 for i in xrange(len(connected_components)):
                     s = ", ".join([pkg.getNEVRA() for pkg in
                                    connected_components[i].pkgs])
                     self.config.printDebug(2, "  %d: %s" % (i, s))
 
+#         weights = self.calculateWeights()
+#         weight_keys = weights.keys()
+#         weight_keys.sort()
+#         weight_keys.reverse()
 
-        weight_keys = weights.keys()
-        weight_keys.sort()
-        weight_keys.reverse()
+#         for key in weight_keys:
+#             if key == -1: continue
+#             for pkg in weights[key]:
+#                 self.config.printDebug(2, "%s %s" % (key, pkg.getNEVRA()))
+#                 self.collect(pkg, order)
 
-        for key in weight_keys:
-            if key == -1: continue
-            for pkg in weights[key]:
+        self.processLeafNodes(order)
 
-                if isinstance(pkg, ConnectedComponent):
-                    self.config.printDebug(2, "%s %s" % (key, pkg))
-                    for p in pkg.pkgs:
-                        self.config.printDebug(2, "\t%s" % p.getNEVRA())
-                    pkg.breakUp(order)
-                    self.remove(pkg)
-                else:
-                    self.config.printDebug(2, "%s %s" % (key, pkg.getNEVRA()))
-                    self.remove(pkg)
-                    order.append(pkg)
-
-        #self.config.printDebug(0, "Ordering finished (%s s)" %
-        #                       (time.time()-t1))
-
-        print len(order), "/", length, "(", len(connected_components), ")"
+        if len(order) != length:
+            self.config.printError("%d Packages of %d in order list! Number of connected components: %d " % (
+                len(order), length,
+                len(connected_components)))
 
         return order
 
@@ -538,13 +550,13 @@ class Loop(HashList):
 
 class ConnectedComponent:
     """Contains a Strongly Connected Component (SCC).
-    This is a number (maximal) number of nodes that are all reachable from
-    each other. In other words the components consists of loops touching
+    This is a (maximal) set of nodes that are all reachable from
+    each other. In other words the component consists of loops touching
     each other.
 
     Automatically changes all relations of its pkgs from/to outside the
-    component to itself. After all components have been created the graph
-    is cycle free.
+    component to itself. After all components have been created the relations
+    graph is cycle free. 
 
     Mimics RpmPackage.
     """
@@ -588,6 +600,7 @@ class ConnectedComponent:
         # uncomment for use of the dict based weight algorithm
         # relations[self].weight = self.pkgs.copy()
 
+        self.detectLoops()
 
     # ----
 
@@ -615,7 +628,7 @@ class ConnectedComponent:
         self._detectLoops([ ], self.pkgs.iterkeys().next(), loops)
         # remove duplicates
         loops.sort()
-        previous = Loop(self.relations, [])
+        previous = Loop(self.relations, []) # dummy loop of size 0
         self.loops = []
         for loop in loops:
             if loop != previous:
@@ -646,15 +659,6 @@ class ConnectedComponent:
 
     # ----
 
-    def isLeaf(self):
-        """Return if any package within the component depends on packages
-        that are not part of the component itself.
-        """
-
-        return not self.relations[self].pre
-
-    # ----
-
     def processLeafNodes(self, order):
         """Remove all leaf nodes with the component and append them to order
         """
@@ -668,8 +672,7 @@ class ConnectedComponent:
                     next = pkg
                     next_post_len = len(self.relations[pkg].post)
             if next:
-                self.relations.remove(next)
-                order.append(next)
+                self.relations.collect(next, order)
                 del self.pkgs[next]
             else:
                 return
@@ -710,8 +713,6 @@ class ConnectedComponent:
         Assumes that the LoopGroup is a leaf
         """
 
-        self.detectLoops()
-
         hardloops = [l for l in self.loops
                      if l.containsHardRequirement()]
 
@@ -722,24 +723,15 @@ class ConnectedComponent:
             # break up smallest loop
             pkg, pre = hardloops[0].breakUp()
 
-            self.processLeafNodes(order)
-
             components = ConnectedComponentsDetector(self.relations).detect(self.pkgs)
-            while components:
-                found = False
-                for component in components:
-                    if component.isLeaf():
-                        self.removeSubComponent(component)
-                        component.breakUp(order)
-                        components.remove(component)
-                        self.relations.remove(component)
-                        found = True
-                        break
-                if not found:
-                    self.config.printError("Can't find leaf component!")
-                    raise AssertionError  # XXX
-                self.processLeafNodes(order)
+            self.relations.debugBreakupComponents(self, components)
+            for component in components:
+                self.removeSubComponent(component)
+                self.pkgs[component] = component
+
+            self.processLeafNodes(order)
         else:
+            self.relations.debugBreakupComponents(self, [ ])
             # No loops with hard requirements found, breaking up everything
             while self.loops:
                 # find most used relation
