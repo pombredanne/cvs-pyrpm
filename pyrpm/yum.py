@@ -465,19 +465,19 @@ class RpmYum:
         unresolved = self.opresolver.getUnresolvedDependencies()
         conflicts = self.opresolver.getConflicts()
         if len(unresolved) > 0:
-            self.config.printError("Unresolvable dependencies:\n")
+            self.config.printError("Unresolvable dependencies:")
             for pkg in unresolved.keys():
-                self.config.printError("Unresolved dependencies for %s\n" %
+                self.config.printError("Unresolved dependencies for %s" %
                                        pkg.getNEVRA())
                 for dep in unresolved[pkg]:
-                    self.config.printError("\t" + depString(dep)+"\n")
+                    self.config.printError("\t" + depString(dep))
         if len(conflicts) > 0:
-            self.config.printError("Unresolvable conflicts:\n")
+            self.config.printError("Unresolvable conflicts:")
             for pkg in conflicts.keys():
-                self.config.printError("Unresolved conflicts for %s\n" %
+                self.config.printError("Unresolved conflicts for %s" %
                                        pkg.getNEVRA())
                 for (dep, r) in conflicts[pkg]:
-                    self.config.printError("\t" + depString(dep)+"\n")
+                    self.config.printError("\t" + depString(dep))
         if len(unresolved) == 0 and len(conflicts) == 0:
             return 1
         return 0
