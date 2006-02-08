@@ -37,6 +37,7 @@ Anaconda is the Red Hat installation tool and can be downloaded at
 link:http://elvis.redhat.com/anaconda/[],
 link:http://fedora.redhat.com/projects/anaconda-installer/[] and
 link:http://fedora.linux.duke.edu/wiki/Anaconda[].
+perl scripts for kickstart installs at link:http://kickstart-tools.sf.net[].
 
 Conary has looked at rpm history and defines a new distribution format that
 enables rollbacks and easier customization on the client side. Available at
