@@ -4410,11 +4410,12 @@ class YumConf(Conf):
 
 
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
-    readsrc, reposdirs, readcompsfile=0):
+    readsrc, reposdirs, verbose, readcompsfile=0):
     # Read in /etc/yum.conf config files.
     repos = []
     for c in configfiles:
-        print "Reading config file %s." % c
+        if verbose:
+            print "Reading config file %s." % c
         conf = YumConf(releasever, arch, BuildArchTranslate(arch),
             buildroot, c, reposdirs)
         #print conf.vars
@@ -4427,10 +4428,7 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             sec = conf[key]
             if sec.get("enabled") == "0":
                 continue
-            if not sec.has_key("baseurl"):
-                print "%s:" % key, "No baseurl for this section in conf file."
-                return None
-            baseurls = sec["baseurl"]
+            baseurls = sec.get("baseurl", [])
             excludes = sec.get("exclude", "")
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
@@ -4438,7 +4436,8 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                 dirname = mkstemp_dir(tmpdir, "mirrorlist")
                 for mlist in sec["mirrorlist"]:
                     mlist = conf.extendValue(mlist)
-                    print "Getting mirrorlist from %s\n" % mlist
+                    if verbose:
+                        print "Getting mirrorlist from %s\n" % mlist
                     fname = cacheLocal([mlist], "", dirname, 1)
                     if fname:
                         lines = open(fname).readlines()
@@ -4450,6 +4449,9 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                         if l:
                             baseurls.append(conf.extendValue(l))
                 os.rmdir(dirname)
+            if not baseurls:
+                print "%s:" % key, "No url for this section in conf file."
+                return None
             repo = RpmRepo(baseurls, excludes, key, readsrc)
             repo.read()
             if not readdebug:
@@ -4458,7 +4460,8 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                 repo.compsfile = cacheLocal(baseurls,
                     "/repodata/comps.xml", key)
             repos.append(repo)
-        print "Done reading config file %s." % c
+        if verbose:
+            print "Done reading config file %s." % c
     return repos
 
 
@@ -5164,7 +5167,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
         if len(checkdupes[pkg]) > 1:
             print "Warning: more than one package installed for %s." % pkg
     repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0,
-        reposdirs)
+        reposdirs, verbose)
     if repos == None:
         return 1
     for tid in packages.keys():
@@ -5689,7 +5692,7 @@ def main():
         if verbose > 2:
             time1 = time.clock()
         repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0,
-            reposdirs)
+            reposdirs, verbose)
         if repos == None:
             return 1
         if verbose > 2:
@@ -5779,7 +5782,7 @@ def main():
                 hdrtags = importanttags
         time1 = time.clock()
         repos = readRepos(releasever, configfiles, arch, buildroot, 0, 1,
-            reposdirs)
+            reposdirs, verbose)
         if configfiles and verbose > 2:
             time2 = time.clock()
             print "Needed", time2 - time1, "seconds to read the repos."
