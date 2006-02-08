@@ -16,8 +16,9 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import os, stat, string
+import os, stat, string, time
 import parted
+import functions
 
 # pyparted classes:
 #
@@ -662,7 +663,7 @@ def umount(what):
             # kill all processes running in dir
             print "Killing all processes running in  '%s'" % what
         if i > 0:
-            (status, rusage) = pyrpm.runScript(\
+            (status, rusage) = functions.runScript(\
                 script="/sbin/fuser -k '%s'" % what)
             if status != 0:
                 print "WARNING: Failed to kill processes."
@@ -681,7 +682,7 @@ def umount(what):
 def swapon(device):
     swapon = "/sbin/swapon '%s'" % device
     print "Enable swap on '%s'" % device
-    (status, rusage) = pyrpm.runScript(script=swapon)
+    (status, rusage) = functions.runScript(script=swapon)
     if status != 0:
         print "ERROR: swapon failed."
         return 1
@@ -690,7 +691,7 @@ def swapon(device):
 def swapoff(device):
     swapoff = "/sbin/swapoff '%s'" % device
     print "Disable swap on '%s'" % device
-    (status, rusage) = pyrpm.runScript(script=swapoff)
+    (status, rusage) = functions.runScript(script=swapoff)
     if status != 0:
         print "ERROR: swapoff failed."
         return 1
