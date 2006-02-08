@@ -48,7 +48,6 @@
 #   - check if local files really exist with os.stat()?,
 #     maybe only once per repo?
 #   - sort several urls to list local ones first, add mirror speed check
-# - how to enable/disable /etc/yum.repos.d/
 # rpm header:
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -4269,21 +4268,16 @@ class YumConf(Conf):
     Variables = ("releasever", "arch", "basearch")
 
     def __init__(self, releasever, arch, basearch, chroot="",
-        filename="/etc/yum.conf", reposdir="/etc/yum.repos.d"):
+        filename="/etc/yum.conf", reposdirs=[]):
         """releasever - version of release (e.g. 3 for Fedora Core 3)
         arch - architecure (e.g. i686)
         basearch - base architecture (e.g. i386)
         chroot - set a chroot to add to all local config filename
         filename - the base config file
-        reposdir - additional dir to read (glob *.repo)
+        reposdirs - additional dirs to read (glob *.repo)
         """
-        if chroot == None:
-            self.chroot = ""
-        else:
-            self.chroot = chroot
-            if chroot[-1:] != "/" and reposdir[:1] != "/":
-                self.chroot += "/"
-        self.reposdir = reposdir
+        self.chroot = chroot
+        self.reposdirs = reposdirs
         self.releasever = releasever
         self.arch = arch
         self.basearch = basearch
@@ -4321,14 +4315,13 @@ class YumConf(Conf):
         Conf.read(self)
         self.parseFile()
         if self.vars.has_key("main") and self.vars["main"].has_key("reposdir"):
-            self.reposdir = self.chroot + self.vars["main"]["reposdir"]
-        if not self.reposdir:
-            return
-        filenames = glob.glob(self.reposdir + "/*.repo")
-        for filename in filenames:
-            self.filename = filename
-            Conf.read(self)
-            self.parseFile()
+            self.reposdirs.append(self.chroot + self.vars["main"]["reposdir"])
+        # XXX: unify repos.d directories to not read them in more than once
+        for reposdir in self.reposdirs:
+            for filename in glob.glob(reposdir + "/*.repo"):
+                self.filename = filename
+                Conf.read(self)
+                self.parseFile()
 
     def parseFile(self):
         """parse one config file with the help of Conf"""
@@ -4417,13 +4410,13 @@ class YumConf(Conf):
 
 
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
-    readsrc, readcompsfile=0):
+    readsrc, reposdirs, readcompsfile=0):
     # Read in /etc/yum.conf config files.
     repos = []
     for c in configfiles:
         print "Reading config file %s." % c
         conf = YumConf(releasever, arch, BuildArchTranslate(arch),
-            buildroot, c, "")
+            buildroot, c, reposdirs)
         #print conf.vars
         for key in conf.vars.keys():
             if key == "main":
@@ -5083,7 +5076,7 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
     return rethash
 
 def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
-    arch, verbose, checkfileconflicts):
+    arch, verbose, checkfileconflicts, reposdirs):
     from binascii import b2a_hex
     if verbose:
         print "Reading rpmdb, this can take some time..."
@@ -5170,7 +5163,8 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     for pkg in checkdupes.keys():
         if len(checkdupes[pkg]) > 1:
             print "Warning: more than one package installed for %s." % pkg
-    repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0)
+    repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0,
+        reposdirs)
     if repos == None:
         return 1
     for tid in packages.keys():
@@ -5530,6 +5524,8 @@ def main():
     excludes = ""
     checksrpms = 0
     rpmdbpath = "/var/lib/rpm/"
+    #reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
+    reposdirs = []
     checkarch = 0
     checkfileconflicts = 0
     runorderer = 0
@@ -5548,7 +5544,7 @@ def main():
          "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
          "excludes=", "nofileconflicts", "fileconflicts", "runorderer",
-         "updaterpms",
+         "updaterpms", "reposdir=", "disablereposdir",
          "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
          "checkrpmdb", "checkdeps", "buildroot=", "installroot=", "root=",
          "version", "baseurl=", "createrepo", "mercurial"])
@@ -5630,6 +5626,10 @@ def main():
             return 0
         elif opt == "--baseurl":
             baseurl = val
+        elif opt == "--reposdir":
+            reposdirs.append(val)
+        elif opt == "--disablereposdir":
+            reposdirs = []
         elif opt == "--createrepo":
             createrepo = 1
         elif opt == "--mercurial":
@@ -5647,7 +5647,7 @@ def main():
         checkArch(args[0])
     elif checkrpmdb:
         if readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles,
-            buildroot, arch, verbose, checkfileconflicts):
+            buildroot, arch, verbose, checkfileconflicts, reposdirs):
             return 1
     elif createrepo:
         for a in args:
@@ -5678,14 +5678,18 @@ def main():
             print "Needed", time2 - time1, "seconds to read the rpmdb", \
                 "(%d rpm packages)." % len(packages.keys())
 
-        # If no config file specified, default to /etc/yum.conf.
+        # If no config file specified, default to /etc/yum.conf and also
+        # the default directories for additional yum repos.
         if not configfiles:
             configfiles.append("/etc/yum.conf")
+        if not reposdirs:
+            reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
 
         # Read all repositories.
         if verbose > 2:
             time1 = time.clock()
-        repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0)
+        repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0,
+            reposdirs)
         if repos == None:
             return 1
         if verbose > 2:
@@ -5774,7 +5778,8 @@ def main():
             if small:
                 hdrtags = importanttags
         time1 = time.clock()
-        repos = readRepos(releasever, configfiles, arch, buildroot, 0, 1)
+        repos = readRepos(releasever, configfiles, arch, buildroot, 0, 1,
+            reposdirs)
         if configfiles and verbose > 2:
             time2 = time.clock()
             print "Needed", time2 - time1, "seconds to read the repos."
