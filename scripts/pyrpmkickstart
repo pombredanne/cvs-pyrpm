@@ -32,6 +32,15 @@ import pyrpm
 
 ################################### classes ###################################
 
+class installation:
+    def __init__(self, version, release):
+        self.release = version
+        self.version = release
+    def __str__(self):
+        return "%s-%s" % (self.release, self.version)
+    def __cmp__(self, other):
+        return cmp(str(self), other)
+
 #################################### dicts ####################################
 
 grp_st_gl = 'grp:shift_toggle,grp_led:scroll'
@@ -121,10 +130,10 @@ def umount_all(dir):
         line = fd.readline()
         if not line:
             break
-        args = string.split(line)
-        i = args[1].find(dir)
+        margs = string.split(line)
+        i = margs[1].find(dir)
         if i == 0:
-            mounted.append(args[1])
+            mounted.append(margs[1])
     fd.close()
     # sort reverse
     mounted.sort()
@@ -257,6 +266,30 @@ def compsLangsupport(comps, languages):
                         pkgs.append(name)
                         break
     return pkgs
+
+def createRepodata(dir):
+    tmp_dir = "%s-repo" % dir
+    os.mkdir(tmp_dir)
+    os.mkdir(tmp_dir+"/repodata")
+    list = os.listdir(source_dir)
+    for f in list:
+        os.symlink("%s/%s" % (source_dir, f), "%s/%s" % (tmp_dir, f))
+    if orig_yum:
+        createrepo = "createrepo %s" % tmp_dir
+    else:
+        createrepo = "PATH=%s:${PATH}; export PATH; pyrpmcreaterepo %s" % \
+                     (PYBINDIR, tmp_dir)
+    pid = os.fork()
+    if pid != 0:
+        (rpid, status) = os.waitpid(pid, 0)
+        if status != 0:
+            return None
+    else:
+        if os.system(createrepo) != 0:
+            sys.exit(255)
+        sys.exit(0)
+    return tmp_dir
+
 
 #################################### main ####################################
 
@@ -429,6 +462,178 @@ if ks["repository"]:
             print "ERROR: Unsupported url for repository, exiting."
             exit(1)
 
+### create temp dir ###
+
+try:
+    tempdir = tempfile.mkdtemp(prefix="pyrpmkickstart_")
+except Exception, msg:
+    print msg
+    exit(1)
+source_dir = tempdir+"/source"
+target_dir = tempdir+"/target"
+stage2_dir = tempdir+"/stage2"
+repo_dir = tempdir+"/repo"
+
+### mount source ###
+
+# create source mount point and mount source (nfs)
+opts = "ro"
+os.mkdir(source_dir)
+if ks["nfs"]:
+    source = "%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
+    fstype = "nfs"
+    fsargs = None
+elif ks["url"]:
+    soure = None
+    fstype = None
+    fsargs = None
+    if ks["url"]["url"].startswith("file://"):
+        source = ks["url"]["url"][7:]
+        fsargs = [ "--rbind" ]
+    else:
+        # TODO: http and ftp source
+        print "ERROR: Only file urls are currently supported."
+        exit(1)
+
+if verbose:
+    print "Mounting '%s' on '%s'" % (source, source_dir)
+try:
+    pyrpm.mount(source, source_dir, fstype, opts, fsargs)
+except Exception, msg:
+    print msg
+    exit(1)
+
+### mount stage2 temporary ###
+
+if not no_stage2:
+    stage2_img_dir = tempdir+"/tmp"
+    os.mkdir(stage2_img_dir)
+    stage2 = "%s/RedHat/base/stage2.img" % source_dir
+    if not os.path.exists(stage2):
+        stage2 = "%s/Fedora/base/stage2.img" % source_dir
+    if not os.path.exists(stage2):
+        print "ERROR: Could not find stage2 image in installation source."
+        exit(1)
+
+    fstype = None # no fstype needed for compressed rom fs
+    # determine stage2.img filesystem type
+    try:
+        fd = open(stage2, "r")
+    except Exception, msg:
+        print msg
+        exit(1)
+    else:
+        magic = fd.read(4)
+        fd.close()
+        if len(magic) != 4:
+            print "ERROR: %s is not a valid stage2 image" % stage2
+            exit(1)
+        if magic == "hsqs" or magic == "sqsh":
+            fstype = "squashfs"
+
+    if verbose:
+        print "Mounting '%s' on '%s'" % (stage2, stage2_img_dir)
+    try:
+        pyrpm.mount(stage2, stage2_img_dir, fstype, options="loop,defaults,ro")
+    except Exception, msg:
+        print msg
+#        print "ERROR: Unable to mount stage2 image."
+        print "You could try to disable the use of the stage2 image with the"
+        print "option --no-stage2."
+        exit(1)
+
+    ### analyze stage2 ###
+    buildstamp = "%s/.buildstamp" % stage2_img_dir
+    if not os.path.exists(buildstamp):
+        print "ERROR: Buildstamp information is missing in stage2."
+        exit(1)
+    try:
+        fd = open(buildstamp, "r")
+    except Exception, msg:
+        print "ERROR: Failed to open buildstamp information in stage2:", msg
+        exit(1)
+    lines = fd.readlines()
+    fd.close()
+
+    if len(lines) < 3:
+        if len(lines) == 1:
+            # RHEL-2.1
+            source_release = "Red Hat Enterprise Linux"
+            source_version = "2.1"
+        else:
+            print "ERROR: Buildstamp information in stage2 is malformed:", \
+                  lines
+            exit(1)
+
+    source_date = string.strip(lines[0])
+    if len(lines) > 2:
+        source_release = string.strip(lines[1])
+        source_version = string.strip(lines[2])
+    del lines
+
+else: # no_stage2
+    dir = "%s/RedHat/RPMS" % source_dir
+    source_release = "Red Hat Enterprise Linux"
+    release = "redhat"
+    if not os.path.exists(dir) or not os.path.isdir(dir):
+        dir = "%s/Fedora/RPMS" % source_dir
+        source_release = "Fedora Core"
+        release = "fedora"
+    if not os.path.exists(dir) or not os.path.isdir(dir):
+        print "ERROR: No valid installation source."
+        exit(1)
+    list = os.listdir(dir)
+    s = [ ]
+    regex = re.compile('%s-release-.*\.rpm' % release)
+    for l in list:
+        if regex.match(l):
+            s.append(l)
+    if len(s) != 1:
+        print "ERROR: Could not find release package in installation source."
+        exit(1)
+    splits = string.split(s[0], "-")
+    if len(splits) > 2 and splits[2] == "as":
+        _version = splits[3]
+    else:
+        _version = splits[2]
+    i = 0
+    while i < len(_version) and ((_version[i] >= '0' and _version[i] <= '9') \
+                                 or _version[i] == "."):
+        i += 1
+    source_version = _version[:i]
+    if len(source_version) == 0:
+       print "ERROR: No valid version of installation source"
+       exit(1)
+    i = string.find(s[0], "rawhide")
+    if i != -1:
+        source_version += ".90" # fix for rawhide (bad)
+    del release, _version, splits, dir, list, i
+
+# verify source release and version
+if source_release == "Red Hat Enterprise Linux":
+    short_release = "RHEL"
+elif source_release == "Fedora Core":
+    short_release = "FC"
+else:
+    print "ERROR: Unknown source release."
+    exit(1)
+
+try:
+    install = installation(short_release, int(source_version))
+except:
+    try:
+        install = installation(short_release, float(source_version))
+    except:
+        print "The installation version '%s' is not valid." % source_version
+        exit(0)
+
+if (install.release == "RHEL" and install.version < 3) or \
+       (install.release == "FC" and install.version < 2):
+    print "%s is not supported as installation source" % install
+    exit(1)
+
+print "Installation source: %s" % install
+
 ### system disks ###
 
 system_disks = [ ]
@@ -574,18 +779,6 @@ if ks.has_key("install") and \
                     if not disk in modified:
                         modified.append(disk)
 
-### create temp dir ###
-
-try:
-    tempdir = tempfile.mkdtemp(prefix="pyrpmkickstart_")
-except Exception, msg:
-    print msg
-    exit(1)
-source_dir = tempdir+"/source"
-target_dir = tempdir+"/target"
-stage2_dir = tempdir+"/stage2"
-repo_dir = tempdir+"/repo"
-
 ### disk / partition selection ###
 
 autopart = { }
@@ -639,26 +832,10 @@ else:
                 except Exception, msg:
                     pass
                 else:
-                    f = fstemp_dir + "/etc/fstab"
                     # anaconda does not support updates where /etc is
                     # an extra filesystem
                     #if not os.path.exists(f) or not os.path.isfile(f):
                     #    f = fstemp_dir + "/fstab"
-                    if os.path.exists(f) and os.path.isfile(f):
-                        try:
-                            fd = open(f, "r")
-                        except:
-                            pass
-                        else:
-                            lines = fd.readlines()
-                            fstabs[onpart] = [ ]
-                            for line in lines:
-                                splits = string.split(line)
-                                if (splits[4] == "1" and \
-                                    splits[5] in ["1", "2"]) or \
-                                    splits[1] == "swap":
-                                    fstabs[onpart].append(line)
-                            fd.close()
                     f = fstemp_dir + "/etc/redhat-release"
                     if os.path.exists(f) and os.path.isfile(f):
                         try:
@@ -666,17 +843,29 @@ else:
                         except:
                             pass
                         else:
-                            release[onpart] = string.strip(fd.readline())
+                            _release = fd.readline()
                             fd.close()
+
+                            f = fstemp_dir + "/etc/fstab"
+                            if os.path.exists(f) and os.path.isfile(f):
+                                try:
+                                    fd = open(f, "r")
+                                except:
+                                    pass
+                                else:
+                                    release[onpart] = string.strip(_release)
+                                    lines = fd.readlines()
+                                    fstab[onpart] = [ ]
+                                    for line in lines:
+                                        splits = string.split(line)
+                                        if (splits[4] == "1" and \
+                                            splits[5] in ["1", "2"]) or \
+                                            splits[1] == "swap":
+                                            fstabs[onpart].append(line)
+                                    fd.close()
                     if verbose:
                         print "Umounting '%s' " % fstemp_dir
                     pyrpm.umount(fstemp_dir)
-                    if not release.has_key(onpart) or \
-                           not fstabs.has_key(onpart):
-                        if release.has_key(onpart):
-                            del release[onpart]
-                        if fstabs.has_key(onpart):
-                            del fstabs[onpart]
 
     if len(fstabs) < 1:
         print "ERROR: Could not find any installation."
@@ -1110,136 +1299,6 @@ if error:
 #    sys.stdout.write("labels=")
 #    pprint.pprint(labels)
 
-### mount source ###
-
-# create source mount point and mount source (nfs)
-opts = "ro"
-os.mkdir(source_dir)
-if ks["nfs"]:
-    source = "%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
-    fstype = "nfs"
-    args = None
-elif ks["url"]:
-    soure = None
-    fstype = None
-    args = None
-    if ks["url"]["url"].startswith("file://"):
-        source = ks["url"]["url"][7:]
-        args = [ "--rbind" ]
-    else:
-        # TODO: http and ftp source
-        print "ERROR: Only file urls are currently supported."
-        exit(1)
-
-if verbose:
-    print "Mounting '%s' on '%s'" % (source, source_dir)
-try:
-    pyrpm.mount(source, source_dir, fstype, opts, args)
-except Exception, msg:
-    print msg
-    exit(1)
-
-### mount stage2 temporary ###
-
-if not no_stage2:
-    stage2_img_dir = tempdir+"/tmp"
-    os.mkdir(stage2_img_dir)
-    stage2 = "%s/RedHat/base/stage2.img" % source_dir
-    if not os.path.exists(stage2):
-        stage2 = "%s/Fedora/base/stage2.img" % source_dir
-    if not os.path.exists(stage2):
-        print "ERROR: Could not find stage2 image in installation source."
-        exit(1)
-
-    fstype = None # no fstype needed for compressed rom fs
-    # determine stage2.img filesystem type
-    try:
-        fd = open(stage2, "r")
-    except Exception, msg:
-        print msg
-        exit(1)
-    else:
-        magic = fd.read(4)
-        fd.close()
-        if len(magic) != 4:
-            print "ERROR: %s is not a valid stage2 image" % stage2
-            exit(1)
-        if magic == "hsqs" or magic == "sqsh":
-            fstype = "squashfs"
-
-    if verbose:
-        print "Mounting '%s' on '%s'" % (stage2, stage2_img_dir)
-    try:
-        pyrpm.mount(stage2, stage2_img_dir, fstype, options="loop,defaults,ro")
-    except Exception, msg:
-        print msg
-        exit(1)
-
-    ### analyze stage2 ###
-    buildstamp = "%s/.buildstamp" % stage2_img_dir
-    if not os.path.exists(buildstamp):
-        print "ERROR: Buildstamp information is missing in stage2."
-        exit(1)
-    try:
-        fd = open(buildstamp, "r")
-    except Exception, msg:
-        print "ERROR: Failed to open buildstamp information in stage2:", msg
-        exit(1)
-    lines = fd.readlines()
-    fd.close()
-    if len(lines) < 3:
-        print "ERROR: Buildstamp information in stage2 is malformed:", lines
-        exit(1)
-
-    source_date = string.strip(lines[0])
-    source_release = string.strip(lines[1])
-    source_version = string.strip(lines[2])
-    del lines
-
-else: # no_stage2
-    dir = "%s/RedHat/RPMS" % source_dir
-    source_release = "Red Hat Enterprise Linux"
-    release = "redhat"
-    if not os.path.exists(dir) or not os.path.isdir(dir):
-        dir = "%s/Fedora/RPMS" % source_dir
-        source_release = "Fedora Core"
-        release = "fedora"
-    if not os.path.exists(dir) or not os.path.isdir(dir):
-        print "ERROR: No valid installation source."
-        exit(1)
-    list = os.listdir(dir)
-    s = [ ]
-    regex = re.compile('%s-release-.*\.rpm' % release)
-    for l in list:
-        if regex.match(l):
-            s.append(l)
-    if len(s) != 1:
-        print "ERROR: Could not find release package in installation source."
-        exit(1)
-    splits = string.split(s[0], "-")
-    i = 0
-    while i < len(splits[2]) and splits[2][i] >= '0' and splits[2][i] <= '9':
-        i += 1
-    source_version = splits[2][:i]
-    if len(source_version) == 0:
-       print "ERROR: No valid version of installation source"
-       exit(1)
-    i = string.find(s[0], "rawhide")
-    if i != -1:
-        source_version += ".90" # fix for rawhide (bad)
-
-if source_release == "Red Hat Enterprise Linux":
-    install_version = "RHEL"
-elif source_release == "Fedora Core":
-    install_version = "FC"
-else:
-    print "ERROR: Unknown source release."
-    exit(1)
-install_release = install_version
-install_version += "-%s" % source_version
-
-print "Installation source: %s %s" % (source_release, source_version)
-
 ### mount repos ###
 
 repos = { }
@@ -1255,18 +1314,18 @@ if ks["repository"]:
         soure = None
         fstype = None
         opts = "ro"
-        args = None
+        fsargs = None
 
         # nfs source
         if ks["repository"][repo]["url"].startswith("nfs://"):
             s = string.splitfields(ks["repository"][repo]["url"][6:], "/", 1)
             source = "%s:/%s" % (s[0], s[1])
             fstype = "nfs"
-            args = None
+            fsargs = None
         # file source
         elif ks["repository"][repo]["url"].startswith("file://"):
             source = ks["repository"][repo]["url"][7:]
-            args = [ "--rbind" ]
+            fsargs = [ "--rbind" ]
         else:
             # TODO: http and ftp source
             print "ERROR: Only nfs and file urls are currently supported " + \
@@ -1277,7 +1336,7 @@ if ks["repository"]:
         if verbose:
             print "Mounting '%s' on '%s'" % (source, dir)
         try:
-            pyrpm.mount(source, dir, fstype, opts, args)
+            pyrpm.mount(source, dir, fstype, opts, fsargs)
         except Exception, msg:
             print msg
             exit(1)
@@ -1410,7 +1469,7 @@ if len(to_format) > 0:
         (status, rusage) = pyrpm.runScript( \
             script="/bin/bash --version 2>&1 >/dev/null", chroot=stage2_dir)
         if status != 0:
-            print "/bin/bash in stage2 is not usable, exiting."
+            print "ERROR: /bin/bash in stage2 is not usable, exiting."
             exit(1)
 
         mke2fs_prog = "/usr/sbin/mke2fs"
@@ -1452,7 +1511,8 @@ if len(to_format) > 0:
                 print "ERROR: mke2fs failed."
                 exit(1)
 
-            if part["fstype"] == "ext3": # set ext options
+            if part["fstype"] == "ext3" and install != "RHEL-2.1":
+                # set ext options
                 tune2fs = "%s -c 0 -i 0 -O dir_index '%s'" % \
                           (tune2fs_prog, partitionmap[onpart]["device"])
 
@@ -1469,8 +1529,8 @@ if len(to_format) > 0:
 
         elif name == "swap":
             l = ""
-            if install_version != "RHEL-3" and install_version != "FC-2":
-                # no swap labels for RHEL-3, FC-1
+            if install not in [ "RHEL-2.1", "RHEL-3", "FC-1", "FC-2" ]:
+                # no swap labels for RHEL-2.1, RHEL-3, FC-1
                 l = "-L '%s'" % label
             mkswap = "%s %s '%s' %d >/dev/null" % \
                      (mkswap_prog, l, partitionmap[onpart]["device"],
@@ -1601,7 +1661,7 @@ if ks.has_key("install"):
                 print "Adding group %s" % desktop
                 pkgs.extend(comps.getPackageNames(desktop))
         # TODO: add xorg driver package for FC-5
-        if install_release == "FC" and install_version > "FC-4":
+        if install.release == "FC" and install.version > 4:
 #            if ks["xconfig"].has_key("driver"):
 #                pkgs.append("xorg-x11-drv-%s" % ks["xconfig"]["driver"])
 #            else:
@@ -1623,11 +1683,11 @@ if ks.has_key("install"):
             print "Adding package iptables"
             pkgs.append("iptables")
             # no firewall con
-            if install_version != "RHEL-3":
+            if install != "RHEL-3":
                 print "Adding package providing /usr/sbin/lokkit"
                 pkgs.append("/usr/sbin/lokkit")
 
-        if ks["selinux"] and install_version != "RHEL-3" and \
+        if ks["selinux"] and install != "RHEL-3" and \
                not "/usr/sbin/lokkit" in pkgs:
             print "Adding package providing /usr/sbin/lokkit"
             pkgs.append("/usr/sbin/lokkit")
@@ -1700,7 +1760,7 @@ create_dir(buildroot, "/dev")
 create_dir(buildroot, "/etc")
 create_dir(buildroot, "/etc/rpm")
 create_dir(buildroot, "/etc/sysconfig")
-if install_version != "RHEL-3":
+if install != "RHEL-3":
     create_dir(buildroot, "/sys")
 create_dir(buildroot, "/tmp")
 os.chmod(buildroot+"/tmp", 1777)
@@ -1768,12 +1828,13 @@ if ks.has_key("install") and not os.path.exists(buildroot+"/etc/fstab"):
         fd.write("none\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n")
         fd.write("none\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n")
         fd.write("none\t\t/proc\t\tproc\tdefaults\t0 0\n")
-        if install_version != "RHEL-3":
+        if install != "RHEL-3":
             fd.write("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
         for onpart in partition:
             if partitionmap[onpart]["name"] == "swap":
-                if install_version == "RHEL-3" or install_version == "FC-2":
-                    # RHEL-3, FC-2 does not support swap labels
+                if (install.release == "RHEL" and install.version < 4) or \
+                       (install.release == "FC" and install.version < 2):
+                    # pre RHEL-4, pre FC-2 does not support swap labels
                     what = "/dev/%s" % onpart
                 else:
                     what = "LABEL=%s" % partitionmap[onpart]["label"]
@@ -1828,7 +1889,9 @@ if ks.has_key("install") and not os.path.exists(buildroot+"/etc/resolv.conf"):
 
 # /etc/modprobe.conf and /etc/modules.conf
 if ks.has_key("install"):
-    if install_version == "RHEL-3":
+    if (install.release == "RHEL" and install.version < 4) or \
+           (install.release == "FC" and install.version < 2):
+        # pre RHEL-4, pre FC-2 use modules.conf
         conf = "/etc/modules.conf"
     else:
         conf = "/etc/modprobe.conf"
@@ -1905,6 +1968,22 @@ if ks.has_key("upgrade"):
 
 ### installation ###
 
+if not os.path.exists("%s/repodata" % source_dir):
+    print "Creating repodata for installation source - this can take some time..."
+    dir = createRepodata(source_dir)
+    if not dir:
+        print "ERROR: createrepo for installation source failed, aborting."
+        exit(1)
+    source_dir = dir
+for repo in repos:
+    if not os.path.exists("%s/repodata" % repos[repo]):
+        print "Creating repodata for repository '%s' - this can take some time..." % repo
+        dir = createRepodata(repos[repo])
+        if not dir:
+            print "WARNING: createrepo for repository '%s' failed, ignoring." % repo
+        else:
+            repos[repo] = dir
+
 if ks.has_key("install"):
     print "Preparing installation"
 else:
@@ -1917,7 +1996,7 @@ yum_conf = tempdir+"/yum.conf"
 try:
     fd = open(yum_conf, "w")
 except Exception, msg:
-    print "ERROR: Configuration of the yum failed:", msg
+    print "ERROR: Configuration of yum failed:", msg
     exit(1)
 fd.write("[main]\n")
 fd.write("cachedir=%s/yum.cache\n" % tempdir)
@@ -1933,8 +2012,8 @@ fd.write("reposdir=%s/yum.repos.d\n" % tempdir)
 if ks.has_key("install") and ks["packages"] and ks["packages"].has_key("drop"):
     fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
 fd.write("\n")
-fd.write("[dist %s]\n" % install_version)
-fd.write("name=dist %s\n" % install_version)
+fd.write("[dist %s]\n" % install)
+fd.write("name=dist %s\n" % install)
 fd.write("baseurl=file://%s\n" % source_dir)
 fd.write("\n")
 # add repos
@@ -2071,7 +2150,9 @@ if ks.has_key("install") and \
                   buildroot+"/etc/inittab")
 
 # /etc/sysconfig/selinux
-if ks.has_key("install") and ks["selinux"] and install_version != "RHEL-3":
+if ks.has_key("install") and ks["selinux"] and \
+       ((install.release == "RHEL" and install.version > 3) or \
+        (install.release == "FC" and install.version > 2)):
     print "Configuring selinux"
 
     if not os.path.exists(buildroot+"/usr/sbin/lokkit"):
@@ -2169,8 +2250,9 @@ if ks.has_key("install") and \
        ks["firewall"] and not ks["firewall"].has_key("disabled"):
     print "Configuring firewall"
 
-    if install_version == "RHEL-3":
-        # lokkit is not able to configure firewall for RHEL-3
+    if (install.release == "RHEL" and install.version >= 4) or \
+           (install.release == "FC" and install.version >= 2):
+        # lokkit is not able to configure firewall for pre RHEL-4 and pre FC-2
 
         try:
             fd = open(buildroot+"/etc/sysconfig/iptables", "w")
@@ -2219,20 +2301,20 @@ if ks.has_key("install") and \
         if not os.path.exists(buildroot+"/usr/sbin/lokkit"):
             print "ERROR: /usr/sbin/lokkit does not exist, skipping."
         else:
-            args = [ ]
+            fwargs = [ ]
             if ks["firewall"].has_key("enabled"):
-                args.append("--enabled")
+                fwargs.append("--enabled")
             if ks["firewall"].has_key("disabled"):
-                args.append("--disabled")
+                fwargs.append("--disabled")
             if ks["firewall"].has_key("trusted"):
                 for trusted in ks["firewall"]["trusted"]:
-                    args.append("--trusted=%s\n" % trusted)
+                    fwargs.append("--trusted=%s\n" % trusted)
             if ks["firewall"].has_key("ports"):
                 for port in ks["firewall"]["ports"]:
-                    args.append("--port=%s:%s\n" % (port[0], port[1]))
+                    fwargs.append("--port=%s:%s\n" % (port[0], port[1]))
 
             lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % \
-                     string.join(args)
+                     string.join(fwargs)
             (status, rusage) = pyrpm.runScript(script=lokkit, chroot=buildroot)
             if status != 0:
                 print "ERROR: Configuration of firewall failed"
@@ -2244,7 +2326,7 @@ if ks.has_key("install") and \
             else:
                 fd.write('# Configuration file for system-config-securitylevel\n')
                 fd.write('\n')
-                for arg in args:
+                for arg in fwargs:
                     fd.write('%s\n' % arg)
                 fd.close()
 
@@ -2443,13 +2525,13 @@ if ks.has_key("install") and ks["xconfig"]:
                 line = string.strip(line)
                 if len(line) < 1 or line[0] == "#":
                     continue
-                args = string.split(line, ";")
-                if len(args) < 5:
+                xargs = string.split(line, ";")
+                if len(xargs) < 5:
                     continue
-                if string.strip(args[1]) == ks["xconfig"]["monitor"]:
+                if string.strip(xargs[1]) == ks["xconfig"]["monitor"]:
                     monitor = ks["xconfig"]["monitor"]
-                    hsync = string.strip(args[3])
-                    vsync = string.strip(args[4])
+                    hsync = string.strip(xargs[3])
+                    vsync = string.strip(xargs[4])
                     found = 1
                     break
             fd.close()
@@ -2465,7 +2547,8 @@ if ks.has_key("install") and ks["xconfig"]:
         depth = ks["xconfig"]["depth"]
 
 
-    if install_version == "RHEL-3":
+    if (install.release == "RHEL" and install.version < 4) or \
+           (install.release == "FC" and install.version < 3.9):
         conf = "/etc/X11/XF86Config"
     else:
         conf = "/etc/X11/xorg.conf"
@@ -2509,7 +2592,8 @@ if ks.has_key("install") and ks["xconfig"]:
         fd.write('        Identifier   "Mouse0"\n')
         fd.write('        Driver       "mouse"\n')
         fd.write('        Option       "Protocol" "IMPS/2"\n')
-        if install_version == "RHEL-3":
+        if (install.release == "RHEL" and install.version < 4) or \
+               (install.release == "FC" and install.version < 2.9):
             fd.write('        Option       "Device" "/dev/mouse"\n')
         else:
             fd.write('        Option       "Device" "/dev/input/mice"\n')
@@ -2548,7 +2632,8 @@ if ks.has_key("install") and ks["xconfig"]:
         fd.write('                Modes    "%s"\n' % resolution)
         fd.write('        EndSubSection\n')
         fd.write('EndSection\n\n')
-        if install_version != "RHEL-3":
+        if (install.release == "RHEL" and install.version < 4) or \
+               (install.release == "FC" and install.version < 2.9):
             fd.write('Section "DRI"\n')
             fd.write('        Group        0\n')
             fd.write('        Mode         0666\n')
