@@ -579,6 +579,8 @@ def getFreeDiskspace(config, operations):
     Use RpmConfig config.  Return 1 if there is enough space (with 30 MB
     slack), 0 otherwise (after warning the user)."""
 
+    if config.ignoresize:
+        return 1
     freehash = {} # device number => [currently counted free bytes, block size]
     # device number => [minimal encountered free bytes, block size]
     minfreehash = {}
@@ -591,64 +593,71 @@ def getFreeDiskspace(config, operations):
     else:
         br = "/"
     for (op, pkg) in operations:
-        dirnames = pkg["dirnames"]
-        if dirnames == None:
-            continue
-        for dirname in dirnames:
-            while dirname.endswith("/") and len(dirname) > 1:
-                dirname = dirname[:-1]
-            if dirhash.has_key(dirname):
+        if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
+            try:
+                pkg.reread(config.resolvertags)
+            except Exception, e:
+                config.printError("Error rereading package: %s" % e)
+                return 0
+            dirnames = pkg["dirnames"]
+            if dirnames == None:
                 continue
-            dnames = []
-            devname = br + dirname
-            while 1:
-                dnames.append(dirname)
-                try:
-                    dev = os.stat(devname).st_dev
-                    break
-                except:
-                    dirname = os.path.dirname(dirname)
-                    devname = os.path.dirname(devname)
-                    if dirhash.has_key(dirname):
-                        dev = dirhash[dirname]
+            for dirname in dirnames:
+                while dirname.endswith("/") and len(dirname) > 1:
+                    dirname = dirname[:-1]
+                if dirhash.has_key(dirname):
+                    continue
+                dnames = []
+                devname = br + dirname
+                while 1:
+                    dnames.append(dirname)
+                    try:
+                        dev = os.stat(devname).st_dev
                         break
-            for d in dnames:
-                dirhash[d] = dev
-            if not freehash.has_key(dev):
-                statvfs = os.statvfs(devname)
-                freehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
-                minfreehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
-            if not mountpoint.has_key(dev):
-                while len(dirname) > 0:
-                    if os.path.ismount(dirname):
-                        mountpoint[dev] = dirname
-                        break
-                    dirname = os.path.dirname(dirname)
-        dirindexes = pkg["dirindexes"]
-        filesizes = pkg["filesizes"]
-        filemodes = pkg["filemodes"]
-        if not dirindexes or not filesizes or not filemodes:
-            continue
-        for i in xrange(len(dirindexes)):
-            if not S_ISREG(filemodes[i]):
+                    except:
+                        dirname = os.path.dirname(dirname)
+                        devname = os.path.dirname(devname)
+                        if dirhash.has_key(dirname):
+                            dev = dirhash[dirname]
+                            break
+                for d in dnames:
+                    dirhash[d] = dev
+                if not freehash.has_key(dev):
+                    statvfs = os.statvfs(devname)
+                    freehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
+                    minfreehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
+                if not mountpoint.has_key(dev):
+                    while len(dirname) > 0:
+                        if os.path.ismount(dirname):
+                            mountpoint[dev] = dirname
+                            break
+                        dirname = os.path.dirname(dirname)
+            dirindexes = pkg["dirindexes"]
+            filesizes = pkg["filesizes"]
+            filemodes = pkg["filemodes"]
+            if not dirindexes or not filesizes or not filemodes:
                 continue
-            dirname = dirnames[dirindexes[i]]
-            while dirname.endswith("/") and len(dirname) > 1:
-                dirname = dirname[:-1]
-            dev = freehash[dirhash[dirname]]
-            mdev = minfreehash[dirhash[dirname]]
-            filesize = ((filesizes[i] / dev[1]) + 1) * dev[1]
-            if op == OP_ERASE:
-                dev[0] += filesize
-            else:
-                dev[0] -= filesize
-            if mdev[0] > dev[0]:
-                mdev[0] = dev[0]
-        for (dev, val) in minfreehash.iteritems():
-            # Less than 30MB space left on device?
-            if val[0] < 31457280:
-                config.printInfo(1, "%s: Less than 30MB of diskspace left on %s\n" % (pkg.getNEVRA(), mountpoint[dev]))
-
+            for i in xrange(len(dirindexes)):
+                if not S_ISREG(filemodes[i]):
+                    continue
+                dirname = dirnames[dirindexes[i]]
+                while dirname.endswith("/") and len(dirname) > 1:
+                    dirname = dirname[:-1]
+                dev = freehash[dirhash[dirname]]
+                mdev = minfreehash[dirhash[dirname]]
+                filesize = ((filesizes[i] / dev[1]) + 1) * dev[1]
+                if op == OP_ERASE:
+                    dev[0] += filesize
+                else:
+                    dev[0] -= filesize
+                if mdev[0] > dev[0]:
+                    mdev[0] = dev[0]
+            for (dev, val) in minfreehash.iteritems():
+                # Less than 30MB space left on device?
+                if val[0] < 31457280:
+                    config.printInfo(1, "%s: Less than 30MB of diskspace left on %s\n" % (pkg.getNEVRA(), mountpoint[dev]))
+            pkg.close()
+            pkg.clear()
     for (dev, val) in minfreehash.iteritems():
         if val[0] < 31457280:
             config.printInfo(0, "Less than 30MB of diskspace left on %s for operation\n" % mountpoint[dev])
@@ -738,14 +747,14 @@ def parseYumOptions(argv, yum):
 
     # Argument parsing
     try:
-      opts, args = getopt.getopt(argv, "?vhc:r:y",
+      opts, args = getopt.getopt(argv, "?hvc:r:yd:e:",
         ["help", "verbose",
          "hash", "version", "quiet", "dbpath=", "root=", "installroot=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
-         "noconflicts", "fileconflicts", "nodeps", "nodigest", "nosignature",
-         "noorder", "noscripts", "notriggers", "excludedocs", "excludeconfigs",
+         "noconflicts", "fileconflicts", "nodeps", "signature", "noorder",
+         "noscripts", "notriggers", "excludedocs", "excludeconfigs",
          "oldpackage", "autoerase", "servicehack", "installpkgs=", "arch=",
-         "checkinstalled", "rusage", "srpmdir="])
+         "checkinstalled", "rusage", "srpmdir=", "enablerepo=", "disablerepo="])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -777,6 +786,10 @@ def parseYumOptions(argv, yum):
             sys.exit(0)
         elif opt == "-y":
             yum.setConfirm(0)
+        elif opt == "-d":
+            rpmconfig.debug = int(val)
+        elif opt == "-e":
+            rpmconfig.warning = int(val)
         elif opt == "--dbpath":
             rpmconfig.dbpath = val
         elif opt == "--installpkgs":
@@ -808,10 +821,8 @@ def parseYumOptions(argv, yum):
             rpmconfig.nofileconflicts = 0
         elif opt == "--nodeps":
             rpmconfig.nodeps = 1
-        elif opt == "--nodigest":
-            rpmconfig.nodigest = 1
-        elif opt == "--nosignature":
-            rpmconfig.nosignature = 1
+        elif opt == "--signature":
+            rpmconfig.nosignature = 0
         elif opt == "--noorder":
             rpmconfig.noorder = 1
         elif opt == "--noscripts":
@@ -830,6 +841,10 @@ def parseYumOptions(argv, yum):
             rpmconfig.checkinstalled = 1
         elif opt == "--srpmdir":
             rpmconfig.srpmdir = val
+        elif opt == "--enablerepo":
+            rpmconfig.enablerepo.append(val)
+        elif opt == "--disablerepo":
+            rpmconfig.disablerepo.append(val)
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1
@@ -1248,8 +1263,12 @@ def archCompat(parch, arch):
 def archDuplicate(parch, arch):
     """Return True if parch and arch have the same base arch."""
 
-    return (parch == arch
+    try:
+        return (parch == arch
             or buildarchtranslate[parch] == buildarchtranslate[arch])
+    except:
+        print "ERROR:", parch, arch
+        raise Exception
 
 def filterArchCompat(list, arch):
     """Modify RpmPackage list list to contain only packages that can be

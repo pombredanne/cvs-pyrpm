@@ -26,22 +26,24 @@ from pyrpm import *
 from pyrpm import __version__
 
 def usage():
-    print "INSTALLING, UPGRADING, AND REMOVING PACKAGES:"
-    print "    pyrpminstall {-i|--install} [install-options] PACKAGE_FILE ..."
-    print "    pyrpminstall {-U|--upgrade} [install-options] PACKAGE_FILE ..."
-    print "    pyrpminstall {-F|--freshen} [install-options] PACKAGE_FILE ..."
-    print "    pyrpminstall {-e|--erase} [install-options] PACKAGE_FILE ..."
-    print
-    print "general options:"
-    print "    [-?, --help] [--version]"
-    print "    [--quiet] [-v, --verbose] [-w, warning] [-d, --debug]"
-    print "    [--dbpath DIRECTORY] [-r, --root DIRECTORY]"
-    print
-    print "install-options:"
-    print "    [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]"
-    print "    [--ignoresize] [--ignorearch]"
-    print "    [--nodeps] [--nodigest] [--nosignature]"
-    print "    [--noorder] [--noscripts] [--notriggers]"
+    print """
+INSTALLING, UPGRADING, AND REMOVING PACKAGES:
+    pyrpminstall {-i|--install} [install-options] PACKAGE_FILE ...
+    pyrpminstall {-U|--upgrade} [install-options] PACKAGE_FILE ...
+    pyrpminstall {-F|--freshen} [install-options] PACKAGE_FILE ...
+    pyrpminstall {-e|--erase} [install-options] PACKAGE_FILE ...
+
+general options:
+    [-?, --help] [--version]
+    [--quiet] [-v, --verbose] [-w, warning] [-d, --debug]
+    [--dbpath DIRECTORY] [-r, --root DIRECTORY]
+
+install-options:
+    [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]
+    [--ignoresize] [--ignorearch]
+    [--nodeps] [--nosignature]
+    [--noorder] [--noscripts] [--notriggers]
+"""
 
 
 def main():
@@ -51,6 +53,8 @@ def main():
         print "Error parsing command list arguments: %s" % e
         usage()
         return 0
+
+    rpmconfig.nosignature = 0   # By default, rpm checks signatures
 
     operation = None
     for (opt, val) in opts:

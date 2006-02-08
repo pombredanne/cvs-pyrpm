@@ -17,8 +17,8 @@
 #
 
 
-from gc import collect
-from time import clock, time
+import fnmatch, re
+from time import clock
 from resolver import RpmResolver
 from control import RpmController
 from package import RpmPackage
@@ -94,14 +94,43 @@ class RpmYum:
             printError("Error reading configuration: %s" % e)
             return 0
         gexcludes = ""
+        __fnmatchre__ = re.compile(".*[\*\[\]\{\}\?].*")
+        erepo = []
+        for ritem in self.config.enablerepo:
+            if __fnmatchre__.match(ritem):
+                restring = fnmatch.translate(ritem)
+                regex = re.compile(restring)
+                erepo.append(regex)
+        drepo = []
+        for ritem in self.config.disablerepo:
+            if __fnmatchre__.match(ritem):
+                restring = fnmatch.translate(ritem)
+                regex = re.compile(restring)
+                drepo.append(regex)
         for key in conf.keys():
             if key == "main":
                 if conf[key].has_key("exclude"):
                     gexcludes = conf[key]["exclude"] + " "
             else:
                 sec = conf[key]
-                # Honor disabled repos :)
+                # Check if the current repo should be enabled or disabled
+                enabled = True      # Default is enabled
                 if sec.has_key("enabled") and sec["enabled"] == "0":
+                    enabled = False
+                if key in self.config.enablerepo:
+                    enabled = True
+                for regex in erepo:
+                    if regex.match(key):
+                        enabled = True
+                        break
+                if key in self.config.disablerepo:
+                    enabled = False
+                for regex in drepo:
+                    if regex.match(key):
+                        enabled = False
+                        break
+                # Repo is not enabled: skip it.
+                if not enabled:
                     continue
                 if sec.has_key("baseurl"):
                     baseurls = sec["baseurl"][:]

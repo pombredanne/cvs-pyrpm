@@ -37,7 +37,7 @@ options:
     [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]
     [--ignoresize] [--ignorearch] [--exactarch]
     [--noconflicts] [--fileconflicts]
-    [--nodeps] [--nodigest] [--nosignature]
+    [--nodeps] [--signature]
     [--noorder] [--noscripts] [--notriggers]
     [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
 

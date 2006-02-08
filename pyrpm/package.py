@@ -258,6 +258,13 @@ class RpmPackage(RpmData):
         self["conflicts"] = self.getConflicts()
         self["triggers"] = self.getTriggers()
 
+    def reread(self, tags=None, ntags=None):
+        """Reread the package. Basically reopens, clears and trys to read
+        the headers again."""
+        self.close()
+        self.clear()
+        self.read(tags, ntags)
+
     def write(self, source=None):
         """Open and write package to the specified source.
 

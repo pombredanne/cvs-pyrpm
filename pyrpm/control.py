@@ -192,12 +192,44 @@ class RpmController:
                              (clock() - time1))
             if not ret:
                 return None
+        self.triggerlist = _Triggers(self.config)
+        for (op, pkg) in operations:
+            if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
+                self.triggerlist.addPkg(pkg)
+                if pkg.source.startswith("http://") or \
+                   pkg.has_key("yumrepo"):
+                    if pkg.has_key("yumrepo"):
+                        nc = pkg["yumrepo"].getNetworkCache()
+                    else:
+                        nc = NetworkCache(self.config, "/", os.path.join(self.config.cachedir, "default"))
+                    self.config.printInfo(2, "Caching network package %s\n" % pkg.getNEVRA())
+                    cached = nc.cache(pkg.source)
+                    if cached is None:
+                        self.config.printError("Error downloading %s"
+                                               % pkg.source)
+                        return 0
+                    pkg.source = cached
+                if not self.config.nosignature:
+                    try:
+                        pkg.reread()
+                    except Exception, e:
+                        self.config.printError("Error rereading package: %s" % e)
+                        return 0
+                    # Check packages if we have turned on signature checking
+                    if pkg.verifyOneSignature() == -1:
+                        self.config.printError("Signature verification failed for package %s" % pkg.getNEVRA())
+                        raise ValueError
+                    else:
+                        self.config.printInfo(2, "Signature of package %s correct\n" % pkg.getNEVRA())
+                    pkg.close()
+                    pkg.clear()
+        if not self.config.ignoresize:
             if self.config.timer:
                 time1 = clock()
             ret = getFreeDiskspace(self.config, operations)
             if self.config.timer:
-                self.config.printInfo(0, "getFreeDiskspace took %s seconds\n" % \
-                             (clock() - time1))
+                self.config.printInfo(0, "getFreeDiskspace took %s seconds\n" %\
+                            (clock() - time1))
             if not ret:
                 return None
         return operations
@@ -210,23 +242,6 @@ class RpmController:
         if operations == []:
             self.config.printError("No updates are necessary.")
             return 1
-        self.triggerlist = _Triggers(self.config)
-        for (op, pkg) in operations:
-            if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
-                self.triggerlist.addPkg(pkg)
-                if pkg.source.startswith("http://") or pkg.has_key("yumrepo"):
-                    if pkg.has_key("yumrepo"):
-                        nc = pkg["yumrepo"].getNetworkCache()
-                    else:
-                        nc = NetworkCache(self.config, "/", os.path.join(self.config.cachedir, "default"))
-                    self.config.printInfo(1, "Caching network package %s\n" % \
-                                          pkg.getNEVRA())
-                    cached = nc.cache(pkg.source)
-                    if cached is None:
-                        self.config.printError("Error downloading %s"
-                                               % pkg.source)
-                        return 0
-                    pkg.source = cached
         for pkg in self.db.getPkgs():
             self.triggerlist.addPkg(pkg)
         numops = len(operations)
@@ -260,9 +275,15 @@ class RpmController:
                     if op == OP_INSTALL or \
                        op == OP_UPDATE or \
                        op == OP_FRESHEN:
+                        try:
+                            pkg.reread()
+                        except Exception, e:
+                            self.config.printError("Error rereading package: %s" % e)
+                            return 0
                         if not self.__addPkgToDB(pkg, nowrite=1):
                             self.config.printError("Couldn't add package %s to parent database." % pkg.getNEVRA())
                             return 0
+                        pkg.close()
                     elif op == OP_ERASE:
                         if not self.__erasePkgFromDB(pkg, nowrite=1):
                             self.config.printError("Couldn't erase package %s from parent database." % pkg.getNEVRA())
@@ -286,6 +307,7 @@ class RpmController:
                 self.db.open()
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
+                    nevra = pkg.getNEVRA()
                     pkg.clear()
                     # Disable verify in child/buildroot, can go wrong horribly.
                     pkg.verify = None
@@ -293,7 +315,7 @@ class RpmController:
                         pkg.read()
                     except (IOError, ValueError), e:
                         self.config.printError("Error rereading %s: %s"
-                                               % (pkg.getNEVRA(), e))
+                                               % (nevra, e))
                         sys.exit(1)
                     if   op == OP_INSTALL:
                         opstring = "Install: "

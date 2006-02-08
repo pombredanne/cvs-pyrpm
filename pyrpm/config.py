@@ -58,8 +58,7 @@ class RpmConfig:
         self.ignoresize = 0
         self.ignorearch = 0
         self.nodeps = 0
-        self.nodigest = 0
-        self.nosignature = 0
+        self.nosignature = 1        # Default: No signature/gpg checks
         self.noorder = 0
         self.noscripts = 0
         self.notriggers = 0
@@ -68,9 +67,9 @@ class RpmConfig:
         self.excludedocs = 0
         self.excludeconfigs = 0
         self.checkinstalled = 0
-        self.exactarch = 0           # same base arch is not enough for updates
-        self.tid = int(time.time())  # Install time id.
-        self.tscolor = 0             # Transaction color, needed for rpmdb
+        self.exactarch = 0          # same base arch is not enough for updates
+        self.tid = int(time.time()) # Install time id.
+        self.tscolor = 0            # Transaction color, needed for rpmdb
         self.compsfile = None
         self.resolvertags = ("name", "epoch", "version", "release", "arch",
             "providename", "provideflags", "provideversion", "requirename",
@@ -93,6 +92,8 @@ class RpmConfig:
         self.signals = [ ]               # Stack of saved signal halders
         self.srpmdir = "/usr/src/redhat/SOURCES" # Dir where srpms will be
                                                  # installed to
+        self.enablerepo = []            # Manually enabled repos
+        self.disablerepo  = []          # Manually disabled repos
         self.cachedir = "/var/cache/pyrpm"      # Directory for cached files
 
     def readConfig(filename="/etc/pyrpm.conf"):
