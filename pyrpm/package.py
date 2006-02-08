@@ -482,7 +482,7 @@ class RpmPackage(RpmData):
         if nfiles == 0:
             nfiles = 1
         if self.config.printhash:
-            self.config.printInfo(0, "#\n"*(30-int(30*n/nfiles)))
+            self.config.printInfo(0, "#"*(30-int(30*n/nfiles)) + "\n")
         else:
             self.config.printInfo(1, "\n")
         # Don't fail if the post script fails, just print out an error
