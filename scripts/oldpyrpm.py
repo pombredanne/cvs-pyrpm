@@ -19,7 +19,7 @@
 
 #
 # Read .rpm packages from python. Implemented completely in python without
-# using the rpmlib C library. Use "oldpyrpm.py -h" to get a list of possible
+# using the librpm C library. Use "oldpyrpm.py -h" to get a list of possible
 # options and http://people.redhat.com/laroche/pyrpm/ also has some docu.
 # This python script depends on libxml2 and urlgrabber for some functionality.
 #
@@ -44,6 +44,10 @@
 # - Optionally also sort by time for e.g. FC updates dirs.
 # - Also use changelog data instead of only looking at the time?
 # - How todo save shell escapes for os.system()
+# - cacheLocal:
+#   - check if local files really exist with os.stat()?,
+#     maybe only once per repo?
+#   - sort several urls to list local ones first, add mirror speed check
 # rpm header:
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -51,8 +55,6 @@
 #   doing this in an extra pass. That's why it is then already too late
 #   to set distroverpkg within the config file at all.
 # - support reading some vars from yum.conf like distroverpkg
-# - readRepos() is only using the first baseurl until now. Add mirror
-#   selection code.
 # - add a new writeHeader2() that copies the existing rpm header and then
 #   writes new entries to the end. This is more robust than the existing
 #   writeHeader().
@@ -1457,7 +1459,7 @@ class ReadRpm:
         for i in xrange(0, indexNo * 16, 16):
             (tag, ttype, offset, count) = unpack("!4I", fmt[i:i + 16])
             if not dorpmtag.has_key(tag):
-                #print "unknown tag:", (tag, ttype, offset, count), self.filename
+                #print "unknown tag:", (tag,ttype,offset,count), self.filename
                 continue
             nametag = dorpmtag[tag][4]
             if ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
@@ -2956,8 +2958,8 @@ class RpmRelations:
         for loop in loop_relations:
             for i in xrange(len(mysorted)):
                 if (loop_relations[loop] < loop_relations[mysorted[i]]) or \
-                       (loop_relations[loop] == loop_relations[mysorted[i]] and \
-                        loop_requires[loop] > loop_requires[mysorted[i]]):
+                    (loop_relations[loop] == loop_relations[mysorted[i]] and \
+                    loop_requires[loop] > loop_requires[mysorted[i]]):
                     mysorted.insert(i, loop)
                     break
             else:
@@ -3299,27 +3301,34 @@ def checkCSV():
     csv2.writeCSV("/tmp/csv2")
 
 
-def cacheLocal(url, subdir, force=0):
+def cacheLocal(urls, filename, subdir, force=0):
     import urlgrabber
 
-    if not url.startswith("http://"):
-        return url
-    baseurl = os.path.basename(url)
-    d = cachedir + subdir
-    dd = "%s/%s" % (d, baseurl)
-    makeDirs(d)
-    try:
-        if force:
-            f = urlgrabber.urlgrab(url, dd)
-        else:
-            f = urlgrabber.urlgrab(url, dd, reget="check_timestamp")
-    except urlgrabber.grabber.URLGrabError, e:
-        # urlgrab fails with invalid range for already completely transfered
-        # files, pretty strange to me to be honest... :)
-        if e[0] == 9:
-            return dd
-        return None
-    return f
+    for url in urls:
+        url = Uri2Filename(url)
+        # remove trailing slashes "/"
+        while url[-1:] == "/":
+            url = url[:-1]
+        url += filename
+        if not url.startswith("http://") and not url.startswith("ftp://"):
+            return url
+        (dirname, basename) = os.path.split(filename)
+        localdir = cachedir + subdir + dirname
+        makeDirs(localdir)
+        localfile = "%s/%s" % (localdir, basename)
+        try:
+            if force:
+                f = urlgrabber.urlgrab(url, localfile)
+            else:
+                f = urlgrabber.urlgrab(url, localfile, reget="check_timestamp")
+        except urlgrabber.grabber.URLGrabError, e:
+            # urlgrab fails with invalid range for already completely transfered
+            # files, pretty strange to me to be honest... :)
+            if e[0] == 9:
+                return localfile
+            continue
+        return f
+    return None
 
 def buildPkgRefDict(pkgs):
     """Take a list of packages and return a dict that contains all the possible
@@ -3450,8 +3459,8 @@ def getProps(reader):
 
 class RpmRepo:
 
-    def __init__(self, filename, excludes, reponame="default", readsrc=0):
-        self.filename = Uri2Filename(filename)
+    def __init__(self, filenames, excludes, reponame="default", readsrc=0):
+        self.filenames = filenames
         self.excludes = excludes.split()
         self.reponame = reponame
         self.readsrc = readsrc
@@ -3462,42 +3471,46 @@ class RpmRepo:
         self.compsfile = None
 
     def read(self):
-        filename = cacheLocal(self.filename + "/repodata/primary.xml.gz",
-            self.reponame, 1)
-        if not filename:
-            return 0
-        reader = libxml2.newTextReaderFilename(filename)
-        if reader == None:
-            return 0
-        self.__parseNode(reader)
-        self.__removeExcluded()
-        return 1
+        for filename in self.filenames:
+            filename = cacheLocal([filename], "/repodata/primary.xml.gz",
+                self.reponame, 1)
+            if not filename:
+                continue
+            reader = libxml2.newTextReaderFilename(filename)
+            if reader == None:
+                continue
+            self.__parseNode(reader)
+            self.__removeExcluded()
+            return 1
+        return 0
 
     def importFilelist(self):
         if self.filelist_imported:
             return 1
-        filename = cacheLocal(self.filename + "/repodata/filelists.xml.gz",
-            self.reponame, 1)
-        if not filename:
-            return 0
-        reader = libxml2.newTextReaderFilename(filename)
-        if reader == None:
-            return 0
-        self.__parseNode(reader)
-        self.filelist_imported = 1
-        return 1
+        for filename in self.filenames:
+            filename = cacheLocal([filename], "/repodata/filelists.xml.gz",
+                self.reponame, 1)
+            if not filename:
+                continue
+            reader = libxml2.newTextReaderFilename(filename)
+            if reader == None:
+                continue
+            self.__parseNode(reader)
+            self.filelist_imported = 1
+            return 1
+        return 0
 
     def createRepo(self, baseurl):
+        filename = Uri2Filename(self.filenames[0])
         # Strip trailing slashes.
-        while self.filename[-1:] == "/":
-            self.filename = self.filename[:-1]
+        while filename[-1:] == "/":
+            filename = filename[:-1]
         rt = {}
         for i in ("name", "epoch", "version", "release", "arch",
             "requirename"):
             value = rpmtag[i]
             rt[i] = value
             rt[value[0]] = value
-        filename = self.filename
         self.filerequires = []
         filenames = findRpms(filename)
         filenames.sort()
@@ -3775,7 +3788,8 @@ class RpmRepo:
                     pkg.sig["sha1header"] = reader.Value()
             elif name == "location":
                 props = getProps(reader)
-                pkg.filename = self.filename + "/" + props["href"]
+                filename = Uri2Filename(self.filenames[0])
+                pkg.filename = filename + "/" + props["href"]
             elif name == "size":
                 props = getProps(reader)
                 pkg.sig["size_in_sig"][0] += int(props.get("package", "0"))
@@ -4012,7 +4026,7 @@ class RpmCompsXML:
         return str(self.grouphash)
 
     def read(self):
-        filename = cacheLocal(self.filename, "", 1)
+        filename = cacheLocal(self.filename, "", "", 1)
         doc = libxml2.parseFile(filename)
         if doc == None:
             return 0
@@ -4420,14 +4434,33 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             if not sec.has_key("baseurl"):
                 print "%s:" % key, "No baseurl for this section in conf file."
                 return None
-            baseurl = sec["baseurl"][0]
+            baseurls = sec["baseurl"]
             excludes = sec.get("exclude", "")
-            repo = RpmRepo(baseurl, excludes, key, readsrc)
+            # If we have mirrorlist grab it, read it and add the extended
+            # lines to our baseurls, just like yum does.
+            if sec.has_key("mirrorlist"):
+                dirname = mkstemp_dir("/tmp", "mirrorlist")
+                for mlist in sec["mirrorlist"]:
+                    mlist = conf.extendValue(mlist)
+                    print "Getting mirrorlist from %s\n" % mlist
+                    fname = cacheLocal([mlist], "", dirname, 1)
+                    if fname:
+                        lines = open(fname).readlines()
+                        os.unlink(fname)
+                    else:
+                        lines = []
+                    for l in lines:
+                        l = l.replace("$ARCH", "$BASEARCH")[:-1]
+                        if l:
+                            baseurls.append(conf.extendValue(l))
+                os.rmdir(dirname)
+            repo = RpmRepo(baseurls, excludes, key, readsrc)
             repo.read()
             if not readdebug:
                 repo.delDebuginfo()
             if readcompsfile:
-                repo.compsfile = cacheLocal(baseurl + "/repodata/comps.xml", key)
+                repo.compsfile = cacheLocal(baseurls,
+                    "/repodata/comps.xml", key)
             repos.append(repo)
         print "Done reading config file %s." % c
     return repos
@@ -5610,15 +5643,15 @@ def main():
     elif checkarch:
         checkArch(args[0])
     elif checkrpmdb:
-        if readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
-            arch, verbose, checkfileconflicts):
+        if readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles,
+            buildroot, arch, verbose, checkfileconflicts):
             return 1
     elif createrepo:
         for a in args:
             if not os.path.isdir(a):
                 print "Createrepo needs a directory name:", a
                 break
-            repo = RpmRepo(a, excludes)
+            repo = RpmRepo([a], excludes)
             repo.createRepo(baseurl)
     elif mercurial:
         createMercurial(verbose)
@@ -5717,7 +5750,8 @@ def main():
                 for r in rpms:
                     if r["arch"] == "noarch":
                         pkgs.remove(r)
-        #installrpms = getPkgsNewest(rtree.getPkgs(), arch, arch_hash, verbose, 1)
+        #installrpms = getPkgsNewest(rtree.getPkgs(), arch, arch_hash,
+        #    verbose, 1)
         #checkDeps(installrpms, checkfileconflicts, runorderer)
         if verbose > 2:
             time2 = time.clock()
