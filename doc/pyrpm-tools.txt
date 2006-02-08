@@ -221,6 +221,12 @@ Here is the command to use a disk image with QEMU.
 The default virtual memory size in qemu is 128M, therefore it is advisable to
 inrease it.
 
+Say you have just completed a normal kickstart installation with qemu.
+Create a second IDE disk and check if your kickstart file can be used
+to install onto the second IDE disk with:
+
+        pyrpmkickstart --no-stage2 ks.cfg hda:/dev/hdb
+
 
 pyrpmrandomizer
 ---------------
