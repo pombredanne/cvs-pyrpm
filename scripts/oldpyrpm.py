@@ -48,6 +48,7 @@
 #   - check if local files really exist with os.stat()?,
 #     maybe only once per repo?
 #   - sort several urls to list local ones first, add mirror speed check
+# - how to enable/disable /etc/yum.repos.d/
 # rpm header:
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -175,6 +176,8 @@ def S_ISSOCK(mode):
 # to search them and delete them again if they are left
 # over from killed processes.
 tmpprefix = "..pyrpm"
+
+tmpdir = os.environ.get("TMPDIR", "/tmp")
 
 openflags = os.O_RDWR | os.O_CREAT | os.O_EXCL
 if hasattr(os, "O_NOINHERIT"):
@@ -2429,8 +2432,8 @@ def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
             orpm["release"] + " to " + nrpm["version"] + "-" + \
             nrpm["release"] + ".\n"
 
-    obuildroot = orpm.buildroot = mkstemp_dir("/tmp") + "/"
-    nbuildroot = nrpm.buildroot = mkstemp_dir("/tmp") + "/"
+    obuildroot = orpm.buildroot = mkstemp_dir(tmpdir) + "/"
+    nbuildroot = nrpm.buildroot = mkstemp_dir(tmpdir) + "/"
 
     sed1 = "sed 's#^--- " + obuildroot + "#--- #'"
     sed2 = "sed 's#^+++ " + nbuildroot + "#+++ #'"
@@ -4439,7 +4442,7 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
             if sec.has_key("mirrorlist"):
-                dirname = mkstemp_dir("/tmp", "mirrorlist")
+                dirname = mkstemp_dir(tmpdir, "mirrorlist")
                 for mlist in sec["mirrorlist"]:
                     mlist = conf.extendValue(mlist)
                     print "Getting mirrorlist from %s\n" % mlist
@@ -4739,7 +4742,7 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
     os.system('cd %s && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
     del os.environ["GIT_DIR"]
     # Add changelog text:
-    (fd, tmpfile) = mkstemp_file("/tmp", special=1)
+    (fd, tmpfile) = mkstemp_file(tmpdir, special=1)
     fd.write("update to %s" % pkg.getNVR())
     if oldpkg:
         fd.write(" (from %s-%s)" % (oldpkg["version"], oldpkg["release"]))
@@ -5845,7 +5848,7 @@ def run_main(main):
         sys.argv.pop(1)
     if dohotshot:
         import hotshot, hotshot.stats
-        htfilename = mkstemp_file("/tmp")[1]
+        htfilename = mkstemp_file(tmpdir)[1]
         prof = hotshot.Profile(htfilename)
         prof.runcall(main)
         prof.close()
