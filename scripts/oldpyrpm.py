@@ -4315,8 +4315,9 @@ class YumConf(Conf):
         Conf.read(self)
         self.parseFile()
         if self.vars.has_key("main") and self.vars["main"].has_key("reposdir"):
-            self.reposdirs.append(self.chroot + self.vars["main"]["reposdir"])
-        # XXX: unify repos.d directories to not read them in more than once
+            k = self.chroot + self.vars["main"]["reposdir"]
+            if k not in self.reposdirs:
+                self.reposdirs.append(k)
         for reposdir in self.reposdirs:
             for filename in glob.glob(reposdir + "/*.repo"):
                 self.filename = filename
@@ -5630,7 +5631,8 @@ def main():
         elif opt == "--baseurl":
             baseurl = val
         elif opt == "--reposdir":
-            reposdirs.append(val)
+            if val not in reposdirs:
+                reposdirs.append(val)
         elif opt == "--disablereposdir":
             reposdirs = []
         elif opt == "--createrepo":
