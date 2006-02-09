@@ -591,7 +591,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             elif name == "location":
                 props = self.__getProps(reader)
                 try:
-                    pkg.source = props["href"]
+                    if self.config.nocache:
+                        pkg.source = os.path.join(self.baseurl, props["href"])
+                    else:
+                        pkg.source = props["href"]
                 except KeyError:
                     raise ValueError, "Missing href= in <location>"
             elif name == "size":

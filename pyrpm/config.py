@@ -95,6 +95,7 @@ class RpmConfig:
         self.enablerepo = []            # Manually enabled repos
         self.disablerepo  = []          # Manually disabled repos
         self.cachedir = "/var/cache/pyrpm"      # Directory for cached files
+        self.nocache = 0                # Disable caching for packages
 
     def readConfig(filename="/etc/pyrpm.conf"):
         return execfile(filename)

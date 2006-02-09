@@ -657,7 +657,6 @@ def getFreeDiskspace(config, operations):
                 if val[0] < 31457280:
                     config.printInfo(1, "%s: Less than 30MB of diskspace left on %s\n" % (pkg.getNEVRA(), mountpoint[dev]))
             pkg.close()
-            pkg.clear()
     for (dev, val) in minfreehash.iteritems():
         if val[0] < 31457280:
             config.printInfo(0, "Less than 30MB of diskspace left on %s for operation\n" % mountpoint[dev])
@@ -754,7 +753,8 @@ def parseYumOptions(argv, yum):
          "noconflicts", "fileconflicts", "nodeps", "signature", "noorder",
          "noscripts", "notriggers", "excludedocs", "excludeconfigs",
          "oldpackage", "autoerase", "servicehack", "installpkgs=", "arch=",
-         "checkinstalled", "rusage", "srpmdir=", "enablerepo=", "disablerepo="])
+         "checkinstalled", "rusage", "srpmdir=", "enablerepo=", "disablerepo=",
+         "nocache"])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -845,6 +845,8 @@ def parseYumOptions(argv, yum):
             rpmconfig.enablerepo.append(val)
         elif opt == "--disablerepo":
             rpmconfig.disablerepo.append(val)
+        elif opt == "--nocache":
+            rpmconfig.nocache = 1
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1

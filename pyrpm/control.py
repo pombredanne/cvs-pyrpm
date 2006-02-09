@@ -196,8 +196,9 @@ class RpmController:
         for (op, pkg) in operations:
             if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
                 self.triggerlist.addPkg(pkg)
-                if pkg.source.startswith("http://") or \
-                   pkg.has_key("yumrepo"):
+                if not self.config.nocache and \
+                   (pkg.source.startswith("http://") or \
+                    pkg.has_key("yumrepo")):
                     if pkg.has_key("yumrepo"):
                         nc = pkg["yumrepo"].getNetworkCache()
                     else:
@@ -222,7 +223,7 @@ class RpmController:
                     else:
                         self.config.printInfo(2, "Signature of package %s correct\n" % pkg.getNEVRA())
                     pkg.close()
-                    pkg.clear()
+                    pkg.clear(ntags=self.config.resolvertags)
         if not self.config.ignoresize:
             if self.config.timer:
                 time1 = clock()
@@ -277,7 +278,7 @@ class RpmController:
                        op == OP_UPDATE or \
                        op == OP_FRESHEN:
                         try:
-                            pkg.reread()
+                            pkg.reread(self.config.resolvertags)
                         except Exception, e:
                             self.config.printError("Error rereading package: %s" % e)
                             return 0

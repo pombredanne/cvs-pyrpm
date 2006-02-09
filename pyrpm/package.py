@@ -198,15 +198,21 @@ class RpmPackage(RpmData):
         self.range_header = (None, None) # Main header
         self.range_payload = (None, None) # Payload; length is always None
 
-    def clear(self):
+    def clear(self, tags=None, ntags=None):
         """Drop read data and prepare for rereading it, unless install_id is
         known."""
 
         if self.has_key("install_id"):
             return
 
-        for k in self.keys():
-            del self[k]
+        for key in self.keys():
+            if tags and key in tags:
+                del self[key]
+            elif ntags and not key in ntags:
+                del self[key]
+            elif not tags and not ntags:
+                del self[key]
+
         self.header_read = 0
         self.rpmusercache = RpmUserCache(self.config)
 
