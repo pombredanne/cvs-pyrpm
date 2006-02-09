@@ -245,6 +245,7 @@ class RpmController:
         for pkg in self.db.getPkgs():
             self.triggerlist.addPkg(pkg)
         numops = len(operations)
+        numops_chars = len("%d" % numops)
         gc.collect()
         pkgsperfork = 100
         setCloseOnExec()
@@ -327,7 +328,7 @@ class RpmController:
                         else:
                             opstring = "Erase:   "
                     i += 1
-                    progress = "[%d/%d] %s%s" % (i, numops, opstring, pkg.getNEVRA())
+                    progress = "[%*d/%d] %s%s" % (numops_chars, i, numops, opstring, pkg.getNEVRA())
                     if self.config.printhash:
                         self.config.printInfo(0, progress)
                     else:
