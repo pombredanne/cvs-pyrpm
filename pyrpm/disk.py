@@ -644,7 +644,8 @@ def mount(what, where, fstype="ext3", options=None, arguments=None):
         _fstype = "-t '%s'" % fstype
     else:
         _fstype = ""
-    mount = "mount %s %s %s '%s' '%s'" % (args, opts, _fstype, what , where)
+    mount = "/bin/mount %s %s %s '%s' '%s'" % (args, opts, _fstype, what,
+                                               where)
     stat = os.system(mount)
     if stat != 0:
         raise IOError, "mount of '%s' on '%s' failed" % (what , where)
@@ -653,7 +654,7 @@ def mount(what, where, fstype="ext3", options=None, arguments=None):
 def umount(what):
     if not os.path.ismount(what):
         # TODO: ismount is not working for bind mounts
-        stat = os.system("umount '%s' 2>/dev/null" % what)
+        stat = os.system("/bin/umount '%s' 2>/dev/null" % what)
         return stat
 
     i = 0
@@ -698,7 +699,7 @@ def swapoff(device):
     return 0
 
 def ext2Label(device):
-    e2label = "e2label %s 2>/dev/null" % device
+    e2label = "/sbin/e2label %s 2>/dev/null" % device
     (child_stdin, child_stdout) = os.popen2(e2label)
     l = child_stdout.read()
     if l:
