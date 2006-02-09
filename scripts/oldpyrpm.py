@@ -5145,16 +5145,19 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     verifyStructure(verbose, packages, triggername, "triggername")
     arch_hash = setMachineDistance(arch)
     checkdupes = {}
+    # Find out 'arch', 'releasever' and set 'checkdupes'.
     for pkg in packages.values():
         if dbpath != "/var/lib/rpm" and pkg["name"] in ("kernel", "kernel-smp"):
             if arch_hash.get(pkg["arch"], 999) == 999:
                 arch = pkg["arch"]
+                arch_hash = setMachineDistance(arch)
                 print "Change 'arch' setting to be:", arch
         if not releasever and pkg["name"] in distroverpkg:
             releasever = pkg["version"]
         if pkg["name"] not in installonlypkgs:
             checkdupes.setdefault("%s.%s" % (pkg["name"], pkg["arch"]),
                 []).append(pkg)
+    # Check 'arch' and dupes:
     for pkg in packages.values():
         if pkg["name"] != "gpg-pubkey" and \
             arch_hash.get(pkg["arch"], 999) == 999:
@@ -5167,6 +5170,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     for pkg in checkdupes.keys():
         if len(checkdupes[pkg]) > 1:
             print "Warning: more than one package installed for %s." % pkg
+    # Read in repositories to compare packages:
     repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0,
         reposdirs, verbose)
     if repos == None:
