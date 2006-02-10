@@ -65,7 +65,10 @@ class NetworkCache:
         parameter as a relative path to it."""
 
         if self.is_local and not self.__isURI(uri):
-            return os.path.join(self.baseurl, uri)
+            path = os.path.join(self.baseurl, uri)
+            if os.path.exists(path):
+                return os.path.join(path)
+            return None
         if self.__isURI(uri):
             sourceurl = uri
         else:
@@ -90,7 +93,7 @@ class NetworkCache:
     def clear(self, uri=None):
         """Clears either the single given uri/file or the whole cache"""
         # XXX: Will clear the whole cache tree if no filename is given
-        if not filename:
+        if not uri:
             return
         if self.isCached(uri):
             os.unlink(self.getCachedFilename(uri))
