@@ -2693,36 +2693,40 @@ class RpmResolver:
 
     def __init__(self, rpms, checkfileconflicts):
         self.rpms = []
+        self.requires_list = {}
         self.filenames_list = FilenamesList(checkfileconflicts)
         self.provides_list = {}
         self.obsoletes_list = {}
         self.conflicts_list = {}
-        self.requires_list = {}
         for r in rpms:
-            if not r.issrc and r["name"] != "gpg-pubkey":
+            if r["name"] != "gpg-pubkey":
                 self.addPkg(r)
 
     def addPkg(self, pkg):
         self.rpms.append(pkg)
+        pkg.addDeps("requirename", "requireflags", "requireversion",
+            self.requires_list)
+        if pkg.issrc:
+            return
         self.filenames_list.addPkg(pkg)
         pkg.addProvides(self.provides_list)
         pkg.addDeps("obsoletename", "obsoleteflags", "obsoleteversion",
             self.obsoletes_list)
         pkg.addDeps("conflictname", "conflictflags", "conflictversion",
             self.conflicts_list)
-        pkg.addDeps("requirename", "requireflags", "requireversion",
-            self.requires_list)
 
     def removePkg(self, pkg):
         self.rpms.remove(pkg)
+        pkg.removeDeps("requirename", "requireflags", "requireversion",
+            self.requires_list)
+        if pkg.issrc:
+            return
         self.filenames_list.removePkg(pkg)
         pkg.removeProvides(self.provides_list)
         pkg.removeDeps("obsoletename", "obsoleteflags", "obsoleteversion",
             self.obsoletes_list)
         pkg.removeDeps("conflictname", "conflictflags", "conflictversion",
             self.conflicts_list)
-        pkg.removeDeps("requirename", "requireflags", "requireversion",
-            self.requires_list)
 
     def searchDependency(self, name, flag, version):
         s = searchDependency(name, flag, version, self.provides_list)
@@ -3149,6 +3153,8 @@ def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0,
         # Add all rpms into a hash by their name.
         h = {}
         for rpm in pkgs:
+            if rpm.issrc:
+                continue
             # Remove all rpms not suitable for this arch.
             if arch_hash.get(rpm["arch"], 999) == 999:
                 if verbose > 3:
@@ -5442,9 +5448,9 @@ def checkProvides(repo):
     for rpm in repo:
         for r in rpm.getRequires():
             requires.setdefault(r[0], []).append(rpm.getFilename())
-    for rpm in repo:
-        for p in rpm.getProvides():
-            provides.setdefault(p, []).append(rpm)
+        if not rpm.issrc:
+            for p in rpm.getProvides():
+                provides.setdefault(p, []).append(rpm)
     if provides.keys():
         print "Duplicate provides:"
     for p in provides.keys():
