@@ -36,8 +36,10 @@ class installation:
     def __init__(self, version, release):
         self.release = version
         self.version = release
+        
     def __str__(self):
         return "%s-%s" % (self.release, self.version)
+
     def __cmp__(self, other):
         return cmp(str(self), other)
 
@@ -256,11 +258,13 @@ def buildroot_copy(source, target):
 def exitHandler(signum, frame):
     raise RuntimeError
 
-def loadComps(dir):
+def loadComps(cache):
     # load comps file for groups and default packages
-    comps_xml = "%s/RedHat/base/comps.xml" % dir
-    if not os.path.exists(comps_xml):
-        comps_xml = "%s/Fedora/base/comps.xml" % dir
+    comps_xml = cache.cache("RedHat/base/comps.xml")
+    if not comps_xml:
+        comps_xml = cache.cache("Fedora/base/comps.xml")
+    if not comps_xml:
+        return None
     if not os.path.exists(comps_xml):
         return None
     comps = pyrpm.RpmCompsXML(pyrpm.rpmconfig, comps_xml)
@@ -418,15 +422,6 @@ def main():
     if not ks["nfs"] and not ks["url"]:
         print "ERROR: Only installation with nfs or url is supported, exiting."
         return 1
-    if ks["url"] and not ks["url"]["url"].startswith("file://"):
-        print "ERROR: Unsupported url installation method, exiting."
-        return 1
-    if ks["repository"]:
-        for repo in ks["repository"]:
-            if not ks["repository"][repo]["url"].startswith("file://") and \
-                   not ks["repository"][repo]["url"].startswith("nfs://"):
-                print "ERROR: Unsupported url for repository, exiting."
-                return 1
 
     ### create temp dir ###
 
@@ -441,41 +436,47 @@ def main():
     cache_dir = tempdir+"/cache"
     repo_dir = tempdir+"/repo"
 
+    os.mkdir(cache_dir)
+    pyrpm.rpmconfig.cachedir = cache_dir
+    source_cache = None
+
     ### mount source ###
 
     # create source mount point and mount source (nfs)
-    opts = "ro"
-    os.mkdir(source_dir)
+    s_dir = "%s/base" % cache_dir
+    os.mkdir(s_dir)
     if ks["nfs"]:
         source = "%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
         fstype = "nfs"
         fsargs = None
-    elif ks["url"]:
-        soure = None
-        fstype = None
-        fsargs = None
-        if ks["url"]["url"].startswith("file://"):
-            source = ks["url"]["url"][7:]
-            fsargs = [ "--rbind" ]
-        else:
-            # TODO: http and ftp source
-            print "ERROR: Only file urls are currently supported."
-            return 1
+        opts = "ro"
+        os.mkdir(source_dir)
 
-    if verbose:
-        print "Mounting '%s' on '%s'" % (source, source_dir)
-    pyrpm.mount(source, source_dir, fstype, opts, fsargs)
+        if verbose:
+            print "Mounting '%s' on '%s'" % (source, source_dir)
+        pyrpm.mount(source, source_dir, fstype, opts, fsargs)
+        source_cache = pyrpm.NetworkCache(pyrpm.rpmconfig,
+                                          "file://%s" % source_dir, s_dir)
+    else: # ks["url"]
+        source_cache = pyrpm.NetworkCache(pyrpm.rpmconfig, ks["url"]["url"],
+                                          s_dir)
+
+    source_cache.clear()
 
     ### mount stage2 temporary ###
 
     if not no_stage2:
         stage2_img_dir = tempdir+"/stage2_img"
         os.mkdir(stage2_img_dir)
-        stage2 = "%s/RedHat/base/stage2.img" % source_dir
-        if not os.path.exists(stage2):
-            stage2 = "%s/Fedora/base/stage2.img" % source_dir
-        if not os.path.exists(stage2):
+
+        stage2 = source_cache.cache("RedHat/base/stage2.img")
+        if not stage2:
+            stage2 = source_cache.cache("Fedora/base/stage2.img")
+        if not stage2:
             print "ERROR: Could not find stage2 image in installation source."
+            return 1
+        if not os.path.exists(stage2):
+            print "ERROR: Could not get stage2 image from installation source."
             return 1
 
         fstype = None # no fstype needed for compressed rom fs
@@ -530,12 +531,30 @@ def main():
         del lines
 
     else: # no_stage2
-        dir = "%s/RedHat/RPMS" % source_dir
+        # TODO: make no_stage2 work with Network Cache
+        print "NO STAGE2 option disabled for now."
+        return
+
+
         source_release = "Red Hat Enterprise Linux"
+        dist = "redhat"
+        dir = source_cache.cache("RedHat/RPMS" % dist)
+        if not dir:
+            dist = "fedora"
+            source_release = "Fedora Core"
+            dir = source_cache.cache("Fedora/RPMS" % dist)
+        if not dir:
+            print "ERROR: Could not find RPMS dir in  installation source."
+            return 1
+        if not os.path.exists(dir) or not os.path.isdir(dir):
+            print "ERROR: Could not get RPMS dir from installation source."
+            return 1
+        #source_cache.cache("")
+        
+        dir = "%s/RedHat/RPMS" % source_dir
         release = "redhat"
         if not os.path.exists(dir) or not os.path.isdir(dir):
             dir = "%s/Fedora/RPMS" % source_dir
-            source_release = "Fedora Core"
             release = "fedora"
         if not os.path.exists(dir) or not os.path.isdir(dir):
             print "ERROR: No valid installation source."
@@ -570,8 +589,10 @@ def main():
     # verify source release and version
     if source_release == "Red Hat Enterprise Linux":
         short_release = "RHEL"
+        prefix = "RedHat"
     elif source_release == "Fedora Core":
         short_release = "FC"
+        prefix = "Fedora"
     else:
         print "ERROR: Unknown source release."
         return 1
@@ -1272,8 +1293,9 @@ def main():
     #    sys.stdout.write("labels=")
     #    pprint.pprint(labels)
 
-    ### mount repos ###
+    ### create repo caches ###
 
+    # TODO: check repo names for invalid chars
     repos = { }
     repo_count = 0
     if ks["repository"]:
@@ -1281,37 +1303,31 @@ def main():
         os.mkdir(repo_dir)
 
         for repo in ks["repository"]:
-            dir = "%s/%04d" % (repo_dir, repo_count)
-            os.mkdir(dir)
-
-            soure = None
-            fstype = None
-            opts = "ro"
-            fsargs = None
-
+            r_dir = "%s/%s" % (cache_dir, repo)
+            os.mkdir(r_dir)
+            
             # nfs source
             if ks["repository"][repo]["url"].startswith("nfs://"):
-                s = string.splitfields(ks["repository"][repo]["url"][6:], "/", 1)
+                dir = "%s/%s" % (repo_dir, repo)
+                os.mkdir(dir)
+
+                s = string.splitfields(ks["repository"][repo]["url"][6:], "/",
+                                       1)
                 source = "%s:/%s" % (s[0], s[1])
                 fstype = "nfs"
                 fsargs = None
-            # file source
-            elif ks["repository"][repo]["url"].startswith("file://"):
-                source = ks["repository"][repo]["url"][7:]
-                fsargs = [ "--rbind" ]
+                opts = "ro"
+
+                # mount the nfs repo
+                if verbose:
+                    print "Mounting '%s' on '%s'" % (source, dir)
+                pyrpm.mount(source, dir, fstype, opts, fsargs)
+                repos[repo] = pyrpm.NetworkCache(pyrpm.rpmconfig,
+                                                 "file://%s" % dir, r_dir)
             else:
-                # TODO: http and ftp source
-                print "ERROR: Only nfs and file urls are currently supported " + \
-                      "for repos."
-                return 1
-
-            # mount the repo
-            if verbose:
-                print "Mounting '%s' on '%s'" % (source, dir)
-            pyrpm.mount(source, dir, fstype, opts, fsargs)
-
-            repos[repo] = dir
-            repo_count += 1
+                repos[repo] = pyrpm.NetworkCache(pyrpm.rpmconfig,
+                                                 ks["repository"][repo]["url"],
+                                                 r_dir)
 
     ### format partitions ###
 
@@ -1576,7 +1592,7 @@ def main():
             pyrpm.normalizeList(languages)
 
         # load comps file for groups and default packages
-        comps = loadComps(source_dir)
+        comps = loadComps(source_cache)
         if not comps:
             print "ERROR: Could not find comps file, exiting."
             return 1
@@ -1875,21 +1891,25 @@ def main():
 
     ### installation ###
 
-    if not os.path.exists("%s/repodata" % source_dir):
-        print "Creating repodata for installation source - this can take some time..."
-        dir = createRepodata(source_dir)
-        if not dir:
-            print "ERROR: createrepo for installation source failed, aborting."
-            return 1
-        source_dir = dir
-    for repo in repos:
-        if not os.path.exists("%s/repodata" % repos[repo]):
-            print "Creating repodata for repository '%s' - this can take some time..." % repo
-            dir = createRepodata(repos[repo])
-            if not dir:
-                print "WARNING: createrepo for repository '%s' failed, ignoring." % repo
-            else:
-                repos[repo] = dir
+    if not source_cache.cache("repodata"):
+        print "ERROR: Repodata is missing in source tree, aborting"
+        return
+    # TODO: make createRepodata work with Network Cache
+#    if not os.path.exists("%s/repodata" % source_dir):
+#        print "Creating repodata for installation source - this can take some time..."
+#        dir = createRepodata(source_dir)
+#        if not dir:
+#            print "ERROR: createrepo for installation source failed, aborting."
+#            return 1
+#        source_dir = dir
+#    for repo in repos:
+#        if not os.path.exists("%s/repodata" % repos[repo]):
+#            print "Creating repodata for repository '%s' - this can take some time..." % repo
+#            dir = createRepodata(repos[repo])
+#            if not dir:
+#                print "WARNING: createrepo for repository '%s' failed, ignoring." % repo
+#            else:
+#                repos[repo] = dir
 
     if ks.has_key("install"):
         print "Preparing installation"
@@ -1919,15 +1939,15 @@ def main():
     if ks.has_key("install") and ks["packages"] and ks["packages"].has_key("drop"):
         fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
     fd.write("\n")
-    fd.write("[dist %s]\n" % install)
+    fd.write("[base]\n")
     fd.write("name=dist %s\n" % install)
-    fd.write("baseurl=file://%s\n" % source_dir)
+    fd.write("baseurl=%s\n" % source_cache.baseurl)
     fd.write("\n")
     # add repos
     for repo in repos:
         fd.write("[%s]\n" % repo)
         fd.write("name=%s\n" % repo)
-        fd.write("baseurl=file://%s\n" % repos[repo])
+        fd.write("baseurl=file://%s\n" % repos[repo].baseurl)
         fd.write("\n")
     fd.close()
 
