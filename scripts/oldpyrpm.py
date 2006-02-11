@@ -5263,11 +5263,12 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
                 found = 1
                 # Use the rpm header to write again a rpmdb entry and compare
                 # that again to the currently existing rpmdb header.
-                # XXX we should try to write some of these ourselves:
+                # We should try to write some of these ourselves:
                 for s in ("installtime", "filestates", "instprefixes",
                     "installcolor", "installtid"):
                     if pkg[s] != None:
                         rpm[s] = pkg[s]
+                #rpm["installcolor"] = (getInstallColor(arch),)
                 region = "immutable"
                 if rpm["immutable1"]:
                     region = "immutable1"
@@ -5297,21 +5298,6 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
         if ctx.hexdigest() != sha1header:
             print pkg.getFilename(), \
                 "bad sha1: %s / %s" % (sha1header, ctx.hexdigest())
-    if None:
-      # XXX this should get tested via doVerify()
-      for pkg in packages.values():
-        if pkg["name"] == "gpg-pubkey":
-            continue
-        if pkg["installcolor"]:
-            if pkg["installcolor"] != (getInstallColor(arch),):
-                print pkg.getFilename(), "wrong installcolor", \
-                    pkg["installcolor"]
-        if pkg["basenames"] == None and pkg["filestates"] == None:
-            pass
-        elif pkg["filestates"] != (0,) * len(pkg["basenames"]):
-            print pkg.getFilename(), "wrong filestates", pkg["filestates"]
-        if pkg["instprefix"] != None:
-            print pkg.getFilename(), "instprefix", pkg["instprefix"]
     checkDeps(packages.values(), checkfileconflicts, 0)
     if verbose:
         if verbose > 2:
