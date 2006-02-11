@@ -795,7 +795,7 @@ headermatch = (
     ("size_in_sig", "install_size_in_sig"),
     ("badsha1_1", "install_badsha1_1"),
     ("badsha1_2", "install_badsha1_2"),
-    ("payloadsize", "archivesize"),
+    #("payloadsize", "archivesize"),
     # need to be generated for the rpmdb:
     #"installtime", "filestates", "instprefixes", "installcolor", "installtid"
 )
@@ -1950,13 +1950,13 @@ class ReadRpm:
             progs = [ progs[i] for i in index ]
         return [(n, f, v, progs.pop(0), scripts.pop(0)) for (n, f, v) in deps]
 
-    def genRpmdbHeader(self):
+    def genSigHeader(self):
         """Take data from the signature header and append it to the hdr."""
         for (sig, hdr) in headermatch:
             if self[hdr] != None and self.sig[sig] == None:
                 self.sig[sig] = self[hdr]
 
-    def genSigHeader(self):
+    def genRpmdbHeader(self):
         """Take the rpmdb header data to again create a signature header."""
         for (sig, hdr) in headermatch:
             if self.sig[sig] != None and self[hdr] == None:
@@ -5260,8 +5260,23 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
                 if rpm.hdrdata[3] != fmt or rpm.hdrdata[4] != fmt2:
                     print "Rpm %s in repo does not match." % repopkg.filename
                     continue
-                # XXX write again a rpmdb header and check if it is the same
                 found = 1
+                # Use the rpm header to write again a rpmdb entry and compare
+                # that again to the currently existing rpmdb header.
+                # XXX we should try to write some of these ourselves:
+                for s in ("installtime", "filestates", "instprefixes",
+                    "installcolor", "installtid"):
+                    if pkg[s] != None:
+                        rpm[s] = pkg[s]
+                region = "immutable"
+                if rpm["immutable1"]:
+                    region = "immutable1"
+                rpm.genRpmdbHeader()
+                (indexNoa, storeSizea, fmta, fmta2) = writeHeader(rpm.hdr.hash,
+                    rpmdbtag, region, install_keys, 0, rpm.rpmgroup)
+                if fmt != fmta or fmt2 != fmta2:
+                    print "Could not write a new rpmdb for %s." % repopkg.filename
+                    continue
                 break
         if found == 0 and configfiles:
             print "Warning: package not found in the repositories:", nevra
