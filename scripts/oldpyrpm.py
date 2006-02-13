@@ -4535,6 +4535,8 @@ srpm_repos = [
     # mercurial mailinglists for details.
     ("http://xenbits.xensource.com/xen-unstable.hg/",
         "xen-unstable", None, None, 30),
+    ("http://xenbits.xensource.com/xen-3.0-testing.hg/",
+        "xen-3.0", None, None, 30),
     ("http://thunk.org/hg/e2fsprogs/", "e2fsprogs", None, None, 20),
 ]
 
