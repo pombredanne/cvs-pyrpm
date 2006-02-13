@@ -287,31 +287,6 @@ def compsLangsupport(comps, languages):
                         break
     return pkgs
 
-def createRepodata(dir):
-    tmp_dir = "%s-repo" % dir
-    os.mkdir(tmp_dir)
-    os.mkdir(tmp_dir+"/repodata")
-    list = os.listdir(source_dir)
-    for f in list:
-        os.symlink("%s/%s" % (source_dir, f), "%s/%s" % (tmp_dir, f))
-    if orig_yum:
-        createrepo = "createrepo %s" % tmp_dir
-    else:
-        createrepo = "PATH=%s:${PATH}; export PATH; pyrpmcreaterepo %s" % \
-                     (PYBINDIR, tmp_dir)
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        print "status=%d" % status
-        if status != 0:
-            return None
-    else:
-        if os.system(createrepo) != 0:
-            os._exit(255)
-        os._exit(0)
-    return tmp_dir
-
-
 ################################ main function ################################
 
 def main():
@@ -438,13 +413,12 @@ def main():
 
     os.mkdir(cache_dir)
     pyrpm.rpmconfig.cachedir = cache_dir
+    source_repo = None
     source_cache = None
 
     ### mount source ###
 
     # create source mount point and mount source (nfs)
-    s_dir = "%s/base" % cache_dir
-    os.mkdir(s_dir)
     if ks["nfs"]:
         source = "%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
         fstype = "nfs"
@@ -455,13 +429,20 @@ def main():
         if verbose:
             print "Mounting '%s' on '%s'" % (source, source_dir)
         pyrpm.mount(source, source_dir, fstype, opts, fsargs)
-        source_cache = pyrpm.NetworkCache(pyrpm.rpmconfig,
-                                          "file://%s" % source_dir, s_dir)
-    else: # ks["url"]
-        source_cache = pyrpm.NetworkCache(pyrpm.rpmconfig, ks["url"]["url"],
-                                          s_dir)
 
-    source_cache.clear()
+        source_repo = pyrpm.database.repodb.RpmRepoDB( \
+            pyrpm.rpmconfig, [ "file://%s" % source_dir ], reponame="base")
+    else: # ks["url"]
+        source_repo = pyrpm.database.repodb.RpmRepoDB(pyrpm.rpmconfig,
+                                                      [ ks["url"]["url"] ],
+                                                      reponame="base")
+
+    print "Reading repodata from installation source..."
+    if source_repo.read() == 0:
+        print "ERROR: Could not read repository from installation source."
+        return
+
+    source_cache = source_repo.getNetworkCache()
 
     ### mount stage2 temporary ###
 
@@ -531,60 +512,25 @@ def main():
         del lines
 
     else: # no_stage2
-        # TODO: make no_stage2 work with Network Cache
-        print "NO STAGE2 option disabled for now."
-        return
-
-
         source_release = "Red Hat Enterprise Linux"
-        dist = "redhat"
-        dir = source_cache.cache("RedHat/RPMS" % dist)
-        if not dir:
-            dist = "fedora"
+        pkgs = source_repo.getPkgsByName("redhat-release")
+        if len(pkgs) == 0:
             source_release = "Fedora Core"
-            dir = source_cache.cache("Fedora/RPMS" % dist)
-        if not dir:
-            print "ERROR: Could not find RPMS dir in  installation source."
-            return 1
-        if not os.path.exists(dir) or not os.path.isdir(dir):
-            print "ERROR: Could not get RPMS dir from installation source."
-            return 1
-        #source_cache.cache("")
-        
-        dir = "%s/RedHat/RPMS" % source_dir
-        release = "redhat"
-        if not os.path.exists(dir) or not os.path.isdir(dir):
-            dir = "%s/Fedora/RPMS" % source_dir
-            release = "fedora"
-        if not os.path.exists(dir) or not os.path.isdir(dir):
-            print "ERROR: No valid installation source."
-            return 1
-        list = os.listdir(dir)
-        s = [ ]
-        regex = re.compile('%s-release-.*\.rpm' % release)
-        for l in list:
-            if regex.match(l):
-                s.append(l)
-        if len(s) != 1:
-            print "ERROR: Could not find release package in installation source."
-            return 1
-        splits = string.split(s[0], "-")
-        if len(splits) > 2 and splits[2] == "as":
-            _version = splits[3]
-        else:
-            _version = splits[2]
-        i = 0
-        while i < len(_version) and ((_version[i] >= '0' and _version[i] <= '9') \
-                                     or _version[i] == "."):
-            i += 1
-        source_version = _version[:i]
+            pkgs = source_repo.getPkgsByName("fedora-release")
+        if len(pkgs) == 0:
+            print "ERROR: Could not fing release pacakge in source."
+            return
+        if len(pkgs) != 1:
+            print "ERROR: Found more than one release package, exiting."
+            return
+        source_version = pkgs[0]["version"]
         if len(source_version) == 0:
             print "ERROR: No valid version of installation source"
             return 1
-        i = string.find(s[0], "rawhide")
+        i = string.find(pkgs[0]["release"], "rawhide")
         if i != -1:
-            source_version += ".90" # fix for rawhide (bad)
-        del release, _version, splits, dir, list, i
+            source_version += ".90" # bad fix for rawhide
+        del i
 
     # verify source release and version
     if source_release == "Red Hat Enterprise Linux":
@@ -1633,23 +1579,71 @@ def main():
 
             # append authconfig
             if ks["authconfig"]:
-                print "Adding package providing /usr/bin/authconfig"
-                pkgs.append("/usr/bin/authconfig")
+                s = source_repo.searchFilenames("/usr/bin/authconfig")
+                if len(s) == 0:
+                    if not source_repo._matchesFile("/usr/bin/authconfig"):
+                        source_repo.importFilelist()
+                        s = source_repo.searchFilenames("/usr/bin/authconfig")
+                if len(s) > 0:
+                    found = False
+                    for pkg in s:
+                        if pkg in pkgs:
+                            found = True
+                            break
+                    if not found:
+                        pkg = s[0]
+                        print "Adding package '%s' for authentication configuration" % pkg["name"]
+                        pkgs.append(pkg["name"])
+                else:
+                    print "WARNING: Could not find package providing '/usr/bin/authconfig'."
 
             # append iptables
             if ks["firewall"] and not ks["firewall"].has_key("disabled") and \
                    not "iptables" in pkgs:
                 print "Adding package iptables"
                 pkgs.append("iptables")
-                # no firewall con
-                if install != "RHEL-3":
-                    print "Adding package providing /usr/sbin/lokkit"
-                    pkgs.append("/usr/sbin/lokkit")
+                # no firewall config tool in RHEL-3
+                if (install.release == "RHEL" and install.version >= 4) or \
+                       (install.release == "FC" and install.version >= 3):
+                    s = source_repo.searchFilenames("/usr/sbin/lokkit")
+                    if len(s) == 0:
+                        if not source_repo._matchesFile("/usr/sbin/lokkit"):
+                            source_repo.importFilelist()
+                            s = source_repo.searchFilenames("/usr/sbin/lokkit")
+                    if len(s) > 0:
+                        found = False
+                        for pkg in s:
+                            if pkg in pkgs:
+                                found = True
+                                break
+                        if not found:
+                            pkg = s[0]
+                            print "Adding package '%s' for firewall configuration." % pkg["name"]
+                            pkgs.append(pkg["name"])
+                    else:
+                        print "WARNING: Could not find package providing '/usr/sbin/lokkit'."
 
-            if ks["selinux"] and install != "RHEL-3" and \
-                   not "/usr/sbin/lokkit" in pkgs:
-                print "Adding package providing /usr/sbin/lokkit"
-                pkgs.append("/usr/sbin/lokkit")
+            if ks["selinux"] and \
+                   (install.release == "RHEL" and install.version >= 4) or \
+                   (install.release == "FC" and install.version >= 3):
+                
+                s = source_repo.searchFilenames("/usr/sbin/lokkit")
+                if len(s) == 0:
+                    if not source_repo._matchesFile("/usr/sbin/lokkit"):
+                        source_repo.importFilelist()
+                        s = source_repo.searchFilenames("/usr/sbin/lokkit")
+                if len(s) > 0:
+                    found = False
+                    for pkg in s:
+                        if pkg in pkgs:
+                            found = True
+                            break
+                    if not found:
+                        pkg = s[0]
+                        print "Adding package '%s' for selinux configuration." % pkg["name"]
+                        pkgs.append(pkg["name"])
+                else:
+                    print "WARNING: Could not find package providing '/usr/sbin/lokkit'."
 
             # append kernel
             if not "kernel" in pkgs and not "kernel-smp" in pkgs:
@@ -1890,26 +1884,6 @@ def main():
                           string.strip(string.join(lines))
 
     ### installation ###
-
-    if not source_cache.cache("repodata"):
-        print "ERROR: Repodata is missing in source tree, aborting"
-        return
-    # TODO: make createRepodata work with Network Cache
-#    if not os.path.exists("%s/repodata" % source_dir):
-#        print "Creating repodata for installation source - this can take some time..."
-#        dir = createRepodata(source_dir)
-#        if not dir:
-#            print "ERROR: createrepo for installation source failed, aborting."
-#            return 1
-#        source_dir = dir
-#    for repo in repos:
-#        if not os.path.exists("%s/repodata" % repos[repo]):
-#            print "Creating repodata for repository '%s' - this can take some time..." % repo
-#            dir = createRepodata(repos[repo])
-#            if not dir:
-#                print "WARNING: createrepo for repository '%s' failed, ignoring." % repo
-#            else:
-#                repos[repo] = dir
 
     if ks.has_key("install"):
         print "Preparing installation"
@@ -2155,14 +2129,16 @@ def main():
            ks["firewall"] and not ks["firewall"].has_key("disabled"):
         print "Configuring firewall"
 
-        if (install.release == "RHEL" and install.version >= 4) or \
-               (install.release == "FC" and install.version >= 2):
-            # lokkit is not able to configure firewall for pre RHEL-4 and pre FC-2
-
+        if (install.release == "RHEL" and install.version < 4) or \
+               (install.release == "FC" and install.version < 2) or \
+               not os.path.exists(buildroot+"/usr/sbin/lokkit"):
+            # lokkit is not able to configure firewall for pre RHEL-4 and
+            # pre FC-2
             _trusted = ""
             if ks["firewall"].has_key("trusted"):
                 for iface in ks["firewall"]["trusted"]:
-                    _trusted += '-A RH-Firewall-1-INPUT -i %s -j ACCEPT\n' % iface
+                    _trusted += '-A RH-Firewall-1-INPUT -i %s -j ACCEPT\n' % \
+                                iface
             _open_ports = ""
             if ks["firewall"].has_key("ports"):
                 ports = ks["firewall"]["ports"][:]
@@ -2204,32 +2180,29 @@ def main():
                     print "ERROR: Could not enable firewall."
         else:
             # use lokkit to configure firewall
+            fwargs = [ ]
+            if ks["firewall"].has_key("enabled"):
+                fwargs.append("--enabled")
+            if ks["firewall"].has_key("disabled"):
+                fwargs.append("--disabled")
+            if ks["firewall"].has_key("trusted"):
+                for trusted in ks["firewall"]["trusted"]:
+                    fwargs.append("--trusted=%s" % trusted)
+            if ks["firewall"].has_key("ports"):
+                for port in ks["firewall"]["ports"]:
+                    fwargs.append("--port=%s:%s" % (port[0], port[1]))
 
-            if not os.path.exists(buildroot+"/usr/sbin/lokkit"):
-                print "ERROR: /usr/sbin/lokkit does not exist, skipping."
-            else:
-                fwargs = [ ]
-                if ks["firewall"].has_key("enabled"):
-                    fwargs.append("--enabled")
-                if ks["firewall"].has_key("disabled"):
-                    fwargs.append("--disabled")
-                if ks["firewall"].has_key("trusted"):
-                    for trusted in ks["firewall"]["trusted"]:
-                        fwargs.append("--trusted=%s" % trusted)
-                if ks["firewall"].has_key("ports"):
-                    for port in ks["firewall"]["ports"]:
-                        fwargs.append("--port=%s:%s" % (port[0], port[1]))
+            lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % \
+                     string.join(fwargs)
+            (status, rusage) = pyrpm.runScript(script=lokkit,
+                                               chroot=buildroot)
+            if status != 0:
+                print "ERROR: Configuration of firewall failed"
 
-                lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % \
-                         string.join(fwargs)
-                (status, rusage) = pyrpm.runScript(script=lokkit, chroot=buildroot)
-                if status != 0:
-                    print "ERROR: Configuration of firewall failed"
-
-                create_file(buildroot,
-                            "/etc/sysconfig/system-config-securitylevel",
-                            [ '# Configuration file for system-config-securitylevel\n\n',
-                              "%s" % string.join(fwargs, "\n") ])
+            create_file(buildroot,
+                        "/etc/sysconfig/system-config-securitylevel",
+                        [ '# Configuration file for system-config-securitylevel\n\n',
+                          "%s" % string.join(fwargs, "\n") ])
 
     # /etc/sysconfig/keyboard
     if ks["keyboard"]:
@@ -2260,7 +2233,8 @@ def main():
         _gateway = ""
         if ks["network"].has_key("gateway"):
             _gateway = 'GATEWAY=%s\n' % ks["network"]["gateway"]
-        create_file(buildroot, "/etc/sysconfig/network", [ _hostname, _gateway ])
+        create_file(buildroot, "/etc/sysconfig/network",
+                    [ _hostname, _gateway ])
 
         device = "eth0"
         if ks["network"].has_key("device"):
