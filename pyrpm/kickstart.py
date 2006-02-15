@@ -258,17 +258,18 @@ class KickstartConfig(dict):
                         raise ValueError, "Error in line '%s'" % line
                 # TODO: logvol
                 elif opt == "network":
-                    self.parseSimple(opt, args[1:],
-                                     [ "bootproto:", "device:", "ip:",
-                                       "gateway:", "nameserver:", "nodns",
-                                       "netmask:", "hostname:", "ethtool:",
-                                       "essid:", "wepkey:", "onboot:",
-                                       "class:" ])
-                    if self[opt].has_key("nameserver"):
-                        splits = string.split(self[opt]["nameserver"], ",")
-                        self[opt]["nameserver"] = [ ]
+                    dict = self.parseMultiple(opt, args[1:],
+                                              [ "bootproto:", "device:", "ip:",
+                                                "gateway:", "nameserver:",
+                                                "nodns", "netmask:",
+                                                "hostname:", "ethtool:",
+                                                "essid:", "wepkey:", "onboot:",
+                                                "class:" ])
+                    if dict.has_key("nameserver"):
+                        splits = string.split(dict["nameserver"], ",")
+                        dict["nameserver"] = [ ]
                         for split in splits:
-                            self[opt]["nameserver"].append(string.strip(split))
+                            dict["nameserver"].append(string.strip(split))
                 elif opt == "nfs":
                     self.parseSimple(opt, args[1:],
                                      [ "server:", "dir:" ])
@@ -416,11 +417,23 @@ class KickstartConfig(dict):
                not self["nfs"] and not self["url"]:
             raise ValueError, "No installation method specified."
 
+        source = 0
+        if self["cdrom"]:
+            source += 1
+        if self["harddrive"]:
+            source += 1
+        if self["nfs"]:
+            source += 1
+        if self["url"]:
+            source += 1
+        if source != 1:
+            raise ValueError, "Multiple installation sources defined."
+
         if self["harddrive"]:
             if not self["harddrive"].has_key("partition"):
-                raise ValueError, "harddrive: partition not set."
+                raise ValueError, "Harddrive: partition not set."
             if not self["harddrive"].has_key("dir"):
-                raise ValueError, "harddrive: dir not set."
+                raise ValueError, "Harddrive: dir not set."
 
         if self["nfs"]:
             if not self["nfs"].has_key("server"):
@@ -524,6 +537,14 @@ class KickstartConfig(dict):
         if len(args) != 0:
             raise ValueError, "'%s %s' is unsupported" % (tag, " ".join(argv))
         self[tag] = dict
+
+    def parseMultiple(self, tag, argv, allowed_args, replace_tags=None):
+        (dict, args) = self.parseArgs(tag, argv, allowed_args, replace_tags)
+
+        if len(args) != 0:
+            raise ValueError, "'%s %s' is unsupported" % (tag, " ".join(argv))
+        self.setdefault(tag, [ ]).append(dict)
+        return dict
 
     def parseSub(self, tag, argv, allowed_args, replace_tags=None):
         (dict, args) = self.parseArgs(tag, argv, allowed_args, replace_tags)
