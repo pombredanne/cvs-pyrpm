@@ -754,7 +754,7 @@ def parseYumOptions(argv, yum):
          "noscripts", "notriggers", "excludedocs", "excludeconfigs",
          "oldpackage", "autoerase", "servicehack", "installpkgs=", "arch=",
          "checkinstalled", "rusage", "srpmdir=", "enablerepo=", "disablerepo=",
-         "nocache"])
+         "nocache", "cachedir="])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -847,6 +847,8 @@ def parseYumOptions(argv, yum):
             rpmconfig.disablerepo.append(val)
         elif opt == "--nocache":
             rpmconfig.nocache = 1
+        elif opt == "--cachedir":
+            rpmconfig.cachedir = val
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1

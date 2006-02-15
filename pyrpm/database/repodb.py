@@ -244,6 +244,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         ffd.write('</filelists>\n')
         pfd.close()
         ffd.close()
+        ## TODO: Write out repomd.xml
         del self.filerequires
         return 1
 
