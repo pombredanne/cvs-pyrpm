@@ -388,15 +388,17 @@ This is how the rpmdb is being checked:
    against the yum repositories. Which rpm packages do not match, which
    installed packages are not available in one of the repos. You can specify
    more than on yum config file by repeating the `-c` option.
- - If no repodata is read in, only the rpmdb files are accessed by all checks
-   and all tests can run as non-root user. Also the check code automatically
-   detects the endianess of the db4 files and looks at the kernel packages
-   to switch over to some other arch setting. So copying over rpmdb files from
-   other machines and checking them is real easy.
+ - If installed rpms are compared against a repository, then a check is done
+   if pyrpm would also write the same rpmdb entry to compare if our functions
+   work the same as original `/bin/rpm` ones.
+ - Only rpmdb files in `/var/lib/rpm` are accessed read-only, no actual
+   installed files from the rpm packages are verified.
+   If checks against repositories are done, those are also read-only and
+   all tests can be run as non-root user.
  - The check can be run on any architecture for any other architecture with
-   automatic detection of the right endian setting as well as automatic
-   arch setting by looking at the installed kernels. So you can copy the
-   rpmdb files onto a central server to check them all.
+   automatic detection of the right endian setting of the db files as well
+   as automatic arch setting by looking at the installed kernels in the rpmdb.
+   So you can copy the rpmdb files onto a central server to check them all.
  - Check if only packages with the correct architecture are installed. Make
    sure no arch-dependent rpm and a noarch package are installed at the
    same time.
