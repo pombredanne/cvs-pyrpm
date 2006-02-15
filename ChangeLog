@@ -1,4 +1,311 @@
+2006-02-15  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-tools.txt 1.7: - update of the docu for --checkrpmdb
+
+2006-02-15  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.48: [tw]
+	- better umount handling in umount_all - try to umount 5 times with a delay
+	- dropped kudzu option
+	- allow more than one network device
+	- allow cdrom install (only usable for minimal-cd-installs or dvd-installs)
+	- dropped --standalone option from usage for now
+
+	* pyrpm/kickstart.py 1.16: [tw]
+	- new parseMultiple for ks["network"] - more than one interface is possible
+	- check installation sources - only allow one
+
+2006-02-15  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/package.py 1.110:
+	- Fixed bug where remove operations left removable files (none duplicate files)
+	  in the system.
+
+2006-02-15  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/database/db.py 1.5, pyrpm/database/lists.py 1.10, pyrpm/database/memorydb.py 1.6:
+	[tw]
+	- renamed is*Duplicate to num*Duplicates, which no returns the number of
+	  duplicates
+
+2006-02-15  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/cache.py 1.6:
+	- NetworkCache::clear() without any parameters now clears the whole cachedir.
+
+2006-02-15  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.47: [tw]
+	- new option --no-cache
+	- using --cachedir for pyrpmyum
+
+2006-02-15  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/cache.py 1.5:
+	- Added new API method to NetworkCache::open(uri) which tries to open the
+	  given URI (relative or absolute, local or network) and returns a
+	  filedescriptor if successfull, None otherwise.
+	- Hopefully fixed traceback cache() when trying to cache directories.
+
+	* scripts/pyrpmyum 1.51: - Updated usage for pyrpmyum and new options
+
+	* pyrpm/database/repodb.py 1.9, pyrpm/functions.py 1.163:
+	- Added --cachedir option
+
+2006-02-13  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.169:
+	- add current stable 3.0 branch for mercurial xen repo
+
+2006-02-13  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.46: [tw]
+	- dropped createrepo support
+	- using repodb instead of NetworkCache for installation source
+	- enabled no_stage2 option again, repodb is used to determine the
+	  version-release of the [redhat|fedora]-release package
+	- repodb is used to get the matching package for /usr/bin/authconfig and
+	  /usr/sbin/lokkit
+	- fixed firewall configuration check for RHEL version and added exists check
+
+2006-02-11  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.168: - cleanup of unused code
+
+	* scripts/oldpyrpm.py 1.167:
+	- start to verify if we can take a rpm header to then write a rpmdb
+	  entry and check if that is again the same as an existing rpmdb
+
+2006-02-10  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.45: [tw]
+	- using NetworkCache
+	  - disabled no-stage2 option for now
+	  - disabled createrepo for now
+
+	* pyrpm/cache.py 1.4: [tw]
+	- only return path for file urls if it valid
+	- fixed clear to use uri instead of filename
+
+2006-02-10  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.166:
+	- prepare some support of dep checking for src.rpms: use the
+	  requires lines to look at the buildrequires for the rpms
+
+2006-02-09  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/disk.py 1.5: [tw]
+	- using absolute patch names for external program calls
+
+	* scripts/pyrpmkickstart 1.44: [tw]
+	- new functions create_link, check_exists, create_file, copy_device and
+	  create_min_devices
+	- moved main program in a function called main
+	- using try for main, dropped exit function, removed calls to own exit function
+	- using new functions
+
+2006-02-09  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/config.py 1.53, pyrpm/control.py 1.84, pyrpm/database/repodb.py 1.8, pyrpm/functions.py 1.162, pyrpm/package.py 1.109:
+	- Fixed a bug introduced yesterday that on some command line options would
+	  print out a completely wrong and useless list of operations.
+	- Implemented the --nocache option. Only disables caching for packages, all
+	  repodata is still being cached if necessary.
+
+2006-02-09  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/control.py 1.83:
+	[tw] - beautify progress output with length format
+
+2006-02-09  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.165:
+	- Fix checking of rpmdb data for non-native archs.
+	- Some more docu.
+
+2006-02-08  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/package.py 1.108: [tw]
+	- fixed output if printhash is enabled
+
+2006-02-08  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/package.py 1.107, pyrpm/yum.py 1.101, scripts/pyrpmcheckrepo 1.14, scripts/pyrpminstall 1.26, scripts/pyrpmrandomizer 1.16, scripts/pyrpmyum 1.50, pyrpm/config.py 1.52, pyrpm/control.py 1.82, pyrpm/functions.py 1.161:
+	- Implemented --enablerepo and --disablerepo command line options for all yum
+	  variants of our tools.
+	- Allow signature/gpg checks of packages using --signature command line option
+	- Reworked quite a bit of the cache space and disk space behaviour, should
+	  fix some of the strange problems we got there.
+	- Finally honor the --ignoresize option for getFreeDiskspace() ;)
+	- Added some more missing yum command line options, nearly all of them are now
+	  included and implemented.
+
+2006-02-08  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.43: [tw]
+	- new class installation for release and information, used for installation
+	  source and for determination of distribution features and specials
+	- renamed args variables, where it overloads sys.argv
+	- new function createRepodata to create repodata if missing
+	- moved tempdir creation and source mount before disk operations to make it
+	  possible to quit early for unsupported installation sources
+	- simplified fstab read code for updates
+
+	* pyrpm/disk.py 1.4: [tw]
+	- fixed missing time import
+	- fixed missing functions import and usage of pyrpm.runScript, which has to be
+	  functions.runScript
+
+2006-02-08  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.164: - read repository directories only once
+
+	* scripts/oldpyrpm.py 1.163:
+	- do not require a baseurl anymore, can also be mirrorlist
+	- depend on the "verbose" level for output messages
+
+	* scripts/oldpyrpm.py 1.162: - better support /etc/yum.repos.d
+
+	* scripts/oldpyrpm.py 1.161: - support environment TMPDIR
+
+	* doc/pyrpm-tools.txt 1.6: - add another example for pyrpmkickstart
+
+	* doc/pyrpm-links.txt 1.7: - add link to kickstart install scripts
+
+	* scripts/oldpyrpm.py 1.160: - add support for "mirrorlist"
+	- support using more than one "baseurl" to fetch files from
+
+2006-02-07  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/orderer.py 1.44: [ffesti]
+
+	Orderer:
+	 * Code clean up
+	 * use simple leaf collection again
+	 * use same algorithm for breaking up connected components
+	   as for the whole graph
+	 * adjusted comments
+
+2006-02-07  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/yum.py 1.100: - no extra newlines needed for error output
+
+2006-02-05  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.159:
+	- move the check if rpm is still before removing it out to the
+	  calling function
+
+	* pyrpm/database/lists.py 1.9: - fix typo
+
+	* scripts/oldpyrpm.py 1.158:
+	- avoid zip() for a few cases, seems it is slow
+
+	* scripts/oldpyrpm.py 1.157:
+	- use "x[-1:] !=" instead of "len(x) > 0 and x[-1] !="
+	- remove mirroring some git repos
+	- implement "removePkg()" for packages with "oldfilenames"
+	- use fewer options to mirror with rsync. E.g. perms are not
+	  all taken from upstream repo, so we can never get e.g.
+	  group/world writable files.
+
+2006-02-04  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/database/__init__.py 1.3, pyrpm/database/db.py 1.4, pyrpm/database/lists.py 1.8, pyrpm/database/memorydb.py 1.5, pyrpm/database/repodb.py 1.7, pyrpm/database/rpmdb.py 1.3, pyrpm/database/sqlitedb.py 1.5, pyrpm/io.py 1.126, pyrpm/kickstart.py 1.15, pyrpm/orderer.py 1.43, pyrpm/resolver.py 1.101, pyrpm/specfile.py 1.5, pyrpm/yum.py 1.99, pyrpm/yumconfig.py 1.22, pyrpm/base.py 1.54, pyrpm/cache.py 1.3, pyrpm/comps.py 1.3, pyrpm/config.py 1.51, pyrpm/control.py 1.81, pyrpm/disk.py 1.3, pyrpm/functions.py 1.160:
+	- copyright cleanup
+
+	* scripts/pyrpmkickstart 1.42: - set PATH outside of pyrpmyum
+
+	* pyrpm/database/lists.py 1.7, pyrpm/database/memorydb.py 1.4:
+	- some small optims
+
+	* pyrpm/cache.py 1.2, pyrpm/orderer.py 1.42:
+	- remove trailing whitespace
+
+2006-02-03  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.41: [tw]
+	- dropped pr_print function - using pprint instead
+	- added PYBINDIR for pyrpmyum call
+	- fixed loadComps to prefer RedHat/base/comps.xml to Fedora/base/comps.xml
+	- using ks["repository"] instead of ks["repo"]
+	- fixed fstab detection for single install updates
+	- fixed exit calls in format stage
+	- fixed umask
+	  - using 022, now
+	  - added chmod to 1777 for /tmp and /var/tmp
+	- create scsi_hostadapter aliases in modprobe.conf/modules.conf for scsi
+	  ks["device"]'s
+	- fixed default depth of xserver config
+	- new code to parse /usr/share/hwdata/Cards (still unfinished)
+
+2006-02-03  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/hashlist.py 1.24, pyrpm/orderer.py 1.41, pyrpm/yum.py 1.98, tests/rpmresolve.py 1.12:
+	[ffesti] Orderer:
+	 * Detect strongly connected components
+	 * Merge components into single node
+	 * weight based ordering
+	  * number of packages depending on package
+	  * simpler weight counting packages twice if two paths exists
+	 * Fixed loop detection to do full recursion (now restricted to components)
+
+2006-02-03  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/resolver.py 1.100: [tw]
+	- prefer self requires in getPkgDependencies
+	- added unused code for removal of self-prereqs - DO NOT ENABLE
+
+	* pyrpm/kickstart.py 1.14: [tw]
+	- added repository tag as an alias to repo
+	- fixed repo and device check
+
+2006-02-03  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/control.py 1.80:
+	- Add a small printInfo() for ordering (as it might take some time for large
+	  transactions).
+
+	* pyrpm/database/repodb.py 1.6, pyrpm/yum.py 1.97, tests/test 1.21, pyrpm.spec.in 1.15, pyrpm/cache.py 1.1, pyrpm/comps.py 1.2, pyrpm/config.py 1.50, pyrpm/control.py 1.79, pyrpm/functions.py 1.159:
+	- Changed RpmCompsXML interface to specifiy that the source is always a local
+	  file.
+	- Implemented a new NetworkCache class that can be used to easily cache files
+	  and even whole servers and subdirs there. Replaces the cacheLocal() function.
+	- Added a cachedir variable to our configuration so we can easily switch that
+	  if needed.
+	- Adapted the code to use the new NetworkCache class.
+	- Renamed keys to gpgkeys at repo reading.
+	- Implemented repomd.xml parsing and use the checksums there to decide wether
+	  we need to recache the various files in repodata.
+
+2006-01-30  Thomas Woerner  <twoerner@redhat.com>
+
+	* tests/rpmresolve.py 1.11: [tw] added -O option and PYRPMDIR
+
+	* tests/rpmresolve.py 1.10: [tw] new script version
+
+2006-01-20  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmkickstart 1.40:
+	- things to work if pyrpm is installed as binary rpm
+
+	* scripts/oldpyrpm.py 1.156: - nicer output for verbose mode
+
+2006-01-17  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm.txt 1.5: - Add link to the experimental git repo.
+
+2006-01-16  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/repodb.py 1.5, pyrpm/functions.py 1.158:
+	- Implemented repomd.xml reader
+	- Use repomd data to determine wether we need to cache the primary.xml.gz
+	  or not.
+
 2006-01-11  Florian La Roche  <laroche@redhat.com>
+
+	* ChangeLog 1.17: - update ChangeLog
 
 	* pyrpm/__init__.py 1.40, configure.in 1.34: - release 0.39
 
