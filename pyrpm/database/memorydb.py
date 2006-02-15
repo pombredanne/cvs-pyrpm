@@ -125,8 +125,8 @@ class RpmMemoryDB(db.RpmDatabase):
     def getFilenames(self):
         return self.filenames_list
 
-    def isFileDuplicate(self, filename):
-        return self.filenames_list.isDuplicate(filename)
+    def numFileDuplicates(self, filename):
+        return self.filenames_list.numDuplicates(filename)
 
     def getFileDuplicates(self):
         return self.filenames_list.duplicates()

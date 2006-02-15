@@ -97,7 +97,7 @@ class RpmDatabase:
     def getFilenames(self):
         raise NotImplementedError
 
-    def isFileDuplicate(self, filename):
+    def numFileDuplicates(self, filename):
         raise NotImplementedError
 
     def getFileDuplicates(self):
