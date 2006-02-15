@@ -460,7 +460,7 @@ class RpmPackage(RpmData):
                 self.config.printInfo(0, "#"*(npos-pos))
             pos = npos
             f = files[i]
-            if db.isFileDuplicate(f):
+            if db.numFileDuplicates(f) > 1:
                 self.config.printDebug(1, "File/Dir %s still in db, not removing..." % f)
                 continue
             if os.path.isdir(f):
