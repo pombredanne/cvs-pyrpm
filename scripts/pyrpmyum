@@ -50,7 +50,8 @@ options:
     [--nodeps] [--signature]
     [--noorder] [--noscripts] [--notriggers]
     [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
-    [--enablerepo=repoid|repoglob] [--disablerepo=repoid|repoglob]
+    [--enablerepo repoid|repoglob] [--disablerepo repoid|repoglob]
+    [--nocache] [--cachedir DIRECTORY]
 
 Warning: Some of the options are not evaluated yet"""
 
