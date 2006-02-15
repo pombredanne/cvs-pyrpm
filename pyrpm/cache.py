@@ -46,6 +46,13 @@ class NetworkCache:
         return uri.startswith("http://") or uri.startswith("ftp://") or \
                uri.startswith("file://")
 
+    def __createSourceURI(self, uri):
+        if self.__isURI(uri):
+            sourceurl = uri
+        else:
+            sourceurl = os.path.join(self.baseurl, uri)
+        return sourceurl
+
     def isCached(self, uri):
         """Check if the given uri/file is already cached."""
 
@@ -59,6 +66,22 @@ class NetworkCache:
             return _uriToFilename(uri)
         return os.path.join(self.main_cachepath, uri)
 
+    def open(self, uri):
+        """Tries to open the given URI and returns a filedescriptor if
+        successfull, None otherwise."""
+
+        if self.is_local and not self.__isURI(uri):
+            path = os.path.join(self.baseurl, uri)
+            try:
+                return open(path)
+            except:
+                return None
+        sourceurl = self.__createSourceURI(uri)
+        try:
+            return urlopen(sourceurl)
+        except:
+            return None
+
     def cache(self, uri, force=0):
         """Cache the given uri/file. If the uri is a real uri then we cache it
         in our external cache, otherwise we use our baseurl and treat the
@@ -66,13 +89,11 @@ class NetworkCache:
 
         if self.is_local and not self.__isURI(uri):
             path = os.path.join(self.baseurl, uri)
-            if os.path.exists(path):
-                return os.path.join(path)
-            return None
-        if self.__isURI(uri):
-            sourceurl = uri
-        else:
-            sourceurl = os.path.join(self.baseurl, uri)
+            try:
+                return path
+            except:
+                return None
+        sourceurl = self.__createSourceURI(uri)
         destfile = self.getCachedFilename(uri)
         if not os.path.isdir(os.path.dirname(destfile)):
             os.makedirs(os.path.dirname(destfile))
@@ -81,7 +102,7 @@ class NetworkCache:
                 f = urlgrab(sourceurl, destfile)
             else:
                 f = urlgrab(sourceurl, destfile, reget='check_timestamp')
-        except URLGrabError, e:
+        except Exception, e:
             # urlgrab fails with invalid range for already completely transfered
             # files, pretty strange to me to be honest... :)
             if e[0] == 9:
