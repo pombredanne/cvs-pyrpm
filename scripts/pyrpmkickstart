@@ -293,14 +293,15 @@ def main():
     global verbose, buildroot, xen, nocleanup, confirm, tempdir, diskmap, \
            partitionmap, devmap, wait, kudzu, orig_yum, target_dir, \
            label_prefix, standalone, stage2_img_dir, repo_comps, upgrade, \
-           no_stage2, devmap
+           no_stage2, no_cache, devmap
     
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
                                      [ "help", "verbose", "yes",
                                        "kudzu", "label-prefix", "no-cleanup",
                                        "standalone", "wait", "xen", "yum",
-                                       "repo-comps", "no-stage2", "upgrade=", ])
+                                       "repo-comps", "no-stage2", "upgrade=",
+                                       "no-cache" ])
     except:
         usage()
         return
@@ -334,6 +335,8 @@ def main():
             no_stage2 = 1
         elif opt == "--upgrade":
             upgrade = val
+        elif opt == "--no-cache":
+            no_cache = 1
         else:
             print "Unknown option '%s'" % opt
             usage()
@@ -1929,9 +1932,13 @@ def main():
     if orig_yum:
         yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf, buildroot)
     else:
-        yum = "PATH=%s:${PATH}; export PATH; PYTHONPATH=%s pyrpmyum -y --hash -c '%s' -r '%s'" %\
-              (PYBINDIR, PYRPMDIR, yum_conf, buildroot)
+        yum = "PATH=%s:${PATH}; export PATH; " % (PYBINDIR) + \
+              "PYTHONPATH=%s; export PYTHONPATH; " % (PYRPMDIR) + \
+              "pyrpmyum -y --hash -c '%s' --root='%s' --cachedir='%s'" % \
+              (yum_conf, buildroot, cache_dir)
         # --servicehack
+        if no_cache:
+            yum += " --nocache"
     if ks["packages"] and ks["packages"].has_key("ignoredeps") and \
            ks["packages"].has_key("ignoremissing"):
         yum += " --nodeps"
@@ -2786,6 +2793,8 @@ OPTIONS
   --upgrade=<part> Upgrade installation in partition <part>. This is only
                    useful for upgrades and if there is more than one
                    installation on the supplied disks.
+  --no-cache       Do not cache RPM's (e.g. for http and ftp sources).
+  
 """
 # TODO  --secure         Secure installation with firewall enabled in standalone mode
 
@@ -2811,6 +2820,7 @@ devmap = None
 repo_comps = 0
 upgrade = None
 no_stage2 = 0
+no_cache = 0
 
 # abort if user is not root
 if os.geteuid() != 0:
