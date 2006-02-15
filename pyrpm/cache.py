@@ -17,7 +17,7 @@
 #
 
 
-import os, os.path, md5, sha
+import os, os.path, md5, sha, shutil
 from pyrpm.functions import _uriToFilename, updateDigestFromFile
 
 try:
@@ -113,11 +113,16 @@ class NetworkCache:
 
     def clear(self, uri=None):
         """Clears either the single given uri/file or the whole cache"""
-        # XXX: Will clear the whole cache tree if no filename is given
+        # If no URI is give clears the whole cache. Use with caution. ;)
         if not uri:
-            return
+            try:
+                shutil.rmtree(self.cachedir)
+                return 1
+            except:
+                return 0
         if self.isCached(uri):
             os.unlink(self.getCachedFilename(uri))
+        return 1
 
     def checksum(self, uri, cstype):
         """Calculates and returns the checksum for a give URL and corresponding
