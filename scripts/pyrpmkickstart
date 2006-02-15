@@ -141,12 +141,24 @@ def umount_all(dir):
     mounted.sort()
     mounted.reverse()
 
+    # try to umount 5 times
+    count = 5
+    i = 0
     failed = 0
-    for dir in mounted:
+    while len(mounted) > 0:
+        dir = mounted[i]
         if verbose:
             print "Umounting '%s' " % dir
+        failed = 0
         if pyrpm.umount(dir) == 1:
             failed = 1
+            i += 1
+        else:
+            mounted.remove(dir)
+        if i >= len(mounted) and count > 0:
+            time.sleep(1)
+            i = 0
+            count -= 1
 
     return failed
 
@@ -291,14 +303,14 @@ def compsLangsupport(comps, languages):
 
 def main():
     global verbose, buildroot, xen, nocleanup, confirm, tempdir, diskmap, \
-           partitionmap, devmap, wait, kudzu, orig_yum, target_dir, \
+           partitionmap, devmap, wait, orig_yum, target_dir, \
            label_prefix, standalone, stage2_img_dir, repo_comps, upgrade, \
            no_stage2, no_cache, devmap
     
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
                                      [ "help", "verbose", "yes",
-                                       "kudzu", "label-prefix", "no-cleanup",
+                                       "label-prefix", "no-cleanup",
                                        "standalone", "wait", "xen", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
                                        "no-cache" ])
@@ -321,8 +333,6 @@ def main():
             nocleanup = 1
         elif opt == "--wait":
             wait = 1
-        elif opt == "--kudzu":
-            kudzu = 1
         elif opt == "--yum":
             orig_yum = 1
         elif opt == "--label-prefix":
@@ -356,9 +366,8 @@ def main():
 
     ks = pyrpm.KickstartConfig(ks_file)
 
-    # start network in standalone mode for pre script
     if standalone:
-        # TODO
+        # TODO: start network for pre script
         pass
 
     # run pre script
@@ -397,7 +406,7 @@ def main():
 
     # installation methods
 
-    if not ks["nfs"] and not ks["url"]:
+    if not ks["nfs"] and not ks["url"] and not ks["cdrom"]:
         print "ERROR: Only installation with nfs or url is supported, exiting."
         return 1
 
@@ -421,8 +430,22 @@ def main():
 
     ### mount source ###
 
+    # create source mount point and mount source (cdrom)
+    if ks["cdrom"]:
+        source = "/dev/cdrom"
+        fstype = "auto"
+        fsargs = None
+        opts = "ro"
+        os.mkdir(source_dir)
+
+        if verbose:
+            print "Mounting '%s' on '%s'" % (source, source_dir)
+        pyrpm.mount(source, source_dir, fstype, opts, fsargs)
+
+        source_repo = pyrpm.database.repodb.RpmRepoDB( \
+            pyrpm.rpmconfig, [ "file://%s" % source_dir ], reponame="base")
     # create source mount point and mount source (nfs)
-    if ks["nfs"]:
+    elif ks["nfs"]:
         source = "%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
         fstype = "nfs"
         fsargs = None
@@ -435,6 +458,7 @@ def main():
 
         source_repo = pyrpm.database.repodb.RpmRepoDB( \
             pyrpm.rpmconfig, [ "file://%s" % source_dir ], reponame="base")
+    # use url source
     else: # ks["url"]
         source_repo = pyrpm.database.repodb.RpmRepoDB(pyrpm.rpmconfig,
                                                       [ ks["url"]["url"] ],
@@ -1660,10 +1684,12 @@ def main():
                 pkgs.append("firstboot")
 
             # append dhclient
-            if ks["network"] and ks["network"]["bootproto"] == "dhcp" and \
-                   not "dhclient" in pkgs:
-                print "Adding package dhclient"
-                pkgs.append("dhclient")
+            if ks["network"] and len(ks["network"]) > 0:
+                for net in ks["network"]:
+                    if net["bootproto"] == "dhcp" and \
+                           not "dhclient" in pkgs:
+                        print "Adding package dhclient"
+                        pkgs.append("dhclient")
 
             # get langsupport packages
             pkgs.extend(compsLangsupport(comps, languages))
@@ -1793,37 +1819,42 @@ def main():
     if ks.has_key("install") and not os.path.exists(buildroot+"/etc/hosts"):
         print "Writing '/etc/hosts'"
 
-        content = [ "# Do not remove the following line, or various programs\n",
-                    "# that require network functionality will fail.\n" ]
         hostname = ""
-        if ks["network"].has_key("hostname") and \
-               not ks["network"].has_key("ip"):
-            hostname = "%s\t" % ks["network"]["hostname"]
-        content.append("127.0.0.1\t\t%slocalhost.localdomain\tlocalhost\n" % \
-                       hostname)
-        if ks["network"].has_key("hostname") and ks["network"].has_key("ip"):
-            content.append("%s\t\t%s\n" % (ks["network"]["ip"],
-                                           ks["network"]["hostname"]))
-        create_file(buildroot, "/etc/hosts", content)
+        hosts = ""
+        if ks["network"] and len(ks["network"]) > 0:
+            for net in ks["network"]:
+                if net.has_key("hostname"):
+                    if not net.has_key("ip"):
+                        if not hostname:
+                            # only use first hostname
+                            hostname = "%s\t" % net["hostname"]
+                    else:
+                        hosts += "%s\t\t%s\n" % (net["ip"], net["hostname"])
+
+        create_file(buildroot, "/etc/hosts", [ \
+            "# Do not remove the following line, or various programs\n",
+            "# that require network functionality will fail.\n",
+            "127.0.0.1\t\t%slocalhost.localdomain\tlocalhost\n" % hostname,
+            hosts ])
 
     # /etc/resolv.conf
-    if ks.has_key("install") and not os.path.exists(buildroot+"/etc/resolv.conf"):
+    if ks.has_key("install") and not \
+           os.path.exists(buildroot+"/etc/resolv.conf"):
         content = [ ]
-        if ks["network"]:
-            if ks["network"].has_key("hostname"):
-                hostname = ks["network"]["hostname"]
-                idx = string.find(hostname, ".")
-                if idx >= 0:
-                    domainname = hostname[(idx+1):]
-                    content.append("search %s\n" % domainname)
-            else:
+        if ks["network"] and len(ks["network"]) > 0:
+            hostname = domainname = None
+            for net in ks["network"]:
+                if net.has_key("hostname") and not hostname:
+                    hostname = net["hostname"]
+                    idx = string.find(hostname, ".")
+                    if idx >= 0:
+                        domainname = hostname[(idx+1):]
+                        content.append("search %s\n" % domainname)
+            if not domainname:
                 content.append("search localdomain\n")
-            if ks["network"].has_key("nameserver") and \
-                   not ks["network"].has_key("nodns"):
-                for server in ks["network"]["nameserver"]:
+            if net.has_key("nameserver") and not net.has_key("nodns"):
+                for server in net["nameserver"]:
                     content.append("nameserver %s\n" % server)
-            else:
-                content.append("nameserver 127.0.0.1\n")
         create_file(buildroot, "/etc/resolv.conf", content)
 
     # /etc/modprobe.conf and /etc/modules.conf
@@ -1971,18 +2002,6 @@ def main():
            not check_dir(buildroot, "/etc/sysconfig"):
         print "Aborting."
         return 1
-
-    ## run kudzu
-    if ks.has_key("install") and kudzu:
-        print "Running kudzu"
-
-        if not os.path.exists(buildroot+"/usr/sbin/kudzu"):
-            print "ERROR: /usr/sbin/kudzu does not exist, skipping."
-        else:
-            (status, rusage) = pyrpm.runScript(script="/usr/sbin/kudzu -q -s",
-                                               chroot=buildroot)
-            if status != 0:
-                print "ERROR: kudzu failed."
 
     # run authconfig if set
     if ks.has_key("install") and ks["authconfig"]:
@@ -2230,75 +2249,99 @@ def main():
                 print "ERROR: mouseconfig failed"
 
     # setup networking
-    if ks.has_key("install") and ks["network"]:
+    if ks.has_key("install") and ks["network"] and len(ks["network"]) > 0:
         print "Configuring network"
-
-        if ks["network"].has_key("hostname"):
-            _hostname = 'HOSTNAME=%s\n' % ks["network"]["hostname"]
-        else:
-            _hostname = 'HOSTNAME=localhost.localdomain\n'
-        _gateway = ""
-        if ks["network"].has_key("gateway"):
-            _gateway = 'GATEWAY=%s\n' % ks["network"]["gateway"]
-        create_file(buildroot, "/etc/sysconfig/network",
-                    [ _hostname, _gateway ])
-
-        device = "eth0"
-        if ks["network"].has_key("device"):
-            device = ks["network"]["device"]
-
-        if device[:3] == "ctc":
-            type = "CTC"
-        elif device[:4] == "iucv":
-            type = "IUCV"
-        elif device[:2] == "tr":
-            type = '"Token Ring"'
-        else:
-            type = "Ethernet"
-
-        bootproto = "none"
-        if ks["network"]["bootproto"] and \
-               ks["network"]["bootproto"] != "static":
-            bootproto = ks["network"]["bootproto"]
 
         if not os.path.exists(buildroot+"/etc/sysconfig/network-scripts"):
             os.mkdir(buildroot+"/etc/sysconfig/network-scripts")
-        try:
-            fd = open(buildroot+"/etc/sysconfig/network-scripts/ifcfg-%s" % \
-                      device, "w")
-        except Exception, msg:
-            print "ERROR: Configuration of '/etc/sysconfig/network-scripts/ifcfg-%s' failed:" % device, msg
-        else:
-            fd.write('DEVICE=%s\n' % device)
-            fd.write('BOOTPROTO=%s\n' % bootproto)
-            if ks["network"].has_key("gateway"):
-                fd.write('GATEWAY=%s\n' % ks["network"]["gateway"])
-            if ks["network"].has_key("netmask"):
-                fd.write('NETMASK=%s\n' % ks["network"]["netmask"])
-            if ks["network"].has_key("ip"):
-                fd.write('IPADDR=%s\n' % ks["network"]["ip"])
-            if ks["network"].has_key("essid"):
-                fd.write('ESSID=%s\n' % ks["network"]["essid"])
-            if ks["network"].has_key("ethtool"):
-                fd.write('ETHTOOL_OPTS=%s\n' % ks["network"]["ethtool"])
-            if ks["network"].has_key("class"):
-                fd.write('DHCP_CLASSID=%s\n' % ks["network"]["class"])
-            if ks["network"].has_key("onboot"):
-                fd.write('ONBOOT=%s\n' % ks["network"]["onboot"])
-            else:
-                fd.write('ONBOOT=yes\n')
-            fd.write('TYPE=%s\n' % type)
-            fd.close()
 
-        if ks["network"].has_key("wepkey"):
-            try:
-                fd = open(buildroot+"/etc/sysconfig/network-scripts/keys-%s" % \
-                          ks["network"]["device"], "w")
-            except Exception, msg:
-                print "ERROR: Configuration of '/etc/sysconfig/network-scripts/keys-%s' failed:" % ks["network"]["device"], msg
+        # check network devices and set device for entries where no device is
+        # specified
+        network_devices = [ ]
+        for net in ks["network"]:
+            if net.has_key("device"):
+                if net["device"] in network_devices:
+                    print "WARNING: '%s' is not unique." % net["device"]
+                else:
+                    network_devices.append(net["device"])
+        for net in ks["network"]:
+            # get device or next free device
+            device = None
+            if net.has_key("device"):
+                device = net["device"]
+            if not device:
+                i = 0
+                device = "eth%d" % i
+                while device in network_devices:
+                    i += 1
+                    device = "eth%d" % i
+                net["device"] = device
+
+        _gateway = None
+        for net in ks["network"]:
+            if net.has_key("hostname"):
+                _hostname = 'HOSTNAME=%s\n' % net["hostname"]
             else:
-                fd.write('KEY=%s\n' % ks["network"]["wepkey"])
+                _hostname = 'HOSTNAME=localhost.localdomain\n'
+
+            if net.has_key("gateway") and not _gateway:
+                _gateway = 'GATEWAY=%s\n' % net["gateway"]
+                create_file(buildroot, "/etc/sysconfig/network",
+                            [ _hostname, _gateway ])
+
+            device = net["device"]
+
+            if device[:3] == "ctc":
+                type = "CTC"
+            elif device[:4] == "iucv":
+                type = "IUCV"
+            elif device[:2] == "tr":
+                type = '"Token Ring"'
+            else:
+                type = "Ethernet"
+
+            bootproto = "none"
+            if net["bootproto"] and net["bootproto"] != "static":
+                bootproto = net["bootproto"]
+
+            try:
+                fd = open(buildroot + \
+                          "/etc/sysconfig/network-scripts/ifcfg-%s" % \
+                          device, "w")
+            except Exception, msg:
+                print "ERROR: Configuration of '/etc/sysconfig/network-scripts/ifcfg-%s' failed:" % device, msg
+            else:
+                fd.write('DEVICE=%s\n' % device)
+                fd.write('BOOTPROTO=%s\n' % bootproto)
+                if net.has_key("gateway"):
+                    fd.write('GATEWAY=%s\n' % net["gateway"])
+                if net.has_key("netmask"):
+                    fd.write('NETMASK=%s\n' % net["netmask"])
+                if net.has_key("ip"):
+                    fd.write('IPADDR=%s\n' % net["ip"])
+                if net.has_key("essid"):
+                    fd.write('ESSID=%s\n' % net["essid"])
+                if net.has_key("ethtool"):
+                    fd.write('ETHTOOL_OPTS=%s\n' % net["ethtool"])
+                if net.has_key("class"):
+                    fd.write('DHCP_CLASSID=%s\n' % net["class"])
+                if net.has_key("onboot"):
+                    fd.write('ONBOOT=%s\n' % net["onboot"])
+                else:
+                    fd.write('ONBOOT=yes\n')
+                fd.write('TYPE=%s\n' % type)
                 fd.close()
+
+            if net.has_key("wepkey"):
+                try:
+                    fd = open(buildroot + \
+                              "/etc/sysconfig/network-scripts/keys-%s" % \
+                              device, "w")
+                except Exception, msg:
+                    print "ERROR: Configuration of '/etc/sysconfig/network-scripts/keys-%s' failed:" % device, msg
+                else:
+                    fd.write('KEY=%s\n' % net["wepkey"])
+                    fd.close()
 
     # /etc/X11/xorg.conf
     if ks.has_key("install") and ks["xconfig"]:
@@ -2762,6 +2805,10 @@ def main():
             fd.write('extra = "ro"\n')
             fd.close()
 
+    if standalone:
+        # honour reboot option
+        pass
+
     return 0
 
 ##################################### usage ###################################
@@ -2776,11 +2823,8 @@ OPTIONS
   -v  | --verbose  Be verbose, and more, ..
   -y  | --yes      Do not ask questions, assume yes.
 
-  --kudzu          Run kudzu after installation.
   --label-prefix   Prepend prefix before labels on partitions
   --no-cleanup     Do not cleanup temporary directory and files.
-  --standalone     Start in standalone mode: start network before running
-                   pre script, swapon swap partitions
   --wait           Wait after installation before umounting.
   --xen            Write a simple xen config file.
   --yum            Use yum instead of pyrpmyum.
@@ -2796,7 +2840,10 @@ OPTIONS
   --no-cache       Do not cache RPM's (e.g. for http and ftp sources).
   
 """
-# TODO  --secure         Secure installation with firewall enabled in standalone mode
+# TODO:
+#  --standalone     Start in standalone mode: start network before running
+#                   pre script, swapon swap partitions
+#  --secure         Secure installation with firewall enabled in standalone mode
 
 ##################################### main ####################################
 
@@ -2810,7 +2857,6 @@ diskmap = None
 partitionmap = None
 devmap = None
 wait = 0
-kudzu = 0
 orig_yum = 0
 target_dir = None
 label_prefix = ""
