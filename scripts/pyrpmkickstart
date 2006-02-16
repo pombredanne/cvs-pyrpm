@@ -20,8 +20,8 @@
 #
 
 import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, \
-       signal, types, shutil, re
-import pprint
+       signal, types, shutil, traceback
+#import pprint
 
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
@@ -1955,7 +1955,7 @@ def main():
     for repo in repos:
         fd.write("[%s]\n" % repo)
         fd.write("name=%s\n" % repo)
-        fd.write("baseurl=file://%s\n" % repos[repo].baseurl)
+        fd.write("baseurl=%s\n" % repos[repo].baseurl)
         fd.write("\n")
     fd.close()
 
@@ -2878,9 +2878,8 @@ pyrpm.setSignals(exitHandler)
 
 try:
     status = main()
-except Exception, msg:
-    if msg:
-        print msg
+except Exception:
+    traceback.print_exc()
     status = 1
 
 ################################### cleanup ###################################
