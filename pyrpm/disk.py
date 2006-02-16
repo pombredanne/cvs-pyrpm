@@ -246,10 +246,10 @@ class Partition(dict):
     partitionType = staticmethod(partitionType)
 
     def set_type(self, type):
-        if not type in Partition.nativeType.keys():
-            print "ERROR: Unknown partition type %s" % type
+#        if not type in Partition.nativeType.keys():
+#            print "ERROR: Unknown partition type %s" % type
         try:
-            fst = parted.file_system_type_get(Partition.nativeType[type])
+            fst = parted.file_system_type_get(type)
         except Exception, msg:
             print msg
             return
@@ -334,7 +334,8 @@ class Disk(dict):
         if self.has_key("image"):
             for part in self["partition"].keys():
                 if self["partition"][part].has_key("device"):
-                    lofree(self["partition"][part]["device"])
+                    if self["partition"][part]["device"]:
+                        lofree(self["partition"][part]["device"])
         self.__clear_partitions()
 
         ped_partition = self.ped_disk.next_partition()
@@ -385,11 +386,13 @@ class Disk(dict):
     def close(self):
         if self.has_key("image"):
             # free loop device
-            lofree(self["device"])
-            for part in self["partition"].keys():
-                if self["partition"][part].has_key("device"):
-                    lofree(self["partition"][part]["device"])
-                del self["partition"][part]
+            if self["device"]:
+                lofree(self["device"])
+                for part in self["partition"].keys():
+                    if self["partition"][part].has_key("device"):
+                        if self["partition"][part]["device"]:
+                            lofree(self["partition"][part]["device"])
+                    del self["partition"][part]
         self.__clear_partitions()
         del self.ped_disk
         del self.ped_device
@@ -496,15 +499,40 @@ class Disk(dict):
         else:
             return dict.__setitem__(self, item, value)
 
-    def add_partition(self, i, start, end, type, fstype):
+    def add_partition(self, id, start, end, type, fstype):
         _fstype = None
         if fstype:
             _fstype = parted.file_system_type_get(fstype)
-        part = self.ped_disk.partition_new(type, _fstype, start, end)
+
+        temp = [ ]
+        s = start
+        # create temporary partitions for all free primary ids up to the 
+        # desired id
+        if self.ped_disk.type.name == "msdos":
+            i = 1
+            while i < id and id <= 4:
+                if not self["partition"].has_key(i):
+                    if s >= end:
+                        raise Exception, "Unable to create partition."
+
+                    part = self.ped_disk.partition_new( \
+                            Partition.PARTITION_PRIMARY, None, s, s)
+                    constraint = self.ped_disk.dev.constraint_any()
+                    r = self.ped_disk.add_partition(part, constraint)
+                    if r:
+                        raise Exception, "Unable to create partition."
+                    temp.append(part)
+                    i += 1
+                    s += self["units"]
+
+        part = self.ped_disk.partition_new(type, _fstype, s, end)
         constraint = self.ped_disk.dev.constraint_any()
         r = self.ped_disk.add_partition(part, constraint)
-#        if r == None:
-#            raise Exception, "Unable to create partition."
+        if r:
+            raise Exception, "Unable to create partition."
+        if len(temp) > 0:
+            for part in temp:
+                self.ped_disk.delete_partition(part)
         self.reload()
         return part.num
 
