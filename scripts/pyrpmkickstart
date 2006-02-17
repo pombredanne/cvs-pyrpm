@@ -471,6 +471,44 @@ def main():
 
     source_cache = source_repo.getNetworkCache()
 
+    ### create repo caches ###
+
+    # TODO: check repo names for invalid chars
+    repos = { }
+    repo_count = 0
+    if ks["repository"]:
+        # create repo base directory
+        os.mkdir(repo_dir)
+
+        for repo in ks["repository"]:
+            # nfs source
+            if ks["repository"][repo]["url"].startswith("nfs://"):
+                dir = "%s/%s" % (repo_dir, repo)
+                os.mkdir(dir)
+
+                s = string.splitfields(ks["repository"][repo]["url"][6:], "/",
+                                       1)
+                source = "%s:/%s" % (s[0], s[1])
+                fstype = "nfs"
+                fsargs = None
+                opts = "ro"
+
+                # mount the nfs repo
+                if verbose:
+                    print "Mounting '%s' on '%s'" % (source, dir)
+                pyrpm.mount(source, dir, fstype, opts, fsargs)
+                repos[repo] = pyrpm.database.repodb.RpmRepoDB( \
+                    pyrpm.rpmconfig, [ "file://%s" % dir ],
+                    reponame=repo)
+            else:
+                repos[repo] = pyrpm.database.repodb.RpmRepoDB( \
+                    pyrpm.rpmconfig, [ ks["repository"][repo]["url"] ],
+                    reponame=repo)
+            print "Reading repodata from repository '%s'..." % repo
+            if repos[repo].read() == 0:
+                print "ERROR: Could not read repository '%s'." % repo
+                return
+
     ### mount stage2 temporary ###
 
     if not no_stage2:
@@ -1266,42 +1304,6 @@ def main():
     #    sys.stdout.write("labels=")
     #    pprint.pprint(labels)
 
-    ### create repo caches ###
-
-    # TODO: check repo names for invalid chars
-    repos = { }
-    repo_count = 0
-    if ks["repository"]:
-        # create repo base directory
-        os.mkdir(repo_dir)
-
-        for repo in ks["repository"]:
-            r_dir = "%s/%s" % (cache_dir, repo)
-            os.mkdir(r_dir)
-            
-            # nfs source
-            if ks["repository"][repo]["url"].startswith("nfs://"):
-                dir = "%s/%s" % (repo_dir, repo)
-                os.mkdir(dir)
-
-                s = string.splitfields(ks["repository"][repo]["url"][6:], "/",
-                                       1)
-                source = "%s:/%s" % (s[0], s[1])
-                fstype = "nfs"
-                fsargs = None
-                opts = "ro"
-
-                # mount the nfs repo
-                if verbose:
-                    print "Mounting '%s' on '%s'" % (source, dir)
-                pyrpm.mount(source, dir, fstype, opts, fsargs)
-                repos[repo] = pyrpm.NetworkCache(pyrpm.rpmconfig,
-                                                 "file://%s" % dir, r_dir)
-            else:
-                repos[repo] = pyrpm.NetworkCache(pyrpm.rpmconfig,
-                                                 ks["repository"][repo]["url"],
-                                                 r_dir)
-
     ### format partitions ###
 
     # prepare to format partitions
@@ -1697,7 +1699,7 @@ def main():
         # load additional comps files
         if repo_comps:
             for repo in repos:
-                _comps = loadComps(repos[repo])
+                _comps = loadComps(repos[repo].getNetworkCache())
                 if _comps:
                     print "Using additional comps in repository %s" % repo
                     if "everything" in groups:
@@ -1955,7 +1957,7 @@ def main():
     for repo in repos:
         fd.write("[%s]\n" % repo)
         fd.write("name=%s\n" % repo)
-        fd.write("baseurl=%s\n" % repos[repo].baseurl)
+        fd.write("baseurl=%s\n" % repos[repo].getNetworkCache().baseurl)
         fd.write("\n")
     fd.close()
 
