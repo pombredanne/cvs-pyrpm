@@ -413,7 +413,7 @@ This is how the rpmdb is being checked:
 Example usages to check your rpm database `rpmdb`:
 -----------------------
 oldpyrpm.py [--verbose|-v|--quiet|-q] [--rpmdbpath=/var/lib/rpm/] --checkrpmdb
-oldpyrpm.py -c /etc/yum.conf --checkrpmdb
+oldpyrpm.py --checkrpmdb [--enablerepos] [--fileconflicts] [-v]
 -----------------------
 
 
