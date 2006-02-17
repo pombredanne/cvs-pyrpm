@@ -3467,9 +3467,11 @@ def getProps(reader):
 
 class RpmRepo:
 
-    def __init__(self, filenames, excludes, reponame="default", readsrc=0):
+    def __init__(self, filenames, excludes, verbose, reponame="default",
+        readsrc=0):
         self.filenames = filenames
         self.excludes = excludes.split()
+        self.verbose = verbose
         self.reponame = reponame
         self.readsrc = readsrc
         self.filelist_imported = 0
@@ -3480,6 +3482,8 @@ class RpmRepo:
 
     def read(self):
         for filename in self.filenames:
+            if self.verbose > 2:
+                print "Reading yum repository %s." % filename
             filename = cacheLocal([filename], "/repodata/primary.xml.gz",
                 self.reponame, 1)
             if not filename:
@@ -3496,6 +3500,8 @@ class RpmRepo:
         if self.filelist_imported:
             return 1
         for filename in self.filenames:
+            if self.verbose > 2:
+                print "Reading full filelist from %s." % filename
             filename = cacheLocal([filename], "/repodata/filelists.xml.gz",
                 self.reponame, 1)
             if not filename:
@@ -4179,8 +4185,9 @@ class RpmCompsXML:
 class Conf:
     """Simple yum.conf parser (read only) mostly copied from rhpl.ConfSMB."""
 
-    def __init__(self, filename, commenttype="#", separators="\t ",
+    def __init__(self, verbose, filename, commenttype="#", separators="\t ",
             separator="\t"):
+        self.verbose = verbose
         self.filename = filename
         self.commenttype = commenttype
         self.separators = separators
@@ -4236,6 +4243,8 @@ class Conf:
 
     def read(self):
         if os.path.isfile(self.filename) and os.access(self.filename, os.R_OK):
+            if self.verbose > 2:
+                print "Reading in config file %s." % self.filename
             self.file = open(self.filename, "r", -1)
             self.lines = self.file.readlines()
             # strip newlines
@@ -4273,7 +4282,7 @@ class YumConf(Conf):
         "proxy_username", "proxy_password")
     Variables = ("releasever", "arch", "basearch")
 
-    def __init__(self, releasever, arch, basearch, chroot="",
+    def __init__(self, verbose, releasever, arch, basearch, chroot="",
         filename="/etc/yum.conf", reposdirs=[]):
         """releasever - version of release (e.g. 3 for Fedora Core 3)
         arch - architecure (e.g. i686)
@@ -4282,6 +4291,7 @@ class YumConf(Conf):
         filename - the base config file
         reposdirs - additional dirs to read (glob *.repo)
         """
+        self.verbose = verbose
         self.chroot = chroot
         self.reposdirs = reposdirs
         self.releasever = releasever
@@ -4292,7 +4302,7 @@ class YumConf(Conf):
 
         self.stanza_re = re.compile("^\s*\[(?P<stanza>[^\]]*)]\s*(?:;.*)?$",
             re.I)
-        Conf.__init__(self, self.myfilename, "#;", "=", "=")
+        Conf.__init__(self, self.verbose, self.myfilename, "#;", "=", "=")
         self.has_key = self.vars.has_key
         self.keys = self.vars.keys
         self.__getitem__ = self.vars.__getitem__
@@ -4421,9 +4431,7 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
     # Read in /etc/yum.conf config files.
     repos = []
     for c in configfiles:
-        if verbose:
-            print "Reading config file %s." % c
-        conf = YumConf(releasever, arch, BuildArchTranslate(arch),
+        conf = YumConf(verbose, releasever, arch, BuildArchTranslate(arch),
             buildroot, c, reposdirs)
         #print conf.vars
         for key in conf.vars.keys():
@@ -4459,7 +4467,7 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             if not baseurls:
                 print "%s:" % key, "No url for this section in conf file."
                 return None
-            repo = RpmRepo(baseurls, excludes, key, readsrc)
+            repo = RpmRepo(baseurls, excludes, verbose, key, readsrc)
             repo.read()
             if not readdebug:
                 repo.delDebuginfo()
@@ -4467,8 +4475,6 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                 repo.compsfile = cacheLocal(baseurls,
                     "/repodata/comps.xml", key)
             repos.append(repo)
-        if verbose:
-            print "Done reading config file %s." % c
     return repos
 
 
@@ -5130,6 +5136,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
         print "Checking data integrity..."
         if verbose > 2:
             time1 = time.clock()
+    # Checking data integrity of the rpmdb:
     for tid in packages.keys():
         if tid > maxtid:
             print "wrong tid:", tid
@@ -5179,10 +5186,14 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
         if len(checkdupes[pkg]) > 1:
             print "Warning: more than one package installed for %s." % pkg
     # Read in repositories to compare packages:
+    if verbose > 2:
+        time3 = time.clock()
     repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0,
         reposdirs, verbose)
     if repos == None:
         return 1
+    if verbose > 2:
+        print "Needed", time.clock() - time3, "seconds to read the repos."
     for tid in packages.keys():
         pkg = packages[tid]
         if pkg["name"] == "gpg-pubkey":
@@ -5305,7 +5316,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
         if verbose > 2:
             time2 = time.clock()
             print "Needed", time2 - time1, "seconds to check the rpmdb data."
-        print "Done."
+        print "Done with checkrpmdb."
     return None
 
 def checkSrpms():
@@ -5544,7 +5555,6 @@ def main():
     excludes = ""
     checksrpms = 0
     rpmdbpath = "/var/lib/rpm/"
-    #reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
     reposdirs = []
     checkarch = 0
     checkfileconflicts = 0
@@ -5678,7 +5688,7 @@ def main():
             if not os.path.isdir(a):
                 print "Createrepo needs a directory name:", a
                 break
-            repo = RpmRepo([a], excludes)
+            repo = RpmRepo([a], excludes, verbose)
             repo.createRepo(baseurl)
     elif mercurial:
         createMercurial(verbose)
