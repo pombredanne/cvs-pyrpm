@@ -2587,7 +2587,7 @@ def genBasenames2(oldfilenames):
 class FilenamesList:
     """A mapping from filenames to rpm packages."""
 
-    def __init__(self, checkfileconflicts=1):
+    def __init__(self, checkfileconflicts):
         self.checkfileconflicts = checkfileconflicts
         self.path = {} # dirname => { basename => (RpmPackage, index) }
 
@@ -5481,7 +5481,10 @@ def usage():
     print "To check your rpm database:"
     print prog, "[--verbose|-v|--quiet|-q] [--rpmdbpath=/var/lib/rpm/] " \
         + "--checkrpmdb"
-    print "Experimental option: [-c /etc/yum.conf] [--releasever 4]"
+    print "Further opotions:"
+    print "    [--enablerepos]: read in /etc/yum.conf and /etc/yum.repos.d/"
+    print "    [--fileconflicts]: check rpmdb for fileconflicts"
+    print "    [-c /etc/yum.conf] [--releasever 4]"
     print
     print "Verify and sanity check rpm packages:"
     print prog, "[--strict] [--nopayload] [--nodigest] \\"
@@ -5561,7 +5564,7 @@ def main():
          "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
          "excludes=", "nofileconflicts", "fileconflicts", "runorderer",
-         "updaterpms", "reposdir=", "disablereposdir",
+         "updaterpms", "reposdir=", "disablereposdir", "enablerepos",
          "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
          "checkrpmdb", "checkdeps", "buildroot=", "installroot=", "root=",
          "version", "baseurl=", "createrepo", "mercurial"])
@@ -5648,6 +5651,9 @@ def main():
                 reposdirs.append(val)
         elif opt == "--disablereposdir":
             reposdirs = []
+        elif opt == "--enablerepos":
+            configfiles.append("/etc/yum.conf")
+            reposdirs.extend(["/etc/yum.repos.d", "/etc/yum/repos.d"])
         elif opt == "--createrepo":
             createrepo = 1
         elif opt == "--mercurial":
