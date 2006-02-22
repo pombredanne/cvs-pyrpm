@@ -1,0 +1,128 @@
+#!/usr/bin/python
+#
+# 
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2004, 2005 Red Hat, Inc.
+#
+# Author: Phil Knirsch
+#
+
+import sys, os, random
+
+PYRPMDIR = ".."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+from pyrpm import __version__
+from pyrpm import *
+from pyrpm.database.memorydb import *
+
+def usage():
+    print """
+    Yum install and remove interative test of all packages in the repositories
+    pyrpmcheckinstall [options] [DIRS... | PACKAGES...]
+
+options:
+    [-?, --help] [--version]
+    [--quiet] [-v, --verbose] [-y]
+    [-c CONFIGFILE] [--dbpath DIRECTORY] [-r, --root DIRECTORY]
+    [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]
+    [--ignoresize] [--ignorearch] [--exactarch]
+    [--noconflicts] [--fileconflicts]
+    [--nodeps] [--signature]
+    [--noorder] [--noscripts] [--notriggers]
+    [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
+
+DIRS:     Directories with packages for possible installation
+PACKAGES: Same for rpm binary packages"""
+
+
+class FakeRepo(RpmMemoryDB):
+    def isFilelistImported(self):
+        return 1
+
+#
+# Main program
+#
+def main():
+    # Our yum worker object
+    yum = RpmYum(rpmconfig)
+
+    # Disabled fileconflicts per default in yum
+    rpmconfig.nofileconflicts = 1
+
+    # Default is to be a little verbose.
+    rpmconfig.verbose = 1
+
+    # Argument parsing
+    args = parseYumOptions(sys.argv[1:], yum)
+
+    # Read additional dirs/packages
+    pkglist = []
+    if args != None:
+        for fname in args:
+            if os.path.isdir(fname):
+                readDir(fname, pkglist, rtags=rpmconfig.resolvertags)
+            elif fname.endswith(".rpm"):
+                pkg = package.RpmPackage(rpmconfig, fname)
+                try:
+                    pkg.read(tags=rpmconfig.resolvertags)
+                    pkg.close()
+                except (IOError, ValueError), e:
+                    rpmconfig.printError("%s: %s\n" % (pkg, e))
+                    continue
+                pkglist.append(pkg)
+
+    # Create fake repository
+    frepo = FakeRepo(rpmconfig, "memory")
+    for pkg in pkglist:
+        frepo.addPkg(pkg)
+    yum.repos.append(frepo)
+
+    yum.setCommand("update")
+    if yum.prepareTransaction() == 0:
+        return 0
+    for repo in yum.repos:
+        pkglist.extend(repo.getPkgs())
+
+    i = 0
+    for pkg in pkglist:
+        i += 1
+        yum.setCommand("update")
+        if yum.prepareTransaction() == 0:
+            break
+        resolver = yum.opresolver
+        rpmconfig.printInfo(0, "Updating package [%d/%d]: %s\n" % (i, len(pkglist), pkg.getNEVRA()))
+        resolver.update(pkg)
+        if not yum.runDepRes():
+            continue
+        if yum.runCommand() == 0:
+            break
+
+        yum.setCommand("remove")
+        if yum.prepareTransaction() == 0:
+            break
+        resolver = yum.opresolver
+        for rpkg in resolver.getDatabase().getPkgs()[:]:
+            resolver.erase(rpkg)
+        if not yum.runDepRes():
+            continue
+        if yum.runCommand() == 0:
+            break
+    return 1
+
+if __name__ == '__main__':
+    if not run_main(main):
+        sys.exit(1)
+
+# vim:ts=4:sw=4:showmatch:expandtab
