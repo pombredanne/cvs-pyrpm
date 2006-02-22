@@ -399,11 +399,11 @@ class RpmPackage(RpmData):
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running pre install script: %s" \
                     % (self.getNEVRA(), e))
-                # FIXME? shouldn't we fail here?
-            else:
-                if rusage != None and len(rusage):
-                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
-
+                # return 0
+            if rusage != None and len(rusage):
+                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
+            if status != 0:
+                self.config.printError("Error running pre install script for package %s" % self.getNEVRA())
         self.__extract(db)
         if self.config.printhash:
             self.config.printInfo(0, "\n")
@@ -416,9 +416,10 @@ class RpmPackage(RpmData):
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running post install script: %s" \
                     % (self.getNEVRA(), e))
-            else:
-                if rusage != None and len(rusage):
-                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "postin", str(rusage[0]), str(rusage[1])))
+            if rusage != None and len(rusage):
+                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "postin", str(rusage[0]), str(rusage[1])))
+            if status != 0:
+                self.config.printError("Error running post install script for package %s" % self.getNEVRA())
         self.rfilist = None
 
     def erase(self, db=None):
@@ -441,10 +442,11 @@ class RpmPackage(RpmData):
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running pre uninstall script: %s" \
                     % (self.getNEVRA(), e))
-                # FIXME? shouldn't we fail here?
-            else:
-                if rusage != None and len(rusage):
-                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
+                # return 0
+            if rusage != None and len(rusage):
+                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
+            if status != 0:
+                self.config.printError("Error running pre uninstall script for package %s" % self.getNEVRA())
         # Generate the rpmfileinfo list, needed for erase verification
         self.__generateFileInfoList()
         # Remove files starting from the end (reverse process to install)
@@ -498,9 +500,10 @@ class RpmPackage(RpmData):
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running post uninstall script: %s" \
                     % (self.getNEVRA(), e))
-            else:
-                if rusage != None and len(rusage):
-                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
+            if rusage != None and len(rusage):
+                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
+            if status != 0:
+                self.config.printError("Error running post uninstall script for package %s" % self.getNEVRA())
 
     def isSourceRPM(self):
         """Return 1 if the package is a SRPM."""

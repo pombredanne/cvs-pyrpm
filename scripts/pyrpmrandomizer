@@ -111,8 +111,6 @@ def main():
     while count > 0:
         if not yum.repos_read and len(frepo.getPkgs()) > 0:
             yum.repos.append(frepo)
-            r = RpmResolver(rpmconfig, frepo.getPkgs())
-            yum.resolvers.append(r)
         if yum.prepareTransaction() == 0:
             break
         resolver = yum.opresolver

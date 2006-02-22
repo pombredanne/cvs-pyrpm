@@ -198,6 +198,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                                 "wb")
         except IOError:
             return 0
+        try:
+            rfd = open(os.path.join(datapath, "repomd.xml"))
+        except IOError:
+            return 0
         #try:
         #    ofd = gzip.GzipFile(os.path.join(datapath, "other.xml.gz"), "wb")
         #except IOError:
@@ -244,7 +248,20 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         ffd.write('</filelists>\n')
         pfd.close()
         ffd.close()
-        ## TODO: Write out repomd.xml
+        # Write repomd.xml
+        rfd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        rfd.write('<repomd xmlns="http://linux.duke.edu/metadata/repo">\n')
+        rfd.write('  <data type="primary">\n')
+        rfd.write('    <location href="repodata/primary.xml.gz"/>\n')
+        rfd.write('  </data>\n')
+        rfd.write('  <data type="filelists">\n')
+        rfd.write('    <location href="repodata/filelists.xml.gz"/>\n')
+        rfd.write('  </data>\n')
+        rfd.write('  <data type="group">\n')
+        rfd.write('    <location href="repodata/comps.xml"/>\n')
+        rfd.write('  </data>\n')
+        rfd.write('</repomd>\n')
+        rfd.close()
         del self.filerequires
         return 1
 

@@ -867,7 +867,6 @@ def parseYumOptions(argv, yum):
         rpmconfig.machine = rpmconfig.arch
 
     if not args:
-        print "No command given" # FIXME: all to stderr
         return None
 
     return args
