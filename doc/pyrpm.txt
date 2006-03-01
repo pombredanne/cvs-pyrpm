@@ -64,6 +64,38 @@ Please let us know of any problems you encounter, if possible with some
 reproducible testcases so we can figure out what might have happend.
 
 
+Features/Highlights
+-------------------
+
+Over time quite a few nice things have come out of the project:
+
+Stable and reliable dependency resolver with efficent algorithms::
+ * Due to the easy nature of python being a rapid prototyping language and the
+   modular design of pyrpm we were able to test and write several generations
+   of dependency resolvers and over time optimize and improve the reliability
+   of it to a point where we are very confident that the results are what a
+   user would expect.
+Handling of multilib systems::
+ * This is connected to the previous feature. Multilib systems are generally
+   a lot trickier to handle than single arch systems. The algorithms used in
+   pyrpm try to make intelligent choices as to which packages should be
+   installed resp. how packages should be updated.
+Ordering of all packages in a transaction::
+ * In order for a whole transaction to work reliable it is not enough to just
+   order the installs and updates but also the erase operations properly. In
+   pyrpm we are handling all operations and order them in a way that
+   honors all requirements correctly, even for erases.
+Smart like package selection::
+ * In pyrpm we are able to make package selections similar to the SMART
+   package manager by trying to downgrade packages or even remove them if
+   dependencies can't be resolved at all. The semi automatic removal is of
+   course optional and not enabled by default.
+Very easy to use scripts to setup up changeroots::
+ * Using pyrpmkickstart you can easily use a typical anaconda kickstart file
+   to do an automated install either on a disk, partition, diskimage or even
+   simple changeroots.
+
+
 Other PyRPM Project Pages
 -------------------------
 
