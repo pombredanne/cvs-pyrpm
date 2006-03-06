@@ -45,7 +45,7 @@ class KickstartConfig(dict):
     REQUIRED_TAGS = [ "authconfig", "bootloader", "keyboard", "lang",
                       "langsupport", "rootpw", "timezone" ]
     # Currently unsupported tags:
-    # driverdisk, logvol, raid, volgroup
+    # driverdisk, logvol, volgroup
 
 
     def __init__(self, filename):
@@ -68,6 +68,7 @@ class KickstartConfig(dict):
         except:
             raise IOError, "Unable to open '%s'" % filename
 
+        swap_id = 0
         in_packages = 0
         in_post = 0
         in_pre = 0
@@ -277,6 +278,9 @@ class KickstartConfig(dict):
                        not self[opt].has_key("dir"):
                         raise ValueError, "Error in line '%s'" % line
                 elif opt == "part" or opt == "partition":
+                    if args[1] == "swap":
+                        args[1] = "swap.%d" % swap_id
+                        swap_id += 1
                     self.parseSub("partition", args[1:],
                                   [ "size:", "grow", "maxsize:", "noformat",
                                     "onpart:", "usepart:", "ondisk:",
@@ -290,7 +294,23 @@ class KickstartConfig(dict):
                     self.convertLong(self["partition"], "start")
                     self.convertLong(self["partition"], "end")
                     self.convertLong(self["partition"], "bytes-per-inode")
-                # TODO: raid
+                elif opt == "raid":
+                    (_dict, _args) = self.parseArgs(opt, args[1:], 
+                                                    [ "level:", "device:",
+                                                      "spares:", "fstype:",
+                                                      "fsoptions:", "noformat",
+                                                      "useexisting" ])
+
+                    if len(_args) < 2:
+                        raise ValueError, "'%s' is unsupported" % line
+                    if not self[opt]:
+                        self[opt] = { }
+                    if self[opt].has_key(_args[0]):
+                        raise ValueError, "raid '%s' is not unique.", _args[0]
+                    self.convertLong(_dict, "level")
+                    self.convertLong(_dict, "spares")
+                    _dict["partitions"] = _args[1:]
+                    self[opt][_args[0]] = _dict
                 elif opt == "repo" or opt == "repository":
                     self.parseSub("repository", args[1:], [ "url:" ])
                 elif opt == "rootpw":
@@ -446,6 +466,10 @@ class KickstartConfig(dict):
         if self["partition"]:
             for name in self["partition"]:
                 part = self["partition"][name]
+                if name[:5] != "swap." and name[:5] != "raid." and \
+                       name[:3] != "pv." and not part.has_key("fstype"):
+                    raise ValueError, \
+                          "Partition '%s' has no filesystem type." % name
                 if part.has_key("fstype") and \
                        part["fstype"] not in [ "ext2", "ext3" ]:
                     raise ValueError, \
@@ -494,6 +518,51 @@ class KickstartConfig(dict):
                     disk[ondisk]["grow"] = name
             del partitions
             del disk
+
+        if self["raid"]:
+            partitions = [ ]
+            devices = [ ]
+            for name in self["raid"]:
+                part = self["raid"][name]
+                if not part.has_key("device"):
+                    raise ValueError, "raid '%s': No device is specified." % \
+                          part
+                if not part["device"] in [ "md0", "md1", "md2", "md3",
+                                           "md4", "md5", "md6", "md7" ]:
+                    raise ValueError, "raid '%s': Illegal device %s." % \
+                          (name, part["device"])
+                if part["device"] in devices:
+                    raise ValueError, "raid '%s': Device %s is not unique" % \
+                          (name, part["device"])
+                devices.append(part["device"])
+                if not part.has_key("level"):
+                    raise ValueError, "raid '%s': No level is specified." % \
+                          part
+                if not part["level"] in [ 0, 1, 5 ]:
+                    raise ValueError, "raid '%s': Level %d is unsupported." % \
+                          (part, part["level"])
+                if not part.has_key("partitions"):
+                    raise ValueError, "raid '%s': No partitions given." % part
+                for p in part["partitions"]:
+                    if p[:5] != "raid.":
+                        raise ValueError, \
+                              "'%s' is no valid raid partition." % p
+                    if p in partitions:
+                        raise ValueError, \
+                              "Partition '%s' used more than once." % p
+                    partitions.append(p)
+                if part.has_key("fstype") and \
+                       part["fstype"] not in [ "ext2", "ext3" "swap" ]:
+                    raise ValueError, \
+                          "raid '%s': Filesystem type '%s' is not supported." % \
+                          (name, part["fstype"])
+            del partitions
+            del devices
+            if "/boot" in self["raid"] and self["raid"]["/boot"]["level"] != 1:
+                raise ValueError, "Raid level of '/boot' has to be 1."
+            if "/" in self["raid"] and self["raid"]["/"]["level"] != 1 and \
+                   not "/boot" in self["raid"]:
+                raise ValueError, "Raid level of '/' has to be 1 if there is no '/boot' partition."
 
         if self["repository"]:
             for name in self["repository"]:
@@ -554,7 +623,7 @@ class KickstartConfig(dict):
         if not self[tag]:
             self[tag] = { }
         elif self[tag].has_key(args[0]):
-                raise ValueError, "%s already set." % tag
+            raise ValueError, "%s already set." % tag
 
         self[tag][args[0]] = dict
 
