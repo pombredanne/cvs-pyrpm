@@ -502,7 +502,10 @@ class Disk(dict):
     def add_partition(self, id, start, end, type, fstype):
         _fstype = None
         if fstype:
-            _fstype = parted.file_system_type_get(fstype)
+            if fstype == "raid":
+                _fstype = None
+            else:
+                _fstype = parted.file_system_type_get(fstype)
 
         temp = [ ]
         s = start
@@ -526,6 +529,8 @@ class Disk(dict):
                     s += self["units"]
 
         part = self.ped_disk.partition_new(type, _fstype, s, end)
+        if fstype == "raid":
+            part.set_flag(parted.PARTITION_RAID, 1)
         constraint = self.ped_disk.dev.constraint_any()
         r = self.ped_disk.add_partition(part, constraint)
         if r:
@@ -560,7 +565,9 @@ class Disk(dict):
         partition = self["partition"]
         if i in partition.keys():
             if partition[i].ped_partition.type  & parted.PARTITION_EXTENDED:
-                print "WARNING: Partition %d is an extended partition" % i
+                print "WARNING: Partition %d is an extended partition," % i, \
+                      "unable to set boot flag."
+                return 0
             return partition[i].ped_partition.set_flag(parted.PARTITION_BOOT,
                                                        1)
         return 0
@@ -616,11 +623,16 @@ class Disk(dict):
                 boot = "*"
             else:
                 boot = " "
+            print partition["type"]
+            type = "---"
+            try:
+                type = Partition.nativeType[partition["native_type"]]
+            except:
+                pass
             print "%*s   %s  %10d  %10d  %11s  %2x  %s" % \
                   (l, device, boot, partition["unit-start"],
                    partition["unit-end"], block_str,
-                   partition["native_type"],
-                   Partition.nativeType[partition["native_type"]])
+                   partition["native_type"], type)
 
 ################################## functions ##################################
 
