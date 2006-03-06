@@ -21,7 +21,7 @@
 
 import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, \
        signal, types, shutil, traceback
-#import pprint
+import pprint
 
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
@@ -118,6 +118,30 @@ keyboard_models = {
     }
 
 ################################## functions ##################################
+
+def get_system_disks():
+    disks = [ ]
+    fd = open("/proc/partitions", "r")
+    while 1:
+        line = fd.readline()
+        if not line:
+            break
+        line = string.strip(line)
+        if len(line) < 1 or line[0] == '#':
+            continue
+        if line[:5] == "major":
+            continue
+        splits = line.split() # major, minor, blocks, name
+        if len(splits) < 4:
+            print "ERROR: '/proc/partitions' malformed."
+            return
+        if int(splits[1], 16) % 16 == 0: # minor%16=0 for harddisk devices
+            hd = splits[3]
+            if hd[0:4] == "loop":
+                continue
+            disks.append("/dev/"+hd)
+    fd.close()
+    return disks
 
 def umount_all(dir):
     # umount target dir and included mount points
@@ -227,7 +251,6 @@ def create_min_devices(buildroot):
         os.mknod(buildroot+"/dev/null", 0666 | stat.S_IFCHR, os.makedev(1, 3))
     if not os.path.exists(buildroot+"/dev/zero"):
         os.mknod(buildroot+"/dev/zero", 0666 | stat.S_IFCHR, os.makedev(1, 5))
-
 
 def getName(name):
     tmp = name[:]
@@ -392,7 +415,9 @@ def main():
     if ks.has_key("install"):
         if not ks["autopart"] and (not ks["partition"] or \
                                    len(ks["partition"]) < 1 or \
-                                   not ks["partition"].has_key("/")):
+                                   (not ks["partition"].has_key("/") and \
+                                    not ks["raid"] and \
+                                    not ks["raid"].has_key("/"))):
             print "ERROR: root partition not defined"
             return 1
     else:
@@ -426,7 +451,6 @@ def main():
     os.mkdir(cache_dir)
     pyrpm.rpmconfig.cachedir = cache_dir
     source_repo = None
-    source_cache = None
 
     ### mount source ###
 
@@ -468,8 +492,6 @@ def main():
     if source_repo.read() == 0:
         print "ERROR: Could not read repository from installation source."
         return
-
-    source_cache = source_repo.getNetworkCache()
 
     ### create repo caches ###
 
@@ -515,9 +537,9 @@ def main():
         stage2_img_dir = tempdir+"/stage2_img"
         os.mkdir(stage2_img_dir)
 
-        stage2 = source_cache.cache("RedHat/base/stage2.img")
+        stage2 = source_repo.getNetworkCache().cache("RedHat/base/stage2.img")
         if not stage2:
-            stage2 = source_cache.cache("Fedora/base/stage2.img")
+            stage2 = source_repo.getNetworkCache().cache("Fedora/base/stage2.img")
         if not stage2:
             print "ERROR: Could not find stage2 image in installation source."
             return 1
@@ -628,33 +650,8 @@ def main():
 
     ### system disks ###
 
-    # get all system disks
-    system_disks = [ ]
-    try:
-        fd = open("/proc/partitions", "r")
-    except Exception, msg:
-        print "ERROR: Failed to open '/proc/partitions': %s" % msg
-        return 1
-    else:
-        while 1:
-            line = fd.readline()
-            if not line:
-                break
-            line = string.strip(line)
-            if len(line) < 1 or line[0] == '#':
-                continue
-            if line[:5] == "major":
-                continue
-            splits = line.split() # major, minor, blocks, name
-            if len(splits) < 4:
-                print "ERROR: '/proc/partitions' malformed."
-                return
-            if int(splits[1], 16) % 16 == 0: # minor%16=0 for harddisk devices
-                hd = splits[3]
-                if hd[0:4] == "loop":
-                    continue
-                system_disks.append("/dev/"+hd)
-        fd.close()
+    # get system disks
+    system_disks = get_system_disks()
 
     ### create user supplied diskmap ###
 
@@ -758,6 +755,12 @@ def main():
                 diskmap[disk].new_disklabel(disklabel)
                 if not disk in modified:
                     modified.append(disk)
+            elif diskmap[disk]["disklabel"] != disklabel:
+                print "Initializing disk '%s' to '%s' disklabel" % \
+                      (disk, disklabel)
+                diskmap[disk].new_disklabel(disklabel)
+                if not disk in modified:
+                    modified.append(disk)
             elif ks["clearpart"].has_key("all"):
                 print "Removing all partitions on disk '%s'" % disk
                 diskmap[disk].delete_all_partitions()
@@ -792,6 +795,19 @@ def main():
         if ks["partition"]:
             for name in ks["partition"].keys():
                 partitions[name] = ks["partition"][name]
+        # add raid partitions
+        if ks["raid"] and len(ks["raid"]) > 0:
+            for name in ks["raid"]:
+                if partitions.has_key(name):
+                    print "ERROR: Multiple definitions of %s" % onpart
+                    return
+                partitions[name] = {}
+                partitions[name]["raid"] = 1
+                partitions[name]["device"] = ks["raid"][name]["device"]
+                # TODO: may depend on release
+                if not partitions[name].has_key("fstype"):
+                    partitions[name]["fstype"] = "ext3"
+            pprint.pprint(partitions)
     else:
         # search for installations and load fstab file
         # generate partitions according to fstab entries as onpart and noformat
@@ -918,7 +934,8 @@ def main():
         if part.has_key("onpart"):
             # partition is defined
             onpart = part["onpart"]
-            # remove leading '/dev/' to be compatible with old kickstart versions
+            # remove leading '/dev/' to be compatible with old kickstart
+            # versions
             if onpart[:5] == "/dev/":
                 onpart = onpart[5:]
             error = 0
@@ -940,6 +957,8 @@ def main():
                       partitionmap[onpart]["id"]
                 return 1
         else:
+            if part.has_key("raid"):
+                continue
             # create partition
             ondisk = "hda"
             # TODO: use SCSI disks
@@ -953,7 +972,8 @@ def main():
                     ondisk = "dasda"
             if part.has_key("ondisk"):
                 ondisk = part["ondisk"]
-                # drop leading '/dev/' to be compatible with old kickstart versions
+                # drop leading '/dev/' to be compatible with old kickstart
+                # versions
                 if ondisk[:5] == "/dev/":
                     ondisk = ondisk[5:]
             if not part.has_key("size"):
@@ -966,7 +986,7 @@ def main():
 
     # create primary and logical lists
     for disk in to_create.keys():
-        # check to have only onw grow partition per disk
+        # check to have only one grow partition per disk
         grow = None
         primary = [ ]
         logical = [ ]
@@ -992,7 +1012,7 @@ def main():
                                diskmap[disk]["sector_size"])
             size_needed += part_size[name]
             if part.has_key("maxsize"):
-                part_maxsize[name] = (((long(part["maxsize"]) * 1024L*1024L) / \
+                part_maxsize[name] = (((part["maxsize"] * 1024L*1024L) / \
                                        diskmap[disk]["units"] + \
                                        diskmap[disk]["sector_size"] - 1) / \
                                       diskmap[disk]["sector_size"])
@@ -1121,8 +1141,11 @@ def main():
                 # create extended if there is none, yet
             else:
                 type = pyrpm.Partition.PARTITION_PRIMARY
-            if name == "swap" or part["fstype"] == "swap":
+            if name[:4] == "swap" or \
+                   (part.has_key("fstype") and part["fstype"] == "swap"):
                 fstype = "linux-swap"
+            elif name[:5] == "raid.":
+                fstype = "raid"
             else:
                 fstype = "ext3"
 
@@ -1157,7 +1180,7 @@ def main():
     if len(modified) > 0 and confirm == 1:
         choice = raw_input("Is this ok [y/N]: ")
         if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
-            return
+            return 0
 
     # commit changes
     for disk in modified:
@@ -1169,6 +1192,24 @@ def main():
                 return 1
         diskmap[disk].reload()
 
+    raidmap = { }
+    # add raid partitions
+    if ks["raid"] and len(ks["raid"]) > 0:
+        for name in ks["raid"]:
+            onpart = ks["raid"][name]["device"]
+            partitionmap[onpart] = { }
+            partitionmap[onpart]["name"] = name
+            dev = "/dev/%s" % onpart
+            if dev in raidmap:
+                print "TODO: remap raid device %s." % dev
+                return
+            else:
+                print "TODO: Create raid device %s." % dev
+                return
+                partitionmap[onpart]["device"] = "/dev/%s" % onpart
+            partitionmap[onpart]["raid"] = 1
+        pprint.pprint(partitionmap)
+
     # sanity check
     if len(partitionmap) == 0:
         print "INTERNAL ERROR: Partitionmap is empty."
@@ -1176,6 +1217,9 @@ def main():
 
     # check partitionmap with diskmap
     for onpart in partitionmap:
+        # skip raid devices
+        if partitionmap[onpart].has_key("raid"):
+            continue
         disk = partitionmap[onpart]["disk"]
         if not diskmap.has_key(disk):
             print "ERROR: Disk '%s' is not defined." % disk
@@ -1184,6 +1228,9 @@ def main():
     # are all needed partitions there?
     error = 0
     for onpart in partitionmap:
+        # skip raid partitions
+        if partitionmap[onpart].has_key("raid"):
+            continue
         name = partitionmap[onpart]["name"]
         disk = partitionmap[onpart]["disk"]
         id = partitionmap[onpart]["id"]
@@ -1206,6 +1253,11 @@ def main():
         if not p["native_type"]:
             print "ERROR: Partition '%s' has no type." % onpart
             error = 1
+#        elif p["native_type"] < 1:
+#            if disk["disklabel"] != "gpt":
+#                print "ERROR: Partition '%s' has illegal type %d." % \
+#                      (onpart, p["native_type"])
+#                error = 1
         else:
             if p["native_type"] == 0x83:
                 if not part.has_key("fstype") or \
@@ -1216,6 +1268,9 @@ def main():
                 if part.has_key("fstype") and part["fstype"] != "swap":
                     print "ERROR: Partition '%s' does not match filesystem" % onpart
                     error = 1
+            elif p["fstype"] == None:
+                # TODO
+                pass
             else:
                 print "ERROR: Filesystem '%s' with code 0x%x on '%s' is not supported" % \
                       (p["fstype"], p["native_type"], onpart)
@@ -1241,8 +1296,10 @@ def main():
                     labels.append(label)
             else:
                 labels.append(label)
+    # TODO: for raid in in raidtab.keys():
 
     # create labels
+    error = 0
     for onpart in partitionmap:
         name = partitionmap[onpart]["name"]
         label = label_prefix
@@ -1254,8 +1311,10 @@ def main():
 
         if part.has_key("fstype") and part["fstype"] in [ "ext2", "ext3" ]:
             label += name
-        elif name == "swap":
+        elif name[:4] == "swap":
             label += "%s-swap" % onpart
+        elif name[:5] == "raid.":
+            pass
         else:
             print "ERROR: Could not determine filesystem type of '%s'" % onpart
             error = 1
@@ -1281,6 +1340,8 @@ def main():
                 label = "%s%d" % (l_name, (id+1))
 
         partitionmap[onpart]["label"] = label
+    if error:
+        return 1
 
     error = 0
     for disk in diskmap:
@@ -1310,6 +1371,8 @@ def main():
     to_format = [ ]
     for onpart in partitionmap:
         name = partitionmap[onpart]["name"]
+        if name[:5] == "raid.":
+            continue
         part = partitions[name]
         if not part.has_key("noformat"):
             to_format.append(onpart)
@@ -1465,7 +1528,7 @@ def main():
                         print "ERROR: tune2fs failed."
                         return 1
 
-            elif name == "swap":
+            elif name[:4] == "swap":
                 l = ""
                 if install not in [ "RHEL-2.1", "RHEL-3", "FC-1", "FC-2" ]:
                     # no swap labels for RHEL-2.1, RHEL-3, FC-1
@@ -1482,9 +1545,12 @@ def main():
                 if status != 0:
                     print "ERROR: mkswap failed."
                     return 1
+            elif name[:5] == "raid.":
+                # TODO
+                pass
             else:
-                print "ERROR: Unknown filesystem for '%s' (%s)" % \
-                      (partitionmap[onpart]["disk"], name)
+                print "ERROR: Unknown filesystem for '%s' (%s)" % (onpart,
+                                                                   name)
                 return 1
             
         del to_format
@@ -1507,11 +1573,13 @@ def main():
 
     os.mkdir(target_dir)
 
-    # prepare to format partitions
+    # prepare to mount partitions
     to_mount = [ ]
     mountmap = { }
     for onpart in partitionmap:
         name = partitionmap[onpart]["name"]
+        if name[:5] == "raid.":
+            continue
         to_mount.append(name)
         mountmap[name] = onpart
     to_mount.sort()
@@ -1567,7 +1635,7 @@ def main():
             pyrpm.normalizeList(languages)
 
         # load comps file for groups and default packages
-        comps = loadComps(source_cache)
+        comps = loadComps(source_repo.getNetworkCache())
         if not comps:
             print "ERROR: Could not find comps file, exiting."
             return 1
@@ -1780,7 +1848,7 @@ def main():
             part = partitions[name]
 
             major = minor = 0
-            if part.has_key("fstype") and name != "swap":
+            if part.has_key("fstype") and name[:4] != "swap":
                 fs = part["fstype"]
                 major = 1
                 if name == "/":
@@ -1790,7 +1858,7 @@ def main():
                 content.append("LABEL=%s\t\t%s\t\t%s\tdefaults\t%d %d\n" % \
                                (partitionmap[onpart]["label"], name, fs, major,
                                 minor))
-            elif name == "swap":
+            elif name[:4] == "swap":
                 continue
             else:
                 print "WARNING: Unknown filesystem for '%s' (%s)" % \
@@ -1951,7 +2019,7 @@ def main():
     fd.write("\n")
     fd.write("[base]\n")
     fd.write("name=dist %s\n" % install)
-    fd.write("baseurl=%s\n" % source_cache.baseurl)
+    fd.write("baseurl=%s\n" % source_repo.getNetworkCache().baseurl)
     fd.write("\n")
     # add repos
     for repo in repos:
