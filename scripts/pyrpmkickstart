@@ -143,6 +143,26 @@ def get_system_disks():
     fd.close()
     return disks
 
+def get_system_md_devices():
+    map = { }
+    fd = open("/proc/mdstat", "r")
+    while 1:
+        line = fd.readline()
+        if not line:
+            break
+        line = string.strip(line)
+        if len(line) < 1 or line[0] == '#':
+            continue
+        if line[:2] != "md":
+            continue
+        splits = line.split() # device : data
+        if len(splits) < 3 or splits[1] != ":":
+            print "ERROR: '/proc/mdstat' malformed."
+            return
+        map[splits[0]] = "/dev/%s" % splits[0]
+    fd.close()
+    return map
+
 def umount_all(dir):
     # umount target dir and included mount points
     mounted = [ ]
@@ -185,6 +205,15 @@ def umount_all(dir):
             count -= 1
 
     return failed
+
+def zero_raidheader(device, size, offset=0):
+    fd = open(device, "wb")
+    fd.seek(offset)
+    i = 0
+    while i < size:
+        fd.write("\0")
+        i += 1
+    fd.close()
 
 def check_dir(buildroot, dir):
     if not os.path.exists(buildroot+dir):
@@ -328,7 +357,7 @@ def main():
     global verbose, buildroot, xen, nocleanup, confirm, tempdir, diskmap, \
            partitionmap, devmap, wait, orig_yum, target_dir, \
            label_prefix, standalone, stage2_img_dir, repo_comps, upgrade, \
-           no_stage2, no_cache, devmap
+           no_stage2, no_cache, raidmap
     
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
@@ -493,6 +522,16 @@ def main():
         print "ERROR: Could not read repository from installation source."
         return
 
+    ### get installation arch ###
+
+    pkgs = source_repo.getPkgsByName("filesystem")
+    if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
+        pkgs = source_repo.getPkgsByName("coreutils")
+    if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
+        print "ERROR: Could not determine installation architecture."
+        return 1
+    machine = pkgs[0]["arch"]
+
     ### create repo caches ###
 
     # TODO: check repo names for invalid chars
@@ -646,7 +685,11 @@ def main():
               install
         return 1
 
-    print "Installation source: %s" % install
+    print "Installation source: %s [%s]" % (install, machine)
+
+    if machine not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
+        print "ERROR: Installation source is not compatible with system arch."
+        return 1
 
     ### system disks ###
 
@@ -804,10 +847,18 @@ def main():
                 partitions[name] = {}
                 partitions[name]["raid"] = 1
                 partitions[name]["device"] = ks["raid"][name]["device"]
-                # TODO: may depend on release
+                # sanity checks
+                for part in ks["raid"][name]["partitions"]:
+                    if not part in partitions:
+                        print "ERROR: Partition '%s' is not defined." % part
+                        return
+                # TODO: fstype may depend on release
                 if not partitions[name].has_key("fstype"):
                     partitions[name]["fstype"] = "ext3"
-            pprint.pprint(partitions)
+                if ks["raid"][name].has_key("noformat"):
+                    partitions[name]["noformat"] = 1
+                if ks["raid"][name].has_key("useexisting"):
+                    partitions[name]["useexisting"] = 1                    
     else:
         # search for installations and load fstab file
         # generate partitions according to fstab entries as onpart and noformat
@@ -958,6 +1009,10 @@ def main():
                 return 1
         else:
             if part.has_key("raid"):
+                onpart = ks["raid"][name]["device"]
+                partitionmap[onpart] = { }
+                partitionmap[onpart]["name"] = name
+                partitionmap[onpart]["raid"] = 1
                 continue
             # create partition
             ondisk = "hda"
@@ -1165,6 +1220,7 @@ def main():
                 return 1
 
             onpart = "%s%d" % (disk, num)
+            part["onpart"] = onpart
             partitionmap[onpart] = { }
             partitionmap[onpart]["name"] = name
             partitionmap[onpart]["disk"] = disk
@@ -1192,40 +1248,40 @@ def main():
                 return 1
         diskmap[disk].reload()
 
-    raidmap = { }
-    # add raid partitions
-    if ks["raid"] and len(ks["raid"]) > 0:
-        for name in ks["raid"]:
-            onpart = ks["raid"][name]["device"]
-            partitionmap[onpart] = { }
-            partitionmap[onpart]["name"] = name
-            dev = "/dev/%s" % onpart
-            if dev in raidmap:
-                print "TODO: remap raid device %s." % dev
-                return
-            else:
-                print "TODO: Create raid device %s." % dev
-                return
-                partitionmap[onpart]["device"] = "/dev/%s" % onpart
-            partitionmap[onpart]["raid"] = 1
-        pprint.pprint(partitionmap)
-
     # sanity check
     if len(partitionmap) == 0:
         print "INTERNAL ERROR: Partitionmap is empty."
         return 1
 
     # check partitionmap with diskmap
+    error = 0
     for onpart in partitionmap:
         # skip raid devices
         if partitionmap[onpart].has_key("raid"):
             continue
+        name = partitionmap[onpart]["name"]
         disk = partitionmap[onpart]["disk"]
         if not diskmap.has_key(disk):
             print "ERROR: Disk '%s' is not defined." % disk
-            return 1
+            error = 1
+        if error:
+            continue
+        id = partitionmap[onpart]["id"]
+        if not id in diskmap[disk]["partition"]:
+            print "ERROR: Partition '%s' does not exist." % onpart
+            error = 1
+        if error:
+            continue
+        p = diskmap[disk]["partition"][id]
+        sector_size = diskmap[disk]["sector_size"]
+        partitionmap[onpart]["start"] = p["start"] * sector_size
+        partitionmap[onpart]["end"] = p["end"] * sector_size
+        partitionmap[onpart]["size"] = p["length"] * sector_size
+        partitionmap[onpart]["device"] = p["device"]
+    if error:
+        return 1
 
-    # are all needed partitions there?
+    # partition matches filesystem?
     error = 0
     for onpart in partitionmap:
         # skip raid partitions
@@ -1234,19 +1290,7 @@ def main():
         name = partitionmap[onpart]["name"]
         disk = partitionmap[onpart]["disk"]
         id = partitionmap[onpart]["id"]
-        d = diskmap[disk]
-        if not id in d["partition"]:
-            print "ERROR: partition '%s' does not exist." % onpart
-            error = 1
-        if error:
-            continue
-        p = d["partition"][id]
-        sector_size = diskmap[disk]["sector_size"]
-        partitionmap[onpart]["start"] = p["start"] * sector_size
-        partitionmap[onpart]["end"] = p["end"] * sector_size
-        partitionmap[onpart]["size"] = p["length"] * sector_size
-        partitionmap[onpart]["device"] = p["device"]
-
+        p = diskmap[disk]["partition"][id]
         part = partitions[name]
 
         # check partition types
@@ -1296,12 +1340,14 @@ def main():
                     labels.append(label)
             else:
                 labels.append(label)
-    # TODO: for raid in in raidtab.keys():
 
     # create labels
     error = 0
     for onpart in partitionmap:
         name = partitionmap[onpart]["name"]
+        if partitionmap[onpart].has_key("raid"):
+            partitionmap[onpart]["label"] = None
+            continue
         label = label_prefix
         part = partitions[name]
 
@@ -1350,6 +1396,9 @@ def main():
                   (disk, diskmap[disk]["device"])
             error = 1
     for onpart in partitionmap:
+        if partitionmap[onpart].has_key("raid"):
+            # md device does not exist, yet
+            continue
         if not os.path.exists(partitionmap[onpart]["device"]):
             print "ERROR: Partition %s: %s is no valid device." % \
                   (onpart, partitionmap[onpart]["device"])
@@ -1383,27 +1432,33 @@ def main():
         print "About to format these partitions:"
         for onpart in to_format:
             name = partitionmap[onpart]["name"]
-            if diskmap[partitionmap[onpart]["disk"]].has_key("image"):
-                disk = "%s:%s" % (partitionmap[onpart]["disk"],
-                                  diskmap[partitionmap[onpart]["disk"]]["image"])
+            if partitionmap[onpart].has_key("raid"):
+                print "\t'%s': raid '%s'" % (name, onpart)
             else:
-                disk = partitionmap[onpart]["disk"]
-            print "\t'%s': '%s' on '%s'" % (name, onpart, disk)
+                if diskmap[partitionmap[onpart]["disk"]].has_key("image"):
+                    disk = "%s:%s" % \
+                           (partitionmap[onpart]["disk"],
+                            diskmap[partitionmap[onpart]["disk"]]["image"])
+                else:
+                    disk = partitionmap[onpart]["disk"]
+                print "\t'%s': '%s' on '%s'" % (name, onpart, disk)
         choice = raw_input("Is this ok [y/N]: ")
         if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
             return 0
+
+    # get system raidmap
+    system_raidmap = get_system_md_devices()
 
     # if there is something to format:
     # 1) copy stage2
     # 2) format partitions
     # 3) free stage2 copy
-    if len(to_format) > 0:
-
+    if len(to_format) > 0 or ks["raid"]:
         if not no_stage2:
             ### create stage2 chroot ###
 
             # copy temporary stage2 mount
-            print "Preparing to format"
+            print "Preparing ..."
 
             # create stage2 mount point and mount ramfs for stage2
             os.mkdir(stage2_dir)
@@ -1451,6 +1506,15 @@ def main():
             create_link(stage2_dir, "/usr/sbin/tune2fs", "/sbin/tune2fs")
             create_link(stage2_dir, "/usr/sbin/mkswap", "/sbin/mkswap")
 
+            if ks["raid"]:
+                if os.path.exists(stage2_dir+"/usr/sbin/mdadm"):
+                    create_link(stage2_dir, "/usr/sbin/mdadm", "/sbin/mdadm")
+                elif os.path.exists(stage2_dir+"/usr/sbin/mkraid"):
+                    create_link(stage2_dir, "/usr/sbin/mkraid", "/sbin/mkraid")
+                else:
+                    print "ERROR: Could not find raid utility in stage2 image."
+                    return 1
+
             # create empty mtab
             if not create_file(stage2_dir, "/etc/mtab"):
                 return 1
@@ -1470,6 +1534,8 @@ def main():
             for disk in diskmap:
                 copy_device(stage2_dir, diskmap[disk]["device"])
             for onpart in partitionmap:
+                if partitionmap[onpart].has_key("raid"):
+                    continue
                 copy_device(stage2_dir, partitionmap[onpart]["device"])
 
             # test if bash is runnable in changeroot
@@ -1483,29 +1549,145 @@ def main():
         else: # no stage2
             chroot = None
 
+        raidmap = { }
+        # create/activate raid partitions
+        if ks["raid"] and len(ks["raid"]) > 0:
+            for name in ks["raid"]:
+                # TODO: if ks["raid"][name].has_key("noformat"):
+                # TODO: if ks["raid"][name].has_key("useexisting"):
+                onpart = ks["raid"][name]["device"]
+                dev = "/dev/%s" % onpart
+                devices = [ ]
+                size = None
+                chunk = 64L*1024L
+                for part in ks["raid"][name]["partitions"]:
+                    p = partitions[part]["onpart"]
+                    # get chunk blocks / 1024
+                    # leaves space at the end of the drive for the RAID
+                    # superblock
+                    p_size = (((long(partitionmap[p]["size"]) / chunk) - 1) \
+                              * chunk) / 1024L
+                    if size == None or size > p_size:
+                        size = p_size
+
+                    if not ks["raid"][name].has_key("useexisting") and \
+                           not ks["raid"][name].has_key("noformat"):
+                        # zero raid header (superblock)
+                        print "Clearing raid header of partition '%s'" % part
+                        s = p_size * 1024L
+                        zero_raidheader(partitionmap[p]["device"], 4096, s)
+
+                    devices.append(partitionmap[p]["device"])
+
+                devs = len(devices)
+                if ks["raid"][name].has_key("spares"):
+                    devs -= ks["raid"][name]["spares"]
+                while dev in raidmap.values() or \
+                          dev in system_raidmap.values():
+                    i = getId(dev)
+                    i += 1
+                    dev = "/dev/md%d" % i
+
+                raidmap[onpart] = { }
+                raidmap[onpart]["device"] = dev
+                raidmap[onpart]["level"] = ks["raid"][name]["level"]
+
+                if ks["raid"][name].has_key("useexisting") or \
+                       ks["raid"][name].has_key("noformat"):
+                    print "Assembling raid %s" % onpart
+                    mdadm = "mdadm --assemble '%s'" % (dev) + \
+                            " %s" % (string.join(devices))
+                else:
+                    # size can not be None: this would mean that no partitions
+                    # are given
+                    print "Creating raid %s" % onpart
+                    mdadm = "mdadm --create '%s' --run" % (dev) + \
+                            " --raid-devices=%d" % (devs) + \
+                            " --level=%d" % (ks["raid"][name]["level"]) + \
+                            " --size=%d" % (size) + \
+                            " %s" % (string.join(devices))
+                if verbose:
+                    print mdadm
+                (status, rusage) = pyrpm.runScript(script=mdadm, chroot=chroot)
+                if status != 0:
+                    print "ERROR: mdadm failed on %s with error code %d" % \
+                          (onpart, status)
+                    return 1
+                partitionmap[onpart]["device"] = dev
+
+                time.sleep(1)
+                os.system("/bin/sync")
+                
+                # get raid information
+                mdadm = "mdadm --detail '%s' > /tmp/%s.log" % (dev, onpart)
+                if verbose:
+                    print mdadm
+                (status, rusage) = pyrpm.runScript(script=mdadm, chroot=chroot)
+                if status != 0:
+                    print "ERROR: mdadm --detail failed on %s with error code %d" % (onpart, status)
+                    return 1
+
+                fd = open("%s/tmp/%s.log" % (chroot, onpart))
+                while 1:
+                    line = fd.readline()
+                    if not line:
+                        break
+                    line = string.strip(line)
+                    if len(line) < 1 or line[0] == '#':
+                        continue
+                    splits = string.split(line, ":", 1)
+                    if len(splits) < 2:
+                        continue
+                    tag = string.strip(splits[0])
+                    if tag == "Array Size":
+                        line = string.strip(splits[1])
+                        s = string.split(line, " ")
+                        try:
+                            size = long(s[0])
+                        except:
+                            print "ERROR: mdadm output malformed. 22222222"
+                            return 1
+                        partitionmap[onpart]["size"] = size * 1024L
+                    # uuid is not usable, because it changes with device names
+                    # /dev/loopX is not good to get an uuid
+                fd.close()
+
         ### format partitions ###
 
         for onpart in to_format:
             name = partitionmap[onpart]["name"]
             label = partitionmap[onpart]["label"]
-            disk = partitionmap[onpart]["disk"]
+            is_image = 0
+            if partitionmap[onpart].has_key("disk"):
+                if diskmap[partitionmap[onpart]["disk"]].has_key("image"):
+                    is_image = 1
+            if partitionmap[onpart].has_key("raid"):
+                # check disks if at least one of them is a disk image
+                name = partitionmap[onpart]["name"]
+                for part in ks["raid"][name]["partitions"]:
+                    p = partitions[part]["onpart"]
+                    if diskmap[partitionmap[p]["disk"]].has_key("image"):
+                        is_image = 1
+                        break
             part = partitions[name]
 
             if part.has_key("fstype") and \
                    (part["fstype"] == "ext2" or part["fstype"] == "ext3"):
-                mke2fs = "/sbin/mke2fs -q -L '%s'" % label
+                mke2fs = "/sbin/mke2fs -q "
+                if label:
+                    mke2fs += " -L '%s'" % label
                 if part["fstype"] == "ext3":
                     mke2fs += " -j"
-                if diskmap[disk].has_key("image"):
+                if is_image:
                     blocksize = 4096
                     mke2fs += " -b %d" % blocksize
                 mke2fs += " '%s'" % partitionmap[onpart]["device"]
-                if diskmap[disk].has_key("image"):
+                if is_image:
                     mke2fs += " %d" % (partitionmap[onpart]["size"] / blocksize)
 
-#            print mke2fs
-                print "Formatting '%s' on '%s' (%s)" % \
-                      (onpart, partitionmap[onpart]["disk"], name)
+                print "Formatting '%s'" % onpart
+                if verbose:
+                    print mke2fs
 
                 (status, rusage) = pyrpm.runScript(script=mke2fs, chroot=chroot)
                 if status != 0:
@@ -1517,10 +1699,9 @@ def main():
                     tune2fs = "/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
                               partitionmap[onpart]["device"]
 
-#                print tune2fs
                     if verbose:
-                        print "Tuning filesystem '%s' on '%s'" % \
-                              (onpart, partitionmap[onpart]["disk"])
+                        print "Tuning filesystem '%s'" % onpart
+                        print tune2fs
 
                     (status, rusage) = pyrpm.runScript(script=tune2fs,
                                                        chroot=chroot)
@@ -1537,16 +1718,15 @@ def main():
                          (l, partitionmap[onpart]["device"],
                           (partitionmap[onpart]["size"] / 1024))
 
-#            print mkswap
-                print "Formatting '%s' on '%s' (%s)" % \
-                      (onpart, partitionmap[onpart]["disk"], name)
+                print "Formatting '%s'" % onpart
+                if verbose:
+                    print mkswap
 
                 (status, rusage) = pyrpm.runScript(script=mkswap, chroot=chroot)
                 if status != 0:
                     print "ERROR: mkswap failed."
                     return 1
             elif name[:5] == "raid.":
-                # TODO
                 pass
             else:
                 print "ERROR: Unknown filesystem for '%s' (%s)" % (onpart,
@@ -1585,7 +1765,7 @@ def main():
     to_mount.sort()
 
     for mntpnt in to_mount:
-        if mntpnt == "swap":
+        if mntpnt[:4] == "swap":
             if standalone:
                 # swapon if in standalone mode
                 if pyrpm.swapon(partitionmap[mountmap[mntpnt]]["device"]) == 1:
@@ -1609,7 +1789,7 @@ def main():
                 print "Mounting '%s' on '%s'" %\
                       (partitionmap[mountmap[mntpnt]]["device"], dir)
             pyrpm.mount(partitionmap[mountmap[mntpnt]]["device"], dir,
-                        fstype=part["fstype"])
+                        fstype=part["fstype"], options="rw")
 
     buildroot = target_dir
     pyrpm.rpmconfig.buildroot = buildroot
@@ -1673,6 +1853,29 @@ def main():
             # add comps package
             if not "comps" in pkgs:
                 pkgs.append("comps")
+
+            # append mdadm
+            if ks["raid"]:
+                s = source_repo.searchFilenames("/sbin/mdadm")
+                if len(s) == 0:
+                    if not source_repo._matchesFile("/sbin/mdadm"):
+                        source_repo.importFilelist()
+                        s = source_repo.searchFilenames("/sbin/mdadm")
+                if len(s) == 0:
+                    s = source_repo.searchFilenames("/sbin/mkraid")
+                if len(s) > 0:
+                    found = False
+                    for pkg in s:
+                        if pkg in pkgs:
+                            found = True
+                            break
+                    if not found:
+                        pkg = s[0]
+                        print "Adding package '%s' for raid configuration." % pkg["name"]
+                        pkgs.append(pkg["name"])
+                else:
+                    print "WARNING: Could not find package for raid configuration."
+
 
             # append authconfig
             if ks["authconfig"]:
@@ -1812,6 +2015,7 @@ def main():
     create_dir(buildroot, "/etc")
     create_dir(buildroot, "/etc/rpm")
     create_dir(buildroot, "/etc/sysconfig")
+    create_dir(buildroot, "/proc")
     if install != "RHEL-3":
         create_dir(buildroot, "/sys")
     create_dir(buildroot, "/tmp")
@@ -1840,11 +2044,23 @@ def main():
         print "Writing '/etc/fstab'"
 
         content = [ ]
+        mtab_content = [ ]
         partition = partitionmap.keys()
         partition.sort()
         partition.reverse()
+
+        # sort by partition names and not onpart
+        onparts = { }
         for onpart in partition:
             name = partitionmap[onpart]["name"]
+            if name[:4] == "raid":
+                continue
+            onparts[name] = onpart
+        parts = onparts.keys()
+        parts.sort()
+
+        for name in parts:
+            onpart = onparts[name]
             part = partitions[name]
 
             major = minor = 0
@@ -1855,14 +2071,19 @@ def main():
                     minor = 1
                 else:
                     minor = 2
-                content.append("LABEL=%s\t\t%s\t\t%s\tdefaults\t%d %d\n" % \
-                               (partitionmap[onpart]["label"], name, fs, major,
-                                minor))
+                label = partitionmap[onpart]["label"]
+                if partitionmap[onpart]["label"]:
+                    source = "LABEL=%s" % partitionmap[onpart]["label"]
+                else:
+                    source = "/dev/%s" % onpart
+                content.append("%s\t\t%s\t\t%s\tdefaults\t%d %d\n" % \
+                               (source, name, fs, major, minor))
+                mtab_content.append("/dev/%s %s %s rw %d %d\n" % \
+                                    (onpart, name, fs, major, minor))
             elif name[:4] == "swap":
                 continue
             else:
-                print "WARNING: Unknown filesystem for '%s' (%s)" % \
-                      (partitionmap[onpart]["disk"], name)
+                print "WARNING: Unknown filesystem for '%s'" % onpart
                 continue
         content.extend( [ "none\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n",
                           "none\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n",
@@ -1872,18 +2093,51 @@ def main():
             content.append("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
         elif install == "FC-2":
             content.append("none\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
-        for onpart in partition:
-            if partitionmap[onpart]["name"] == "swap":
-                if (install.release == "RHEL" and install.version < 4) or \
-                       (install.release == "FC" and install.version < 3):
-                    # pre RHEL-4, pre FC-2 does not support swap labels
-                    what = "/dev/%s" % onpart
-                else:
-                    what = "LABEL=%s" % partitionmap[onpart]["label"]
-                content.append("%s\t\t%s\t\t%s\tdefaults\t0 0\n" % \
-                               (what, partitionmap[onpart]["name"],
-                                partitionmap[onpart]["name"]))
+        for name in parts:
+            if name[:4] != "swap":
+                continue
+            onpart = onparts[name]
+            if (install.release == "RHEL" and install.version < 4) or \
+                   (install.release == "FC" and install.version < 3):
+                # pre RHEL-4, pre FC-2 does not support swap labels
+                what = "/dev/%s" % onpart
+            else:
+                what = "LABEL=%s" % partitionmap[onpart]["label"]
+            content.append("%s\t\tswap\t\tswap\tdefaults\t0 0\n" % what)
         create_file(buildroot, "/etc/fstab", content)
+
+        print "Writing '/etc/mtab'"
+        create_file(buildroot, "/etc/mtab", mtab_content)
+
+    # /etc/mdadm.conf
+    if ks.has_key("install") and ks["raid"] and \
+           not os.path.exists(buildroot+"/etc/mdadm.conf"):
+        print "Writing '/etc/mdadm.conf'"
+        content = [ "# mdadm.conf written out by pyrpmkickstart\n",
+                    "DEVICE partitions\n",
+                    "MAILADDR root\n" ]
+        for name in ks["raid"]:
+            onpart = ks["raid"][name]["device"]
+            devices = [ ]
+            for part in ks["raid"][name]["partitions"]:
+                p = partitions[part]["onpart"]
+                dev = "/dev/%s%d" % (partitionmap[p]["disk"],
+                                     partitionmap[p]["id"])
+                devices.append(dev)
+            content.append("ARRAY /dev/%s level=raid%d devices=%s\n" % \
+                           (onpart, ks["raid"][name]["level"],
+                            string.join(devices, ",")))
+        create_file(buildroot, "/etc/mdadm.conf", content)
+
+    # /proc/mdstat
+    if ks.has_key("install") and raidmap and \
+           not os.path.exists(buildroot+"/proc/mdstat"):
+        print "Writing '/proc/mdstat'"
+        content = [ ]
+        for raid in raidmap:
+            content.append("%s : active raid%d " % (raid, 
+                                                    raidmap[raid]["level"]))
+        create_file(buildroot, "/proc/mdstat", content)
 
     # /etc/hosts
     if ks.has_key("install") and not os.path.exists(buildroot+"/etc/hosts"):
@@ -1960,7 +2214,7 @@ def main():
     # /etc/rpm/platform
     if ks.has_key("install") and not os.path.exists(buildroot+"/etc/rpm/platform"):
         create_file(buildroot, "/etc/rpm/platform", 
-                    [ "%s-redhat-linux" % pyrpm.rpmconfig.machine ])
+                    [ "%s-redhat-linux" % machine ])
 
     # /var/log/lastlog
     if ks.has_key("install"):
@@ -2319,99 +2573,119 @@ def main():
                 print "ERROR: mouseconfig failed"
 
     # setup networking
-    if ks.has_key("install") and ks["network"] and len(ks["network"]) > 0:
+    if ks.has_key("install"):
         print "Configuring network"
 
         if not os.path.exists(buildroot+"/etc/sysconfig/network-scripts"):
             os.mkdir(buildroot+"/etc/sysconfig/network-scripts")
 
-        # check network devices and set device for entries where no device is
-        # specified
-        network_devices = [ ]
-        for net in ks["network"]:
-            if net.has_key("device"):
-                if net["device"] in network_devices:
-                    print "WARNING: '%s' is not unique." % net["device"]
-                else:
-                    network_devices.append(net["device"])
-        for net in ks["network"]:
-            # get device or next free device
-            device = None
-            if net.has_key("device"):
-                device = net["device"]
-            if not device:
-                i = 0
-                device = "eth%d" % i
-                while device in network_devices:
-                    i += 1
-                    device = "eth%d" % i
-                net["device"] = device
+        # generate loopback network configuration if it does not exist
+        if not os.path.exists(buildroot+\
+                              "/etc/sysconfig/network-scripts/ifcfg-lo"):
+            print "Adding missing /etc/sysconfig/network-scripts/ifcfg-lo."
+            create_file(buildroot, "/etc/sysconfig/network-scripts/ifcfg-lo",
+                        [ 'DEVICE=lo\n',
+                          'IPADDR=127.0.0.1\n',
+                          'NETMASK=255.0.0.0\n',
+                          'NETWORK=127.0.0.0\n',
+                          "# If you're having problems with gated making 127.0.0.0/8 a martian,\n",
+                          "# you can change this to something else (255.255.255.255, for example)\n",
+                          'BROADCAST=127.255.255.255\n',
+                          'ONBOOT=yes\n',
+                          'NAME=loopback\n' ])
 
+        _hostname = None
         _gateway = None
-        for net in ks["network"]:
-            if net.has_key("hostname"):
-                _hostname = 'HOSTNAME=%s\n' % net["hostname"]
-            else:
-                _hostname = 'HOSTNAME=localhost.localdomain\n'
+        if ks["network"] and len(ks["network"]) > 0:
+            # check network devices and set device for entries where no device
+            # is specified
+            network_devices = [ ]
+            for net in ks["network"]:
+                if net.has_key("device"):
+                    if net["device"] in network_devices:
+                        print "WARNING: '%s' is not unique." % net["device"]
+                    else:
+                        network_devices.append(net["device"])
+            for net in ks["network"]:
+                # get device or next free device
+                device = None
+                if net.has_key("device"):
+                    device = net["device"]
+                if not device:
+                    i = 0
+                    device = "eth%d" % i
+                    while device in network_devices:
+                        i += 1
+                        device = "eth%d" % i
+                    net["device"] = device
 
-            if net.has_key("gateway") and not _gateway:
-                _gateway = 'GATEWAY=%s\n' % net["gateway"]
-                create_file(buildroot, "/etc/sysconfig/network",
-                            [ _hostname, _gateway ])
+            for net in ks["network"]:
+                if not _hostname and net.has_key("hostname"):
+                    _hostname = 'HOSTNAME=%s\n' % net["hostname"]
+                if not _gateway and net.has_key("gateway"):
+                    _gateway = 'GATEWAY=%s\n' % net["gateway"]
 
-            device = net["device"]
+                device = net["device"]
 
-            if device[:3] == "ctc":
-                type = "CTC"
-            elif device[:4] == "iucv":
-                type = "IUCV"
-            elif device[:2] == "tr":
-                type = '"Token Ring"'
-            else:
-                type = "Ethernet"
-
-            bootproto = "none"
-            if net["bootproto"] and net["bootproto"] != "static":
-                bootproto = net["bootproto"]
-
-            try:
-                fd = open(buildroot + \
-                          "/etc/sysconfig/network-scripts/ifcfg-%s" % \
-                          device, "w")
-            except Exception, msg:
-                print "ERROR: Configuration of '/etc/sysconfig/network-scripts/ifcfg-%s' failed:" % device, msg
-            else:
-                fd.write('DEVICE=%s\n' % device)
-                fd.write('BOOTPROTO=%s\n' % bootproto)
-                if net.has_key("gateway"):
-                    fd.write('GATEWAY=%s\n' % net["gateway"])
-                if net.has_key("netmask"):
-                    fd.write('NETMASK=%s\n' % net["netmask"])
-                if net.has_key("ip"):
-                    fd.write('IPADDR=%s\n' % net["ip"])
-                if net.has_key("essid"):
-                    fd.write('ESSID=%s\n' % net["essid"])
-                if net.has_key("ethtool"):
-                    fd.write('ETHTOOL_OPTS=%s\n' % net["ethtool"])
-                if net.has_key("class"):
-                    fd.write('DHCP_CLASSID=%s\n' % net["class"])
-                if net.has_key("onboot"):
-                    fd.write('ONBOOT=%s\n' % net["onboot"])
+                if device[:3] == "ctc":
+                    type = "CTC"
+                elif device[:4] == "iucv":
+                    type = "IUCV"
+                elif device[:2] == "tr":
+                    type = '"Token Ring"'
                 else:
-                    fd.write('ONBOOT=yes\n')
-                fd.write('TYPE=%s\n' % type)
-                fd.close()
+                    type = "Ethernet"
 
-            if net.has_key("wepkey"):
+                bootproto = "none"
+                if net["bootproto"] and net["bootproto"] != "static":
+                    bootproto = net["bootproto"]
+
                 try:
                     fd = open(buildroot + \
-                              "/etc/sysconfig/network-scripts/keys-%s" % \
+                              "/etc/sysconfig/network-scripts/ifcfg-%s" % \
                               device, "w")
                 except Exception, msg:
-                    print "ERROR: Configuration of '/etc/sysconfig/network-scripts/keys-%s' failed:" % device, msg
+                    print "ERROR: Configuration of '/etc/sysconfig/network-scripts/ifcfg-%s' failed:" % device, msg
                 else:
-                    fd.write('KEY=%s\n' % net["wepkey"])
+                    fd.write('DEVICE=%s\n' % device)
+                    fd.write('BOOTPROTO=%s\n' % bootproto)
+                    if net.has_key("gateway"):
+                        fd.write('GATEWAY=%s\n' % net["gateway"])
+                    if net.has_key("netmask"):
+                        fd.write('NETMASK=%s\n' % net["netmask"])
+                    if net.has_key("ip"):
+                        fd.write('IPADDR=%s\n' % net["ip"])
+                    if net.has_key("essid"):
+                        fd.write('ESSID=%s\n' % net["essid"])
+                    if net.has_key("ethtool"):
+                        fd.write('ETHTOOL_OPTS=%s\n' % net["ethtool"])
+                    if net.has_key("class"):
+                        fd.write('DHCP_CLASSID=%s\n' % net["class"])
+                    if net.has_key("onboot"):
+                        fd.write('ONBOOT=%s\n' % net["onboot"])
+                    else:
+                        fd.write('ONBOOT=yes\n')
+                    fd.write('TYPE=%s\n' % type)
                     fd.close()
+
+                if net.has_key("wepkey"):
+                    try:
+                        fd = open(buildroot + \
+                                  "/etc/sysconfig/network-scripts/keys-%s" % \
+                                  device, "w")
+                    except Exception, msg:
+                        print "ERROR: Configuration of '/etc/sysconfig/network-scripts/keys-%s' failed:" % device, msg
+                    else:
+                        fd.write('KEY=%s\n' % net["wepkey"])
+                    fd.close()
+
+        if not _hostname:
+            _hostname = 'HOSTNAME=localhost.localdomain\n'
+        if not _gateway:
+            _gateway = ""
+        # write /etc/sysconfig/network
+        create_file(buildroot, "/etc/sysconfig/network",
+                    [ 'NETWORKING=yes\n', _hostname, _gateway ])
 
     # /etc/X11/xorg.conf
     if ks.has_key("install") and ks["xconfig"]:
@@ -2659,7 +2933,7 @@ def main():
 
         append=""
         if ks["bootloader"] and ks["bootloader"].has_key("append"):
-            append = " "+ks["bootloader"]["append"]
+            append = " %s" % ks["bootloader"]["append"]
 
         hds = diskmap.keys()
         hds.sort()
@@ -2676,8 +2950,17 @@ def main():
             hdmap[hd] = "hd%d" % id
             id += 1
 
-        hd_boot = "%s,%d" % (hdmap[partitionmap[mountmap[dir]]["disk"]],
-                             (partitionmap[mountmap[dir]]["id"] - 1))
+        if partitionmap[mountmap[dir]].has_key("raid"):
+            # take one of the raid level 1 partitions
+            part = ks["raid"][dir]["partitions"][0]
+            p = partitions[part]["onpart"]
+            print "TODO: write grub to all disks"
+            # TODO: for all disks build grub configuration
+            hd_boot = "%s,%d" % (hdmap[partitionmap[p]["disk"]],
+                                 (partitionmap[p]["id"] - 1))
+        else:
+            hd_boot = "%s,%d" % (hdmap[partitionmap[mountmap[dir]]["disk"]],
+                                 (partitionmap[mountmap[dir]]["id"] - 1))
 
         kernels = [ ]
         if not os.path.exists(buildroot+"/bin/rpm"):
@@ -2721,7 +3004,10 @@ def main():
         if ks["bootloader"].has_key("location"):
             location = ks["bootloader"]["location"]
         if location == "mbr":
-            location = partitionmap[mountmap[dir]]["disk"]
+            if partitionmap[mountmap[dir]].has_key("raid"):
+                location = mountmap[dir]
+            else:
+                location = partitionmap[mountmap[dir]]["disk"]
         elif location == "partition":
             location = mountmap[dir]
 
@@ -2759,18 +3045,20 @@ def main():
             # add all kernels:
             for kernel in kernels:
                 kernel = string.strip(kernel)
+                if partitionmap[mountmap["/"]]["label"]:
+                    root = "LABEL=%s" % partitionmap[mountmap["/"]]["label"]
+                else: # raid deveices have no label
+                    root = "/dev/%s" % mountmap["/"]
                 content.extend( \
                     [ 'title %s (%s)\n' % (source_release, kernel),
                       '\troot (%s)\n' % hd_boot,
-                      '\tkernel %s/vmlinuz-%s ro root=LABEL=%s%s\n' % \
-                      (prefix, kernel, partitionmap[mountmap["/"]]["label"],
-                       append),
+                      '\tkernel %s/vmlinuz-%s ro root=%s%s\n' % \
+                      (prefix, kernel, root, append),
                       '\tinitrd %s/initrd-%s.img\n' % (prefix, kernel) ] )
 
             create_file(buildroot, "/boot/grub/grub.conf", content, force=1)
 
-            # TODO: use arch of installed system
-            machine = pyrpm.buildarchtranslate[pyrpm.rpmconfig.machine]
+            # use arch of install tree
             buildroot_copy("/usr/share/grub/%s-redhat/stage1" % machine,
                            "/boot/grub/stage1")
             buildroot_copy("/usr/share/grub/%s-redhat/stage2" % machine,
@@ -2785,10 +3073,16 @@ def main():
                 copy_device(buildroot, diskmap[disk]["device"], dev)
                 devmap[diskmap[disk]["device"]] = dev
             for onpart in partitionmap:
+                if partitionmap[onpart].has_key("raid"):
+                    continue
                 dev = "/tmp/%s%d" % (partitionmap[onpart]["disk"],
                                      partitionmap[onpart]["id"])
                 copy_device(buildroot, partitionmap[onpart]["device"], dev)
                 devmap[partitionmap[onpart]["device"]] = dev
+#            for raid in raidmap:
+#                dev = "/tmp/%s" % raidmap[raid]["device"][5:]
+#                copy_device(buildroot, raidmap[raid]["device"], dev)
+#                devmap[raidmap[raid]["device"]] = dev
 
             # create devices.map file
             content = [ '(fd0) /dev/fd0\n' ]
@@ -2810,6 +3104,11 @@ def main():
             content.append('root (%s)\n' % hd_boot)
             if hdmap.has_key(location):
                 hd = hdmap[location]
+            elif partitionmap[mountmap[dir]].has_key("raid"):
+                part = ks["raid"][dir]["partitions"][0]
+                p = partitions[part]["onpart"]
+                # TODO: get first disk
+                hd = hdmap[partitionmap[p]["disk"]]
             else:
                 try:
                     hd_name = getName(location)
@@ -2932,7 +3231,7 @@ target_dir = None
 label_prefix = ""
 standalone = 0
 stage2_img_dir = None
-devmap = None
+raidmap = None
 repo_comps = 0
 upgrade = None
 no_stage2 = 0
@@ -2956,6 +3255,7 @@ except Exception:
 
 # wait one second before going on
 time.sleep(1)
+os.system("/bin/sync")
 
 if wait:
     if target_dir:
@@ -2981,10 +3281,16 @@ if tempdir:
 
 if partitionmap:
     for onpart in partitionmap:
-        if partitionmap[onpart]["name"] == "swap" and \
+        if partitionmap[onpart]["name"][:4] == "swap" and \
                partitionmap[onpart].has_key("on"):
             pyrpm.swapoff(partitionmap[onpart]["device"])
             del partitionmap[onpart]["on"]
+
+if raidmap:
+    for raid in raidmap:
+        mdadm="mdadm --stop '%s'" % raidmap[raid]["device"]
+        os.system(mdadm)
+
 if diskmap:
     for disk in diskmap:
         diskmap[disk].close()
