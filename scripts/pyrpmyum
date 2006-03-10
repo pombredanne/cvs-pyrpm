@@ -51,9 +51,10 @@ options:
     [--noorder] [--noscripts] [--notriggers]
     [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
     [--enablerepo repoid|repoglob] [--disablerepo repoid|repoglob]
+    [--exclude pkgname/pkgglob]
     [--nocache] [--cachedir DIRECTORY]
-
-Warning: Some of the options are not evaluated yet"""
+    [--obsoletes] [--noplugins]
+"""
 
 def lockPyrpm():
     if os.getuid() != 0 or rpmconfig.test:

@@ -746,7 +746,7 @@ def parseYumOptions(argv, yum):
 
     # Argument parsing
     try:
-      opts, args = getopt.getopt(argv, "?hvc:r:yd:e:",
+      opts, args = getopt.getopt(argv, "?hvc:r:yd:e:R:C",
         ["help", "verbose",
          "hash", "version", "quiet", "dbpath=", "root=", "installroot=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
@@ -754,7 +754,7 @@ def parseYumOptions(argv, yum):
          "noscripts", "notriggers", "excludedocs", "excludeconfigs",
          "oldpackage", "autoerase", "servicehack", "installpkgs=", "arch=",
          "checkinstalled", "rusage", "srpmdir=", "enablerepo=", "disablerepo=",
-         "nocache", "cachedir="])
+         "nocache", "cachedir=", "exclude=", "obsoletes", "noplugins"])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -779,6 +779,12 @@ def parseYumOptions(argv, yum):
             rpmconfig.warning = 0
             rpmconfig.verbose = 0
             rpmconfig.printhash = 0
+        elif opt == "-R":
+            # Basically we ignore this for now, just don't throw an error ;)
+            pass
+        elif opt == "-C":
+            # Basically we ignore this for now, just don't throw an error ;)
+            pass
         elif opt == "--autoerase":
             yum.setAutoerase(1)
         elif opt == "--version":
@@ -849,6 +855,14 @@ def parseYumOptions(argv, yum):
             rpmconfig.nocache = 1
         elif opt == "--cachedir":
             rpmconfig.cachedir = val
+        elif opt == "--exclude":
+            rpmconfig.excludes.append(val)
+        elif opt == "--obsoletes":
+            # Basically we ignore this for now, just don't throw an error ;)
+            pass
+        elif opt == "--noplugins":
+            # Basically we ignore this for now, just don't throw an error ;)
+            pass
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1

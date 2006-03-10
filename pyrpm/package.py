@@ -493,6 +493,9 @@ class RpmPackage(RpmData):
             self.config.printInfo(0, "#"*(30-int(30*n/nfiles)) + "\n")
         else:
             self.config.printInfo(1, "\n")
+        # Hack to prevent errors for glibc and bash postunscripts
+        #if self["name"] == "glibc" or self["name"] == "bash":
+        #    return
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None and not self.config.noscripts:
             try:

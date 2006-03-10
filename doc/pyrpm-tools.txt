@@ -23,6 +23,29 @@ pyrpmcheck /mirror/fedora/development/i386/Fedora/RPMS
 -----------------------
 
 
+pyrpmcheckinstall
+-----------------
+
+In order to test problems with installs or removals this tool can be used to
+test a whole repository against missing prereqs, failing scripts and other
+common problems. It does so by iterating over all packages of the given
+repos and installing and removing them just like a yum install <package>/yum
+remove <package> would have done. Doing this in an empty buildroot allows one
+to find missing dependencies and other script failures easily.
+
+Check a complete FC4 repository:
+
+-----------------------
+pyrpmcheckinstall -y -v -c fc4-i386.conf -r /mnt/build/test >& /tmp/installtest
+-----------------------
+
+To only get the errors and have a minimal log make it quite:
+
+-----------------------
+pyrpmcheckinstall -y -q -c fc4-i386.conf -r /mnt/build/test >& /tmp/installtest
+-----------------------
+
+
 pyrpmcheckrepo
 --------------
 

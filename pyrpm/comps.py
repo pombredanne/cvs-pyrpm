@@ -64,21 +64,27 @@ class RpmCompsXML:
 
     def getOptionalPackageNames(self, group):
         """Return a sorted list of (package name, [package requirement]) of
-        optional packagres from group and its dependencies."""
+        optional packages from group and its dependencies."""
 
         return self.__getPackageNames(group, ["optional"])
 
     def getDefaultPackageNames(self, group):
         """Return a sorted list of (package name, [package requirement]) of
-        default packagres from group and its dependencies."""
+        default packages from group and its dependencies."""
 
         return self.__getPackageNames(group, ["default"])
 
     def getMandatoryPackageNames(self, group):
         """Return a sorted list of (package name, [package requirement]) of
-        mandatory packagres from group and its dependencies."""
+        mandatory packages from group and its dependencies."""
 
         return self.__getPackageNames(group, ["mandatory"])
+
+    def getConditionalPackageNames(self, group):
+        """Return a sorted list of (package name, [package requirement]) of
+        conditional packages from group and its dependencies."""
+
+        return self.__getPackageNames(group, ["conditional"])
 
     def __getPackageNames(self, group, typelist):
         """Return a sorted list of (package name, [package requirement]) of
