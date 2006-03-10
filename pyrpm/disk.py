@@ -18,7 +18,7 @@
 
 import os, stat, string, time
 import parted
-import functions
+import functions, loop
 
 # pyparted classes:
 #
@@ -307,7 +307,7 @@ class Disk(dict):
             self["device"] = device
         elif stat.S_ISREG(mode) or as_image:
             self["image"] = device
-            device = losetup(self["image"])
+            device = loop.losetup(self["image"])
             if not device:
                 raise IOError, "Unable to get loop device for '%s'." % \
                       self["image"]
@@ -335,7 +335,7 @@ class Disk(dict):
             for part in self["partition"].keys():
                 if self["partition"][part].has_key("device"):
                     if self["partition"][part]["device"]:
-                        lofree(self["partition"][part]["device"])
+                        loop.lofree(self["partition"][part]["device"])
         self.__clear_partitions()
 
         ped_partition = self.ped_disk.next_partition()
@@ -361,9 +361,12 @@ class Disk(dict):
                 self.partition[num]["disk"] = self
                 if self.has_key("image"):
                     if self.alloc_loop:
-                        device = losetup(self["image"],
-                                         self.partition[num]["start"] * \
-                                         self["sector_size"])
+                        device = loop.losetup(self["image"],
+                                              self.partition[num]["start"] * \
+                                              self["sector_size"])
+                        loop.lo_set_maxsize(device,
+                                            self.partition[num]["length"] * \
+                                            self["sector_size"])
                         if not device:
                             raise IOError, "Unable to get loop device " + \
                                   "for partition %d of '%s'." % \
@@ -387,11 +390,11 @@ class Disk(dict):
         if self.has_key("image"):
             # free loop device
             if self["device"]:
-                lofree(self["device"])
+                loop.lofree(self["device"])
                 for part in self["partition"].keys():
                     if self["partition"][part].has_key("device"):
                         if self["partition"][part]["device"]:
-                            lofree(self["partition"][part]["device"])
+                            loop.lofree(self["partition"][part]["device"])
                     del self["partition"][part]
         self.__clear_partitions()
         del self.ped_disk
@@ -623,7 +626,6 @@ class Disk(dict):
                 boot = "*"
             else:
                 boot = " "
-            print partition["type"]
             type = "---"
             try:
                 type = Partition.nativeType[partition["native_type"]]
@@ -635,43 +637,6 @@ class Disk(dict):
                    partition["native_type"], type)
 
 ################################## functions ##################################
-
-def lolist():
-    list = os.listdir("/dev/")
-    list.sort()
-    free = 0
-    for file in list:
-        if file[:4] != "loop":
-            continue
-        status = os.system("/sbin/losetup '/dev/%s' 2>/dev/null" % file)
-        if status != 0:
-            free += 1
-    if free == 0:
-        print "All loop devices are in use."
-        print "You should generate additional loop devices or free some, which are not used by this program."
-    else:
-        print "You have %d free loop devices available." % free
-
-def losetup(target, offset=0):
-    i = 0
-    loop_device = None
-    offset_string = ""
-    if offset:
-        offset_string = "-o%d" % offset
-    while not loop_device and i < 100:
-        (child_stdin, child_stdout) = os.popen2("/sbin/losetup -f 2>/dev/null")
-        loop_device = child_stdout.read()
-        loop_device = string.strip(loop_device)
-        i += 1
-        if loop_device:
-            status = os.system("/sbin/losetup %s '%s' '%s'" % \
-                               (offset_string, loop_device, target))
-            if status != 0:
-                loop_device = None
-    return loop_device
-
-def lofree(device):
-    return (os.system("/sbin/losetup -d '%s'" % device) == 0)
 
 def mount(what, where, fstype="ext3", options=None, arguments=None):
     opts = ""
