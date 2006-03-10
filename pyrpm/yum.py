@@ -93,7 +93,7 @@ class RpmYum:
         except IOError, e:
             printError("Error reading configuration: %s" % e)
             return 0
-        gexcludes = string.join(self.config.excludes)
+        gexcludes = ''.join(self.config.excludes)
         __fnmatchre__ = re.compile(".*[\*\[\]\{\}\?].*")
         erepo = []
         for ritem in self.config.enablerepo:
