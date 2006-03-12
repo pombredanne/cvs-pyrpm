@@ -2374,11 +2374,11 @@ def sameSrcRpm(a, b):
 
 def ignoreBinary():
     return "\.gz$\n\.tgz$\n\.taz$\n\.bz2$\n\.z$\n\.Z$\n\.zip$\n" \
-        "\.ttf$\n\.db$\n\.jar$\n\.pdf$\n\.sdf$\n\.war$\n"
+        "\.ttf$\n\.db$\n\.jar$\n\.pdf$\n\.sdf$\n\.war$\n\.gsi$\n"
 
 def isBinary(filename):
     for i in (".gz", ".tgz", ".taz", ".bz2", ".z", ".Z", ".zip", ".ttf",
-        ".db", ".jar", ".pdf", ".sdf", ".war"):
+        ".db", ".jar", ".pdf", ".sdf", ".war", ".gsi"):
         if filename.endswith(i):
             return 1
     return 0
@@ -4660,7 +4660,8 @@ def cmpNoMD5(a, b):
     """Ignore leading md5sum to sort the "sources" file."""
     return cmp(a[33:], b[33:])
 
-def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
+def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
+    pkgname = pkg["name"]
     files = pkg.getFilenames()
     i = pkg.getSpecfile(files)
     specfile = files[i]
@@ -4699,7 +4700,7 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
         if f not in files and f not in ("Makefile", "sources"):
             fsrc = pkgdir + "/" + f
             os.unlink(fsrc)
-            os.system("cd %s && GIT_DIR=%s/%s git-update-index --remove %s" % (pkgdir, grepodir, reponame, f))
+            os.system("cd %s/.. && GIT_DIR=%s git-update-index --remove %s/%s" % (pkgdir, repodir, pkgname, f))
     if "sources" in files or "Makefile" in files:
         raise ValueError, \
             "src.rpm contains sources/Makefile: %s" % pkg.filename
@@ -4713,7 +4714,7 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
         "rhn-applet", "rhnlib", "rhpl",
         "sysklogd", "system-config-printer", "system-config-securitylevel",
         "tux", "udev"]
-    if reponame == "RHEL2.1.git":
+    if repodir.endswith("/RHEL2.1.git"):
         EXTRACT_SOURCE_FOR.remove("redhat-config-network")
     sources = []
     if filecache:
@@ -4746,9 +4747,9 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
         "include ../pyrpm/Makefile.srpm\n",
         "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
     # XXX: also checkin the data into a per-package repo
-    os.environ["GIT_DIR"] = "%s/%s" % (grepodir, reponame)
-    os.system("cd %s && { find . -path ./.git -prune -o -type f -print | sed -e 's|^./||' | xargs git-update-index -q --add --refresh; }" % pkgdir)
-    os.system('cd %s && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
+    os.environ["GIT_DIR"] = repodir
+    os.system("cd %s/.. && { find %s -type f -print | xargs git-update-index -q --add --refresh; }" % (pkgdir, pkgname))
+    os.system('cd %s/.. && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
     del os.environ["GIT_DIR"]
     # Add changelog text:
     (fd, tmpfile) = mkstemp_file(tmpdir, special=1)
@@ -4780,7 +4781,7 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
         "\" GIT_AUTHOR_EMAIL=\"" + email + "\" GIT_AUTHOR_DATE=" + \
         buildtime + " GIT_COMMITTER_NAME=\"" + user + \
         "\" GIT_COMMITTER_EMAIL=\"" + email + "\" GIT_COMMITTER_DATE=" + \
-        buildtime + " GIT_DIR=" + grepodir + "/" + reponame +" git commit " + changelog)
+        buildtime + " GIT_DIR=" + repodir + " git commit " + changelog)
     if tmpfile != None:
         os.unlink(tmpfile)
 
@@ -4808,7 +4809,7 @@ def createMercurial(verbose):
             firsttime = 1
             makeDirs(repodir)
             os.system("cd %s && { GIT_DIR=%s git init-db; }" % \
-                (repodir, repodir ))
+                (repodir, repodir))
             writeFile(repodir + "/description", [repodescr + "\n"])
         if not filecache:
             filecache = hgfiles + "/" + reponame
@@ -4824,11 +4825,10 @@ def createMercurial(verbose):
             pkgs = getPkgsNewest(pkgs)
         oldpkgs = {}
         for pkg in pkgs:
-            name = pkg["name"]
-            pkgdir = unpackdir + "/" + name
-            extractSrpm(reponame + ".git", pkg, pkgdir, filecache, repodir,
-                oldpkgs.get(name))
-            oldpkgs[name] = pkg
+            pkgname = pkg["name"]
+            pkgdir = unpackdir + "/" + pkgname
+            extractSrpm(pkg, pkgdir, filecache, repodir, oldpkgs.get(pkgname))
+            oldpkgs[pkgname] = pkg
         os.system("cd %s && { GIT_DIR=%s git repack -d; GIT_DIR=%s git prune-packed; }" % (unpackdir, repodir, repodir))
 
 
