@@ -4541,8 +4541,6 @@ srpm_repos = [
     # mercurial mailinglists for details.
     ("http://xenbits.xensource.com/xen-unstable.hg/",
         "xen-unstable", None, None, 30),
-    ("http://xenbits.xensource.com/xen-3.0-testing.hg/",
-        "xen-3.0", None, None, 30),
     ("http://thunk.org/hg/e2fsprogs/", "e2fsprogs", None, None, 20),
 ]
 
@@ -4715,7 +4713,7 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
         "rhn-applet", "rhnlib", "rhpl",
         "sysklogd", "system-config-printer", "system-config-securitylevel",
         "tux", "udev"]
-    if reponame == "RHEL2.1":
+    if reponame == "RHEL2.1.git":
         EXTRACT_SOURCE_FOR.remove("redhat-config-network")
     sources = []
     if filecache:
@@ -4749,7 +4747,7 @@ def extractSrpm(reponame, pkg, pkgdir, filecache, repodir, oldpkg):
         "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
     # XXX: also checkin the data into a per-package repo
     os.environ["GIT_DIR"] = "%s/%s" % (grepodir, reponame)
-    os.system("cd %s && { find . -path ./.git -prune -o -type f -print | sed -e 's|^./||' | xargs git-update-index --add --refresh; }" % pkgdir)
+    os.system("cd %s && { find . -path ./.git -prune -o -type f -print | sed -e 's|^./||' | xargs git-update-index -q --add --refresh; }" % pkgdir)
     os.system('cd %s && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
     del os.environ["GIT_DIR"]
     # Add changelog text:
@@ -4828,7 +4826,7 @@ def createMercurial(verbose):
         for pkg in pkgs:
             name = pkg["name"]
             pkgdir = unpackdir + "/" + name
-            extractSrpm(reponame, pkg, pkgdir, filecache, repodir,
+            extractSrpm(reponame + ".git", pkg, pkgdir, filecache, repodir,
                 oldpkgs.get(name))
             oldpkgs[name] = pkg
         os.system("cd %s && { GIT_DIR=%s git repack -d; GIT_DIR=%s git prune-packed; }" % (unpackdir, repodir, repodir))
@@ -5188,6 +5186,9 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
     # Read in repositories to compare packages:
     if verbose > 2:
         time3 = time.clock()
+    # Only very little information is taken from "repos", so we could
+    # really only keep minimal info from the repos: filename, nevra,
+    # rpm:header-range:end.
     repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0,
         reposdirs, verbose)
     if repos == None:
