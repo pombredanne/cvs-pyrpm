@@ -2373,12 +2373,12 @@ def sameSrcRpm(a, b):
     return amd5s == bmd5s
 
 def ignoreBinary():
-    return "\.gz$\n\.tgz$\n\.taz$\n\.bz2$\n\.z$\n\.Z$\n\.zip$\n" \
+    return "\.gz$\n\.tgz$\n\.taz$\n\.tbz$\n\.bz2$\n\.z$\n\.Z$\n\.zip$\n" \
         "\.ttf$\n\.db$\n\.jar$\n\.pdf$\n\.sdf$\n\.war$\n\.gsi$\n"
 
 def isBinary(filename):
-    for i in (".gz", ".tgz", ".taz", ".bz2", ".z", ".Z", ".zip", ".ttf",
-        ".db", ".jar", ".pdf", ".sdf", ".war", ".gsi"):
+    for i in (".gz", ".tgz", ".taz", ".tbz", ".bz2", ".z", ".Z", ".zip",
+        ".ttf", ".db", ".jar", ".pdf", ".sdf", ".war", ".gsi"):
         if filename.endswith(i):
             return 1
     return 0
