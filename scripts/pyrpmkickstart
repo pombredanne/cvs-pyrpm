@@ -637,6 +637,8 @@ def main():
             source_version = string.strip(lines[2])
         del lines
 
+        check_exists(stage2_img_dir, "/usr/bin/bash")
+
     else: # no_stage2
         source_release = "Red Hat Enterprise Linux"
         pkgs = source_repo.getPkgsByName("redhat-release")
@@ -852,8 +854,10 @@ def main():
                     if not part in partitions:
                         print "ERROR: Partition '%s' is not defined." % part
                         return
-                # TODO: fstype may depend on release
+                if ks["raid"][name].has_key("fstype"):
+                    partitions[name]["fstype"] = ks["raid"][name]["fstype"]
                 if not partitions[name].has_key("fstype"):
+                    # TODO: fstype may depend on release
                     partitions[name]["fstype"] = "ext3"
                 if ks["raid"][name].has_key("noformat"):
                     partitions[name]["noformat"] = 1
@@ -881,7 +885,7 @@ def main():
                 onpart = "%s%s" % (disk, part)
                 labelmap[label] = onpart
 
-                if partition[part]["fstype"] in [ "ext2", "ext3" ] and \
+                if partition[part]["fstype"] in [ "ext2", "ext3", "xfs" ] and \
                        partition[part]["native_type"] == 0x83:
 
                     # try to mount partition and search for fstab
@@ -959,7 +963,7 @@ def main():
                     continue
                 if len(splits[1]) < 1: # mountpoint
                     continue
-                if splits[2] in [ "ext2", "ext3", "swap" ]:
+                if splits[2] in [ "ext2", "ext3", "xfs", "swap" ]:
                     onpart = None
                     if splits[0][:6] == "LABEL=":
                         label = splits[0][6:]
@@ -1055,8 +1059,8 @@ def main():
                 part_size[name] = long(part["size"])
             else:
                 if name in [ "swap", "/boot" ]:
-                    # use recommeneded memory size for swap partition if no size
-                    # is given
+                    # use recommeneded memory size for swap partition if no
+                    # size is given
                     part_size[name] = long(autopart[name]["size"])
             if not part_size.has_key(name):
                 print "ERROR: Partition '%s' has no size." % name
@@ -1305,7 +1309,7 @@ def main():
         else:
             if p["native_type"] == 0x83:
                 if not part.has_key("fstype") or \
-                       not part["fstype"] in [ "ext2", "ext3" ]:
+                       not part["fstype"] in [ "ext2", "ext3", "xfs" ]:
                     print "ERROR: Partition '%s' does not match filesystem" % onpart
                     error = 1
             elif p["native_type"] == 0x82:
@@ -1355,9 +1359,11 @@ def main():
             # filesystem marked not to get formatted
             continue
 
-        if part.has_key("fstype") and part["fstype"] in [ "ext2", "ext3" ]:
+        if part.has_key("fstype") and \
+               part["fstype"] in [ "ext2", "ext3", "xfs" ]:
             label += name
-        elif name[:4] == "swap":
+        elif name[:4] == "swap" or \
+                 (part.has_key("fstype") and part["fstype"] == "swap"):
             label += "%s-swap" % onpart
         elif name[:5] == "raid.":
             pass
@@ -1418,6 +1424,7 @@ def main():
 
     # prepare to format partitions
     to_format = [ ]
+    needed_fstypes = [ ]
     for onpart in partitionmap:
         name = partitionmap[onpart]["name"]
         if name[:5] == "raid.":
@@ -1425,15 +1432,59 @@ def main():
         part = partitions[name]
         if not part.has_key("noformat"):
             to_format.append(onpart)
+        if part.has_key("fstype") and not part["fstype"] in needed_fstypes:
+            needed_fstypes.append(part["fstype"])
+        elif name[:4] == "swap" and not "swap" in needed_fstypes:
+            needed_fstypes.append("swap")
     to_format.sort()
     to_format.reverse()
 
+    # check if all needed programs are there: mdadm, mkswap, mkfs.X and tune2fs
+    prefix = ""
+    dir = ""
+    location = "host system"
+    if not no_stage2:
+        prefix = "/usr"
+        dir = stage2_img_dir
+        location = "stage2 image"    
+    if ks["raid"]:
+        if not os.path.exists(dir+prefix+"/sbin/mdadm"):
+            print "ERROR: Could not find %s/sbin/mdadm in %s." % \
+                  (prefix, location)
+            return 1
+    for fstype in needed_fstypes:
+        if fstype == "swap":
+            try:
+                check_exists(dir, "%s/sbin/mkswap" % prefix)
+            except:
+                print "ERROR: Could not find %s/sbin/mkswap in %s." % \
+                      (prefix, location)
+                return
+        else:
+            try:
+                check_exists(dir, "%s/sbin/mkfs.%s" % (prefix, fstype))
+            except:
+                print "ERROR: Could not find %s/sbin/mkfs.%s in %s." % \
+                      (prefix, fstype, location)
+                return
+    if "ext3" in needed_fstypes and install != "RHEL-2.1":
+        try:
+            check_exists(dir, "%s/sbin/tune2fs" % prefix)
+        except:
+            print "ERROR: Could not find %s/sbin/tune2fs in %s." % \
+                  (prefix, location)
+    del prefix
+    del dir
+    del location
+
+    # print confirm message
     if confirm == 1 and len(to_format) > 0:
         print "About to format these partitions:"
         for onpart in to_format:
             name = partitionmap[onpart]["name"]
             if partitionmap[onpart].has_key("raid"):
-                print "\t'%s': raid '%s'" % (name, onpart)
+                print "\t'%s': raid '%s' [ %s ]" % \
+                      (name, onpart, ", ".join(ks["raid"][name]["partitions"]))
             else:
                 if diskmap[partitionmap[onpart]["disk"]].has_key("image"):
                     disk = "%s:%s" % \
@@ -1493,27 +1544,22 @@ def main():
             create_dir(stage2_dir, "/var/log")
             create_dir(stage2_dir, "/var/tmp")
 
-            # check for needed binaries
-            check_exists(stage2_dir, "/usr/bin/bash")
-            check_exists(stage2_dir, "/usr/sbin/mke2fs")
-            check_exists(stage2_dir, "/usr/sbin/tune2fs")
-            check_exists(stage2_dir, "/usr/sbin/mkswap")
-
-            # create links
+            # create needed links
             create_link(stage2_dir, "/usr/bin/bash", "/bin/sh")
             create_link(stage2_dir, "/usr/bin/bash", "/bin/bash")
-            create_link(stage2_dir, "/usr/sbin/mke2fs", "/sbin/mke2fs")
-            create_link(stage2_dir, "/usr/sbin/tune2fs", "/sbin/tune2fs")
-            create_link(stage2_dir, "/usr/sbin/mkswap", "/sbin/mkswap")
+
+            for fstype in needed_fstypes:
+                if fstype == "swap":
+                    create_link(stage2_dir, "/usr/sbin/mkswap", "/sbin/mkswap")
+                else:
+                    name = "mkfs.%s" % fstype
+                    create_link(stage2_dir, "/usr/sbin/%s" % name,
+                                "/sbin/%s" % name)
+            if "ext3" in needed_fstypes and install != "RHEL-2.1":
+                create_link(stage2_dir, "/usr/sbin/tune2fs", "/sbin/tune2fs")
 
             if ks["raid"]:
-                if os.path.exists(stage2_dir+"/usr/sbin/mdadm"):
-                    create_link(stage2_dir, "/usr/sbin/mdadm", "/sbin/mdadm")
-                elif os.path.exists(stage2_dir+"/usr/sbin/mkraid"):
-                    create_link(stage2_dir, "/usr/sbin/mkraid", "/sbin/mkraid")
-                else:
-                    print "ERROR: Could not find raid utility in stage2 image."
-                    return 1
+                create_link(stage2_dir, "/usr/sbin/mdadm", "/sbin/mdadm")
 
             # create empty mtab
             if not create_file(stage2_dir, "/etc/mtab"):
@@ -1573,7 +1619,9 @@ def main():
                     if not ks["raid"][name].has_key("useexisting") and \
                            not ks["raid"][name].has_key("noformat"):
                         # zero raid header (superblock)
-                        print "Clearing raid header of partition '%s'" % part
+                        if verbose:
+                            print "Clearing raid header of partition '%s'" % \
+                                  part
                         s = p_size * 1024L
                         zero_raidheader(partitionmap[p]["device"], 4096, s)
 
@@ -1592,6 +1640,13 @@ def main():
                 raidmap[onpart]["device"] = dev
                 raidmap[onpart]["level"] = ks["raid"][name]["level"]
 
+                id = getId(dev)
+                if not no_stage2 and not os.path.exists(stage2_dir + dev):
+                    os.mknod(stage2_dir + dev, 0600 | stat.S_IFBLK,
+                             os.makedev(9, id))
+                if not os.path.exists(dev):
+                    os.mknod(dev, 0600 | stat.S_IFBLK, os.makedev(9, id))
+                        
                 if ks["raid"][name].has_key("useexisting") or \
                        ks["raid"][name].has_key("noformat"):
                     print "Assembling raid %s" % onpart
@@ -1604,8 +1659,9 @@ def main():
                     mdadm = "mdadm --create '%s' --run" % (dev) + \
                             " --raid-devices=%d" % (devs) + \
                             " --level=%d" % (ks["raid"][name]["level"]) + \
-                            " --size=%d" % (size) + \
                             " %s" % (string.join(devices))
+#                            " --size=%d" % (size) + \
+#
                 if verbose:
                     print mdadm
                 (status, rusage) = pyrpm.runScript(script=mdadm, chroot=chroot)
@@ -1626,8 +1682,10 @@ def main():
                 if status != 0:
                     print "ERROR: mdadm --detail failed on %s with error code %d" % (onpart, status)
                     return 1
-
-                fd = open("%s/tmp/%s.log" % (chroot, onpart))
+                if chroot:
+                    fd = open("%s/tmp/%s.log" % (chroot, onpart))
+                else:
+                    fd = open("/tmp/%s.log" % onpart)
                 while 1:
                     line = fd.readline()
                     if not line:
@@ -1657,41 +1715,28 @@ def main():
         for onpart in to_format:
             name = partitionmap[onpart]["name"]
             label = partitionmap[onpart]["label"]
-            is_image = 0
-            if partitionmap[onpart].has_key("disk"):
-                if diskmap[partitionmap[onpart]["disk"]].has_key("image"):
-                    is_image = 1
-            if partitionmap[onpart].has_key("raid"):
-                # check disks if at least one of them is a disk image
-                name = partitionmap[onpart]["name"]
-                for part in ks["raid"][name]["partitions"]:
-                    p = partitions[part]["onpart"]
-                    if diskmap[partitionmap[p]["disk"]].has_key("image"):
-                        is_image = 1
-                        break
             part = partitions[name]
 
             if part.has_key("fstype") and \
-                   (part["fstype"] == "ext2" or part["fstype"] == "ext3"):
-                mke2fs = "/sbin/mke2fs -q "
+                   part["fstype"] in [ "ext2", "ext3", "xfs", "jfs" ]:
+                mkfs = "/sbin/mkfs.%s -q " % part["fstype"]
                 if label:
-                    mke2fs += " -L '%s'" % label
+                    mkfs += " -L '%s'" % label
+
                 if part["fstype"] == "ext3":
-                    mke2fs += " -j"
-                if is_image:
-                    blocksize = 4096
-                    mke2fs += " -b %d" % blocksize
-                mke2fs += " '%s'" % partitionmap[onpart]["device"]
-                if is_image:
-                    mke2fs += " %d" % (partitionmap[onpart]["size"] / blocksize)
+                    mkfs += " -j" # enable journal for ext3
+                elif part["fstype"] == "xfs":
+                    mkfs += " -f" # force to overwrite existing filesystem
+                    
+                mkfs += " '%s'" % partitionmap[onpart]["device"]
 
-                print "Formatting '%s'" % onpart
+                print "Formatting '%s': '%s'" % (name, onpart)
                 if verbose:
-                    print mke2fs
+                    print mkfs
 
-                (status, rusage) = pyrpm.runScript(script=mke2fs, chroot=chroot)
+                (status, rusage) = pyrpm.runScript(script=mkfs, chroot=chroot)
                 if status != 0:
-                    print "ERROR: mke2fs failed."
+                    print "ERROR: mkfs.%s failed." % part["fstype"]
                     return 1
 
                 if part["fstype"] == "ext3" and install != "RHEL-2.1":
@@ -1709,16 +1754,17 @@ def main():
                         print "ERROR: tune2fs failed."
                         return 1
 
-            elif name[:4] == "swap":
+            elif name[:4] == "swap" or \
+                     (part.has_key("fstype") and part["fstype"] == "swap"):
                 l = ""
-                if install not in [ "RHEL-2.1", "RHEL-3", "FC-1", "FC-2" ]:
+                if (install.release == "RHEL" and install.version >= 4) or \
+                       (install.release == "FC" and install.version >= 2):
                     # no swap labels for RHEL-2.1, RHEL-3, FC-1
                     l = "-L '%s'" % label
-                mkswap = "/sbin/mkswap %s '%s' %d >/dev/null" % \
-                         (l, partitionmap[onpart]["device"],
-                          (partitionmap[onpart]["size"] / 1024))
+                mkswap = "/sbin/mkswap %s '%s' >/dev/null" % \
+                         (l, partitionmap[onpart]["device"])
 
-                print "Formatting '%s'" % onpart
+                print "Formatting '%s': '%s'" % (name, onpart)
                 if verbose:
                     print mkswap
 
@@ -1833,22 +1879,50 @@ def main():
                 pkgs.extend(comps.getPackageNames(group))
 
             # add default desktop
-            if ks["xconfig"] and ks["xconfig"].has_key("startxonboot"):
-                pkgs.extend(comps.getPackageNames("base-x"))
-                desktop = "GNOME"
-                if ks["xconfig"].has_key("defaultdesktop"):
-                    desktop = ks["xconfig"]["defaultdesktop"]
-                desktop = "%s-desktop" % desktop.lower()
-                if not desktop in groups:
-                    print "Adding group %s" % desktop
-                    pkgs.extend(comps.getPackageNames(desktop))
-            # TODO: add xorg driver package for FC-5
-            if install.release == "FC" and install.version > 4:
-#            if ks["xconfig"].has_key("driver"):
-#                pkgs.append("xorg-x11-drv-%s" % ks["xconfig"]["driver"])
-#            else:
-                if not "xorg-x11-drivers" in pkgs:
-                    pkgs.append("xorg-x11-drivers")
+            if ks["xconfig"]:
+                if ks["xconfig"].has_key("startxonboot"):
+                    pkgs.extend(comps.getPackageNames("base-x"))
+                    desktop = "GNOME"
+                    if ks["xconfig"].has_key("defaultdesktop"):
+                        desktop = ks["xconfig"]["defaultdesktop"]
+                    desktop = "%s-desktop" % desktop.lower()
+                    if not desktop in groups:
+                        print "Adding group %s" % desktop
+                        pkgs.extend(comps.getPackageNames(desktop))
+                # TODO: add xorg driver package for FC-5
+                if install.release == "FC" and install.version > 4:
+                    if ks["xconfig"].has_key("driver"):
+                        pkgs.append("xorg-x11-drv-%s" % \
+                                    ks["xconfig"]["driver"])
+                    else:
+                        if not "xorg-x11-drivers" in pkgs:
+                            pkgs.append("xorg-x11-drivers")
+
+            # add packages for needed filesystem types
+            for fstype in needed_fstypes:
+                if fstype == "swap":
+                    continue
+                mkfs = "/sbin/mkfs.%s" % fstype
+                s = source_repo.searchFilenames(mkfs)
+                if len(s) == 0:
+                    if not source_repo._matchesFile(mkfs):
+                        source_repo.importFilelist()
+                        s = source_repo.searchFilenames(mkfs)
+                if len(s) > 0:
+                    found = False
+                    for pkg in s:
+                        if pkg in pkgs:
+                            found = True
+                            break
+                    if not found:
+                        pkg = s[0]
+                        print "Adding package '%s' for '%s'." % \
+                              (pkg["name"], mkfs)
+                        pkgs.append(pkg["name"])
+                else:
+                    print "ERROR: Could not find package providing '%s'." % \
+                          mkfs
+                    return 1
 
             # add comps package
             if not "comps" in pkgs:
@@ -1861,8 +1935,6 @@ def main():
                     if not source_repo._matchesFile("/sbin/mdadm"):
                         source_repo.importFilelist()
                         s = source_repo.searchFilenames("/sbin/mdadm")
-                if len(s) == 0:
-                    s = source_repo.searchFilenames("/sbin/mkraid")
                 if len(s) > 0:
                     found = False
                     for pkg in s:
@@ -2016,7 +2088,8 @@ def main():
     create_dir(buildroot, "/etc/rpm")
     create_dir(buildroot, "/etc/sysconfig")
     create_dir(buildroot, "/proc")
-    if install != "RHEL-3":
+    if (install.release == "RHEL" and install.version >= 4) or \
+           (install.release == "FC" and install.version >= 2):
         create_dir(buildroot, "/sys")
     create_dir(buildroot, "/tmp")
     os.chmod(buildroot+"/tmp", 1777)
@@ -2088,17 +2161,16 @@ def main():
         content.extend( [ "none\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n",
                           "none\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n",
                           "none\t\t/proc\t\tproc\tdefaults\t0 0\n" ] )
-        if (install.release == "RHEL" and install.version < 4) or \
-               (install.release == "FC" and install.version < 2):
+        if (install.release == "RHEL" and install.version >= 4) or \
+               (install.release == "FC" and install.version >= 2):
             content.append("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
-        elif install == "FC-2":
-            content.append("none\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
         for name in parts:
             if name[:4] != "swap":
                 continue
             onpart = onparts[name]
             if (install.release == "RHEL" and install.version < 4) or \
-                   (install.release == "FC" and install.version < 3):
+                   (install.release == "FC" and install.version < 2) or \
+                   not partitionmap[onpart]["label"]:
                 # pre RHEL-4, pre FC-2 does not support swap labels
                 what = "/dev/%s" % onpart
             else:
@@ -2135,8 +2207,8 @@ def main():
         print "Writing '/proc/mdstat'"
         content = [ ]
         for raid in raidmap:
-            content.append("%s : active raid%d " % (raid, 
-                                                    raidmap[raid]["level"]))
+            content.append("%s : active raid%d \n" % \
+                           (raid, raidmap[raid]["level"]))
         create_file(buildroot, "/proc/mdstat", content)
 
     # /etc/hosts
