@@ -307,6 +307,9 @@ class KickstartConfig(dict):
                         self[opt] = { }
                     if self[opt].has_key(_args[0]):
                         raise ValueError, "raid '%s' is not unique.", _args[0]
+                    if _dict.has_key("level") and \
+                           _dict["level"].lower()[:4] == "raid":
+                        _dict["level"] = _dict["level"][4:]
                     self.convertLong(_dict, "level")
                     self.convertLong(_dict, "spares")
                     _dict["partitions"] = _args[1:]
@@ -471,7 +474,7 @@ class KickstartConfig(dict):
                     raise ValueError, \
                           "Partition '%s' has no filesystem type." % name
                 if part.has_key("fstype") and \
-                       part["fstype"] not in [ "ext2", "ext3" ]:
+                       part["fstype"] not in [ "ext2", "ext3", "xfs", "jfs" ]:
                     raise ValueError, \
                           "'%s': Filesystem type '%s' is not supported" % \
                           (name, part["fstype"])
@@ -518,6 +521,16 @@ class KickstartConfig(dict):
                     disk[ondisk]["grow"] = name
             del partitions
             del disk
+            if "/boot" in self["partition"] and \
+                   self["partition"]["/boot"]["filesystem"] not in \
+                   [ "ext", "ext3" ]:
+                raise ValueError, \
+                      "Filesystem of '/boot' has to be ext2 or ext3."
+            elif "/" in self["partition"] and \
+                     self["partition"]["/"]["filesystem"] not in \
+                     [ "ext", "ext3" ]:
+                raise ValueError, \
+                      "Filesystem of '/' has to be ext2 or ext3 if there is no /boot partition with ext2 or ext3 filesystem."
 
         if self["raid"]:
             partitions = [ ]
@@ -552,14 +565,18 @@ class KickstartConfig(dict):
                               "Partition '%s' used more than once." % p
                     partitions.append(p)
                 if part.has_key("fstype") and \
-                       part["fstype"] not in [ "ext2", "ext3" "swap" ]:
+                       part["fstype"] not in [ "ext2", "ext3", "xfs", "jfs", "swap" ]:
                     raise ValueError, \
                           "raid '%s': Filesystem type '%s' is not supported." % \
                           (name, part["fstype"])
             del partitions
             del devices
-            if "/boot" in self["raid"] and self["raid"]["/boot"]["level"] != 1:
-                raise ValueError, "Raid level of '/boot' has to be 1."
+            if "/boot" in self["raid"]:
+                if self["raid"]["/boot"]["level"] != 1:
+                    raise ValueError, "Raid level of '/boot' has to be 1."
+                if self["raid"]["/boot"].has_key("fstype") and \
+                       self["raid"]["/boot"]["fstype"] not in [ "ext2", "ext3" ]:
+                    raise ValueError, "Filesystem of '/boot' has to be ext2 or ext3."
             if "/" in self["raid"] and self["raid"]["/"]["level"] != 1 and \
                    not "/boot" in self["raid"]:
                 raise ValueError, "Raid level of '/' has to be 1 if there is no '/boot' partition."
