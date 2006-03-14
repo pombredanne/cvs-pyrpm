@@ -534,6 +534,8 @@ class Disk(dict):
         part = self.ped_disk.partition_new(type, _fstype, s, end)
         if fstype == "raid":
             part.set_flag(parted.PARTITION_RAID, 1)
+        if fstype == "lvm":
+            part.set_flag(parted.PARTITION_LVM, 1)
         constraint = self.ped_disk.dev.constraint_any()
         r = self.ped_disk.add_partition(part, constraint)
         if r:
@@ -669,7 +671,7 @@ def umount(what):
             # kill all processes running in dir
             print "Killing all processes running in  '%s'" % what
         if i > 0:
-            (status, rusage) = functions.runScript(\
+            (status, rusage, log) = functions.runScript(\
                 script="/sbin/fuser -k '%s'" % what)
             if status != 0:
                 print "WARNING: Failed to kill processes."
@@ -688,7 +690,7 @@ def umount(what):
 def swapon(device):
     swapon = "/sbin/swapon '%s'" % device
     print "Enable swap on '%s'" % device
-    (status, rusage) = functions.runScript(script=swapon)
+    (status, rusage, log) = functions.runScript(script=swapon)
     if status != 0:
         print "ERROR: swapon failed."
         return 1
@@ -697,7 +699,7 @@ def swapon(device):
 def swapoff(device):
     swapoff = "/sbin/swapoff '%s'" % device
     print "Disable swap on '%s'" % device
-    (status, rusage) = functions.runScript(script=swapoff)
+    (status, rusage, log) = functions.runScript(script=swapoff)
     if status != 0:
         print "ERROR: swapoff failed."
         return 1

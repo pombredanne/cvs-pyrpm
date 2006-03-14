@@ -250,26 +250,8 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
 
     if script != None:
         os.unlink(tmpfilename)
-    if status != 0: #or cret != "":
-        if os.WIFEXITED(status):
-            rpmconfig.printError("Script %s ended with exit code %d:" % \
-                                 (str(args), os.WEXITSTATUS(status)))
-        elif os.WIFSIGNALED(status):
-            core = ""
-            if os.WCOREDUMP(status):
-                core = "(with coredump)"
-            rpmconfig.printError("Script %s killed by signal %d%s:" % \
-                                 (str(args), os.WTERMSIG(status), core))
-        elif os.WIFSTOPPED(status):     # Can't happen, needs os.WUNTRACED
-            rpmconfig.printError("Script %s stopped with signal %d:" % \
-                                 (str(args), os.WSTOPSIG(status)))
-        else:
-            rpmconfig.printError("Script %s ended (fixme: reason unknown):" % \
-                                 str(args))
-        cret.rstrip()
-        rpmconfig.printError("Script %s failed: %s" % (args, cret))
-    # FIXME: should we be swallowing the script output?
-    return (status, rusage_val)
+
+    return (status, rusage_val, cret)
 
 def installFile(rfi, infd, size, useAttrs=True):
     """Install a file described by RpmFileInfo rfi, with input of given size
