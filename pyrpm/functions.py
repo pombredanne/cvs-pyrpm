@@ -162,7 +162,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
     if prog == None:
         prog = "/bin/sh"
     if prog == "/bin/sh" and script == None:
-        return (0, None)
+        return (0, None, "")
     if chroot != None:
         tdir = chroot+"/"+tmpdir
     else:
@@ -175,7 +175,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
         try:
             os.makedirs(tdir, mode=01777)
         except:
-            return (0, None)
+            return (0, None, "")
     if isinstance(prog, TupleType):
         args = prog
     else:
@@ -186,7 +186,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
         # FIXME: assumes delayldconfig is checked after all runScript
         # invocations
         rpmconfig.delayldconfig = 1
-        return (0, None)
+        return (0, None, "")
     elif rpmconfig.delayldconfig:
         rpmconfig.delayldconfig = 0
         runScript("/sbin/ldconfig", force=1)
