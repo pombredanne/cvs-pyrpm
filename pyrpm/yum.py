@@ -166,7 +166,7 @@ class RpmYum:
                     gpgkeys = sec["gpgkey"]
                 if self.config.timer:
                     time1 = clock()
-                self.config.printInfo(1, "Reading repository %s.\n" % key)
+                self.config.printInfo(1, "Reading repository %s\n" % key)
                 if self.__addSingleRepo(baseurls, gexcludes + excludes,
                                         key, gpgkeys) == 0:
                     return 0
@@ -202,7 +202,7 @@ class RpmYum:
         if self.config.timer:
             time1 = clock()
         # Create and read db
-        self.config.printInfo(1, "Reading local RPM database.\n")
+        self.config.printInfo(1, "Reading local RPM database\n")
         self.pydb = database.getRpmDBFactory(self.config, self.config.dbpath,
                                              self.config.buildroot)
         self.pydb.open()
@@ -450,13 +450,12 @@ class RpmYum:
 
         if   self.command.endswith("install"):
             return self.opresolver.install(pkg)
-        elif self.command.endswith("update"):
+        elif self.command.endswith("update") or \
+             self.command.endswith("upgrade"):
             if pkg["name"] in self.always_install:
                 return self.opresolver.install(pkg)
             else:
                 return self.opresolver.update(pkg)
-        elif self.command.endswith("upgrade"):
-            return self.opresolver.update(pkg)
         elif self.command.endswith("remove"):
             return self.opresolver.erase(pkg)
         else:

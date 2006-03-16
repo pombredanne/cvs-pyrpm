@@ -193,14 +193,16 @@ class RpmController:
             if not ret:
                 return None
         self.triggerlist = _Triggers(self.config)
+        if not self.config.nocache:
+            self.config.printInfo(1, "Caching network packages\n")
         for (op, pkg) in operations:
             if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
                 self.triggerlist.addPkg(pkg)
                 if not self.config.nocache and \
                    (pkg.source.startswith("http://") or \
-                    pkg.has_key("yumrepo")):
-                    if pkg.has_key("yumrepo"):
-                        nc = pkg["yumrepo"].getNetworkCache()
+                    pkg.yumrepo != None):
+                    if pkg.yumrepo != None:
+                        nc = pkg.yumrepo.getNetworkCache()
                     else:
                         nc = NetworkCache(self.config, "/", os.path.join(self.config.cachedir, "default"))
                     self.config.printInfo(2, "Caching network package %s\n" % pkg.getNEVRA())
@@ -252,7 +254,7 @@ class RpmController:
         setCloseOnExec()
         sys.stdout.flush()
         for i in xrange(0, numops, pkgsperfork):
-            subop = operations[:pkgsperfork]
+            subop = operations[i:i+pkgsperfork]
             for (op, pkg) in subop:
                 try:
                     pkg.close()
@@ -296,7 +298,6 @@ class RpmController:
                         # Shouldn't really happen when pkg is open for reading,
                         # anyway.
                         pass
-                operations = operations[pkgsperfork:]
             else:
                 del operations
                 gc.collect()
@@ -393,6 +394,10 @@ class RpmController:
                 self.db.close()
                 sys.exit(0)
         self.db.close()
+        for (op, pkg) in operations:
+            if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
+                if pkg.yumrepo != None and pkg.yumhref != None:
+                    pkg.yumrepo.getNetworkCache().clear(pkg.yumhref)
         return 1
 
     def appendUri(self, uri):

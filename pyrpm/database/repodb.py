@@ -304,7 +304,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     continue
                 #if pkg["arch"] == "src" or self.__isExcluded(pkg):
                 #    continue
-                pkg["yumrepo"] = self
+                pkg.yumrepo = self
                 self.addPkg(pkg)
             elif props.has_key("name"):
                 try:
@@ -608,13 +608,13 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     pkg["signature"]["sha1header"] = Valuef()
             elif name == "location":
                 props = self.__getProps(reader)
-                try:
-                    if self.config.nocache:
-                        pkg.source = os.path.join(self.baseurl, props["href"])
-                    else:
-                        pkg.source = props["href"]
-                except KeyError:
+                if not props.has_key("href"):
                     raise ValueError, "Missing href= in <location>"
+                if self.config.nocache:
+                    pkg.source = os.path.join(self.baseurl, props["href"])
+                else:
+                    pkg.source = props["href"]
+                pkg.yumhref = props["href"]
             elif name == "size":
                 props = self.__getProps(reader)
                 try:

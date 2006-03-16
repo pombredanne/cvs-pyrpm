@@ -188,6 +188,8 @@ class RpmPackage(RpmData):
         self.config = config
         self.clear()
         self.source = source
+        self.yumrepo = None     # Yum repository if package is from that repo
+        self.yumhref = None     # Original relative href in yum repo
         self.verify = verify    # Verify file format constraints and signatures
         self.hdronly = hdronly  # Don't open the payload
         self.db = db            # RpmDatabase
