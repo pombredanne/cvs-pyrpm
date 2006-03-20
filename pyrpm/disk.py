@@ -505,7 +505,7 @@ class Disk(dict):
     def add_partition(self, id, start, end, type, fstype):
         _fstype = None
         if fstype:
-            if fstype == "raid":
+            if fstype in [ "raid", "lvm" ]:
                 _fstype = None
             else:
                 _fstype = parted.file_system_type_get(fstype)
@@ -534,7 +534,7 @@ class Disk(dict):
         part = self.ped_disk.partition_new(type, _fstype, s, end)
         if fstype == "raid":
             part.set_flag(parted.PARTITION_RAID, 1)
-        if fstype == "lvm":
+        elif fstype == "lvm":
             part.set_flag(parted.PARTITION_LVM, 1)
         constraint = self.ped_disk.dev.constraint_any()
         r = self.ped_disk.add_partition(part, constraint)
