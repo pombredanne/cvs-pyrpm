@@ -428,7 +428,8 @@ def main():
         interpreter = "/bin/sh"
         if ks["pre"].has_key("interpreter"):
             interpreter = ks["pre"]["interpreter"]
-        (status, rusage) = pyrpm.runScript(interpreter, ks["pre"]["script"])
+        (status, rusage, msg) = pyrpm.runScript(interpreter,
+                                                ks["pre"]["script"])
         if status != 0:
             if ks["pre"].has_key("erroronfail"):
                 print "ERROR: Pre script failed, aborting."
@@ -1585,8 +1586,9 @@ def main():
                 copy_device(stage2_dir, partitionmap[onpart]["device"])
 
             # test if bash is runnable in changeroot
-            (status, rusage) = pyrpm.runScript( \
-                script="/bin/bash --version 2>&1 >/dev/null", chroot=stage2_dir)
+            (status, rusage, msg) = pyrpm.runScript( \
+                script="/bin/bash --version 2>&1 >/dev/null",
+                chroot=stage2_dir)
             if status != 0:
                 print "ERROR: /bin/bash in stage2 is not usable, exiting."
                 return 1
@@ -1664,7 +1666,8 @@ def main():
 #
                 if verbose:
                     print mdadm
-                (status, rusage) = pyrpm.runScript(script=mdadm, chroot=chroot)
+                (status, rusage, msg) = pyrpm.runScript(script=mdadm,
+                                                        chroot=chroot)
                 if status != 0:
                     print "ERROR: mdadm failed on %s with error code %d" % \
                           (onpart, status)
@@ -1678,7 +1681,8 @@ def main():
                 mdadm = "mdadm --detail '%s' > /tmp/%s.log" % (dev, onpart)
                 if verbose:
                     print mdadm
-                (status, rusage) = pyrpm.runScript(script=mdadm, chroot=chroot)
+                (status, rusage, msg) = pyrpm.runScript(script=mdadm,
+                                                        chroot=chroot)
                 if status != 0:
                     print "ERROR: mdadm --detail failed on %s with error code %d" % (onpart, status)
                     return 1
@@ -1734,7 +1738,8 @@ def main():
                 if verbose:
                     print mkfs
 
-                (status, rusage) = pyrpm.runScript(script=mkfs, chroot=chroot)
+                (status, rusage, msg) = pyrpm.runScript(script=mkfs,
+                                                        chroot=chroot)
                 if status != 0:
                     print "ERROR: mkfs.%s failed." % part["fstype"]
                     return 1
@@ -1748,8 +1753,8 @@ def main():
                         print "Tuning filesystem '%s'" % onpart
                         print tune2fs
 
-                    (status, rusage) = pyrpm.runScript(script=tune2fs,
-                                                       chroot=chroot)
+                    (status, rusage, msg) = pyrpm.runScript(script=tune2fs,
+                                                            chroot=chroot)
                     if status != 0:
                         print "ERROR: tune2fs failed."
                         return 1
@@ -1768,7 +1773,8 @@ def main():
                 if verbose:
                     print mkswap
 
-                (status, rusage) = pyrpm.runScript(script=mkswap, chroot=chroot)
+                (status, rusage, msg) = pyrpm.runScript(script=mkswap,
+                                                        chroot=chroot)
                 if status != 0:
                     print "ERROR: mkswap failed."
                     return 1
@@ -2416,7 +2422,8 @@ def main():
                     authconfig += " --%s=%s" % (tag, ks["authconfig"][tag])
                 else:
                     authconfig += " --%s" % tag
-            (status, rusage) = pyrpm.runScript(script=authconfig, chroot=buildroot)
+            (status, rusage, msg) = pyrpm.runScript(script=authconfig,
+                                                    chroot=buildroot)
             if status != 0:
                 print "ERROR: authconfig failed"
 
@@ -2437,7 +2444,7 @@ def main():
                 for i in range(salt_len):
                     salt += random.choice(string.letters+string.digits+"./")
                 password = crypt.crypt(password, salt)
-            (status, rusage) = pyrpm.runScript( \
+            (status, rusage, msg) = pyrpm.runScript( \
                     script="/usr/sbin/usermod -p '%s' root" % password,
                     chroot=buildroot)
             if status != 0:
@@ -2483,7 +2490,8 @@ def main():
         else:
             lokkit = "/usr/sbin/lokkit --quiet --nostart --selinux='%s'" % \
                      ks["selinux"].keys()[0]
-            (status, rusage) = pyrpm.runScript(script=lokkit, chroot=buildroot)
+            (status, rusage, msg) = pyrpm.runScript(script=lokkit,
+                                                    chroot=buildroot)
             if status != 0:
                 print "ERROR: Configuring selinux failed."
 
@@ -2505,9 +2513,9 @@ def main():
             # Create /etc/localtime
             # do not hardlink /etc/localtime, has to be copy for
             # system-config-date
-            (status, rusage) = pyrpm.runScript( \
-                    script="rm -f /etc/localtime; cp '%s' /etc/localtime" % tzfile,
-                    chroot=buildroot)
+            (status, rusage, msg) = pyrpm.runScript( \
+                    script="rm -f /etc/localtime; cp '%s' /etc/localtime" % \
+                    tzfile, chroot=buildroot)
             if status != 0:
                 print "ERROR: Could not create /etc/localtime."
 
@@ -2596,7 +2604,7 @@ def main():
 
             # enable firewall
             if ks["firewall"].has_key("enabled"):
-                (status, rusage) = pyrpm.runScript( \
+                (status, rusage, msg) = pyrpm.runScript( \
                         script="/sbin/chkconfig iptables on", chroot=buildroot)
                 if status != 0:
                     print "ERROR: Could not enable firewall."
@@ -2616,8 +2624,8 @@ def main():
 
             lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % \
                      string.join(fwargs)
-            (status, rusage) = pyrpm.runScript(script=lokkit,
-                                               chroot=buildroot)
+            (status, rusage, msg) = pyrpm.runScript(script=lokkit,
+                                                    chroot=buildroot)
             if status != 0:
                 print "ERROR: Configuration of firewall failed"
 
@@ -2638,7 +2646,7 @@ def main():
         if not os.path.exists(buildroot+"/usr/sbin/mouseconfig"):
             print "ERROR: /usr/sbin/mouseconfig does not exist, skipping."
         else:
-            (status, rusage) = pyrpm.runScript( \
+            (status, rusage, msg) = pyrpm.runScript( \
                     script="/usr/sbin/mouseconfig --noui genericwheelps/2",
                     chroot=buildroot)
             if status != 0:
@@ -3038,7 +3046,7 @@ def main():
         if not os.path.exists(buildroot+"/bin/rpm"):
             print "ERROR: Could not determine installed kernels, /bin/rpm does not exist, skipping."
         else:
-            (status, rusage) = pyrpm.runScript(\
+            (status, rusage, msg) = pyrpm.runScript(\
                 script="rpm -qla 'kernel*' | grep /boot/vmlinuz | cut -d- -f2- >/tmp/installed-kernels 2>/dev/null", chroot=buildroot)
             if status != 0:
                 print "ERROR: Failed to determine installed kernels, aborting."
@@ -3197,7 +3205,7 @@ def main():
                 if not os.path.exists(buildroot+"/sbin/grub"):
                     print "ERROR: /sbin/grub does not exist, skipping."
                 else:
-                    (status, rusage) = pyrpm.runScript( \
+                    (status, rusage, msg) = pyrpm.runScript( \
                         script="/bin/sh /tmp/grub-setup", chroot=buildroot)
                     if status != 0:
                         print "ERROR: grub setup failed"
@@ -3213,8 +3221,9 @@ def main():
         if ks["post"].has_key("interpreter"):
             interpreter = ks["post"]["interpreter"]
 
-        (status, rusage) = pyrpm.runScript(interpreter, ks["post"]["script"],
-                                           chroot=chroot)
+        (status, rusage, msg) = pyrpm.runScript(interpreter,
+                                                ks["post"]["script"],
+                                                chroot=chroot)
         if status != 0:
             if ks["post"].has_key("erroronfail"):
                 print "ERROR: post script failed"
