@@ -45,8 +45,7 @@ class KickstartConfig(dict):
     REQUIRED_TAGS = [ "authconfig", "bootloader", "keyboard", "lang",
                       "langsupport", "rootpw", "timezone" ]
     # Currently unsupported tags:
-    # driverdisk, logvol, volgroup
-
+    # driverdisk
 
     def __init__(self, filename):
         dict.__init__(self)
@@ -257,7 +256,19 @@ class KickstartConfig(dict):
                         self[opt]["supported"] = _args
                     if len(self[opt]) == 0:
                         raise ValueError, "Error in line '%s'" % line
-                # TODO: logvol
+                elif opt == "logvol":
+                    if args[1] == "swap":
+                        args[1] = "swap.%d" % swap_id
+                        swap_id += 1                    
+                    dict = self.parseSub(opt, args[1:],
+                                         [ "vgname:", "size:", "name:", 
+                                           "noformat", "useexisting",
+                                           "fstype:", "fsoptions:",
+                                           "bytes-per-inode:", "grow",
+                                           "maxsize:", "recommended",
+                                           "percent" ])
+                    self.convertLong(dict, "bytes-per-inode")
+                    self.convertDouble(dict, "percent")
                 elif opt == "network":
                     dict = self.parseMultiple(opt, args[1:],
                                               [ "bootproto:", "device:", "ip:",
@@ -281,19 +292,21 @@ class KickstartConfig(dict):
                     if args[1] == "swap":
                         args[1] = "swap.%d" % swap_id
                         swap_id += 1
-                    self.parseSub("partition", args[1:],
-                                  [ "size:", "grow", "maxsize:", "noformat",
-                                    "onpart:", "usepart:", "ondisk:",
-                                    "ondrive:", "asprimary", "fstype:",
-                                    "fsoptions:", "label:", "start:", "end:",
-                                    "bytes-per-inode:", "recommended",
-                                    "onbiosdisk" ],
-                                  { "usepart": "onpart", "ondrive": "ondisk" })
-                    self.convertLong(self["partition"], "size")
-                    self.convertLong(self["partition"], "maxsize")
-                    self.convertLong(self["partition"], "start")
-                    self.convertLong(self["partition"], "end")
-                    self.convertLong(self["partition"], "bytes-per-inode")
+                    dict = self.parseSub("partition", args[1:],
+                                         [ "size:", "grow", "maxsize:",
+                                           "noformat", "onpart:", "usepart:",
+                                           "ondisk:", "ondrive:", "asprimary",
+                                           "fstype:", "fsoptions:", "label:",
+                                           "start:", "end:",
+                                           "bytes-per-inode:", "recommended",
+                                           "onbiosdisk" ],
+                                         { "usepart": "onpart",
+                                           "ondrive": "ondisk" })
+                    self.convertLong(dict, "size")
+                    self.convertLong(dict, "maxsize")
+                    self.convertLong(dict, "start")
+                    self.convertLong(dict, "end")
+                    self.convertLong(dict, "bytes-per-inode")
                 elif opt == "raid":
                     (_dict, _args) = self.parseArgs(opt, args[1:], 
                                                     [ "level:", "device:",
@@ -335,7 +348,20 @@ class KickstartConfig(dict):
                                        "resolution:", "depth:", "driver:" ],
                                      { "startX": "startxonboot",
                                        "videoRam": "videoram" })
-                # TODO: volgroup
+                elif opt == "volgroup":
+                    (_dict, _args) = self.parseArgs(opt, args[1:],
+                                                    [ "noformat",
+                                                      "useexisting",
+                                                      "pesize:" ])
+                    if len(_args) < 2:
+                        raise ValueError, "'%s' is unsupported" % line
+                    self.convertLong(_dict, "pesize")
+                    _dict["partitions"] = _args[1:]
+                    if not self[opt]:
+                        self[opt] = { }
+                    if not self[opt].has_key(_args[0]):
+                        self[opt][_args[0]] = { }
+                    self[opt][_args[0]] = _dict
                 else:
                     print "'%s' is unsupported" % line
             elif in_packages:
@@ -474,7 +500,8 @@ class KickstartConfig(dict):
                     raise ValueError, \
                           "Partition '%s' has no filesystem type." % name
                 if part.has_key("fstype") and \
-                       part["fstype"] not in [ "ext2", "ext3", "xfs", "jfs" ]:
+                       part["fstype"] not in [ "ext2", "ext3", "xfs", "jfs",
+                                               "reiserfs" ]:
                     raise ValueError, \
                           "'%s': Filesystem type '%s' is not supported" % \
                           (name, part["fstype"])
@@ -522,13 +549,12 @@ class KickstartConfig(dict):
             del partitions
             del disk
             if "/boot" in self["partition"] and \
-                   self["partition"]["/boot"]["filesystem"] not in \
+                   self["partition"]["/boot"]["fstype"] not in \
                    [ "ext", "ext3" ]:
                 raise ValueError, \
                       "Filesystem of '/boot' has to be ext2 or ext3."
             elif "/" in self["partition"] and \
-                     self["partition"]["/"]["filesystem"] not in \
-                     [ "ext", "ext3" ]:
+                     self["partition"]["/"]["fstype"] not in [ "ext", "ext3" ]:
                 raise ValueError, \
                       "Filesystem of '/' has to be ext2 or ext3 if there is no /boot partition with ext2 or ext3 filesystem."
 
@@ -565,7 +591,8 @@ class KickstartConfig(dict):
                               "Partition '%s' used more than once." % p
                     partitions.append(p)
                 if part.has_key("fstype") and \
-                       part["fstype"] not in [ "ext2", "ext3", "xfs", "jfs", "swap" ]:
+                       part["fstype"] not in [ "ext2", "ext3", "xfs", "jfs",
+                                               "reiserfs", "swap" ]:
                     raise ValueError, \
                           "raid '%s': Filesystem type '%s' is not supported." % \
                           (name, part["fstype"])
@@ -575,11 +602,40 @@ class KickstartConfig(dict):
                 if self["raid"]["/boot"]["level"] != 1:
                     raise ValueError, "Raid level of '/boot' has to be 1."
                 if self["raid"]["/boot"].has_key("fstype") and \
-                       self["raid"]["/boot"]["fstype"] not in [ "ext2", "ext3" ]:
+                       self["raid"]["/boot"]["fstype"] not in [ "ext2",
+                                                                "ext3" ]:
                     raise ValueError, "Filesystem of '/boot' has to be ext2 or ext3."
             if "/" in self["raid"] and self["raid"]["/"]["level"] != 1 and \
                    not "/boot" in self["raid"]:
                 raise ValueError, "Raid level of '/' has to be 1 if there is no '/boot' partition."
+
+        if self["volgroup"]:
+            for group in self["volgroup"]:
+                for name in self["volgroup"][group]["partitions"]:
+                    if name[:3] != "pv.":
+                        raise ValueError, "volgroup '%s': Illegal partition name '%s'." (group, name)
+                    if not name in self["partition"]:
+                        raise ValueError, "volgroup '%s': Partition '%s' is not defined." (group, name)
+
+        if self["logvol"]:
+            if not self["volgroup"]:
+                raise ValueError, "No volgroups defined."
+
+            names = [ ]
+            for mntpoint in self["logvol"]:
+                if not self["logvol"][mntpoint].has_key("vgname"):
+                    raise ValueError, "logvol '%s' has no vgname." % mntpoint
+                if not self["logvol"][mntpoint].has_key("size"):
+                    raise ValueError, "logvol '%s' has no size." % mntpoint
+                if not self["logvol"][mntpoint].has_key("name"):
+                    raise ValueError, "logvol '%s' has no name." % mntpoint
+                if not self["logvol"][mntpoint]["vgname"] in self["volgroup"].keys():
+                    raise ValueError, "logvol '%s': volgroup '%s' is not defined." % \
+                          (mntpoint, self["logvol"][mntpoint]["vgname"])
+                if self["logvol"][mntpoint]["name"] in names:
+                    raise ValueError, "Name of logvol '%s' is not unique." % \
+                          mntpoint
+                names.append(self["logvol"][mntpoint]["name"])
 
         if self["repository"]:
             for name in self["repository"]:
@@ -643,6 +699,7 @@ class KickstartConfig(dict):
             raise ValueError, "%s already set." % tag
 
         self[tag][args[0]] = dict
+        return dict
 
     def stripQuotes(self, var):
         if var and len(var) > 2:
@@ -657,6 +714,13 @@ class KickstartConfig(dict):
                 dict[key] = long(dict[key])
             except Exception, msg:
                 print "'%s'=%s is no valid long value." % (key, dict[key])
+
+    def convertDouble(self, dict, key):
+        if dict.has_key(key):
+            try:
+                dict[key] = double(dict[key])
+            except Exception, msg:
+                print "'%s'=%s is no valid double value." % (key, dict[key])
 
     ############################ static functions ############################
 
