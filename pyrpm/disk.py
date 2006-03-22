@@ -16,8 +16,13 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
+try:
+    import parted
+    PARTED_MODULE_LOADED = True
+except:
+    PARTED_MODULE_LOADED = False
+
 import os, stat, string, time
-import parted
 import functions, loop
 
 # pyparted classes:
@@ -183,11 +188,18 @@ class Partition(dict):
         0xff: "BBT",              # Xenix Bad Block Table
         }
 
-    PARTITION_PRIMARY = parted.PARTITION_PRIMARY
-    PARTITION_EXTENDED = parted.PARTITION_EXTENDED
-    PARTITION_LOGICAL = parted.PARTITION_LOGICAL
+    if PARTED_MODULE_LOADED:
+        PARTITION_PRIMARY = parted.PARTITION_PRIMARY
+        PARTITION_EXTENDED = parted.PARTITION_EXTENDED
+        PARTITION_LOGICAL = parted.PARTITION_LOGICAL
+    else:
+        PARTITION_PRIMARY = None
+        PARTITION_EXTENDED = None
+        PARTITION_LOGICAL = None
 
     def __init__(self, ped_partition):
+        if not PARTED_MODULE_LOADED:
+            raise ImportError, "Unable to import parted module. Please install the pyparted package"
         self.ped_partition = ped_partition
 
     def __getitem__(self, item):

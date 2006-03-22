@@ -17,7 +17,13 @@
 #
 
 
-import sqlite, os, os.path, string
+try:
+    import sqlite
+    SQLITE_MODULE_LOADED = True
+except:
+    SQLITE_MODULE_LOADED = False
+
+import os, os.path, string
 from types import TupleType
 from binascii import b2a_hex, a2b_hex
 
@@ -33,6 +39,8 @@ class RpmSQLiteDB(memorydb.RpmMemoryDB):
     # Tags stored in separate tables
     tagnames = ["providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion", "obsoletename", "obsoleteflags", "obsoleteversion", "conflictname", "conflictflags", "conflictversion", "triggername", "triggerflags", "triggerversion", "triggerscripts", "triggerscriptprog", "triggerindex", "i18ntable", "summary", "description", "changelogtime", "changelogname", "changelogtext", "prefixes", "pubkeys", "group", "dirindexes", "dirnames", "basenames", "fileusername", "filegroupname", "filemodes", "filemtimes", "filedevices", "fileinodes", "filesizes", "filemd5s", "filerdevs", "filelinktos", "fileflags", "fileverifyflags", "fileclass", "filelangs", "filecolors", "filedependsx", "filedependsn", "classdict", "dependsdict", "policies", "filecontexts", "oldfilenames"]
     def __init__(self, config, source, buildroot=None):
+        if not SQLITE_MODULE_LOADED:
+            raise ImportError, "Unable to import sqlite module. Please install the python-sqlite package"
         memorydb.RpmMemoryDB.__init__(self, config, source, buildroot)
         self.cx = None
 

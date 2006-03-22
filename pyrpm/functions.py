@@ -581,69 +581,68 @@ def getFreeDiskspace(config, operations):
             except Exception, e:
                 config.printError("Error rereading package: %s" % e)
                 return 0
-            dirnames = pkg["dirnames"]
-            if dirnames == None:
+        dirnames = pkg["dirnames"]
+        if dirnames == None:
+            continue
+        for dirname in dirnames:
+            while dirname.endswith("/") and len(dirname) > 1:
+                dirname = dirname[:-1]
+            if dirhash.has_key(dirname):
                 continue
-            for dirname in dirnames:
-                while dirname.endswith("/") and len(dirname) > 1:
-                    dirname = dirname[:-1]
-                if dirhash.has_key(dirname):
-                    continue
-                dnames = []
-                devname = br + dirname
-                while 1:
-                    dnames.append(dirname)
-                    try:
-                        dev = os.stat(devname).st_dev
+            dnames = []
+            devname = br + dirname
+            while 1:
+                dnames.append(dirname)
+                try:
+                    dev = os.stat(devname).st_dev
+                    break
+                except:
+                    dirname = os.path.dirname(dirname)
+                    devname = os.path.dirname(devname)
+                    if dirhash.has_key(dirname):
+                        dev = dirhash[dirname]
                         break
-                    except:
-                        dirname = os.path.dirname(dirname)
-                        devname = os.path.dirname(devname)
-                        if dirhash.has_key(dirname):
-                            dev = dirhash[dirname]
-                            break
-                for d in dnames:
-                    dirhash[d] = dev
-                if not freehash.has_key(dev):
-                    statvfs = os.statvfs(devname)
-                    freehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
-                    minfreehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
-                if not mountpoint.has_key(dev):
-                    while len(dirname) > 0:
-                        if os.path.ismount(dirname):
-                            mountpoint[dev] = dirname
-                            break
-                        dirname = os.path.dirname(dirname)
-            dirindexes = pkg["dirindexes"]
-            filesizes = pkg["filesizes"]
-            filemodes = pkg["filemodes"]
-            if not dirindexes or not filesizes or not filemodes:
+            for d in dnames:
+                dirhash[d] = dev
+            if not freehash.has_key(dev):
+                statvfs = os.statvfs(devname)
+                freehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
+                minfreehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
+            if not mountpoint.has_key(dev):
+                while len(dirname) > 0:
+                    if os.path.ismount(br+"/"+dirname):
+                        mountpoint[dev] = dirname
+                        break
+                    dirname = os.path.dirname(dirname)
+        dirindexes = pkg["dirindexes"]
+        filesizes = pkg["filesizes"]
+        filemodes = pkg["filemodes"]
+        if not dirindexes or not filesizes or not filemodes:
+            continue
+        for i in xrange(len(dirindexes)):
+            if not S_ISREG(filemodes[i]):
                 continue
-            for i in xrange(len(dirindexes)):
-                if not S_ISREG(filemodes[i]):
-                    continue
-                dirname = dirnames[dirindexes[i]]
-                while dirname.endswith("/") and len(dirname) > 1:
-                    dirname = dirname[:-1]
-                dev = freehash[dirhash[dirname]]
-                mdev = minfreehash[dirhash[dirname]]
-                filesize = ((filesizes[i] / dev[1]) + 1) * dev[1]
-                if op == OP_ERASE:
-                    dev[0] += filesize
-                else:
-                    dev[0] -= filesize
-                if mdev[0] > dev[0]:
-                    mdev[0] = dev[0]
-            for (dev, val) in minfreehash.iteritems():
-                # Less than 30MB space left on device?
-                if val[0] < 31457280:
-                    config.printInfo(1, "%s: Less than 30MB of diskspace left on %s\n" % (pkg.getNEVRA(), mountpoint[dev]))
-            pkg.close()
+            dirname = dirnames[dirindexes[i]]
+            while dirname.endswith("/") and len(dirname) > 1:
+                dirname = dirname[:-1]
+            dev = freehash[dirhash[dirname]]
+            mdev = minfreehash[dirhash[dirname]]
+            filesize = ((filesizes[i] / dev[1]) + 1) * dev[1]
+            if op == OP_ERASE:
+                dev[0] += filesize
+            else:
+                dev[0] -= filesize
+            if mdev[0] > dev[0]:
+                mdev[0] = dev[0]
+        for (dev, val) in minfreehash.iteritems():
+            # Less than 30MB space left on device?
+            if val[0] < 31457280:
+                config.printInfo(2, "%s: Less than 30MB of diskspace left on %s\n" % (pkg.getNEVRA(), mountpoint[dev]))
+        pkg.close()
     for (dev, val) in minfreehash.iteritems():
         if val[0] < 31457280:
-            config.printInfo(0, "Less than 30MB of diskspace left on %s for operation\n" % mountpoint[dev])
+            config.printInfo(0, "%sMB more diskspace required on %s for operation\n" % (30 - val[0]/1024/1024, mountpoint[dev]))
             ret = 0
-
     return ret
 
 def _uriToFilename(uri):
