@@ -609,11 +609,13 @@ def getFreeDiskspace(config, operations):
                 freehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
                 minfreehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
             if not mountpoint.has_key(dev):
-                while len(dirname) > 0:
-                    if os.path.ismount(br+"/"+dirname):
+                fulldir = os.path.normpath(br+"/"+dirname)
+                while len(fulldir) > 0:
+                    if os.path.ismount(fulldir):
                         mountpoint[dev] = dirname
                         break
                     dirname = os.path.dirname(dirname)
+                    fulldir = os.path.dirname(fulldir)
         dirindexes = pkg["dirindexes"]
         filesizes = pkg["filesizes"]
         filemodes = pkg["filemodes"]

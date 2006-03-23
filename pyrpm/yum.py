@@ -22,7 +22,6 @@ from time import clock
 from resolver import RpmResolver
 from control import RpmController
 from package import RpmPackage
-from comps import RpmCompsXML
 from functions import *
 from io import *
 import database
@@ -172,11 +171,6 @@ class RpmYum:
                     return 0
                 if self.config.timer:
                     self.config.printInfo(0, "Reading repository took %s seconds\n" % (clock() - time1))
-                if self.config.compsfile == None:
-                    # May stay None on download error
-                    nc = self.repos[-1].getNetworkCache()
-                    if nc:
-                        self.config.compsfile = nc.cache("repodata/comps.xml")
         return 1
 
     def __addSingleRepo(self, baseurl, excludes, reponame, key_urls):
@@ -246,16 +240,12 @@ class RpmYum:
             repopkglist.extend(repo.getPkgs())
         # If we do a group operation handle it accordingly
         if self.command.startswith("group"):
-            if self.config.compsfile == None:
-                self.config.printError("You need to specify a comps.xml file for group operations")
-                return 0
-            comps = RpmCompsXML(self.config, self.config.compsfile)
-            comps.read() # Ignore errors
             pkgs = []
             for grp in args:
-                pkgs.extend(comps.getPackageNames(grp))
+                for repo in self.repos:
+                    if repo.comps != None:
+                        pkgs.extend(repo.comps.getPackageNames(grp))
             args = pkgs
-            del comps
         else:
             if len(args) == 0:
                 if self.command.endswith("remove"):

@@ -70,7 +70,6 @@ class RpmConfig:
         self.exactarch = 0          # same base arch is not enough for updates
         self.tid = int(time.time()) # Install time id.
         self.tscolor = 0            # Transaction color, needed for rpmdb
-        self.compsfile = None
         self.resolvertags = ("name", "epoch", "version", "release", "arch",
             "providename", "provideflags", "provideversion", "requirename",
             "requireflags", "requireversion", "obsoletename", "obsoleteflags",

@@ -21,6 +21,7 @@ from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
 import memorydb
 from pyrpm.base import *
 from pyrpm.cache import NetworkCache
+from pyrpm.comps import RpmCompsXML
 import pyrpm.functions as functions
 import pyrpm.package as package
 import pyrpm.openpgp as openpgp
@@ -64,6 +65,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
         self.filereqs = []      # Filereqs, if available
         self.nc = None
+        self.comps = None
 
     def read(self):
         self.is_read = 1 # FIXME: write-only
@@ -115,6 +117,14 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     continue
                 for k in keys:
                     self.keyring.addKey(k)
+            # Try to read a comps.xml file if there is any
+            if self.repomd.has_key("group"):
+                try:
+                    filename = self.nc.cache("repodata/comps.xml", 1)
+                    self.comps = RpmCompsXML(self.config, filename)
+                    self.comps.read()
+                except:
+                    pass
             # Last but not least if we can find the filereq.xml.gz file use it
             # and import the files from there into our packages.
             filename = self.nc.cache("filereq.xml.gz", 1)
