@@ -30,7 +30,7 @@ class RpmCompsXML:
         self.config = config
         self.source = source
         self.grouphash = {}             # group id => { key => value }
-        self.grouphierarchyhash = {}    # FIXME: write-only
+        self.pkgtypehash = {}           # pkgname => [type, ...]
 
     def __str__(self):
         return str(self.grouphash)
@@ -85,6 +85,16 @@ class RpmCompsXML:
         conditional packages from group and its dependencies."""
 
         return self.__getPackageNames(group, ["conditional"])
+
+    def getTypes(self, pkgname):
+        if not self.pkgtypehash.has_key(pkgname):
+            return []
+        return self.pkgtypehash[pkgname]
+
+    def hasType(self, pkgname, type):
+        if not self.pkgtypehash.has_key(pkgname):
+            return False
+        return type in self.pkgtypehash[pkgname]
 
     def __getPackageNames(self, group, typelist):
         """Return a sorted list of (package name, [package requirement]) of
@@ -189,6 +199,7 @@ class RpmCompsXML:
                 else:
                     requires = []
                 plist[node.content] = (ptype, requires)
+                self.pkgtypehash.setdefault(node.content, []).append(ptype)
             node = node.next
         return plist
 

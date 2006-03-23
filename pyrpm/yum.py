@@ -722,20 +722,25 @@ class RpmYum:
         # distance and evr
         orderList(pkg_list, self.config.machine)
         ret = 0
-        for upkg in pkg_list:
-            if upkg in self.erase_list or upkg in self.opresolver.getDatabase():
-                continue
-            # Only try to update if the package itself or the update package
-            # are noarch or if they are buildarchtranslate or arch compatible.
-            # Some exception needs to be done for filerequirements.
-            if not (is_filereq or \
-                    archDuplicate(upkg["arch"], pkg["arch"]) or \
-                    archCompat(upkg["arch"], pkg["arch"]) or \
-                    archCompat(pkg["arch"], upkg["arch"])):
-                continue
-            ret = self.opresolver.update(upkg)
+        for type in ["mandatory", "default", "optional", None]:
+            for upkg in pkg_list:
+                if upkg.compstype != type:
+                    continue
+                if upkg in self.erase_list or upkg in self.opresolver.getDatabase():
+                    continue
+                # Only try to update if the package itself or the update package
+                # are noarch or if they are buildarchtranslate or arch
+                # compatible. Some exception needs to be done for
+                # filerequirements.
+                if not (is_filereq or \
+                        archDuplicate(upkg["arch"], pkg["arch"]) or \
+                        archCompat(upkg["arch"], pkg["arch"]) or \
+                        archCompat(pkg["arch"], upkg["arch"])):
+                    continue
+                ret = self.opresolver.update(upkg)
+                if ret > 0:
+                    break
             if ret > 0:
-#                self.__handleObsoletes(upkg)
                 break
         return ret
 

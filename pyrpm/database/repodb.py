@@ -99,6 +99,15 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 reader = libxml2.newTextReaderFilename(filename)
             except libxml2.libxmlError:
                 continue
+            # Try to read a comps.xml file if there is any before we parse the
+            # primary.xml
+            if self.repomd.has_key("group"):
+                try:
+                    filename = self.nc.cache("repodata/comps.xml", 1)
+                    self.comps = RpmCompsXML(self.config, filename)
+                    self.comps.read()
+                except:
+                    pass
             self.__parseNode(reader)
             for url in self.key_urls:
                 filename = self.nc.cache(url, 1)
@@ -117,14 +126,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     continue
                 for k in keys:
                     self.keyring.addKey(k)
-            # Try to read a comps.xml file if there is any
-            if self.repomd.has_key("group"):
-                try:
-                    filename = self.nc.cache("repodata/comps.xml", 1)
-                    self.comps = RpmCompsXML(self.config, filename)
-                    self.comps.read()
-                except:
-                    pass
             # Last but not least if we can find the filereq.xml.gz file use it
             # and import the files from there into our packages.
             filename = self.nc.cache("filereq.xml.gz", 1)
@@ -315,6 +316,13 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 #if pkg["arch"] == "src" or self.__isExcluded(pkg):
                 #    continue
                 pkg.yumrepo = self
+                if self.comps != None:
+                    if   self.comps.hasType(pkg["name"], "mandatory"):
+                        pkg.compstype = "mandatory"
+                    elif self.comps.hasType(pkg["name"], "default"):
+                        pkg.compstype = "default"
+                    elif self.comps.hasType(pkg["name"], "optional"):
+                        pkg.compstype = "optional"
                 self.addPkg(pkg)
             elif props.has_key("name"):
                 try:
