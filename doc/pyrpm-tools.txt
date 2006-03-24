@@ -55,7 +55,7 @@ like you could do with `pyrpmyum \--test`) and then simulates an update to the
 second set of rpms or repository. A typical test would be to use a FC-3
 or FC-4 yum.conf repo as a install base and then use a FC-devel repo or
 rpm tree as the update tree. The nice thing about the simulation is that it
-doesn't actually perform the installation and so doesn't need any diskspace.
+doesn't actually perform the installation and so doesn't need any disk space.
 Additionally you can use the (undocumented ;)) option `\--arch` where you can
 specify any arch you like. The host arch doesn't matter for the simulation
 as the whole code "thinks" it runs under arch. So simulated installs and
@@ -112,7 +112,7 @@ corresponding entry in Packages and vice versa. There are some exceptions and
 special cases, but all known ones are handled correctly. The one check that is
 very unreliable is the SHA1 header checksum tests as this test has to rely on a
 very specific ordering of the rpm binary header and about the tags that appear
-in the original rpm. If those assupmtions don't hold this checksum can't be
+in the original rpm. If those assumptions don't hold this checksum can't be
 computed correctly.
 Additional binary packages or a yum config file with yum repositories can be
 specified to test the rpmdb headers against those packages for additional
@@ -242,7 +242,7 @@ Here is the command to use a disk image with QEMU.
         qemu -m 256 disk2G.img
 
 The default virtual memory size in qemu is 128M, therefore it is advisable to
-inrease it.
+increase it.
 
 Say you have just completed a normal kickstart installation with qemu.
 Create a second IDE disk and check if your kickstart file can be used
@@ -254,7 +254,7 @@ to install onto the second IDE disk with:
 pyrpmrandomizer
 ---------------
 
-This is our main stresstest tool. With it you can run literally thousands of
+This is our main stress test tool. With it you can run literally thousands of
 update and erase operations in a buildroot and after several days scan the
 output for any problems. It works simply by alternating between trying to
 randomly install one rpm package (including needed dependent rpms) and
@@ -287,7 +287,7 @@ pyrpmspecinfo
 -------------
 
 As we often have to work with specfiles, too, we've written a small tool with
-which we can extrace the different sections from a specfile in order to use
+which we can extract the different sections from a specfile in order to use
 that info via pipe in other tools.
 
 
@@ -308,7 +308,7 @@ described update chain only about 6-7 packages were deleted up to FC3, and all
 of them would have to be removed manually anyway. But a word of warning here:
 The autoerase option might run amok if things go really wrong or you try to
 update to a completely broken tree and would then try to remove almost all of
-your packages. This has never happend for real trees for us, but just imagine
+your packages. This has never happened for real trees for us, but just imagine
 a broken repository and things could go really wrong. That's why this option
 isn't directly listed in the help and should only be used for a `\--test` run
 or without the -y option where you get listed separately from the "normal"
@@ -446,7 +446,7 @@ Createrepo
 You can generate repo metadata like `createrepo` does. You need to copy the
 `comps.xml` file yourself into the repodata directory if you need one.
 Also xml pretty printing is hardcoded (`-p` option for upstream createrepo).
-Createrepo files are compatibel with the output from createrepo-0.4.3.
+Createrepo files are compatible with the output from createrepo-0.4.3.
 -----------------------
 cp comps.xml /mirror/fedora/development/i386/repodata/comps.xml
 oldpyrpm.py --createrepo /mirror/fedora/development/i386/
@@ -485,7 +485,7 @@ Here some options that can be useful:
  - `\--noverify` is skipping the special debug tests and then mainly all
    rpm packages are only read in. If also `\--small` is specified, not all
    rpm tags are read in, only the ones in `importanttags`.
- - Specify a cache directory to hold data from yum repopsitories via
+ - Specify a cache directory to hold data from yum repositories via
    `\--cachedir ~/.pyrpm/cache/`.
  - Dependency and fileconflict checking is done if either `\--strict` or
    `\--checkdeps` is added. `\--nofileconflicts` is disabling fileconflict

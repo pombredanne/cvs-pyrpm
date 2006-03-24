@@ -61,7 +61,7 @@ Using it to set up buildroots on the other hand should be very safe as this
 all happens in a very contained environment (sandbox principle). 
 
 Please let us know of any problems you encounter, if possible with some
-reproducible testcases so we can figure out what might have happend.
+reproducible test cases so we can figure out what might have happened.
 
 
 Features/Highlights
@@ -90,7 +90,7 @@ Over time quite a few nice things have come out of the project:
   package manager by trying to downgrade packages or even remove them if
   dependencies can't be resolved at all. The semi automatic removal is of
   course optional and not enabled by default.
-- Very easy to use scripts to setup up changeroots: +
+- Very easy to use scripts to setup changeroots: +
   Using pyrpmkickstart you can easily use a typical anaconda kickstart file
   to do an automated install either on a disk, partition, diskimage or even
   simple changeroots.
