@@ -69,7 +69,7 @@ Features/Highlights
 
 Over time quite a few nice things have come out of the project:
 
-- Stable and reliable dependency resolver with efficent algorithms: +
+- Stable and reliable dependency resolver with efficient algorithms: +
   Due to the easy nature of python being a rapid prototyping language and the
   modular design of pyrpm we were able to test and write several generations
   of dependency resolvers and over time optimize and improve the reliability
