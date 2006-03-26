@@ -259,9 +259,9 @@ class KickstartConfig(dict):
                 elif opt == "logvol":
                     if args[1] == "swap":
                         args[1] = "swap.%d" % swap_id
-                        swap_id += 1                    
+                        swap_id += 1
                     dict = self.parseSub(opt, args[1:],
-                                         [ "vgname:", "size:", "name:", 
+                                         [ "vgname:", "size:", "name:",
                                            "noformat", "useexisting",
                                            "fstype:", "fsoptions:",
                                            "bytes-per-inode:", "grow",
@@ -308,7 +308,7 @@ class KickstartConfig(dict):
                     self.convertLong(dict, "end")
                     self.convertLong(dict, "bytes-per-inode")
                 elif opt == "raid":
-                    (_dict, _args) = self.parseArgs(opt, args[1:], 
+                    (_dict, _args) = self.parseArgs(opt, args[1:],
                                                     [ "level:", "device:",
                                                       "spares:", "fstype:",
                                                       "fsoptions:", "noformat",

@@ -525,7 +525,7 @@ if PARTED_MODULE_LOADED:
 
         temp = [ ]
         s = start
-        # create temporary partitions for all free primary ids up to the 
+        # create temporary partitions for all free primary ids up to the
         # desired id
         if self.ped_disk.type.name == "msdos":
             i = 1

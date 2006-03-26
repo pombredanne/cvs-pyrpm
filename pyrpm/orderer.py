@@ -193,8 +193,6 @@ class RpmRelations:
     def remove(self, pkg):
         """Remove RpmPackage pkg from the dependency graph"""
 
-        
-
         rel = self.list[pkg]
         # remove all post relations for the matching pre relation packages
         for r in rel.pre:
@@ -234,7 +232,7 @@ class RpmRelations:
         if isinstance(pkg, ConnectedComponent):
             pkg.breakUp(order)
         else:
-            order.append(pkg)        
+            order.append(pkg)
         self.remove(pkg)
 
     # ----
@@ -556,7 +554,7 @@ class ConnectedComponent:
 
     Automatically changes all relations of its pkgs from/to outside the
     component to itself. After all components have been created the relations
-    graph is cycle free. 
+    graph is cycle free.
 
     Mimics RpmPackage.
     """

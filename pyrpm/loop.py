@@ -55,7 +55,7 @@ def lo_get_info64(device):
     try:
         info64 = fcntl.ioctl(fd.fileno(), LOOP_GET_STATUS64, info64)
     except:
-        raise IOError, "ERROR: Could not get status64 on '%s'" % device    
+        raise IOError, "ERROR: Could not get status64 on '%s'" % device
     info = struct.unpack("QQQQQIIIIBBBQ", info64)
     fd.close()
     return info
@@ -73,7 +73,7 @@ def lo_set_info64(device, info):
     try:
         fcntl.ioctl(fd.fileno(), LOOP_SET_STATUS64, info64)
     except:
-        raise IOError, "ERROR: Could not set status64 on '%s'" % device    
+        raise IOError, "ERROR: Could not set status64 on '%s'" % device
     fd.close()
 
 # set maxsize of loop device in bytes
