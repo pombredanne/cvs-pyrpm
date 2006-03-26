@@ -753,8 +753,7 @@ def main():
     if len(diskmap) == 0:
         print "WARNING: No device maps defined, using system harddisks!"
         if confirm:
-            choice = raw_input("Is this ok [y/N]: ")
-            if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
+            if not pyrpm.is_this_ok():
                 return 0
 
         for disk in system_disks:
@@ -1239,8 +1238,7 @@ def main():
             diskmap[disk].print_partitions()
 
     if len(modified) > 0 and confirm == 1:
-        choice = raw_input("Is this ok [y/N]: ")
-        if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
+        if not pyrpm.is_this_ok():
             return 0
 
     # commit changes
@@ -1494,8 +1492,7 @@ def main():
                 else:
                     disk = partitionmap[onpart]["disk"]
                 print "\t'%s': '%s' on '%s'" % (name, onpart, disk)
-        choice = raw_input("Is this ok [y/N]: ")
-        if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
+        if not pyrpm.is_this_ok():
             return 0
 
     # get system raidmap

@@ -981,6 +981,17 @@ def readPackages(dbpath):
             rpmio.hdr = {}
     return packages, keyring
 
+def raw_input2(msg):
+    sys.stdout.write(msg)
+    sys.stdout.flush(msg)
+    return raw_input()
+
+def is_this_ok():
+    choice = raw_input2("Is this ok [y/N]: ")
+    if len(choice) == 0 or (choice[0] != "y" and choice[0] != "Y"):
+        return 0
+    return 1
+
 # Error handling functions
 
 # FIXME: not used

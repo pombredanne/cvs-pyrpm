@@ -410,8 +410,7 @@ class RpmYum:
         if self.confirm:
             self.config.printInfo(0, "Installing %d packages, updating %d packages, erasing %d packages\n" % (ipkgs, upkgs, epkgs))
         if self.confirm and not self.config.test:
-            choice = raw_input("Is this ok [y/N]: ")
-            if len(choice) == 0 or (choice[0] != "y" and choice[0] != "Y"):
+            if not is_this_ok():
                 return 1
         if self.config.timer:
             self.config.printInfo(0, "runCommand() took %s seconds\n" % (clock() - time1))
