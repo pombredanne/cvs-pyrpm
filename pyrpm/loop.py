@@ -120,3 +120,5 @@ def losetup(target, offset=0):
 
 def lofree(device):
     return (os.system("/sbin/losetup -d '%s'" % device) == 0)
+
+# vim:ts=4:sw=4:showmatch:expandtab
