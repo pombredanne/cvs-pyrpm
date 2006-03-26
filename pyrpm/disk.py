@@ -288,7 +288,8 @@ class Partition(dict):
 
 ################################# disk class #################################
 
-class Disk(dict):
+if PARTED_MODULE_LOADED:
+  class Disk(dict):
     diskType = { }
     # fill in Disk.diskType data
     type = parted.disk_type_get_next()
