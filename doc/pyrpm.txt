@@ -21,12 +21,12 @@ link:http://www.jur-linux.org/git/?p=cvs-pyrpm.git;a=summary[].
 
 
 Overview
--------- 
+--------
 
-PyRPM is an experimental project to look at rpm package management. It is 
+PyRPM is an experimental project to look at rpm package management. It is
 a python module and a collection of scripts that provide similar functionality
 as rpm, yum and co. It is written from ground up and is implemented only in
-python. It mainly deals with rpm packages, the rpm database `rpmdb` in 
+python. It mainly deals with rpm packages, the rpm database `rpmdb` in
 `/var/lib/rpm`, comps.xml files and yum repositories (called repo data).
 
 The reason for this project was to have a codebase with which we can test and
@@ -47,7 +47,7 @@ Warning
 
 The PyRPM project is by no means meant to be a full replacement of rpm or yum.
 In its current state we feel confident that in general it won't break
-anything, but the code isn't production quality yet. 
+anything, but the code isn't production quality yet.
 
 The check scripts can be safely used as they won't modify anything on your
 system, so feel free to use them at your convenience.
@@ -58,7 +58,7 @@ that it will work on your machine. It has only been run by a few people until
 now.
 
 Using it to set up buildroots on the other hand should be very safe as this
-all happens in a very contained environment (sandbox principle). 
+all happens in a very contained environment (sandbox principle).
 
 Please let us know of any problems you encounter, if possible with some
 reproducible test cases so we can figure out what might have happened.

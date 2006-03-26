@@ -180,7 +180,7 @@ bootloader --location=mbr
 partition swap --size=100
 partition /boot --fstype=ext3 --size=100
 partition / --fstype=ext3 --size=1 --grow
-auth  --useshadow  --enablemd5 
+auth  --useshadow  --enablemd5
 network --bootproto=dhcp --device=eth0
 firewall --enabled --ssh
 selinux --disabled
@@ -200,10 +200,10 @@ formatted, then add "--noformat".
 The source has to be a installable tree. It is not possible to install from
 iso images. There are currently two supported installation methods:
 NFS install and url-file install. Contrary to the kickstart documentation, it
-is possible to install from a local installation tree with 
+is possible to install from a local installation tree with
 "url --url=file://path", where path is a full path name with a leading slash.
 
-The destination is either a hard disk, a partition on a hard disk or a 
+The destination is either a hard disk, a partition on a hard disk or a
 complete disk image (usable e.g. with XEN, QEMU, VMware). If you are using a
 hard disk, please be careful with "zerombr" and "clearpart" in the kickstart
 file. These will remove some or all partitions on this hard drive according
@@ -211,9 +211,9 @@ to the usage. Do not use them, if you want to install on a single partition
 on your hard drive. You would have to install the bootloader into the root
 partition of your new install as well: "bootloader --location=partition".
 
-A disk image is similar to a real hard disk for the installer. It assumes, 
+A disk image is similar to a real hard disk for the installer. It assumes,
 that it is a IDE hard disk and maps it to hda. Qemu emulates a disk image as
-a IDE hard drive internally, so you can use it as is. If you want to use sda 
+a IDE hard drive internally, so you can use it as is. If you want to use sda
 instead, you have to map the disk image with "sda:disk.img". This is essential
 for installation in vmware disk images, because vmware defaults to SCSI disks.
 Please keep in mind that you have to preallocate the hard disk in vmware to be

@@ -53,7 +53,7 @@ At first we want to provide some high level information about how rpm works
 without going into too much techincal detail. This should help understand how
 rpm works and what problems it solves (and which it doesn't and why yum is
 needed). Following that will be a section that describes then what yum does
-and what problems it solves (and again, which it can't solve and which we try 
+and what problems it solves (and again, which it can't solve and which we try
 to solve in our yum derivate). Afterwards we will go more into the rpm binary format and the format of yum repositories as well as several interessting points
 about the way rpm works and the problems that appear with doing to.
 
@@ -65,7 +65,7 @@ Rpms whole concept is based on socalled dependencies which define the relation
 between packages. Those are simply expressed using Requires and Provides. In
 mathematical terms this can be viewed as a directed graph where the nodes are
 packages and the edges are requirements from packages that require something to
-packages that provide that requirement.  
+packages that provide that requirement.
 To make this a little more visible here a small ascii art:
 
  A ----> B ----> C
@@ -136,7 +136,7 @@ be installed (or removed) a dependency graph is constructed. All packages with
 no requirements can be installed first. Afterwards all requires of the remaining
 packages that were provided by the installed packges get removed. This normally
 results in a new set of packages without any requirements. This process is then
-repeated until either no more packages need to be installed or we have 
+repeated until either no more packages need to be installed or we have
 requirement loops between packages. These loops then need to be broken up by
 intelligently selecting one dependency and removing that until we have
 packages without requirements again. If there are several packages in one round
@@ -251,7 +251,7 @@ Other less common storage formats include databases like SQLite or MySQL which
 e.g yum uses to convert the repodata format to a more usable form locally.
 
 Apart from that rpm itself extracts quite a bit of the information from rpm
-binary headers and writes them in various db4 files in /var/lib/rpm. 
+binary headers and writes them in various db4 files in /var/lib/rpm.
 
 
 RPM database internals
@@ -389,7 +389,7 @@ value and the second value always 0. Here a small example:
 /var/lib/rpm/Packages:
 ^^^^^^^^^^^^^^^^^^^^^^
 '----------'-----------
- Package id Install Tid 
+ Package id Install Tid
 -----------------------
  5          1000000
  8          1000000
