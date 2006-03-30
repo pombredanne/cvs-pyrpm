@@ -95,7 +95,7 @@
 # - "rhnplatform" could go away if it is not required.
 #
 
-__version__ = "0.42"
+__version__ = "0.43"
 __doc__ = """Manage everything around Linux RPM packages."""
 
 import sys
