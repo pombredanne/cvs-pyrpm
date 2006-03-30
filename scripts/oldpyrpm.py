@@ -2119,7 +2119,7 @@ class ReadRpm:
                 self.printErr("unknown vendor: %s" % self["vendor"])
             if self["distribution"] not in (None, "Red Hat Linux",
                 "Red Hat FC-3", "Red Hat (FC-3)", "Red Hat (FC-4)",
-                "Red Hat (FC-5)",
+                "Red Hat (FC-5)", "Red Hat (FC-6)",
                 "Red Hat (scratch)", "Red Hat (RHEL-3)", "Red Hat (RHEL-4)"):
                 self.printErr("unknown distribution: %s" % self["distribution"])
         arch = self["arch"]
