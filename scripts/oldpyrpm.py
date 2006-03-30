@@ -4555,6 +4555,7 @@ gitrepos = (
     (kgit + "linux/hotplug/udev.git", "udev", None),
     ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct", None),
     #(kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6", 40),
+    # http://git.openvz.org/pub/linux-2.6-openvz
 )
 
 def createCGI():
