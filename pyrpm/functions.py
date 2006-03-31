@@ -983,7 +983,7 @@ def readPackages(dbpath):
 
 def raw_input2(msg):
     sys.stdout.write(msg)
-    sys.stdout.flush(msg)
+    sys.stdout.flush()
     return raw_input()
 
 def is_this_ok():

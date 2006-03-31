@@ -690,7 +690,8 @@ def main():
 
     print "Installation source: %s [%s]" % (install, machine)
 
-    if machine not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
+    if machine not in pyrpm.arch_compats[pyrpm.rpmconfig.machine] and \
+           machine != pyrpm.rpmconfig.machine:
         print "ERROR: Installation source is not compatible with system arch."
         return 1
 
