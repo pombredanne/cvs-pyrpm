@@ -914,7 +914,7 @@ class RpmPackage(RpmData):
             rpmverifyflags = self["fileverifyflags"][i]
         if self.has_key("filecolors"):
             rpmfilecolor = self["filecolors"][i]
-        rfi = RpmFileInfo(self.config, filename, rpminode, rpmmode, rpmuid,
+        rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid,
                           rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev,
                           rpmmd5sum, rpmlinktos, rpmflags, rpmverifyflags,
                           rpmfilecolor)

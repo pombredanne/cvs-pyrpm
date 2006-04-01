@@ -19,9 +19,8 @@
 import os.path
 
 class RpmFileInfo:
-    def __init__(self, config, filename, inode, mode, uid, gid, mtime, filesize,
+    def __init__(self, filename, inode, mode, uid, gid, mtime, filesize,
                  dev, rdev, md5sum, linktos, flags, verifyflags, filecolor):
-        self.config = config            # FIXME: write-only
         self.filename = filename        # Usually real name, but can be modified
         self.inode = inode            # rpm header limited to int32; write-only
         self.mode = mode                # Standard stat file modes

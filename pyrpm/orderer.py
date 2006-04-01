@@ -70,6 +70,7 @@ Possible weights are:
 
  * Number of packages depending on the package
  * maximal path from a leaf node
+
 """
 
 from hashlist import HashList
@@ -122,7 +123,7 @@ class RpmRelations:
             # ignore unresolved, we are only looking at the changes,
             # therefore not all symbols are resolvable in these changes
             for ((name, flag, version), s) in resolved:
-                if name.startswith("config("): # drop config requirements
+                if name[:7] == "config(": # drop config requirements
                     continue
                 f = operationFlag(flag, operation)
                 for pkg2 in s:
