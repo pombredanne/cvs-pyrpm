@@ -1132,6 +1132,8 @@ def stringCompare(str1, str2):
         # remove leading separators
         while i1 < lenstr1 and not _xisalnum(str1[i1]): i1 += 1
         while i2 < lenstr2 and not _xisalnum(str2[i2]): i2 += 1
+        if i1 == lenstr1 or i2 == lenstr2: # bz 178798
+            break
         # start of the comparison data, search digits or alpha chars
         j1 = i1
         j2 = i2
