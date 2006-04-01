@@ -47,7 +47,6 @@ class RpmDatabase:
 
     def setBuildroot(self, buildroot):
         """Set database chroot to buildroot."""
-
         self.buildroot = buildroot
 
     ### not implemented functions ###

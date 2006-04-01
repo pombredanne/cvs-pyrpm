@@ -122,19 +122,13 @@ class ProvidesList:
         """Add Provides: by RpmPackage rpm"""
 
         for (name, flag, version) in rpm[self.TAG]:
-            self._add(name, flag, version, rpm)
+            self.hash.setdefault(name, [ ]).append((flag, version, rpm))
 
     def removePkg(self, rpm):
         """Remove Provides: by RpmPackage rpm"""
 
         for (name, flag, version) in rpm[self.TAG]:
             self._remove(name, flag, version, rpm)
-
-    def _add(self, name, flag, version, rpm):
-        """Add Provides: (name, RPMSENSE_* flag, EVR string) by RpmPackage rpm
-        to database"""
-
-        self.hash.setdefault(name, [ ]).append((flag, version, rpm))
 
     def _remove(self, name, flag, version, rpm):
         """Remove Provides: (name, RPMSENSE_* flag, EVR string) by RpmPackage
@@ -143,8 +137,7 @@ class ProvidesList:
         list = self.hash[name]
         i = 0
         while i < len(list):
-            p = list[i]
-            if p[0] == flag and p[1] == version and p[2] == rpm:
+            if list[i] == (flag, version, rpm):
                 del list[i]
                 break
             else:
@@ -221,7 +214,7 @@ class TriggersList(ConflictsList):
         """Add Provides: by RpmPackage rpm"""
 
         for (name, flag, version, scriptprog, scripts) in rpm[self.TAG]:
-            self._add(name, flag, version, rpm)
+            self.hash.setdefault(name, [ ]).append((flag, version, rpm))
 
     def removePkg(self, rpm):
         """Remove Provides: by RpmPackage rpm"""
