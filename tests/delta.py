@@ -587,7 +587,7 @@ class RpmDelta:
                         "TRAILER!!!", 0)
             _cpio.close()
             source_fd = open(source_name, "r")
-            source_cpio = pyrpm.CPIOFile(pyrpm.rpmconfig, source_fd)
+            source_cpio = pyrpm.CPIOFile(source_fd)
 
         hardlinks = { }
         last_hardlink = { }
@@ -729,7 +729,7 @@ class RpmDelta:
 
         tell = pkg.io.fd.tell()
 
-        fd = pyrpm.PyGZIP(self.config, pkg.io.fd)
+        fd = pyrpm.PyGZIP(pkg.io.fd)
 
         cpio_name = "%s/getcpio_%s" % (self.config.tempdir, pkg.getNEVRA())
 

@@ -31,8 +31,7 @@ import functions
 
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
 class PyGZIP:
-    def __init__(self, config, fd):
-        self.config = config
+    def __init__(self, fd):
         self.fd = fd
         self.decompobj = zlib.decompressobj(-zlib.MAX_WBITS)
         self.crcval = zlib.crc32("")
@@ -165,8 +164,7 @@ class PyGZIP:
 
 class CPIOFile:
     """ Read ASCII CPIO files. """
-    def __init__(self, config, fd):
-        self.config = config
+    def __init__(self, fd):
         self.fd = fd                    # filedescriptor
         self.lastfilesize = 0           # Length of "current" file data
         self.readsize = 0       # Number of bytes read from "current" file data
@@ -356,8 +354,8 @@ class RpmStreamIO(RpmIO):
                 pos = self._tell()
                 self.hdrdata = None
                 self.hdr = {}
-                cpiofd = PyGZIP(self.config, self.fd)
-                self.cpio = CPIOFile(self.config, cpiofd)
+                cpiofd = PyGZIP(self.fd)
+                self.cpio = CPIOFile(cpiofd)
                 self.where = 4
                 # Nobody cares about gzipped payload length so far
                 return ("-", (pos, None))

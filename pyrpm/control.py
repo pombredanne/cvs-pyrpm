@@ -27,8 +27,7 @@ from orderer import *
 class _Triggers:
     """A database of triggers searchable by %name"""
 
-    def __init__(self, config):
-        self.config = config            # FIXME: write-only
+    def __init__(self):
         # %name => (RPMSENSE_* flag, EVR string, interpreter, script,
         # RpmPackage containing the trigger)
         self.triggers = {}
@@ -192,7 +191,7 @@ class RpmController:
                              (clock() - time1))
             if not ret:
                 return None
-        self.triggerlist = _Triggers(self.config)
+        self.triggerlist = _Triggers()
         if not self.config.nocache:
             self.config.printInfo(1, "Caching network packages\n")
         for (op, pkg) in operations:
