@@ -30,8 +30,7 @@ except:
 class NetworkCache:
     """Class to handle caching network files to a local directory"""
 
-    def __init__(self, config, baseurl, cachepath="/var/cache/pyrpm/"):
-        self.config = config
+    def __init__(self, baseurl, cachepath="/var/cache/pyrpm/"):
         self.baseurl = baseurl
         self.main_cachepath = os.path.join(cachepath, "main")
         self.external_cachepath = os.path.join(cachepath, "external")

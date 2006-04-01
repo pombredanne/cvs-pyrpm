@@ -71,7 +71,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self.is_read = 1 # FIXME: write-only
         for uri in self.source:
             # First we try and read the repomd file as a starting point.
-            self.nc = NetworkCache(self.config, uri, os.path.join(self.config.cachedir, self.reponame))
+            self.nc = NetworkCache(uri, os.path.join(self.config.cachedir, self.reponame))
             filename = self.nc.cache("repodata/repomd.xml", 1)
             if not filename:
                 continue

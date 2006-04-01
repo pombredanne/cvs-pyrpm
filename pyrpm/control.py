@@ -204,7 +204,7 @@ class RpmController:
                     if pkg.yumrepo != None:
                         nc = pkg.yumrepo.getNetworkCache()
                     else:
-                        nc = NetworkCache(self.config, "/", os.path.join(self.config.cachedir, "default"))
+                        nc = NetworkCache("/", os.path.join(self.config.cachedir, "default"))
                     self.config.printInfo(2, "Caching network package %s\n" % pkg.getNEVRA())
                     cached = nc.cache(pkg.source)
                     if cached is None:
