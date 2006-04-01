@@ -210,7 +210,6 @@ class RpmRelations:
         """Move package from the relations graph to the order list
         Handle ConnectedComponent.
         """
-        self.debugCollect(pkg, order)
         if isinstance(pkg, ConnectedComponent):
             pkg.breakUp(order)
         else:
@@ -302,32 +301,6 @@ class RpmRelations:
 
     # ----
 
-    def debugConnectedComponents(self, components):
-        """ Overload this function to get a call after the connected components
-        were found.
-        """
-        # Remember: Do not change any contents!
-        return
-
-    # ---
-
-    def debugBreakupComponents(self, component, subcomponents):
-        """ Overload this function to get a call before resursivly break up
-        a component.
-        """
-        # Remember: Do not change any contents!
-        return
-
-    # ----
-
-    def debugCollect(self, pkg, order):
-        """Overload this function to get a call within collect()
-        """
-        # Remember: Do not change any contents!
-        return
-
-    # ----
-
     def processLeafNodes(self, order, leaflist=None):
         """Move topologically sorted "trailing" packages from
         orderer.RpmRelations relations to start of list.
@@ -381,9 +354,6 @@ class RpmRelations:
         order = [ ]
 
         connected_components = ConnectedComponentsDetector(self).detect(self)
-
-        # call debug code
-        self.debugConnectedComponents(connected_components)
 
         if connected_components:
             # debug output the components
@@ -704,14 +674,12 @@ class ConnectedComponent:
             pkg, pre = hardloops[0].breakUp()
 
             components = ConnectedComponentsDetector(self.relations).detect(self.pkgs)
-            self.relations.debugBreakupComponents(self, components)
             for component in components:
                 self.removeSubComponent(component)
                 self.pkgs[component] = component
 
             self.processLeafNodes(order)
         else:
-            self.relations.debugBreakupComponents(self, [ ])
             # No loops with hard requirements found, breaking up everything
             while self.loops:
                 # find most used relation
