@@ -180,25 +180,23 @@ class RpmRelations:
     # ----
 
     def remove(self, pkg):
-        """Remove RpmPackage pkg from the dependency graph"""
-
+        """Remove RpmPackage pkg from the dependency graph."""
         rel = self.list[pkg]
         # remove all post relations for the matching pre relation packages
         for r in rel.pre:
-            # XXX may be raise an exception here?
             del self.list[r].post[pkg]
         # remove all pre relations for the matching post relation packages
         for r in rel.post:
             del self.list[r].pre[pkg]
         del self.list[pkg]
+
     # ----
 
     def removeRelation(self, node, next, quiet=False):
-        """Drop the "RpmPackage node requires RpmPackage next" arc"""
-        hard = self[node].pre[next]
+        """Drop the "RpmPackage node requires RpmPackage next" arc."""
         if not quiet:
             txt = "Removing"
-            if hard:
+            if self[node].pre[next]:
                 txt = "Zapping"
             self.config.printDebug(1, "%s requires for %s from %s" % \
                                    (txt, next.getNEVRA(), node.getNEVRA()))
@@ -209,8 +207,7 @@ class RpmRelations:
 
     def collect(self, pkg, order):
         """Move package from the relations graph to the order list
-        Handle ConnectedComponent.
-        """
+        Handle ConnectedComponent."""
         if isinstance(pkg, ConnectedComponent):
             pkg.breakUp(order)
         else:
@@ -225,7 +222,6 @@ class RpmRelations:
 
         Stop when each remaining package has successor (implies a dependency
         loop)."""
-
         i = 0
         found = 0
         while len(self) > 0:
@@ -246,13 +242,12 @@ class RpmRelations:
 
     def _calculateWeights2(self, pkg, leafs):
         """For each package generate a dict of all packages that depend on it.
-        At last use the length of the dict as weight.
-        """
+        At last use the length of the dict as weight."""
         # Uncomment weight line in ConnectedComponent.__init__() to use this
         if self[pkg].weight == 0:
             weight = { pkg : pkg }
         else:
-            weight =  self[pkg].weight
+            weight = self[pkg].weight
 
         for p in self[pkg].pre:
             rel = self[p]
@@ -274,9 +269,8 @@ class RpmRelations:
 
     def _calculateWeights(self, pkg, leafs):
         """Weight of a package is sum of the (weight+1) of all packages
-        depending on it
-        """
-        weight =  self[pkg].weight + 1
+        depending on it."""
+        weight = self[pkg].weight + 1
         for p in self[pkg].pre:
             rel = self[p]
             rel.weight += weight
@@ -304,9 +298,7 @@ class RpmRelations:
 
     def processLeafNodes(self, order, leaflist=None):
         """Move topologically sorted "trailing" packages from
-        orderer.RpmRelations relations to start of list.
-
-        """
+        orderer.RpmRelations relations to start of list."""
         if leaflist is None:
             leaflist = self # loop over all pkgs
 
@@ -398,7 +390,7 @@ class Loop(HashList):
         min_hash = None
         min_idx = 0
         for i in xrange(len(pkgs)):
-            if min_hash is None or hash(pkgs[i])<min_hash:
+            if min_hash is None or hash(pkgs[i]) < min_hash:
                 min_hash = hash(pkgs[i])
                 min_idx = i
 
@@ -410,10 +402,8 @@ class Loop(HashList):
     # ----
 
     def __cmp__(self, other):
-        """compare loops:
-
-        Sort by size first, use hash values of the pkgs from te beginning then
-        """
+        """compare loops: Sort by size first, use hash values of the pkgs
+        from the beginning then."""
         result = cmp(len(self), len(other))
         if result == 0:
             for i in xrange(len(self)): # both have same lenght
@@ -425,13 +415,12 @@ class Loop(HashList):
     # ----
 
     def __iter__(self):
-        """Return Iterator. Iterator returns (Node, Next) Tuples.
-        """
+        """Return Iterator. Iterator returns (Node, Next) Tuples."""
         idx = 1
         while idx < len(self):
-            yield (self.list[idx-1], self.list[idx])
+            yield(self.list[idx-1], self.list[idx])
             idx += 1
-        yield (self.list[-1], self.list[0])
+        yield(self.list[-1], self.list[0])
 
     # ----
 
@@ -444,7 +433,7 @@ class Loop(HashList):
     # ----
 
     def containsHardRequirement(self):
-        """Does the loop contain any hard relations"""
+        """Does the loop contain any hard relations?"""
         for pkg, pre in self:
             if self.relations[pkg].pre[pre]:
                 return True
@@ -502,8 +491,7 @@ class ConnectedComponent:
     """
 
     def __init__(self, relations, pkgs):
-        """relations: the RpmRelations object containing the loops
-        """
+        """relations: the RpmRelations object containing the loops."""
 
         self.relations = relations
 
@@ -600,7 +588,7 @@ class ConnectedComponent:
     # ----
 
     def processLeafNodes(self, order):
-        """Remove all leaf nodes with the component and append them to order
+        """Remove all leaf nodes with the component and append them to order.
         """
         while True:
             # Without the requirement of max(rel.pre) this could be O(1)
@@ -620,7 +608,7 @@ class ConnectedComponent:
     # ----
 
     def removeSubComponent(self, component):
-        """Remove all packages of a sub component from own package list"""
+        """Remove all packages of a sub component from own package list."""
         for pkg in component.pkgs:
             del self.pkgs[pkg]
 
@@ -650,7 +638,7 @@ class ConnectedComponent:
     def breakUp(self, order):
         """Remove this component from the graph by breaking it apart.
 
-        Assumes that the LoopGroup is a leaf
+        Assumes that the LoopGroup is a leaf.
         """
 
         hardloops = [l for l in self.loops
@@ -725,7 +713,7 @@ class ConnectedComponentsDetector:
     # ----
 
     def detect(self, pkgs):
-        """Returns a list of all strongly ConnectedComponents"""
+        """Returns a list of all strongly ConnectedComponents."""
         self.states = {} # attach numbers to packages
         self.root_stack = [] # stack of possible root nodes
         self.pkg_stack = [] # stack of all nodes visited and not processed yet
