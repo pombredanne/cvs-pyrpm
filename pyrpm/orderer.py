@@ -108,6 +108,8 @@ class RpmRelations:
         self.__len__ = self.list.__len__
         self.__getitem__ = self.list.__getitem__
         self.has_key = self.list.has_key
+        for pkg in rpms:
+            self.list[pkg] = RpmRelation()
 
         db = database.memorydb.RpmMemoryDB(self.config, None)
         db.addPkgs(rpms)
@@ -119,22 +121,13 @@ class RpmRelations:
             resolved = resolver.getResolvedPkgDependencies(pkg)
             # ignore unresolved, we are only looking at the changes,
             # therefore not all symbols are resolvable in these changes
-            l = len(self)
             for ((name, flag, version), s) in resolved:
                 if name.startswith("config("): # drop config requirements
                     continue
                 f = operationFlag(flag, operation)
                 for pkg2 in s:
-                    if pkg2 == pkg:
-                        continue
-                    self.append(pkg, pkg2, f)
-            if len(self) == l:
-                # if there are no new relations, then pkg has either no
-                # relations or only self-relations
-                self.config.printDebug(1, "No relations found for %s, " % \
-                                       pkg.getNEVRA() + \
-                                       "generating empty relations")
-                self.append(pkg, None, 0)
+                    if pkg2 != pkg:
+                        self.append(pkg, pkg2, f)
 
         if self.config.debug > 1:
             # print relations
@@ -160,19 +153,23 @@ class RpmRelations:
 
     # ----
 
+    def addPkg(self, pkg):
+        if self.list[pkg] == None:
+            self.list[pkg] = RpmRelation()
+
+    # ----
+
     def append(self, pkg, pre, flag):
         """Add an arc from RpmPackage pre to RpmPackage pkg with flag.
 
         pre can be None to add pkg to the graph with no arcs."""
-
         if pre == pkg:
+            #raise
             return
         i = self.list[pkg]
         if i == None:
             i = RpmRelation()
             self.list[pkg] = i
-        if pre == None:
-            return # no additional things to do for empty relations
         if flag or pre not in i.pre:
             # prefer hard requirements, do not overwrite with soft req
             i.pre[pre] = flag
@@ -470,7 +467,7 @@ class Loop(HashList):
             if self.relations[pkg].pre[pre]:
                 distances.append(0)
             else:
-                distances.append(distances[-1]+1)
+                distances.append(distances[-1] + 1)
 
         for idx in xrange(len(distances)):
             if distances[idx] == 0 and idx > 0:
@@ -510,7 +507,7 @@ class ConnectedComponent:
 
         self.relations = relations
 
-        relations.append(self, None, 0)
+        relations.addPkg(self)
 
         self.pkgs = { }
         for pkg in pkgs:
