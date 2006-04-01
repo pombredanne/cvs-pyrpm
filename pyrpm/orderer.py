@@ -23,19 +23,19 @@ The RpmOrderer
 The orderer gets lists of packages, which have to get installed, the list of
 updates, the obsoletes and the erases from a previous running RpmResolver.
 With these lists, the orderer is feeding a resolver. The orderer is looking
-only at the changes for a installation. The packages, which will be the same
+only at the changes for an installation. The packages, which will be the same
 before and after the installation, update or erase, have no effect on the
-ordering of the changes. The ordering is first done for the installes and
+ordering of the changes. The ordering is first done for the installs and
 then for the erases in reverse order. Two packages A and B where both get
 erased and package A has a erase dependency on package B, package B has to
 get removed before package A.
 
 At first, the orderer is creating a relation structure, where a relation
-describes the dependance of a package from another. This relation structure
+describes the dependence of a package from another. This relation structure
 is a dependency tree. There are two kinds of relations: soft and hard. A soft
 relation is a normal dependency, which has to be solved after package
 installation at runtime. The hard relation is a pre requirement, which has to
-be solved before the dependant package gets installed.
+be solved before the dependent package gets installed.
 
 
 The second stage is detecting strongly connected components. These are maximal
@@ -45,12 +45,12 @@ outside are changed to this new node. After this the relation graph is cycle
 free!
 
 After this we can collect the leaf packages until all packages are processed.
-When collecting a conneced component it is broken up and the containing
+When collecting a connected component it is broken up and the containing
 packages are collected.
 
-The final stage is to generate an opertion list with the ordered packages and
+The final stage is to generate an operation list with the ordered packages and
 which takes the updates and obsoletes list into consideration. The operation
-list is a list of tupels, where each tupel is of the form (operation, package).
+list is a list of tuples, where each tuple is of the form (operation, package).
 The operation is either "install", "update" or "erase".
 For a package, which gets updated, and which is in the update or obsolete list
 (which is an update for one or more installed packages or which obsoletes one
@@ -324,7 +324,8 @@ class RpmRelations:
                 if not self[pkg].pre:
                     post = len(self[pkg].post)
                     leafs.setdefault(post, []).append(pkg)
-                    if post > new_max: new_max = post
+                    if post > new_max:
+                        new_max = post
             # select new (highest) bucket
             if not leafs[max_post]:
                 del leafs[max_post]
@@ -427,7 +428,7 @@ class Loop(HashList):
     def containsRequirement(self, pkg, pre):
         if pkg in self and pre in self:
             idx = self.index(pre)
-            return self[idx-1] is pkg
+            return self[idx - 1] is pkg
         return False
 
     # ----
@@ -685,7 +686,7 @@ class ConnectedComponent:
 # ----------------------------------------------------------------------------
 
 class ConnectedComponentsDetector:
-    '''Use Gabow algorithm to detect strongly connected components:
+    """Use Gabow algorithm to detect strongly connected components:
         Do a depth first traversal and number the nodes.
         "root node": the node of a SCC that is visited first
         Keep two stacks:
@@ -699,13 +700,13 @@ class ConnectedComponentsDetector:
         If we reach a node already processed (part of a SCC (of possibly
          only one node size)) there is no way form this node to our current.
          Just ignore this way.
-        If we go back in the recusion the following can happen:
+        If we go back in the recursion the following can happen:
         1. Our node has been removed from the root stack. It is part of a
            SCC -> do nothing
         2. Our node is top on the root stack: the pkg stack contains a SCC
            from the position of our node up -> remove it including our node
            also remove the node from the root stack
-        '''
+        """
 
     def __init__(self, relations):
         self.relations = relations
@@ -773,6 +774,7 @@ class ConnectedComponentsDetector:
 # ----------------------------------------------------------------------------
 
 class RpmOrderer:
+
     def __init__(self, config, installs, updates, obsoletes, erases):
         """Initialize.
 
