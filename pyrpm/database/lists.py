@@ -104,8 +104,7 @@ class ProvidesList:
 
     # TODO: add key, __getitem__, ..
 
-    def __init__(self, config):
-        self.config = config            # FIXME: write-only
+    def __init__(self):
         self.hash = { }
         self.clear()
         self.__len__ = self.hash.__len__

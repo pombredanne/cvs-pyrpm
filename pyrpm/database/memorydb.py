@@ -44,12 +44,12 @@ class RpmMemoryDB(db.RpmDatabase):
         self.pkgs = [ ]   # [pkg, ..]
         self.names = { }  # name: [pkg, ..]
 
-        self.provides_list = lists.ProvidesList(self.config)
+        self.provides_list = lists.ProvidesList()
         self.filenames_list = lists.FilenamesList()
-        self.requires_list = lists.RequiresList(self.config)
-        self.conflicts_list = lists.ConflictsList(self.config)
-        self.obsoletes_list = lists.ObsoletesList(self.config)
-        self.triggers_list = lists.TriggersList(self.config)
+        self.requires_list = lists.RequiresList()
+        self.conflicts_list = lists.ConflictsList()
+        self.obsoletes_list = lists.ObsoletesList()
+        self.triggers_list = lists.TriggersList()
 
     def open(self):
         """If the database keeps a connection, prepare it."""
