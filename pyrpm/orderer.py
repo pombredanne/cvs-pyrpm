@@ -76,7 +76,6 @@ from hashlist import HashList
 from base import *
 from resolver import RpmResolver
 import database
-import time
 
 def operationFlag(flag, operation):
     """Return dependency flag for RPMSENSE_* flag during operation."""
@@ -136,9 +135,6 @@ class RpmRelations:
                                        pkg.getNEVRA() + \
                                        "generating empty relations")
                 self.append(pkg, None, 0)
-
-        del db
-        del resolver
 
         if self.config.debug > 1:
             # print relations
