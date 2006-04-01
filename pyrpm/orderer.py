@@ -110,10 +110,6 @@ class RpmRelations:
         self.__getitem__ = self.list.__getitem__
         self.has_key = self.list.has_key
 
-        # RpmPackage =>
-        # [list of required RpmPackages that were dropped to break a loop]
-        self.dropped_relations = { }
-
         db = database.memorydb.RpmMemoryDB(self.config, None)
         db.addPkgs(rpms)
         resolver = RpmResolver(self.config, db, nocheck=1)
@@ -218,9 +214,6 @@ class RpmRelations:
                                    (txt, next.getNEVRA(), node.getNEVRA()))
         del self[node].pre[next]
         del self[next].post[node]
-        if not node in self.dropped_relations:
-            self.dropped_relations[node] = [ ]
-        self.dropped_relations[node].append(next)
 
     # ----
 
