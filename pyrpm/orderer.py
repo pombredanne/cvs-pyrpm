@@ -82,9 +82,6 @@ class RpmRelation:
     """Pre and post relations for a package (a node in the dependency
     graph)."""
 
-    SOFT    = 0 # normal requirement
-    HARD    = 1 # prereq
-
     def __init__(self):
         self.pre = { }         # RpmPackage => flag
         self.post = { }        # RpmPackage => 1 (value is not used)
@@ -94,11 +91,6 @@ class RpmRelation:
     def __str__(self):
         return "%d %d" % (len(self.pre), len(self.post))
 
-    def isHard(flag):
-        return (flag & RpmRelation.HARD == RpmRelation.HARD)
-    isHard = staticmethod(isHard)
-
-# ----
 
 class RpmRelations:
     """List of relations for each package (a dependency graph)."""
@@ -154,7 +146,7 @@ class RpmRelations:
                     for p in rel.pre:
                         if len(pre) > 2:
                             pre += ", "
-                        if RpmRelation.isHard(rel.pre[p]):
+                        if rel.pre[p]:
                             pre += "*" # prereq
                         pre += p.getNEVRA()
                 self.config.printDebug(2, "\t%d %d %s%s" % \
@@ -177,7 +169,7 @@ class RpmRelations:
             self.list[pkg] = i
         if pre == None:
             return # no additional things to do for empty relations
-        if pre not in i.pre or RpmRelation.isHard(flag):
+        if flag or pre not in i.pre:
             # prefer hard requirements, do not overwrite with soft req
             i.pre[pre] = flag
             if not pre in self.list:
@@ -202,14 +194,11 @@ class RpmRelations:
 
     def removeRelation(self, node, next, quiet=False):
         """Drop the "RpmPackage node requires RpmPackage next" arc"""
-
-        hard = RpmRelation.isHard(self[node].pre[next])
-
+        hard = self[node].pre[next]
         if not quiet:
             txt = "Removing"
             if hard:
                 txt = "Zapping"
-
             self.config.printDebug(1, "%s requires for %s from %s" % \
                                    (txt, next.getNEVRA(), node.getNEVRA()))
         del self[node].pre[next]
@@ -433,8 +422,8 @@ class RpmRelations:
         if isLegacyPreReq(flag) or \
                (operation == OP_ERASE and isErasePreReq(flag)) or \
                (operation != OP_ERASE and isInstallPreReq(flag)):
-            return RpmRelation.HARD # hard requirement
-        return RpmRelation.SOFT # soft requirement
+            return 1    # hard requirement
+        return 0        # soft requirement
 
 # ----------------------------------------------------------------------------
 
@@ -497,7 +486,7 @@ class Loop(HashList):
     def containsHardRequirement(self):
         """Does the loop contain any hard relations"""
         for pkg, pre in self:
-            if RpmRelation.isHard(self.relations[pkg].pre[pre]):
+            if self.relations[pkg].pre[pre]:
                 return True
         return False
 
@@ -515,7 +504,7 @@ class Loop(HashList):
 
         distances = [0]
         for pkg, pre in self:
-            if RpmRelation.isHard(self.relations[pkg].pre[pre]):
+            if self.relations[pkg].pre[pre]:
                 distances.append(0)
             else:
                 distances.append(distances[-1]+1)
