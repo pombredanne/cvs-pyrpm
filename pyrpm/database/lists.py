@@ -19,6 +19,16 @@
 import os
 import pyrpm.functions as functions
 
+def genBasenames2(oldfilenames):
+    (basenames, dirnames) = ([], [])
+    for filename in oldfilenames:
+        (dirname, basename) = os.path.split(filename)
+        if dirname[-1:] != "/":
+            dirname += "/"
+        basenames.append(basename)
+        dirnames.append(dirname)
+    return (basenames, dirnames)
+
 class FilenamesList:
     """A mapping from filenames to RpmPackages."""
 
@@ -27,58 +37,40 @@ class FilenamesList:
 
     def clear(self):
         """Clear the mapping."""
-
         self.path = { } # dirname => { basename => RpmPackage }
-        self.oldfilenames = { }
 
     def addPkg(self, pkg):
         """Add all files from RpmPackage pkg to self."""
-
-        if pkg.has_key("oldfilenames"):
-            for f in pkg["oldfilenames"]:
-                self.oldfilenames.setdefault(f, [ ]).append(pkg)
-            return
-        basenames = pkg["basenames"]
-        if basenames == None:
-            return
-        dirindexes = pkg["dirindexes"]
-        dirnames = pkg["dirnames"]
         path = self.path
-        for i in dirnames:
-            path.setdefault(i, { })
+        basenames = pkg["basenames"]
+        if basenames != None:
+            dirindexes = pkg["dirindexes"]
+            dirnames = pkg["dirnames"]
+            for dirname in dirnames:
+                path.setdefault(dirname, {})
+            dirnames = [ dirnames[di] for di in dirindexes ]
+        else:
+            if pkg["oldfilenames"] == None:
+                return
+            (basenames, dirnames) = genBasenames2(pkg["oldfilenames"])
+            for dirname in dirnames:
+                path.setdefault(dirname, {})
         for i in xrange(len(basenames)):
-            dirname = dirnames[dirindexes[i]]
-            path[dirname].setdefault(basenames[i], [ ]).append(pkg)
+            path[dirnames[i]].setdefault(basenames[i], []).append(pkg)
 
     def removePkg(self, pkg):
         """Remove all files from RpmPackage pkg from self."""
-
-        if pkg.has_key("oldfilenames"):
-            for f in pkg["oldfilenames"]:
-                if not self.oldfilenames.has_key(f) or \
-                   not pkg in self.oldfilenames[f]:
-                    continue
-                self.oldfilenames[f].remove(pkg)
-                if len(self.oldfilenames[f]) == 0:
-                    del self.oldfilenames[f]
-            return
-
         basenames = pkg["basenames"]
-        if basenames == None:
-            # XXX we should also support "oldfilenames"
-            return
-        for i in xrange (len(pkg["basenames"])):
-            dirname = pkg["dirnames"][pkg["dirindexes"][i]]
-
-            if not self.path.has_key(dirname):
-                continue
-
-            basename = pkg["basenames"][i]
-            if self.path[dirname].has_key(basename):
-                self.path[dirname][basename].remove(pkg)
-
-            if len(self.path[dirname][basename]) == 0:
-                del self.path[dirname][basename]
+        if basenames != None:
+            dirindexes = pkg["dirindexes"]
+            dirnames = pkg["dirnames"]
+            dirnames = [ dirnames[di] for di in dirindexes ]
+        else:
+            if pkg["oldfilenames"] == None:
+                return
+            (basenames, dirnames) = genBasenames2(pkg["oldfilenames"])
+        for i in xrange(len(basenames)):
+            self.path[dirnames[i]][basenames[i]].remove(pkg)
 
     def numDuplicates(self, filename):
         (dirname, basename) = os.path.split(filename)
@@ -98,256 +90,10 @@ class FilenamesList:
 
         The list may point to internal structures of FilenamesList and may be
         changed by calls to addPkg() and removePkg()."""
-
-        pkglist = [ ]
-        if self.oldfilenames.has_key(name):
-            pkglist.extend(self.oldfilenames[name])
         (dirname, basename) = os.path.split(name)
-        if len(dirname) > 0 and dirname[-1] != "/":
+        if dirname[-1:] != "/":
             dirname += "/"
-        pkglist.extend(self.path.get(dirname, {}).get(basename, []))
-        return pkglist
-
-
-class PhilFilenamesList:
-    """A mapping from filenames to RpmPackages."""
-
-    def __init__(self):
-        self.clear()
-
-    def clear(self):
-        """Clear the mapping."""
-        self.basenames = { } # basename: { pkg: [basename_idx, ..] }
-        self.cache = { }
-
-    def addPkg(self, pkg):
-        """Add all files from RpmPackage pkg to self."""
-
-        self.cache = { }
-        if pkg.has_key("oldfilenames"):
-            for i in xrange(len(pkg["oldfilenames"])):
-                basename = os.path.basename(pkg["oldfilenames"][i])
-                self.basenames.setdefault(basename, { }).setdefault(pkg, [ ]).append(i)
-                #self.basenames.setdefault(basename, { }).append((pkg, i))
-            return
-
-        if pkg["basenames"] == None:
-            return
-
-        for i in xrange(len(pkg["basenames"])):
-            f = pkg["basenames"][i]
-            self.basenames.setdefault(f, { }).setdefault(pkg, [ ]).append(i)
-            #self.basenames.setdefault(f, [ ]).append((pkg, i))
-
-    def removePkg(self, pkg):
-        """Remove all files from RpmPackage pkg from self."""
-
-        self.cache = { }
-        if pkg.has_key("oldfilenames"):
-            for i in xrange(len(pkg["oldfilenames"])):
-                f = os.path.basename(pkg["oldfilenames"][i])
-                if not self.basenames.has_key(f):
-                    # TODO: error/warning?
-                    continue
-                if self.basenames[f].has_key(pkg):
-                    del self.basenames[f][pkg]
-            if len(self.basenames[f].keys()) == 0:
-                del self.basenames[f]
-            return
-
-        if pkg["basenames"] == None:
-            return
-        for i in xrange(len(pkg["basenames"])):
-            f = pkg["basenames"][i]
-            if not self.basenames.has_key(f):
-                continue
-            if self.basenames[f].has_key(pkg):
-                del self.basenames[f][pkg]
-        if len(self.basenames[f].keys()) == 0:
-            del self.basenames[f]
-
-    def isDuplicate(self, filename):
-        (dirname, basename) = os.path.split(filename)
-        if len(dirname) > 0 and dirname[-1] != "/":
-            dirname += "/"
-        list = [ ]
-        if self.basenames.has_key(basename):
-            for (pkg, i) in self.basenames[basename]:
-                if pkg.has_key("oldfilenames"):
-                    if os.path.dirname(pkg["oldfilenames"][i]) == dirname:
-                        list.append(pkg)
-                else:
-                    if pkg["dirnames"][pkg["dirindexes"][i]] == dirname:
-                        list.append(pkg)
-        normalizeList(list)
-        if len(list) > 1:
-            return 1
-        return 0
-
-    def duplicates(self):
-        dups = { }
-        for basename in self.basenames:
-            hash = { }
-            for (pkg, i) in self.basenames[basename]:
-                if pkg.has_key("oldfilenames"):
-                    hash.setdefault(pkg["oldfilenames"][i],
-                                    [ ]).append(pkg)
-                else:
-                    name = pkg["dirnames"][pkg["dirindexes"][i]] + basename
-                    hash.setdefault(name, [ ]).append(pkg)
-            for name in hash:
-                if len(hash[name]) > 1:
-                    dups[name] = hash[name]
-        return dups
-
-    def search(self, name, nocache=0):
-        """Return list of packages providing file with name.
-
-        The list may point to internal structures of FilenamesList and may be
-        changed by calls to addPkg() and removePkg()."""
-
-        if not nocache and self.cache.has_key(name):
-            return self.cache[name][:]
-
-        pkglist = [ ]
-        (dirname, basename) = os.path.split(name)
-        if not self.basenames.has_key(basename):
-            return pkglist
-        if len(dirname) > 0 and dirname[-1] != "/":
-            dirname += "/"
-        for pkg in self.basenames[basename]:
-            if pkg.has_key("oldfilenames"):
-                for idx in self.basenames[basename][pkg]:
-                    if pkg["oldfilenames"][idx] == name:
-                        pkglist.append(pkg)
-            else:
-                for idx in self.basenames[basename][pkg]:
-                    if pkg["dirnames"][pkg["dirindexes"][idx]] == dirname:
-                        pkglist.append(pkg)
-        if nocache:
-            return pkglist
-        self.cache[name] = pkglist
-        return self.cache[name][:]
-
-class NewFilenamesList:
-    """A mapping from filenames to RpmPackages."""
-
-    def __init__(self):
-        self.clear()
-
-    def clear(self):
-        """Clear the mapping."""
-        self.basenames = { } # basename: [(pkg, basename_idx), ..]
-        self.cache = { }
-
-    def addPkg(self, pkg):
-        """Add all files from RpmPackage pkg to self."""
-
-        self.cache = { }
-        if pkg.has_key("oldfilenames"):
-            for i in xrange(len(pkg["oldfilenames"])):
-                basename = os.path.basename(pkg["oldfilenames"][i])
-                self.basenames.setdefault(basename, [ ]).append((pkg, i))
-            return
-
-        if pkg["basenames"] == None:
-            return
-        for i in xrange(len(pkg["basenames"])):
-            f = pkg["basenames"][i]
-            self.basenames.setdefault(f, [ ]).append((pkg, i))
-
-    def removePkg(self, pkg):
-        """Remove all files from RpmPackage pkg from self."""
-
-        self.cache = { }
-        if pkg.has_key("oldfilenames"):
-            for i in xrange(len(pkg["oldfilenames"])):
-                f = pkg["oldfilenames"][i]
-                if not self.basenames.has_key(f):
-                    # TODO: error/warning?
-                    continue
-                j = 0
-                while j < len(self.basenames[f]):
-                    if self.basenames[f][j][0] == pkg and \
-                           self.basenames[f][j][1] == i:
-                        self.basenames[f].pop(j)
-                    else:
-                        j += 1
-            if len(self.basenames[f]) == 0:
-                del self.basenames[f]
-            return
-
-        if pkg["basenames"] == None:
-            return
-        for i in xrange(len(pkg["basenames"])):
-            f = pkg["basenames"][i]
-            j = 0
-            nlist = []
-            for (bpkg, idx) in self.basenames[f]:
-                if not bpkg == pkg:
-                    nlist.append((bpkg, idx))
-            if len(nlist) == 0:
-                del self.basenames[f]
-            else:
-                self.basenames[f] = nlist
-
-    def isDuplicate(self, filename):
-        (dirname, basename) = os.path.split(filename)
-        if len(dirname) > 0 and dirname[-1] != "/":
-            dirname += "/"
-        list = [ ]
-        if self.basenames.has_key(basename):
-            for (pkg, i) in self.basenames[basename]:
-                if pkg.has_key("oldfilenames"):
-                    if os.path.dirname(pkg["oldfilenames"][i]) == dirname:
-                        list.append(pkg)
-                else:
-                    if pkg["dirnames"][pkg["dirindexes"][i]] == dirname:
-                        list.append(pkg)
-        normalizeList(list)
-        if len(list) > 1:
-            return 1
-        return 0
-
-    def duplicates(self):
-        dups = { }
-        for basename in self.basenames:
-            hash = { }
-            for (pkg, i) in self.basenames[basename]:
-                if pkg.has_key("oldfilenames"):
-                    hash.setdefault(pkg["oldfilenames"][i], [ ]).append(pkg)
-                else:
-                    name = pkg["dirnames"][pkg["dirindexes"][i]] + basename
-                    hash.setdefault(name, [ ]).append(pkg)
-            for name in hash:
-                if len(hash[name]) > 1:
-                    dups[name] = hash[name]
-        return dups
-
-    def search(self, name, nocache=0):
-        """Return list of packages providing file with name.
-
-        The list may point to internal structures of FilenamesList and may be
-        changed by calls to addPkg() and removePkg()."""
-
-        if nocache or not self.cache.has_key(name):
-            pkglist = [ ]
-            (dirname, basename) = os.path.split(name)
-            if not self.basenames.has_key(basename):
-                return pkglist
-            if len(dirname) > 0 and dirname[-1] != "/":
-                dirname += "/"
-            for (pkg, i) in self.basenames[basename]:
-                if pkg.has_key("oldfilenames"):
-                    if pkg["oldfilenames"][i] == name:
-                        pkglist.append(pkg)
-                else:
-                    if pkg["dirnames"][pkg["dirindexes"][i]] == dirname:
-                        pkglist.append(pkg)
-            if nocache:
-                return pkglist
-            self.cache[name] = pkglist
-        return self.cache[name][:]
+        return self.path.get(dirname, {}).get(basename, [])
 
 
 class ProvidesList:
