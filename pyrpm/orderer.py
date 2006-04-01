@@ -78,6 +78,14 @@ from resolver import RpmResolver
 import database
 import time
 
+def operationFlag(flag, operation):
+    """Return dependency flag for RPMSENSE_* flag during operation."""
+    if isLegacyPreReq(flag) or \
+           (operation == OP_ERASE and isErasePreReq(flag)) or \
+           (operation != OP_ERASE and isInstallPreReq(flag)):
+        return 1    # hard requirement
+    return 0        # soft requirement
+
 class RpmRelation:
     """Pre and post relations for a package (a node in the dependency
     graph)."""
@@ -116,7 +124,7 @@ class RpmRelations:
             for ((name, flag, version), s) in resolved:
                 if name.startswith("config("): # drop config requirements
                     continue
-                f = self._operationFlag(flag, operation)
+                f = operationFlag(flag, operation)
                 for pkg2 in s:
                     if pkg2 == pkg:
                         continue
@@ -383,17 +391,6 @@ class RpmRelations:
                 len(connected_components)))
 
         return order
-
-    # ----
-
-    def _operationFlag(self, flag, operation):
-        """Return dependency flag for RPMSENSE_* flag during operation."""
-
-        if isLegacyPreReq(flag) or \
-               (operation == OP_ERASE and isErasePreReq(flag)) or \
-               (operation != OP_ERASE and isInstallPreReq(flag)):
-            return 1    # hard requirement
-        return 0        # soft requirement
 
 # ----------------------------------------------------------------------------
 
