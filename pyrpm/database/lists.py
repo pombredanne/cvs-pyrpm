@@ -128,22 +128,10 @@ class ProvidesList:
         """Remove Provides: by RpmPackage rpm"""
 
         for (name, flag, version) in rpm[self.TAG]:
-            self._remove(name, flag, version, rpm)
-
-    def _remove(self, name, flag, version, rpm):
-        """Remove Provides: (name, RPMSENSE_* flag, EVR string) by RpmPackage
-        rpm."""
-
-        list = self.hash[name]
-        i = 0
-        while i < len(list):
-            if list[i] == (flag, version, rpm):
-                del list[i]
-                break
-            else:
-                i += 1
-        if len(list) == 0:
-            del self.hash[name]
+            list = self.hash[name]
+            list.remove( (flag, version, rpm) )
+            if len(list) == 0:
+                del self.hash[name]
 
     def search(self, name, flag, version):
         """Return a list of RpmPackage's matching the Requires:
@@ -220,6 +208,9 @@ class TriggersList(ConflictsList):
         """Remove Provides: by RpmPackage rpm"""
 
         for (name, flag, version, scriptprog, scripts) in rpm[self.TAG]:
-            self._remove(name, flag, version, rpm)
+            list = self.hash[name]
+            list.remove( (flag, version, rpm) )
+            if len(list) == 0:
+                del self.hash[name]
 
 # vim:ts=4:sw=4:showmatch:expandtab
