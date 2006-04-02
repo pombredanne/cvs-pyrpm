@@ -552,7 +552,7 @@ class RpmResolver:
 
         # TODO: use db.getRequires()
         for u in pkg["requires"]:
-            if u[0].startswith("rpmlib("): # drop rpmlib requirements
+            if u[0][:7] == "rpmlib(": # drop rpmlib requirements
                 continue
             s = self.database.searchDependency(u[0], u[1], u[2])
 #            # drop self script prereq and self script postun
@@ -591,7 +591,7 @@ class RpmResolver:
 
         # TODO: use db.getRequires()
         for u in pkg["requires"]:
-            if u[0].startswith("rpmlib("): # drop rpmlib requirements
+            if u[0][:7] == "rpmlib(": # drop rpmlib requirements
                 continue
             s = self.database.searchDependency(u[0], u[1], u[2])
             if len(s) > 0: # resolved
@@ -661,7 +661,7 @@ class RpmResolver:
             for pkg in self.database.getPkgsByName(name):
                 unresolved = [ ]
                 for u in pkg["requires"]:
-                    if u[0].startswith("rpmlib("): # drop rpmlib requirements
+                    if u[0][:7] == "rpmlib(": # drop rpmlib requirements
                         continue
                     s = self.database.searchDependency(u[0], u[1], u[2])
 #                    # drop self script prereq and self script postun

@@ -585,7 +585,7 @@ def getFreeDiskspace(config, operations):
         if dirnames == None:
             continue
         for dirname in dirnames:
-            while dirname.endswith("/") and len(dirname) > 1:
+            while dirname[-1:] == "/" and len(dirname) > 1:
                 dirname = dirname[:-1]
             if dirhash.has_key(dirname):
                 continue
@@ -625,7 +625,7 @@ def getFreeDiskspace(config, operations):
             if not S_ISREG(filemodes[i]):
                 continue
             dirname = dirnames[dirindexes[i]]
-            while dirname.endswith("/") and len(dirname) > 1:
+            while dirname[-1:] == "/" and len(dirname) > 1:
                 dirname = dirname[:-1]
             dev = freehash[dirhash[dirname]]
             mdev = minfreehash[dirhash[dirname]]

@@ -624,7 +624,7 @@ class RpmPackage(RpmData):
             if pos < npos and self.config.printhash:
                 self.config.printInfo(0, "#"*(npos-pos))
             pos = npos
-            if issrc and filename.startswith("/"):
+            if issrc and filename[:1] == "/":
                 # src.rpm has empty tag "dirnames", but we use absolut paths in
                 # io.read(), so at least the directory '/' is there ...
                 filename = filename[1:]

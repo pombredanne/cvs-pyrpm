@@ -194,11 +194,11 @@ class CPIOFile:
         # Adjust filename, so that it matches the way the rpm header has
         # filenames stored. This code used to be:
         # 'filename = "/" + os.path.normpath("./" + filename)'
-        if filename.startswith("./"):
+        if filename[:2] == "./":
             filename = filename[1:]
-        if not filename.startswith("/"):
+        if filename[:1] != "/":
             filename = "%s%s" % ("/", filename)
-        if filename.endswith("/") and len(filename) > 1:
+        if filename[-1:] == "/" and len(filename) > 1:
             filename = filename[:-1]
         # Read file contents.
         self.lastfilesize = int(data[54:62], 16)
