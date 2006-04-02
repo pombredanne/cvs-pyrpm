@@ -96,6 +96,35 @@ Over time quite a few nice things have come out of the project:
   simple changeroots.
 
 
+Requirements for PyRpm
+----------------------
+
+This is required for PyRpm to work:
+
+- link:http://python.org/[python] 2.3 or newer. PyRpm is also using the
+  gzip, zlib, bz2, bsddb python modules.
+- link:http://xmlsoft.org/[libxml2] with the python bindings in
+  `libxml2-python`
+- link:http://linux.duke.edu/projects/urlgrabber/[python-urlgrabber] to read
+  data via http and ftp.
+
+There are also optional dependencies like:
+
+- pyparted if you want to use pyrpmkickstart with the `--no-stage2` option
+  where the apps from your machine are used instead of the
+  `Fedora/base/*.img` files.
+- link:http://www.methods.co.nz/asciidoc/[asciidoc] if you want to change the
+  documentation and need to re-generate the html files. The releases already
+  contain pre-generated html files.
+- link:http://pysqlite.org/[python-sqlite] if you want to experiment with the
+  optional sqlite database backend.
+
+For x86 (32bit) we often see that e.g. pyrpmyum needs up to 300MB of memory.
+For current Fedora Core releases, python on x86_64 (64bit) needs nearly twice
+as much of memory, so you probably should have 1GB for your x86_64 machine to
+work smoothly.
+
+
 Other PyRPM Project Pages
 -------------------------
 
