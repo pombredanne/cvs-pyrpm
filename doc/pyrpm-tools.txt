@@ -36,13 +36,13 @@ to find missing dependencies and other script failures easily.
 Check a complete FC4 repository:
 
 -----------------------
-pyrpmcheckinstall -y -v -c fc4-i386.conf -r /mnt/build/test >& /tmp/installtest
+pyrpmcheckinstall -y -v -c fc4-i386.conf -r /mnt/build/test &> /tmp/installtest
 -----------------------
 
-To only get the errors and have a minimal log make it quite:
+To only get the errors and have a minimal log make it quiet:
 
 -----------------------
-pyrpmcheckinstall -y -q -c fc4-i386.conf -r /mnt/build/test >& /tmp/installtest
+pyrpmcheckinstall -y -q -c fc4-i386.conf -r /mnt/build/test &> /tmp/installtest
 -----------------------
 
 
@@ -269,7 +269,7 @@ pyrpmyum.
 Run 10000 install and erase operations in the /mnt/build/test buildroot and
 save the resulting output in /tmp/stresstest
 -----------------------
-pyrpmrandomizer --servicehack -y -v -c fc3-updates-i386.conf -r /mnt/build/test 10000 >&/tmp/stresstest
+pyrpmrandomizer --servicehack -y -v -c fc3-updates-i386.conf -r /mnt/build/test 10000 &>/tmp/stresstest
 -----------------------
 
 
