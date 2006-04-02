@@ -96,12 +96,12 @@ Over time quite a few nice things have come out of the project:
   simple changeroots.
 
 
-Requirements for PyRpm
+Requirements for PyRPM
 ----------------------
 
-This is required for PyRpm to work:
+This is required for PyRPM to work:
 
-- link:http://python.org/[python] 2.3 or newer. PyRpm is also using the
+- link:http://python.org/[python] 2.3 or newer. PyRPM is also using the
   gzip, zlib, bz2, bsddb python modules.
 - link:http://xmlsoft.org/[libxml2] with the python bindings in
   `libxml2-python`
