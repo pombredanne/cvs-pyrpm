@@ -5869,6 +5869,7 @@ def main():
                 rpm.filenames = rpm.getFilenames()
             checkDirs(repo)
             checkSymlinks(repo)
+            checkScripts(repo)
         if strict or checkdeps:
             if specifyarch:
                 checkarchs = [arch,]
@@ -5881,7 +5882,6 @@ def main():
                         verbose, 1, 1)
                     if strict:
                         checkProvides(installrpms)
-                        checkScripts(installrpms)
                     checkDeps(installrpms, checkfileconflicts, runorderer)
                     time2 = time.clock()
                     print "Needed", time2 - time1, "sec to check this tree."
