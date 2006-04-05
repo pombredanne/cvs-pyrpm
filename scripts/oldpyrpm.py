@@ -1080,6 +1080,8 @@ def stringCompare(str1, str2):
         # remove leading separators
         while i1 < lenstr1 and not _xisalnum(str1[i1]): i1 += 1
         while i2 < lenstr2 and not _xisalnum(str2[i2]): i2 += 1
+        if i1 == lenstr1 or i2 == lenstr2: # bz 178798
+            break
         # start of the comparison data, search digits or alpha chars
         j1 = i1
         j2 = i2
@@ -2113,13 +2115,14 @@ class ReadRpm:
             self.printErr("bad os: %s" % self["os"])
         if self.strict:
             if self["packager"] not in (None,
-                "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>"):
+                "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>",
+                "Fedora Project <http://bugzilla.redhat.com/bugzilla>"):
                 self.printErr("unknown packager: %s" % self["packager"])
-            if self["vendor"] not in (None, "Red Hat, Inc."):
+            if self["vendor"] not in (None, "Red Hat, Inc.", "Fedora Project"):
                 self.printErr("unknown vendor: %s" % self["vendor"])
             if self["distribution"] not in (None, "Red Hat Linux",
                 "Red Hat FC-3", "Red Hat (FC-3)", "Red Hat (FC-4)",
-                "Red Hat (FC-5)", "Red Hat (FC-6)",
+                "Red Hat (FC-5)", "Red Hat (FC-6)", "Fedora Extras",
                 "Red Hat (scratch)", "Red Hat (RHEL-3)", "Red Hat (RHEL-4)"):
                 self.printErr("unknown distribution: %s" % self["distribution"])
         arch = self["arch"]
@@ -5485,6 +5488,13 @@ def checkProvides(repo):
             continue
         print p, x
 
+def checkScripts(repo):
+    for rpm in repo:
+        for s in ("post", "postun", "prein", "preun", "verifyscript"):
+            data = rpm[s]
+            if data != None and data.find("RPM") != -1:
+                print rpm.filename, "contains \"RPM\" as string"
+
 
 def usage():
     prog = sys.argv[0]
@@ -5871,6 +5881,7 @@ def main():
                         verbose, 1, 1)
                     if strict:
                         checkProvides(installrpms)
+                        checkScripts(installrpms)
                     checkDeps(installrpms, checkfileconflicts, runorderer)
                     time2 = time.clock()
                     print "Needed", time2 - time1, "sec to check this tree."
