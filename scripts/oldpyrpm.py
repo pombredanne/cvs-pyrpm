@@ -49,6 +49,10 @@
 #     maybe only once per repo?
 #   - sort several urls to list local ones first, add mirror speed check
 # rpm header:
+# - checkScripts(): better check for RPM/% search by line to e.g. ignore
+#   comment lines
+# - checkSymlinks(): allow checking dangling symlinks by traversing the
+#   full path per directory and then follow also symlinks to other dirs
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
 # - Reading yum.conf we immediately replace 'releasever' instead of
@@ -5490,10 +5494,14 @@ def checkProvides(repo):
 
 def checkScripts(repo):
     for rpm in repo:
-        for s in ("post", "postun", "prein", "preun", "verifyscript"):
+        for s in ("postin", "postun", "prein", "preun", "verifyscript"):
             data = rpm[s]
-            if data != None and data.find("RPM") != -1:
+            if data == None:
+                continue
+            if data.find("RPM") != -1:
                 print rpm.filename, "contains \"RPM\" as string"
+            if data.find("%") != -1:
+                print rpm.filename, "contains \"%\""
 
 
 def usage():
