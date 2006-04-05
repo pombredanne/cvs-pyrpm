@@ -11,5 +11,6 @@ install-exec-local:
 		$(DESTDIR)$(bindir)/$$i;\
 	done
 
-CLEANFILES := $(notdir $(wildcard *~)) $(notdir $(wildcard *\#)) $(notdir $(wildcard \.\#*))
+CLEANFILES := $(notdir $(wildcard *~)) $(notdir $(wildcard *\#)) \
+	$(notdir $(wildcard \.\#*)) $(wildcard *\.pyc)
 
