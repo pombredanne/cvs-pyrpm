@@ -2111,10 +2111,11 @@ class ReadRpm:
         if self.strict:
             if self["packager"] not in (None,
                 "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>",
-                "Fedora Project <http://bugzilla.redhat.com/bugzilla>"):
+                "Fedora Project <http://bugzilla.redhat.com/bugzilla>",
+                "Matthias Saou <matthias@rpmforge.net>"):
                 self.printErr("unknown packager: %s" % self["packager"])
             if self["vendor"] not in (None, "Red Hat, Inc.", "Fedora Project",
-                "Livna.org RPMS"):
+                "Livna.org RPMS", "Freshrpms.net"):
                 self.printErr("unknown vendor: %s" % self["vendor"])
             if self["distribution"] not in (None, "Red Hat Linux",
                 "Red Hat FC-3", "Red Hat (FC-3)", "Red Hat (FC-4)",
