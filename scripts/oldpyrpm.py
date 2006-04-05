@@ -5495,8 +5495,9 @@ def checkScripts(repo):
                 for line in data.split("\n"):
                     if line.find("RPM") == -1 or comment.match(line):
                         continue
-                    # ignore RPM_INSTALL_PREFIX
-                    if line.find("RPM_INSTALL_PREFIX") != -1:
+                    # ignore RPM_INSTALL_PREFIX and "rpm --import"
+                    if line.find("RPM_INSTALL_PREFIX") != -1 or \
+                        line.find("rpm --import") != -1:
                         continue
                     print rpm.filename, "contains \"RPM\" as string"
                     break
