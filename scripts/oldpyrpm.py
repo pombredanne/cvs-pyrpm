@@ -49,8 +49,6 @@
 #     maybe only once per repo?
 #   - sort several urls to list local ones first, add mirror speed check
 # rpm header:
-# - checkScripts(): better check for RPM/% search by line to e.g. ignore
-#   comment lines
 # - checkSymlinks(): allow checking dangling symlinks by traversing the
 #   full path per directory and then follow also symlinks to other dirs
 # - Can doVerify() be called on rpmdb data or if the sig header is
@@ -85,12 +83,6 @@
 # - "badsha1_2" has the size added in reversed order to compute the final
 #   sha1 sum. A patch to python shamodule.c could allow to verify also these
 #   old broken entries.
-# - We use S_ISREG(fileflag) to check for regular files before looking
-#   at filemd5s, but filemd5s is only set for regular files, so this
-#   might be optimized a bit. (That code is in no performance critical
-#   path, so could also stay as is.) Also note that some kernels have
-#   bugs to not mmap() files with size 0 and then rpm is writing wrong
-#   filemd5s for those.
 # things that look even less important to implement:
 # - add streaming support to bzip2 compressed payload
 # - lua scripting support
@@ -1650,8 +1642,7 @@ class ReadRpm:
                 ctx = md5.new()
                 ctx.update(data)
                 if ctx.hexdigest() != md5sum:
-                    if (self.strict or self["filesizes"][i] != 0) and \
-                        self["arch"] != "sparc":
+                    if self["filesizes"][i] != 0 and self["arch"] != "sparc":
                         self.printErr("wrong filemd5s for %s: %s, %s" \
                             % (filename, ctx.hexdigest(), md5sum))
 
@@ -2122,7 +2113,8 @@ class ReadRpm:
                 "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>",
                 "Fedora Project <http://bugzilla.redhat.com/bugzilla>"):
                 self.printErr("unknown packager: %s" % self["packager"])
-            if self["vendor"] not in (None, "Red Hat, Inc.", "Fedora Project"):
+            if self["vendor"] not in (None, "Red Hat, Inc.", "Fedora Project",
+                "Livna.org RPMS"):
                 self.printErr("unknown vendor: %s" % self["vendor"])
             if self["distribution"] not in (None, "Red Hat Linux",
                 "Red Hat FC-3", "Red Hat (FC-3)", "Red Hat (FC-4)",
@@ -2227,11 +2219,10 @@ class ReadRpm:
                 if fileflags[x] & (RPMFILE_GHOST | RPMFILE_EXCLUDE):
                     continue
                 if S_ISREG(filemodes[x]):
-                    if not filemd5s[x]:
-                        # There is a kernel bug to not mmap() files with
-                        # size 0. That kernel also builds broken rpms.
-                        if self.strict or self["filesizes"][x] != 0:
-                            self.printErr("missing filemd5sum, %d, %s" % (x,
+                    # All regular files except 0-sized files must have
+                    # a md5sum.
+                    if not filemd5s[x] and self["filesizes"][x] != 0:
+                        self.printErr("missing filemd5sum, %d, %s" % (x,
                                 filenames[x]))
                 elif filemd5s[x] != "":
                     print filemd5s[x]
@@ -5493,15 +5484,37 @@ def checkProvides(repo):
         print p, x
 
 def checkScripts(repo):
+    comment = re.compile("^\s*#")
     for rpm in repo:
         for s in ("postin", "postun", "prein", "preun", "verifyscript"):
             data = rpm[s]
             if data == None:
                 continue
             if data.find("RPM") != -1:
-                print rpm.filename, "contains \"RPM\" as string"
+                for line in data.split("\n"):
+                    if line.find("RPM") == -1 or comment.match(line):
+                        continue
+                    # ignore RPM_INSTALL_PREFIX
+                    if line.find("RPM_INSTALL_PREFIX") != -1:
+                        continue
+                    print rpm.filename, "contains \"RPM\" as string"
+                    break
             if data.find("%") != -1:
-                print rpm.filename, "contains \"%\""
+                for line in data.split("\n"):
+                    if line.find("%") == -1 or comment.match(line):
+                        continue
+                    # ignore ${var%extension} constructs
+                    if re.compile(".*\${.+%.+}").match(line):
+                        continue
+                    # ignore "rpm --query --queryformat" and "rpm --eval"
+                    if line.find("rpm --query --queryformat") != -1 or \
+                        line.find("rpm --eval") != -1:
+                        continue
+                    # ignore `date +string`
+                    if re.compile(".*date \'?\+").match(line):
+                        continue
+                    print rpm.filename, "contains \"%\""
+                    break
 
 
 def usage():
