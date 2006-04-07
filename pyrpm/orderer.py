@@ -128,7 +128,7 @@ class RpmRelations:
                 f = operationFlag(flag, operation)
                 for pkg2 in s:
                     if pkg2 != pkg:
-                        self.append(pkg, pkg2, f)
+                        self.addRel(pkg, pkg2, f)
 
         if self.config.debug > 1:
             # print relations
@@ -160,7 +160,7 @@ class RpmRelations:
 
     # ----
 
-    def append(self, pkg, pre, flag):
+    def addRel(self, pkg, pre, flag):
         """Add an arc from RpmPackage pre to RpmPackage pkg with flag.
 
         pre can be None to add pkg to the graph with no arcs."""
@@ -209,7 +209,6 @@ class RpmRelations:
     def collect(self, pkg, order):
         """Move package from the relations graph to the order list
         Handle ConnectedComponent."""
-        self.debugCollect(pkg, order)
         if isinstance(pkg, ConnectedComponent):
             pkg.breakUp(order)
         else:
@@ -298,29 +297,6 @@ class RpmRelations:
 
     # ----
 
-    def debugConnectedComponents(self, components):
-        """ Overload this function to get a call after the connected components
-        were found."""
-        # Remember: Do not change any contents!
-        return
-
-    # ---
-
-    def debugBreakupComponents(self, component, subcomponents):
-        """ Overload this function to get a call before resursivly break up
-        a component."""
-        # Remember: Do not change any contents!
-        return
-
-    # ----
-
-    def debugCollect(self, pkg, order):
-        """Overload this function to get a call within collect()."""
-        # Remember: Do not change any contents!
-        return
-
-    # ----
-
     def processLeafNodes(self, order, leaflist=None):
         """Move topologically sorted "trailing" packages from
         orderer.RpmRelations relations to start of list."""
@@ -373,7 +349,6 @@ class RpmRelations:
         order = [ ]
 
         connected_components = ConnectedComponentsDetector(self).detect(self)
-        self.debugConnectedComponents(connected_components)
 
         if connected_components:
             # debug output the components
@@ -538,7 +513,7 @@ class ConnectedComponent:
             for p in to_remove:
                 flag = relations[pkg].pre[p]
                 relations.removeRelation(pkg, p, quiet=True)
-                relations.append(self, p, flag)
+                relations.addRel(self, p, flag)
 
 
             to_remove = [ ]
@@ -549,7 +524,7 @@ class ConnectedComponent:
             for p in to_remove:
                 flag = relations[pkg].post[p]
                 relations.removeRelation(p, pkg, quiet=True)
-                relations.append(p, self, flag)
+                relations.addRel(p, self, flag)
 
         relations[self].weight = len(self.pkgs)
         # uncomment for use of the dict based weight algorithm
@@ -679,14 +654,12 @@ class ConnectedComponent:
             pkg, pre = hardloops[0].breakUp()
 
             components = ConnectedComponentsDetector(self.relations).detect(self.pkgs)
-            self.relations.debugBreakupComponents(self, components)
             for component in components:
                 self.removeSubComponent(component)
                 self.pkgs[component] = component
 
             self.processLeafNodes(order)
         else:
-            self.relations.debugBreakupComponents(self, [ ])
             # No loops with hard requirements found, breaking up everything
             while self.loops:
                 # find most used relation
