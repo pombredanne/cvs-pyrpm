@@ -408,9 +408,10 @@ if __name__ == '__main__':
 
     # -----------------------------------------------------------------------
 
-    installed = [ ]
     operation = pyrpm.OP_UPDATE
-    resolver = pyrpm.RpmResolver(pyrpm.rpmconfig, installed)
+    db = pyrpm.database.memorydb.RpmMemoryDB(pyrpm.rpmconfig, None)
+    db.addPkgs([])
+    resolver = pyrpm.RpmResolver(pyrpm.rpmconfig, db)
 
     i = 0
     l = len(rpms)
