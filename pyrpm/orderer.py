@@ -154,28 +154,13 @@ class RpmRelations:
 
     # ----
 
-    def addPkg(self, pkg):
-        if self.list[pkg] == None:
-            self.list[pkg] = RpmRelation()
-
-    # ----
-
     def addRel(self, pkg, pre, flag):
         """Add an arc from RpmPackage pre to RpmPackage pkg with flag.
-
         pre can be None to add pkg to the graph with no arcs."""
-        if pre == pkg:
-            #raise
-            return
         i = self.list[pkg]
-        if i == None:
-            i = RpmRelation()
-            self.list[pkg] = i
         if flag or pre not in i.pre:
             # prefer hard requirements, do not overwrite with soft req
             i.pre[pre] = flag
-            if not pre in self.list:
-                self.list[pre] = RpmRelation()
             self.list[pre].post[pkg] = 1
 
     # ----
@@ -466,11 +451,11 @@ class Loop(HashList):
             else:
                 distances[idx] += distances[-1]
 
-        max = -1
+        maxd = -1
         max_idx = 0
         for idx in xrange(len(distances)):
-            if distances[idx]>max:
-                max = distances[idx]
+            if distances[idx] > maxd:
+                maxd = distances[idx]
                 max_idx = idx
 
         self.relations.removeRelation(self[max_idx-1], self[max_idx])
@@ -497,7 +482,7 @@ class ConnectedComponent:
 
         self.relations = relations
 
-        relations.addPkg(self)
+        relations.list[pkg] = RpmRelation()
 
         self.pkgs = { }
         for pkg in pkgs:
