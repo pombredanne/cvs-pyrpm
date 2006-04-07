@@ -2794,7 +2794,7 @@ class RpmRelations:
             del self.list[r].pre[pkg]
         del self.list[pkg]
 
-    def removeRelation(self, node, next, quiet=False):
+    def removeRelation(self, node, next, quiet=0):
         """Drop the "RpmPackage node requires RpmPackage next" arc."""
         #if not quiet:
         #    txt = "Removing"
@@ -2986,21 +2986,21 @@ class Loop(HashList):
         if pkg in self and pre in self:
             idx = self.index(pre)
             return self[idx - 1] is pkg
-        return False
+        return 0
 
     def containsHardRequirement(self):
         """Does the loop contain any hard relations?"""
         for pkg, pre in self:
             if self.relations[pkg].pre[pre]:
-                return True
-        return False
+                return 1
+        return 0
 
     def breakUp(self):
         """Searches for the relation that has the maximum distance
         from hard requirements and removes it.
         Returns (Node, Next) of the removed requirement.
 
-        Assumes self.containsHardRequirement() == True"""
+        Assumes self.containsHardRequirement() == 1"""
 
         # find the requirement that has the largest distance
         # to a hard requirement
@@ -3042,21 +3042,22 @@ class ConnectedComponent:
         """relations: the RpmRelations object containing the loops."""
 
         self.relations = relations
+        # add myself to the list
         relations.list[self] = RpmRelation()
         self.pkgs = {}
         for pkg in pkgs:
             self.pkgs[pkg] = pkg
             relations[pkg].weight = -1
 
+        # remove all relations this connected component is replacing
         for pkg in pkgs:
             to_remove = []
             for pre in relations[pkg].pre:
                 if not pre in self.pkgs:
                     to_remove.append(pre)
-
             for p in to_remove:
                 flag = relations[pkg].pre[p]
-                relations.removeRelation(pkg, p, quiet=True)
+                relations.removeRelation(pkg, p, quiet=1)
                 relations.addRel(self, p, flag)
 
 
@@ -3064,16 +3065,14 @@ class ConnectedComponent:
             for post in relations[pkg].post:
                 if not post in self.pkgs:
                     to_remove.append(post)
-
             for p in to_remove:
                 flag = relations[pkg].post[p]
-                relations.removeRelation(p, pkg, quiet=True)
+                relations.removeRelation(p, pkg, quiet=1)
                 relations.addRel(p, self, flag)
 
         relations[self].weight = len(self.pkgs)
         # uncomment for use of the dict based weight algorithm
         # relations[self].weight = self.pkgs.copy()
-
         self.detectLoops()
 
     def __len__(self):
@@ -3105,8 +3104,7 @@ class ConnectedComponent:
         add discovered loops to loops.
 
         The list of RpmPackages path contains the path from the search root to
-        the current package.  loops is a list of Loop objects.
-        """
+        the current package.  loops is a list of Loop objects."""
         for p in self.relations[pkg].pre:
             # "p in path" is O(N), can be O(1) with another hash.
             if len(path) > 0 and p in path:
@@ -3122,7 +3120,7 @@ class ConnectedComponent:
     def processLeafNodes(self, order):
         """Remove all leaf nodes with the component and append them to order.
         """
-        while True:
+        while 1:
             # Without the requirement of max(rel.pre) this could be O(1)
             next = None
             next_post_len = -1
