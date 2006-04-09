@@ -130,27 +130,30 @@ class RpmRelations:
                     if pkg2 != pkg:
                         self.addRel(pkg, pkg2, f)
 
-        if self.config.debug > 1:
-            # print relations
-            self.config.printDebug(2, "\t==== relations (%d) " % len(self) +\
-                                   "==== #pre-relations #post-relations " + \
-                                   "package pre-relation-packages, " +\
-                                   "'*' marks prereq's")
-            for pkg in self:
-                rel = self[pkg]
-                pre = ""
-                if self.config.debug > 2 and len(rel.pre) > 0:
-                    pre = ": "
-                    for p in rel.pre:
-                        if len(pre) > 2:
-                            pre += ", "
-                        if rel.pre[p]:
-                            pre += "*" # prereq
-                        pre += p.getNEVRA()
-                self.config.printDebug(2, "\t%d %d %s%s" % \
-                                       (len(rel.pre), len(rel.post),
-                                        pkg.getNEVRA(), pre))
-            self.config.printDebug(2, "\t==== relations ====")
+        if self.config.debug >= 2:
+            self.printRel()
+
+    # ----
+
+    def printRel(self):
+        """Print relations."""
+        self.config.printDebug(2, "\t==== relations (%d) " % len(self) + \
+            "==== #pre-relations #post-relations " + \
+            "package pre-relation-packages, '*' marks prereq's")
+        for pkg in self:
+            rel = self[pkg]
+            pre = ""
+            if self.config.debug > 2 and len(rel.pre) > 0:
+                pre = ": "
+                for p in rel.pre:
+                    if len(pre) > 2:
+                        pre += ", "
+                    if rel.pre[p]:
+                        pre += "*" # prereq
+                    pre += p.getNEVRA()
+            self.config.printDebug(2, "\t%d %d %s%s" % \
+                (len(rel.pre), len(rel.post), pkg.getNEVRA(), pre))
+        self.config.printDebug(2, "\t==== relations ====")
 
     # ----
 
