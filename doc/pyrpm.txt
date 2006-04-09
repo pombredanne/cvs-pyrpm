@@ -124,6 +124,12 @@ For current Fedora Core releases, python on x86_64 (64bit) needs nearly twice
 as much of memory, so you probably should have 1GB for your x86_64 machine to
 work smoothly.
 
+PyRPM is currently spending most of its CPU and memory on the list of files
+that are stored within rpm packages. Those are needed for dependency
+resolution. Re-writing all in C could improve this again and also allow
+production usage of it. Another possibility would be to change the repodata
+to allow for reduced data sets and better algorithms.
+
 
 Other PyRPM Project Pages
 -------------------------
