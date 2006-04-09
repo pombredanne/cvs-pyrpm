@@ -38,7 +38,6 @@
 
 #
 # TODO:
-# - set RPM_INSTALL_PREFIX for scripts
 # git repos:
 # - Optionally import the full tree for the initial import (e.g. FC releases).
 # - Optionally also sort by time for e.g. FC updates dirs.
@@ -49,6 +48,7 @@
 #     maybe only once per repo?
 #   - sort several urls to list local ones first, add mirror speed check
 # rpm header:
+# - check against current upstream rpm development
 # - checkSymlinks(): allow checking dangling symlinks by traversing the
 #   full path per directory and then follow also symlinks to other dirs
 # - Can doVerify() be called on rpmdb data or if the sig header is
@@ -57,12 +57,12 @@
 #   doing this in an extra pass. That's why it is then already too late
 #   to set distroverpkg within the config file at all.
 # - support reading some vars from yum.conf like distroverpkg
-# - add a new writeHeader2() that copies the existing rpm header and then
-#   writes new entries to the end. This is more robust than the existing
-#   writeHeader().
 # - allow a --rebuilddb into a new directory and a diff between two rpmdb
 # - check OpenGPG signatures
 # - allow src.rpm selection based on OpenGPG signature. Prefer GPG signed.
+# - add a new writeHeader2() that copies the existing rpm header and then
+#   writes new entries to the end. This is more robust than the existing
+#   writeHeader().
 # - For reading rpmdb we could first try to detect the region tag, then
 #   read all additional added tags into a separate hash. This would really
 #   clean up data handling and how duplicate tags are taken care off.
@@ -74,7 +74,7 @@
 # - i386 rpm extraction on ia64? (This is stored like relocated rpms in
 #   duplicated file tags.)
 # - Better error handling in PyGZIP.
-# - streaming read for cpio files (not high prio item)
+# - streaming read for cpio files
 # - use setPerms() in doLnOrCopy()
 # - Change "strict" and "verify" into "debug/verbose" and have one integer
 #   specify debug and output levels. (Maybe also "nodigest" can move in?)
@@ -2877,10 +2877,8 @@ class RpmRelations:
         for pkg in self:
             if not self[pkg].post: # post leaf node
                 self._calculateWeights(pkg, leafs)
-
         while leafs:
             self._calculateWeights(leafs.pop(), leafs)
-
         weights = {}
         for pkg in self:
             weights.setdefault(self[pkg].weight, []).append(pkg)
@@ -3389,7 +3387,7 @@ def selectNewestRpm(rpms, arch, arch_hash, verbose):
     if arch == None:
         for rpm in rpms[1:]:
             if pkgCompare(newest, rpm) < 0:
-                if verbose > 3:
+                if verbose > 4:
                     print "select", rpm.getFilename(), "over", \
                         newest.getFilename()
                 newest = rpm
@@ -3400,14 +3398,14 @@ def selectNewestRpm(rpms, arch, arch_hash, verbose):
     for rpm in rpms[1:]:
         rpmarch = arch_hash.get(rpm["arch"], 999)
         if rpmarch < newestarch:
-            if verbose > 3:
+            if verbose > 4:
                 print "select", rpm.getFilename(), "over", \
                     newest.getFilename()
             newest = rpm
             newestarch = rpmarch
         elif rpmarch == newestarch:
             if pkgCompare(newest, rpm) < 0:
-                if verbose > 3:
+                if verbose > 4:
                     print "select", rpm.getFilename(), "over", \
                         newest.getFilename()
                 newest = rpm
@@ -3437,7 +3435,7 @@ def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0,
                 continue
             # Remove all rpms not suitable for this arch.
             if arch_hash.get(rpm["arch"], 999) == 999:
-                if verbose > 3:
+                if verbose > 4:
                     print "Removed due to incompatibel arch:", \
                         rpm.getFilename()
                 continue
@@ -3473,7 +3471,7 @@ def findRpms(dir, uselstat=None, verbose=0):
             elif S_ISREG(st.st_mode) and f.endswith(".rpm"):
                 files.append(path)
             else:
-                if verbose:
+                if verbose > 2:
                     print "ignoring", path
     return files
 
@@ -4731,7 +4729,7 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                 dirname = mkstemp_dir(tmpdir, "mirrorlist")
                 for mlist in sec["mirrorlist"]:
                     mlist = conf.extendValue(mlist)
-                    if verbose:
+                    if verbose > 2:
                         print "Getting mirrorlist from %s\n" % mlist
                     fname = cacheLocal([mlist], "", dirname, 1)
                     if fname:
