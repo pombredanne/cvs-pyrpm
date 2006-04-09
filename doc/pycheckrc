@@ -8,3 +8,16 @@ maxArgs = 15
 
 # check if using implict and explicit return values
 checkImplicitReturns = False
+
+# No limit for the number of warnings/errors.
+limit = 0
+
+# max # of lines in a function
+maxLines = 400
+
+# max # of branches in a function
+maxBranches = 70
+
+# max # of local vars in a function
+maxLocals = 70
+
