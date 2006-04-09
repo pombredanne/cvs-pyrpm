@@ -59,7 +59,7 @@ tags = [ "name", "epoch", "version", "release", "arch",
          "providename", "provideflags", "provideversion", "requirename",
          "requireflags", "requireversion", "obsoletename", "obsoleteflags",
          "obsoleteversion", "conflictname", "conflictflags",
-         "conflictversion", "filesizes", "filemodes", "filemd5s",
+         "conflictversion", "filesizes", "filemodes", "filemd5s", "fileflags",
          "dirindexes", "basenames", "dirnames" ]
 
 if __name__ == '__main__':
