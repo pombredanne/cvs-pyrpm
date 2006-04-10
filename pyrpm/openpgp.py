@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2005 Red Hat, Inc.
+# Copyright (C) 2005, 2006 Red Hat, Inc.
 # Author: Miloslav Trmac
 #
 # This program is free software; you can redistribute it and/or modify
@@ -865,6 +865,33 @@ def parsePGPSignature(data):
     return packets[0]
 
 
+def isolateASCIIArmor(data):
+    """Assuming data contains an ASCII-armored message, possibly with some
+    prefix and suffix, return only the ASCII-armored message.
+
+    Return the isolated part, or the original data if the message is not
+    ASCII-armored."""
+
+    if data.find("-----BEGIN PGP ") == -1:
+        return data
+    lines = data.splitlines()
+    if not lines:
+        return data
+    for i in xrange(len(lines)):
+        if lines[i].startswith("-----BEGIN PGP "):
+            lines = lines[i:]
+            break
+    else:
+        return data
+    for i in xrange(len(lines)):
+        if lines[i].startswith("-----END PGP "):
+            lines = lines[: i + 1]
+            break
+    else:
+        return data
+    return '\n'.join(lines) + '\n'
+
+
  # Key storage
 def _mergeSigs(dest, src):
     """Merge list of signature packets src to dest."""
@@ -874,7 +901,7 @@ def _mergeSigs(dest, src):
         s[sig.data] = None
     for sig in src:
         if sig.data not in s:
-            dest.append(sig.data)
+            dest.append(sig)
             s[sig.data] = None
 
 
@@ -1021,7 +1048,7 @@ class _PublicKey:
                 self.subkeys.append((subkey, sigs))
                 h[subkey.data] = sigs
             else:
-                _mergeSigs(h[uid.data], sigs)
+                _mergeSigs(h[subkey.data], sigs)
 
 
 def parsePGPKeys(data):

@@ -120,6 +120,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                                            % (filename, e))
                     continue
                 try:
+                    key_data = openpgp.isolateASCIIArmor(key_data)
                     keys = openpgp.parsePGPKeys(key_data)
                 except Exception, e:
                     self.config.printError("Invalid GPG key %s: %s" % (url, e))
