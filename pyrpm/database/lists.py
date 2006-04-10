@@ -119,10 +119,18 @@ class ProvidesList:
         self.hash = { }
 
     def addPkg(self, rpm):
-        """Add Provides: by RpmPackage rpm"""
+        """Add Provides: by RpmPackage rpm. If no self provide is done it will
+        be added automatically."""
 
+        sname = rpm["name"]
+        sver = rpm.getEVR()
+        self_provide = False
         for (name, flag, version) in rpm[self.TAG]:
+            if name == sname and flag == RPMSENSE_EQUAL and version == sver:
+                self_provide = True
             self.hash.setdefault(name, [ ]).append((flag, version, rpm))
+        if not self_provide:
+            self.hash.setdefault(sname, [ ]).append((RPMSENSE_EQUAL, sver, rpm))
 
     def removePkg(self, rpm):
         """Remove Provides: by RpmPackage rpm"""

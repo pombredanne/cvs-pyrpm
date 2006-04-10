@@ -957,13 +957,15 @@ class RpmPackage(RpmData):
         return "%s.%s" % (self.getNEVR(), self["arch"])
 
     def getProvides(self):
-        """Return built value for self["provides"] + (%name = EVR).
-
+        """Return built value for self["provides"].
+        Don't add the self provide anymore, it's added now properly in the
+        ProvidesList if it's not there.
         Raise ValueError on invalid data."""
 
-        r = self.__getDeps(("providename", "provideflags", "provideversion"))
-        r.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
-        return r
+        return self.__getDeps(("providename", "provideflags", "provideversion"))
+        #r = self.__getDeps(("providename", "provideflags", "provideversion"))
+        #r.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
+        #return r
 
     def getRequires(self):
         """Return built value for self["requires"].
