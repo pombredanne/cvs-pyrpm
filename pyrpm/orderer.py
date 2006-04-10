@@ -103,14 +103,44 @@ class RpmRelation:
 class RpmRelations:
     """List of relations for each package (a dependency graph)."""
 
-    def __init__(self, config, rpms):
+    def __init__(self, config, rpms, operation):
         self.config = config
         self.list = HashList()          # RpmPackage => RpmRelation
         self.__len__ = self.list.__len__
         self.__getitem__ = self.list.__getitem__
         self.has_key = self.list.has_key
+        self.genRelations(rpms, operation)
+
+    def genRelations(self, rpms, operation):
+        # clear list to get to a sane state
+        self.list.clear()
+
+        # add relations for all packages
         for pkg in rpms:
             self.list[pkg] = RpmRelation()
+
+        # Build a new resolver to list all dependencies between packages.
+        db = database.memorydb.RpmMemoryDB(self.config, None)
+        db.addPkgs(rpms)
+        resolver = RpmResolver(self.config, db, nocheck=1)
+
+        # Add dependencies:
+        for pkg in db.getPkgs():
+            self.config.printDebug(1, "Generating relations for %s" % \
+                                   pkg.getNEVRA())
+            resolved = resolver.getResolvedPkgDependencies(pkg)
+            # ignore unresolved, we are only looking at the changes,
+            # therefore not all symbols are resolvable in these changes
+            for ((name, flag, version), s) in resolved:
+                if name[:7] == "config(":
+                    continue
+                f = operationFlag(flag, operation)
+                for pkg2 in s:
+                    if pkg2 != pkg:
+                        self.addRel(pkg, pkg2, f)
+
+        if self.config.debug >= 2:
+            self.printRel()
 
     # ----
 
@@ -136,7 +166,7 @@ class RpmRelations:
 
     # ----
 
-    def addRel(self, pkg, pre, flag):
+    def addRelation(self, pkg, pre, flag):
         """Add an arc from RpmPackage pre to RpmPackage pkg with flag.
         pre can be None to add pkg to the graph with no arcs."""
         i = self.list[pkg]
@@ -480,8 +510,7 @@ class ConnectedComponent:
             for p in to_remove:
                 flag = relations[pkg].pre[p]
                 relations.removeRelation(pkg, p, quiet=True)
-                relations.addRel(self, p, flag)
-
+                relations.addRelation(self, p, flag)
 
             to_remove = [ ]
             for post in relations[pkg].post:
@@ -491,7 +520,7 @@ class ConnectedComponent:
             for p in to_remove:
                 flag = relations[pkg].post[p]
                 relations.removeRelation(p, pkg, quiet=True)
-                relations.addRel(p, self, flag)
+                relations.addRelation(p, self, flag)
 
         relations[self].weight = len(self.pkgs)
         # uncomment for use of the dict based weight algorithm
@@ -807,37 +836,6 @@ class RpmOrderer:
 
     # ----
 
-    def genRelations(self, rpms, operation):
-        # generate empty relations
-        relations = RpmRelations(self.config, rpms)
-
-        # Build a new resolver to list all dependencies between packages.
-        db = database.memorydb.RpmMemoryDB(self.config, None)
-        db.addPkgs(rpms)
-        resolver = RpmResolver(self.config, db, nocheck=1)
-
-        # Add all dependencies:
-        for pkg in db.getPkgs():
-            self.config.printDebug(1, "Generating relations for %s" % \
-                                   pkg.getNEVRA())
-            resolved = resolver.getResolvedPkgDependencies(pkg)
-            # ignore unresolved, we are only looking at the changes,
-            # therefore not all symbols are resolvable in these changes
-            for ((name, flag, version), s) in resolved:
-                if name[:7] == "config(":
-                    continue
-                f = operationFlag(flag, operation)
-                for pkg2 in s:
-                    if pkg2 != pkg:
-                        relations.addRel(pkg, pkg2, f)
-
-        if self.config.debug >= 2:
-            relations.printRel()
-
-        return relations
-
-    # ----
-
     def genOrder(self):
         """Return an ordered list of RpmPackage's, first installs, then
         erases.
@@ -853,7 +851,8 @@ class RpmOrderer:
                 order.extend(self.installs)
             else:
                 # generate relations
-                relations = self.genRelations(self.installs, OP_INSTALL)
+                relations = RpmRelations(self.config, self.installs,
+                                         OP_INSTALL)
 
                 # order package list
                 order2 = relations.genOrder()
@@ -867,7 +866,7 @@ class RpmOrderer:
                 order.extend(self.erases)
             else:
                 # generate relations
-                relations = self.genRelations(self.erases, OP_ERASE)
+                relations = RpmRelations(self.config, self.erases, OP_ERASE)
 
                 # order package list
                 order2 = relations.genOrder()
