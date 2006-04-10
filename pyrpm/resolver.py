@@ -685,6 +685,22 @@ class RpmResolver:
         return all_unresolved
     # ----
 
+    def getPkgConflicts(self, pkg, deps, dest):
+        """Check for conflicts to pkg's deps, add results to dest[pkg].
+
+        dest[pkg] will be
+        [((name, RPMSENSE_* flags, EVR string), conflicting RpmPackage)]."""
+
+        for c in deps:
+            s = self.database.searchDependency(c[0], c[1], c[2])
+            pruned = self._getConflicts(pkg, c, s)
+            for c in pruned:
+                if pkg not in dest:
+                    dest[pkg] = [ ]
+                if c not in dest[pkg]:
+                    dest[pkg].append(c)
+    # ----
+
     def getConflicts(self):
         """Check for conflicts in conflicts and obsoletes among currently
         installed packages.
@@ -704,14 +720,8 @@ class RpmResolver:
         for name in self.database.getNames():
             for r in self.database.getPkgsByName(name):
                 self.config.printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
-                for c in r["conflicts"] + r["obsoletes"]:
-                    s = self.database.searchDependency(c[0], c[1], c[2])
-                    _conflicts = self._getConflicts(r, c, s)
-                    for c in _conflicts:
-                        if r not in conflicts:
-                            conflicts[r] = [ ]
-                        if c not in conflicts[r]:
-                            conflicts[r].append(c)
+                self.getPkgConflicts(r, r["conflicts"] + r["obsoletes"],
+                                     conflicts)
         return conflicts
     # ----
 
@@ -734,15 +744,7 @@ class RpmResolver:
         for name in self.database.getNames():
             for r in self.database.getPkgsByName(name):
                 self.config.printDebug(1, "Checking for obsoletes for %s" % r.getNEVRA())
-                for c in r["obsoletes"]:
-                    (name, flag, version) = c
-                    s = self.database.searchDependency(c[0], c[1], c[2])
-                    _obsoletes = self._getConflicts(r, c, s)
-                    for c in _obsoletes:
-                        if r not in obsoletes:
-                            obsoletes[r] = [ ]
-                        if c not in obsoletes[r]:
-                            obsoletes[r].append(c)
+                self.getPkgConflicts(r, r["obsoletes"], obsoletes)
         return obsoletes
     # ----
 

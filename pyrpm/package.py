@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2004, 2005 Red Hat, Inc.
+# Copyright (C) 2004, 2005, 2006 Red Hat, Inc.
 # Authors: Phil Knirsch, Thomas Woerner, Florian La Roche, Karel Zak,
 #          Miloslav Trmac
 #
@@ -18,13 +18,18 @@
 #
 
 
-import os.path, sys, pwd, grp, md5, sha
-from stat import S_ISREG
+import os.path, stat, sys, pwd, grp, md5, sha
 from io import getRpmIOFactory
-from base import RpmFileInfo, RPM_HEADER_INDEX_MAGIC, RPM_HEADER_LEAD_MAGIC, RPMFILE_GHOST, RPMFILE_CONFIG, RPMFILE_NOREPLACE, RPM_STRING, RPM_BIN, RPM_STRING_ARRAY, RPM_I18NSTRING, RPM_INT8, RPM_INT16, RPM_INT32, RPM_INT64, RPMSENSE_EQUAL, arch_compats
+from base import *
+import elf
 import functions
+from hashlist import HashList
 import openpgp
 
+try:
+    import selinux
+except ImportError:
+    selinux = None
 
 class _RpmFilenamesIterator:
     """An iterator over package files stored as basenames + dirindexes"""
@@ -191,7 +196,7 @@ class RpmPackage(RpmData):
         self.yumrepo = None     # Yum repository if package is from that repo
         self.yumhref = None     # Original relative href in yum repo
         self.compstype = None   # If available refers to the type in comps.xml
-        self.verify = verify    # Verify file format constraints and signatures
+        self.verifySignature = verify   # Verify signature
         self.hdronly = hdronly  # Don't open the payload
         self.db = db            # RpmDatabase
         self.io = None          # Our rpm IO class
@@ -257,7 +262,7 @@ class RpmPackage(RpmData):
 
         self.open()
         self.__readHeader(tags, ntags)
-        if self.verify and self.verifyOneSignature() == -1:
+        if self.verifySignature and self.verifyOneSignature() == -1:
             raise ValueError, "Signature verification failed."""
         if self.io:
             self.issrc = self.io.issrc
@@ -423,7 +428,6 @@ class RpmPackage(RpmData):
                 sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "postin", str(rusage[0]), str(rusage[1])))
             if status != 0:
                 self.config.printError("Error running post install script for package %s" % self.getNEVRA())
-        self.rfilist = None
 
     def erase(self, db=None):
         """Open package, read its header and remove it.
@@ -510,6 +514,217 @@ class RpmPackage(RpmData):
                 sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
             if status != 0:
                 self.config.printError("Error running post uninstall script for package %s" % self.getNEVRA())
+
+    def verify(self, db, resolver):
+        """Verify a package, using db for multilib conflict resolution and
+        resolver for dependency verification.
+
+        Returns a list of failures, [] if all is OK.  Each failure is a pair
+        of (filename or None, RPMVERIFY_* flag or error string)."""
+
+        errors = []
+        if not self.config.justdb:
+            self.__generateFileInfoList()
+            selinux_enabled = (selinux is not None and
+                               selinux.is_selinux_enabled() > 0)
+            files = self["filenames"]
+            for filename in files:
+                self.__verifyFile(errors, filename, db, selinux_enabled)
+            self.rfilist = None
+        if resolver is not None:
+            if not self.config.nodeps:
+                (unresolved, _) = resolver.getPkgDependencies(self)
+                for u in unresolved:
+                    errors.append((None, "Unresolved dependency: %s"
+                                   % functions.depString(u)))
+            if not self.config.noconflicts:
+                conflicts = HashList()
+                resolver.getPkgConflicts(self,
+                                         self["conflicts"] + self["obsoletes"],
+                                         conflicts)
+                if self in conflicts:
+                    pkgConflicts = { }
+                    for c, r in conflicts[self]:
+                        l = pkgConflicts.setdefault(r, [])
+                        if c not in l:
+                            l.append(c)
+                    for (r, l) in pkgConflicts.iteritems():
+                        s = ", ".join([functions.depString(c) for c in l])
+                        errors.append((None, "Conflict with %s: %s"
+                                       % (r.getNEVRA(), s)))
+        if self["verifyscriptprog"] is not None and not self.config.noscripts:
+            try:
+                (status, rusage, output) = \
+                         functions.runScript(self["verifyscriptprog"],
+                                             self["verifyscript"],
+                                             force = True,
+                                             rusage = self.config.rusage,
+                                             chroot = self.config.buildroot)
+            except (IOError, OSError), e:
+                errors.append((None, "%%verifyscript: %s" % str(e)))
+            else:
+                if rusage != None and len(rusage):
+                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n"
+                                     % (self.getNEVRA(), "verifyscript",
+                                        str(rusage[0]), str(rusage[1])))
+                if status != 0:
+                    self.config.printInfo("%%verifyscript output:\n"
+                                          "%s\n" % output)
+                    errors.append((None,
+                                   "%%verifyscript failed with status %s:"
+                                   % status))
+        return errors
+
+    def extract(self, directory):
+        """Open the package, read its header and extract it under the specified
+        directory.
+
+        Intended for examining the package, not for installation.  Raise
+        ValueError on invalid package data, IOError, OSError."""
+
+        self.open()
+        self.__readHeader()
+        if not directory.endswith('/'):
+            directory += '/'
+        self.__extract(useAttrs = False, pathPrefix = directory)
+        if self.config.printhash:
+            self.config.printInfo(0, "\n")
+        else:
+            self.config.printInfo(1, "\n")
+
+    def __verifyFile(self, errors, filename, db, selinux_enabled):
+        """Verify the file named by filename.
+
+        Append a list of failures for self.verify to errors.  Use db for
+        multilib conflict resolution.  Check SELinux contexts if
+        selinux_enabled."""
+
+        def appendError(e):
+            """Append IOError or OSError exception to errors."""
+
+            if e.filename and e.filename == real_file:
+                errors.append((filename, e.strerror))
+            else:
+                errors.append((filename, str(e)))
+
+        rfi = self.rfilist[filename]
+        if rfi.flags & RPMFILE_GHOST:
+            return
+        if self.config.buildroot is None:
+            real_file = filename
+        else:
+            real_file = self.config.buildroot + filename
+        if db is not None and stat.S_ISREG(rfi.mode):
+            plist = db.searchFilenames(rfi.filename)
+            for pkg in plist:
+                if (not functions.archDuplicate(self["arch"], pkg["arch"]) and
+                    self["arch"] in arch_compats[pkg["arch"]]):
+                    # A different package has a "higher arch".
+                    return
+        try:
+            st = os.lstat(real_file)
+        except OSError, e:
+            appendError(e)
+            return
+        if stat.S_IFMT(st.st_mode) != stat.S_IFMT(rfi.mode):
+            self.config.printInfo(1, "%s: File type %o, should be %o\n"
+                                  % (filename, stat.S_IFMT(st.st_mode),
+                                     stat.S_IFMT(rfi.mode)))
+            errors.append((filename, "File type mismatch"))
+            return
+        if selinux_enabled:
+            (err, file_context) = selinux.lgetfilecon(filename)
+            if err < 0:
+                errors.append((filename, "lgetfilecon() failed"))
+            else:
+                # %filecontexts not supported
+                (err, policy_context) = selinux.matchpathcon(filename,
+                                                             st.st_mode)
+                if err < 0:
+                    errors.append((filename, "matchpathcon() failed"))
+                elif file_context != policy_context:
+                    errors.append((filename, "context changed from %s to %s"
+                                   % (policy_context, file_context)))
+        verifyflags = rfi.verifyflags
+        if self.config.verifyallconfig and rfi.flags & RPMFILE_CONFIG and \
+           stat.S_ISREG(rfi.mode) and rfi.filesize != 0:
+            verifyflags |= RPMVERIFY_FILESIZE | RPMVERIFY_MD5
+        if stat.S_ISREG(st.st_mode):
+            if verifyflags & (RPMVERIFY_FILESIZE | RPMVERIFY_MD5):
+                file_size = st.st_size # None if prelink_undo fails
+                md5sum = None
+                if self.config.prelink_undo is not None and \
+                   os.path.exists(self.config.prelink_undo[0]) and \
+                   elf.file_is_prelinked(real_file):
+                    try:
+                        cmd = functions. \
+                              shellCommandLine(self.config.prelink_undo
+                                               + [real_file])
+                        f = os.popen(cmd)
+                        try:
+                            m = md5.new()
+                            file_size = functions.updateDigestFromFile(m, f)
+                            md5sum = m.hexdigest()
+                        finally:
+                            if f.close():
+                                errors.append((filename,
+                                               "Prelink undo failed"))
+                                file_size = None
+                    except IOError, e:
+                        errors.append((filename, str(e)))
+                        file_size = None
+                if file_size is not None and \
+                       verifyflags & RPMVERIFY_FILESIZE and \
+                       file_size != rfi.filesize:
+                    self.config.printInfo(2, "%s: File size %s, should be %s\n"
+                                          % (filename, file_size,
+                                             rfi.filesize))
+                    errors.append((filename, RPMVERIFY_FILESIZE))
+                    errors.append((filename, RPMVERIFY_MD5))
+                elif file_size is not None and verifyflags & RPMVERIFY_MD5:
+                    if md5sum is None:
+                        try:
+                            f = open(real_file)
+                            m = md5.new()
+                            functions.updateDigestFromFile(m, f)
+                            f.close()
+                            md5sum = m.hexdigest()
+                        except IOError, e:
+                            appendError(e)
+                            md5sum = None
+                    if md5sum is not None and md5sum != rfi.md5sum:
+                        errors.append((filename, RPMVERIFY_MD5))
+            if verifyflags & RPMVERIFY_MTIME and st.st_mtime != rfi.mtime:
+                errors.append((filename, RPMVERIFY_MTIME))
+        if stat.S_ISLNK(st.st_mode) and verifyflags & RPMVERIFY_LINKTO:
+            try:
+                linkto = os.readlink(real_file)
+            except IOError, e:
+                appendError(e)
+                linkto = None
+            if linkto is not None and linkto != rfi.linkto:
+                self.config.printInfo(1, "%s: Points to %s, should be %s\n"
+                                      % (filename, linkto, rfi.linkto))
+                errors.append((filename, RPMVERIFY_LINKTO))
+        if not stat.S_ISLNK(st.st_mode):
+            if verifyflags & RPMVERIFY_USER and st.st_uid != rfi.uid:
+                self.config.printInfo(1, "%s: UID %s, should be %s\n"
+                                      % (filename, st.st_uid, rfi.uid))
+                errors.append((filename, RPMVERIFY_USER))
+            if verifyflags & RPMVERIFY_GROUP and st.st_gid != rfi.gid:
+                self.config.printInfo(1, "%s: GID %s, should be %s\n"
+                                      % (filename, st.st_gid, rfi.gid))
+                errors.append((filename, RPMVERIFY_GROUP))
+            if verifyflags & RPMVERIFY_MODE and \
+                   stat.S_IMODE(st.st_mode) != stat.S_IMODE(rfi.mode):
+                self.config.printInfo(1, "%s: Mode %o, should be %o\n"
+                                      % (filename, stat.S_IMODE(st.st_mode),
+                                         stat.S_IMODE(rfi.mode)))
+                errors.append((filename, RPMVERIFY_MODE))
+        if verifyflags & RPMVERIFY_RDEV and st.st_rdev != rfi.rdev:
+            self.config.printInfo(1, "%s: Device %x, should be %x\n"
+                                  % (filename, st.st_rdev, rfi.rdev))
+            errors.append((filename, RPMVERIFY_RDEV))
 
     def isSourceRPM(self):
         """Return 1 if the package is a SRPM."""
@@ -601,10 +816,13 @@ class RpmPackage(RpmData):
         self.generateFileNames()
         self.header_read = 1
 
-    def __extract(self, db=None):
+    def __extract(self, db=None, pathPrefix=None, useAttrs=True):
         """Extract files from self.io (positioned at start of payload).
 
-        Raise ValueError on invalid package data, IOError, OSError."""
+        Raise ValueError on invalid package data, IOError, OSError.  Ignore
+        file attributes if not useAttrs.  Prefix filenames by pathPrefix if
+        defined; note that config.buildroot should be used for normal chroot
+        operation."""
 
         files = self["filenames"]
         # We don't need those lists earlier, so we create them "on-the-fly"
@@ -616,6 +834,8 @@ class RpmPackage(RpmData):
         n = 0
         pos = 0
         issrc = self.isSourceRPM()
+        if issrc:
+            useAttrs = False
         if self.config.printhash:
             self.config.printInfo(0, "\r\t\t\t\t\t\t ")
         while filename != "EOF":
@@ -631,16 +851,18 @@ class RpmPackage(RpmData):
             if self.rfilist.has_key(filename):
                 rfi = self.rfilist[filename]
                 if self.__verifyFileInstall(rfi, db):
-                    if filesize == 0 and S_ISREG(rfi.mode): # Only hardlink reg
+                    if filesize == 0 and stat.S_ISREG(rfi.mode): # Only hardlink reg
                         self.__possibleHardLink(rfi)
                     else:
-                        functions.installFile(rfi, cpio, filesize, not issrc)
+                        functions.installFile(rfi, cpio, filesize, useAttrs,
+                                              pathPrefix = pathPrefix)
                         # Many scripts have problems like e.g. openssh is
                         # stopping all sshd (also outside of a chroot if
                         # it is de-installed. Real hacky workaround:
-                        if self.config.service and filename == "/sbin/service":
+                        if pathPrefix is None and self.config.service \
+                               and filename == "/sbin/service":
                             open("/sbin/service", "wb").write("exit 0\n")
-                        self.__handleHardlinks(rfi)
+                        self.__handleHardlinks(rfi, pathPrefix)
                 else:
                     cpio.skipToNextFile()
                     if filesize > 0:
@@ -653,7 +875,8 @@ class RpmPackage(RpmData):
             nfiles = 1
         if self.config.printhash:
             self.config.printInfo(0, "#"*(30-int(30*n/nfiles)))
-        self.__handleRemainingHardlinks()
+        self.__handleRemainingHardlinks(useAttrs, pathPrefix)
+        self.rfilist = None
 
     def __verifyFileInstall(self, rfi, db):
         """Return 1 if file with RpmFileInfo rfi should be installed.
@@ -664,7 +887,7 @@ class RpmPackage(RpmData):
         if not db:
             return 1
         # File is not a regular file -> just do it
-        if not S_ISREG(rfi.mode):
+        if not stat.S_ISREG(rfi.mode):
             return 1
         plist = db.searchFilenames(rfi.filename)
         # File not already in db -> write it
@@ -694,7 +917,7 @@ class RpmPackage(RpmData):
         (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
             = os.stat(rfi.filename)
         # File on disc is not a regular file -> don't try to calc an md5sum
-        if S_ISREG(mode):
+        if stat.S_ISREG(mode):
             try:
                 f = open(rfi.filename)
                 m = md5.new()
@@ -765,7 +988,7 @@ class RpmPackage(RpmData):
                 = os.stat(rfi.filename)
             # File on disc is not a regular file -> don't try to calc an md5sum
             md5sum = ''
-            if S_ISREG(mode):
+            if stat.S_ISREG(mode):
                 try:
                     f = open(rfi.filename)
                     m = md5.new()
@@ -834,19 +1057,24 @@ class RpmPackage(RpmData):
         key = rfi.getHardLinkID()
         self.hardlinks.setdefault(key, []).append(rfi)
 
-    def __handleHardlinks(self, rfi):
+    def __handleHardlinks(self, rfi, pathPrefix):
         """Create hard links to RpmFileInfo rfi if specified so in
         self.hardlinks.
 
-        Raise IOError, OSError."""
+        Raise IOError, OSError.  Prefix filenames by pathPrefix if defined."""
 
         key = rfi.getHardLinkID()
         links = self.hardlinks.get(key)
         if not links:
             return
         for hrfi in links:
-            functions.makeDirs(hrfi.filename)
-            functions.createLink(rfi.filename, hrfi.filename)
+            src = rfi.filename
+            dest = hrfi.filename
+            if pathPrefix is not None:
+                src = pathPrefix + src
+                dest = pathPrefix + dest
+            functions.makeDirs(dest)
+            functions.createLink(src, dest)
         del self.hardlinks[key]
 
     def __removeHardlinks(self, rfi):
@@ -856,16 +1084,18 @@ class RpmPackage(RpmData):
         if self.hardlinks.has_key(key):
             del self.hardlinks[key]
 
-    def __handleRemainingHardlinks(self):
+    def __handleRemainingHardlinks(self, useAttrs, pathPrefix):
         """Create empty hard-linked files according to self.hardlinks.
 
-        Raise ValueError on invalid package data, IOError, OSError."""
+        Ignore file attributes if not useAttrs.  Prefix filenames by pathPrefix
+        if defined.  Raise ValueError on invalid package data, IOError,
+        OSError."""
 
-        issrc = self.isSourceRPM()
         for key in self.hardlinks.keys():
             rfi = self.hardlinks[key].pop(0)
-            functions.installFile(rfi, None, 0, not issrc)
-            self.__handleHardlinks(rfi)
+            functions.installFile(rfi, None, 0, useAttrs,
+                                  pathPrefix = pathPrefix)
+            self.__handleHardlinks(rfi, pathPrefix)
 
     def getRpmFileInfo(self, filename):
         """Return RpmFileInfo describing filename, or None if this package does
@@ -884,7 +1114,7 @@ class RpmPackage(RpmData):
         rpmdev = None
         rpmrdev = None
         rpmmd5sum = None
-        rpmlinktos = None
+        rpmlinkto = None
         rpmflags = None
         rpmverifyflags = None
         rpmfilecolor = None
@@ -907,7 +1137,7 @@ class RpmPackage(RpmData):
         if self.has_key("filemd5s"):
             rpmmd5sum = self["filemd5s"][i]
         if self.has_key("filelinktos"):
-            rpmlinktos = self["filelinktos"][i]
+            rpmlinkto = self["filelinktos"][i]
         if self.has_key("fileflags"):
             rpmflags = self["fileflags"][i]
         if self.has_key("fileverifyflags"):
@@ -916,7 +1146,7 @@ class RpmPackage(RpmData):
             rpmfilecolor = self["filecolors"][i]
         rfi = RpmFileInfo(filename, rpminode, rpmmode, rpmuid,
                           rpmgid, rpmmtime, rpmfilesize, rpmdev, rpmrdev,
-                          rpmmd5sum, rpmlinktos, rpmflags, rpmverifyflags,
+                          rpmmd5sum, rpmlinkto, rpmflags, rpmverifyflags,
                           rpmfilecolor)
         return rfi
 

@@ -36,7 +36,6 @@ except:
 
 from io import *
 import openpgp
-import yumconfig
 import package
 
 from config import rpmconfig
@@ -155,8 +154,9 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
     """Run (script otherargs) with interpreter prog (which can be a list
     containing initial arguments).
 
-    Return None, or getrusage() stats of the script if rusage.  Disable
-    ldconfig optimization if force.  Raise IOError, OSError."""
+    Return (exit status, getrusage() stats, script output).  Use None instead
+    of getrusage() data if !rusage.  Disable ldconfig optimization if force.
+    Raise IOError, OSError."""
 
     # FIXME? hardcodes config.rpmconfig usage
     if prog == None:
@@ -253,17 +253,21 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
 
     return (status, rusage_val, cret)
 
-def installFile(rfi, infd, size, useAttrs=True):
+def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
     """Install a file described by RpmFileInfo rfi, with input of given size
     from CPIOFile infd.
 
     infd can be None if size == 0.  Ignore file attributes in rfi if useAttrs
-    is False.  Raise ValueError on invalid mode, IOError, OSError."""
+    is False.  Prefix filenames by pathPrefix if defined.  Raise ValueError on
+    invalid mode, IOError, OSError."""
 
+    filename = rfi.filename
+    if pathPrefix is not None:
+        filename = pathPrefix + filename
     mode = rfi.mode
     if S_ISREG(mode):
-        makeDirs(rfi.filename)
-        (fd, tmpfilename) = mkstemp_file(os.path.dirname(rfi.filename), tmpprefix)
+        makeDirs(filename)
+        (fd, tmpfilename) = mkstemp_file(os.path.dirname(filename), tmpprefix)
         try:
             try:
                 data = "1"
@@ -279,24 +283,23 @@ def installFile(rfi, infd, size, useAttrs=True):
         except (IOError, OSError):
             os.unlink(tmpfilename)
             raise
-        os.rename(tmpfilename, rfi.filename)
+        os.rename(tmpfilename, filename)
     elif S_ISDIR(mode):
-        if not os.path.isdir(rfi.filename):
-            os.makedirs(rfi.filename)
+        if not os.path.isdir(filename):
+            os.makedirs(filename)
         if useAttrs:
-            _setFileAttrs(rfi.filename, rfi)
+            _setFileAttrs(filename, rfi)
     elif S_ISLNK(mode):
-        data1 = rfi.linktos
+        data1 = rfi.linkto
         data2 = infd.read(size)
         data2 = data2.rstrip("\x00")
         symlinkfile = data1
         if data1 != data2:
             print >> sys.stderr, "Warning: Symlink information differs between rpm header and cpio for %s -> %s" % (rfi.filename, data1)
-        if os.path.islink(rfi.filename) \
-            and os.readlink(rfi.filename) == symlinkfile:
+        if os.path.islink(filename) and os.readlink(filename) == symlinkfile:
             return
-        makeDirs(rfi.filename)
-        tmpfilename = mkstemp_symlink(os.path.dirname(rfi.filename), tmpprefix,
+        makeDirs(filename)
+        tmpfilename = mkstemp_symlink(os.path.dirname(filename), tmpprefix,
                                       symlinkfile)
         try:
             if useAttrs:
@@ -304,21 +307,21 @@ def installFile(rfi, infd, size, useAttrs=True):
         except OSError:
             os.unlink(tmpfilename)
             raise
-        os.rename(tmpfilename, rfi.filename)
+        os.rename(tmpfilename, filename)
     elif S_ISFIFO(mode):
-        makeDirs(rfi.filename)
-        tmpfilename = mkstemp_mkfifo(os.path.dirname(rfi.filename), tmpprefix)
+        makeDirs(filename)
+        tmpfilename = mkstemp_mkfifo(os.path.dirname(filename), tmpprefix)
         try:
             if useAttrs:
                 _setFileAttrs(tmpfilename, rfi)
         except OSError:
             os.unlink(tmpfilename)
             raise
-        os.rename(tmpfilename, rfi.filename)
+        os.rename(tmpfilename, filename)
     elif S_ISCHR(mode) or S_ISBLK(mode):
-        makeDirs(rfi.filename)
+        makeDirs(filename)
         try:
-            tmpfilename = mkstemp_mknod(os.path.dirname(rfi.filename),
+            tmpfilename = mkstemp_mknod(os.path.dirname(filename),
                                         tmpprefix, mode, rfi.rdev)
         except OSError:
             return # FIXME: why?
@@ -326,25 +329,25 @@ def installFile(rfi, infd, size, useAttrs=True):
             if useAttrs:
                 _setFileAttrs(tmpfilename, rfi)
         except OSError:
-            os.unlink(rfi.filename)
+            os.unlink(filename)
             raise
-        os.rename(tmpfilename, rfi.filename)
+        os.rename(tmpfilename, filename)
     elif S_ISSOCK(mode):
         # Sockets are useful only when bound, but what do we care...
         # Note that creating sockets using mknod is not SUSv3-mandated, quite
         # likely Linux-specific.
         # Also, only 1 know package has a socket packaged, and that was dev in
         # RH-5.2.
-        makeDirs(rfi.filename)
-        tmpfilename = mkstemp_mknod(os.path.dirname(rfi.filename), tmpprefix,
+        makeDirs(filename)
+        tmpfilename = mkstemp_mknod(os.path.dirname(filename), tmpprefix,
                                     mode, 0)
         try:
             if useAttrs:
                 _setFileAttrs(tmpfilename, rfi)
         except OSError:
-            os.unlink(rfi.filename)
+            os.unlink(filename)
             raise
-        os.rename(tmpfilename, rfi.filename)
+        os.rename(tmpfilename, filename)
     else:
         raise ValueError, "%s: not a valid filetype" % (oct(mode))
 
@@ -504,8 +507,11 @@ def readExact(fd, size):
     return data
 
 def updateDigestFromFile(digest, fd, bytes = None):
-    """Update digest with data from fd, until EOF or only specified bytes."""
+    """Update digest with data from fd, until EOF or only specified bytes.
 
+    Return the number of bytes processed."""
+
+    res = 0
     while True:
         chunk = DIGEST_CHUNK
         if bytes is not None and chunk > bytes:
@@ -514,8 +520,34 @@ def updateDigestFromFile(digest, fd, bytes = None):
         if not data:
             break
         digest.update(data)
+        res += len(data)
         if bytes is not None:
             bytes -= len(data)
+    return res
+
+def _shellQuoteString(s):
+    """Returns its argument properly quoted for parsing by a POSIX shell."""
+
+    # Leave trivial cases unchanged
+    for c in s:
+        if not _xisalnum(c):
+            break
+    else:
+        if len(s) > 0:
+            return s
+    res = "'"
+    for c in s:
+        if c != "'":
+            res += c
+        else:
+            res += "'\\''"
+    res += "'"
+    return res
+
+def shellCommandLine(args):
+    """Returns a properly quoted POSIX shell command line for its arguments."""
+
+    return " ".join([_shellQuoteString(s) for s in args])
 
 def getFreeCachespace(config, operations):
     """Check if there is enough diskspace for caching the rpms for the given
@@ -723,9 +755,9 @@ def parseYumOptions(argv, yum):
     """Parse yum-like config options from argv to config.rpmconfig and RpmYum
     yum.
 
-    Return list of non-option operands on success, None if a help message
-    should be written.  sys.exit () on --version, some invalid arguments
-    or errors in config files."""
+    Return a (possibly empty) list of non-option operands on success, None on
+    error (if a help message should be written).  sys.exit () on --version,
+    some invalid arguments or errors in config files."""
 
     # Argument parsing
     try:
@@ -737,7 +769,8 @@ def parseYumOptions(argv, yum):
          "noscripts", "notriggers", "excludedocs", "excludeconfigs",
          "oldpackage", "autoerase", "servicehack", "installpkgs=", "arch=",
          "checkinstalled", "rusage", "srpmdir=", "enablerepo=", "disablerepo=",
-         "nocache", "cachedir=", "exclude=", "obsoletes", "noplugins"])
+         "nocache", "cachedir=", "exclude=", "obsoletes", "noplugins",
+         "diff", "verifyallconfig"])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -846,6 +879,10 @@ def parseYumOptions(argv, yum):
         elif opt == "--noplugins":
             # Basically we ignore this for now, just don't throw an error ;)
             pass
+        elif opt == "--diff":
+            rpmconfig.diff = True
+        elif opt == "--verifyallconfig":
+            rpmconfig.verifyallconfig = True
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1
@@ -862,9 +899,6 @@ def parseYumOptions(argv, yum):
             rpmconfig.printError("Unknown arch %s" % rpmconfig.arch)
             sys.exit(1)
         rpmconfig.machine = rpmconfig.arch
-
-    if not args:
-        return None
 
     return args
 

@@ -96,6 +96,13 @@ class RpmConfig:
         self.cachedir = "/var/cache/pyrpm"      # Directory for cached files
         self.nocache = 0                # Disable caching for packages
         self.excludes = [ ]
+        # The first element should be a full path, interpreted outside
+        # self.buildroot
+        self.prelink_undo = ["/usr/sbin/prelink", "-y"]
+        self.diff = False               # Try to show a diff in pyrpmverify
+        # Verify contents of all nonempty config files, even if the package has
+        # disabled it
+        self.verifyallconfig = False
 
     def readConfig(filename="/etc/pyrpm.conf"):
         return execfile(filename)

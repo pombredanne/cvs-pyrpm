@@ -24,7 +24,7 @@ from control import RpmController
 from package import RpmPackage
 from functions import *
 from io import *
-import database
+import database, yumconfig
 
 
 class RpmYum:
@@ -187,24 +187,30 @@ class RpmYum:
         self.repos.append(repo)
         return 1
 
-    def prepareTransaction(self):
+    def prepareTransaction(self, localDb = None):
         """Open the RPM database and prepare the transaction.
 
-        Return 1 in success, 0 on error (after warning the user)."""
+        Return 1 in success, 0 on error (after warning the user).  If localDb
+        is not None, use it as a local RPM database instead of reading the
+        database again."""
 
         self.erase_list = []
-        if self.config.timer:
-            time1 = clock()
-        # Create and read db
-        self.config.printInfo(1, "Reading local RPM database\n")
-        self.pydb = database.getRpmDBFactory(self.config, self.config.dbpath,
-                                             self.config.buildroot)
-        self.pydb.open()
-        if not self.pydb.read():
-            self.config.printError("Error reading the RPM database")
-            return 0
-        if self.config.timer:
-            self.config.printInfo(0, "Reading local RPM database took %s seconds\n" % (clock() - time1))
+        if localDb:
+            self.pydb = localDb
+        else:
+            if self.config.timer:
+                time1 = clock()
+            # Create and read db
+            self.config.printInfo(1, "Reading local RPM database\n")
+            self.pydb = database.getRpmDBFactory(self.config,
+                                                 self.config.dbpath,
+                                                 self.config.buildroot)
+            self.pydb.open()
+            if not self.pydb.read():
+                self.config.printError("Error reading the RPM database")
+                return 0
+            if self.config.timer:
+                self.config.printInfo(0, "Reading local RPM database took %s seconds\n" % (clock() - time1))
         for pkg in self.pydb.getPkgs():
             if "redhat-release" in [ dep[0] for dep in pkg["provides"] ]:
                 rpmconfig.relver = pkg["version"]

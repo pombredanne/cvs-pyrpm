@@ -341,8 +341,9 @@ class YumConf(Conf):
                 if not self.checkVar(stanza, v[0]):
                     # FIXME: not v[1] not quite correct, should use whole line
                     if (not v[1]) and (prevname in YumConf.MultiLines):
-                        value = self.extendValue(v[0])
-                        stanzavars[prevname].append(value)
+                        line = self.extendValue(v[0])
+                        for value in line.split():
+                            stanzavars[prevname].append(value)
                         self.nextline()
                         continue
 
@@ -356,7 +357,7 @@ class YumConf(Conf):
                 value = self.extendValue(v[1])
 
                 if name in YumConf.MultiLines:
-                    stanzavars[name] = [ value ]
+                    stanzavars[name] = value.split()
                 else:
                     stanzavars[name] = value
 

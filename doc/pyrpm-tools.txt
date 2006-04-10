@@ -291,6 +291,22 @@ which we can extract the different sections from a specfile in order to use
 that info via pipe in other tools.
 
 
+pyrpmverify
+-----------
+
+A tool to verify installed rpm packages. Command-line arguments specify
+packages to verify. When no arguments are specified, all installed packages are
+verified.
+
+With the `--diff` option `pyrpmverify` attempts to download the original
+packages and outputs diffs of the changed files.
+
+Some packages have content verification explicitly disabled for some files
+(e. g.  `/etc/nsswitch.conf` in FC5 glibc-2.4-4), you can use the
+`--verifyallconfig` option to force verification (and diff output) for such
+files.
+
+
 pyrpmyum
 --------
 

@@ -312,7 +312,7 @@ class RpmController:
                     nevra = pkg.getNEVRA()
                     pkg.clear()
                     # Disable verify in child/buildroot, can go wrong horribly.
-                    pkg.verify = None
+                    pkg.verifySignature = None
                     try:
                         pkg.read()
                     except (IOError, ValueError), e:

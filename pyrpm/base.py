@@ -20,21 +20,21 @@ import os.path
 
 class RpmFileInfo:
     def __init__(self, filename, inode, mode, uid, gid, mtime, filesize,
-                 dev, rdev, md5sum, linktos, flags, verifyflags, filecolor):
+                 dev, rdev, md5sum, linkto, flags, verifyflags, filecolor):
         self.filename = filename        # Usually real name, but can be modified
-        self.inode = inode            # rpm header limited to int32; write-only
+        self.inode = inode              # rpm header limited to int32
         self.mode = mode                # Standard stat file modes
         self.uid = uid                  # int32 uid instead of name as in cpio
         self.gid = gid                  # int32 gid instead of name as in cpio
         self.mtime = mtime
         self.filesize = filesize        # rpm header limited to int32
-        self.dev = dev                  # FIXME: write-only
+        self.dev = dev
         self.rdev = rdev                # rpm header limited to int16
         self.md5sum = md5sum            # Uncoverted md5sum from header
-        self.linktos = linktos          # Target file in case of symlink
+        self.linkto = linkto            # Target file in case of symlink
         self.flags = flags              # RPMFILE_*
-        self.verifyflags = verifyflags  # FIXME: write-only
-        self.filecolor = filecolor      # FIXME: write-only
+        self.verifyflags = verifyflags
+        self.filecolor = filecolor
 
     def getHardLinkID(self):
         """Return a string integer representing

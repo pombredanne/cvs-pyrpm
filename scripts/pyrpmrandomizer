@@ -79,7 +79,7 @@ def main():
 
     # Argument parsing
     args = parseYumOptions(sys.argv[1:], yum)
-    if args == None:
+    if not args:
         usage()
         return 0
 

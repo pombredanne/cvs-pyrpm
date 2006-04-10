@@ -1,0 +1,171 @@
+#!/usr/bin/python
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2006 Red Hat, Inc.
+#
+# Author: Miloslav Trmac
+#
+
+import sys, os, getopt
+
+PYRPMDIR = ".."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+from pyrpm import *
+
+_flag_chars = [
+    (RPMVERIFY_FILESIZE, 'S'), (RPMVERIFY_MODE, 'M'), (RPMVERIFY_MD5, '5'),
+    (RPMVERIFY_RDEV, 'D'), (RPMVERIFY_LINKTO, 'L'), (RPMVERIFY_USER, 'U'),
+    (RPMVERIFY_GROUP, 'G'), (RPMVERIFY_MTIME, 'T')
+]
+
+def _printFileFailures(filename, failures):
+    """Outputs the failures for filename.
+
+    failures is a part of the list returned by RpmPackage.verify."""
+
+    mask = 0
+    for val in failures:
+        if type(val) == int:
+            mask |= val
+    if mask != 0:
+        code = ['.'] * len(_flag_chars)
+        i = 0
+        for (flag, char) in _flag_chars:
+            if mask & flag:
+                code[i] = char
+            i += 1
+        print "%s %s" % (''.join(code), filename)
+        failures = [val for val in failures if type(val) != int]
+    for msg in failures:
+        print "%s: %s" % (filename, msg)
+
+def _showDiff(yum, pkg, files):
+    """Try to show a diff of the specified files between a original pkg from
+    yum and current filesystem state."""
+
+    if not rpmconfig.nocache and \
+       (pkg.source.startswith("http://") or pkg.yumrepo is not None):
+        if pkg.yumrepo is not None:
+            nc = pkg.yumrepo.getNetworkCache()
+        else:
+            nc = NetworkCache("/", os.path.join(rpmconfig.cachedir, "default"))
+        rpmconfig.printInfo(2, "Caching network package %s\n" % pkg.getNEVRA())
+        cached = nc.cache(pkg.source)
+        if cached is None:
+            rpmconfig.printError("Error downloading %s" % pkg.source)
+            return
+        pkg.source = cached
+    tmpdir = rpmconfig.tmpdir
+    if tmpdir is None:
+        tmpdir = "/var/tmp"
+    try:
+        origdir = functions.mkstemp_dir("/var/tmp", "diff")
+    except (IOError, OSError), e:
+        rpmconfig.printError("Error creating a temporary directory: %s"
+                             % str(e))
+        return
+    try:
+        pkg.close()
+        pkg.clear()
+        pkg.extract(origdir)
+        for file in files:
+            os.spawnlp(os.P_WAIT, 'diff', 'diff', '-u', origdir + '/' + file,
+                       file)
+    finally:
+        os.spawnlp(os.P_WAIT, 'rm', 'rm', '-rf', origdir)
+
+
+def _usage():
+    """Print an usage message."""
+
+    print """pyrpmverify [--diff] [PACKAGE]...
+
+Options:
+  [--diff]		Show diffs for of modified files
+  [--verifyallconfig]	Force verification of all config files
+
+See (pyrpmyum --help) for other options.
+"""
+
+def main():
+    yum = RpmYum(rpmconfig)
+    rpmconfig.verbose = 1
+    rpmconfig.checkinstalled = 1
+
+    args = parseYumOptions(sys.argv[1:], yum)
+    if args is None:
+        _usage()
+        return 1
+
+    db = database.getRpmDBFactory(rpmconfig, rpmconfig.dbpath,
+                                  rpmconfig.buildroot)
+    db.open()
+    db.read()
+    resolver = RpmResolver(rpmconfig, db, True)
+    if args:
+        packages = []
+        for name in args:
+            found = functions.findPkgByNames([name,], db.getPkgs())
+            if found:
+                packages.append(found[0])
+            else:
+                rpmconfig.printError("%s: No match" % name)
+    else:
+        packages = db.getPkgs()
+
+    nevras_to_diff = {}                 # NEVRA => [file path]
+    for pkg in packages:
+        rpmconfig.printInfo(2, "%s:\n" % pkg.getNEVRA())
+        res = pkg.verify(db, resolver)
+        if res:
+            per_file = {}          # file path or None => error message or code
+            map_for_diff = {}           # file path => None
+            for failure in res:
+                per_file.setdefault(failure[0], []).append(failure[1])
+                if type(failure[1]) == int and \
+                   failure[1] in (base.RPMVERIFY_MD5, base.RPMVERIFY_FILESIZE):
+                    map_for_diff[failure[0]] = None
+            files_to_diff = map_for_diff.keys()
+            if files_to_diff:
+                files_to_diff.sort()
+                nevras_to_diff[pkg.getNEVRA()] = files_to_diff
+            for (filename, failures) in per_file.iteritems():
+                if filename is not None:
+                    _printFileFailures(filename, failures)
+                else:
+                    for msg in failures:
+                        print msg
+            sys.stdout.flush() # Synchronize with debugging output
+
+    if rpmconfig.diff and nevras_to_diff:
+        if not yum.setCommand("install") or \
+               not yum.prepareTransaction(localDb = db):
+            rpmconfig.printError("Can't initialize yum backend")
+            return 1
+        pkgByNEVRA = {}
+        for repo in yum.repos:
+            for pkg in repo.getPkgs():
+                pkgByNEVRA[pkg.getNEVRA()] = pkg
+        for (nevra, files) in nevras_to_diff.iteritems():
+            try:
+                pkg = pkgByNEVRA[nevra]
+            except KeyError:
+                print "Original package for %s not found" % nevra
+                continue
+            _showDiff(yum, pkg, files)
+
+if __name__ == '__main__':
+    if not run_main(main):
+        sys.exit(1)

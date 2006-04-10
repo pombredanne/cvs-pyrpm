@@ -69,7 +69,7 @@ def main():
 
     # Read additional dirs/packages
     pkglist = []
-    if args != None:
+    if args:
         for fname in args:
             if os.path.isdir(fname):
                 readDir(fname, pkglist, rtags=rpmconfig.resolvertags)
