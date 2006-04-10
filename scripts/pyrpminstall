@@ -60,25 +60,25 @@ def main():
     for (opt, val) in opts:
         if opt in ["-i", "--install"]:
             if operation != None:
-                print "Only one operation at a time is allow."
+                print "Only one operation at a time is allowed."
                 usage()
                 return 0
             operation = OP_INSTALL
         elif opt in ["-U", "--upgrade"]:
             if operation != None:
-                print "Only one operation at a time is allow."
+                print "Only one operation at a time is allowed."
                 usage()
                 return 0
             operation = OP_UPDATE
         elif opt in ["-F", "--freshen"]:
             if operation != None:
-                print "Only one operation at a time is allow."
+                print "Only one operation at a time is allowed."
                 usage()
                 return 0
             operation = OP_FRESHEN
         elif opt in ["-e", "--erase"]:
             if operation != None:
-                print "Only one operation at a time is allow."
+                print "Only one operation at a time is allowed."
                 usage()
                 return 0
             operation = OP_ERASE
