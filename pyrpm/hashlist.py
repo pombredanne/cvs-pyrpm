@@ -27,7 +27,6 @@ class HashList:
     def __init__(self):
         self.list = [ ] # keys
         self.hash = { } # key => value
-
         self.__len__ = self.list.__len__
         self.__repr__ = self.list.__repr__
         self.index = self.list.index
@@ -35,8 +34,9 @@ class HashList:
         self.keys = self.hash.keys
 
     def clear(self):
-        self.list = [ ] # keys
-        self.hash = { } # key => value
+        """ clear internal structures """
+        self.list[:] = [ ]
+        self.hash.clear()
 
     def __getitem__(self, key):
         """self[key] = value, or None if key does not exist.
