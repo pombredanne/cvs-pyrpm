@@ -50,7 +50,7 @@ class RpmYum:
         # Our list of package names that get installed instead of updated
         self.always_install = ["kernel", "kernel-smp", "kernel-bigmem",
             "kernel-enterprise", "kernel-debug", "kernel-unsupported"]
-        # List of vaild commands
+        # List of valid commands
         self.command_list = ["install", "update", "upgrade", "remove", \
                              "groupinstall", "groupupdate", "groupupgrade", \
                              "groupremove"]

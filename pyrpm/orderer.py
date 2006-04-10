@@ -464,7 +464,7 @@ class ConnectedComponent:
 
         self.relations = relations
 
-        relations.list[pkg] = RpmRelation()
+        relations.list[self] = RpmRelation()
 
         self.pkgs = { }
         for pkg in pkgs:

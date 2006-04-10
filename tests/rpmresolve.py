@@ -67,6 +67,7 @@ def main():
     global rpms
     global dir
     global output_op
+    global resolve
     
 #    if len(sys.argv) == 1:
 #        usage()

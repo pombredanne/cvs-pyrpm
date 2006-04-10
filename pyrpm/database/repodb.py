@@ -115,13 +115,13 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     f = file(filename)
                     key_data = f.read()
                     f.close()
-                except IOError, e:
+                except Exception, e:
                     self.config.printError("Error reading GPG key %s: %s"
                                            % (filename, e))
                     continue
                 try:
                     keys = openpgp.parsePGPKeys(key_data)
-                except ValueError, e:
+                except Exception, e:
                     self.config.printError("Invalid GPG key %s: %s" % (url, e))
                     continue
                 for k in keys:
