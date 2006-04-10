@@ -18,6 +18,7 @@
 
 import os
 import pyrpm.functions as functions
+from pyrpm.base import RPMSENSE_EQUAL
 
 def genBasenames2(oldfilenames):
     (basenames, dirnames) = ([], [])
