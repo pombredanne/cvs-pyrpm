@@ -137,7 +137,7 @@ class RpmRelations:
                 f = operationFlag(flag, operation)
                 for pkg2 in s:
                     if pkg2 != pkg:
-                        self.addRel(pkg, pkg2, f)
+                        self.addRelation(pkg, pkg2, f)
 
         if self.config.debug >= 2:
             self.printRel()
