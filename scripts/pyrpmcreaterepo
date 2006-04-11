@@ -77,6 +77,8 @@ def usage(retval=1):
                      be specified multiple times
      -F, --fileglob = specify a file glob used for trimming filelist, can be
                      specified multiple times
+         --globinfo = yes or no - enable/disable output of file/dir glob info
+                      (default no)
     """)
 
     sys.exit(retval)
@@ -161,13 +163,14 @@ def parseArgs(args):
 #    cmds['updategroupsonly'] = 0
     cmds['file-pattern-match'] = ['.*bin\/.*', '^\/etc\/.*', '^\/usr\/lib\/sendmail$']
     cmds['dir-pattern-match'] = ['.*bin\/.*', '^\/etc\/.*']
+    cmds['globinfo'] = False
 
     try:
         gopts, argsleft = getopt.getopt(args, 'phqVvg:s:x:u:AD:F:', ['help', 'exclude=',
                                             'quiet', 'verbose',
                                             'baseurl=', 'groupfile=', 'checksum=',
                                             'version', 'pretty', 'autoglob',
-                                            'dirglob=', 'fileglob='])
+                                            'dirglob=', 'fileglob=', 'globinfo='])
     except getopt.error, e:
         errorprint(_('Options Error: %s.') % e)
         usage()
@@ -250,6 +253,13 @@ def parseArgs(args):
                     cmds['file-pattern-match'] = []
                 else:
                     cmds['file-pattern-match'].append(a)
+            elif arg in ('--globinfo',):
+                a = a.lower()
+                if a not in ('yes', 'no'):
+                    errorprint(_('Error: globinfo values are: yes or no'))
+                    usage()
+                else:
+                    cmds['globinfo'] = a == 'yes'
 
     except ValueError, e:
         errorprint(_('Options Error: %s') % e)
@@ -469,7 +479,7 @@ def repoXML(node, cmds):
         data.newChild(None, 'timestamp', str(timestamp))
         unchecksum = data.newChild(None, 'open-checksum', uncsum)
         unchecksum.newProp('type', sumtype)
-        if ftype == 'primary':
+        if ftype == 'primary' and cmds['globinfo']:
             for glob in cmds['file-pattern-match']:
                 fglob = data.newChild(None, 'fileglob', glob)
             for glob in cmds['dir-pattern-match']:
