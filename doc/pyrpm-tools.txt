@@ -299,12 +299,16 @@ packages to verify. When no arguments are specified, all installed packages are
 verified.
 
 With the `--diff` option `pyrpmverify` attempts to download the original
-packages and outputs diffs of the changed files.
+packages and outputs diffs of the changed files. Changes will be shown for
+all nonempty regular files which are marked as `%config`.
 
 Some packages have content verification explicitly disabled for some files
 (e. g.  `/etc/nsswitch.conf` in FC5 glibc-2.4-4), you can use the
 `--verifyallconfig` option to force verification (and diff output) for such
 files.
+
+Multilib installations are currently untested and SELinux context testing
+depends on link:https://bugzilla.redhat.com/bugzilla/show_bug.cgi?id=188106[].
 
 
 pyrpmyum
