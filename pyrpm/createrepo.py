@@ -64,7 +64,10 @@ def _textChildFromTag(parent, ns, tag, value):
     if type(value) in [list, tuple]:
         value = value[0]
     value = re.sub("\n$", '', _utf8String(value))
-    parent.newTextChild(ns, tag, value)
+    if value:
+        parent.newTextChild(ns, tag, value)
+    else:
+        parent.newChild(ns, tag, None)
 
 
 def _archOrSrc(pkg):

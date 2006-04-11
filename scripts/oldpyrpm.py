@@ -3663,9 +3663,10 @@ def parsePackages(pkgs, requests, casematch=1):
     return (exactmatch, matched, unmatched)
 
 def escape(s):
-    """Return escaped string converted to UTF-8."""
-    if s == None:
-        return ""
+    """Return escaped string converted to UTF-8. Return None if the string is empty,
+       so the newChild method does not add text node."""
+    if not s:
+        return None
     s = s.replace("&", "&amp;")
     if isinstance(s, unicode):
         return s
