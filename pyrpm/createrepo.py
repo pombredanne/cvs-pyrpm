@@ -162,8 +162,9 @@ def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):
     hr.newProp('start', str(pkg.range_header[0]))
     hr.newProp('end', str(pkg.range_header[0] + pkg.range_header[1]))
     for nodename in ['provides', 'conflicts', 'obsoletes']:
+        getter = getattr(pkg, "get%s" % nodename.title())
         lst = [(name, flags & base.RPMSENSE_SENSEMASK, ver)
-               for (name, flags, ver) in pkg[nodename]]
+               for (name, flags, ver) in getter()]
         if len(lst) > 0:
             functions.normalizeList(lst)
             rpconode = format.newChild(formatns, nodename, None)
@@ -172,7 +173,7 @@ def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):
 
     depsList = [(name, flags & (base.RPMSENSE_SENSEMASK
                                 | base.RPMSENSE_PREREQ), ver)
-                for (name, flags, ver) in pkg['requires']]
+                for (name, flags, ver) in pkg.getRequires()]
     if len(depsList) > 0:
         functions.normalizeList(depsList)
         rpconode = format.newChild(formatns, 'requires', None)
