@@ -212,6 +212,7 @@ class YumConf(Conf):
                      "throttle",
                      "bandwidth",
                      "commands",
+                     "keepcache",
                      "proxy",
                      "proxy_username",
                      "proxy_password",

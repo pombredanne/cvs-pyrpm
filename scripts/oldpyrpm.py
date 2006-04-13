@@ -4552,8 +4552,8 @@ class YumConf(Conf):
         "installonlypkgs", "kernelpkgnames", "showdupesfromrepos", "obsoletes",
         "overwrite_groups", "installroot", "rss-filename", "distroverpkg",
         "diskspacecheck", "tsflags", "recent", "retries", "keepalive",
-        "throttle", "bandwidth", "commands", "proxy", "proxy_username",
-        "proxy_password", "pkgpolicy")
+        "throttle", "bandwidth", "commands", "keepcache", "proxy",
+        "proxy_username", "proxy_password", "pkgpolicy")
     MultiLines = ("baseurl", "mirrorlist")
     RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
