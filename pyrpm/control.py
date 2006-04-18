@@ -150,7 +150,7 @@ class RpmController:
         nodeps = 1
         if resolver == None:
             nodeps = 0
-            resolver = RpmResolver(self.config, self.db.getPkgs())
+            resolver = RpmResolver(self.config, self.db)
             for r in self.rpms:
                 # Ignore errors from RpmResolver, the functions already warn
                 # the user if necessary.

@@ -150,9 +150,12 @@ def mkstemp_mknod(dirname, pre, mode, rdev):
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
 def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
-              tmpdir="/var/tmp", chroot=None):
+              tmpdir="/var/tmp", chroot=None, pkg = None):
     """Run (script otherargs) with interpreter prog (which can be a list
     containing initial arguments).
+
+    If pkg is supplied, it's used to populate environment.
+    The following env. variables are defined: RPM_INSTALL_PREFIX.
 
     Return (exit status, getrusage() stats, script output).  Use None instead
     of getrusage() data if !rusage.  Disable ldconfig optimization if force.
@@ -226,8 +229,16 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
                 os.close(wfd)
             os.dup2(1, 2)
             os.chdir("/")
+            # FIXME: what about PATH=%{_install_script_path}?
             e = {"HOME": "/", "USER": "root", "LOGNAME": "root",
                 "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin"}
+            if pkg:
+                if pkg["prefixes"]:
+                    e["RPM_INSTALL_PREFIX"] = pkg["prefixes"][0]
+                idx = 1
+                for prefix in pkg["prefixes"]:
+                    e["RPM_INSTALL_PREFIX%d" % idx] = prefix
+                    idx += 1
             os.execve(args[0], args, e)
         finally:
             os._exit(255)
