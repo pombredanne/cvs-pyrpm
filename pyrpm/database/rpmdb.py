@@ -374,8 +374,9 @@ class RpmDB(memorydb.RpmMemoryDB):
                 else:
                     tnamehash[key] = 1
             if not db.has_key(key):
-                db[key] = ""
-            db[key] += pack("2I", pkgid, idx)
+                db[key] = pack("2I", pkgid, idx)
+            else:
+                db[key] += pack("2I", pkgid, idx)
             if not useidx:
                 break
 
