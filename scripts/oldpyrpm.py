@@ -49,8 +49,6 @@
 #   - sort several urls to list local ones first, add mirror speed check
 # rpm header:
 # - check against current upstream rpm development
-# - checkSymlinks(): allow checking dangling symlinks by traversing the
-#   full path per directory and then follow also symlinks to other dirs
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
 # - Reading yum.conf we immediately replace 'releasever' instead of
@@ -5722,7 +5720,9 @@ def checkArch(path):
 def checkSymlinks(repo):
     """Check for dangling symlinks."""
     allfiles = {}
-    # collect all directories
+    goodlinks = {}
+    dangling = []
+    # collect all files
     for rpm in repo:
         for f in rpm.filenames:
             allfiles[f] = None
@@ -5737,9 +5737,26 @@ def checkSymlinks(repo):
                 link = "%s/%s" % (os.path.dirname(f), link)
             link = os.path.normpath(link)
             if allfiles.has_key(link):
+                goodlinks[f] = link
                 continue
-            print "%s has dangling symlink from %s to %s" \
-                % (rpm["name"], f, link)
+            dangling.append((rpm["name"], f, link))
+    # resolve possible dangling links
+    for name, f, link in dangling:
+       if resolveLink(goodlinks, f, link) not in allfiles:
+            print "%s has dangling symlink from %s to %s" % (name, f, link)
+
+def resolveLink(goodlinks, file, link):
+    """Resolve link to file, use information stored in
+       dictionary of goodlinks"""
+    path = []
+    # process all path elements
+    for elem in link.split(os.sep):
+        path.append(elem)
+        tmppath = "/" + os.path.join(*path)
+        if tmppath in goodlinks:
+            # if it's a link, use replace already process path
+            path = goodlinks[tmppath].split(os.sep)
+    return "/" + os.path.join(*path)
 
 def checkDirs(repo):
     # collect all directories
