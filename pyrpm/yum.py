@@ -27,6 +27,9 @@ from io import *
 import database, yumconfig
 
 
+# Global search dict. Needs to be move to database classes real soon. 
+pyrpmyum_finddict = None
+
 class RpmYum:
     def __init__(self, config):
         self.config = config
@@ -110,6 +113,12 @@ class RpmYum:
             if key == "main":
                 if conf[key].has_key("exclude"):
                     gexcludes = conf[key]["exclude"] + " "
+                # exactarch can only be found in main section. Default False
+                if sec.has_key("exactarch") and sec["exactarch"] == "1":
+                    self.config.exactarch = True
+                # keepcache can only be found in main section. Default True
+                if sec.has_key("keepcache") and sec["keepcache"] == "0":
+                    self.config.exactarch = False
             else:
                 sec = conf[key]
                 # Check if the current repo should be enabled or disabled
@@ -179,8 +188,8 @@ class RpmYum:
         Return 1 on success 0 on errror (after warning the user).  Exclude
         packages matching whitespace-separated excludes."""
 
-        repo = database.repodb.RpmRepoDB(self.config, baseurl, self.config.buildroot,
-                                  excludes, reponame, key_urls)
+        repo = database.repodb.RpmRepoDB(self.config, baseurl,
+                          self.config.buildroot, excludes, reponame, key_urls)
         if repo.read() == 0:
             self.config.printError("Error reading repository %s" % reponame)
             return 0
@@ -230,6 +239,177 @@ class RpmYum:
         self.__generateObsoletesList()
         return 1
 
+    def getGroupPackages(self, name):
+        """Return a list of package names from all repositories matching that
+        group"""
+
+        pkglist = []
+        for repo in self.repos:
+            if repo.comps != None:
+                pkglist.extend(repo.comps.getPackageNames(name))
+        return pkglist
+
+    def install(self, name):
+        pkglist = self.__findPkgs(name)
+        return self.__addBestPkg(pkglist)
+
+    def groupInstall(self, name):
+        args = self.getGroupPackages(name)
+        for pkgname in args:
+            self.install(pkgname)
+        return 1
+
+    def installByDep(self, dname, dflags, dversion):
+        pkglist = self.__findPkgsByDep(dname, dflags, dversion)
+        return self.__addBestPkg(pkglist)
+
+    def update(self, name):
+        # First find all matching packages. Remember, name can be a glob, too,
+        # so we might get a list of packages with different names.
+        pkglist = self.__findPkgs(name)
+        # Next we generate two temporary hashes. One with just a list of
+        # packages for each name and a second with a subhash for each package
+        # for each arch. Both are needed for speed reasons. The first one for
+        # the general case where we either have:
+        #  - install only package
+        #  - no previously installed package
+        #  - previously installed packages but exactarch in yum.conf is False.
+        # The second one is needed for exactarch updates to find matching
+        # updates fast for specific installed archs of packages.
+        pkgnamehash = {}
+        pkgnamearchhash = {}
+        # HACK! Need to fix yumconfig.py, main section seems to be broken
+        #self.config.exactarch = True
+        for pkg in pkglist:
+            pkgnamehash.setdefault(pkg["name"], []).append(pkg)
+            pkgnamearchhash.setdefault(pkg["name"], {}).setdefault(pkg["arch"], []).append(pkg)
+        # Now go over all package names we found and find the correct update
+        # packages.
+        for name in pkgnamehash.keys():
+            dbpkgs = self.pydb.getPkgsByName(name)
+            # If the package name is either in our always_install list, no
+            # package with that name was installed we simply try to select the
+            # best matching package update for this arch.
+            if name in self.always_install or len(dbpkgs) == 0:
+                self.__addBestPkg(pkgnamehash[name])
+                continue
+            # Next trick: We now know that this is an update package and we
+            # have at least 1 package with that name installed. In order to
+            # updated 32 and 64 bit archs properly we now have to determine
+            # how and what needs to be updated properly in case exactarch
+            # isn't set.
+            if not self.config.exactarch:
+                arch = None
+                is_multi = False
+                # Check if the installed packages are 32 and 64 bit.
+                for ipkg in dbpkgs:
+                    if arch != None and arch != buildarchtranslate[ipkg["arch"]]:
+                        is_multi = True
+                        break
+                    arch = buildarchtranslate[ipkg["arch"]]
+                # If not and we're not exactarch then just find the best
+                # matching package again as we allow arch switches to 64bit
+                # for updates.
+                if not is_multi:
+                    self.__addBestPkg(pkgnamehash[name])
+                    continue
+                # OK, we have both archs for this package installed, we now
+                # need to filter them to 32bit and 64bit buckets and later
+                # use our standard algorithm to select the best matching
+                # package for each arch. 
+                for arch in pkgnamearchhash[name].keys():
+                    if buildarchtranslate[arch] == arch:
+                        continue
+                    pkgnamearchhash[name].setdefault(buildarchtranslate[arch], []).extend(pkgnamearchhash[name][arch])
+                    del pkgnamearchhash[name][arch]
+            # Ok, now we have to find matching updates for all installed archs.
+            for ipkg in dbpkgs:
+                if not self.config.exactarch:
+                    arch = buildarchtranslate[ipkg["arch"]]
+                    march = self.config.machine
+                else:
+                    arch = ipkg["arch"]
+                    march = arch
+                if not pkgnamearchhash[name].has_key(arch):
+                    self.config.printError("Can't find update package with matching arch for package %s" % ipkg.getNEVRA())
+                    return 0
+                self.__addBestPkg(pkgnamearchhash[name][arch], march, True)
+                # Trick to avoid multiple adds for same arch, after handling
+                # it once we clear the update package list.
+                pkgnamearchhash[name][arch] = []
+        return 1
+
+    def groupUpdate(self, name):
+        args = self.getGroupPackages(name)
+        for pkgname in args:
+            self.update(pkgname)
+        return 1
+
+    def updateByDep(self, dname, dflags, dversion):
+        pkglist = self.__findPkgsByDep(dname, dflags, dversion)
+        return self.__addBestPkg(pkglist)
+
+    def remove(self, name):
+        dict = buildPkgRefDict(self.pydb.getPkgs())
+        self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgs(), dict))
+
+    def groupRemove(self, name):
+        args = self.getGroupPackages(name)
+        for pkgname in args:
+            self.remove(pkgname)
+
+    def removeByDep(self, dname, dflags, dversion, all=True):
+        pkglist = self.pydb.searchDependency(dname, dflags, dversion)
+        return self.__addBestPkg(pkglist)
+
+    def __readPackage(self, name):
+        try:
+            pkg = readRpmPackage(self.config, name, db=self.pydb,
+                                 tags=self.config.resolvertags)
+        except (IOError, ValueError), e:
+            self.config.printError("%s: %s" % (name, e))
+            return None
+        if self.config.ignorearch or \
+           pkg.isSourceRPM() or \
+           archCompat(pkg["arch"], self.config.machine):
+            return pkg
+        self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % name)
+        return None
+
+    def __findPkgs(self, name):
+        if name[0] != "/":
+            return self.__findPkgsByName(name)
+        else:
+            return self.__findPkgsByDep(name, 0, "")
+
+    def __findPkgsByName(self, name):
+        global pyrpmyum_finddict
+        if pyrpmyum_finddict == None:
+            pkglist = []
+            for repo in self.repos:
+                    pkglist.extend(repo.getPkgs())
+            pyrpmyum_finddict = buildPkgRefDict(pkglist)
+        return findPkgByNames([name,], [], pyrpmyum_finddict)
+
+    def __findPkgsByDep(self, dname, dflags, dversion):
+        pkglist = []
+        for repo in self.repos:
+            pkglist.extend(repo.searchDependency(dname, dflags, dversion))
+        return pkglist
+
+    def __addBestPkg(self, pkglist, arch=None, exactarch=False):
+        if arch == None:
+            arch = self.config.machine
+        orderList(pkglist, arch)
+        # We only add the first package where we find that file
+        if len(pkglist) > 0:
+            # In case of exactarch it needs to match precisely.
+            if exactarch and pkglist[0]["arch"] != arch:
+                return 0
+            self.pkgs.append(pkglist[0])
+            return 1
+        return 0
+
     def runArgs(self, args):
         """Set self.pkgs to RpmPackage's to work with, based on args.
 
@@ -240,98 +420,61 @@ class RpmYum:
         if self.config.timer:
             time1 = clock()
         self.config.printInfo(1, "Selecting packages for operation\n")
-        # Generate list of all packages in all repos
-        repopkglist = []
-        for repo in self.repos:
-            repopkglist.extend(repo.getPkgs())
-        # If we do a group operation handle it accordingly
-        if self.command.startswith("group"):
-            pkgs = []
-            for grp in args:
-                for repo in self.repos:
-                    if repo.comps != None:
-                        pkgs.extend(repo.comps.getPackageNames(grp))
-            args = pkgs
-        else:
-            if len(args) == 0:
-                if self.command.endswith("remove"):
-                    self.pkgs.extend(self.opresolver.getDatabase().getPkgs())
-                else:
-                    # Hardcode the inverse package obsolete code here as we
-                    # need to use the reverse logic to later cases.
-                    for opkg in self.__obsoleteslist:
-                        #if opkg in self.opresolver or opkg in self.erase_list:
-                        #    continue
-                        for u in opkg["obsoletes"]:
-                            s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
-                            if len(s) == 0:
-                                continue
-                            if self.opresolver.update(opkg) > 0:
-                                break
-                    rhash = {}
-                    for pkg in repopkglist:
-                        rhash.setdefault(pkg["name"], []).append(pkg)
-                    for pkg in self.opresolver.getDatabase().getPkgs():
-                        name = pkg["name"]
-                        if not rhash.has_key(name):
+        # We unfortunatly still need to special case the argless remove 
+        if len(args) == 0:
+            if self.command == "update" or self.command == "upgrade":
+                # Hardcode the inverse package obsolete code here as we
+                # need to use the reverse logic to later cases.
+                for opkg in self.__obsoleteslist:
+                    for u in opkg["obsoletes"]:
+                        s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
+                        if len(s) == 0:
                             continue
-                        for rpkg in rhash[name]:
-                            self.pkgs.append(rpkg)
-        # Look for packages we need/want to install. Arguments can either be
-        # direct filenames or package nevra's with * wildcards
-        dict = None
-        for f in args:
-            if os.path.isfile(f) and f.endswith(".rpm"):
-                try:
-                    pkg = readRpmPackage(self.config, f, db=self.pydb,
-                                         tags=self.config.resolvertags)
-                except (IOError, ValueError), e:
-                    self.config.printError("%s: %s" % (f, e))
-                    return 0
-                if self.config.ignorearch or \
-                   pkg.isSourceRPM() or \
-                   archCompat(pkg["arch"], self.config.machine):
-                    self.pkgs.append(pkg)
-                else:
-                    self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % f)
-            elif os.path.isdir(f):
-                for g in os.listdir(f):
-                    fn = os.path.join(f, g)
-                    if not g.endswith(".rpm") or not os.path.isfile(fn):
-                        continue
-                    try:
-                        pkg = readRpmPackage(self.config, fn, db=self.pydb,
-                                             tags=self.config.resolvertags)
-                    except (IOError, ValueError), e:
-                        self.config.printError("%s: %s" % (fn, e))
-                        return 0
-                    if self.config.ignorearch or \
-                       pkg.isSourceRPM() or \
-                       archCompat(pkg["arch"], self.config.machine):
-                        self.pkgs.append(pkg)
-                    else:
-                        self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
+                        if self.opresolver.update(opkg) > 0:
+                            break
+                for pkg in self.opresolver.getDatabase().getPkgs():
+                    args.append(pkg["name"])
+        # Select proper function to be called for every argument. We have
+        # a fixed operation for runArgs(), so use a reference to the
+        # corresponding function.
+        func_hash = {"groupremove": self.groupRemove,
+                    "groupinstall": self.groupInstall,
+                    "groupupdate":  self.groupUpdate,
+                    "groupupgrade": self.groupUpdate,
+                    "remove":       self.remove,
+                    "install":      self.install,
+                    "update":       self.update,
+                    "upgrade":      self.update}
+        op_func = func_hash.get(self.command)
+        if op_func == None:
+            return 0
+        # First pass through our args to find any directories and/or binary
+        # rpms and create a memory repository from them to avoid special
+        # cases.
+        memory_repo = database.repodb.RpmRepoDB(self.config, "", self.config.buildroot, "", "pyrpmyum-memory-repo", [])
+        new_args = []
+        for name in args:
+            if   os.path.isfile(name) and name.endswith(".rpm"):
+                pkg = self.__readPackage(name)
+                if pkg != None:
+                    memory_repo.addPkg(pkg)
+                    new_args.append(pkg["name"])
+            elif os.path.isdir(name):
+                pkglist = []
+                functions.readDir(name, pkglist)
+                for pkg in pkglist:
+                    memory_repo.addPkg(pkg)
+                    new_args.append(pkg["name"])
             else:
-                if self.command.endswith("remove"):
-                    if dict == None:
-                        dict = buildPkgRefDict(self.pydb.getPkgs())
-                    self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgs(), dict))
-                else:
-                    # Nice trick to support yum update /usr/bin/foo ;)
-                    if f[0] == '/':
-                        pkg_list = []
-                        for repo in self.repos:
-                            pkg_list.extend(repo.searchDependency(f, 0, ""))
-                        orderList(pkg_list, self.config.machine)
-                        # We only add the first package where we find that file
-                        if len(pkg_list) > 0:
-                            self.pkgs.append(pkg_list[0])
-                    else:
-                        if dict == None:
-                            dict = buildPkgRefDict(repopkglist)
-                        self.pkgs.extend(findPkgByNames([f,], repopkglist, dict))
-                    if len(self.pkgs) == 0:
-                        self.config.printError("Couldn't find package %s, skipping" % f)
+                new_args.append(name)
+        # Append our new temporary repo to our internal repositories
+        self.repos.append(memory_repo)
+        args = new_args
+        # Loop over all args and call the appropriate handler function for each
+        for name in new_args:
+            # We call our operation function which will handle all the
+            # details for each specific case.
+            op_func(name)
         if self.config.timer:
             self.config.printInfo(0, "runArgs() took %s seconds\n" % (clock() - time1))
         return 1

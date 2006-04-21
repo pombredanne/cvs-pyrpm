@@ -141,6 +141,15 @@ class ProvidesList:
             list.remove( (flag, version, rpm) )
             if len(list) == 0:
                 del self.hash[name]
+        sname = rpm["name"]
+        if not self.hash.has_key(sname):
+            return
+        list = self.hash[sname]
+        sver = rpm.getEVR()
+        if (RPMSENSE_EQUAL, sver, rpm) in list:
+            list.remove( (RPMSENSE_EQUAL, sver, rpm) )
+        if len(list) == 0:
+            del self.hash[name]
 
     def search(self, name, flag, version):
         """Return a list of RpmPackage's matching the Requires:
@@ -170,6 +179,22 @@ class ProvidesList:
 class ConflictsList(ProvidesList):
     """A database of Conflicts:"""
     TAG = "conflicts"
+
+    def addPkg(self, rpm):
+        """Add Provides: by RpmPackage rpm. If no self provide is done it will
+        be added automatically."""
+
+        for (name, flag, version) in rpm[self.TAG]:
+            self.hash.setdefault(name, [ ]).append((flag, version, rpm))
+
+    def removePkg(self, rpm):
+        """Remove Provides: by RpmPackage rpm"""
+
+        for (name, flag, version) in rpm[self.TAG]:
+            list = self.hash[name]
+            list.remove( (flag, version, rpm) )
+            if len(list) == 0:
+                del self.hash[name]
 
     def search(self, name, flag, version):
         # s/Conflicts/Obsoletes/ in ObsoletesList

@@ -36,6 +36,8 @@ for i in sys.argv[1:]:
             if rpm["requirename"][i].startswith("rpmlib("):
                 continue
             print rpm.getNEVRA(), rpm["requirename"][i]
+    print len(rpm["dirnames"])
+
 #    print "dirnames = ", rpm["dirnames"]
 #    print "dirindexes = ", rpm["dirindexes"]
 #    print "basenames = ", rpm["basenames"]

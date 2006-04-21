@@ -17,7 +17,7 @@
 #
 
 
-import os, os.path, md5, sha, shutil
+import os, os.path, md5, sha, shutil, sys
 from pyrpm.functions import _uriToFilename, updateDigestFromFile
 
 try:
@@ -94,7 +94,10 @@ class NetworkCache:
         sourceurl = self.__createSourceURI(uri)
         destfile = self.getCachedFilename(uri)
         if not os.path.isdir(os.path.dirname(destfile)):
-            os.makedirs(os.path.dirname(destfile))
+            try:
+                os.makedirs(os.path.dirname(destfile))
+            except:
+                pass
         try:
             if force:
                 f = urlgrab(sourceurl, destfile)

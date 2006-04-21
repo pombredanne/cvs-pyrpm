@@ -314,8 +314,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 # pkg can be None if it is excluded
                 if pkg == None:
                     continue
-                #if pkg["arch"] == "src" or self.__isExcluded(pkg):
-                #    continue
                 pkg.yumrepo = self
                 if self.comps != None:
                     if   self.comps.hasType(pkg["name"], "mandatory"):
@@ -710,16 +708,41 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             raise ValueError, "Missing version information"
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
         pkgs = self.getPkgsByName(pname)
+        dhash = {}
         for pkg in pkgs:
             if pkg.getNEVRA() == nevra:
+                if len(dhash) == 0:
+                    for f in filelist:
+                        idx = f.rindex("/")
+                        if idx < 0:
+                            raise ValueError, "Couldn't find '/' in filename from filelist"
+                        dname = f[:idx+1]
+                        fname = f[idx+1:]
+                        dhash.setdefault(dname, []).append(fname)
+                    dnames = dhash.keys()[:]
+                    dnames.sort()
+                    dindexes = []
+                    bnames = []
+                    for f in filelist:
+                        idx = f.rindex("/")
+                        dname = f[:idx+1]
+                        fname = f[idx+1:]
+                        dindexes.append(dnames.index(dname))
+                        bnames.append(fname)
+                pkg["dirnames"] = dnames
+                pkg["dirindexes"] = dindexes
+                pkg["basenames"] = bnames
+                if pkg.has_key("oldfilenames"):
+                    del pkg["oldfilenames"]
+
                 # get rid of old dirnames, dirindexes and basenames
-                if pkg.has_key("dirnames"):
-                    del pkg["dirnames"]
-                if pkg.has_key("dirindexes"):
-                    del pkg["dirindexes"]
-                if pkg.has_key("basenames"):
-                    del pkg["basenames"]
-                pkg["oldfilenames"] = filelist
+                #if pkg.has_key("dirnames"):
+                #    del pkg["dirnames"]
+                #if pkg.has_key("dirindexes"):
+                #    del pkg["dirindexes"]
+                #if pkg.has_key("basenames"):
+                #    del pkg["basenames"]
+                #pkg["oldfilenames"] = filelist
 
     def __generateFormat(self, node, pkg):
         """Add RPM-specific tags under libxml2.xmlNode node for RpmPackage

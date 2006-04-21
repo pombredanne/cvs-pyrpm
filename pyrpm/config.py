@@ -103,6 +103,7 @@ class RpmConfig:
         # Verify contents of all nonempty config files, even if the package has
         # disabled it
         self.verifyallconfig = False
+        self.keepcache = True           # Keep cached packages after install
 
     def readConfig(filename="/etc/pyrpm.conf"):
         return execfile(filename)

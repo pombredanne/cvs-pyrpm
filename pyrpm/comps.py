@@ -86,11 +86,6 @@ class RpmCompsXML:
 
         return self.__getPackageNames(group, ["conditional"])
 
-    def getTypes(self, pkgname):
-        if not self.pkgtypehash.has_key(pkgname):
-            return []
-        return self.pkgtypehash[pkgname]
-
     def hasType(self, pkgname, type):
         if not self.pkgtypehash.has_key(pkgname):
             return False

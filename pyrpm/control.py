@@ -393,6 +393,8 @@ class RpmController:
                 self.db.close()
                 sys.exit(0)
         self.db.close()
+        if self.config.keepcache:
+            return 1
         for (op, pkg) in operations:
             if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
                 if pkg.yumrepo != None and pkg.yumhref != None:
