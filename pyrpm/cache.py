@@ -89,7 +89,7 @@ class NetworkCache:
         if self.is_local and not self.__isURI(uri):
             path = os.path.join(self.baseurl, uri)
             if os.path.exists(path):
-                return os.path.join(path)
+                return path
             return None
         sourceurl = self.__createSourceURI(uri)
         destfile = self.getCachedFilename(uri)
