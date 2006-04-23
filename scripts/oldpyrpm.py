@@ -4306,7 +4306,7 @@ def parseBoolean(s):
 class RpmCompsXML:
 
     def __init__(self, filename):
-        self.filename = Uri2Filename(filename)
+        self.filename = filename
         self.grouphash = {}
         self.grouphierarchyhash = {}
 
@@ -4316,8 +4316,9 @@ class RpmCompsXML:
     def __str__(self):
         return str(self.grouphash)
 
-    def read(self):
-        filename = cacheLocal(self.filename, "", "", 1)
+    def read(self, reponame):
+        filename = cacheLocal([self.filename], "/repodata/comps.xml",
+            reponame, 1)
         doc = libxml2.parseFile(filename)
         if doc == None:
             return 0
@@ -4819,6 +4820,7 @@ srpm_repos = [
     ("http://xenbits.xensource.com/xen-unstable.hg/",
         "xen-unstable", None, None, 30),
     ("http://thunk.org/hg/e2fsprogs/", "e2fsprogs", None, None, 20),
+    ("http://hg.thinkmo.de/moin/1.5/", "moin", None, None, 30),
 ]
 
 kgit = "rsync://rsync.kernel.org/pub/scm/"
@@ -5741,11 +5743,11 @@ def checkSymlinks(repo):
                 continue
             dangling.append((rpm["name"], f, link))
     # resolve possible dangling links
-    for name, f, link in dangling:
-       if resolveLink(goodlinks, f, link) not in allfiles:
+    for (name, f, link) in dangling:
+        if resolveLink(goodlinks, link) not in allfiles:
             print "%s has dangling symlink from %s to %s" % (name, f, link)
 
-def resolveLink(goodlinks, file, link):
+def resolveLink(goodlinks, link):
     """Resolve link to file, use information stored in
        dictionary of goodlinks"""
     path = []
@@ -5753,8 +5755,8 @@ def resolveLink(goodlinks, file, link):
     for elem in link.split(os.sep):
         path.append(elem)
         tmppath = "/" + os.path.join(*path)
+        # If it's a link, replace already processed path:
         if tmppath in goodlinks:
-            # if it's a link, use replace already process path
             path = goodlinks[tmppath].split(os.sep)
     return "/" + os.path.join(*path)
 
