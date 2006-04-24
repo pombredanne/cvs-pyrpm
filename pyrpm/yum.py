@@ -497,7 +497,8 @@ class RpmYum:
         # Filter newest packages
         if self.config.timer:
             time1 = clock()
-        self.pkgs = selectNewestPkgs(self.pkgs)
+        # Shouldn't be needed anymore. Verify...
+        #self.pkgs = selectNewestPkgs(self.pkgs)
         if self.config.timer:
             self.config.printInfo(0, "selectNewestPkgs took %s seconds\n" % (clock() - time1))
         if self.config.timer:
