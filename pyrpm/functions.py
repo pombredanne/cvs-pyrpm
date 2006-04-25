@@ -1315,7 +1315,7 @@ def archCompat(parch, arch):
     """Return True if package with architecture parch can be installed on
     machine with arch arch."""
 
-    return parch in arch_compats.get(arch, [])
+    return (arch == "noarch" or parch in arch_compats.get(arch, []))
     #return (parch == "noarch" or arch == "noarch" or parch == arch or
     #        parch in arch_compats.get(arch, []))
 
