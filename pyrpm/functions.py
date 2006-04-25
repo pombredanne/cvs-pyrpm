@@ -1315,18 +1315,15 @@ def archCompat(parch, arch):
     """Return True if package with architecture parch can be installed on
     machine with arch arch."""
 
-    return (parch == "noarch" or arch == "noarch" or parch == arch or
-            parch in arch_compats.get(arch, []))
+    return parch in arch_compats.get(arch, [])
+    #return (parch == "noarch" or arch == "noarch" or parch == arch or
+    #        parch in arch_compats.get(arch, []))
 
 def archDuplicate(parch, arch):
     """Return True if parch and arch have the same base arch."""
 
-    try:
-        return (parch == arch
-            or buildarchtranslate[parch] == buildarchtranslate[arch])
-    except:
-        print "ERROR:", parch, arch
-        raise Exception
+    return (parch == arch
+        or buildarchtranslate.get(parch, parch) == buildarchtranslate.get(arch, arch))
 
 def filterArchCompat(list, arch):
     """Modify RpmPackage list list to contain only packages that can be
