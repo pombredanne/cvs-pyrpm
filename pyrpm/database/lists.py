@@ -83,7 +83,8 @@ class FilenamesList:
         dups = { }
         for dirname in self.path.keys():
             for filename in self.path[dirname].keys():
-                dups[dirname + filename] = self.path[dirname][filename]
+                if len(self.path[dirname][filename]) > 1:
+                    dups[dirname + filename] = self.path[dirname][filename]
         return dups
 
     def search(self, name):
