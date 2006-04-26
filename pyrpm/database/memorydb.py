@@ -30,9 +30,10 @@ class RpmMemoryDB(db.RpmDatabase):
         self.source = source
         self.buildroot = buildroot
         self.pkgs = [ ]   # [pkg, ..]
-        self.clear()
+        self.names = { }  # name: [pkg, ..]
         self.__len__ = self.pkgs.__len__
         self.__getitem__ = self.pkgs.__getitem__
+        self.clear()
 
     def __contains__(self, pkg):
         if pkg in self.names.get(pkg["name"], []):
@@ -41,8 +42,8 @@ class RpmMemoryDB(db.RpmDatabase):
 
     # clear all structures
     def clear(self):
-        self.pkgs = [ ]   # [pkg, ..]
-        self.names = { }  # name: [pkg, ..]
+        self.pkgs[:] = [ ]
+        self.names.clear()
 
         self.provides_list = lists.ProvidesList()
         self.filenames_list = lists.FilenamesList()
@@ -182,7 +183,7 @@ class RpmMemoryDB(db.RpmDatabase):
     def searchDependency(self, name, flag, version):
         """Return list of RpmPackages from self.names providing
         (name, RPMSENSE_* flag, EVR string) dep."""
-        s = self.searchProvides(name, flag, version)
+        s = self.searchProvides(name, flag, version).keys()
         if name[0] == '/': # all filenames are beginning with a '/'
             s += self.searchFilenames(name)
         return s
