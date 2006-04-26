@@ -108,7 +108,7 @@ class ProvidesList:
 
     def __init__(self):
         self.hash = { }
-        self.clear()
+        ProvidesList.clear(self)
         self.__len__ = self.hash.__len__
         self.__getitem__ = self.hash.__getitem__
         self.has_key = self.hash.has_key
@@ -118,7 +118,7 @@ class ProvidesList:
         """Discard all stored data"""
 
         # %name => [(flag, EVR string, providing RpmPackage)]
-        self.hash = { }
+        self.hash.clear()
 
     def addPkg(self, rpm):
         """Add Provides: by RpmPackage rpm. If no self provide is done it will
@@ -157,22 +157,22 @@ class ProvidesList:
         (name, RPMSENSE_* flag, EVR string)."""
 
         if not self.hash.has_key(name):
-            return [ ]
+            return { }
         evr = functions.evrSplit(version)
-        ret = [ ]
+        ret = { }
         for (f, v, rpm) in self.hash[name]:
             if rpm in ret:
                 continue
             if version == "":
-                ret.append(rpm)
+                ret.setdefault(rpm, [ ]).append((name, f, v))
                 continue
             if functions.rangeCompare(flag, evr, f, functions.evrSplit(v)):
-                ret.append(rpm)
+                ret.setdefault(rpm, [ ]).append((name, f, v))
                 continue
             if v == "": # compare with package version for unversioned provides
                 evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
                 if functions.evrCompare(evr2, flag, evr):
-                    ret.append(rpm)
+                    ret.setdefault(rpm, [ ]).append((name, f, v))
 
         return ret
 
@@ -203,17 +203,17 @@ class ConflictsList(ProvidesList):
         (name, RPMSENSE_* flag, EVR string)."""
 
         if not self.hash.has_key(name):
-            return [ ]
+            return { }
         evr = functions.evrSplit(version)
-        ret = [ ]
+        ret = { }
         for (f, v, rpm) in self.hash[name]:
             if rpm in ret:
                 continue
             if version == "":
-                ret.append(rpm)
+                ret.setdefault(rpm, [ ]).append((name, f, v))
                 continue
             if functions.rangeCompare(flag, evr, f, functions.evrSplit(v)):
-                ret.append(rpm)
+                ret.setdefault(rpm, [ ]).append((name, f, v))
                 continue
 
         return ret
