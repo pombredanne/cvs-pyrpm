@@ -337,7 +337,7 @@ class RpmResolver:
         obsoletes = [ ]
         if len(list) != 0:
             if pkg in list:
-                list.remove(pkg)
+                del list[pkg]
             for r in list:
                 if self.config.checkinstalled == 0 and \
                        self._hasConflict(dep, self.installed_obsoletes):
@@ -657,6 +657,50 @@ class RpmResolver:
 
         all_unresolved = HashList()
 
+        if self.config.checkinstalled == 0:
+            for pkg in self.erases:
+                # check if provides are required and not provided by another
+                # package
+                for p in pkg["provides"]:
+                    sr = self.database.searchRequires(p[0], p[1], p[2])
+                    if len(sr) > 0:
+                        sp = self.database.searchProvides(p[0], p[1], p[2])
+                        if len(sp) > 0:
+                            continue
+                        for p in sr:
+                            # unresolved dep
+                            all_unresolved.setdefault(p, [ ]).extend(sr[p])
+                # check if filenames are required and not provided by another
+                # package
+                for f in pkg["filenames"]:
+# EVIL S**T !!
+#                    if not self.database.provides_list.has_key(f):
+#                        continue
+                    sr = self.database.searchRequires(f, 0, "")
+                    if len(sr) > 0:
+                        sf = self.database.searchFilenames(f)
+                        if len(sf) > 0:
+                            continue
+                        for p in sr:
+                            # unresolved dep
+                            all_unresolved.setdefault(p, [ ]).extend(sr[p])
+
+            # check new packages
+            for pkg in self.installs:
+                unresolved = [ ]
+                for u in pkg["requires"]:
+                    if u[0][:7] == "rpmlib(": # drop rpmlib requirements
+                        continue
+                    s = self.database.searchDependency(u[0], u[1], u[2])
+                    if len(s) > 0: # found something
+                        continue
+                    unresolved.append(u)
+                if len(unresolved) > 0:
+                    all_unresolved.setdefault(pkg, [ ]).extend(unresolved)
+
+            return all_unresolved
+
+        # check installed
         for name in self.database.getNames():
             for pkg in self.database.getPkgsByName(name):
                 unresolved = [ ]
@@ -664,24 +708,12 @@ class RpmResolver:
                     if u[0][:7] == "rpmlib(": # drop rpmlib requirements
                         continue
                     s = self.database.searchDependency(u[0], u[1], u[2])
-#                    # drop self script prereq and self script postun
-#                    # these prereqs can not be solved by the package itself
-#                    if len(s) > 0 and pkg in s and isLegacyPreReq(u[1]) and \
-#                           (u[1] & RPMSENSE_SCRIPT_PRE != 0 or \
-#                            u[1] & RPMSENSE_SCRIPT_POSTUN != 0):
-#                        if len(s) == 1:
-#                            s = [ ]
-#                        else:
-#                            s.remove(pkg)
                     if len(s) > 0: # found something
-                        continue
-                    if self.config.checkinstalled == 0 and \
-                           pkg in self.installed_unresolved and \
-                           u in self.installed_unresolved[pkg]:
                         continue
                     unresolved.append(u)
                 if len(unresolved) > 0:
                     all_unresolved.setdefault(pkg, [ ]).extend(unresolved)
+
         return all_unresolved
     # ----
 
