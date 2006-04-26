@@ -34,7 +34,7 @@ class RpmDatabase:
         self.config = config
         self.source = source
         self.buildroot = buildroot
-        self.clear()
+        RpmDatabase.clear(self)
         self.keyring = openpgp.PGPKeyRing()
         self.is_read = 0                # 1 if the database was already read
 
