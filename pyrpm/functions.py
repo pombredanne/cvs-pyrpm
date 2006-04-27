@@ -234,11 +234,13 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
                 "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin"}
             if pkg:
                 if pkg["prefixes"]:
-                    e["RPM_INSTALL_PREFIX"] = pkg["prefixes"][0]
-                idx = 1
-                for prefix in pkg["prefixes"]:
-                    e["RPM_INSTALL_PREFIX%d" % idx] = prefix
-                    idx += 1
+                    if len(pkg["prefixes"]) == 1:
+                        e["RPM_INSTALL_PREFIX"] = pkg["prefixes"][0]
+                    else:
+                        idx = 1
+                        for prefix in pkg["prefixes"]:
+                            e["RPM_INSTALL_PREFIX%d" % idx] = prefix
+                            idx += 1
             os.execve(args[0], args, e)
         finally:
             os._exit(255)
