@@ -55,6 +55,7 @@
 #   doing this in an extra pass. That's why it is then already too late
 #   to set distroverpkg within the config file at all.
 # - support reading some vars from yum.conf like distroverpkg
+# - yum.conf variables are case independent?
 # - allow a --rebuilddb into a new directory and a diff between two rpmdb
 # - check OpenGPG signatures
 # - allow src.rpm selection based on OpenGPG signature. Prefer GPG signed.
@@ -3585,7 +3586,7 @@ def checkCSV():
     csv2.writeCSV("/tmp/csv2")
 
 
-def cacheLocal(urls, filename, subdir, force=0, verbose=0):
+def cacheLocal(urls, filename, subdir, force=0, verbose=0, nofilename=0):
     import urlgrabber
 
     for url in urls:
@@ -3595,13 +3596,12 @@ def cacheLocal(urls, filename, subdir, force=0, verbose=0):
         # remove trailing slashes "/"
         while url[-1:] == "/":
             url = url[:-1]
-        url += filename
+        if nofilename == 0:
+            url += filename
         if verbose > 4:
             print "cacheLocal: looking at url:", url
         if not url.startswith("http://") and not url.startswith("ftp://"):
             return url
-        if not filename:
-            filename = os.path.basename(url)
         (dirname, basename) = os.path.split(filename)
         localdir = cachedir + subdir + dirname
         makeDirs(localdir)
@@ -3774,7 +3774,7 @@ class RpmRepo:
             if self.verbose > 2:
                 print "Reading yum repository %s." % filename
             filename = cacheLocal([filename], "/repodata/primary.xml.gz",
-                self.reponame, 1)
+                self.reponame + "/repo", 1)
             if not filename:
                 continue
             reader = libxml2.newTextReaderFilename(filename)
@@ -3792,7 +3792,7 @@ class RpmRepo:
             if self.verbose > 2:
                 print "Reading full filelist from %s." % filename
             filename = cacheLocal([filename], "/repodata/filelists.xml.gz",
-                self.reponame, 1)
+                self.reponame + "/repo", 1)
             if not filename:
                 continue
             reader = libxml2.newTextReaderFilename(filename)
@@ -4330,7 +4330,7 @@ class RpmCompsXML:
 
     def read(self, reponame):
         filename = cacheLocal([self.filename], "/repodata/comps.xml",
-            reponame, 1)
+            reponame + "/repo", 1)
         doc = libxml2.parseFile(filename)
         if doc == None:
             return 0
@@ -4742,12 +4742,11 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                     mlist = conf.extendValue(mlist)
                     if verbose > 2:
                         print "Getting mirrorlist from %s." % mlist
-                    fname = cacheLocal([mlist], "", "%s/mirrorlist" % key,
-                        1, verbose)
+                    fname = cacheLocal([mlist], "mirrorlist", key,
+                        1, verbose, nofilename=1)
                     lines = []
                     if fname:
                         lines = open(fname).readlines()
-                        #os.unlink(fname)
                     for l in lines:
                         l = l.replace("$ARCH", "$basearch")[:-1]
                         if l:
@@ -4761,7 +4760,7 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                 repo.delDebuginfo()
             if readcompsfile:
                 repo.compsfile = cacheLocal(baseurls,
-                    "/repodata/comps.xml", key)
+                    "/repodata/comps.xml", key + "/repo")
             repos.append(repo)
     return repos
 
