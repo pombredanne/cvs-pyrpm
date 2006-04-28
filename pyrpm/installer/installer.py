@@ -135,11 +135,16 @@ class Repository:
                 print "Mounting '%s' on '%s'" % (what, self.dir)
             mount(what, self.dir, fstype="auto", options="ro")
             source = "file://%s" % self.dir 
-        elif source[:5] == "nfs://":
+        elif source[:6] == "nfs://":
+            what = source[6:]
+            splits = what.split("/", 1)
+            if splits[0][-1] != ":":
+                what = ":/".join(splits)
+            del splits
             # mount nfs source
             if config.verbose:
                 print "Mounting '%s' on '%s'" % (source, self.dir)
-            mount(source[5:], self.dir, fstype="nfs", options="ro")
+            mount(what, self.dir, fstype="nfs", options="ro")
             source = "file://%s" % self.dir
         # else: url
 
