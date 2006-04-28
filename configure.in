@@ -9,5 +9,6 @@ scripts/Makefile
 doc/Makefile
 pyrpm/Makefile
 pyrpm/database/Makefile
+pyrpm/installer/Makefile
 tests/Makefile
 ])
