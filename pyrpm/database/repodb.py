@@ -138,6 +138,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             except libxml2.libxmlError:
                 return 1
             self.__parseNode(reader)
+            return 1
         return 0
 
     def getNetworkCache(self):
