@@ -3585,32 +3585,44 @@ def checkCSV():
     csv2.writeCSV("/tmp/csv2")
 
 
-def cacheLocal(urls, filename, subdir, force=0):
+def cacheLocal(urls, filename, subdir, force=0, verbose=0):
     import urlgrabber
 
     for url in urls:
+        if not url:
+            continue
         url = Uri2Filename(url)
         # remove trailing slashes "/"
         while url[-1:] == "/":
             url = url[:-1]
         url += filename
+        if verbose > 4:
+            print "cacheLocal: looking at url:", url
         if not url.startswith("http://") and not url.startswith("ftp://"):
             return url
+        if not filename:
+            filename = os.path.basename(url)
         (dirname, basename) = os.path.split(filename)
         localdir = cachedir + subdir + dirname
         makeDirs(localdir)
         localfile = "%s/%s" % (localdir, basename)
+        if verbose > 4:
+            print "cacheLocal: localfile:", localfile
         try:
             if force:
                 f = urlgrabber.urlgrab(url, localfile)
             else:
                 f = urlgrabber.urlgrab(url, localfile, reget="check_timestamp")
         except urlgrabber.grabber.URLGrabError, e:
+            if verbose > 4:
+                print "cacheLocal: error: e:", e
             # urlgrab fails with invalid range for already completely transfered
             # files, pretty strange to me to be honest... :)
             if e[0] == 9:
                 return localfile
             continue
+        if verbose > 4:
+            print "cacheLocal: return:", f
         return f
     return None
 
@@ -4552,7 +4564,7 @@ class YumConf(Conf):
         "overwrite_groups", "installroot", "rss-filename", "distroverpkg",
         "diskspacecheck", "tsflags", "recent", "retries", "keepalive",
         "throttle", "bandwidth", "commands", "keepcache", "proxy",
-        "proxy_username", "proxy_password", "pkgpolicy")
+        "proxy_username", "proxy_password", "pkgpolicy", "plugins", "metadata_expire")
     MultiLines = ("baseurl", "mirrorlist")
     RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
@@ -4726,22 +4738,20 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
             if sec.has_key("mirrorlist"):
-                dirname = mkstemp_dir(tmpdir, "mirrorlist")
                 for mlist in sec["mirrorlist"]:
                     mlist = conf.extendValue(mlist)
                     if verbose > 2:
-                        print "Getting mirrorlist from %s\n" % mlist
-                    fname = cacheLocal([mlist], "", dirname, 1)
+                        print "Getting mirrorlist from %s." % mlist
+                    fname = cacheLocal([mlist], "", "%s/mirrorlist" % key,
+                        1, verbose)
+                    lines = []
                     if fname:
                         lines = open(fname).readlines()
-                        os.unlink(fname)
-                    else:
-                        lines = []
+                        #os.unlink(fname)
                     for l in lines:
-                        l = l.replace("$ARCH", "$BASEARCH")[:-1]
+                        l = l.replace("$ARCH", "$basearch")[:-1]
                         if l:
                             baseurls.append(conf.extendValue(l))
-                os.rmdir(dirname)
             if not baseurls:
                 print "%s:" % key, "No url for this section in conf file."
                 return None
@@ -5323,7 +5333,7 @@ def readPackages(dbpath, verbose, keepdata=1, hdrtags=None):
     data = open(dbpath + "Packages", "rb").read(16)
     if len(data) == 16:
         if unpack("=I", data[12:16])[0] == 0x00061561:
-            if verbose > 3:
+            if verbose > 4:
                 print "Checking rpmdb with same endian order."
         else:
             if pack("=H", 0xdead) == "\xde\xad":
@@ -5754,11 +5764,11 @@ def resolveLink(goodlinks, link):
     # process all path elements
     for elem in link.split(os.sep):
         path.append(elem)
-        tmppath = "/" + os.path.join(*path)
+        tmppath = os.path.join(os.sep, *path)
         # If it's a link, replace already processed path:
         if tmppath in goodlinks:
             path = goodlinks[tmppath].split(os.sep)
-    return "/" + os.path.join(*path)
+    return os.path.join(os.sep, *path)
 
 def checkDirs(repo):
     # collect all directories
