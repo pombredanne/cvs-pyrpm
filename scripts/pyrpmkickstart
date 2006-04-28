@@ -91,7 +91,10 @@ def main():
         elif opt == "--no-stage2":
             no_stage2 = 1
         elif opt == "--upgrade":
-            upgrade = val
+            if val[:5] == "/dev/":
+                upgrade = val[5:]
+            else:
+                upgrade = val
         elif opt == "--no-cache":
             no_cache = 1
         else:
@@ -744,6 +747,8 @@ def main():
         labelmap = { }
         map = { }
         mdmap = { }
+        volgroup = { }
+        vgmap = { }
         for disk in diskmap:
             partition = diskmap[disk]["partition"]
             for part in partition:
@@ -788,11 +793,10 @@ def main():
                         dict["level"] = info["level"]
                         dict["raid-devices"] = info["raid-devices"]
                         dict["devices"] = { }
-                    dict["devices"][info["device-number"]] = {}
+                    dict["devices"][info["device-number"]] = { }
                     d = dict["devices"][info["device-number"]]
                     d["onpart"] = info["onpart"]
                     d["device"] = info["device"]
-                    continue
 
                 elif partition[part]["fstype"] == "lvm":
                     print "%s: partition['%s']['fstype']='%s' device='%s'" % \
@@ -801,42 +805,44 @@ def main():
 
                     dict = LVM_PHYSICAL_VOLUME.info(partition[part]["device"],
                                                     chroot=stage2_chroot)
-                    print dict
 
-                    sys.stdout.write("\nWaiting - Press any key to continue.")
-                    c = sys.stdin.read(1)
-
-                    print 
+                    if dict.has_key("vgname"):
+                        volgroup.setdefault(dict["vgname"], { }).setdefault("partitions", [ ]).append(partition[part]["device"])
 
                 elif partition[part]["fstype"] in \
                        [ "ext2", "ext3", "xfs", "jfs", "reiserfs" ] and \
                        partition[part]["native_type"] == 0x83:
-                    # try to mount partition and search for fstab
-                    if verbose:
-                        print "Mounting '%s' on '%s'" % \
-                              (partition[part]["device"], fstemp_dir)
-                    try:
-                        mount(partition[part]["device"], fstemp_dir,
-                              fstype=partition[part]["fstype"],
-                              options="ro")
-                    except Exception, msg:
-                        if verbose:
-                            print "Failed to mount '%s'." % \
-                                  partition[part]["device"]
-                    else:
-                        # anaconda does not support updates where /etc is
-                        # an extra filesystem
-                        _release = load_release(fstemp_dir)
-                        _fstab = load_fstab(fstemp_dir)
-                        _mdadm = load_mdadm_conf(fstemp_dir)
-                        if _release and _fstab:
-                            installed[onpart] = { }
-                            installed[onpart]["release"] = _release
-                            installed[onpart]["fstab"] = _fstab
-                            installed[onpart]["mdadm-conf"] = _mdadm
-                        if verbose:
-                            print "Umounting '%s' " % fstemp_dir
-                        umount(fstemp_dir)
+                    info = get_installation_info(partition[part]["device"],
+                                                 partition[part]["fstype"],
+                                                 fstemp_dir)
+                    if info:
+                        installed[onpart] = info
+
+        # check volume groups and logical volumes
+        print "volgroup=%s" % pprint.pformat(volgroup)
+        to_delete = [ ]
+        for group in volgroup:
+            vgmap[group] = LVM_VOLGROUP(group, chroot=stage2_chroot)
+            if not vgmap[group].start():
+                to_delete.append(group)
+
+        for group in to_delete:
+#            vgmap[group].stop()
+            del vgmap[group]
+            del volgroup[group]
+
+        volumes = LVM_LOGICAL_VOLUME.display(chroot=stage2_chroot)
+        for device in volumes:
+            if not volumes[device]["vgname"] in volgroup:
+                continue
+            fstype = detectFstype(device)
+            if fstype:
+                info = get_installation_info(device, fstype, fstemp_dir)
+                if info:
+                    installed[device] = info
+
+        for group in vgmap:
+            vgmap[group].stop()
 
         # check mdmap and delete unusable entries
         to_delete = [ ]
@@ -880,28 +886,16 @@ def main():
             fstype = detectFstype(device)
 
             if fstype:
-                # try to mount partition and search for fstab
-                if verbose:
-                    print "Mounting '%s' on '%s'" % (device, fstemp_dir)
-                try:
-                    mount("%s" % device, fstemp_dir, fstype=fstype,
-                          options="ro")
-                except:
-                    if verbose:
-                        print "Failed to mount '%s'." % device
-                else:
-                    _release = load_release(fstemp_dir)
-                    _fstab = load_fstab(fstemp_dir)
-                    if _release and _fstab:
-                        installed[dev] = { }
-                        installed[dev]["release"] = _release
-                        installed[dev]["fstab"] = _fstab
-                        installed[dev]["raid"] = raid
-                    if verbose:
-                        print "Umounting '%s' " % device
-                    umount(fstemp_dir)
+                info = get_installation_info(device, fstype, fstemp_dir)
+                if info:
+                    installed[dev] = info
 
             raid.stop()
+
+
+        print "installed=%s" % pprint.pformat(installed)
+        sys.stdout.write("\nWaiting - Press any key to continue.")
+        c = sys.stdin.read(1)
 
         if len(installed) < 1:
             print "ERROR: Could not find any installations."
@@ -913,7 +907,12 @@ def main():
                 print "%s: %s" % (onpart, installed[onpart]["release"])
 
         if upgrade:
-            if not upgrade in installed.keys():
+            if upgrade[:6] == "LABEL=":
+                if upgrade[6:] in labelmap:
+                    upgrade = labelmap[upgrade[6:]]
+                else:
+                    print "ERROR: Could not find %s." % upgrade
+            elif not upgrade in installed.keys():
                 print "ERROR: Could not find %s." % upgrade
                 return 1
         elif len(installed) == 1:
@@ -1400,6 +1399,7 @@ def main():
                 devs.append(partitionmap[onpart]["device"])
 
             vgmap[group] = LVM_VOLGROUP(group, chroot=stage2_chroot)
+            # TODO: noformat
             if not vgmap[group].create(devs, volgroup[group]["pesize"]):
                 return 1
             create_dir(stage2_chroot, "/dev/%s" % group)
@@ -1425,6 +1425,7 @@ def main():
 
         lv = LVM_LOGICAL_VOLUME(onpart, partitionmap[onpart]["volgroup"],
                                 chroot=stage2_chroot)
+        # TODO: noformat
         if not lv.create(partitionmap[onpart]["size"]):
             return 1
         partitionmap[onpart]["device"] = "/dev/%s/%s" % \
@@ -2244,18 +2245,18 @@ def main():
                     minor = 2
                 label = partitionmap[onpart]["label"]
                 if partitionmap[onpart]["label"]:
-                    sourcepart = "LABEL=%s" % partitionmap[onpart]["label"]
+                    src = "LABEL=%s" % partitionmap[onpart]["label"]
                 elif partitionmap[onpart].has_key("lvm"):
                     # there is no device mapping for lvm, therefore use real
                     # device
-                    sourcepart = partitionmap[onpart]["device"]
+                    src = partitionmap[onpart]["device"]
                 else:
-                    sourcepart = "/dev/%s" % onpart
+                    src = "/dev/%s" % onpart
                 opts = "defaults"
                 if partitionmap[onpart].has_key("fsoptions"):
                     opts = partitionmap[onpart]["fsoptions"]
                 content.append("%s\t\t%s\t\t%s\t%s\t%d %d\n" % \
-                               (sourcepart, name, fs, opts, major, minor))
+                               (src, name, fs, opts, major, minor))
                 mtab_content.append("/dev/%s %s %s rw %d %d\n" % \
                                     (onpart, name, fs, major, minor))
             elif name[:4] == "swap":
@@ -2647,7 +2648,7 @@ def main():
             else:
                 os.unlink(buildroot+"/etc/localtime")
             try:
-                copy_file(buildroot+tzfile, buildroot+"/etc/localtime")
+                buildroot_copy(buildroot, tzfile, "/etc/localtime")
             except:
                 print "ERROR: Could not create /etc/localtime."
 
@@ -2850,12 +2851,16 @@ def main():
             create_file(buildroot, "/boot/grub/grub.conf", content, force=1)
 
             # use arch of install tree
-            copy_file(buildroot+"/usr/share/grub/%s-redhat/stage1" % installation.arch,
-                           buildroot+"/boot/grub/stage1")
-            copy_file(buildroot+"/usr/share/grub/%s-redhat/stage2" % installation.arch,
-                           buildroot+"/boot/grub/stage2")
-            copy_file(buildroot+"/usr/share/grub/%s-redhat/e2fs_stage1_5" % \
-                           installation.arch, buildroot+"/boot/grub/e2fs_stage1_5")
+            buildroot_copy(buildroot,
+                           "/usr/share/grub/%s-redhat/stage1" % installation.arch,
+                           "/boot/grub/stage1")
+            buildroot_copy(buildroot,
+                           "/usr/share/grub/%s-redhat/stage2" % installation.arch,
+                           "/boot/grub/stage2")
+            # TODO: support xfs, jfs and reiserfs stage1.5
+            buildroot_copy(buildroot,
+                           "/usr/share/grub/%s-redhat/e2fs_stage1_5" % \
+                           installation.arch, "/boot/grub/e2fs_stage1_5")
 
             # create temporary devices which are usable by grub (hda, hda1, ..)
             devmap = { } # device mapping
