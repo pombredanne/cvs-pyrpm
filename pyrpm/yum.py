@@ -110,8 +110,9 @@ class RpmYum:
                 regex = re.compile(restring)
                 drepo.append(regex)
         for key in conf.keys():
+            sec = conf[key]
             if key == "main":
-                if conf[key].has_key("exclude"):
+                if sec.has_key("exclude"):
                     gexcludes = conf[key]["exclude"] + " "
                 # exactarch can only be found in main section. Default False
                 if sec.has_key("exactarch") and sec["exactarch"] == "1":
@@ -120,7 +121,6 @@ class RpmYum:
                 if sec.has_key("keepcache") and sec["keepcache"] == "0":
                     self.config.exactarch = False
             else:
-                sec = conf[key]
                 # Check if the current repo should be enabled or disabled
                 enabled = True      # Default is enabled
                 if sec.has_key("enabled") and sec["enabled"] == "0":
