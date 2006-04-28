@@ -138,6 +138,33 @@ def load_mdadm_conf(chroot=""):
     fd.close()
     return conf    
 
+def get_installation_info(device, fstype, dir):
+    # try to mount partition and search for release, fstab and
+    # mdadm.con
+    if config.verbose:
+        print "Mounting '%s' on '%s'" % (device, dir)
+    try:
+        mount(device, dir, fstype=fstype, options="ro")
+    except Exception, msg:
+        if config.verbose:
+            print "Failed to mount '%s'." % device
+            return None
+    else:
+        dict = { }
+        # anaconda does not support updates where /etc is
+        # an extra filesystem
+        _release = load_release(dir)
+        _fstab = load_fstab(dir)
+        _mdadm = load_mdadm_conf(dir)
+        if _release and _fstab:
+            dict["release"] = _release
+            dict["fstab"] = _fstab
+            dict["mdadm-conf"] = _mdadm
+        if config.verbose:
+            print "Umounting '%s' " % dir
+        umount(dir)
+        return dict
+
 def get_size_in_byte(size):
     _size = size.strip()
     if _size[-1] == "b" or _size[-1] == "B":
@@ -338,6 +365,8 @@ def copy_device(source, target_dir, source_dir="", target=None):
         raise IOError, "'%s' is no device." % s
 
     t = "%s/%s" % (target_dir, target)
+    if os.path.exists(t):
+        return
     try:
         if s_linkto:
             create_dir(target_dir, os.path.dirname(s_linkto))
@@ -418,7 +447,7 @@ def copy_file(source, target):
     source_fd.close()
     target_fd.close()
 
-def buildroot_copy(source, target):
+def buildroot_copy(buildroot, source, target):
     copy_file(buildroot+source, buildroot+target)
 
 def chroot_device(device, chroot=None):
