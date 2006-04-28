@@ -403,12 +403,12 @@ def copy_file(source, target):
     try:
         source_fd = open(source, "r")
     except Exception, msg:
-        print "ERROR: Failed to open '%s':" % buildroot+source, msg
+        print "ERROR: Failed to open '%s':" % source, msg
         return 1
     try:
         target_fd = open(target, "w")
     except Exception, msg:
-        print "ERROR: Failed to open '%s':" % buildroot+target, msg
+        print "ERROR: Failed to open '%s':" % target, msg
         source_fd.close()
         return 1
     data = source_fd.read(65536)
