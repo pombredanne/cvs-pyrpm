@@ -128,10 +128,8 @@ class ProvidesList:
         sver = rpm.getEVR()
         self_provide = False
         for (name, flag, version) in rpm[self.TAG]:
-            if name == sname and (flag & RPMSENSE_EQUAL) and version == sver:
-                self_provide = True
             self.hash.setdefault(name, [ ]).append((flag, version, rpm))
-        if not self_provide:
+        if (sname, RPMSENSE_EQUAL, sver) not in rpm[self.TAG]:
             self.hash.setdefault(sname, [ ]).append((RPMSENSE_EQUAL, sver, rpm))
 
     def removePkg(self, rpm):
