@@ -2244,18 +2244,18 @@ def main():
                     minor = 2
                 label = partitionmap[onpart]["label"]
                 if partitionmap[onpart]["label"]:
-                    source = "LABEL=%s" % partitionmap[onpart]["label"]
+                    sourcepart = "LABEL=%s" % partitionmap[onpart]["label"]
                 elif partitionmap[onpart].has_key("lvm"):
                     # there is no device mapping for lvm, therefore use real
                     # device
-                    source = partitionmap[onpart]["device"]
+                    sourcepart = partitionmap[onpart]["device"]
                 else:
-                    source = "/dev/%s" % onpart
+                    sourcepart = "/dev/%s" % onpart
                 opts = "defaults"
                 if partitionmap[onpart].has_key("fsoptions"):
                     opts = partitionmap[onpart]["fsoptions"]
                 content.append("%s\t\t%s\t\t%s\t%s\t%d %d\n" % \
-                               (source, name, fs, opts, major, minor))
+                               (sourcepart, name, fs, opts, major, minor))
                 mtab_content.append("/dev/%s %s %s rw %d %d\n" % \
                                     (onpart, name, fs, major, minor))
             elif name[:4] == "swap":
@@ -2647,7 +2647,7 @@ def main():
             else:
                 os.unlink(buildroot+"/etc/localtime")
             try:
-                buildroot_copy(tzfile, "/etc/localtime")
+                copy_file(buildroot+tzfile, buildroot+"/etc/localtime")
             except:
                 print "ERROR: Could not create /etc/localtime."
 
@@ -2850,12 +2850,12 @@ def main():
             create_file(buildroot, "/boot/grub/grub.conf", content, force=1)
 
             # use arch of install tree
-            buildroot_copy("/usr/share/grub/%s-redhat/stage1" % installation.arch,
-                           "/boot/grub/stage1")
-            buildroot_copy("/usr/share/grub/%s-redhat/stage2" % installation.arch,
-                           "/boot/grub/stage2")
-            buildroot_copy("/usr/share/grub/%s-redhat/e2fs_stage1_5" % \
-                           installation.arch, "/boot/grub/e2fs_stage1_5")
+            copy_file(buildroot+"/usr/share/grub/%s-redhat/stage1" % installation.arch,
+                           buildroot+"/boot/grub/stage1")
+            copy_file(buildroot+"/usr/share/grub/%s-redhat/stage2" % installation.arch,
+                           buildroot+"/boot/grub/stage2")
+            copy_file(buildroot+"/usr/share/grub/%s-redhat/e2fs_stage1_5" % \
+                           installation.arch, buildroot+"/boot/grub/e2fs_stage1_5")
 
             # create temporary devices which are usable by grub (hda, hda1, ..)
             devmap = { } # device mapping
