@@ -145,6 +145,18 @@ class LVM_VOLGROUP:
         self.size = vg["vgsize"]
         return 1
 
+    def start(self):
+        vgchange = "%s vgchange -a y '%s'" % (LVM_VOLGROUP.prog, self.name)
+        (status, rusage, msg) = functions.runScript(script=vgchange,
+                                                    chroot=self.chroot)
+        if status != 0:
+            print "ERROR: Activation of volume group '%s' failed." % \
+                  self.name
+            print msg
+            return 0
+        self.active = True
+        return 1
+
     def stop(self):
         if not self.active:
             return 1
@@ -277,13 +289,13 @@ class LVM_LOGICAL_VOLUME:
     scan = staticmethod(scan)        
 
     def info(name, chroot=None):
-        vgs = LVM_LOGICAL_VOLUME.display(chroot=chroot)
-        if not vgs.has_key(name) or \
-               not vgs[name].has_key("device") or \
-               not vgs[name].has_key("lvsize"):
+        lvs = LVM_LOGICAL_VOLUME.display(chroot=chroot)
+        if not lvs.has_key(name) or \
+               not lvs[name].has_key("device") or \
+               not lvs[name].has_key("lvsize"):
             print "ERROR: Unable to get logical volume information for '%s'." % name
             return None
-        return vgs[name]
+        return lvs[name]
     info = staticmethod(info)
 
     def display(chroot=None):
