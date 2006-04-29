@@ -95,6 +95,7 @@ def getFileList(path, ext, filelist):
         errorprint(_('Error accessing directory %s, %s') % (path, e))
         sys.exit(1)
 
+    dir_list.sort()
     for d in dir_list:
         if os.path.isdir(path + '/' + d):
             filelist = getFileList(path + '/' + d, ext, filelist)

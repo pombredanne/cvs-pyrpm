@@ -168,6 +168,7 @@ def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):
         if len(lst) > 0:
             functions.normalizeList(lst)
             rpconode = format.newChild(formatns, nodename, None)
+            lst.sort()
             for dep in lst:
                 _entryNode(rpconode, formatns, dep)
 
@@ -177,6 +178,7 @@ def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):
     if len(depsList) > 0:
         functions.normalizeList(depsList)
         rpconode = format.newChild(formatns, 'requires', None)
+        depsList.sort()
         for dep in depsList:
             entry = _entryNode(rpconode, formatns, dep)
             if (dep[1] & base.RPMSENSE_PREREQ) != 0:
@@ -185,16 +187,27 @@ def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):
     files = _listVal(pkg['filenames'])
     fileflags = _listVal(pkg['fileflags'])
     filemodes = _listVal(pkg['filemodes'])
+    (writefile, writedir, writeghost) = ([], [], [])
     for (filename, mode, flag) in zip(files, filemodes, fileflags):
         if stat.S_ISDIR(mode):
             if _dirrc.match(filename):
-                files = format.newTextChild(None, 'file',
-                                            _utf8String (filename))
-                files.newProp('type', 'dir')
+                writedir.append(filename)
         elif _filerc.match(filename):
-            files = format.newTextChild(None, 'file', _utf8String (filename))
             if flag & base.RPMFILE_GHOST:
-                files.newProp('type', 'ghost')
+                writeghost.append(filename)
+            else:
+                writefile.append(filename)
+    writefile.sort()
+    for f in writefile:
+        tnode = format.newChild(None, "file", _utf8String(f))
+    writedir.sort()
+    for f in writedir:
+        tnode = format.newChild(None, "file", _utf8String(f))
+        tnode.newProp("type", "dir")
+    writeghost.sort()
+    for f in writeghost:
+        tnode = format.newChild(None, "file", _utf8String(f))
+        tnode.newProp("type", "ghost")
     return pkgNode
 
 
@@ -212,12 +225,26 @@ def metadataFilelistsNode(parent, pkg, pkgid):
     files = _listVal(pkg['filenames'])
     fileflags = _listVal(pkg['fileflags'])
     filemodes = _listVal(pkg['filemodes'])
+    (writefile, writedir, writeghost) = ([], [], [])
     for (filename, mode, flag) in zip(files, filemodes, fileflags):
-        node = pkgNode.newTextChild(None, 'file', _utf8String(filename))
         if stat.S_ISDIR(mode):
-            node.newProp('type', 'dir')
-        elif flag & base.RPMFILE_GHOST:
-            node.newProp('type', 'ghost')
+            writedir.append(filename)
+        else:
+            if flag & base.RPMFILE_GHOST:
+                writeghost.append(filename)
+            else:
+                writefile.append(filename)
+    writefile.sort()
+    for f in writefile:
+        tnode = pkgNode.newChild(None, "file", _utf8String(f))
+    writedir.sort()
+    for f in writedir:
+        tnode = pkgNode.newChild(None, "file", _utf8String(f))
+        tnode.newProp("type", "dir")
+    writeghost.sort()
+    for f in writeghost:
+        tnode = pkgNode.newChild(None, "file", _utf8String(f))
+        tnode.newProp("type", "ghost")
     return pkgNode
 
 

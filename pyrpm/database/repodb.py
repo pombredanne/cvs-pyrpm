@@ -800,19 +800,31 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         filemodes = pkg['filemodes']
         if files == None or fileflags == None or filemodes == None:
             return
+        (writefile, writedir, writeghost) = ([], [], [])
         for (fname, mode, flag) in zip(files, filemodes, fileflags):
             if stat.S_ISDIR(mode):
                 if not filter or \
                    self._dirrc.match(fname) or \
                    fname in self.filerequires:
-                    tnode = node.newChild(None, 'file', self.__escape(fname))
-                    tnode.newProp('type', 'dir')
+                    writedir.append(fname)
             elif not filter or \
                  self._filerc.match(fname) or \
                  fname in self.filerequires:
-                tnode = node.newChild(None, 'file', self.__escape(fname))
                 if flag & RPMFILE_GHOST:
-                    tnode.newProp('type', 'ghost')
+                    writeghost.append(fname)
+                else:
+                    writefile.append(fname)
+        writefile.sort()
+        for f in writefile:
+            tnode = node.newChild(None, "file", self.__escape(f))
+        writedir.sort()
+        for f in writedir:
+            tnode = node.newChild(None, "file", self.__escape(f))
+            tnode.newProp("type", "dir")
+        writeghost.sort()
+        for f in writeghost:
+            tnode = node.newChild(None, "file", self.__escape(f))
+            tnode.newProp("type", "ghost")
 
     def __parseFormat(self, reader, pkg):
         """Parse data from current <format> tag at libxml2.xmlTextReader reader
@@ -873,23 +885,11 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         duplicates (when output by __generateDeps ()) removed."""
 
         fdeps = []
-        for name, flags, version in deps:
-            duplicate = 0
-            for fname, fflags, fversion in fdeps:
-                if name != fname or \
-                   version != fversion or \
-                   (isErasePreReq(flags) or \
-                    isInstallPreReq(flags) or \
-                    isLegacyPreReq(flags)) != \
-                   (isErasePreReq(fflags) or \
-                    isInstallPreReq(fflags) or \
-                    isLegacyPreReq(fflags)) or \
-                   (flags & RPMSENSE_SENSEMASK) != (fflags & RPMSENSE_SENSEMASK):
-                    continue
-                duplicate = 1
-                break
-            if not duplicate:
-                fdeps.append([name, flags, version])
+        for (name, flags, version) in deps:
+            flags &= RPMSENSE_SENSEMASK | RPMSENSE_PREREQ
+            if (name, flags, version) not in fdeps:
+                fdeps.append((name, flags, version))
+        fdeps.sort()
         return fdeps
 
     def __parseDeps(self, reader, ename):

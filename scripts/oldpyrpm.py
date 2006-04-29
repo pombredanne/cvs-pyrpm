@@ -4257,23 +4257,6 @@ class RpmRepo:
             flags &= RPMSENSE_SENSEMASK | RPMSENSE_PREREQ
             if (name, flags, version) not in fdeps:
                 fdeps.append((name, flags, version))
-            #duplicate = 0
-            #for (fname, fflags, fversion) in fdeps:
-            #    if name != fname or \
-            #       version != fversion or \
-            #       (isErasePreReq(flags) or \
-            #        isInstallPreReq(flags) or \
-            #        isLegacyPreReq(flags)) != \
-            #       (isErasePreReq(fflags) or \
-            #        isInstallPreReq(fflags) or \
-            #        isLegacyPreReq(fflags)) or \
-            #       (flags & RPMSENSE_SENSEMASK) != \
-            #           (fflags & RPMSENSE_SENSEMASK):
-            #        continue
-            #    duplicate = 1
-            #    break
-            #if not duplicate:
-            #    fdeps.append((name, flags, version))
         fdeps.sort()
         return fdeps
 
