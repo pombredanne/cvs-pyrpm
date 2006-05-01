@@ -4813,6 +4813,7 @@ srpm_repos = [
         "xen-unstable", None, None, 30),
     ("http://thunk.org/hg/e2fsprogs/", "e2fsprogs", None, None, 20),
     ("http://hg.thinkmo.de/moin/1.5/", "moin", None, None, 30),
+    ("http://hg.fedoraproject.org/hg/fedora/livecd--devel", "livecd--devel", None, None, 30),
 ]
 
 kgit = "rsync://rsync.kernel.org/pub/scm/"
@@ -4825,8 +4826,11 @@ gitrepos = (
     (kgit + "cogito/cogito.git", "cogito", 20),
     (kgit + "linux/hotplug/udev.git", "udev", None),
     ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct", None),
-    #(kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6", 40),
-    # http://git.openvz.org/pub/linux-2.6-openvz
+    (kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6", 40),
+    (kgit + "libs/klibc/klibc.git", "klibc", 40),
+    ("http://git.openvz.org/pub/linux-2.6-openvz", "linux-2.6-openvz", 40),
+    ("http://git.openvz.org/pub/vzctl", "vzctl", 20),
+    ("http://git.openvz.org/pub/vzquota", "vzquota", 20),
 )
 
 def createCGI():
