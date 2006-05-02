@@ -313,7 +313,7 @@ class RpmYum:
                 if not is_multi:
                     self.__addBestPkg(pkgnamehash[name])
                     continue
-                # OK, we have both archs for this package installed, we now
+                # OK, we have several archs for this package installed, we now
                 # need to filter them to 32bit and 64bit buckets and later
                 # use our standard algorithm to select the best matching
                 # package for each arch. 
@@ -406,7 +406,8 @@ class RpmYum:
             # In case of exactarch it needs to match precisely.
             if exactarch and pkglist[0]["arch"] != arch:
                 return 0
-            self.pkgs.append(pkglist[0])
+            if not pkglist[0] in self.pkgs:
+                self.pkgs.append(pkglist[0])
             return 1
         return 0
 
