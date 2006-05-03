@@ -26,6 +26,9 @@ def usage():
   -i                          install packages
   -e                          erase packages
   -R                          no resolve call
+  -r                          show detailed requires for packages
+  -f                          file conflict check
+  -c                          check installed
   -O                          no operation list output
   -d <dir>                    load files from dir
   --installed <dir>           directory with installed rpms
@@ -49,30 +52,23 @@ def progress_write(msg):
 
 # ----------------------------------------------------------------------------
 
-rpms = [ ]
-
-ignore_epoch = 0
-verbose = 0
-installed_dir = None
-installed = [ ]
-dir = None
-resolve = 1
-output_op = 1
-
-tags = pyrpm.rpmconfig.resolvertags
-
 def main():
-    global ignore_epoch, tags
-    global verbose, installed_dir, installed
-    global rpms
-    global dir
-    global output_op
-    global resolve
+    rpms = [ ]
+    ignore_epoch = 0
+    verbose = 0
+    installed_dir = None
+    installed = [ ]
+    dir = None
+    resolve = 1
+    output_op = 1
+    requires = 0
     
 #    if len(sys.argv) == 1:
 #        usage()
 #        sys.exit(0)
 
+    pyrpm.rpmconfig.nofileconflicts = 1
+    pyrpm.rpmconfig.checkinstalled = 0
     ops = [ ]
     i = 1
     op = pyrpm.OP_UPDATE
@@ -93,8 +89,14 @@ def main():
             op = pyrpm.OP_FRESHEN
         elif sys.argv[i] == "-e":
             op = pyrpm.OP_ERASE
+        elif sys.argv[i] == "-f":
+            pyrpm.rpmconfig.nofileconflicts = 0
+        elif sys.argv[i] == "-c":
+            pyrpm.rpmconfig.checkinstalled = 1
         elif sys.argv[i] == "-R":
             resolve = 0
+        elif sys.argv[i] == "-r":
+            requires = 1
         elif sys.argv[i] == "-O":
             output_op = 0
         elif sys.argv[i] == "-E"or sys.argv[i] == "--ignore-epoch":
@@ -108,6 +110,10 @@ def main():
         else:
             ops.append((op, sys.argv[i]))
         i += 1
+
+    pyrpm.rpmconfig.debug = verbose
+    pyrpm.rpmconfig.warning = verbose
+    pyrpm.rpmconfig.verbose = verbose
 
     if dir:
         if not os.path.exists(dir) or not os.path.isdir(dir):
@@ -124,12 +130,6 @@ def main():
                 continue
             ops.append((op, n))
 
-    pyrpm.rpmconfig.debug = verbose
-    pyrpm.rpmconfig.warning = verbose
-    pyrpm.rpmconfig.verbose = verbose
-
-    pyrpm.rpmconfig.checkinstalled = 0
-
 #    if len(ops) == 0:
 #        usage()
 #        sys.exit(0)        
@@ -145,7 +145,7 @@ def main():
 
             r = pyrpm.RpmPackage(pyrpm.rpmconfig, "%s%s" % (installed_dir, f))
             try:
-                r.read(tags=tags)
+                r.read(tags=pyrpm.rpmconfig.resolvertags)
                 r.close()
             except Exception, msg:
                 print msg
@@ -157,9 +157,6 @@ def main():
             print
             del list    
 
-    pyrpm.rpmconfig.checkinstalled = 0
-    pyrpm.rpmconfig.nofileconflicts = 1
-    
     print "==============================================================="
     print "Loading Packages"
     # -- load install/update/erase
@@ -171,7 +168,7 @@ def main():
             progress_write("Reading %d/%d " % (i, len(ops)))
         r = pyrpm.RpmPackage(pyrpm.rpmconfig, f)
         try:
-            r.read(tags=tags)
+            r.read(tags=pyrpm.rpmconfig.resolvertags)
             r.close()
         except Exception, msg:
             print msg
@@ -228,86 +225,101 @@ def main():
         print
     del ops
 
-    print "==============================================================="
+    if pyrpm.rpmconfig.checkinstalled == 1:
 
-    print "- Installed unresolved ----------------------------------------"
-    for pkg in resolver.installed_unresolved:
-        print pkg.getNEVRA()
-        for c in resolver.installed_unresolved[pkg]:
-            print "\t%s" % pyrpm.depString(c)
-    print "- Installed conflicts -----------------------------------------"
-    for pkg in resolver.installed_conflicts:
-        print pkg.getNEVRA()
-        for (c,rpm) in resolver.installed_conflicts[pkg]:
-            print "\t%s: %s" % (pyrpm.depString(c), rpm.getNEVRA())
-    print "- Installed file conflicts ------------------------------------"
-    for pkg in resolver.installed_file_conflicts:
-        print pkg.getNEVRA()
-        for (f,rpm) in resolver.installed_file_conflicts[pkg]:
-            print "\t%s: %s" % (f, rpm.getNEVRA())
+        if len(resolver.installed_unresolved) > 0:
+            print "- Installed unresolved ----------------------------------------"
+        for pkg in resolver.installed_unresolved:
+            print pkg.getNEVRA()
+            for c in resolver.installed_unresolved[pkg]:
+                print "\t%s" % pyrpm.depString(c)
+        if len(resolver.installed_conflicts) > 0:
+            print "- Installed conflicts -----------------------------------------"
+        for pkg in resolver.installed_conflicts:
+            print pkg.getNEVRA()
+            for (c,rpm) in resolver.installed_conflicts[pkg]:
+                print "\t%s: %s" % (pyrpm.depString(c), rpm.getNEVRA())
+        if len(resolver.installed_file_conflicts) > 0:
+            print "- Installed file conflicts ------------------------------------"
+        for pkg in resolver.installed_file_conflicts:
+            print pkg.getNEVRA()
+            for (f,rpm) in resolver.installed_file_conflicts[pkg]:
+                print "\t%s: %s" % (f, rpm.getNEVRA())
 
-    if len(resolver.installs) == 0 and len(resolver.erases) == 0:
-        print "Nothing to do."
-        sys.exit(0)
+        if len(resolver.installs) == 0 and len(resolver.erases) == 0:
+            print "Nothing to do."
+            sys.exit(0)
 
-    print "- Conflicts ---------------------------------------------------"
     conflicts = resolver.getConflicts()
+    if len(conflicts) > 0:
+        print "- Conflicts ---------------------------------------------------"
     for pkg in conflicts:
         for d,rpm in conflicts[pkg]:
             print "%s, %s:\n\t%s" % (pkg.getNEVRA(), rpm.getNEVRA(),
                                     pyrpm.depString(d))
 
-#    print "- File Conflicts ----------------------------------------------"
-#    pyrpm.rpmconfig.nofileconflicts = 0
-#    fconflicts = resolver.getFileConflicts()
-#    for pkg in fconflicts:
-#        print pkg.getNEVRA()
-#        for (f,p) in fconflicts[pkg]:
-#            print "\t%s: %s" % (f, p.getNEVRA())
-#    pyrpm.rpmconfig.nofileconflicts = 1
+    if pyrpm.rpmconfig.nofileconflicts == 0:
+        fconflicts = resolver.getFileConflicts()
+        if len(fconflicts) > 0:
+            print "- File Conflicts ----------------------------------------------"
+        for pkg in fconflicts:
+            print pkg.getNEVRA()
+            for (f,p) in fconflicts[pkg]:
+                print "\t%s: %s" % (f, p.getNEVRA())
 
-    print "---------------------------------------------------------------"
+    if resolve == 1:
+        print "==============================================================="
+        print "Resolving"
+        if resolver.resolve() != 1:
+            sys.exit(-1)
 
-    if resolve == 1 and resolver.resolve() != 1:
-        sys.exit(-1)
+    if verbose:
+        print "- Installs ----------------------------------------------------"
+        for pkg in resolver.installs:
+            print "\t%s" % pkg.getNEVRA()
+        print "- Updates -----------------------------------------------------"
+        for pkg in resolver.updates:
+            print "\t%s" % pkg.getNEVRA()
+            for p in resolver.updates[pkg]:
+                print "\t\t%s" % p.getNEVRA()
+        print "- Obsoletes ---------------------------------------------------"
+        for pkg in resolver.obsoletes:
+            print "\t%s" % pkg.getNEVRA()
+            for p in resolver.obsoletes[pkg]:
+                print "\t\t%s" % p.getNEVRA()
+        print "- Erases ------------------------------------------------------"
+        for pkg in resolver.erases:
+            print "\t%s" % pkg.getNEVRA()
+        print "---------------------------------------------------------------"
 
-#    for pkg in resolver.installs:
-#        if resolver.updates.has_key(pkg):
-#            print "update: %s" % pkg.getNEVRA()
-#        else:
-#            print "install: %s" % pkg.getNEVRA()
-#    for pkg in resolver.erases:
-#        print "erase: %s" % pkg.getNEVRA()
+    if requires:
+        print "==============================================================="
+        print "Requires - '*' marks prereqs"
+        if pyrpm.rpmconfig.checkinstalled == 1:
+            list = resolver.getDatabase().getPkgs()
+        else:
+            list = resolver.installs
+        for pkg in list:
+            for dep in pkg["requires"]:
+                reqs = [ ]
+                if pyrpm.isLegacyPreReq(dep[1]):
+                    reqs.append("legacy")
+                if pyrpm.isInstallPreReq(dep[1]):
+                    reqs.append("install")
+                if pyrpm.isErasePreReq(dep[1]):
+                    reqs.append("erase")
+                if len(reqs) > 0:
+                    print "  %s: '%s' *%s*" % (pkg.getNEVRA(),
+                                               pyrpm.depString(dep),
+                                               " ".join(reqs))
+                else:
+                    print "  %s: '%s'" % (pkg.getNEVRA(), pyrpm.depString(dep))
+        print "==============================================================="
 
-#    for pkg in resolver.installs:
-#        for dep in pkg["requires"]:
-#            reqs = ""
-#            if pyrpm.isLegacyPreReq(dep[1]):
-#                reqs += "legacy "
-#            if pyrpm.isInstallPreReq(dep[1]):
-#                reqs += "install "
-#            if pyrpm.isErasePreReq(dep[1]):
-#                reqs += "erase "
-#            print "%s: (%s): %s" % (pkg.getNEVRA(), dep[0], reqs)
-#    sys.exit(0)
+    cl = time.time()
+    unresolved = resolver.getUnresolvedDependencies()
+    print "resolver.getUnresolvedDependencies(): time=%f" % (time.time() - cl)
 
-#    print "- Installs ----------------------------------------------------"
-#    for pkg in resolver.installs:
-#        print "\t%s" % pkg.getNEVRA()
-#    print "- Updates -----------------------------------------------------"
-#    for pkg in resolver.updates:
-#        print "\t%s" % pkg.getNEVRA()
-#        for p in resolver.updates[pkg]:
-#            print "\t\t%s" % p.getNEVRA()
-#    print "- Obsoletes ---------------------------------------------------"
-#    for pkg in resolver.obsoletes:
-#        print "\t%s" % pkg.getNEVRA()
-#        for p in resolver.obsoletes[pkg]:
-#            print "\t\t%s" % p.getNEVRA()
-#    print "- Erases ------------------------------------------------------"
-#    for pkg in resolver.erases:
-#        print "\t%s" % pkg.getNEVRA()
-#    print "---------------------------------------------------------------"
 
     installs = resolver.installs
     updates = resolver.updates
@@ -315,6 +327,8 @@ def main():
     erases = resolver.erases
     del resolver
 
+    print "==============================================================="
+    print "Ordering"
     orderer = pyrpm.RpmOrderer(pyrpm.rpmconfig, installs, updates, obsoletes,
                                erases)
 
