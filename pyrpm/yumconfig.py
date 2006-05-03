@@ -216,6 +216,8 @@ class YumConf(Conf):
                      "proxy",
                      "proxy_username",
                      "proxy_password",
+                     "plugins",
+                     "metadata_expire",
                      # undocumented
                      "pkgpolicy",
                      )
