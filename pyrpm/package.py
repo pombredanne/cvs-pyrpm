@@ -412,6 +412,7 @@ class RpmPackage(RpmData):
                 sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
             if status != 0:
                 self.config.printError("Error running pre install script for package %s" % self.getNEVRA())
+                self.config.printError(log)
         self.__extract(db)
         if self.config.printhash:
             self.config.printInfo(0, "\n")
@@ -428,6 +429,7 @@ class RpmPackage(RpmData):
                 sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "postin", str(rusage[0]), str(rusage[1])))
             if status != 0:
                 self.config.printError("Error running post install script for package %s" % self.getNEVRA())
+                self.config.printError(log)
 
     def erase(self, db=None):
         """Open package, read its header and remove it.
@@ -454,6 +456,7 @@ class RpmPackage(RpmData):
                 sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
             if status != 0:
                 self.config.printError("Error running pre uninstall script for package %s" % self.getNEVRA())
+                self.config.printError(log)
         # Generate the rpmfileinfo list, needed for erase verification
         self.__generateFileInfoList()
         # Remove files starting from the end (reverse process to install)
@@ -473,7 +476,7 @@ class RpmPackage(RpmData):
                 self.config.printDebug(1, "File/Dir %s still in db, not removing..." % f)
                 continue
             if os.path.isdir(f):
-                if os.listdir(f) == []:
+                if len(os.listdir(f)) == 0:
                     try:
                         os.rmdir(f)
                     except OSError:
@@ -500,9 +503,22 @@ class RpmPackage(RpmData):
             self.config.printInfo(0, "#"*(30-int(30*n/nfiles)) + "\n")
         else:
             self.config.printInfo(1, "\n")
-        # Hack to prevent errors for glibc and bash postunscripts
-        #if self["name"] == "glibc" or self["name"] == "bash":
-        #    return
+        # Cleanup phase after normal file removal. We now check which
+        # directories were created by this package (but now owned) and remove
+        # them if they are:
+        #  - Not owned by any other package
+        #  - Empty
+        for dname in self["dirnames"]:
+            dname = os.path.dirname(dname)
+            while len(dname) > 1:
+                if db.numDuplicates(dname) == 0 and len(os.listdir(dname)) == 0:
+                    os.rmdir(dname)
+                dname = os.path.dirname(dname)
+        # Hack to prevent errors for glibc and bash postunscripts for our
+        # pyrpmcheckinstall script
+        if sys.argv[0].endswith("pyrpmcheckinstall") and \
+           (self["name"] == "glibc" or self["name"] == "bash"):
+            return
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None and not self.config.noscripts:
             try:
@@ -514,6 +530,7 @@ class RpmPackage(RpmData):
                 sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "preun", str(rusage[0]), str(rusage[1])))
             if status != 0:
                 self.config.printError("Error running post uninstall script for package %s" % self.getNEVRA())
+                self.config.printError(log)
 
     def verify(self, db, resolver):
         """Verify a package, using db for multilib conflict resolution and
