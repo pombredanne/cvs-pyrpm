@@ -85,14 +85,101 @@ Requires and provides can be versioned and have additional flags like <, <=, ==,
 >=, > which need to be handled properly.
 
 
+How are versions compared? (by Tom "Spot" Callaway and Paul Nasrat)
+-------------------------------------------------------------------
+
+The rpmvercmp algorithm compares two labels (like the Version or the Release
+tag) to see which is newer.
+
+In this algorithm, "digits" and "letters" are defined as ASCII digits
+('0'-'9') and ASCII letters ('a'-'z' and 'A'-'Z'). Other Unicode digits and
+letters (like accented Latin letters) are not considered letters. ASCII
+letters and digits are called "alphanumeric" characters.
+
+Please note that the algorithm's actions is undefined in some cases, in a ways
+may make the resulting comparisons stop working sanely (see [WWW]
+https://bugzilla.redhat.com/bugzilla/show_bug.cgi?id=178798 for an example
+where the order of the comparison is more important than the operands). To
+avoid these, make sure that all your labels start and end with alphanumeric
+characters. So while things like "1.", "+a", or "_" are allowed as labels, the
+result of such comparisons are undefined. For the exact (non-symmetric)
+algorithm, see lib/vercmp.c in the RPM source code. The following algorithm is
+a simplification based on the version available in FC4, and is considered to
+be stable, as the last time it changed in any way was in January 2003.
+
+ 1. Each label is separated into a list of maximal alphabetic or numeric
+sections, with separators (non-alphanumeric characters) ignored. If there is
+any extra non-alphanumeric character at the end, that. So, '2.0.1' becomes
+('2', '0', '1'), while ('2xFg33.+f.5') becomes ('2', 'xFg', '33', 'f', '5').
+
+ 2. All numbers are converted to their numeric value. So '10' becomes 10,
+'000230' becomes 230, and '00000' becomes 0.
+
+ 3. The elements in the list are compared one by one using the following
+algorithm. If two elements are decided to be different, the label with the
+newer element wins as the newer label. If the elements are decided to be
+equal, the next elements are compared until we either reach different elements
+or one of the lists runs out. In case one of the lists run out, the other
+label wins as the newer label. So, for example, (1, 2) is newer than (1, 1),
+and (1, 2, 0) is newer than (1, 2).
+
+The algorithm for comparing list elements is as follows:
+
+ 1. If one of the elements is a number, while the other is alphabetic, the
+numeric elements is considered newer. So 10 is newer than 'abc', and 0 is
+newer than 'Z'.
+
+ 2. If both the elements are numbers, the larger number is considered newer.
+So 5 is newer than 4 and 10 is newer than 2. If the numbers are equal, the
+elements are decided equal.
+
+ 3. If both the elements are alphabetic, they are compared using the Unix
+strcmp function, with the greater string resulting in a newer element. So 'b'
+is newer than 'a', 'add' is newer than 'ZULU' (because lowercase characters
+win in strcmp comparisons), and 'aba' is newer than 'ab'. If the strings are
+identical, the elements are decided equal.
+
+Examples
+
+Some random examples, to make sure you understand the rpmvercmp algorithm:
+
+   1.  '1.0010' is newer than '1.9' because 10 is more than 9.
+
+   2.  '1.05' is equal to '1.5', because both '05' and '5' are treated as the
+number 5.
+
+   3.  '1.0' is newer than '1', because it has one more element in the list,
+while previous elements are equal.
+
+   4.  '2.50' is newer than '2.5', because 50 is more than 5.
+
+   5.  'fc4' is equal to 'fc.4', because the alphabetic and numeric sections
+will always get separated into different elements anyway.
+
+   6.  'FC5' is older than 'fc4', because it uses uppercase letters.
+
+   7.  '2a' is older than '2.0', because numbers are considered newer than
+letters.
+
+   8.  '1.0' is newer than '1.fc4' because numbers are considered newer than
+letters.
+
+   9.  '3.0.0_fc' is the same as '3.0.0.fc', because the separators themselves
+are not important.
+
+
 What are obsoletes?
 -------------------
 
 Sometimes it is necessary to replace an installed package with a new package
-that provides the same functionality as the installed one. By obsoleting that
+that provides the same functionality as an installed one. By obsoleting that
 installed package in the new package the installed package will be removed
 during an update and replaced with the new package. Obsoletes can be versioned
 and have flags just like requires and provides.
+
+An example was when ucd-snmp got replaced by net-snmp. There the new net-snmp
+package contained a "Obsoletes: ucd-snmp" and, as it provided the
+functionality of the old ucd-snmp a "Provides: ucd-snmp".
 
 
 What are conflicts?
@@ -167,6 +254,18 @@ requirments and add the best matching package to I. This process is repeated
 until all requirments are fullfilled or aborted if they can't be resolved
 using R.
 
+An important fact is that dependencies are "arch-less", meaning if you have a
+requirement on multilib systems this can lead to 64bit packages being pulled
+it from 32bit packages and vice versa. For libraries this can and usally will
+automatically be prevented as 64bit libraries on 64bit systems have a (64bit) 
+at the end of their provides, so they specifically and correcltly will be
+required by binaries linked against them.
+
+More problematic on the other hand are development packages where there a
+package foo-devel typically only has a "Requires: foo" as a requirement which
+would pull in a 64bit foo package for a 32bit foo-devel package, which is
+most of the time not what you want.
+
 
 What is special about multilib systems?
 ---------------------------------------
@@ -180,6 +279,88 @@ handling is done. If the color larger than 0 and both colors are equal, again,
 normal file conflicts and handling is done. If both are larger than 0 and
 differ then the "higher" color wins, meaning the 64bit binary. No file conflicts
 will be done for that case either.
+
+
+How do Updates work?
+--------------------
+
+There are 2 basic forms for updates: Specified or complete updates. For the
+former this is easily done by looking for packages that match the ones given
+on the command line. Those can either be names (with version, release and arch
+information, of course), regular expressions or binary rpm packages. For the
+later a special pre updates pass has to be done in order to correctly obsolete
+old packages with newer ones (like the changes from xorg-x11 to modular-x from
+FC3 to FC4). Other than that it's identical to the specified case where the
+names to be updates are simply the names of all packages installed on the
+system.
+
+For a single arch system it is fairly easy to find the best update package: We
+just look for the package with the "highest" arch (except if exactarch is
+specified in which case the arch of the update package needs to exactly match
+the one of the installed package) and then the highest version.
+
+For multilib system things get a lot trickier. If the given update package is
+either marked as "install only" (like usually kernel packages) or if no package
+with that name has already been installed we use the simple algorithm as
+before, selecting the highest arch/version match for the update. If exactarch
+has been set then we just need to go through all installed archs of each name
+and find the highest versions for each arch.
+
+If exactarch isn't set we now need to determine if more than one major arch
+for a name is installed. Major arch in this case means either 32bit or 64bit,
+e.g i386, i486, i586, i686, athlon for 32bit and x86_64 for 64bit. If there is
+only one we can and do allow even major arch changes (from 32bit to 64bit and
+vice versa). If packages for more than one major arch are already installed we
+need to find updates for each of the installed major archs and do the final
+selection as in the previous cases.
+
+
+How do pre/post install/uninstall scripts and triggers work?
+------------------------------------------------------------
+
+RPM provides the ability to have packages execute a set of scripts before and
+after installation and uninstallation. This often is needed to either prepare
+the system for the actual installation, do some post processing after a
+package is installed, some pre processing before a package is uninstalled or
+cleanup after a packages has been uninstalled.
+
+Although the basic idea is fairly simple it still can cause some confusion
+when scripts are executed for example during updates of packages. This is the
+order how an update of a package is done in relation to the scripts:
+
+ * Run %pre of new package
+ * Install new files
+ * Run %post of new package
+ * Run %preun of old package
+ * Delete any old files not overwritten by newer ones
+ * Run %postun of old package
+
+So during an update the new package gets installed first with all it's scripts
+and then the old package with all it's scripts get uninstalled.
+
+Sometimes it is necessary for packages to run scripts when other packages are
+installed or uninstalled. This can be done using trigger scripts. Triggers are
+therefore very similar to requirements and are written the same way in the
+spec files. The order of how and when trigger scripts are called looks like
+this:
+
+ * Run %pre for new version of package being installed
+ * Install new files
+ * Run %post for new version of package being installed
+ * Run %triggerin from other packages set off by new install
+ * Run %triggerin of new package
+ * Run %triggerun of old package
+ * Run %triggerun from other packages set off by old uninstall
+ * Run %preun for old version of package being removed
+ * Delete any old files not overwritten by newer ones
+ * Run %postun for old version of package being removed
+ * Run %triggerpostun of old package
+ * Run %triggerpostun from other packages set off by old uninstall
+
+Looks a little more complicated, but allows to perform postprocessing by other
+packages after some package has been installed or uninstalled. Take notice
+that there isn't a %triggerpostin and that %triggerin basically behaves like a
+%triggerpostin.
 
 
 How does a binary rpm look like?
