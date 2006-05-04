@@ -661,21 +661,17 @@ class RpmResolver:
             for pkg in self.erases:
                 # check if provides are required and not provided by another
                 # package
-                for p in pkg["provides"]:
-                    sr = self.database.searchRequires(p[0], p[1], p[2])
-                    if len(sr) > 0:
-                        sp = self.database.searchProvides(p[0], p[1], p[2])
-                        if len(sp) > 0:
-                            continue
-                        for p in sr:
-                            # unresolved dep
-                            all_unresolved.setdefault(p, [ ]).extend(sr[p])
+                for dep in pkg["provides"]:
+                    sr = self.database.searchRequires(dep[0], dep[1], dep[2])
+                    for p in sr:
+                        for d in sr[p]:
+                            sp = self.database.searchProvides(d[0], d[1], d[2])
+                            if len(sp) > 0:
+                                continue
+                            all_unresolved.setdefault(p, [ ]).append(d)
                 # check if filenames are required and not provided by another
                 # package
                 for f in pkg["filenames"]:
-# EVIL S**T !!
-#                    if not self.database.provides_list.has_key(f):
-#                        continue
                     sr = self.database.searchRequires(f, 0, "")
                     if len(sr) > 0:
                         sf = self.database.searchFilenames(f)
@@ -687,16 +683,13 @@ class RpmResolver:
 
             # check new packages
             for pkg in self.installs:
-                unresolved = [ ]
                 for u in pkg["requires"]:
                     if u[0][:7] == "rpmlib(": # drop rpmlib requirements
                         continue
                     s = self.database.searchDependency(u[0], u[1], u[2])
                     if len(s) > 0: # found something
                         continue
-                    unresolved.append(u)
-                if len(unresolved) > 0:
-                    all_unresolved.setdefault(pkg, [ ]).extend(unresolved)
+                    all_unresolved.setdefault(pkg, [ ]).append(u)
 
             return all_unresolved
 
