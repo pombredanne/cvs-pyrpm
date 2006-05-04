@@ -33,7 +33,13 @@ class RpmMemoryDB(db.RpmDatabase):
         self.names = { }  # name: [pkg, ..]
         self.__len__ = self.pkgs.__len__
         self.__getitem__ = self.pkgs.__getitem__
-        self.clear()
+        self.provides_list = lists.ProvidesList()
+        self.filenames_list = lists.FilenamesList()
+        self.requires_list = lists.RequiresList()
+        self.conflicts_list = lists.ConflictsList()
+        self.obsoletes_list = lists.ObsoletesList()
+        self.triggers_list = lists.TriggersList()
+        RpmMemoryDB.clear(self)
 
     def __contains__(self, pkg):
         if pkg in self.names.get(pkg["name"], []):
@@ -42,15 +48,16 @@ class RpmMemoryDB(db.RpmDatabase):
 
     # clear all structures
     def clear(self):
+        db.RpmDatabase.clear(self)
         self.pkgs[:] = [ ]
         self.names.clear()
 
-        self.provides_list = lists.ProvidesList()
-        self.filenames_list = lists.FilenamesList()
-        self.requires_list = lists.RequiresList()
-        self.conflicts_list = lists.ConflictsList()
-        self.obsoletes_list = lists.ObsoletesList()
-        self.triggers_list = lists.TriggersList()
+        self.provides_list.clear()
+        self.filenames_list.clear()
+        self.requires_list.clear()
+        self.conflicts_list.clear()
+        self.obsoletes_list.clear()
+        self.triggers_list.clear()
 
     def open(self):
         """If the database keeps a connection, prepare it."""
@@ -197,6 +204,7 @@ class RpmMemoryDB(db.RpmDatabase):
             tsource = self.source[7:]
         else:
             tsource = self.source
+
         if self.buildroot != None:
             return self.buildroot + tsource
         else:
