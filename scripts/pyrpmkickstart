@@ -219,37 +219,14 @@ def main():
             return 1
 
         ### analyze stage2 ###
-        buildstamp = "%s/.buildstamp" % stage2_img_dir
-        if not os.path.exists(buildstamp):
+        if not os.path.exists("%s/.buildstamp" % stage2_img_dir):
             print "ERROR: Buildstamp information is missing in stage2."
-            return
-        try:
-            fd = open(buildstamp, "r")
-        except Exception, msg:
-            print "ERROR: Failed to open buildstamp information in stage2: %s" % msg
             return 1
-        lines = fd.readlines()
-        fd.close()
-
-        if len(lines) < 3:
-            if len(lines) == 1:
-                # RHEL-2.1
-                source_release = "Red Hat Enterprise Linux"
-                source_version = "2.1"
-            else:
-                print "ERROR: Buildstamp information in stage2 is malformed:", \
-                      lines
-                return 1
-
-        source_date = string.strip(lines[0])
-        if len(lines) > 2:
-            source_release = string.strip(lines[1])
-            source_version = string.strip(lines[2])
-        i = source_date.find(".")
-        if i != -1 and len(source_date) > i+1:
-            arch = source_date[i+1:]
-            source_date = source_date[:i]
-        del lines
+        bs = get_buildstamp_info(stage2_img_dir)
+        if not bs:
+            print "ERROR: Failed to get buildstamp information from stage2"
+            return 1
+        (source_release, source_version, arch) = bs
 
         ### create stage2 chroot ###
 
@@ -345,25 +322,35 @@ def main():
 
     else: # no_stage2
         stage2_dir = ""
-        source_release = "Red Hat Enterprise Linux"
-        pkgs = source.repo.getPkgsByName("redhat-release")
-        if len(pkgs) == 0:
-            source_release = "Fedora Core"
-            pkgs = source.repo.getPkgsByName("fedora-release")
-        if len(pkgs) == 0:
-            print "ERROR: Could not fing release pacakge in source."
-            return
-        if len(pkgs) != 1:
-            print "ERROR: Found more than one release package, exiting."
-            return
-        source_version = pkgs[0]["version"]
-        if len(source_version) == 0:
-            print "ERROR: No valid version of installation source"
-            return 1
-        i = string.find(pkgs[0]["release"], "rawhide")
-        if i != -1:
-            source_version += ".90" # bad fix for rawhide
-        del i
+        source_release = None
+        
+        # get discinfo if available
+        if source.get(".discinfo"):
+            di = get_discinfo(source.get(".discinfo"))
+            if di:
+                (source_release, source_version, arch) = di
+
+        # get source information via release package if discinfo was not found
+        if not source_release:
+            source_release = "Red Hat Enterprise Linux"
+            pkgs = source.repo.getPkgsByName("redhat-release")
+            if len(pkgs) == 0:
+                source_release = "Fedora Core"
+                pkgs = source.repo.getPkgsByName("fedora-release")
+            if len(pkgs) == 0:
+                print "ERROR: Could not fing release package in source."
+                return
+            if len(pkgs) != 1:
+                print "ERROR: Found more than one release package, exiting."
+                return
+            source_version = pkgs[0]["version"]
+            if len(source_version) == 0:
+                print "ERROR: No valid version of installation source"
+                return 1
+            i = string.find(pkgs[0]["release"], "rawhide")
+            if i != -1 and string.find(source_version, ".") == -1:
+                source_version += ".90" # bad fix for rawhide
+            del i
 
     if not arch:
         # get installation arch
@@ -806,9 +793,8 @@ def main():
                     dict = LVM_PHYSICAL_VOLUME.info(partition[part]["device"],
                                                     chroot=stage2_chroot)
 
-                    if dict.has_key("vgname"):
+                    if dict and dict.has_key("vgname"):
                         volgroup.setdefault(dict["vgname"], { }).setdefault("partitions", [ ]).append(partition[part]["device"])
-
                 elif partition[part]["fstype"] in \
                        [ "ext2", "ext3", "xfs", "jfs", "reiserfs" ] and \
                        partition[part]["native_type"] == 0x83:
@@ -833,7 +819,8 @@ def main():
 
         volumes = LVM_LOGICAL_VOLUME.display(chroot=stage2_chroot)
         for device in volumes:
-            if not volumes[device]["vgname"] in volgroup:
+            if not volumes[device].has_key("vgname") or \
+                   not volumes[device]["vgname"] in volgroup:
                 continue
             fstype = detectFstype(device)
             if fstype:

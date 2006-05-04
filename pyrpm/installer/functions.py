@@ -165,6 +165,66 @@ def get_installation_info(device, fstype, dir):
         umount(dir)
         return dict
 
+def get_buildstamp_info(dir):
+    release = version = arch = date = None
+    
+    buildstamp = "%s/.buildstamp" % dir
+    try:
+        fd = open(buildstamp, "r")
+    except Exception, msg:
+        return None
+
+    lines = fd.readlines()
+    fd.close()
+
+    if len(lines) < 3:
+        if len(lines) == 1:
+            # RHEL-2.1
+            release = "Red Hat Enterprise Linux"
+            version = "2.1"
+        else:
+            print "ERROR: Buildstamp information in '%s' is malformed." % dir
+            return None
+
+    date = string.strip(lines[0])
+    if len(lines) > 2:
+        release = string.strip(lines[1])
+        version = string.strip(lines[2])
+    i = date.find(".")
+    if i != -1 and len(date) > i+1:
+        arch = date[i+1:]
+        date = date[:i]
+    del lines
+
+    return (release, version, arch)
+
+def get_discinfo(discinfo):
+    release = version = arch = date = None
+    
+    try:
+        fd = open(discinfo, "r")
+    except Exception, msg:
+        return None
+
+    lines = fd.readlines()
+    fd.close()
+
+    if len(lines) < 4:
+        print "ERROR: .discinfo in '%s' is malformed." % discinfo
+        return None
+
+    date = string.strip(lines[0])
+    splits = string.rsplit(string.strip(lines[1]), " ", maxsplit=1)
+    if not len(splits) == 2:
+        print "ERROR: .discinfo in '%s' is malformed." % discinfo
+        return None
+    release = string.strip(splits[0])
+    version = string.strip(splits[1])
+    arch = string.strip(lines[2])
+    del lines
+
+    return (release, version, arch)
+
 def get_size_in_byte(size):
     _size = size.strip()
     if _size[-1] == "b" or _size[-1] == "B":
