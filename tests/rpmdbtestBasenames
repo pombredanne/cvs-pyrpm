@@ -1,9 +1,14 @@
-import bsddb
+import bsddb, sys
 from struct import unpack
 
 from pyrpm import *
 
-db = bsddb.hashopen("/var/lib/rpm/Basenames", "r")
+if len(sys.argv) > 1:
+        dbpath = sys.argv[1]
+else:
+        dbpath = "/var/lib/rpm"
+
+db = bsddb.hashopen(dbpath+"/Basenames", "r")
 
 for key in db.keys():
 	data = db[key]

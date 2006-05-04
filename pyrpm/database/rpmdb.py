@@ -42,10 +42,25 @@ class RpmDB(memorydb.RpmMemoryDB):
         self.netsharedpath = self.__getNetSharedPath()
 
     def open(self):
-        pass
+        self.__openDB4()
 
     def close(self):
-        pass
+        self.basenames_db      = None
+        self.conflictname_db   = None
+        self.dirnames_db       = None
+        self.filemd5s_db       = None
+        self.group_db          = None
+        self.installtid_db     = None
+        self.name_db           = None
+        self.packages_db       = None
+        self.providename_db    = None
+        self.provideversion_db = None
+        self.requirename_db    = None
+        self.requireversion_db = None
+        self.sha1header_db     = None
+        self.sigmd5_db         = None
+        self.triggername_db    = None
+        self.dbopen = False
 
     def read(self):
         # Never fails, attempts to recover as much as possible

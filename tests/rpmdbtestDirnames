@@ -5,6 +5,7 @@ from pyrpm import *
 
 db = bsddb.btopen("/var/lib/rpm/Dirnames", "r")
 
+print len(db.keys())
 for key in db.keys():
 	data = db[key]
 	print key

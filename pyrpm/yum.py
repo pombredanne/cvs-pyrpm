@@ -278,8 +278,6 @@ class RpmYum:
         # updates fast for specific installed archs of packages.
         pkgnamehash = {}
         pkgnamearchhash = {}
-        # HACK! Need to fix yumconfig.py, main section seems to be broken
-        #self.config.exactarch = True
         for pkg in pkglist:
             pkgnamehash.setdefault(pkg["name"], []).append(pkg)
             pkgnamearchhash.setdefault(pkg["name"], {}).setdefault(pkg["arch"], []).append(pkg)
@@ -301,7 +299,7 @@ class RpmYum:
             if not self.config.exactarch:
                 arch = None
                 is_multi = False
-                # Check if the installed packages are 32 and 64 bit.
+                # Check if all packages share them same buildarch translation.
                 for ipkg in dbpkgs:
                     if arch != None and arch != buildarchtranslate[ipkg["arch"]]:
                         is_multi = True
@@ -324,6 +322,8 @@ class RpmYum:
                     del pkgnamearchhash[name][arch]
             # Ok, now we have to find matching updates for all installed archs.
             for ipkg in dbpkgs:
+                # If we are not doing exactarch we allow archs to be switched
+                # inside of the given buildarch translation.
                 if not self.config.exactarch:
                     arch = buildarchtranslate[ipkg["arch"]]
                     march = self.config.machine
@@ -333,6 +333,8 @@ class RpmYum:
                 if not pkgnamearchhash[name].has_key(arch):
                     self.config.printError("Can't find update package with matching arch for package %s" % ipkg.getNEVRA())
                     return 0
+                # Find the best matching package for the given list of packages
+                # and archs.
                 self.__addBestPkg(pkgnamearchhash[name][arch], march, True)
                 # Trick to avoid multiple adds for same arch, after handling
                 # it once we clear the update package list.
@@ -496,12 +498,8 @@ class RpmYum:
                 pkg["conflicts"] = []
                 pkg["obsoletes"] = []
         # Filter newest packages
-        if self.config.timer:
-            time1 = clock()
         # Shouldn't be needed anymore. Verify...
         #self.pkgs = selectNewestPkgs(self.pkgs)
-        if self.config.timer:
-            self.config.printInfo(0, "selectNewestPkgs took %s seconds\n" % (clock() - time1))
         if self.config.timer:
             time1 = clock()
         # Add packages to be processed to our operation resolver

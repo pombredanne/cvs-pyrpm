@@ -12,6 +12,8 @@ db = bsddb.hashopen(dbpath+"/Packages", "r")
 
 rpmio = RpmFileIO(config, "foo")
 
+print db.keys()
+
 for key in db.keys():
 	data = db[key]
 	val = unpack("i", key)[0]

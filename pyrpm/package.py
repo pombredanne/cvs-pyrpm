@@ -508,12 +508,15 @@ class RpmPackage(RpmData):
         # them if they are:
         #  - Not owned by any other package
         #  - Empty
-        for dname in self["dirnames"]:
-            dname = os.path.dirname(dname)
-            while len(dname) > 1:
-                if db.numDuplicates(dname) == 0 and len(os.listdir(dname)) == 0:
-                    os.rmdir(dname)
+        if len(self["dirnames"]) > 0:
+            for dname in self["dirnames"]:
                 dname = os.path.dirname(dname)
+                while len(dname) > 1:
+                    if db.numFileDuplicates(dname) == 0 and \
+                       os.path.isdir(dname) and \
+                       len(os.listdir(dname)) == 0:
+                        os.rmdir(dname)
+                    dname = os.path.dirname(dname)
         # Hack to prevent errors for glibc and bash postunscripts for our
         # pyrpmcheckinstall script
         if sys.argv[0].endswith("pyrpmcheckinstall") and \
