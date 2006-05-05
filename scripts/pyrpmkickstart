@@ -2127,6 +2127,8 @@ def main():
     create_dir(buildroot, "/etc/rpm")
     create_dir(buildroot, "/etc/sysconfig")
     create_dir(buildroot, "/proc")
+    create_dir(buildroot, "/proc/self/fd")
+    create_file(buildroot, "/proc/self/fd/0", [])
     create_dir(buildroot, "/root")
     if (installation.release == "RHEL" and installation.version >= 4) or \
            (installation.release == "FC" and installation.version >= 2):
@@ -2374,9 +2376,11 @@ def main():
         create_file(buildroot, conf, content)
 
     # /etc/rpm/platform
-    if ks.has_key("install") and not os.path.exists(buildroot+"/etc/rpm/platform"):
-        create_file(buildroot, "/etc/rpm/platform", 
-                    [ "%s-redhat-linux" % installation.arch ])
+    # disable for now, it writes i386 instead of i686 and then rpm won't
+    # install i586 rpms anymore: (TODO: re-enable this again)
+    #if ks.has_key("install") and not os.path.exists(buildroot+"/etc/rpm/platform"):
+    #    create_file(buildroot, "/etc/rpm/platform", 
+    #                [ "%s-redhat-linux" % installation.arch ])
 
     # /var/log/lastlog
     if ks.has_key("install"):
