@@ -353,7 +353,7 @@ class RpmYum:
 
     def remove(self, name):
         dict = buildPkgRefDict(self.pydb.getPkgs())
-        self.pkgs.extend(findPkgByNames([f,], self.pydb.getPkgs(), dict))
+        self.pkgs.extend(findPkgByNames([name,], self.pydb.getPkgs(), dict))
 
     def groupRemove(self, name):
         args = self.getGroupPackages(name)
