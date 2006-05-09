@@ -1,0 +1,475 @@
+#!/usr/bin/python
+#
+# (c) 2005,2006 Red Hat, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2004, 2005 Red Hat, Inc.
+#
+# AUTHOR: Thomas Woerner <twoerner@redhat.com>
+#
+
+import sys, os, getopt, math
+
+PYRPMDIR = ".."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+import pyrpm
+
+# ----------------------------------------------------------------------------
+
+sout =  os.readlink("/proc/self/fd/1")
+devpts = 0
+if sout[0:9] == "/dev/pts/":
+    devpts = 1
+
+def progress_write(msg):
+    if devpts == 1:
+        sys.stdout.write("\r")
+    sys.stdout.write(msg)
+    if devpts == 0:
+        sys.stdout.write("\n")
+    sys.stdout.flush()
+
+# ----------------------------------------------------------------------------
+
+def usage():
+    print """Usage: %s <options> <rpm package>...
+
+OPTIONS:
+  -h  | --help           print help
+  -v  | --verbose        be verbose, and more, ..
+  -d <dir>               load rpms from dir <dir> (multi)
+  -i                     simulate install instead of update
+  -C                     no conflict checks
+  -F                     no file conflict checks
+  -R                     no resolving
+  -p <prefix>            use prefix <prefix> for output files
+
+This program prints a tree for package dependencies if '-I' is not given else
+it iterates though the normal ordering process and writes the component and
+loop graph.
+""" % sys.argv[0]
+
+# ----------------------------------------------------------------------------
+
+rpms = [ ]
+
+verbose = 0
+install = 0
+dirs = [ ]
+no_resolving = 0
+prefix = ""
+
+if __name__ == '__main__':
+    try:
+        (opts, args) = getopt.getopt(sys.argv[1:], "hvd:iCFRp:",
+                                     [ "help", "verbose" ])
+    except:
+        usage()
+        sys.exit(1)
+
+    for (opt, val) in opts:
+        if opt in [ "-h", "--help" ]:
+            usage()
+            sys.exit(1)
+        elif opt in [ "-v", "--verbose" ]:
+            verbose += 1
+        elif opt == "-i":
+            install = 1
+        elif opt == "-d":
+            dirs.append(val)
+        elif opt == "-R":
+            no_resolving = 1
+        elif opt == "-p":
+            prefix = val
+        elif opt == "-C":
+            pyrpm.rpmconfig.noconflictcheck = 1
+        elif opt == "-F":
+            pyrpm.rpmconfig.nofileconflictcheck = 1
+        else:
+            print "Unknown option '%s'" % opt
+            usage()
+            sys.exit(1)
+
+    pyrpm.rpmconfig.verbose = verbose
+    if pyrpm.rpmconfig.verbose > 3:
+        pyrpm.rpmconfig.debug = pyrpm.rpmconfig.verbose - 3
+    if pyrpm.rpmconfig.verbose > 2:
+        pyrpm.rpmconfig.warning = pyrpm.rpmconfig.verbose - 2
+    elif pyrpm.rpmconfig.verbose > 1:
+        pyrpm.rpmconfig.warning = pyrpm.rpmconfig.verbose - 1
+
+    # -- load packages
+
+    if len(dirs) > 0:
+        for dir in dirs:
+            _args = [ ]
+            if not os.path.exists(dir) or not os.path.isdir(dir):
+                print "%s does not exists or is not a directory." % dir
+                sys.exit(1)
+            print "Loading rpm packages from %s" % dir
+            list = os.listdir(dir)
+            list.sort
+            for entry in list:
+                if not entry or not entry[-4:] == ".rpm":
+                    continue
+                n = dir+"/"+entry
+                if not os.path.isfile(n):
+                    continue
+                _args.append(n)
+            # 
+            i = 1
+            for f in _args:
+                if verbose > 0:
+                    progress_write("Reading %d/%d " % (i, len(_args)))
+                r = pyrpm.RpmPackage(pyrpm.rpmconfig, f)
+                try:
+                    r.read(tags=pyrpm.rpmconfig.resolvertags)
+                except:
+                    print "Loading of %s failed, exiting." % f
+                    sys.exit(-1)
+                r.close()
+                rpms.append(r)
+                i += 1
+            if verbose > 0 and len(_args) > 0:
+                print
+    else:
+        i = 1
+        for f in args:
+            if verbose > 0:
+                progress_write("Reading %d/%d " % (i, len(args)))
+            r = pyrpm.RpmPackage(pyrpm.rpmconfig, f)
+            try:
+                r.read(tags=pyrpm.rpmconfig.resolvertags)
+            except:
+                print "Loading of %s failed, exiting." % f
+                sys.exit(-1)
+            r.close()
+            rpms.append(r)
+            i += 1
+        if verbose > 0 and len(args) > 0:
+            print
+    del args
+    
+    if len(rpms) < 1:
+        print "No packages."
+        sys.exit(0)
+
+    # -----------------------------------------------------------------------
+
+    def printRelations(relations, pkgs, output):
+        if output == "-":
+            fp = sys.stdout
+        else:
+            fp = open(output, "w+")
+
+        fp.write('digraph rpmgraph {\n')
+        fp.write('graph [\n');
+        fp.write('	overlap="false",\n');
+        fp.write('	nodesep="1.0",\n');
+        fp.write('	K=2,\n');
+        fp.write('	splines="true",\n');
+        fp.write('	mindist=2,\n');
+        fp.write('	pack="true",\n');
+        fp.write('	ratio="compress",\n');
+        fp.write('	size="50,50"\n');
+        fp.write('	color="black"\n');
+        fp.write('];\n')
+        fp.write('node [\n');
+        fp.write('	fontsize=30\n');
+        fp.write('];\n')
+        fp.write('edge [\n');
+        fp.write('	minlen=3.0,\n');
+        fp.write('	tailclip=true,\n');
+        fp.write('	headclip=true\n');
+        fp.write('	arrowsize="3.0"\n');
+        fp.write('];\n')
+
+        for pkg in pkgs:
+            rel = relations[pkg]
+            pkg_name = pkg["name"]
+#            fp.write('"%s" [peripheries=%d];\n' % \
+#                     (pkg_name, len(rel.pre)+len(rel.post)))
+            fp.write('"%s"\n' % pkg_name)
+
+        for pkg in pkgs:
+            rel = relations[pkg]
+            pkg_name = pkg["name"]
+            if len(rel.pre) > 0:
+                for p in rel.pre:
+                    if rel.pre[p] == 1: # hard relation
+                        style='bold'
+                    else:
+                        style='solid'
+                    name = p["name"]
+                    fp.write('"%s" -> "%s" [style="%s"];\n' % \
+                             (pkg_name, name, style))
+
+        fp.write('}\n')
+
+        if output != "-":
+            fp.close()
+
+    # -----------------------------------------------------------------------
+
+    class Node:
+        def __init__(self, name, index):
+            self.name = name
+            self.index = index
+            self.x = 0
+            self.y = 0
+            self.width = 0.7
+            self.height = 0.5
+            if len(self.name) * 0.07 + 0.2 > self.width:
+                self.width = len(self.name) * 0.07 + 0.2
+
+    class Loop:
+        def __init__(self, relations, loop, start_index):
+            self.relations = relations
+            self.loop = loop
+            self.x = 0
+            self.y = 0
+            self.nodes = { }
+            l = len(self.loop)-1
+            for i in xrange(l):
+                self.nodes[self.loop[i]] = Node(self.loop[i]["name"],
+                                                start_index + i)
+                if i < 2:
+                    if l == 2:
+                        self.nodes[self.loop[i]].x = 50
+                    else:
+                        self.nodes[self.loop[i]].x = 100
+                    self.nodes[self.loop[i]].y = i * (l - 1) * 100 + 50
+                else:
+                    self.nodes[self.loop[i]].x = 0
+                    self.nodes[self.loop[i]].y = (l - i) * 100 + 50
+
+            self.width = 150
+            if l > 2:
+                self.width = 200
+            self.height = l * 100
+        def __len__(self):
+            return len(self.loop)
+        def __getitem__(self, i):
+            return self.loop[i]
+        def __str__(self):
+            s = ""
+            for node in self.nodes:
+                s += '"node%08d" ' % self.nodes[node].index
+                s += '[label="%s", pos="%d,%d", width="%.2f", height="%.2f"];\n' % \
+                     (self.nodes[node].name,
+                      self.nodes[node].x + self.x, self.nodes[node].y + self.y,
+                      self.nodes[node].width, self.nodes[node].height)
+            l = len(self.loop)-1
+            for i in xrange(l):
+                node = self.loop[i]
+                next = self.loop[i+1]
+                if self.relations[node].pre[next] == 1: # hard relation
+                    style='bold'
+                else:
+                    style='solid'
+                x1 = self.nodes[next].x
+                y1 = self.nodes[next].y
+                x2 = self.nodes[node].x
+                y2 = self.nodes[node].y
+
+                w1 = 35 * self.nodes[next].width
+                h1 = 35 * self.nodes[next].height
+                w2 = 35 * self.nodes[node].width
+                h2 = 35 * self.nodes[node].height
+
+                if l == 2: # two nodes
+                    x1 += - 10 + i*20
+                    x2 += - 10 + i*20
+
+                # length d of vector
+                d = math.sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
+                # normalize vector: (_x,_y)
+                _x = (x2 - x1) / d
+                _y = (y2 - y1) / d
+                
+                _x1 = self.x + x1 + _x * w1
+                _y1 = self.y + y1 + _y * h1
+                _x2 = self.x + x2 - _x * w2
+                _y2 = self.y + y2 - _y * h2
+
+                pos = 'pos="e,%d,%d %d,%d %d,%d %d,%d %d,%d"' % \
+                      (_x1, _y1, _x2, _y2, _x2, _y2, _x2, _y2,
+                       (_x1 + _x2) / 2, (_y1 + _y2) / 2)
+                s += '"node%08d" -> "node%08d" [style="%s", %s]\n' % \
+                     (self.nodes[node].index, self.nodes[next].index, 
+                      style, pos)
+
+            return s
+
+    def arrangeLoops(loop_list, _y_max):
+        x = 50
+        y = y_max = 0
+        line_width = 0
+        lines = [ ] # unfilled lines
+        for loop in loop_list:
+            # first check if it fits in an unfilled line
+            if len(lines) > 0:
+                found = 0
+                for line in lines:
+                    if line[1] + loop.height <= _y_max and \
+                           loop.width <= line[2]:
+                        loop.x = line[0]
+                        loop.y = line[1]
+                        line[1] += loop.height
+                        if y_max < line[1]:
+                            y_max = line[1]
+                        found = 1
+                        break
+                if found == 1:
+                    continue
+
+            if y != 0 and y + loop.height > _y_max:
+                if y < _y_max:
+                    lines.append([x, y, line_width])
+                y = 0
+                x += line_width
+                line_width = 0
+
+            loop.x = x
+            loop.y = y
+            if line_width < loop.width:
+                line_width = loop.width            
+            y += loop.height
+            if y_max < y:
+                y_max = y
+
+        return (x + line_width, y_max)
+
+    def printLoops(relations, loops, output):
+        if output == "-":
+            fp = sys.stdout
+        else:
+            fp = open(output, "w+")
+
+        loop_list = [ ]
+        nodes_index = 0
+        for loop in loops:
+            loop_list.append(Loop(relations, loop, nodes_index))
+            nodes_index += len(loop)-1
+
+        (x_max, y_max) = arrangeLoops(loop_list, 100)
+        old_y_max = [ ]
+        # make it about (3*height x 4*width)
+        while y_max < 1.25 * x_max or y_max > 1.5 * x_max:
+            y_max = (1.33 * x_max + 0.75 * y_max) / 2
+            (x_max, y_max) = arrangeLoops(loop_list, y_max)
+            if y_max in old_y_max:
+                break
+            old_y_max.append(y_max)
+
+        fp.write('digraph rpmgraph {\n')
+        fp.write('graph [\n');
+        fp.write('	overlap="false"\n');
+        fp.write('	nodesep="1.0"\n');
+        fp.write('	K="2"\n');
+        fp.write('	splines="true"\n');
+        fp.write('	mindist="2"\n');
+        fp.write('	pack="true"\n');
+        fp.write('	ratio="compress"\n');
+        fp.write('	bb="0,0,%d,%d"\n' % (x_max, y_max));
+        fp.write('	color="black"\n');
+        fp.write(']\n')
+        fp.write('node [\n');
+        fp.write('	fontsize="30"\n');
+        fp.write(']\n')
+        fp.write('edge [\n');
+        fp.write('	minlen="3.0"\n');
+        fp.write('	tailclip="true"\n');
+        fp.write('	headclip="true"\n');
+        fp.write('	arrowsize="3.0"\n');
+        fp.write(']\n')
+        
+        for loop in loop_list:
+            fp.write(str(loop))
+
+        fp.write('}\n')
+
+        if output != "-":
+            fp.close()
+
+    # -----------------------------------------------------------------------
+
+    db = pyrpm.database.memorydb.RpmMemoryDB(pyrpm.rpmconfig, None)
+    resolver = pyrpm.RpmResolver(pyrpm.rpmconfig, db)
+    del db
+    
+    loop_count = 0
+
+    i = 0
+    l = len(rpms)
+    while len(rpms) > 0:
+        if verbose > 0:
+            progress_write("Appending %d/%d " % (i+1, l))
+        r = rpms.pop(0)
+        # append
+        if install:
+            resolver.install(r)
+        else:
+            resolver.update(r)
+        i += 1
+    del rpms
+    if verbose > 0:
+        print
+
+    if len(resolver.installs) == 0:
+        print "ERROR: Install list empty"
+        sys.exit(0)
+
+    if no_resolving == 0:
+        if resolver.resolve() != 1:
+            print "ERROR: Resolving failed."
+            sys.exit(-1)
+
+    # -----------------------------------------------------------------------
+    
+    relations = pyrpm.RpmRelations(pyrpm.rpmconfig, resolver.installs,
+                                   pyrpm.OP_INSTALL)
+    del resolver
+
+    if relations == None or len(relations) < 1:
+        sys.exit(-1)
+
+    printRelations(relations, relations, "%srpmgraph.dot" % prefix)
+
+    components = pyrpm.ConnectedComponentsDetector(relations).detect(relations)
+    
+    loops = [ ]
+    print "# components: %d" % len(components)
+    i = 0
+    for component in components:
+        if verbose > 1:
+            print "  %d: %s" % (i, ", ".join([pkg.getNEVRA() \
+                                              for pkg in component.pkgs]))
+        i += 1
+        printRelations(relations, component.pkgs,
+                       "%scomponent_%03d.dot" % (prefix, i))
+        for loop in component.loops:
+            _loop = [ ]
+            for (node1,node2) in loop:
+                _loop.append(node1)
+            # append first node again
+            _loop.append(node2)
+            loops.append(_loop)
+
+    print "# loops: %d" % len(loops)
+    printLoops(relations, loops, "%sloops.dot" % prefix)
+
+    del relations
+    sys.exit(0)
