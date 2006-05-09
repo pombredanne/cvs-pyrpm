@@ -508,7 +508,7 @@ class RpmPackage(RpmData):
         # them if they are:
         #  - Not owned by any other package
         #  - Empty
-        if len(self["dirnames"]) > 0:
+        if self.has_key("dirnames"):
             for dname in self["dirnames"]:
                 dname = os.path.dirname(dname)
                 while len(dname) > 1:
