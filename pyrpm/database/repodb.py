@@ -581,6 +581,11 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if ntype == XML_READER_TYPE_END_ELEMENT:
                 if name == "package":
                     break
+                elif not excheck and pname != None and pepoch != None and \
+                     pversion != None and prelease != None and parch != None:
+                    excheck = 1
+                    if self.__isExcluded(pkg):
+                        return None
                 continue
             if    name == "name":
                 if Readf() != 1:
@@ -605,11 +610,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 pkg["version"] = pversion
                 pkg["release"] = prelease
                 pkg["epoch"] = pepoch
-            elif not excheck and pname != None and pepoch != None and \
-               pversion != None and prelease != None and parch != None:
-                excheck = 1
-                if self.__isExcluded(pkg):
-                    return None
             elif name == "checksum":
                 props = self.__getProps(reader)
                 try:
