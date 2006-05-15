@@ -34,6 +34,8 @@
 # - Packages built with a broken kernel that does not mmap() files with
 #   size 0 just have that filemd5sum set to "" and "rpm -V" also fails.
 # - Verify mode warns about a few packages from RHL5.x (rpm-2.x).
+# - CentOS 3.7/ia64 and 4.3/alpha rpm packages cannot be read, might be
+#   endian problems showing up?
 #
 
 #
@@ -1309,7 +1311,7 @@ class CPIO:
                 filename = filename[1:]
             if not self.issrc and filename[:1] != "/":
                 filename = "%s%s" % ("/", filename)
-            if filename[-1:] == "/":
+            if filename[-1:] == "/" and filename != "/":
                 filename = filename[:-1]
             if extract:
                 func(filename, int(data[54:62], 16), self.__readDataPad,
@@ -1522,7 +1524,9 @@ class ReadRpm:
                 return 1
             leaddata = doRead(self.fd, 96)
             if leaddata[:4] != "\xed\xab\xee\xdb":
+                #from binascii import b2a_hex
                 self.printErr("no rpm magic found")
+                #print "wrong lead: %s" % b2a_hex(leaddata[:4])
                 return 1
             self.issrc = (leaddata[7] == "\x01")
             if self.verify:
@@ -2063,7 +2067,8 @@ class ReadRpm:
         if size_in_sig != None and not isUrl(self.filename):
             rpmsize = os.stat(self.filename).st_size
             if rpmsize != 96 + self.sigdatasize + size_in_sig:
-                self.printErr("wrong size in rpm package")
+                self.printErr("wrong size in rpm package: %d / %d" % \
+                    (rpmsize, 96 + self.sigdatasize + size_in_sig))
         filenames = self.getFilenames()
         if self.issrc:
             i = self.getSpecfile(filenames)
@@ -3803,7 +3808,7 @@ class RpmRepo:
             return 1
         return 0
 
-    def createRepo(self, baseurl):
+    def createRepo(self, baseurl, ignoresymlinks):
         filename = Uri2Filename(self.filenames[0])
         # Strip trailing slashes.
         while filename[-1:] == "/":
@@ -3815,7 +3820,7 @@ class RpmRepo:
             rt[i] = value
             rt[value[0]] = value
         self.filerequires = []
-        filenames = findRpms(filename)
+        filenames = findRpms(filename, ignoresymlinks)
         filenames.sort()
         i = 0
         while i < len(filenames):
@@ -4756,23 +4761,14 @@ def writeFile(filename, data, mode=None):
     os.rename(tmpfile, filename)
 
 
-# Sample config for /etc/httpd/conf.d/scm.conf:
-#Alias /hg /home/devel/test/hgrepo-cgi
-#<Directory "/home/devel/test/hgrepo-cgi">
-#    DirectoryIndex index.cgi
-#    AddHandler cgi-script .cgi
-#    Options ExecCGI
-#    Order allow,deny
-#    Allow from all
-#</Directory>
 hgauthor = "Florian La Roche <laroche@redhat.com>"
 rootdir = "/home/devel/test"
 hgrepo = rootdir + "/hgrepo"
 hgcgi = rootdir + "/hgrepo-cgi"
 hgfiles = rootdir + "/filecache"
 grepodir = rootdir + "/gitrepos"
-mirror = "/var/www/html/mirror/"
 srepodir = rootdir + "/unpacked"
+mirror = "/var/www/html/mirror/"
 if not os.path.isdir(mirror):
     mirror = "/home/mirror/"
 fedora = mirror + "fedora/"
@@ -4805,10 +4801,7 @@ srpm_repos = [
     ("http://selenic.com/hg/", "hg", None, None, 20),
     ("http://hg.serpentine.com/mercurial/mq/", "mq", None, None, 20),
     ("http://hg.serpentine.com/mercurial/bos/", "hg-bos", None, None, 20),
-    #("http://www.kernel.org/hg/linux-2.6/", "hg-linux-2.6", None, None, 40),
     ("http://hg.rpath.com/conary/", "conary", None, None, 20),
-    # Their http server is broken. A new checkout often fails. See the
-    # mercurial mailinglists for details.
     ("http://xenbits.xensource.com/xen-unstable.hg/",
         "xen-unstable", None, None, 30),
     ("http://thunk.org/hg/e2fsprogs/", "e2fsprogs", None, None, 20),
@@ -4895,8 +4888,6 @@ def updateGitMirrors(verbose):
         print "No directory", grepodir, "is setup."
         return
 
-    #return  # The following is all disabled:
-
     print "Downloading from git mirrors."
     for (repo, dirname, maxchanges) in gitrepos:
         if verbose > 2:
@@ -4911,26 +4902,6 @@ def updateGitMirrors(verbose):
                 os.system("rmdir " + d)
             os.system("cd %s && GIT_DIR=%s git-pull" % (grepodir, d + ".git"))
             writeFile(d + ".git/description", ["mirror from " + repo + "\n"])
-
-    return  # The following is all disabled:
-
-    print "Converting now git to hg repos."
-    for (repo, dirname, maxchanges) in gitrepos:
-        src = grepodir + "/" + dirname + ".git"
-        dst = hgrepo + "/" + dirname
-        mapfile = src + "-mapfile"
-        if not os.path.isdir(dst):
-            makeDirs(dst)
-            os.system("cd %s && hg init" % dst)
-            writeFile(mapfile, [])
-        os.system("/usr/share/doc/mercurial-0.7/convert-repo " + src + " " + \
-            dst + " " + mapfile)
-        data = ["[paths]\ndefault = %s\n" % repo,
-            "[web]\ndescription = mirror from %s\n" % repo]
-        if maxchanges:
-            data.append("maxchanges = %d\n" % maxchanges)
-        writeFile(dst + "/.hg/hgrc", data)
-    print "Done."
 
 def cmpNoMD5(a, b):
     """Ignore leading md5sum to sort the "sources" file."""
@@ -5614,7 +5585,7 @@ def readRpmdb(dbpath, distroverpkg, releasever, configfiles, buildroot,
         print "Done with checkrpmdb."
     return None
 
-def checkSrpms():
+def checkSrpms(ignoresymlinks):
     directories = [
         "/var/www/html/mirror/updates-rhel/2.1",
         "/var/www/html/mirror/updates-rhel/3",
@@ -5631,7 +5602,7 @@ def checkSrpms():
     for d in directories:
         if not os.path.isdir(d):
             continue
-        rpms = findRpms(d)
+        rpms = findRpms(d, ignoresymlinks)
         rpms = readRpm(rpms, rpmsigtag, rpmtag)
         h = {}
         for rpm in rpms:
@@ -5647,7 +5618,7 @@ def checkSrpms():
     rpms = []
     for d in directories:
         if os.path.isdir(d):
-            rpms.extend(findRpms(d))
+            rpms.extend(findRpms(d, ignoresymlinks))
     rpms = readRpm(rpms, rpmsigtag, rpmtag)
     h = {}
     for rpm in rpms:
@@ -5666,10 +5637,10 @@ def checkSrpms():
 def cmpA(h1, h2):
     return cmp(h1[0], h2[0])
 
-def checkArch(path):
+def checkArch(path, ignoresymlinks):
     print "Mark the arch where a src.rpm would not get built:\n"
     arch = ["i386", "x86_64", "ia64", "ppc", "s390", "s390x"]
-    rpms = findRpms(path)
+    rpms = findRpms(path, ignoresymlinks)
     rpms = readRpm(rpms, rpmsigtag, rpmtag)
     # Only look at the newest src.rpms.
     h = {}
@@ -5887,6 +5858,7 @@ def main():
         print "Created the directory %s to cache files locally." % cachedir
         makeDirs(cachedir)
     verbose = 2
+    ignoresymlinks = 0
     configfiles = []
     distroverpkg = ("fedora-release", "redhat-release")
     #assumeyes = 0
@@ -5918,7 +5890,7 @@ def main():
     updaterpms = 0
     (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
         ["help", "verbose", "quiet", "arch=", "releasever=",
-         "distroverpkg", "strict",
+         "distroverpkg", "strict", "ignoresymlinks",
          "digest", "nodigest", "payload", "nopayload",
          "wait", "noverify", "small", "explode", "diff", "extract",
          "excludes=", "nofileconflicts", "fileconflicts", "runorderer",
@@ -5934,6 +5906,8 @@ def main():
             verbose += 1
         elif opt in ("-q", "--quiet"):
             verbose = 0
+        elif opt == "--ignoresymlinks":
+            ignoresymlinks = 1
         elif opt == "-c":
             configfiles.append(val)
         elif opt == "--arch":
@@ -6024,9 +5998,9 @@ def main():
         for a in args:
             extractRpm(a, buildroot, owner)
     elif checksrpms:
-        checkSrpms()
+        checkSrpms(ignoresymlinks)
     elif checkarch:
-        checkArch(args[0])
+        checkArch(args[0], ignoresymlinks)
     elif checkrpmdb:
         if readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles,
             buildroot, arch, verbose, checkfileconflicts, reposdirs):
@@ -6037,7 +6011,7 @@ def main():
                 print "Createrepo needs a directory name:", a
                 break
             repo = RpmRepo([a], excludes, verbose)
-            repo.createRepo(baseurl)
+            repo.createRepo(baseurl, ignoresymlinks)
     elif mercurial:
         createMercurial(verbose)
     elif updaterpms:
@@ -6179,14 +6153,14 @@ def main():
             a = Uri2Filename(a)
             b = [a]
             if not a.endswith(".rpm") and not isUrl(a) and os.path.isdir(a):
-                b = findRpms(a)
+                b = findRpms(a, ignoresymlinks)
             for a in b:
                 #print a
                 rpm = verifyRpm(a, verify, strict, payload, nodigest, hdrtags,
                     keepdata, headerend.get(a))
                 if rpm == None:
                     continue
-                #f = rpm["requirename"]
+                #f = rpm["filenames"]
                 #if f:
                 #    print rpm.getFilename()
                 #    print f
