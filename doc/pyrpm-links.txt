@@ -3,7 +3,8 @@ Pointers to related projects
 
 rpm is available from link:http://www.rpm.org/[] and
 link:http://www.wraptastic.org/[].
-Mailinglist at link:https://listman.redhat.com/mailman/listinfo/rpm-list[].
+Mailinglist at link:https://listman.redhat.com/mailman/listinfo/rpm-list[]
+and link:https://lists.dulug.duke.edu/mailman/listinfo/rpm-devel/.
 The binary rpm format is described at
 link:http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html[].
 
@@ -47,6 +48,10 @@ link:http://www.rpath.com/[] and link:http://wiki.conary.com/[].
 apt4rpm is adapting the Debian packaging tool to also work with rpm packages.
 Available from link:http://apt4rpm.sourceforge.net/[].
 
+Debian packaging system at link:http://packages.debian.org/dpkg[]. Proposal for
+multiarch at link:http://multiarch.alioth.debian.org/multiarch-hp-report.pdf[]
+and new version at link:http://multiarch.alioth.debian.org/dpkg2.pdf[].
+
 deltarpm is working on reducing the network traffic for rpm based updates.
 Available at link:ftp://ftp.suse.com/pub/projects/deltarpm/[]. Similar project
 at link:http://www.wombat.ie/software/rpmdc/releasenotes-0.1.1.html[].
@@ -62,6 +67,8 @@ Rebuild rpm packages and manage build roots via mach, available from
 link:http://thomas.apestaart.org/projects/mach/[] and further info
 at link:http://fedoraproject.org/wiki/UsingMach[].
 Fedora Extras is using link:http://fedoraproject.org/wiki/Projects/Plague[].
+Discussions around a buildsystem also happen on
+link:http://www.redhat.com/archives/fedora-buildsys-list/[].
 Caos is using link:http://www.kainx.org/mezzanine/[] to
 build and manage rpm packages with their wiki page at
 link:https://wiki.caosity.org/tiki-index.php?page=Package+Maintenance&bl[].
