@@ -51,11 +51,6 @@ class KickstartConfig(dict):
         dict.__init__(self)
         self.parse(filename)
 
-    def __getitem__(self, item):
-        if not self.has_key(item):
-            return None
-        return dict.__getitem__(self, item)
-
     def clear(self):
         for key in self.keys():
             del self[key]
@@ -371,7 +366,7 @@ class KickstartConfig(dict):
                     args = [ line[:1], line[1:] ]
                     opt = line
 
-                if not self["packages"]:
+                if not self.has_key("packages"):
                     self["packages"] = { }
                 if opt[0] == "@":
                     if not self["packages"].has_key("groups"):
@@ -402,7 +397,7 @@ class KickstartConfig(dict):
 
     def verify(self):
         for tag in self.REQUIRED_TAGS:
-            if not self[tag]:
+            if not self.has_key(tag):
                 raise ValueError, "ERROR: %s is required." % tag
 
         if not self.has_key("install") and not self.has_key("upgrade"):
@@ -449,43 +444,44 @@ class KickstartConfig(dict):
                                                        "none" ]:
             raise ValueError, "bootloader: location invalid."
 
-        if self["clearpart"]:
+        if self.has_key("clearpart"):
             if self["clearpart"].has_key("none") and \
                    len(self["clearpart"]) != 1:
                 raise ValueError, "clearpart: none mixed with other tags."
 
-        if self["device"]:
+        if self.has_key("device"):
             for key in self["device"].keys():
                 if key not in [ "scsi", "eth" ]:
                     raise ValueError, "device: type %s not valid." % key
 
-        if self["firstboot"] and self["firstboot"].has_key("enabled") and \
+        if self.has_key("firstboot") and \
+               self["firstboot"].has_key("enabled") and \
                self["firstboot"].has_key("disabled"):
             raise ValueError, "firstboot: enabled and disabled."
 
-        if not self["cdrom"] and not self["harddrive"] and \
-               not self["nfs"] and not self["url"]:
+        if not self.has_key("cdrom") and not self.has_key("harddrive") and \
+               not self.has_key("nfs") and not self.has_key("url"):
             raise ValueError, "No installation method specified."
 
         source = 0
-        if self["cdrom"]:
+        if self.has_key("cdrom"):
             source += 1
-        if self["harddrive"]:
+        if self.has_key("harddrive"):
             source += 1
-        if self["nfs"]:
+        if self.has_key("nfs"):
             source += 1
-        if self["url"]:
+        if self.has_key("url"):
             source += 1
         if source != 1:
             raise ValueError, "Multiple installation sources defined."
 
-        if self["harddrive"]:
+        if self.has_key("harddrive"):
             if not self["harddrive"].has_key("partition"):
                 raise ValueError, "Harddrive: partition not set."
             if not self["harddrive"].has_key("dir"):
                 raise ValueError, "Harddrive: dir not set."
 
-        if self["nfs"]:
+        if self.has_key("nfs"):
             if not self["nfs"].has_key("server"):
                 raise ValueError, "nfs: server not set."
             if not self["nfs"].has_key("dir"):
@@ -493,7 +489,7 @@ class KickstartConfig(dict):
 
         partitions = [ ]
         disk = { }
-        if self["partition"]:
+        if self.has_key("partition"):
             for name in self["partition"]:
                 part = self["partition"][name]
                 if name[:5] != "swap." and name[:5] != "raid." and \
@@ -557,9 +553,10 @@ class KickstartConfig(dict):
             elif "/" in self["partition"] and \
                      self["partition"]["/"]["fstype"] not in [ "ext", "ext3" ]:
                 raise ValueError, \
-                      "Filesystem of '/' has to be ext2 or ext3 if there is no /boot partition with ext2 or ext3 filesystem."
+                      "Filesystem of '/' has to be ext2 or ext3 if there is " \
+                      "no /boot partition with ext2 or ext3 filesystem."
 
-        if self["raid"]:
+        if self.has_key("raid"):
             partitions = [ ]
             devices = [ ]
             for name in self["raid"]:
@@ -605,20 +602,26 @@ class KickstartConfig(dict):
                 if self["raid"]["/boot"].has_key("fstype") and \
                        self["raid"]["/boot"]["fstype"] not in [ "ext2",
                                                                 "ext3" ]:
-                    raise ValueError, "Filesystem of '/boot' has to be ext2 or ext3."
+                    raise ValueError, "Filesystem of '/boot' has to be " \
+                          "ext2 or ext3."
             if "/" in self["raid"] and self["raid"]["/"]["level"] != 1 and \
                    not "/boot" in self["raid"]:
-                raise ValueError, "Raid level of '/' has to be 1 if there is no '/boot' partition."
+                raise ValueError, "Raid level of '/' has to be 1 " \
+                      "if there is no '/boot' partition."
 
-        if self["volgroup"]:
+        if self.has_key("volgroup"):
             for group in self["volgroup"]:
                 for name in self["volgroup"][group]["partitions"]:
                     if name[:3] != "pv.":
-                        raise ValueError, "volgroup '%s': Illegal partition name '%s'." (group, name)
+                        raise ValueError, \
+                              "volgroup '%s': Illegal partition name '%s'." % \
+                              (group, name)
                     if not name in self["partition"]:
-                        raise ValueError, "volgroup '%s': Partition '%s' is not defined." (group, name)
+                        raise ValueError, \
+                              "volgroup '%s': Partition '%s'" %(group, name) +\
+                              " is not defined."
 
-        if self["logvol"]:
+        if self.has_key("logvol"):
             if not self["volgroup"]:
                 raise ValueError, "No volgroups defined."
 
@@ -630,28 +633,25 @@ class KickstartConfig(dict):
                     raise ValueError, "logvol '%s' has no size." % mntpoint
                 if not self["logvol"][mntpoint].has_key("name"):
                     raise ValueError, "logvol '%s' has no name." % mntpoint
-                if not self["logvol"][mntpoint]["vgname"] in self["volgroup"].keys():
-                    raise ValueError, "logvol '%s': volgroup '%s' is not defined." % \
+                if not self["logvol"][mntpoint]["vgname"] \
+                       in self["volgroup"].keys():
+                    raise ValueError, \
+                          "logvol '%s': volgroup '%s' is not defined." % \
                           (mntpoint, self["logvol"][mntpoint]["vgname"])
                 if self["logvol"][mntpoint]["name"] in names:
                     raise ValueError, "Name of logvol '%s' is not unique." % \
                           mntpoint
                 names.append(self["logvol"][mntpoint]["name"])
 
-        if self["repository"]:
+        if self.has_key("repository"):
             for name in self["repository"]:
                 repo = self["repository"][name]
                 if not repo.has_key("url"):
                     raise ValueError, "url not set for repository %s." % repo
 
-        if self["url"]:
+        if self.has_key("url"):
             if not self["url"].has_key("url"):
                 raise ValueError, "url not set for url."
-
-        if self["xconfig"]:
-            if self["xconfig"].has_key("card") and \
-                   self["xconfig"].has_key("driver"):
-                raise ValueError, "xconfig: card and driver specified."
 
     def parseArgs(self, tag, argv, allowed_args, replace_tags=None):
         dict = { }
@@ -672,7 +672,7 @@ class KickstartConfig(dict):
         return (dict, args)
 
     def parseSimple(self, tag, argv, allowed_args, replace_tags=None):
-        if self[tag]:
+        if self.has_key(tag):
             raise ValueError, "%s already set." % tag
 
         (dict, args) = self.parseArgs(tag, argv, allowed_args, replace_tags)
@@ -694,7 +694,7 @@ class KickstartConfig(dict):
 
         if len(args) != 1:
             raise ValueError, "'%s %s' is unsupported" % (tag, " ".join(argv))
-        if not self[tag]:
+        if not self.has_key(tag):
             self[tag] = { }
         elif self[tag].has_key(args[0]):
             raise ValueError, "%s already set." % tag

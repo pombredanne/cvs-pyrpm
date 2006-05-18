@@ -158,7 +158,8 @@ def main():
 
     # installation methods
 
-    if not ks["nfs"] and not ks["url"] and not ks["cdrom"]:
+    if not ks.has_key("nfs") and not ks.has_key("url") and \
+           not ks.has_key("cdrom"):
         print "ERROR: Only installation with nfs or url is supported, exiting."
         return 1
 
@@ -166,9 +167,9 @@ def main():
     
     source = Repository(pyrpm.rpmconfig, source_dir, "base")
 
-    if ks["cdrom"]:
+    if ks.has_key("cdrom"):
         url = "cdrom"
-    elif ks["nfs"]:
+    elif ks.has_key("nfs"):
         url = "nfs://%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
     else:
         url = ks["url"]["url"]
@@ -492,8 +493,9 @@ def main():
 
     ### start installation process ###
 
-    if standalone and ks["network"] and \
-           (ks["nfs"] or (ks["url"] and ks["url"]["url"][:5] != "file:")):
+    if standalone and ks.has_key("network") and \
+           (ks.has_key("nfs") or \
+            (ks.has_key("url") and ks["url"]["url"][:5] != "file:")):
         ### standalone network setup ###
 
         # TODO:
@@ -507,7 +509,8 @@ def main():
     ########################## kickstart second pass ##########################
 
     # run pre script and reload kickstart file
-    if ks["install"] and ks["pre"] and len(ks["pre"]["script"]) > 0:
+    if ks.has_key("install") and \
+           ks.has_key("pre") and len(ks["pre"]["script"]) > 0:
         print "Running pre script"
         interpreter = "/bin/sh"
         if ks["pre"].has_key("interpreter"):
@@ -529,18 +532,19 @@ def main():
 
     # kickstart sanity checks
     if ks.has_key("install"):
-        if not ks["autopart"] and (not ks["partition"] or \
-                                   len(ks["partition"]) < 1 or \
-                                   (not ks["partition"].has_key("/") and \
-                                    not (ks["raid"] and \
-                                         ks["raid"].has_key("/")) and \
-                                    not (ks["logvol"] and \
-                                         ks["logvol"].has_key("/")))):
+        if not ks.has_key("autopart") and \
+               (not ks.has_key("partition") or \
+                len(ks["partition"]) < 1 or \
+                (not ks["partition"].has_key("/") and \
+                 not (ks.has_key("raid") and \
+                      ks["raid"].has_key("/")) and \
+                 not (ks.has_key("logvol") and \
+                      ks["logvol"].has_key("/")))):
             print "ERROR: root partition not defined"
             return 1
 
         # check if volgroups already exists
-        if ks["volgroup"] and len(ks["volgroup"]) > 0:
+        if ks.has_key("volgroup") and len(ks["volgroup"]) > 0:
             for group in ks["volgroup"]:
                 if system["lvmap"].has_key(group):
                     print "ERROR: Volume group '%s'" % (group) + \
@@ -558,7 +562,7 @@ def main():
 
     # TODO: check repo names for invalid chars
     repos = { }
-    if ks["repository"]:
+    if ks.has_key("repository"):
         for repo in ks["repository"]:
             repos[repo] = Repository(pyrpm.rpmconfig, repos_dir, repo)
             print "Reading repodata from repository '%s'" % repo
@@ -582,7 +586,7 @@ def main():
     # clearpart, initialize disks
     modified = [ ]
     if ks.has_key("install") and \
-           ks["clearpart"] and not ks["clearpart"].has_key("none"):
+           ks.has_key("clearpart") and not ks["clearpart"].has_key("none"):
         disklabel = "msdos"
         linuxtypes = [ 0x82, 0x83, 0x8e, 0xfd ]
         drives = diskmap.keys()
@@ -596,7 +600,8 @@ def main():
                 return 1
         for disk in drives:
             if ks["clearpart"].has_key("initlabel") or \
-                   (ks["zerombr"] and ks["zerombr"].has_key("yes")) or \
+                   (ks.has_key("zerombr") and \
+                    ks["zerombr"].has_key("yes")) or \
                    not diskmap[disk].has_disklabel():
                 print "Initializing disk '%s'" % disk
                 diskmap[disk].new_disklabel(disklabel)
@@ -633,14 +638,14 @@ def main():
     volgroup = { }
     raidmap = { }
     if ks.has_key("install"):
-        if ks["autopart"]:
+        if ks.has_key("autopart"):
             for name in autopart.keys():
                 partitions[name] = autopart[name]
-        if ks["partition"]:
+        if ks.has_key("partition"):
             for name in ks["partition"].keys():
                 partitions[name] = ks["partition"][name]
         # add raid partitions
-        if ks["raid"] and len(ks["raid"]) > 0:
+        if ks.has_key("raid") and len(ks["raid"]) > 0:
             has_raid = True
             for name in ks["raid"]:
                 if partitions.has_key(name):
@@ -663,7 +668,7 @@ def main():
                     partitions[name]["noformat"] = 1
                 if ks["raid"][name].has_key("useexisting"):
                     partitions[name]["useexisting"] = 1                    
-        if ks["volgroup"] and len(ks["volgroup"]) > 0:
+        if ks.has_key("volgroup") and len(ks["volgroup"]) > 0:
             for group in ks["volgroup"]:
                 volgroup[group] = { }
                 vg = ks["volgroup"][group]
@@ -697,7 +702,7 @@ def main():
                     if vg.has_key("noformat") or vg.has_key("useexisting"):
                         partitions[onpart]["noformat"] = 1
 
-        if ks["logvol"] and len(ks["logvol"]) > 0:
+        if ks.has_key("logvol") and len(ks["logvol"]) > 0:
             for name in ks["logvol"]:
                 if partitions.has_key(name):
                     print "ERROR: Multiple definitions of %s" % onpart
@@ -1697,7 +1702,7 @@ def main():
         raid_devices = [ ]
 
         # create/activate raid partitions
-        if ks["install"] and has_raid:
+        if ks.has_key("install") and has_raid:
             for name in partitions:
                 if not partitions[name].has_key("raid"):
                     continue
@@ -1887,7 +1892,7 @@ def main():
 
     if ks.has_key("install"):
         # set default group "base" if no groups are specified
-        if not ks["packages"] or \
+        if not ks.has_key("packages") or \
                not ks["packages"].has_key("groups") or \
                len(ks["packages"]["groups"]) == 0:
             groups = [ "base" ]
@@ -1896,7 +1901,7 @@ def main():
             pyrpm.normalizeList(groups)
 
         languages = [ ]
-        if ks["langsupport"]:
+        if ks.has_key("langsupport"):
             if ks["langsupport"].has_key("default"):
                 languages.append(ks["langsupport"]["default"][:2])
             for lang in ks["langsupport"]["supported"]:
@@ -1921,7 +1926,7 @@ def main():
                 pkgs.extend(source.comps.getPackageNames(group))
 
             # add default desktop
-            if ks["xconfig"]:
+            if ks.has_key("xconfig"):
                 if ks["xconfig"].has_key("startxonboot"):
                     pkgs.extend(source.comps.getPackageNames("base-x"))
                     desktop = "GNOME"
@@ -1992,7 +1997,7 @@ def main():
 
 
             # append authconfig
-            if ks["authconfig"]:
+            if ks.has_key("authconfig"):
                 s = source.repo.searchFilenames("/usr/sbin/authconfig")
                 if len(s) == 0:
                     if not source.repo._matchesFile("/usr/sbin/authconfig"):
@@ -2012,7 +2017,8 @@ def main():
                     print "WARNING: Could not find package providing '/usr/sbin/authconfig'."
 
             # append iptables
-            if ks["firewall"] and not ks["firewall"].has_key("disabled") and \
+            if ks.has_key("firewall") and \
+                   not ks["firewall"].has_key("disabled") and \
                    not "iptables" in pkgs:
                 print "Adding package iptables"
                 pkgs.append("iptables")
@@ -2037,10 +2043,11 @@ def main():
                     else:
                         print "WARNING: Could not find package providing '/usr/sbin/lokkit'."
 
-            if ks["selinux"] and \
-                   (installation.release == "RHEL" and installation.version >= 4) or \
-                   (installation.release == "FC" and installation.version >= 3):
-                
+            if ks.has_key("selinux") and \
+                   (installation.release == "RHEL" and \
+                    installation.version >= 4) or \
+                   (installation.release == "FC" and \
+                    installation.version >= 3):
                 s = source.repo.searchFilenames("/usr/sbin/lokkit")
                 if len(s) == 0:
                     if not source.repo._matchesFile("/usr/sbin/lokkit"):
@@ -2065,13 +2072,14 @@ def main():
                 pkgs.append("kernel")
 
             # append firstboot
-            if ks["firstboot"] and not ks["firstboot"].has_key("disabled") and \
+            if ks.has_key("firstboot") and \
+                   not ks["firstboot"].has_key("disabled") and \
                    not "firstboot" in pkgs:
                 print "Adding package firstboot"
                 pkgs.append("firstboot")
 
             # append dhclient
-            if ks["network"] and len(ks["network"]) > 0:
+            if ks.has_key("network") and len(ks["network"]) > 0:
                 for net in ks["network"]:
                     if net["bootproto"] == "dhcp" and \
                            not "dhclient" in pkgs:
@@ -2098,14 +2106,15 @@ def main():
                     pkgs.extend(compsLangsupport(comps, languages))
 
         # add and remove packages from package list
-        if ks["packages"] and ks["packages"].has_key("drop"):
-            for pkg in ks["packages"]["drop"]:
-                if pkg in pkgs:
-                    pkgs.remove(pkg)
-        if ks["packages"] and ks["packages"].has_key("add"):
-            for pkg in ks["packages"]["add"]:
-                if not pkg in pkgs:
-                    pkgs.append(pkg)
+        if ks.has_key("packages"):
+            if ks["packages"].has_key("drop"):
+                for pkg in ks["packages"]["drop"]:
+                    if pkg in pkgs:
+                        pkgs.remove(pkg)
+            if ks["packages"].has_key("add"):
+                for pkg in ks["packages"]["add"]:
+                    if not pkg in pkgs:
+                        pkgs.append(pkg)
 
         pyrpm.normalizeList(pkgs)
 
@@ -2128,7 +2137,7 @@ def main():
     create_dir(buildroot, "/etc/sysconfig")
     create_dir(buildroot, "/proc")
     create_dir(buildroot, "/proc/self/fd")
-    create_file(buildroot, "/proc/self/fd/0", [])
+    create_file(buildroot, "/proc/self/fd/0", [ ])
     create_dir(buildroot, "/root")
     if (installation.release == "RHEL" and installation.version >= 4) or \
            (installation.release == "FC" and installation.version >= 2):
@@ -2309,7 +2318,7 @@ def main():
 
         hostname = ""
         hosts = ""
-        if ks["network"] and len(ks["network"]) > 0:
+        if ks.has_key("network") and len(ks["network"]) > 0:
             for net in ks["network"]:
                 if net.has_key("hostname"):
                     if not net.has_key("ip"):
@@ -2329,7 +2338,7 @@ def main():
     if ks.has_key("install") and not \
            os.path.exists(buildroot+"/etc/resolv.conf"):
         content = [ ]
-        if ks["network"] and len(ks["network"]) > 0:
+        if ks.has_key("network") and len(ks["network"]) > 0:
             hostname = domainname = None
             for net in ks["network"]:
                 if net.has_key("hostname") and not hostname:
@@ -2358,7 +2367,7 @@ def main():
         content = [ ]
         adapter = 0
         # add options for defined devices in ks["device"]
-        if ks["device"] and len(ks["device"]) > 0:
+        if ks.has_key("device") and len(ks["device"]) > 0:
             for type in ks["device"]:
                 if ks["device"][type] and len(ks["device"][type]) > 0:
                     for module in ks["device"][type]:
@@ -2378,9 +2387,9 @@ def main():
     # /etc/rpm/platform
     # disable for now, it writes i386 instead of i686 and then rpm won't
     # install i586 rpms anymore: (TODO: re-enable this again)
-    #if ks.has_key("install") and not os.path.exists(buildroot+"/etc/rpm/platform"):
-    #    create_file(buildroot, "/etc/rpm/platform", 
-    #                [ "%s-redhat-linux" % installation.arch ])
+#    if ks.has_key("install") and not os.path.exists(buildroot+"/etc/rpm/platform"):
+#    create_file(buildroot, "/etc/rpm/platform", 
+#                [ "%s-redhat-linux" % installation.arch ])
 
     # /var/log/lastlog
     if ks.has_key("install"):
@@ -2441,7 +2450,8 @@ def main():
     fd.write("retries=20\n")
     fd.write("obsoletes=1\n")
     fd.write("reposdir=%s/yum.repos.d\n" % tempdir)
-    if ks.has_key("install") and ks["packages"] and ks["packages"].has_key("drop"):
+    if ks.has_key("install") and \
+           ks.has_key("packages") and ks["packages"].has_key("drop"):
         fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
     fd.write("\n")
     fd.write("[base]\n")
@@ -2467,7 +2477,7 @@ def main():
         # --servicehack
         if no_cache:
             yum += " --nocache"
-    if ks["packages"] and ks["packages"].has_key("ignoredeps") and \
+    if ks.has_key("packages") and ks["packages"].has_key("ignoredeps") and \
            ks["packages"].has_key("ignoremissing"):
         yum += " --nodeps"
     if ks.has_key("install"):
@@ -2514,7 +2524,7 @@ def main():
         return 1
 
     # run authconfig if set
-    if ks.has_key("install") and ks["authconfig"]:
+    if ks.has_key("install") and ks.has_key("authconfig"):
         print "Configuring authentication"
 
         # Create /etc/samba for authconfig
@@ -2539,7 +2549,7 @@ def main():
                 print "ERROR: authconfig failed"
 
     # setting root password
-    if ks.has_key("install") and ks["rootpw"]:
+    if ks.has_key("install") and ks.has_key("rootpw"):
         print "Setting root password"
 
         try:
@@ -2566,7 +2576,7 @@ def main():
 
     # /etc/inittab
     if ks.has_key("install") and \
-           ks["xconfig"] and ks["xconfig"].has_key("startxonboot"):
+           ks.has_key("xconfig") and ks["xconfig"].has_key("startxonboot"):
         print "Configuring runlevel"
 
         try:
@@ -2594,7 +2604,7 @@ def main():
                       buildroot+"/etc/inittab")
 
     # /etc/sysconfig/selinux
-    if ks.has_key("install") and ks["selinux"] and \
+    if ks.has_key("install") and ks.has_key("selinux") and \
            ((installation.release == "RHEL" and installation.version > 3) or \
             (installation.release == "FC" and installation.version > 2)):
         print "Configuring selinux"
@@ -2613,7 +2623,7 @@ def main():
                 print "ERROR: Configuring selinux failed."
 
     # /etc/sysconfig/clock
-    if ks.has_key("install") and ks["timezone"]:
+    if ks.has_key("install") and ks.has_key("timezone"):
         print "Configuring timezone"
         zone = ks["timezone"].keys()[0]
         if ks["timezone"][zone].has_key("utc"):
@@ -2647,13 +2657,13 @@ def main():
         # /etc/sysconfig/desktop
         print "Setting default desktop"
         desktop = "GNOME"
-        if ks["xconfig"] and ks["xconfig"].has_key("defaultdesktop"):
+        if ks.has_key("xconfig") and ks["xconfig"].has_key("defaultdesktop"):
             desktop = ks["xconfig"]["defaultdesktop"]
         create_file(buildroot, "/etc/sysconfig/desktop",
                     [ 'DESKTOP="%s"\n' % desktop ])
 
     # /etc/sysconfig/i18n
-    if ks["langsupport"]:
+    if ks.has_key("langsupport"):
         print "Configuring languages"
         content = [ ]
         if ks["langsupport"].has_key("default"):
@@ -2672,7 +2682,7 @@ def main():
         print "Configuring installinfo"
         method = ""
         for key in [ "cdrom", "harddrive", "nfs", "url" ]:
-            if ks[key]:
+            if ks.has_key(key):
                 method = key
                 break
         create_file(buildroot, "/etc/sysconfig/installinfo",
@@ -2680,15 +2690,16 @@ def main():
 
     # /etc/sysconfig/iptables
     if ks.has_key("install") and \
-           ks["firewall"] and not ks["firewall"].has_key("disabled"):
+           ks.has_key("firewall") and not ks["firewall"].has_key("disabled"):
         print "Configuring firewall"
         firewall_config(ks, buildroot, installation)
 
     # /etc/sysconfig/keyboard
-    if ks["keyboard"]:
+    if ks.has_key("keyboard"):
         print "Configuring keyboard"
         create_file(buildroot, "/etc/sysconfig/keyboard",
-                    [ 'KEYBOARDTYPE="pc"\n', 'KEYTABLE="%s"\n' % ks["keyboard"] ])
+                    [ 'KEYBOARDTYPE="pc"\n', 'KEYTABLE="%s"\n' % \
+                      ks["keyboard"] ])
 
     # /etc/sysconfig/mouse
     if ks.has_key("install"):
@@ -2711,12 +2722,12 @@ def main():
         network_config(ks, buildroot)
 
     # /etc/X11/xorg.conf
-    if ks.has_key("install") and ks["xconfig"]:
+    if ks.has_key("install") and ks.has_key("xconfig"):
         print "Configuring X"
         x_config(ks, buildroot, installation)
 
     # /etc/sysconfig/firstboot
-    if ks.has_key("install") and ks["firstboot"]:
+    if ks.has_key("install") and ks.has_key("firstboot"):
         print "Configuring firstboot"
         if ks["firstboot"].has_key("reconfig"):
             create_file(buildroot, "/etc/reconfigSys")
@@ -2725,8 +2736,9 @@ def main():
                         [ 'RUN_FIRSTBOOT=NO\n' ])
 
     # /boot/grub/grub.conf
-    if ks["bootloader"] and not (ks["bootloader"].has_key("location") and \
-                                 ks["bootloader"]["location"] == "none"):
+    if ks.has_key("bootloader") and \
+           not (ks["bootloader"].has_key("location") and \
+                ks["bootloader"]["location"] == "none"):
 #TODO:                          and not (ks.has_key("upgrade") and \
 #                                  not ks["bootloader"].has_key("upgrade")):
 
@@ -2739,7 +2751,7 @@ def main():
             have = "do not have"
 
         append=""
-        if ks["bootloader"] and ks["bootloader"].has_key("append"):
+        if ks["bootloader"].has_key("append"):
             append = " %s" % ks["bootloader"]["append"]
 
         hds = diskmap.keys()
@@ -2928,7 +2940,7 @@ def main():
                         print "ERROR: grub setup failed"
 
     # sanitize lvm - remove cache file
-    if ks["install"]:
+    if ks.has_key("install"):
         lvm_cache = "%s/etc/lvm/.cache" % buildroot
         if os.path.exists(lvm_cache):
             print "Sanitizing lvm: Removing cache file."
@@ -2938,7 +2950,8 @@ def main():
                 print "ERROR: Unable to remove cache file."
 
     # run post script
-    if ks["install"] and ks["post"] and len(ks["post"]["script"]) > 0:
+    if ks.has_key("install") and \
+           ks.has_key("post") and len(ks["post"]["script"]) > 0:
         print "Running post script"
 
         chroot = None
@@ -3088,12 +3101,13 @@ time.sleep(1)
 os.system("/bin/sync")
 
 if wait:
-    sys.stdout.write("\nAvailable trees\n")
-    if stage2_chroot:
-        sys.stdout.write("  Stage2:       %s\n" % stage2_chroot)
-    if target_dir:
-        sys.stdout.write("  Installation: %s\n" % target_dir)
-    sys.stdout.write("Use 'chroot <dir>' to change into the tree.\n")
+    if stage2_chroot or target_dir:
+        sys.stdout.write("\nAvailable trees\n")
+        if stage2_chroot:
+            sys.stdout.write("  Stage2:       %s\n" % stage2_chroot)
+        if target_dir:
+            sys.stdout.write("  Installation: %s\n" % target_dir)
+        sys.stdout.write("Use 'chroot <dir>' to change into the tree.\n")
     sys.stdout.write("\nWaiting - Press any key to continue.")
     sys.stdout.flush()
     c = sys.stdin.read(1)
