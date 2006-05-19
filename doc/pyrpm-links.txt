@@ -8,6 +8,9 @@ and link:https://lists.dulug.duke.edu/mailman/listinfo/rpm-devel/.
 The binary rpm format is described at
 link:http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html[].
 
+In case of errors for the rpmdb, here a document on how to recover it:
+link:http://people.redhat.com/berrange/notes/rpmrecovery.html[].
+
 yum is available from link:http://linux.duke.edu/projects/yum/[]
 with the development mailinglist at
 link:https://lists.linux.duke.edu/mailman/listinfo/yum-devel/[].
