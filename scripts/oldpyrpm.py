@@ -4761,12 +4761,9 @@ def writeFile(filename, data, mode=None):
     os.rename(tmpfile, filename)
 
 
-hgauthor = "Florian La Roche <laroche@redhat.com>"
 rootdir = "/home/devel/test"
-hgrepo = rootdir + "/hgrepo"
-hgcgi = rootdir + "/hgrepo-cgi"
 hgfiles = rootdir + "/filecache"
-grepodir = rootdir + "/gitrepos"
+grepodir = rootdir + "/git-data"
 srepodir = rootdir + "/unpacked"
 mirror = "/var/www/html/mirror/"
 if not os.path.isdir(mirror):
@@ -4796,112 +4793,7 @@ srpm_repos = [
      [ mirror + "rhel/3/en/os/i386/SRPMS", rhelupdates + "3"], None, 30),
     ("Red Hat Enterprise Linux 2.1", "RHEL2.1",
      [ mirror + "rhel/2.1AS/en/os/i386/SRPMS", rhelupdates + "2.1"], None, 30),
-
-    # Other sites I mirror:
-    ("http://selenic.com/hg/", "hg", None, None, 20),
-    ("http://hg.serpentine.com/mercurial/mq/", "mq", None, None, 20),
-    ("http://hg.serpentine.com/mercurial/bos/", "hg-bos", None, None, 20),
-    ("http://hg.rpath.com/conary/", "conary", None, None, 20),
-    ("http://xenbits.xensource.com/xen-unstable.hg/",
-        "xen-unstable", None, None, 30),
-    ("http://thunk.org/hg/e2fsprogs/", "e2fsprogs", None, None, 20),
-    ("http://hg.thinkmo.de/moin/1.5/", "moin", None, None, 30),
-    ("http://hg.fedoraproject.org/hg/fedora/livecd--devel", "livecd--devel", None, None, 30),
 ]
-
-kgit = "rsync://rsync.kernel.org/pub/scm/"
-gitrepos = (
-    (kgit + "boot/syslinux/syslinux.git", "syslinux", 20),
-    (kgit + "devel/sparse/sparse.git", "sparse", 20),
-    (kgit + "git/git.git", "git", 20),
-    (kgit + "gitk/gitk.git", "gitk", None),
-    (kgit + "git/gitweb.git", "gitweb", None),
-    (kgit + "cogito/cogito.git", "cogito", 20),
-    (kgit + "linux/hotplug/udev.git", "udev", None),
-    ("http://www.cyd.liu.se/~freku045/gct/gct.git", "gct", None),
-    (kgit + "linux/kernel/git/torvalds/linux-2.6.git", "linux-2.6", 40),
-    (kgit + "libs/klibc/klibc.git", "klibc", 40),
-    ("http://git.openvz.org/pub/linux-2.6-openvz", "linux-2.6-openvz", 40),
-    ("http://git.openvz.org/pub/vzctl", "vzctl", 20),
-    ("http://git.openvz.org/pub/vzquota", "vzquota", 20),
-)
-
-def createCGI():
-    """Setup CGI configuration for mercurial."""
-    if not hgcgi:
-        return
-    if not os.path.isdir(hgcgi):
-        print "Error: cgi path for mercurial not setup."
-        return
-    mainindex = [
-        "#!/usr/bin/python\nimport cgitb, os, sys\n",
-        "cgitb.enable()\nfrom mercurial import hgweb\n\n",
-        "config = []\nfor (n, d) in (\n"]
-    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
-        repodir = hgrepo + "/" + reponame
-        cgidir = hgcgi + "/" + reponame
-        mainindex.append("    (\"%s\", \"%s\"),\n" % (reponame, repodir))
-        # Write index.cgi for each repository.
-        makeDirs(cgidir)
-        if dirs == None:
-            repodescr = "mirror from " + repodescr
-        writeFile(cgidir + "/index.cgi",
-            ["#!/usr/bin/python\nimport cgitb, os, sys\n",
-             "cgitb.enable()\nfrom mercurial import hgweb\n",
-             "h = hgweb.hgweb(\"%s\", \"%s\")\n" % (repodir, repodescr),
-             "h.run()\n"], 0755)
-    for (repo, dirname, maxchanges) in gitrepos:
-        dst = hgrepo + "/" + dirname
-        mainindex.append("    (\"%s\", \"%s\"),\n" % (dirname, dst))
-        cgidir = hgcgi + "/" + dirname
-        makeDirs(cgidir)
-        writeFile(cgidir + "/index.cgi",
-            ["#!/usr/bin/python\nimport cgitb, os, sys\n",
-             "cgitb.enable()\nfrom mercurial import hgweb\n",
-             "h = hgweb.hgweb(\"%s\", \"%s\")\n" % (dst, "mirror from " + repo),
-             "h.run()\n"], 0755)
-    mainindex.extend(["    ):\n",
-        "    if os.path.isfile(d + \"/.hg/00changelog.d\"):\n",
-        "        config.append((n, d))\n\n"])
-    mainindex.append("h = hgweb.hgwebdir(config)\nh.run()\n")
-    writeFile(hgcgi + "/index.cgi", mainindex, 0755)
-
-def updateMercurialMirrors(verbose):
-    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
-        if dirs:
-            continue
-        repodir = hgrepo + "/" + reponame
-        if verbose > 2:
-            print repodescr
-        if not os.path.isdir(repodir):
-            os.system("hg clone -q " + repodescr + " " + repodir)
-            data = ["[paths]\ndefault = %s\n" % repodescr,
-                "[web]\ndescription = mirror from %s\n" % repodescr]
-            if maxchanges:
-                data.append("maxchanges = %d\n" % maxchanges)
-            writeFile(repodir + "/.hg/hgrc", data)
-        else:
-            os.system("cd %s && { hg pull -q; hg update -m -q; }" % repodir)
-
-def updateGitMirrors(verbose):
-    if not os.path.isdir(grepodir):
-        print "No directory", grepodir, "is setup."
-        return
-
-    print "Downloading from git mirrors."
-    for (repo, dirname, maxchanges) in gitrepos:
-        if verbose > 2:
-            print repo
-        d = grepodir + "/" + dirname
-        if repo.startswith("rsync://"):
-            os.system("rsync -rltqvH --delete " + repo + "/ " + d + ".git")
-        else:
-            if not os.path.isdir(d + ".git"):
-                os.system("git clone -q " + repo + " " + d)
-                os.rename(d + "/.git", d + ".git")
-                os.system("rmdir " + d)
-            os.system("cd %s && GIT_DIR=%s git-pull" % (grepodir, d + ".git"))
-            writeFile(d + ".git/description", ["mirror from " + repo + "\n"])
 
 def cmpNoMD5(a, b):
     """Ignore leading md5sum to sort the "sources" file."""
@@ -5036,12 +4928,9 @@ def cmpByTime(a, b):
     return cmp(a["buildtime"][0], b["buildtime"][0])
 
 def createMercurial(verbose):
-    if not os.path.isdir(hgrepo) or not os.path.isdir(hgfiles):
-        print "Error: Paths for mercurial not setup. " + hgrepo + " " + hgfiles
+    if not os.path.isdir(grepodir) or not os.path.isdir(hgfiles):
+        print "Error: Paths for mercurial not setup. " + grepodir + " " + hgfiles
         return
-    createCGI()
-    updateGitMirrors(verbose)
-    updateMercurialMirrors(verbose)
     # Create and initialize repos if still missing.
     for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
         repodir = grepodir + "/" + reponame + ".git"
