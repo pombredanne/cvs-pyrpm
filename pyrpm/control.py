@@ -262,11 +262,14 @@ class RpmController:
                     self.config.printError("Error reopening %s: %s"
                                        % (pkg.getNEVRA(), e))
                     return 0
-            try:
-                pid = os.fork()
-            except OSError, e:
-                self.config.printError("fork(): %s" % e)
-                return 0
+            if self.config.buildroot:
+                try:
+                    pid = os.fork()
+                except OSError, e:
+                    self.config.printError("fork(): %s" % e)
+                    return 0
+            else:
+                pid = 0
             if pid != 0:
                 (rpid, status) = os.waitpid(pid, 0)
                 if status != 0:
@@ -302,11 +305,12 @@ class RpmController:
                 gc.collect()
                 if self.config.buildroot:
                     os.chroot(self.config.buildroot)
-                # We're in a buildroot now, reset the buildroot in the db object
-                self.db.setBuildroot(None)
-                # Now reopen database
-                self.db.close()
-                self.db.open()
+                    # We're in a buildroot now, reset the buildroot in the db
+                    # object
+                    self.db.setBuildroot(None)
+                    # Now reopen database
+                    self.db.close()
+                    self.db.open()
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)
                     nevra = pkg.getNEVRA()
