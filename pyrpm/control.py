@@ -192,6 +192,29 @@ class RpmController:
             if not ret:
                 return None
         self.triggerlist = _Triggers()
+        if not self.config.ignoresize:
+            for (op, pkg) in operations:
+                if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
+                    pkg.reread(tags=self.config.resolvertags)
+            if self.config.timer:
+                time1 = clock()
+            ret = getFreeDiskspace(self.config, operations)
+            if self.config.timer:
+                self.config.printInfo(0, "getFreeDiskspace took %s seconds\n" %\
+                            (clock() - time1))
+            if not ret:
+                return None
+        return operations
+
+    def runOperations(self, operations):
+        """Perform (operation, RpmPackage) from list operation.
+
+        Return 1 on success, 0 on error (after warning the user)."""
+
+        if operations == []:
+            self.config.printError("No updates are necessary.")
+            return 1
+        # Cache the packages
         if not self.config.nocache:
             self.config.printInfo(1, "Caching network packages\n")
         for (op, pkg) in operations:
@@ -225,25 +248,6 @@ class RpmController:
                         self.config.printInfo(2, "Signature of package %s correct\n" % pkg.getNEVRA())
                     pkg.close()
                     pkg.clear(ntags=self.config.resolvertags)
-        if not self.config.ignoresize:
-            if self.config.timer:
-                time1 = clock()
-            ret = getFreeDiskspace(self.config, operations)
-            if self.config.timer:
-                self.config.printInfo(0, "getFreeDiskspace took %s seconds\n" %\
-                            (clock() - time1))
-            if not ret:
-                return None
-        return operations
-
-    def runOperations(self, operations):
-        """Perform (operation, RpmPackage) from list operation.
-
-        Return 1 on success, 0 on error (after warning the user)."""
-
-        if operations == []:
-            self.config.printError("No updates are necessary.")
-            return 1
         for pkg in self.db.getPkgs():
             self.triggerlist.addPkg(pkg)
         numops = len(operations)
