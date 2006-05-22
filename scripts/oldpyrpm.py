@@ -5879,6 +5879,7 @@ def main():
             createrepo = 1
         elif opt == "--mercurial":
             mercurial = 1
+    # Select of what we want todo here:
     if diff:
         diff = diffTwoSrpms(args[0], args[1], explode)
         if diff != "":
@@ -6015,7 +6016,6 @@ def main():
                 print "Updating to %s." % rpm.getFilename()
 
     else:
-        arch_hash = setMachineDistance(arch)
         keepdata = 1
         hdrtags = rpmtag
         if verify == 0 and nodigest == 1:
@@ -6077,6 +6077,7 @@ def main():
                     time1 = time.clock()
                     print "Check as if kernel has the", \
                         "architecture \"%s\" now:" % arch
+                    arch_hash = setMachineDistance(arch)
                     installrpms = getPkgsNewest(repo, arch, arch_hash,
                         verbose, 1, 1)
                     if strict:
