@@ -174,7 +174,7 @@ class KickstartConfig(dict):
                     (_dict, _args) = self.parseArgs(opt, args[1:], [ "opts:" ])
                     if len(_args) != 2:
                         raise ValueError, "'%s' is unsupported" % line
-                    if not self[opt]:
+                    if not self.has_key(opt):
                         self[opt] = { }
                     if not self[opt].has_key(_args[0]):
                         self[opt][_args[0]] = { }
@@ -182,7 +182,7 @@ class KickstartConfig(dict):
                 # TODO: driverdisk
                 elif opt == "firewall":
                     # firewall is special, so we have to do it by hand
-                    if self[opt]:
+                    if self.has_key(opt):
                         raise ValueError, "%s already set." % opt
 
                     (_opts, _args) = KickstartConfig.getopt(args[1:], "",
@@ -313,7 +313,7 @@ class KickstartConfig(dict):
 
                     if len(_args) < 2:
                         raise ValueError, "'%s' is unsupported" % line
-                    if not self[opt]:
+                    if not self.has_key(opt):
                         self[opt] = { }
                     if self[opt].has_key(_args[0]):
                         raise ValueError, "raid '%s' is not unique.", _args[0]
@@ -353,7 +353,7 @@ class KickstartConfig(dict):
                     if len(_args) < 2:
                         raise ValueError, "'%s' is unsupported" % line
                     _dict["partitions"] = _args[1:]
-                    if not self[opt]:
+                    if not self.has_key(opt):
                         self[opt] = { }
                     if not self[opt].has_key(_args[0]):
                         self[opt][_args[0]] = { }
