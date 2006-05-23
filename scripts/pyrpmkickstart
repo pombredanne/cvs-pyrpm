@@ -20,6 +20,12 @@
 # AUTHOR: Thomas Woerner <twoerner@redhat.com>
 #
 
+# TODO
+# - overwrite rpmconfig.machine for yum call
+# - lvm update
+#
+
+
 import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, \
        signal, types, shutil, traceback, popen2
 import pprint
@@ -48,12 +54,13 @@ def exitHandler(signum, frame):
 ################################ main function ################################
 
 def main():
-    global verbose, buildroot, xen, nocleanup, confirm, tempdir, diskmap, \
+    global verbose, target_chroot, xen, nocleanup, confirm, tempdir, diskmap, \
            partitionmap, devmap, wait, orig_yum, target_dir, \
            label_prefix, standalone, stage2_img_dir, repo_comps, upgrade, \
            no_stage2, no_cache, raidmap, log, stage2_chroot, \
            vgmap
-
+    user_arch = None
+    
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
                                      [ "help", "verbose", "yes",
@@ -95,6 +102,8 @@ def main():
                 upgrade = val[5:]
             else:
                 upgrade = val
+        elif opt == "--arch":
+            user_arch = val
         elif opt == "--no-cache":
             no_cache = 1
         else:
@@ -105,6 +114,15 @@ def main():
     if len(args) < 1:
         usage()
         return
+
+    if user_arch:
+        if user_arch not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
+            print "ERROR: User requested arch is not compatible with " \
+                  "system arch."
+            return 1
+        if user_arch == "noarch":
+            print "ERROR: Noarch is now allowed as instalaltion arch."
+            return 1
 
     # kickstart file
     ks_file = args[0]
@@ -180,7 +198,7 @@ def main():
 
     ############################## mount stage2  ##############################
 
-    arch = None
+    source_arch = None
     if not no_stage2:
         stage2_img_dir = tempdir+"/stage2_img"
         os.mkdir(stage2_img_dir)
@@ -227,7 +245,7 @@ def main():
         if not bs:
             print "ERROR: Failed to get buildstamp information from stage2"
             return 1
-        (source_release, source_version, arch) = bs
+        (source_release, source_version, source_arch) = bs
 
         ### create stage2 chroot ###
 
@@ -329,7 +347,7 @@ def main():
         if source.get(".discinfo"):
             di = get_discinfo(source.get(".discinfo"))
             if di:
-                (source_release, source_version, arch) = di
+                (source_release, source_version, source_arch) = di
 
         # get source information via release package if discinfo was not found
         if not source_release:
@@ -353,7 +371,7 @@ def main():
                 source_version += ".90" # bad fix for rawhide
             del i
 
-    if not arch:
+    if not source_arch:
         # get installation arch
         pkgs = source.repo.getPkgsByName("filesystem")
         if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
@@ -361,7 +379,7 @@ def main():
         if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
             print "ERROR: Could not determine installation architecture."
             return 1
-        arch = pkgs[0]["arch"]
+        source_arch = pkgs[0]["arch"]
 
     # verify source release and version
     if source_release == "Red Hat Enterprise Linux":
@@ -375,11 +393,12 @@ def main():
         return 1
 
     try:
-        installation = Installation(short_release, int(source_version), arch)
+        installation = Installation(short_release, int(source_version),
+                                    source_arch)
     except:
         try:
             installation = Installation(short_release, float(source_version),
-                                        arch)
+                                        source_arch)
         except:
             print "ERROR: The installation version '%s' is not valid." % \
                   source_version
@@ -393,9 +412,13 @@ def main():
 
     print "Installation source: %s [%s]" % (installation, installation.arch)
 
-    if installation.arch not in pyrpm.arch_compats[pyrpm.rpmconfig.machine] and \
-           installation.arch != pyrpm.rpmconfig.machine:
+    if installation.arch not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
         print "ERROR: Installation source is not compatible with system arch."
+        return 1
+
+    if user_arch and user_arch not in pyrpm.arch_compats[installation.arch]:
+        print "ERROR: User requested arch '%s' " % (user_arch) + \
+              "is not compatible with installation source."
         return 1
 
     ####################### get used system ressources #######################
@@ -1010,6 +1033,7 @@ def main():
                 to_create.setdefault(part["vgname"], [ ]).append(name)
                 continue
             # create partition
+            # default disk is hda
             ondisk = "hda"
             # TODO: use SCSI disks
             # Not possible right now, because there is no hardware detection.
@@ -1885,8 +1909,8 @@ def main():
                 opts = part["fsoptions"]
             mount(d, dir, fstype=part["fstype"], options=opts)
 
-    buildroot = target_dir
-    pyrpm.rpmconfig.buildroot = buildroot
+    target_chroot = target_dir
+    pyrpm.rpmconfig.buildroot = target_chroot
 
     ############################ package selection ############################
 
@@ -2131,67 +2155,68 @@ def main():
     # create essential directories and files
     os.umask(022)
 
-    create_dir(buildroot, "/boot/grub")
-    create_dir(buildroot, "/dev")
-    create_dir(buildroot, "/etc/rpm")
-    create_dir(buildroot, "/etc/sysconfig")
-    create_dir(buildroot, "/proc")
-    create_dir(buildroot, "/proc/self/fd")
-    create_file(buildroot, "/proc/self/fd/0", [ ])
-    create_dir(buildroot, "/root")
+    create_dir(target_chroot, "/boot/grub")
+    create_dir(target_chroot, "/dev")
+    create_dir(target_chroot, "/etc/rpm")
+    create_dir(target_chroot, "/etc/sysconfig")
+    create_dir(target_chroot, "/proc")
+    create_dir(target_chroot, "/proc/self/fd")
+    create_file(target_chroot, "/proc/self/fd/0", [ ])
+    create_dir(target_chroot, "/root")
     if (installation.release == "RHEL" and installation.version >= 4) or \
            (installation.release == "FC" and installation.version >= 2):
-        create_dir(buildroot, "/sys")
-    create_dir(buildroot, "/tmp")
-    os.chmod(buildroot+"/tmp", 1777)
-    create_dir(buildroot, "/var/log")
-    create_dir(buildroot, "/var/tmp")
-    os.chmod(buildroot+"/var/tmp", 1777)
+        create_dir(target_chroot, "/sys")
+    create_dir(target_chroot, "/tmp")
+    os.chmod(target_chroot+"/tmp", 1777)
+    create_dir(target_chroot, "/var/log")
+    create_dir(target_chroot, "/var/tmp")
+    os.chmod(target_chroot+"/var/tmp", 1777)
 
     # /dev
-    create_min_devices(buildroot)
+    create_min_devices(target_chroot)
 
     # create /dev/mapper/control
     if volgroup:
-        create_dir(buildroot, "/dev/mapper")
-        create_device(buildroot, "/dev/mapper/control", 0600 | stat.S_IFCHR,
+        create_dir(target_chroot, "/dev/mapper")
+        create_device(target_chroot, "/dev/mapper/control", 0600 | stat.S_IFCHR,
                       10, 63)
 
     # create needed devices
     for onpart in partitionmap:
         if partitionmap[onpart].has_key("volgroup"):
-            create_dir(buildroot, "/dev/%s" % \
+            create_dir(target_chroot, "/dev/%s" % \
                        partitionmap[onpart]["volgroup"])
-            copy_device(partitionmap[onpart]["device"], buildroot,
+            copy_device(partitionmap[onpart]["device"], target_chroot,
                         source_dir=stage2_dir)
         else:
-            copy_device(partitionmap[onpart]["device"], buildroot,
+            copy_device(partitionmap[onpart]["device"], target_chroot,
                         source_dir=stage2_dir)
 
     # /proc/mdstat
     if ks.has_key("install") and raidmap and \
-           not os.path.exists(buildroot+"/proc/mdstat"):
+           not os.path.exists(target_chroot+"/proc/mdstat"):
         print "Writing '/proc/mdstat'"
         content = [ ]
         for raid in raidmap:
             content.append("%s : active raid%d \n" % \
                            (raid, raidmap[raid].level))
-        create_file(buildroot, "/proc/mdstat", content)
+        create_file(target_chroot, "/proc/mdstat", content)
 
     # /proc/lvm/global
     if ks.has_key("install") and volgroup:
-        create_dir(buildroot, "/proc/lvm")
-        if not os.path.exists(buildroot+"/proc/lvm/global"):
+        create_dir(target_chroot, "/proc/lvm")
+        if not os.path.exists(target_chroot+"/proc/lvm/global"):
             print "Writing '/proc/lvm/global'"
             content = [ ]
             for group in volgroup:
                 content.append("VG:  %s\n" % group)
-            create_file(buildroot, "/proc/lvm/group", content)
+            create_file(target_chroot, "/proc/lvm/group", content)
 
     # /proc/devices
-    if ks.has_key("install") and not os.path.exists(buildroot+"/proc/devices"):
+    if ks.has_key("install") and \
+           not os.path.exists(target_chroot+"/proc/devices"):
         # create usable /proc/devices for lvm
-        create_file(buildroot, "/proc/devices",
+        create_file(target_chroot, "/proc/devices",
                     [ "Character devices:\n",
                       " 10 misc\n",
                       "\n",
@@ -2207,10 +2232,11 @@ def main():
             '\n',
             '# DEFAULTKERNEL specifies the default kernel package type\n',
             'DEFAULTKERNEL=kernel\n' ]
-        create_file(buildroot, "/etc/sysconfig/kernel", content)
+        create_file(target_chroot, "/etc/sysconfig/kernel", content)
 
     # /etc/fstab
-    if ks.has_key("install") and not os.path.exists(buildroot+"/etc/fstab"):
+    if ks.has_key("install") and \
+           not os.path.exists(target_chroot+"/etc/fstab"):
         print "Writing '/etc/fstab'"
 
         content = [ ]
@@ -2285,14 +2311,14 @@ def main():
             else:
                 what = "LABEL=%s" % partitionmap[onpart]["label"]
             content.append("%s\t\tswap\t\tswap\tdefaults\t0 0\n" % what)
-        create_file(buildroot, "/etc/fstab", content)
+        create_file(target_chroot, "/etc/fstab", content)
 
         print "Writing '/etc/mtab'"
-        create_file(buildroot, "/etc/mtab", mtab_content)
+        create_file(target_chroot, "/etc/mtab", mtab_content)
 
     # /etc/mdadm.conf
     if ks.has_key("install") and has_raid and \
-           not os.path.exists(buildroot+"/etc/mdadm.conf"):
+           not os.path.exists(target_chroot+"/etc/mdadm.conf"):
         print "Writing '/etc/mdadm.conf'"
         content = [ "# mdadm.conf written by pyrpmkickstart\n",
                     "DEVICE partitions\n",
@@ -2310,10 +2336,11 @@ def main():
             content.append("ARRAY /dev/%s level=raid%d devices=%s\n" % \
                            (onpart, partitions[name]["level"],
                             ",".join(devs)))
-        create_file(buildroot, "/etc/mdadm.conf", content)
+        create_file(target_chroot, "/etc/mdadm.conf", content)
 
     # /etc/hosts
-    if ks.has_key("install") and not os.path.exists(buildroot+"/etc/hosts"):
+    if ks.has_key("install") and \
+           not os.path.exists(target_chroot+"/etc/hosts"):
         print "Writing '/etc/hosts'"
 
         hostname = ""
@@ -2328,7 +2355,7 @@ def main():
                     else:
                         hosts += "%s\t\t%s\n" % (net["ip"], net["hostname"])
 
-        create_file(buildroot, "/etc/hosts", [ \
+        create_file(target_chroot, "/etc/hosts", [ \
             "# Do not remove the following line, or various programs\n",
             "# that require network functionality will fail.\n",
             "127.0.0.1\t\t%slocalhost.localdomain\tlocalhost\n" % hostname,
@@ -2336,7 +2363,7 @@ def main():
 
     # /etc/resolv.conf
     if ks.has_key("install") and not \
-           os.path.exists(buildroot+"/etc/resolv.conf"):
+           os.path.exists(target_chroot+"/etc/resolv.conf"):
         content = [ ]
         if ks.has_key("network") and len(ks["network"]) > 0:
             hostname = domainname = None
@@ -2352,7 +2379,7 @@ def main():
             if net.has_key("nameserver") and not net.has_key("nodns"):
                 for server in net["nameserver"]:
                     content.append("nameserver %s\n" % server)
-        create_file(buildroot, "/etc/resolv.conf", content)
+        create_file(target_chroot, "/etc/resolv.conf", content)
 
     # /etc/modprobe.conf and /etc/modules.conf
     if ks.has_key("install"):
@@ -2382,22 +2409,22 @@ def main():
                             content.append('options %s %s\n' % \
                                            (module,
                                             ks["device"][type][module]["opts"]))
-        create_file(buildroot, conf, content)
+        create_file(target_chroot, conf, content)
 
     # /etc/rpm/platform
     # disable for now, it writes i386 instead of i686 and then rpm won't
     # install i586 rpms anymore: (TODO: re-enable this again)
-#    if ks.has_key("install") and not os.path.exists(buildroot+"/etc/rpm/platform"):
-#    create_file(buildroot, "/etc/rpm/platform", 
+#    if ks.has_key("install") and not os.path.exists(target_chroot+"/etc/rpm/platform"):
+#    create_file(target_chroot, "/etc/rpm/platform", 
 #                [ "%s-redhat-linux" % installation.arch ])
 
     # /var/log/lastlog
     if ks.has_key("install"):
-        create_file(buildroot, "/var/log/lastlog")
+        create_file(target_chroot, "/var/log/lastlog")
 
     # /var/log/messages
     if ks.has_key("install"):
-        create_file(buildroot, "/var/log/messages")
+        create_file(target_chroot, "/var/log/messages")
 
     # print previous installed release
     if ks.has_key("upgrade"):
@@ -2468,12 +2495,12 @@ def main():
 
     # yum
     if orig_yum:
-        yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf, buildroot)
+        yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf, target_chroot)
     else:
         yum = "PATH=%s:${PATH}; export PATH; " % (PYBINDIR) + \
               "PYTHONPATH=%s; export PYTHONPATH; " % (PYRPMDIR) + \
               "pyrpmyum -y --hash -c '%s' --root='%s' --cachedir='%s'" % \
-              (yum_conf, buildroot, cache_dir)
+              (yum_conf, target_chroot, cache_dir)
         # --servicehack
         if no_cache:
             yum += " --nocache"
@@ -2518,8 +2545,8 @@ def main():
     ##########################################################################
 
     # check system dirs
-    if not check_dir(buildroot, "/etc") or \
-           not check_dir(buildroot, "/etc/sysconfig"):
+    if not check_dir(target_chroot, "/etc") or \
+           not check_dir(target_chroot, "/etc/sysconfig"):
         print "Aborting."
         return 1
 
@@ -2528,11 +2555,11 @@ def main():
         print "Configuring authentication"
 
         # Create /etc/samba for authconfig
-        if not os.path.exists(buildroot+"/etc/samba"):
-            os.mkdir(buildroot+"/etc/samba")
+        if not os.path.exists(target_chroot+"/etc/samba"):
+            os.mkdir(target_chroot+"/etc/samba")
 
         try:
-            check_exists(buildroot, "/usr/sbin/authconfig")
+            check_exists(target_chroot, "/usr/sbin/authconfig")
         except:
             print "ERROR: /usr/sbin/authconfig does not exist, skipping."
         else:
@@ -2543,7 +2570,7 @@ def main():
                 else:
                     authconfig += " --%s" % tag
             (status, rusage, msg) = pyrpm.runScript(script=authconfig,
-                                                    chroot=buildroot)
+                                                    chroot=target_chroot)
             log(msg)
             if status != 0:
                 print "ERROR: authconfig failed"
@@ -2553,7 +2580,7 @@ def main():
         print "Setting root password"
 
         try:
-            check_exists(buildroot, "/usr/sbin/usermod")
+            check_exists(target_chroot, "/usr/sbin/usermod")
         except:
             print "ERROR: /usr/sbin/usermod does not exist, skipping."
         else:
@@ -2569,7 +2596,7 @@ def main():
                 password = crypt.crypt(password, salt)
             (status, rusage, msg) = pyrpm.runScript( \
                     script="/usr/sbin/usermod -p '%s' root" % password,
-                    chroot=buildroot)
+                    chroot=target_chroot)
             log(msg)
             if status != 0:
                 print "ERROR: Setting root password failed"
@@ -2580,8 +2607,8 @@ def main():
         print "Configuring runlevel"
 
         try:
-            fd_in = open(buildroot+"/etc/inittab", "r")
-            fd_out = open(buildroot+"/etc/inittab.pyrpmkickstart", "w")
+            fd_in = open(target_chroot+"/etc/inittab", "r")
+            fd_out = open(target_chroot+"/etc/inittab.pyrpmkickstart", "w")
         except Exception, msg:
             print "ERROR: Configuration of '/etc/inittab' failed:", msg
         else:
@@ -2599,9 +2626,9 @@ def main():
                 fd_out.write(line)
             fd_in.close()
             fd_out.close()
-            os.unlink(buildroot+"/etc/inittab")
-            os.rename(buildroot+"/etc/inittab.pyrpmkickstart",
-                      buildroot+"/etc/inittab")
+            os.unlink(target_chroot+"/etc/inittab")
+            os.rename(target_chroot+"/etc/inittab.pyrpmkickstart",
+                      target_chroot+"/etc/inittab")
 
     # /etc/sysconfig/selinux
     if ks.has_key("install") and ks.has_key("selinux") and \
@@ -2610,14 +2637,14 @@ def main():
         print "Configuring selinux"
 
         try:
-            check_exists(buildroot, "/usr/sbin/lokkit")
+            check_exists(target_chroot, "/usr/sbin/lokkit")
         except:
             print "ERROR: /usr/sbin/lokkit does not exist, skipping."
         else:
             lokkit = "/usr/sbin/lokkit --quiet --nostart --selinux='%s'" % \
                      ks["selinux"].keys()[0]
             (status, rusage, msg) = pyrpm.runScript(script=lokkit,
-                                                    chroot=buildroot)
+                                                    chroot=target_chroot)
             log(msg)
             if status != 0:
                 print "ERROR: Configuring selinux failed."
@@ -2630,12 +2657,12 @@ def main():
             _utc = 'UTC=true\n'
         else:
             _utc = 'UTC=false\n'    
-        create_file(buildroot, "/etc/sysconfig/clock",
+        create_file(target_chroot, "/etc/sysconfig/clock",
                     [ 'ZONE="%s"\n' % zone, _utc, 'ARC=false\n' ])
 
         tzfile = "/usr/share/zoneinfo/" + zone
         try:
-            check_exists(buildroot, tzfile)
+            check_exists(target_chroot, tzfile)
         except:
             print "ERROR: %s does not exist, skipping." % tzfile
         else:
@@ -2643,13 +2670,13 @@ def main():
             # do not hardlink /etc/localtime, has to be copy for
             # system-config-date
             try:
-                check_exists(buildroot, "/etc/localtime")
+                check_exists(target_chroot, "/etc/localtime")
             except:
                 pass
             else:
-                os.unlink(buildroot+"/etc/localtime")
+                os.unlink(target_chroot+"/etc/localtime")
             try:
-                buildroot_copy(buildroot, tzfile, "/etc/localtime")
+                buildroot_copy(target_chroot, tzfile, "/etc/localtime")
             except:
                 print "ERROR: Could not create /etc/localtime."
 
@@ -2659,7 +2686,7 @@ def main():
         desktop = "GNOME"
         if ks.has_key("xconfig") and ks["xconfig"].has_key("defaultdesktop"):
             desktop = ks["xconfig"]["defaultdesktop"]
-        create_file(buildroot, "/etc/sysconfig/desktop",
+        create_file(target_chroot, "/etc/sysconfig/desktop",
                     [ 'DESKTOP="%s"\n' % desktop ])
 
     # /etc/sysconfig/i18n
@@ -2675,7 +2702,7 @@ def main():
         else:
             content.append('LANG="%s"\n' % \
                            string.join(ks["langsupport"]["supported"], ":"))
-        create_file(buildroot, "/etc/sysconfig/i18n", content)
+        create_file(target_chroot, "/etc/sysconfig/i18n", content)
 
     # /etc/sysconfig/installinfo
     if ks.has_key("install"):
@@ -2685,19 +2712,19 @@ def main():
             if ks.has_key(key):
                 method = key
                 break
-        create_file(buildroot, "/etc/sysconfig/installinfo",
+        create_file(target_chroot, "/etc/sysconfig/installinfo",
                     [ 'INSTALLMETHOD=%s\n' % method ])
 
     # /etc/sysconfig/iptables
     if ks.has_key("install") and \
            ks.has_key("firewall") and not ks["firewall"].has_key("disabled"):
         print "Configuring firewall"
-        firewall_config(ks, buildroot, installation)
+        firewall_config(ks, target_chroot, installation)
 
     # /etc/sysconfig/keyboard
     if ks.has_key("keyboard"):
         print "Configuring keyboard"
-        create_file(buildroot, "/etc/sysconfig/keyboard",
+        create_file(target_chroot, "/etc/sysconfig/keyboard",
                     [ 'KEYBOARDTYPE="pc"\n', 'KEYTABLE="%s"\n' % \
                       ks["keyboard"] ])
 
@@ -2705,13 +2732,13 @@ def main():
     if ks.has_key("install"):
         print "Configuring generic IMPS/2 mouse"
         try:
-            check_exists(buildroot, "/usr/sbin/mouseconfig")
+            check_exists(target_chroot, "/usr/sbin/mouseconfig")
         except:
             print "ERROR: /usr/sbin/mouseconfig does not exist, skipping."
         else:
             (status, rusage, msg) = pyrpm.runScript( \
                     script="/usr/sbin/mouseconfig --noui genericwheelps/2",
-                    chroot=buildroot)
+                    chroot=target_chroot)
             log(msg)
             if status != 0:
                 print "ERROR: mouseconfig failed"
@@ -2719,20 +2746,20 @@ def main():
     # setup networking
     if ks.has_key("install"):
         print "Configuring network"
-        network_config(ks, buildroot)
+        network_config(ks, target_chroot)
 
     # /etc/X11/xorg.conf
     if ks.has_key("install") and ks.has_key("xconfig"):
         print "Configuring X"
-        x_config(ks, buildroot, installation)
+        x_config(ks, target_chroot, installation)
 
     # /etc/sysconfig/firstboot
     if ks.has_key("install") and ks.has_key("firstboot"):
         print "Configuring firstboot"
         if ks["firstboot"].has_key("reconfig"):
-            create_file(buildroot, "/etc/reconfigSys")
+            create_file(target_chroot, "/etc/reconfigSys")
         if ks["firstboot"].has_key("disabled"):
-            create_file(buildroot, "/etc/sysconfig/firstboot",
+            create_file(target_chroot, "/etc/sysconfig/firstboot",
                         [ 'RUN_FIRSTBOOT=NO\n' ])
 
     # /boot/grub/grub.conf
@@ -2770,13 +2797,13 @@ def main():
             id += 1
 
         print "Searching for installed kernels"
-        kernels = get_installed_kernels(buildroot)
+        kernels = get_installed_kernels(target_chroot)
 
         if len(kernels) < 1:
             print "ERROR: No kernels are installed."
             return 1
 
-        if not os.path.exists(buildroot+"/boot/grub/grub.conf") or \
+        if not os.path.exists(target_chroot+"/boot/grub/grub.conf") or \
                ks.has_key("upgrade"):
 #TODO:           ks["bootloader"].has_key("upgrade"):
 # do not update grub entries for old kernels
@@ -2851,25 +2878,30 @@ def main():
                       (prefix, kernel, root, append),
                       '\tinitrd %s/initrd-%s.img\n' % (prefix, kernel) ] )
 
-            create_file(buildroot, "/boot/grub/grub.conf", content, force=1)
+            create_file(target_chroot, "/boot/grub/grub.conf", content,
+                        force=1)
 
-            # use arch of install tree
-            buildroot_copy(buildroot,
-                           "/usr/share/grub/%s-redhat/stage1" % installation.arch,
-                           "/boot/grub/stage1")
-            buildroot_copy(buildroot,
-                           "/usr/share/grub/%s-redhat/stage2" % installation.arch,
-                           "/boot/grub/stage2")
-            # TODO: support xfs, jfs and reiserfs stage1.5
-            buildroot_copy(buildroot,
-                           "/usr/share/grub/%s-redhat/e2fs_stage1_5" % \
-                           installation.arch, "/boot/grub/e2fs_stage1_5")
+            # copy all grub stage files
+            t = "/usr/share/grub/%s-redhat/" % installation.arch
+            list = os.listdir(target_chroot+t)
+            if len(list) == 0:
+                print "ERROR: grub stage files are missing in " + \
+                      "installation tree."
+                return 1
+            for f in [ "stage1", "stage2", "e2fs_stage1_5" ]:
+                if not f in list:
+                    print "ERROR: grub stage file '%s' " % f + \
+                          "is missing in installation tree."
+                    return 1
+            for entry in list:
+                buildroot_copy(target_chroot, t + entry, "/boot/grub/" + entry)
+            del t
 
             # create temporary devices which are usable by grub (hda, hda1, ..)
             devmap = { } # device mapping
             for disk in hds:
                 dev = "/tmp/%s" % disk
-                copy_device(diskmap[disk]["device"], buildroot,
+                copy_device(diskmap[disk]["device"], target_chroot,
                             source_dir=stage2_dir, target=dev)
                 devmap[diskmap[disk]["device"]] = dev
             for onpart in partitionmap:
@@ -2881,7 +2913,7 @@ def main():
                 else:
                     dev = "/tmp/%s%d" % (partitionmap[onpart]["disk"],
                                          partitionmap[onpart]["id"])
-                    copy_device(partitionmap[onpart]["device"], buildroot,
+                    copy_device(partitionmap[onpart]["device"], target_chroot,
                                 source_dir=stage2_dir, target=dev)
                     devmap[partitionmap[onpart]["device"]] = dev
 
@@ -2889,7 +2921,8 @@ def main():
             content = [ '(fd0) /dev/fd0\n' ]
             for disk in hds:
                 content.append('(%s) %s\n' % (hdmap[disk], disk))
-            if not create_file(buildroot, "/boot/grub/devices.map", content):
+            if not create_file(target_chroot, "/boot/grub/devices.map",
+                               content):
                 return 1
 
             # grub setup
@@ -2925,23 +2958,23 @@ def main():
                 content.append('setup (%s)\n' % hd)
             content.append('quit\n')
             content.append('EOF\n')
-            if not create_file(buildroot, "/tmp/grub-setup", content):
+            if not create_file(target_chroot, "/tmp/grub-setup", content):
                 print "ERROR: grub setup failed"
             else:
                 try:
-                    check_exists(buildroot, "/sbin/grub")
+                    check_exists(target_chroot, "/sbin/grub")
                 except:
                     print "ERROR: /sbin/grub does not exist, skipping."
                 else:
                     (status, rusage, msg) = pyrpm.runScript( \
-                        script="/bin/sh /tmp/grub-setup", chroot=buildroot)
+                        script="/bin/sh /tmp/grub-setup", chroot=target_chroot)
                     log(msg)
                     if status != 0:
                         print "ERROR: grub setup failed"
 
     # sanitize lvm - remove cache file
     if ks.has_key("install"):
-        lvm_cache = "%s/etc/lvm/.cache" % buildroot
+        lvm_cache = "%s/etc/lvm/.cache" % target_chroot
         if os.path.exists(lvm_cache):
             print "Sanitizing lvm: Removing cache file."
             try:
@@ -2956,7 +2989,7 @@ def main():
 
         chroot = None
         if not ks["post"].has_key("nochroot"):
-            chroot = buildroot
+            chroot = target_chroot
         elif stage2_chroot:
             chroot = stage2_chroot
         interpreter = "/bin/sh"
@@ -2998,15 +3031,15 @@ def main():
             fd.write('extra = "ro"\n')
             fd.close()
 
-    # copy log file into buildroot+/root/
+    # copy log file into target_chroot+/root/
     logger.flush()
     logger.close()
     fd = open(log_file, "r")
     target = "/root/pyrpmkickstart.log"
     try:
-        target_fd = open(buildroot+target, "w")
+        target_fd = open(target_chroot+target, "w")
     except Exception, msg:
-        print "ERROR: Failed to open '%s':" % buildroot+target, msg
+        print "ERROR: Failed to open '%s':" % target_chroot+target, msg
         return 1
     data = fd.read(65536)
     while data:
@@ -3058,7 +3091,7 @@ OPTIONS
 ##################################### main ####################################
 
 verbose = 0
-buildroot = ""
+target_chroot = ""
 xen = 0
 nocleanup = 0
 confirm = 1
@@ -3101,12 +3134,12 @@ time.sleep(1)
 os.system("/bin/sync")
 
 if wait:
-    if stage2_chroot or target_dir:
+    if stage2_chroot or target_chroot:
         sys.stdout.write("\nAvailable trees\n")
         if stage2_chroot:
             sys.stdout.write("  Stage2:       %s\n" % stage2_chroot)
         if target_dir:
-            sys.stdout.write("  Installation: %s\n" % target_dir)
+            sys.stdout.write("  Installation: %s\n" % target_chroot)
         sys.stdout.write("Use 'chroot <dir>' to change into the tree.\n")
     sys.stdout.write("\nWaiting - Press any key to continue.")
     sys.stdout.flush()
@@ -3115,15 +3148,15 @@ if wait:
 if devmap:
     # remove temporary devices
     for dev in devmap:
-        if not os.path.exists(buildroot+devmap[dev]):
+        if not os.path.exists(target_chroot+devmap[dev]):
             print "WARNING: '%s' does not eixt in '%s'." % (devmap[dev],
-                                                            buildroot)
+                                                            target_chroot)
             continue
-        os.unlink(buildroot+devmap[dev])
+        os.unlink(target_chroot+devmap[dev])
     devmap = None
 
-if tempdir and buildroot:
-    stat = umount_all(buildroot)
+if tempdir and target_chroot:
+    stat = umount_all(target_chroot)
 
 if partitionmap:
     for onpart in partitionmap:
