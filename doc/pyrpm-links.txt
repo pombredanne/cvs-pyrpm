@@ -69,7 +69,10 @@ link:http://www.openpkg.org/[].
 Rebuild rpm packages and manage build roots via mach, available from
 link:http://thomas.apestaart.org/projects/mach/[] and further info
 at link:http://fedoraproject.org/wiki/UsingMach[].
-Fedora Extras is using link:http://fedoraproject.org/wiki/Projects/Plague[].
+Fedora Extras has started a fork called mock:
+link:http://fedoraproject.org/wiki/Projects/Mock[].
+The buildsystem for Fedora Extras is called plague, available at
+link:http://fedoraproject.org/wiki/Projects/Plague[].
 Discussions around a buildsystem also happen on
 link:http://www.redhat.com/archives/fedora-buildsys-list/[].
 Caos is using link:http://www.kainx.org/mezzanine/[] to
