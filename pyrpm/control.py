@@ -305,9 +305,9 @@ class RpmController:
                         # anyway.
                         pass
             else:
-                del operations
-                gc.collect()
                 if self.config.buildroot:
+                    del operations
+                    gc.collect()
                     os.chroot(self.config.buildroot)
                     # We're in a buildroot now, reset the buildroot in the db
                     # object
@@ -398,8 +398,9 @@ class RpmController:
                         self.config.printWarning(0, "Error running "
                                                  "/sbin/ldconfig: %s" % e)
                 self.config.printInfo(2, "number of /sbin/ldconfig calls optimized away: %d\n" % self.config.ldconfig)
-                self.db.close()
-                sys.exit(0)
+                if self.config.buildroot:
+                    self.db.close()
+                    sys.exit(0)
         self.db.close()
         if self.config.keepcache:
             return 1
