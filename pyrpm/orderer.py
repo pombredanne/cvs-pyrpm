@@ -349,7 +349,7 @@ class RpmRelations:
 
         if connected_components:
             # debug output the components
-            self.config.printDebug(1, "-- STRONLY CONNECTED COMPONENTS --")
+            self.config.printDebug(1, "-- STRONGLY CONNECTED COMPONENTS --")
             if self.config.debug > 1:
                 for i in xrange(len(connected_components)):
                     s = ", ".join([pkg.getNEVRA() for pkg in
