@@ -105,6 +105,9 @@ class RpmDatabase:
     def getRequires(self):
         raise NotImplementedError
 
+    def getFileRequires(self):
+        return [file for file in self.getRequires().keys() if file[0]=="/"]
+
     def getConflicts(self):
         raise NotImplementedError
 

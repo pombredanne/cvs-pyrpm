@@ -435,8 +435,8 @@ class RpmYum:
                             continue
                         if self.opresolver.update(opkg) > 0:
                             break
-                for pkg in self.opresolver.getDatabase().getPkgs():
-                    args.append(pkg["name"])
+                for name in self.opresolver.getDatabase().getNames():
+                    args.append(name)
         # Select proper function to be called for every argument. We have
         # a fixed operation for runArgs(), so use a reference to the
         # corresponding function.
@@ -608,18 +608,14 @@ class RpmYum:
         # List of filereqs we already checked
         self.filereqs = []
         self.iteration = 1
-        unresolved = self.opresolver.getUnresolvedDependencies()
-        if not unresolved:
-            conflicts = self.opresolver.getConflicts()
-            if len(conflicts) == 0:
-                return 1
+
         # As long as either __handleUnresolvedDeps() or __handleConflicts()
         # changes something to the package set we need to continue the loop.
         # Afterwards there may still be unresolved deps or conflicts for which
         # we then have to check.
         nowork_count = 0
-        while nowork_count < 3:
-            if not self.__handleUnresolvedDeps(unresolved):
+        while nowork_count < 3: # XXX Why not 2???
+            if not self.__handleUnresolvedDeps():
                 nowork_count += 1
             else:
                 nowork_count = 0
@@ -648,45 +644,33 @@ class RpmYum:
             return 1
         return 0
 
-    def __handleUnresolvedDeps(self, unresolved = None):
+    def __handleUnresolvedDeps(self):
         """Try to install/remove packages to reduce the number of unresolved
         dependencies.
 
         Return 1 if some package changes have been done, 0 otherwise."""
 
-        if unresolved == None:
-            unresolved = self.opresolver.getUnresolvedDependencies()
         # Otherwise get first unresolved dep and then try to solve it as long
         # as we have unresolved deps. If we fail to resolve a dep we try the
         # next one until only unresolvable deps remain.
-        ppos = 0
-        dpos = 0
         ret = 0
-        while len(unresolved) > 0:
-            pkg = unresolved.keys()[ppos]
-            dep = unresolved[pkg][dpos]
-            self.config.printInfo(2, "Dependency iteration %s\n" %
-                                     str(self.iteration))
-            self.iteration += 1
-            self.config.printInfo(2, "Resolving dependency for %s\n" %
-                                     pkg.getNEVRA())
-            # If we were able to resolve this dep in any way we reget the
-            # deps and do the next internal iteration
-            if self.__resolveDep(pkg, dep):
-                ret = 1
-                unresolved = self.opresolver.getUnresolvedDependencies()
-                ppos = 0
-                dpos = 0
-                continue
-            # Try to find next unresolved dep
-            dpos += 1
-            if dpos >= len(unresolved[pkg]):
-                dpos = 0
-                ppos += 1
-                # End of story: There are no more resolvable unresolved deps,
-                # so we end here.
-                if ppos >= len(unresolved.keys()):
-                    return ret
+        unresolved = self.opresolver.iterUnresolvedDependencies()
+
+        while True:
+            for pkg, dep in unresolved:
+                self.config.printInfo(2, "Dependency iteration %s\n" %
+                                      str(self.iteration))
+                self.iteration += 1
+                self.config.printInfo(2, "Resolving dependency for %s\n" %
+                                      pkg.getNEVRA())
+                # If we were able to resolve this dep in any way we reget the
+                # deps and do the next internal iteration
+                if self.__resolveDep(pkg, dep):
+                    ret = 1
+                    unresolved = self.opresolver.iterUnresolvedDependencies()
+                    break
+            else: # exit while loop if we got through the for loop
+                break
         return ret
 
     def __resolveDep(self, pkg, dep):

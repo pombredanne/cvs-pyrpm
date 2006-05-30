@@ -54,55 +54,26 @@ class RpmResolver:
         self.database = database
         self.clear()
 
-        # %name => [RpmPackage]; "originally" installed packages
-        self.installed = HashList()
-
-        self.installed_unresolved = HashList()
-        self.installed_conflicts = HashList()
-        self.installed_obsoletes = HashList()
-        self.installed_file_conflicts = HashList()
-
-        # all packages, which are in the database this time are already
-        # installed packages.
-        for name in self.database.getNames():
-            self.installed[name] = self.database.getPkgsByName(name)[:]
-#            for pkg in self.database.getPkgsByName(name):
-#                self.installed.setdefault(name, [ ]).append(pkg)
-
         # do no further checks
         if nocheck:
             return
 
-        # fill in installed_ structures
-        check_installed = self.config.checkinstalled
-        self.config.checkinstalled = 1
-        # HashList: RpmPackage => [(name, RPMSENSE_* flags, EVR string)].
-        # unresolved dependencies among "originally" installed packages
-        self.installed_unresolved = self.getUnresolvedDependencies()
-        # HashList: RpmPackage =>
-        # [((name, RPMSENSE_* flags, EVR string), matching RpmPackage)].
-        # conflicts among "originally" installed packages
-        self.installed_conflicts = self.getConflicts()
-        # HashList: RpmPackage =>
-        # [((name, RPMSENSE_* flags, EVR string), matching RpmPackage)].
-        # obsoletes among "originally" installed packages
-        self.installed_obsoletes = self.getObsoletes()
-        # HashList: RpmPackage => [(filename, conflicting RpmPackage)].
-        # Each pair of packages is represented only once, the first added to
-        # self.filenames_list is the HashList key.
-        self.installed_file_conflicts = self.getFileConflicts()
-        self.config.checkinstalled = check_installed
+        if config.checkinstalled == 0:
+            self.installed_unresolved_file_requires = self.getUnresolvedFileRequires()
+            
     # ----
 
     def clear(self):
         """Clear all changed data."""
 
-        self.installs = [ ] # Added RpmPackage's
+        self.installs = set() # Added RpmPackage's
+        self.check_installs = set()
         # new RpmPackage
         # => ["originally" installed RpmPackage removed by update]
         self.updates = { }
-        self.erases = [ ] # Removed RpmPackage's
-
+        self.erases = set() # Removed RpmPackage's
+        self.check_erases = set()
+        self.check_file_requires = False
         # new RpmPackage =>
         # ["originally" installed RpmPackage obsoleted by update]
         self.obsoletes = { }
@@ -127,22 +98,28 @@ class RpmResolver:
                 s = self.database.searchObsoletes(f, 0, "")
                 if self._checkObsoletes(pkg, dep, s, operation):
                     return self.CONFLICT
+            #for name in self.database.getObsoletes().keys():
+            #    if name.startswith("/") and name in pkg["filenames"]:
+            #        return self.CONFLICT
 
         # Add RpmPackage
         # Return an RpmList error code (after warning the user). Check whether
         # a package with the same NEVRA is already in the database.
+
         name = pkg["name"]
         if self.database.hasName(name):
             for r in self.database.getPkgsByName(name):
                 ret = self.__install_check(r, pkg)
                 if ret != self.OK:
                     return ret
-        self.database.addPkg(pkg)
 
         if not self.isInstalled(pkg):
-            self.installs.append(pkg)
+            self.installs.add(pkg)
         if pkg in self.erases:
             self.erases.remove(pkg)
+        self.check_installs.add(pkg)
+
+        self.database.addPkg(pkg)
 
         return self.OK
     # ----
@@ -166,55 +143,54 @@ class RpmResolver:
         # Valid only during OP_UPDATE: list of RpmPackage's that will be
         # removed by the current update
         self.pkg_updates = [ ]
-        if name in self.database.getNames():
-            for r in self.database.getPkgsByName(name):
-                ret = pkgCompare(r, pkg)
-                if ret > 0: # old_ver > new_ver
-                    if self.config.oldpackage == 0:
-                        if self.isInstalled(r):
-                            msg = "%s: A newer package is already installed"
-                        else:
-                            msg = "%s: A newer package was already added"
-                        self.config.printWarning(1, msg % pkg.getNEVRA())
-                        del self.pkg_updates
-                        return self.OLD_PACKAGE
+        for r in self.database.getPkgsByName(name):
+            ret = pkgCompare(r, pkg)
+            if ret > 0: # old_ver > new_ver
+                if self.config.oldpackage == 0:
+                    if self.isInstalled(r):
+                        msg = "%s: A newer package is already installed"
                     else:
-                        # old package: simulate a new package
-                        ret = -1
-                if ret < 0: # old_ver < new_ver
-                    if self.config.exactarch == 1 and \
-                           self.__arch_incompat(pkg, r):
-                        del self.pkg_updates
-                        return self.ARCH_INCOMPAT
+                        msg = "%s: A newer package was already added"
+                    self.config.printWarning(1, msg % pkg.getNEVRA())
+                    del self.pkg_updates
+                    return self.OLD_PACKAGE
+                else:
+                    # old package: simulate a new package
+                    ret = -1
+            if ret < 0: # old_ver < new_ver
+                if self.config.exactarch == 1 and \
+                       self.__arch_incompat(pkg, r):
+                    del self.pkg_updates
+                    return self.ARCH_INCOMPAT
 
-                    if archDuplicate(pkg["arch"], r["arch"]) or \
-                           pkg["arch"] == "noarch" or r["arch"] == "noarch":
-                        self.pkg_updates.append(r)
-                else: # ret == 0, old_ver == new_ver
-                    if self.config.exactarch == 1 and \
-                           self.__arch_incompat(pkg, r):
-                        del self.pkg_updates
-                        return self.ARCH_INCOMPAT
+                if archDuplicate(pkg["arch"], r["arch"]) or \
+                       pkg["arch"] == "noarch" or r["arch"] == "noarch":
+                    self.pkg_updates.append(r)
+            else: # ret == 0, old_ver == new_ver
+                if self.config.exactarch == 1 and \
+                       self.__arch_incompat(pkg, r):
+                    del self.pkg_updates
+                    return self.ARCH_INCOMPAT
 
-                    ret = self.__install_check(r, pkg) # Fails for same NEVRAs
-                    if ret != self.OK:
+                ret = self.__install_check(r, pkg) # Fails for same NEVRAs
+                if ret != self.OK:
+                    del self.pkg_updates
+                    return ret
+
+                if archDuplicate(pkg["arch"], r["arch"]):
+                    if archCompat(pkg["arch"], r["arch"]):
+                        if self.isInstalled(r):
+                            msg = "%s: Ignoring due to installed %s"
+                            ret = self.ALREADY_INSTALLED
+                        else:
+                            msg = "%s: Ignoring due to already added %s"
+                            ret = self.ALREADY_ADDED
+                        self.config.printWarning(1, msg % (pkg.getNEVRA(),
+                                               r.getNEVRA()))
                         del self.pkg_updates
                         return ret
-
-                    if archDuplicate(pkg["arch"], r["arch"]):
-                        if archCompat(pkg["arch"], r["arch"]):
-                            if self.isInstalled(r):
-                                msg = "%s: Ignoring due to installed %s"
-                                ret = self.ALREADY_INSTALLED
-                            else:
-                                msg = "%s: Ignoring due to already added %s"
-                                ret = self.ALREADY_ADDED
-                            self.config.printWarning(1, msg % (pkg.getNEVRA(),
-                                                   r.getNEVRA()))
-                            del self.pkg_updates
-                            return ret
-                        else:
-                            self.pkg_updates.append(r)
+                    else:
+                        self.pkg_updates.append(r)
 
         ret = self.install(pkg, operation=OP_UPDATE)
         if ret != self.OK:
@@ -261,18 +237,28 @@ class RpmResolver:
 
         Return an RpmList error code."""
 
-        # pkg in self.installed
-        if not pkg["name"] in self.installed:
-            return self.NOT_INSTALLED
         found = 0
-        for r in self.installed[pkg["name"]]:
+
+        for r in self.database.getPkgByName(pkg["name"]):
+            if r in self.installs: continue
+            
             if archDuplicate(pkg["arch"], r["arch"]):
                 found = 1
                 break
+        if not found:
+            # pkg already got deleted from database
+            name = pkg["name"]
+            for r in self.erases:
+                if (r["name"] == name and 
+                    archDuplicate(pkg["arch"], r["arch"])):
+                    found = 1
+                    break
+                
         if found == 1:
             return self.update(pkg)
 
         return self.NOT_INSTALLED
+
     # ----
 
     def erase(self, pkg):
@@ -286,19 +272,24 @@ class RpmResolver:
             self.config.printWarning(1, "Package %s (id %s) not found"
                                      % (pkg.getNEVRA(), id(pkg)))
             return self.NOT_INSTALLED
-        self.database.removePkg(pkg)
 
         if self.isInstalled(pkg):
-            self.erases.append(pkg)
+            self.erases.add(pkg)
         if pkg in self.installs:
             self.installs.remove(pkg)
+            self.check_installs.discard(pkg)
         if pkg in self.updates:
             del self.updates[pkg]
 
         if pkg in self.obsoletes:
             del self.obsoletes[pkg]
+        self.check_erases.add(pkg)
+        self.check_file_requires = True
+
+        self.database.removePkg(pkg)
 
         return self.OK
+
     # ----
 
     def _checkObsoletes(self, pkg, dep, list, operation=OP_INSTALL):
@@ -339,9 +330,6 @@ class RpmResolver:
             if pkg in list:
                 del list[pkg]
             for r in list:
-                if self.config.checkinstalled == 0 and \
-                       self._hasConflict(dep, self.installed_obsoletes):
-                    continue
                 if operation == OP_UPDATE:
                     if pkg["name"] == r["name"]:
                         continue
@@ -350,19 +338,7 @@ class RpmResolver:
                         continue
                 obsoletes.append((dep, r))
         return obsoletes
-    # ----
 
-    def _hasConflict(self, dep, conflicts_list):
-        """Return 1 if (name, RPMSENSE_*flag, EVR string) dep is already
-        present in self.installed_{obsoletes_conflicts} conflicts_list."""
-
-        found = 0
-        for pkg in conflicts_list:
-            for (c,r) in conflicts_list[pkg]:
-                if c == dep:
-                    found = 1
-                    break
-        return found
     # ----
 
     def _getConflicts(self, pkg, dep, list):
@@ -377,10 +353,6 @@ class RpmResolver:
             if pkg in list:
                 list.remove(pkg)
             for r in list:
-                if self.config.checkinstalled == 0 and \
-                       (self._hasConflict(dep, self.installed_conflicts) or \
-                        self._hasConflict(dep, self.installed_obsoletes)):
-                    continue
                 if pkg.getNEVR() == r.getNEVR():
                     continue
                 conflicts.append((dep, r))
@@ -477,7 +449,12 @@ class RpmResolver:
         be from self.names."""
 
         name = pkg["name"]
-        return name in self.installed and pkg in self.installed[name]
+        if pkg in self.erases:
+            return True
+        if pkg in self.installs:
+            return False
+        return pkg in self.database
+
     # ----
 
     def __install_check(self, r, pkg):
@@ -565,10 +542,6 @@ class RpmResolver:
 #                else:
 #                    s.remove(pkg)
             if len(s) == 0: # unresolved
-                if self.config.checkinstalled == 0 and \
-                       pkg in self.installed_unresolved and \
-                       u in self.installed_unresolved[pkg]:
-                    continue
                 unresolved.append(u)
             else: # resolved
                 if pkg in s and len(s) > 1:
@@ -599,8 +572,20 @@ class RpmResolver:
                     s = [pkg]
                 resolved.append((u, s))
         return resolved
+
     # ----
 
+    def getUnresolvedFileRequires(self):
+        db = self.database
+        filereqs = db.getFileRequires()
+        result = []
+        for file in filereqs:
+            if not db.searchDependency(file, 0, ""):
+                result.append(file)
+        return result
+            
+    # ----
+    
     def checkDependencies(self):
         """Check dependencies, report errors.
 
@@ -608,6 +593,17 @@ class RpmResolver:
         user)."""
 
         no_unresolved = 1
+
+        if self.config.checkinstalled == 0:
+            unresolved = self.getUnresolvedDependencies()
+            for p in unresolved.keys():
+                self.config.printError("%s: unresolved dependencies:" % p.getNEVRA())
+                for u in unresolved[p]:
+                    self.config.printError("\t%s" % depString(u))
+            if unresolved:
+                return 0
+            return 1
+
         for name in self.database.getNames():
             for r in self.database.getPkgsByName(name):
                 if self.config.checkinstalled == 0 and \
@@ -647,6 +643,7 @@ class RpmResolver:
                 if len(resolved) > 0:
                     all_resolved.setdefault(r, [ ]).extend(resolved)
         return all_resolved
+
     # ----
 
     def getUnresolvedDependencies(self):
@@ -658,57 +655,72 @@ class RpmResolver:
         all_unresolved = HashList()
 
         if self.config.checkinstalled == 0:
-            for pkg in self.erases:
-                # check if provides are required and not provided by another
-                # package
-                for dep in pkg["provides"]:
-                    sr = self.database.searchRequires(dep[0], dep[1], dep[2])
-                    for p in sr:
-                        for d in sr[p]:
-                            sp = self.database.searchProvides(d[0], d[1], d[2])
-                            if len(sp) > 0:
-                                continue
-                            all_unresolved.setdefault(p, [ ]).append(d)
-                # check if filenames are required and not provided by another
-                # package
-                for f in pkg["filenames"]:
-                    sr = self.database.searchRequires(f, 0, "")
-                    if len(sr) > 0:
-                        sf = self.database.searchFilenames(f)
-                        if len(sf) > 0:
-                            continue
-                        for p in sr:
-                            # unresolved dep
-                            all_unresolved.setdefault(p, [ ]).extend(sr[p])
+            unresolved = self.iterUnresolvedDependencies()
+        else:
+            unresolved = self.iterAllUnresolvedDependencies()
 
-            # check new packages
-            for pkg in self.installs:
-                for u in pkg["requires"]:
-                    if u[0][:7] == "rpmlib(": # drop rpmlib requirements
-                        continue
-                    s = self.database.searchDependency(u[0], u[1], u[2])
-                    if len(s) > 0: # found something
-                        continue
-                    all_unresolved.setdefault(pkg, [ ]).append(u)
-
-            return all_unresolved
-
-        # check installed
-        for name in self.database.getNames():
-            for pkg in self.database.getPkgsByName(name):
-                unresolved = [ ]
-                for u in pkg["requires"]:
-                    if u[0][:7] == "rpmlib(": # drop rpmlib requirements
-                        continue
-                    s = self.database.searchDependency(u[0], u[1], u[2])
-                    if len(s) > 0: # found something
-                        continue
-                    unresolved.append(u)
-                if len(unresolved) > 0:
-                    all_unresolved.setdefault(pkg, [ ]).extend(unresolved)
-
+        for p, d in unresolved:
+            all_unresolved.setdefault(p, [ ]).append(d)
         return all_unresolved
+        
     # ----
+
+    def iterUnresolvedDependencies(self):
+        """only check changes done to the database"""
+        for pkg in self.check_erases.copy():
+            # check if provides are required and not provided by another
+            # package
+            ok = True
+            for dep in pkg["provides"]:
+                sr = self.database.searchRequires(dep[0], dep[1], dep[2])
+                for p in sr:
+                    for d in sr[p]:
+                        sp = self.database.searchProvides(d[0], d[1], d[2])
+                        if len(sp) > 0:
+                            continue
+                        ok = False
+                        yield p, d
+            if ok:
+                self.check_erases.discard(pkg)
+                
+        if self.check_file_requires:
+            ok = True
+            # check if filenames are required and not provided by another
+            # package
+            unresolved = [f for f in self.getUnresolvedFileRequires()
+                          if f not in self.installed_unresolved_file_requires]
+            for f in unresolved:
+                sr = self.database.searchRequires(f, 0, "")
+                for p, r in sr.iteritems():
+                    for dep in r:
+                        ok = False
+                        yield p, dep
+            self.check_file_requires = not ok or bool(self.check_erases)
+        
+        # check new packages
+        for pkg in self.check_installs.copy():
+            ok = True
+            for u in pkg["requires"]:
+                if u[0][:7] == "rpmlib(": # drop rpmlib requirements
+                    continue
+                s = self.database.searchDependency(u[0], u[1], u[2])
+                if len(s) > 0: # found something
+                    continue
+                ok = False
+                yield pkg, u
+            if ok:
+                self.check_installs.discard(pkg)
+
+    def iterAllUnresolvedDependencies(self):
+        """check all dependencies,
+        also return the alredy installed unresolved""" 
+        for pkg in self.database.getPkgs():
+            for u in pkg["requires"]:
+                if u[0][:7] == "rpmlib(": # drop rpmlib requirements
+                    continue
+                s = self.database.searchDependency(u[0], u[1], u[2])
+                if len(s) == 0: # not found
+                    yield pkg, u
 
     def getPkgConflicts(self, pkg, deps, dest):
         """Check for conflicts to pkg's deps, add results to dest[pkg].
@@ -738,10 +750,14 @@ class RpmResolver:
         if self.config.noconflicts:
             # conflicts turned off
             return conflicts
-        if self.config.checkinstalled == 0 and len(self.installs) == 0:
-            # no conflicts if there is no new package
-            return conflicts
 
+        if self.config.checkinstalled == 0:
+            for r in self.installs:
+                self.config.printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
+                self.getPkgConflicts(r, r["conflicts"] + r["obsoletes"],
+                                     conflicts)
+            return conflicts
+        
         for name in self.database.getNames():
             for r in self.database.getPkgsByName(name):
                 self.config.printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
@@ -762,8 +778,10 @@ class RpmResolver:
             # conflicts turned off, obsoletes are also conflicts, but in an
             # other level
             return obsoletes
-        if self.config.checkinstalled == 0 and len(self.installs) == 0:
-            # no obsoletes if there is no new package
+        if self.config.checkinstalled == 0:
+            for p in self.installs:
+                self.config.printDebug(1, "Checking for obsoletes for %s" % r.getNEVRA())
+                self.getPkgConflicts(r, r["obsoletes"], obsoletes)
             return obsoletes
 
         for name in self.database.getNames():
@@ -805,11 +823,27 @@ class RpmResolver:
 
         conflicts = HashList()
 
+        db = self.database
+
         if self.config.nofileconflicts:
             # file conflicts turned off
             return conflicts
-        if self.config.checkinstalled == 0 and len(self.installs) == 0:
+        if self.config.checkinstalled == 0:
             # no conflicts if there is no new package
+            for pkg in self.installs:
+                for name in pkg["filenames"]:
+                    dups = db.searchFilenames(name)
+                    if len(dups) == 1: continue
+                    self.config.printDebug(
+                        1, "Checking for file conflicts for '%s'" %\
+                        name)
+                    for j in xrange(len(dups)):
+                        for k in xrange(j+1, len(dups)):
+                            if not self._hasFileConflict(dups[j], dups[k],
+                                                         name):
+                                continue
+                            conflicts.setdefault(dups[j], [ ]).append(
+                                (name, dups[k]))
             return conflicts
 
         # duplicates: { name: [(pkg, idx),..], .. }
@@ -824,6 +858,7 @@ class RpmResolver:
                         continue
                     conflicts.setdefault(dups[j], [ ]).append((name, dups[k]))
         return conflicts
+
     # ----
 
     def checkFileConflicts(self):
@@ -849,10 +884,12 @@ class RpmResolver:
                 for f in conf[r]:
                     self.config.printError("\t%s" % f)
         return 0
+
     # ----
 
     def getDatabase(self):
         return self.database
+
     # ----
 
     def resolve(self):
@@ -874,7 +911,6 @@ class RpmResolver:
             # check for file conflicts
             if self.checkFileConflicts() != 1:
                 return -3
-
         return 1
 
 # vim:ts=4:sw=4:showmatch:expandtab
