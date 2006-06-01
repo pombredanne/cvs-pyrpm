@@ -60,6 +60,7 @@ def main():
            no_stage2, no_cache, raidmap, log, stage2_chroot, \
            vgmap
     user_arch = None
+    no_default_groups = 0
     
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
@@ -67,7 +68,7 @@ def main():
                                        "label-prefix", "no-cleanup",
                                        "standalone", "wait", "xen", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
-                                       "no-cache" ])
+                                       "no-cache", "no-default-groups" ])
     except:
         usage()
         return
@@ -106,6 +107,8 @@ def main():
             user_arch = val
         elif opt == "--no-cache":
             no_cache = 1
+        elif opt == "--no-default-groups":
+            no_default_groups = 1
         else:
             print "Unknown option '%s'" % opt
             usage()
@@ -153,6 +156,16 @@ def main():
             return 1
         stage2_dir = tempdir+"/stage2"
         os.mkdir(stage2_dir)
+
+    if not no_stage2:
+        # mount ramfs for stage2, needed here for nfs sources
+        if verbose:
+            print "Mounting ramfs on '%s'" % stage2_dir
+        try:
+            mount("None", stage2_dir, fstype="ramfs")
+        except Exception, msg:
+            print "ERROR: Unable to create stage2 ramfs: %s" % msg
+            return 1
 
     source_dir = stage2_dir+"/mnt/source"
     target_dir = stage2_dir+"/mnt/sysimage"
@@ -254,15 +267,6 @@ def main():
         # check if ther is a bash
         check_exists(stage2_img_dir, "/usr/bin/bash")
 
-        # mount ramfs for stage2
-        if verbose:
-            print "Mounting ramfs on '%s'" % stage2_dir
-        try:
-            mount("None", stage2_dir, fstype="ramfs")
-        except Exception, msg:
-            print "ERROR: Unable to create stage2 ramfs: %s" % msg
-            return 1
-
         # copytree does not like to get a signal
         pyrpm.blockSignals()
         for f in os.listdir(stage2_img_dir):
@@ -273,7 +277,6 @@ def main():
             else:
                 shutil.copy2(s, d)
         pyrpm.unblockSignals()
-
 
         if verbose:
             print "Umounting '%s' " % stage2_img_dir
@@ -1367,19 +1370,30 @@ def main():
     if error:
         return 1
 
-# TODO: remove - not needed anymore, because all is done in stage2
-#    # create needed devices
-#    if not no_stage2:
-#        # create disk and partition devices
-#        for disk in diskmap:
-#            copy_device(diskmap[disk]["device"], stage2_dir)
-#        for onpart in partitionmap:
-#            if partitionmap[onpart].has_key("raid"):
-#                continue
-#            if partitionmap[onpart].has_key("volgroup"):
-#                # create later
-#                continue
-#            copy_device(partitionmap[onpart]["device"], stage2_dir)
+    # create devices for unmapped disks in stage2
+    if not no_stage2:
+        # create disk and partition devices if they do not exist
+        for disk in diskmap:
+            # these devices are managed by the disk class
+            if diskmap[disk].has_key("image"):
+                continue
+            try:
+                check_exists(stage2_dir, diskmap[disk]["device"])
+            except:
+                copy_device(diskmap[disk]["device"], stage2_dir)
+        for onpart in partitionmap:
+            # these devices are managed by the disk class
+            if diskmap[partitionmap[onpart]["disk"]].has_key("image"):
+                continue
+            if partitionmap[onpart].has_key("raid"):
+                continue
+            if partitionmap[onpart].has_key("volgroup"):
+                # create later
+                continue
+            try:
+                check_exists(stage2_dir, partitionmap[onpart]["device"])
+            except:
+                copy_device(partitionmap[onpart]["device"], stage2_dir)
 
     # create lvm physical layer
     for onpart in partitionmap:
@@ -1915,14 +1929,36 @@ def main():
     ############################ package selection ############################
 
     if ks.has_key("install"):
-        # set default group "base" if no groups are specified
-        if not ks.has_key("packages") or \
-               not ks["packages"].has_key("groups") or \
-               len(ks["packages"]["groups"]) == 0:
-            groups = [ "base" ]
-        else:
-            groups = ks["packages"]["groups"]
-            pyrpm.normalizeList(groups)
+        groups = [ ]
+        if ks["packages"].has_key("groups") and \
+               len(ks["packages"]["groups"]) > 0:
+            # only add group ids to group array
+            for group in ks["packages"]["groups"]:
+                found = False
+                group_id = source.comps.getGroup(group)
+                if group_id:
+                    groups.append(group_id)
+                    found = True
+                if repo_comps:
+                    for repo in repos:
+                        if not repos[repo].comps:
+                            continue
+                        group_id = repos[repo].comps.getGroup(group)
+                        if group_id:
+                            groups.append(group_id)
+                            found = True
+                if not found:
+                    print "WARNING: Could not find group '%s'." % group
+
+        # add default group "base" if it is not in groups and no_default_groups
+        # is not set
+        if not no_default_groups:
+            if not "base" in groups:
+                groups.append("base")
+            if not "core" in groups:
+                groups.append("core")
+
+        pyrpm.normalizeList(groups)
 
         languages = [ ]
         if ks.has_key("langsupport"):
@@ -1938,29 +1974,47 @@ def main():
             return 1
 
         pkgs = [ ]
-
         # everything install
         if "everything" in groups:
-            for group in source.comps.grouphash.values():
-                if group.has_key("packagelist"):
-                    pkgs.extend(group["packagelist"])
-        else:
-            # add package for selected groups
-            for group in groups:
+            for group in source.comps.getGroups():
                 pkgs.extend(source.comps.getPackageNames(group))
-
+                pkgs.extend(source.comps.getConditionalPackageNames(group))
+            if repo_comps:
+                for repo in repos:
+                    if not repos[repo].comps:
+                        continue
+                    comps = repos[repo].comps
+                    for group in comps.getGroups():
+                        pkgs.extend(comps.getPackageNames(group))
+                        pkgs.extend(comps.getConditionalPackageNames(group))
+        else:
             # add default desktop
             if ks.has_key("xconfig"):
                 if ks["xconfig"].has_key("startxonboot"):
-                    pkgs.extend(source.comps.getPackageNames("base-x"))
+                    if not "base-x" in groups:
+                        groups.append("base-x")
                     desktop = "GNOME"
                     if ks["xconfig"].has_key("defaultdesktop"):
                         desktop = ks["xconfig"]["defaultdesktop"]
                     desktop = "%s-desktop" % desktop.lower()
                     if not desktop in groups:
                         print "Adding group %s" % desktop
-                        pkgs.extend(source.comps.getPackageNames(desktop))
-                # add xorg driver package for FC-5
+                        groups.append(desktop)
+
+            # add package for selected groups
+            for group in groups:
+                if source.comps.hasGroup(group):
+                    pkgs.extend(source.comps.getPackageNames(group))
+                if repo_comps:
+                    for repo in repos:
+                        if not repos[repo].comps:
+                            continue
+                        comps = repos[repo].comps
+                        if comps.hasGroup(group):
+                            pkgs.extend(comps.getPackageNames(group))
+
+            # add xorg driver package for FC-5
+            if ks.has_key("xconfig"):
                 if installation.release == "FC" and installation.version > 4:
                     if ks["xconfig"].has_key("driver"):
                         pkgs.append("xorg-x11-drv-%s" % \
@@ -1974,25 +2028,11 @@ def main():
                 if fstype == "swap":
                     continue
                 mkfs = "/sbin/mkfs.%s" % fstype
-                s = source.repo.searchFilenames(mkfs)
-                if len(s) == 0:
-                    if not source.repo._matchesFile(mkfs):
-                        source.repo.importFilelist()
-                        s = source.repo.searchFilenames(mkfs)
-                if len(s) > 0:
-                    found = False
-                    for pkg in s:
-                        if pkg in pkgs:
-                            found = True
-                            break
-                    if not found:
-                        pkg = s[0]
-                        print "Adding package '%s' for '%s'." % \
-                              (pkg["name"], mkfs)
-                        pkgs.append(pkg["name"])
-                else:
-                    print "ERROR: Could not find package providing '%s'." % \
-                          mkfs
+                try:
+                    addPkgByFileProvide(source.repo, mkfs, pkgs,
+                                        "%s filesystem creation" % fstype)
+                except Exception, msg:
+                    print "ERROR: %s" % msg
                     return 1
 
             # add comps package
@@ -2001,94 +2041,49 @@ def main():
 
             # append mdadm
             if has_raid:
-                s = source.repo.searchFilenames("/sbin/mdadm")
-                if len(s) == 0:
-                    if not source.repo._matchesFile("/sbin/mdadm"):
-                        source.repo.importFilelist()
-                        s = source.repo.searchFilenames("/sbin/mdadm")
-                if len(s) > 0:
-                    found = False
-                    for pkg in s:
-                        if pkg in pkgs:
-                            found = True
-                            break
-                    if not found:
-                        pkg = s[0]
-                        print "Adding package '%s' for raid configuration." % pkg["name"]
-                        pkgs.append(pkg["name"])
-                else:
-                    print "WARNING: Could not find package for raid configuration."
-
+                try:
+                    addPkgByFileProvide(source.repo, "/sbin/mdadm", pkgs, 
+                                        "raid configuration")
+                except Exception, msg:
+                    print "WARNING: %s" % msg
 
             # append authconfig
             if ks.has_key("authconfig"):
-                s = source.repo.searchFilenames("/usr/sbin/authconfig")
-                if len(s) == 0:
-                    if not source.repo._matchesFile("/usr/sbin/authconfig"):
-                        source.repo.importFilelist()
-                        s = source.repo.searchFilenames("/usr/sbin/authconfig")
-                if len(s) > 0:
-                    found = False
-                    for pkg in s:
-                        if pkg in pkgs:
-                            found = True
-                            break
-                    if not found:
-                        pkg = s[0]
-                        print "Adding package '%s' for authentication configuration" % pkg["name"]
-                        pkgs.append(pkg["name"])
-                else:
-                    print "WARNING: Could not find package providing '/usr/sbin/authconfig'."
+                try:
+                    addPkgByFileProvide(source.repo, "/usr/sbin/authconfig",
+                                        pkgs, "authentication configuration")
+                except Exception, msg:
+                    print "WARNING: %s" % msg
 
-            # append iptables
+            # append iptables and config tool
             if ks.has_key("firewall") and \
                    not ks["firewall"].has_key("disabled") and \
                    not "iptables" in pkgs:
                 print "Adding package iptables"
                 pkgs.append("iptables")
+                
                 # no firewall config tool in RHEL-3
-                if (installation.release == "RHEL" and installation.version >= 4) or \
-                       (installation.release == "FC" and installation.version >= 3):
-                    s = source.repo.searchFilenames("/usr/sbin/lokkit")
-                    if len(s) == 0:
-                        if not source.repo._matchesFile("/usr/sbin/lokkit"):
-                            source.repo.importFilelist()
-                            s = source.repo.searchFilenames("/usr/sbin/lokkit")
-                    if len(s) > 0:
-                        found = False
-                        for pkg in s:
-                            if pkg in pkgs:
-                                found = True
-                                break
-                        if not found:
-                            pkg = s[0]
-                            print "Adding package '%s' for firewall configuration." % pkg["name"]
-                            pkgs.append(pkg["name"])
-                    else:
-                        print "WARNING: Could not find package providing '/usr/sbin/lokkit'."
+                if (installation.release == "RHEL" and \
+                    installation.version >= 4) or \
+                   (installation.release == "FC" and \
+                    installation.version >= 3):
+                    try:
+                        addPkgByFileProvide(source.repo, "/usr/sbin/lokkit",
+                                            pkgs, "firewall configuration")
+                    except Exception, msg:
+                        print "WARNING: %s" % msg
 
+            # append lokkit
             if ks.has_key("selinux") and \
                    (installation.release == "RHEL" and \
                     installation.version >= 4) or \
                    (installation.release == "FC" and \
                     installation.version >= 3):
-                s = source.repo.searchFilenames("/usr/sbin/lokkit")
-                if len(s) == 0:
-                    if not source.repo._matchesFile("/usr/sbin/lokkit"):
-                        source.repo.importFilelist()
-                        s = source.repo.searchFilenames("/usr/sbin/lokkit")
-                if len(s) > 0:
-                    found = False
-                    for pkg in s:
-                        if pkg in pkgs:
-                            found = True
-                            break
-                    if not found:
-                        pkg = s[0]
-                        print "Adding package '%s' for selinux configuration." % pkg["name"]
-                        pkgs.append(pkg["name"])
-                else:
-                    print "WARNING: Could not find package providing '/usr/sbin/lokkit'."
+                try:
+                    addPkgByFileProvide(source.repo, "/usr/sbin/lokkit", pkgs,
+                                        "selinux configuration")
+                except Exception, msg:
+                    print "WARNING: %s" % msg
 
             # append kernel
             if not "kernel" in pkgs and not "kernel-smp" in pkgs:
@@ -2112,22 +2107,11 @@ def main():
 
             # get langsupport packages
             pkgs.extend(compsLangsupport(source.comps, languages))
-
-        # load additional comps files
-        if repo_comps:
-            for repo in repos:
-                if crepos[repo].comps:
-                    print "Using additional comps in repository %s" % repo
-                    comps = repos[repo].comps
-                    if "everything" in groups:
-                        for group in comps.grouphash.values():
-                            if group.has_key("packagelist"):
-                                pkgs.extend(group["packagelist"])
-                    else:
-                        # add package for selected groups
-                        for group in groups:
-                            pkgs.extend(comps.getPackageNames(group))
-                    pkgs.extend(compsLangsupport(comps, languages))
+            if repo_comps:
+                for repo in repos:
+                    if not repos[repo].comps:
+                        continue
+                    pkgs.extend(compsLangsupport(repos[repo].comps, languages))
 
         # add and remove packages from package list
         if ks.has_key("packages"):
@@ -2178,8 +2162,8 @@ def main():
     # create /dev/mapper/control
     if volgroup:
         create_dir(target_chroot, "/dev/mapper")
-        create_device(target_chroot, "/dev/mapper/control", 0600 | stat.S_IFCHR,
-                      10, 63)
+        create_device(target_chroot, "/dev/mapper/control",
+                      0600 | stat.S_IFCHR, 10, 63)
 
     # create needed devices
     for onpart in partitionmap:
@@ -2483,13 +2467,19 @@ def main():
     fd.write("\n")
     fd.write("[base]\n")
     fd.write("name=dist %s\n" % installation)
-    fd.write("baseurl=%s\n" % source.cache.baseurl)
+    url = source.cache.baseurl
+    if url[0] == "/":
+        url = "file://%s" % url
+    fd.write("baseurl=%s\n" % url)
     fd.write("\n")
     # add repos
     for repo in repos:
         fd.write("[%s]\n" % repo)
         fd.write("name=%s\n" % repo)
-        fd.write("baseurl=%s\n" % repos[repo].cache.baseurl)
+        url = repos[repo].cache.baseurl
+        if url[0] == "/":
+            url = "file://%s" % url
+        fd.write("baseurl=%s\n" % url)
         fd.write("\n")
     fd.close()
 
@@ -3149,8 +3139,8 @@ if devmap:
     # remove temporary devices
     for dev in devmap:
         if not os.path.exists(target_chroot+devmap[dev]):
-            print "WARNING: '%s' does not eixt in '%s'." % (devmap[dev],
-                                                            target_chroot)
+            print "WARNING: '%s' does not exist in '%s'." % (devmap[dev],
+                                                             target_chroot)
             continue
         os.unlink(target_chroot+devmap[dev])
     devmap = None

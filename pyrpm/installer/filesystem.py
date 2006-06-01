@@ -45,7 +45,9 @@ def umount(what):
     if not os.path.ismount(what):
         # TODO: ismount is not working for bind mounts
         stat = os.system("/bin/umount '%s' 2>/dev/null" % what)
-        return stat
+        if stat != 0:
+            return 1
+        return 0
 
     i = 0
     failed = 0

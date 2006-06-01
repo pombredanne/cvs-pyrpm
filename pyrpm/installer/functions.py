@@ -439,20 +439,6 @@ def copy_device(source, target_dir, source_dir="", target=None):
     except Exception, msg:
         raise IOError, "Unable to copy device '%s': %s" % (s, msg)
 
-#def copy_device(buildroot, source, target=None):
-#    if not target:
-#        target = source
-#    t = "%s/%s" % (buildroot, target)
-#    try:
-#        check_exists(buildroot, target)
-#    except:
-#        stats = os.stat(source)
-#        try:
-#            os.mknod(t, stats.st_mode, stats.st_rdev)
-#        except Exception, msg:
-#            raise IOError, "Unable to generate device '%s/%s':" % \
-#                  (buildroot, target), msg
-
 def create_device(buildroot, name, stat, major, minor):
     if not os.path.exists(buildroot+name):
         os.mknod(buildroot+name, stat, os.makedev(major, minor))
@@ -528,3 +514,24 @@ def compsLangsupport(comps, languages):
                         pkgs.append(name)
                         break
     return pkgs
+
+def addPkgByFileProvide(repo, name, pkgs, description):
+    s = repo.searchFilenames(name)
+    if len(s) == 0:
+        if not repo._matchesFile(name):
+            repo.importFilelist()
+            s = repo.searchFilenames(name)
+    if len(s) > 0:
+        found = False
+        for pkg in s:
+            if pkg in pkgs:
+                found = True
+                break
+        if not found:
+            pkg = s[0]
+            print "Adding package '%s' for %s." % (pkg["name"], description)
+            pkgs.append(pkg["name"])
+    else:
+        raise ValueError, "Could not find package providing '%s'" % (name) + \
+              "needed for %s." % (description)
+

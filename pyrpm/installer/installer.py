@@ -20,6 +20,7 @@ from pyrpm.database import repodb
 from disk import *
 import config
 from devices import *
+from filesystem import *
 
 #################################### dicts ####################################
 
