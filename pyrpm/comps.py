@@ -47,6 +47,42 @@ class RpmCompsXML:
             return 0
         return self.__parseNode(root.children)
 
+    def hasGroup(self, name):
+        """Return true if group id or localized group name is valid."""
+        if not self.getGroup(name):
+            return False
+        return True
+
+    def getGroup(self, name):
+        """Return group id even for localized group names."""
+        if not self.grouphash.has_key(name):
+            # check name tag first then try again with localized names
+            for group in self.grouphash.keys():
+                if self.grouphash[group].has_key("name") and \
+                       self.grouphash[group]["name"] == name:
+                    return group
+            for group in self.grouphash.keys():
+                for key in self.grouphash[group].keys():
+                    if key[:5] == "name:" and \
+                           self.grouphash[group][key] == name:
+                        return group
+            return None
+        else:
+            return name
+
+    def getGroupNames(self, lang=None):
+        """Return localized group names if available or group names if set,
+        but at least group ids."""
+        groups = [ ]
+        for group in self.grouphash.keys():
+            if lang and self.grouphash[group].has_key("name:%s" % lang):
+                groups.append(self.grouphash[group]["name:%s" % lang])
+            elif self.grouphash[group].has_key("name"):
+                groups.append(self.grouphash[group]["name"])
+            else:
+                groups.append(group)
+        return groups
+
     def getPackageNames(self, group):
         """Return a list of mandatory an default packages from group and its
         dependencies and the dependencies of the packages.
@@ -97,15 +133,16 @@ class RpmCompsXML:
         typelist."""
 
         ret = []
-        if not self.grouphash.has_key(group):
+        _group = self.getGroup(group)
+        if not _group:
             return ret
-        if self.grouphash[group].has_key("packagelist"):
-            pkglist = self.grouphash[group]["packagelist"]
+        if self.grouphash[_group].has_key("packagelist"):
+            pkglist = self.grouphash[_group]["packagelist"]
             for (pkgname, value) in pkglist.iteritems():
                 if value[0] in typelist:
                     ret.append((pkgname, value[1]))
-        if self.grouphash[group].has_key("grouplist"):
-            grplist = self.grouphash[group]["grouplist"]
+        if self.grouphash[_group].has_key("grouplist"):
+            grplist = self.grouphash[_group]["grouplist"]
             # FIXME: Stack overflow with loops in group requirements
             for grpname in grplist["groupreqs"]:
                 ret.extend(self.__getPackageNames(grpname, typelist))
