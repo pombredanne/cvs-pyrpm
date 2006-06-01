@@ -53,8 +53,12 @@ class RpmCompsXML:
             return False
         return True
 
+    def getGroups(self):
+        """Return all group ids."""
+        return self.grouphash.keys()
+
     def getGroup(self, name):
-        """Return group id even for localized group names."""
+        """Return group id for group names (even localized names)."""
         if not self.grouphash.has_key(name):
             # check name tag first then try again with localized names
             for group in self.grouphash.keys():
@@ -70,19 +74,36 @@ class RpmCompsXML:
         else:
             return name
 
+    def getNameOfGroup(self, group, lang=None):
+        """Return localized group name if available or group name if set,
+        but at least the group id."""
+        if not self.grouphash.has_key(group):
+            return None
+        if lang and self.grouphash[group].has_key("name:%s" % lang):
+            return self.grouphash[group]["name:%s" % lang]
+        elif self.grouphash[group].has_key("name"):
+            return self.grouphash[group]["name"]
+        else:
+            return group
+
     def getGroupNames(self, lang=None):
         """Return localized group names if available or group names if set,
         but at least group ids."""
         groups = [ ]
         for group in self.grouphash.keys():
-            if lang and self.grouphash[group].has_key("name:%s" % lang):
-                groups.append(self.grouphash[group]["name:%s" % lang])
-            elif self.grouphash[group].has_key("name"):
-                groups.append(self.grouphash[group]["name"])
-            else:
-                groups.append(group)
+            # the group is in the list, therefore direct use of getGroupName
+            groups.append(self.getNameOfGroup(group, lang))
         return groups
 
+    def getDefaultGroups(self):
+        """Return list of default group ids."""
+        groups = [ ]
+        for group in self.grouphash.keys():
+            if self.grouphash[group].has_key("default") and \
+                   self.grouphash[group]["default"]:
+                groups.append(group)
+        return groups
+                
     def getPackageNames(self, group):
         """Return a list of mandatory an default packages from group and its
         dependencies and the dependencies of the packages.
