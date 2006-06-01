@@ -61,6 +61,7 @@ def main():
            vgmap
     user_arch = None
     no_default_groups = 0
+    autoerase = 0
     
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
@@ -68,7 +69,8 @@ def main():
                                        "label-prefix", "no-cleanup",
                                        "standalone", "wait", "xen", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
-                                       "no-cache", "no-default-groups" ])
+                                       "no-cache", "no-default-groups",
+                                       "drop-unresolved"])
     except:
         usage()
         return
@@ -109,6 +111,8 @@ def main():
             no_cache = 1
         elif opt == "--no-default-groups":
             no_default_groups = 1
+        elif opt == "--drop-unresolved":
+            autoerase = 1
         else:
             print "Unknown option '%s'" % opt
             usage()
@@ -2498,6 +2502,8 @@ def main():
            ks["packages"].has_key("ignoremissing"):
         yum += " --nodeps"
     if ks.has_key("install"):
+        if autoerase:
+            yum += " --autoerase "
         yum += " install "
         yum += string.join(pkgs)
     else:
@@ -3056,22 +3062,27 @@ OPTIONS
   -v  | --verbose  Be verbose, and more, ..
   -y  | --yes      Do not ask questions, assume yes.
 
-  --label-prefix   Prepend prefix before labels on partitions
-  --no-cleanup     Do not cleanup temporary directory and files.
-  --wait           Wait after installation before umounting.
-  --xen            Write a simple xen config file.
-  --yum            Use yum instead of pyrpmyum.
-  --repo-comps     Load comps file in repos and use them for package and group
-                   selection.
-  --no-stage2      Do not mount stage2.img from installation source, use host
-                   system tools to format partitions. This will not work for
-                   all host and client system combinations, but could help 
-                   with others.
-  --upgrade=<part> Upgrade installation in partition <part>. This is only
-                   useful for upgrades and if there is more than one
-                   installation on the supplied disks.
-  --no-cache       Do not cache RPM's (e.g. for http and ftp sources).
-  
+  --label-prefix       Prepend prefix before labels on partitions
+  --no-cleanup         Do not cleanup temporary directory and files.
+  --wait               Wait after installation before umounting.
+  --xen                Write a simple xen config file.
+  --yum                Use yum instead of pyrpmyum.
+  --repo-comps         Load comps file in repos and use them for package and
+                       group selection.
+  --no-stage2          Do not mount stage2.img from installation source, use
+                       host system tools to format partitions. This does not
+                       work for all host and client system combinations, but
+                       could help with others.
+  --upgrade=<part>     Upgrade installation in partition <part>. This is only
+                       useful for upgrades and if there is more than one
+                       installation on the supplied disks.
+  --no-cache           Do not cache RPM's (e.g. for http and ftp sources).
+  --no-default-groups  Do not use base and core as default groups. This is
+                       useful for minimal installations.
+  --drop-unresolved    Drop packages, which have unresolved dependencies in
+                       installation mode. Please keep in mind that this could
+                       result in a unusable system.
+
 """
 # TODO:
 #  --standalone     Start in standalone mode: start network before running
