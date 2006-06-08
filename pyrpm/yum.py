@@ -853,13 +853,28 @@ class RpmYum:
         # Order the elements of the potential packages by machine
         # distance and evr
         orderList(pkg_list, self.config.machine)
+        # Prepare a pkg name hash for possibly newer packages that have "higher"
+        # ranked packages via the comps with lower version in other repos.
+        pkgnamehash = {}
         ret = 0
         for type in ["mandatory", "default", "optional", None]:
             for upkg in pkg_list:
-                if upkg.compstype != type:
-                    continue
+                # Skip all packages that are either blocked via our erase_list
+                # or that are already in the opresolver
                 if upkg in self.erase_list or upkg in self.opresolver.getDatabase():
                     continue
+                # If no package with the same name has already been found enter
+                # it in the pkgnamehash. That way pkgnamehash will always
+                # contain the newest not-blocked available package for each
+                # name.
+                if not pkgnamehash.has_key(upkg["name"]):
+                    pkgnamehash[upkg["name"]] = upkg
+                # If the compstype doesn't fit, skip it for now.
+                if upkg.compstype != type:
+                    continue
+                # Now we need to replace the fitting package with the newest
+                # version available (which could be the same).
+                upkg = pkgnamehash[upkg["name"]]
                 # Only try to update if the package itself or the update package
                 # are noarch or if they are buildarchtranslate or arch
                 # compatible. Some exception needs to be done for
