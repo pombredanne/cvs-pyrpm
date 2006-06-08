@@ -20,6 +20,83 @@ import os.path
 from installer import keyboard_models
 from functions import create_file
 
+class hwdataCards:
+    def __init__(self, filename):
+        self.cards = { }
+        try:
+            fd = open(filename)
+        except:
+            raise IOError, "Could not load '%s'." % filename
+
+        dict = None
+        card = None
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            line = line.strip()
+            if len(line) < 1 or line[0] == "#":
+                continue
+
+            if line[:4] == "NAME":
+                if dict and len(dict) > 0 and card:
+                    self.cards[card] = dict
+                dict = { }
+                card = line[4:].strip()
+            elif line[:6] == "DRIVER":
+                dict["driver"] = line[6:].strip()
+            elif line[:7] == "CHIPSET":
+                dict["chipset"] = line[7:].strip()
+            elif line[:6] == "SERVER":
+                dict["server"] = line[6:].strip()
+            elif line[:6] == "RAMDAC":
+                dict["ramdac"] = line[6:].strip()
+            elif line[:8] == "DACSPEED":
+                dict["dacspeed"] = line[9:].strip()
+            elif line[:9] == "CLOCKCHIP":
+                dict["clockchip"] = line[9:].strip()
+            elif line == "NOCLOCKPROBE":
+                dict["noclockprobe"] = 1
+            elif line[:4] == "LINE":
+                dict.setdefault("options", [ ]).append(line[4:].strip())
+            elif line[:3] == "SEE":
+                dict.setdefault("ref", [ ]).append(line[3:].strip())
+            elif line == "END":
+                continue
+            else:
+                print "Unknown entry '%s'"% line
+        fd.close()
+
+    def _get(self, card, dict, cards):
+        if card in cards:
+            return
+        if self.cards.has_key(card):
+            cards.append(card)
+            for key in self.cards[card].keys():
+                if key == "ref":
+                    continue
+                if key == "options":
+                    if not dict.has_key(key):
+                        dict[key] = [ ]
+                    for value in self.cards[card][key]:
+                        if not value in dict[key]:
+                            dict[key].append(value)
+                else:
+                    if dict.has_key(key):
+                        continue
+                    dict[key] = self.cards[card][key]
+            if self.cards[card].has_key("ref"):
+                for _card in self.cards[card]["ref"]:
+                    self._get(_card, dict, cards)
+
+    def get(self, card):
+        dict = { }
+        cards = [ ]
+        self._get(card, dict, cards)
+        if len(cards) == 0:
+            return None
+        return dict
+
 def x_config(ks, buildroot, installation):
     # default: VGA graphics card, Generic extended super VGA monitor
     card = "Unknown video card"
@@ -44,6 +121,9 @@ def x_config(ks, buildroot, installation):
     if ks["xconfig"].has_key("driver"):
         ksdriver = ks["xconfig"]["driver"]
     ksoptions = [ ]
+
+    try:
+        cards = hwdataCards(buildroot+'/usr/share/hwdata/Cards')
 
     if os.path.exists(buildroot+'/usr/share/hwdata/Cards'):
         if ksdriver and not kscard:
