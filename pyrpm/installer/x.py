@@ -19,83 +19,7 @@
 import os.path
 from installer import keyboard_models
 from functions import create_file
-
-class hwdataCards:
-    def __init__(self, filename):
-        self.cards = { }
-        try:
-            fd = open(filename)
-        except:
-            raise IOError, "Could not load '%s'." % filename
-
-        dict = None
-        card = None
-        while 1:
-            line = fd.readline()
-            if not line:
-                break
-            line = line.strip()
-            if len(line) < 1 or line[0] == "#":
-                continue
-
-            if line[:4] == "NAME":
-                if dict and len(dict) > 0 and card:
-                    self.cards[card] = dict
-                dict = { }
-                card = line[4:].strip()
-            elif line[:6] == "DRIVER":
-                dict["driver"] = line[6:].strip()
-            elif line[:7] == "CHIPSET":
-                dict["chipset"] = line[7:].strip()
-            elif line[:6] == "SERVER":
-                dict["server"] = line[6:].strip()
-            elif line[:6] == "RAMDAC":
-                dict["ramdac"] = line[6:].strip()
-            elif line[:8] == "DACSPEED":
-                dict["dacspeed"] = line[9:].strip()
-            elif line[:9] == "CLOCKCHIP":
-                dict["clockchip"] = line[9:].strip()
-            elif line == "NOCLOCKPROBE":
-                dict["noclockprobe"] = 1
-            elif line[:4] == "LINE":
-                dict.setdefault("options", [ ]).append(line[4:].strip())
-            elif line[:3] == "SEE":
-                dict.setdefault("ref", [ ]).append(line[3:].strip())
-            elif line == "END":
-                continue
-            else:
-                print "Unknown entry '%s'"% line
-        fd.close()
-
-    def _get(self, card, dict, cards):
-        if card in cards:
-            return
-        if self.cards.has_key(card):
-            cards.append(card)
-            for key in self.cards[card].keys():
-                if key == "ref":
-                    continue
-                if key == "options":
-                    if not dict.has_key(key):
-                        dict[key] = [ ]
-                    for value in self.cards[card][key]:
-                        if not value in dict[key]:
-                            dict[key].append(value)
-                else:
-                    if dict.has_key(key):
-                        continue
-                    dict[key] = self.cards[card][key]
-            if self.cards[card].has_key("ref"):
-                for _card in self.cards[card]["ref"]:
-                    self._get(_card, dict, cards)
-
-    def get(self, card):
-        dict = { }
-        cards = [ ]
-        self._get(card, dict, cards)
-        if len(cards) == 0:
-            return None
-        return dict
+import hwdata
 
 def x_config(ks, buildroot, installation):
     # default: VGA graphics card, Generic extended super VGA monitor
@@ -105,6 +29,7 @@ def x_config(ks, buildroot, installation):
     monitor = "Unknown monitor"
     hsync = "31.5 - 37.9"
     vsync = "50 - 61"
+    dmps = 0
     resolution = "800x600"
     depth = 8
     user_hsync = user_vsync = None
@@ -114,107 +39,80 @@ def x_config(ks, buildroot, installation):
     (kbd_layout, kbd_model, kbd_variant, kbd_options) = \
                  keyboard_models[ks["keyboard"]]
 
-    kscard = None
+    _card = None
+    _driver = None
+    _options = [ ]
     if ks["xconfig"].has_key("card"):
-        kscard = ks["xconfig"]["card"]
-    ksdriver = None
-    if ks["xconfig"].has_key("driver"):
-        ksdriver = ks["xconfig"]["driver"]
-    ksoptions = [ ]
-
-    try:
-        cards = hwdataCards(buildroot+'/usr/share/hwdata/Cards')
-
-    if os.path.exists(buildroot+'/usr/share/hwdata/Cards'):
-        if ksdriver and not kscard:
-            print "ERROR: Card not specified, using default configuration."
-        else:
+        if os.path.exists(buildroot+'/usr/share/hwdata/Cards'):
             try:
-                fd = open(buildroot+'/usr/share/hwdata/Cards')
+                cards = hwdata.Cards(buildroot+'/usr/share/hwdata/Cards')
             except:
-                print "ERROR: Unable to open graphics card database."
+                print "Failed to load '/usr/share/hwdata/Cards'."
             else:
-                # TODO: honour SEE tags in file
-                found = 0
-                _card = None
-                _driver = None
-                _options = [ ]
-                while 1:
-                    line = fd.readline()
-                    if not line:
-                        break
-                    line = line.strip()
-                    if len(line) < 1 or line[0] == "#":
-                        continue
-
-                    if line[:4] == "NAME":
-                        if kscard and kscard == _card:
-                            card = _card
-                            driver =_driver
-                            options = _options
-                            found = 1
-                            break
-                        _card = line[4:].strip()
-                        _driver = None
-                        _options = [ ]
-                    elif line[:6] == "DRIVER":
-                        _driver = line[6:].strip()
-                    elif line[:4] == "LINE":
-                        _options.append(line[4:].strip())
-                    else:
-                        continue
-                fd.close()
-                if not found:
-                    print "ERROR: Card not found in graphics card database."
-
-    elif os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
+                dict = cards.get(ks["xconfig"]["card"])
+                if dict and dict.has_key("driver"):
+                    _card = ks["xconfig"]["card"]
+                    _driver = dict["driver"]
+                    if dict.has_key("options"):
+                        _options.extend(dict["options"])
+                else:
+                    print "ERROR: Card not found in hardware database."
+        else:
+            print "Unable to use card '%s'" % (ks["xconfig"]["card"]) + \
+                  ", because there is no '/usr/share/hwdata/Cards'"
+    if not _card and ks["xconfig"]["driver"]:
+        if os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
         # There is no usable name in the videodrivers file, so fake it
-        if ksdriver:
-            driver = ksdriver
-            card = driver + ' (generic)'
+            _driver = ks["xconfig"]["driver"]
+            _card = driver + ' (generic)'
         else:
-            print "ERROR: Driver not specified for xconfig, " +\
-                  "using default configuration."
+            print "Unable to use driver '%s'" % ks["xconfig"]["driver"] + \
+                  ", because there is no '/usr/share/hwdata/videodrivers'"
+
+    if not _card or not _driver:
+        print "Using default X driver configuration."
     else:
-        print "ERROR: Could not find hardware database for video drivers."
+        card = _card
+        driver = _driver
+        options = _options
+        if ks["xconfig"].has_key("videoram"):
+            videoram = ks["xconfig"]["videoram"]
 
-    if ks["xconfig"].has_key("videoram"):
-        videoram = ks["xconfig"]["videoram"]
+    _monitor = None
+    _hsync = None
+    _vsync = None
+    _dpms = 0
     if ks["xconfig"].has_key("monitor"):
-        try:
-            fd = open(buildroot+'/usr/share/hwdata/MonitorsDB')
-        except:
-            print "ERROR: Unable to open monitor database."
-        else:
-            found = 0
-            while 1:
-                line = fd.readline()
-                if not line:
-                    break
-                line = line.strip()
-                if len(line) < 1 or line[0] == "#":
-                    continue
-                xargs = line.split(";")
-                if len(xargs) < 5:
-                    continue
-                if xargs[1].strip() == ks["xconfig"]["monitor"]:
-                    monitor = ks["xconfig"]["monitor"]
-                    hsync = xargs[3].strip()
-                    vsync = xargs[4].strip()
-                    found = 1
-                    break
-            fd.close()
-            if found != 1:
-                print "ERROR: Monitor not found in hardware database."
-    if ks["xconfig"].has_key("hsync"): # overwrite with user supplied value
-        hsync = ks["xconfig"]["hsync"]
-    if ks["xconfig"].has_key("vsync"):
-        vsync = ks["xconfig"]["vsync"] # overwrite with user supplied value
-    if ks["xconfig"].has_key("resolution"):
-        resolution = ks["xconfig"]["resolution"]
-    if ks["xconfig"].has_key("depth"):
-        depth = ks["xconfig"]["depth"]
+        if os.path.exists(buildroot+'/usr/share/hwdata/Cards'):
+            try:
+                monitors = hwdata.Monitors(buildroot)
+            except:
+                print "ERROR: Failed to load monitor database."
+            else:
+                dict = monitors.get(ks["xconfig"]["monitor"])
+                if dict:
+                    _monitor = ks["xconfig"]["monitor"]
+                    _hsync = dict["hsync"]
+                    _vsync = dict["vsync"]
+                    _dpms = dict["dpms"]
+                else:
+                    print "ERROR: Monitor not found in hardware database."
 
+    if not _monitor or not _hsync or not _vsync:
+        print "Using default monitor X configuration."
+    else:
+        monitor = _monitor
+        hsync = _hsync
+        vsync = _vsync
+        dpms = _dpms
+        if ks["xconfig"].has_key("hsync"): # overwrite with user supplied value
+            hsync = ks["xconfig"]["hsync"]
+        if ks["xconfig"].has_key("vsync"):
+            vsync = ks["xconfig"]["vsync"] # overwrite with user supplied value
+        if ks["xconfig"].has_key("resolution"):
+            resolution = ks["xconfig"]["resolution"]
+        if ks["xconfig"].has_key("depth"):
+            depth = ks["xconfig"]["depth"]
 
     if (installation.release == "RHEL" and installation.version < 4) or \
            (installation.release == "FC" and installation.version < 3.9):
@@ -234,11 +132,13 @@ def x_config(ks, buildroot, installation):
     else:
         mousedev = "/dev/input/mice"
 
-    _hsync = _vsync = ""
+    _hsync = _vsync = _dmps = ""
     if hsync:
         _hsync = '        HorizSync    %s\n' % hsync
     if vsync:
         _vsync = '        VertRefresh  %s\n' % vsync
+    if dpms:
+        _dpms = '        Option       "dpms"\n'
 
     _videoram = ""
     if videoram:
@@ -289,7 +189,7 @@ def x_config(ks, buildroot, installation):
                 '        ModelName    "%s"\n' % monitor,
                 _hsync,
                 _vsync,
-                '        Option       "dpms"\n',
+                _dpms,
                 'EndSection\n\n',
                 'Section "Device"\n',
                 '        Identifier   "Videocard0"\n',
