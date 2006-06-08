@@ -29,7 +29,7 @@ def x_config(ks, buildroot, installation):
     monitor = "Unknown monitor"
     hsync = "31.5 - 37.9"
     vsync = "50 - 61"
-    dmps = 0
+    dpms = 0
     resolution = "800x600"
     depth = 8
     user_hsync = user_vsync = None
@@ -57,19 +57,17 @@ def x_config(ks, buildroot, installation):
                         _options.extend(dict["options"])
                 else:
                     print "ERROR: Card not found in hardware database."
-        else:
-            print "Unable to use card '%s'" % (ks["xconfig"]["card"]) + \
-                  ", because there is no '/usr/share/hwdata/Cards'"
-    if not _card and ks["xconfig"]["driver"]:
+    if not _card and ks["xconfig"].has_key("driver"):
         if os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
         # There is no usable name in the videodrivers file, so fake it
             _driver = ks["xconfig"]["driver"]
             _card = driver + ' (generic)'
-        else:
-            print "Unable to use driver '%s'" % ks["xconfig"]["driver"] + \
-                  ", because there is no '/usr/share/hwdata/videodrivers'"
 
     if not _card or not _driver:
+        if ks["xconfig"].has_key("card"):
+            print "WARNING: Card not found in database."
+        if ks["xconfig"].has_key("driver"):
+            print "WARNING: Driver not found in database."
         print "Using default X driver configuration."
     else:
         card = _card
@@ -132,21 +130,17 @@ def x_config(ks, buildroot, installation):
     else:
         mousedev = "/dev/input/mice"
 
-    _hsync = _vsync = _dmps = ""
+    _hsync = _vsync = _dpms = _videoram = _options = ""
     if hsync:
         _hsync = '        HorizSync    %s\n' % hsync
     if vsync:
         _vsync = '        VertRefresh  %s\n' % vsync
     if dpms:
         _dpms = '        Option       "dpms"\n'
-
-    _videoram = ""
     if videoram:
         _videoram = '        VideoRam     %s\n' % videoram
-    _options = ""
-    if len(options) > 0:
-        for option in options:
-            _options += '        %s\n' % option
+    for option in options:
+        _options += '        %s\n' % option
 
     content = [ 'Section "ServerLayout"\n',
                 '        Identifier   "Default Layout"\n',
