@@ -169,3 +169,5 @@ def main():
 if __name__ == '__main__':
     if not run_main(main):
         sys.exit(1)
+
+# vim:ts=4:sw=4:showmatch:expandtab
