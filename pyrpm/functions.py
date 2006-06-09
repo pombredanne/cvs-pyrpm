@@ -150,7 +150,7 @@ def mkstemp_mknod(dirname, pre, mode, rdev):
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
 def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
-              tmpdir="/var/tmp", chroot=None, pkg = None):
+              tmpdir="/var/tmp", chroot=None, pkg=None):
     """Run (script otherargs) with interpreter prog (which can be a list
     containing initial arguments).
 

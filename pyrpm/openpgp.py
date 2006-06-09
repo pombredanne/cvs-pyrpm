@@ -176,9 +176,12 @@ class _DSAPubkeyAlg(_PubkeyAlg):
         return self.dsa.verify(value, (r, s))
 
 _pubkey_classes = {
-    _ALG_PK_RSA: _RSAPubkeyAlg, _ALG_PK_RSA_ENCRYPT: _RSAPubkeyAlg,
-    _ALG_PK_RSA_SIGN: _RSAPubkeyAlg, # _ALG_PK_ELGAMAL_ENCRYPT: something,
-    _ALG_PK_DSA: _DSAPubkeyAlg, # _ALG_PK_ELGAMAL: something
+    _ALG_PK_RSA: _RSAPubkeyAlg,
+    _ALG_PK_RSA_ENCRYPT: _RSAPubkeyAlg,
+    _ALG_PK_RSA_SIGN: _RSAPubkeyAlg,
+    # _ALG_PK_ELGAMAL_ENCRYPT: something,
+    _ALG_PK_DSA: _DSAPubkeyAlg,
+    # _ALG_PK_ELGAMAL: something
 }
 
 
@@ -488,8 +491,7 @@ class _SignaturePacket(_PGPPacket):
             raise ValueError, "Invalid digest type used with DSA"
         if alg.verify(self.data[self.value_start:], digest):
             return 1
-        else:
-            return -1
+        return -1
 
     def __verifyDigestWithKey(self, key, key_id, digest, flags):
         """Verify the signature of digest of data against a key, using
@@ -537,7 +539,7 @@ class _SignaturePacket(_PGPPacket):
                 result = 0
         return result
 
-    def verifyDigest(self, keyring, digest, flags = FL_CAN_SIGN):
+    def verifyDigest(self, keyring, digest, flags=FL_CAN_SIGN):
         """Verify the signature of digest of data against a matching key
         in a keyring, if any, with given key usage flags.
 

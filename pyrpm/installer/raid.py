@@ -245,3 +245,5 @@ class RAID:
         dict["device"] = device
         return dict
     examine = staticmethod(examine)
+
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -98,3 +98,5 @@ def firewall_config(ks, buildroot, installation):
                     [ '# Configuration file for system-config-securitylevel\n',
                       "\n",
                       "%s" % "\n".join(fwargs) ])
+
+# vim:ts=4:sw=4:showmatch:expandtab

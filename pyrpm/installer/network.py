@@ -130,3 +130,5 @@ def network_config(ks, buildroot):
     # write /etc/sysconfig/network
     create_file(buildroot, "/etc/sysconfig/network",
                 [ 'NETWORKING=yes\n', _hostname, _gateway ])
+
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -168,3 +168,5 @@ def file_is_prelinked(filename):
                        _ELFDynamic.DT_GNU_LIBLIST):
             return True
     return False
+
+# vim:ts=4:sw=4:showmatch:expandtab

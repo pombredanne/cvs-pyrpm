@@ -135,7 +135,7 @@ class Repository:
             if config.verbose:
                 print "Mounting '%s' on '%s'" % (what, self.dir)
             mount(what, self.dir, fstype="auto", options="ro")
-            source = "file://%s" % self.dir 
+            source = "file://%s" % self.dir
         elif source[:6] == "nfs://":
             what = source[6:]
             splits = what.split("/", 1)
@@ -163,3 +163,4 @@ class Repository:
         self.comps = self.repo.comps
         return 1
 
+# vim:ts=4:sw=4:showmatch:expandtab

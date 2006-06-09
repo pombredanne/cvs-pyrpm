@@ -145,7 +145,7 @@ def detectFstype(device):
         return None
     if buf[0:4] == "JFS1":
         return "jfs"
-    
+
     return None
 
 def ext2Label(device):

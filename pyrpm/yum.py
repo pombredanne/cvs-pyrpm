@@ -27,7 +27,7 @@ from io import *
 import database, yumconfig
 
 
-# Global search dict. Needs to be move to database classes real soon. 
+# Global search dict. Needs to be move to database classes real soon.
 pyrpmyum_finddict = None
 
 class RpmYum:
@@ -319,7 +319,7 @@ class RpmYum:
                 # OK, we have several archs for this package installed, we now
                 # need to filter them to 32bit and 64bit buckets and later
                 # use our standard algorithm to select the best matching
-                # package for each arch. 
+                # package for each arch.
                 for arch in pkgnamearchhash[name].keys():
                     if buildarchtranslate[arch] == arch:
                         continue
@@ -428,7 +428,7 @@ class RpmYum:
         if self.config.timer:
             time1 = clock()
         self.config.printInfo(1, "Selecting packages for operation\n")
-        # We unfortunatly still need to special case the argless remove 
+        # We unfortunatly still need to special case the argless remove
         if len(args) == 0:
             if self.command == "update" or self.command == "upgrade":
                 # Hardcode the inverse package obsolete code here as we

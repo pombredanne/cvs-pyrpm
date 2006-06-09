@@ -62,3 +62,5 @@ class Devices:
         if mapto in self.reverse_map:
             raise ValueError, "Mapto '%s' not in use." % mapto
         return self.reverse_map[mapto]
+
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -60,7 +60,7 @@ class RpmResolver:
 
         if config.checkinstalled == 0:
             self.installed_unresolved_file_requires = self.getUnresolvedFileRequires()
-            
+
     # ----
 
     def clear(self):
@@ -241,7 +241,7 @@ class RpmResolver:
 
         for r in self.database.getPkgByName(pkg["name"]):
             if r in self.installs: continue
-            
+
             if archDuplicate(pkg["arch"], r["arch"]):
                 found = 1
                 break
@@ -249,11 +249,11 @@ class RpmResolver:
             # pkg already got deleted from database
             name = pkg["name"]
             for r in self.erases:
-                if (r["name"] == name and 
+                if (r["name"] == name and
                     archDuplicate(pkg["arch"], r["arch"])):
                     found = 1
                     break
-                
+
         if found == 1:
             return self.update(pkg)
 
@@ -583,7 +583,7 @@ class RpmResolver:
             if not db.searchDependency(file, 0, ""):
                 result.append(file)
         return result
-            
+
     # ----
     
     def checkDependencies(self):
@@ -662,7 +662,7 @@ class RpmResolver:
         for p, d in unresolved:
             all_unresolved.setdefault(p, [ ]).append(d)
         return all_unresolved
-        
+
     # ----
 
     def iterUnresolvedDependencies(self):

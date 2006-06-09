@@ -62,7 +62,7 @@ class LVM_PHYSICAL_VOLUME:
             # set <volgroup>: <device>, ..
             dict.setdefault(splits[3], [ ]).append(splits[1])
         return dict
-    scan = staticmethod(scan)        
+    scan = staticmethod(scan)
 
     def info(device, chroot=None):
         pvs = LVM_PHYSICAL_VOLUME.display(chroot=chroot)
@@ -182,7 +182,7 @@ class LVM_VOLGROUP:
             config.log(msg)
             return 0
         return 1
-    scan = staticmethod(scan)        
+    scan = staticmethod(scan)
 
     def info(name, chroot=None):
         vgs = LVM_VOLGROUP.display(chroot=chroot)
@@ -195,7 +195,7 @@ class LVM_VOLGROUP:
             return None
         return vgs[name]
     info = staticmethod(info)
-        
+
     def display(chroot=None):
         command = "%s vgdisplay --units b 2>/dev/null" % LVM_VOLGROUP.prog
         if config.verbose:
@@ -286,7 +286,7 @@ class LVM_LOGICAL_VOLUME:
                 continue
             dict[splits[1]] = d[1]
         return dict
-    scan = staticmethod(scan)        
+    scan = staticmethod(scan)
 
     def info(name, chroot=None):
         lvs = LVM_LOGICAL_VOLUME.display(chroot=chroot)
@@ -337,3 +337,5 @@ class LVM_LOGICAL_VOLUME:
                 return None
         return dict
     display = staticmethod(display)
+
+# vim:ts=4:sw=4:showmatch:expandtab

@@ -78,7 +78,7 @@ def load_release(chroot=""):
     release = fd.readline()
     fd.close()
     return release.strip()
-    
+
 def load_fstab(chroot=""):
     f = "%s/etc/fstab" % chroot
     if not (os.path.exists(f) and os.path.isfile(f)):
@@ -136,11 +136,11 @@ def load_mdadm_conf(chroot=""):
                 else:
                     conf[dev][key] = value
     fd.close()
-    return conf    
+    return conf
 
 def get_installation_info(device, fstype, dir):
     # try to mount partition and search for release, fstab and
-    # mdadm.con
+    # mdadm.conf
     if config.verbose:
         print "Mounting '%s' on '%s'" % (device, dir)
     try:
@@ -167,7 +167,7 @@ def get_installation_info(device, fstype, dir):
 
 def get_buildstamp_info(dir):
     release = version = arch = date = None
-    
+
     buildstamp = "%s/.buildstamp" % dir
     try:
         fd = open(buildstamp, "r")
@@ -200,7 +200,8 @@ def get_buildstamp_info(dir):
 
 def get_discinfo(discinfo):
     release = version = arch = date = None
-    
+
+    # This should be using the cache to also work for http/ftp.
     try:
         fd = open(discinfo, "r")
     except Exception, msg:
@@ -378,14 +379,14 @@ def realpath(buildroot, path):
     t = "%s/%s" % (buildroot, path)
     if os.path.islink(t):
         t = buildroot + os.readlink(t)
-    return t    
+    return t
 
 def check_exists(buildroot, target):
     if not os.path.exists("%s/%s" % (buildroot, target)) and \
            not os.path.exists(realpath(buildroot, target)):
         raise IOError, "%s is missing." % target
 
-def create_file(buildroot, target, content=None, force=0):
+def create_file(buildroot, target, content=None, force=0, mode=None):
     try:
         check_exists(buildroot, target)
     except:
@@ -407,6 +408,8 @@ def create_file(buildroot, target, content=None, force=0):
             fd.close()
             return 0
     fd.close()
+    if mode != None:
+        os.chmod("%s/%s" % (buildroot, target), mode)
     return 1
 
 def copy_device(source, target_dir, source_dir="", target=None):
@@ -535,3 +538,4 @@ def addPkgByFileProvide(repo, name, pkgs, description):
         raise ValueError, "Could not find package providing '%s'" % (name) + \
               "needed for %s." % (description)
 
+# vim:ts=4:sw=4:showmatch:expandtab

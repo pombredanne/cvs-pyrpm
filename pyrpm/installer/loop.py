@@ -46,10 +46,10 @@ class LOOP:
     LOOP_GET_STATUS64 = 0x4C05
     LO_NAME_SIZE      = 64
     LO_KEY_SIZE       = 32
-    
+
     LOOP_MAX          = 256
     LOOP_NAME         = "/dev/loop%d"
-    
+
     def __init__(self, device):
         self.clear()
         self.device = device
@@ -147,7 +147,7 @@ class LOOP:
             self._setInfo(fd=lo_fd)
         except Exception, msg:
             lo_fd.close()
-            return 0        
+            return 0
         try:
             fcntl.ioctl(lo_fd.fileno(), LOOP.LOOP_CLR_FD, 0)
         except:

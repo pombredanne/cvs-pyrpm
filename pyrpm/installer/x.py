@@ -211,3 +211,5 @@ def x_config(ks, buildroot, installation):
                          '        Mode         0666\n',
                          'EndSection\n' ] )
     create_file(buildroot, conf, content)
+
+# vim:ts=4:sw=4:showmatch:expandtab
