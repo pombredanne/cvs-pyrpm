@@ -86,6 +86,7 @@ class RpmConfig:
         self.yumconf = ['/etc/yum.conf'] # Yum config files
         self.relver  = '3'               # Release version, needed by YumConfig
         self.arch = None                 # If explicitly selected, for --test
+        self.archlist = None             # Specific list of supported archs
         self.tmpdir = None
         self.supported_signals = [ signal.SIGINT, signal.SIGTERM,
                                    signal.SIGHUP ]

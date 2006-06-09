@@ -36,6 +36,9 @@ class RpmYum:
         # Default: Don't autoerase packages that have unresolved symbols in
         # install or update
         self.autoerase = 0
+        # package names/globs to be excluded from autoerasing of autoerase is
+        # enabled.
+        self.autoeraseexclude = []
         # Default: Ask user for confirmation of complete operation
         self.confirm = 1
         # Default: No command
@@ -63,6 +66,15 @@ class RpmYum:
         according to flag."""
 
         self.autoerase = flag
+
+    def setAutoeraseExclude(self, exlist):
+        """Sets the names/globs to be excluded from autoerasing."""
+        nlist = []
+        for name in exlist:
+            name = fnmatch.translate(name)
+            regex = re.compile(name)
+            nlist.append(regex)
+        self.autoeraseexclude = nlist
 
     def setConfirm(self, flag):
         """Enable or disable asking the user for confirmation according to
@@ -96,19 +108,16 @@ class RpmYum:
             printError("Error reading configuration: %s" % e)
             return 0
         gexcludes = ''.join(self.config.excludes)
-        __fnmatchre__ = re.compile(".*[\*\[\]\{\}\?].*")
         erepo = []
         for ritem in self.config.enablerepo:
-            if __fnmatchre__.match(ritem):
-                restring = fnmatch.translate(ritem)
-                regex = re.compile(restring)
-                erepo.append(regex)
+            ritem = fnmatch.translate(ritem)
+            regex = re.compile(ritem)
+            erepo.append(regex)
         drepo = []
         for ritem in self.config.disablerepo:
-            if __fnmatchre__.match(ritem):
-                restring = fnmatch.translate(ritem)
-                regex = re.compile(restring)
-                drepo.append(regex)
+            ritem = fnmatch.translate(ritem)
+            regex = re.compile(ritem)
+            drepo.append(regex)
         for key in conf.keys():
             sec = conf[key]
             if key == "main":
@@ -125,14 +134,10 @@ class RpmYum:
                 enabled = True      # Default is enabled
                 if sec.has_key("enabled") and sec["enabled"] == "0":
                     enabled = False
-                if key in self.config.enablerepo:
-                    enabled = True
                 for regex in erepo:
                     if regex.match(key):
                         enabled = True
                         break
-                if key in self.config.disablerepo:
-                    enabled = False
                 for regex in drepo:
                     if regex.match(key):
                         enabled = False
@@ -739,7 +744,8 @@ class RpmYum:
         #   - Erase the packages that had unresolved deps (autoerase option)
         if self.autoerase:
             self.config.printWarning(1, "Autoerasing package %s due to unresolved symbols." % pkg.getNEVRA())
-            self.__doAutoerase(pkg)
+            if not self.__doAutoerase(pkg):
+                return 0
             return 1
         return 0
 
@@ -897,6 +903,12 @@ class RpmYum:
 
         Return 1 on success, 0 on error (after warning the user)."""
 
+        for reex in self.autoeraseexclude:
+            if reex.match(pkg["name"]) and \
+             len(self.opresolver.getDatabase().getPkgsByName(pkg["name"])) == 1:
+                self.erase_list.append(pkg)
+                self.config.printWarning(1, "No autoerase of package %s due to exclude list." % pkg.getNEVRA())
+                return 0
         if self.opresolver.updates.has_key(pkg):
             updates = self.opresolver.updates[pkg]
         else:

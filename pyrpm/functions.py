@@ -777,10 +777,10 @@ def parseYumOptions(argv, yum):
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
          "noconflicts", "fileconflicts", "nodeps", "signature", "noorder",
          "noscripts", "notriggers", "excludedocs", "excludeconfigs",
-         "oldpackage", "autoerase", "servicehack", "installpkgs=", "arch=",
-         "checkinstalled", "rusage", "srpmdir=", "enablerepo=", "disablerepo=",
-         "nocache", "cachedir=", "exclude=", "obsoletes", "noplugins",
-         "diff", "verifyallconfig"])
+         "oldpackage", "autoerase", "autoeraseexclude=", "servicehack",
+         "installpkgs=", "arch=", "archlist=", "checkinstalled", "rusage",
+         "srpmdir=", "enablerepo=", "disablerepo=", "nocache", "cachedir=",
+         "exclude=", "obsoletes", "noplugins", "diff", "verifyallconfig"])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -813,6 +813,8 @@ def parseYumOptions(argv, yum):
             pass
         elif opt == "--autoerase":
             yum.setAutoerase(1)
+        elif opt == "--autoeraseexclude":
+            yum.setAutoeraseExclude(val.split())
         elif opt == "--version":
             print "pyrpmyum", __version__
             sys.exit(0)
@@ -869,6 +871,8 @@ def parseYumOptions(argv, yum):
             rpmconfig.service = 1
         elif opt == "--arch":
             rpmconfig.arch = val
+        elif opt == "--archlist":
+            rpmconfig.archlist = val.split()
         elif opt == "--checkinstalled":
             rpmconfig.checkinstalled = 1
         elif opt == "--srpmdir":

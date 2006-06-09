@@ -340,9 +340,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         if pkg["arch"] == "src":
             return 1
         if not self.config.ignorearch and \
-           not functions.archCompat(pkg["arch"], self.config.machine):
-            self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
-            return 1
+           (not functions.archCompat(pkg["arch"], self.config.machine) or \
+            (self.config.archlist != None and not pkg["arch"] in self.config.archlist)):
+                self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
+                return 1
         excludes = functions.findPkgByNames(self.excludes, [pkg])
         return len(excludes) > 0
 
