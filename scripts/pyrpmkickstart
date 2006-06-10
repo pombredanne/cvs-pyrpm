@@ -62,7 +62,7 @@ def main():
     user_arch = None
     no_default_groups = 0
     autoerase = 0
-    
+
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
                                      [ "help", "verbose", "yes",
@@ -199,7 +199,7 @@ def main():
         return 1
 
     ### load source ###
-    
+
     source = Repository(pyrpm.rpmconfig, source_dir, "base")
 
     if ks.has_key("cdrom"):
@@ -535,7 +535,7 @@ def main():
 
     has_raid = False
     fstypes = [ ]
-    
+
     ########################## kickstart second pass ##########################
 
     # run pre script and reload kickstart file
@@ -697,7 +697,7 @@ def main():
                 if ks["raid"][name].has_key("noformat"):
                     partitions[name]["noformat"] = 1
                 if ks["raid"][name].has_key("useexisting"):
-                    partitions[name]["useexisting"] = 1                    
+                    partitions[name]["useexisting"] = 1
         if ks.has_key("volgroup") and len(ks["volgroup"]) > 0:
             for group in ks["volgroup"]:
                 volgroup[group] = { }
@@ -755,7 +755,7 @@ def main():
                 if ks["logvol"][name].has_key("noformat"):
                     partitions[name]["noformat"] = 1
                 if ks["logvol"][name].has_key("useexisting"):
-                    partitions[name]["useexisting"] = 1                    
+                    partitions[name]["useexisting"] = 1
     else:
         # search for installations and load fstab file
         # generate partitions according to fstab entries as onpart and noformat
@@ -1647,7 +1647,7 @@ def main():
         elif name[:4] == "swap" and not "swap" in needed_fstypes:
             needed_fstypes.append("swap")
             # TODO: check filesystem size against fs_maxsize (dist and release
-            # dependent)            
+            # dependent)
     to_format.sort()
     to_format.reverse()
 
@@ -1659,7 +1659,7 @@ def main():
     if not no_stage2:
         prefix = "/usr"
         dir = stage2_dir
-        location = "stage2 image"    
+        location = "stage2 image"
     if has_raid:
         if not os.path.exists(dir+prefix+"/sbin/mdadm"):
             print "ERROR: Could not find %s/sbin/mdadm in %s." % \
@@ -1819,7 +1819,7 @@ def main():
                 elif part["fstype"] == "reiserfs":
                     if label:
                         mkfs += " -l '%s'" % label
-                    
+
                 mkfs += " '%s'" % partitionmap[onpart]["device"]
 
                 print "Formatting '%s': '%s'" % (name, onpart)
@@ -1841,7 +1841,7 @@ def main():
                     print "Tuning filesystem '%s'" % onpart
                     if verbose:
                         print tune2fs
-                        
+
                     (status, rusage, msg) = pyrpm.runScript(script=tune2fs,
                                                             chroot=stage2_chroot)
                     log(msg)
@@ -1877,7 +1877,7 @@ def main():
                 print "ERROR: Unknown filesystem for '%s' (%s)" % (onpart,
                                                                    name)
                 return 1
-            
+
         del to_format
 
     ############################# mount target ################################
@@ -2046,7 +2046,7 @@ def main():
             # append mdadm
             if has_raid:
                 try:
-                    addPkgByFileProvide(source.repo, "/sbin/mdadm", pkgs, 
+                    addPkgByFileProvide(source.repo, "/sbin/mdadm", pkgs,
                                         "raid configuration")
                 except Exception, msg:
                     print "WARNING: %s" % msg
@@ -2065,7 +2065,7 @@ def main():
                    not "iptables" in pkgs:
                 print "Adding package iptables"
                 pkgs.append("iptables")
-                
+
                 # no firewall config tool in RHEL-3
                 if (installation.release == "RHEL" and \
                     installation.version >= 4) or \
@@ -2652,7 +2652,7 @@ def main():
         if ks["timezone"][zone].has_key("utc"):
             _utc = 'UTC=true\n'
         else:
-            _utc = 'UTC=false\n'    
+            _utc = 'UTC=false\n'
         create_file(target_chroot, "/etc/sysconfig/clock",
                     [ 'ZONE="%s"\n' % zone, _utc, 'ARC=false\n' ])
 
@@ -3189,3 +3189,5 @@ if tempdir:
     tempdir = None
 
 sys.exit(status)
+
+# vim:ts=4:sw=4:showmatch:expandtab
