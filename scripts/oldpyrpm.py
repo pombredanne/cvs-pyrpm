@@ -2048,7 +2048,7 @@ class ReadRpm:
                         j.decode("utf-8")
                     except:
                         self.printErr("not utf-8 in %s" % i)
-                        self.printErr("text: %s" % j)
+                        #self.printErr("text: %s" % j)
                         break
         for i in ("md5",):
             if not self.sig.has_key(i):
