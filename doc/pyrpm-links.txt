@@ -29,6 +29,8 @@ link:http://linux.duke.edu/projects/mini/repoview/[].
 
 rpmlint is checking for packaging errors. It is available at
 link:http://people.mandriva.com/%7eflepied/projects/rpmlint/[http://people.mandriva.com/~flepied/projects/rpmlint/].
+General guidelines on how to package rpms for Fedora Core and Fedora Extras
+are at link:http://fedoraproject.org/wiki/Packaging/Guidelines[].
 
 Smart is written in python and combines several different binary
 packaging formats within one packaging tool. It is available at
