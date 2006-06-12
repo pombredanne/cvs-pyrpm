@@ -493,7 +493,11 @@ def main():
                 print "ERROR: '%s' already exists in diskmap." % key
                 return 1
 
-            diskmap[key] = Disk(val, alloc_loop=1, as_image=disk_image)
+            try:
+                diskmap[key] = Disk(val, alloc_loop=1, as_image=disk_image)
+            except Exception, msg:
+                print "ERROR: %s" % msg
+                return 1
 
     # use system disks?
     if len(diskmap) == 0:
@@ -2154,11 +2158,9 @@ def main():
     if (installation.release == "RHEL" and installation.version >= 4) or \
            (installation.release == "FC" and installation.version >= 2):
         create_dir(target_chroot, "/sys")
-    create_dir(target_chroot, "/tmp")
-    os.chmod(target_chroot+"/tmp", 1777)
+    create_dir(target_chroot, "/tmp", mode=1777)
     create_dir(target_chroot, "/var/log")
-    create_dir(target_chroot, "/var/tmp")
-    os.chmod(target_chroot+"/var/tmp", 1777)
+    create_dir(target_chroot, "/var/tmp", mode=1777)
 
     # /dev
     create_min_devices(target_chroot)
@@ -2408,11 +2410,11 @@ def main():
 
     # /var/log/lastlog
     if ks.has_key("install"):
-        create_file(target_chroot, "/var/log/lastlog")
+        create_file(target_chroot, "/var/log/lastlog", mode=0644)
 
     # /var/log/messages
     if ks.has_key("install"):
-        create_file(target_chroot, "/var/log/messages")
+        create_file(target_chroot, "/var/log/messages", mode=0600)
 
     # print previous installed release
     if ks.has_key("upgrade"):
@@ -3139,7 +3141,7 @@ if wait:
         sys.stdout.write("\nAvailable trees\n")
         if stage2_chroot:
             sys.stdout.write("  Stage2:       %s\n" % stage2_chroot)
-        if target_dir:
+        if target_chroot:
             sys.stdout.write("  Installation: %s\n" % target_chroot)
         sys.stdout.write("Use 'chroot <dir>' to change into the tree.\n")
     sys.stdout.write("\nWaiting - Press any key to continue.")
