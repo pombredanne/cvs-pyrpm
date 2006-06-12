@@ -5362,8 +5362,14 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     name = readDb(swapendian, rpmdbpath + "Name")
     providename = readDb(swapendian, rpmdbpath + "Providename")
     provideversion = readDb(swapendian, rpmdbpath + "Provideversion", "bt")
-    #pubkeys =
-    readDb(swapendian, rpmdbpath + "Pubkeys")
+    # We make "Pubkeys" optional since also pyrpmrebuilddb does not write
+    # it again:
+    if not os.access(rpmdbpath + "Pubkeys", os.R_OK):
+        if verbose:
+            print "Did not any Pubkey db file."
+    else:
+        #pubkeys =
+        readDb(swapendian, rpmdbpath + "Pubkeys")
     requirename = readDb(swapendian, rpmdbpath + "Requirename")
     requireversion = readDb(swapendian, rpmdbpath + "Requireversion", "bt")
     sha1header = readDb(swapendian, rpmdbpath + "Sha1header")
