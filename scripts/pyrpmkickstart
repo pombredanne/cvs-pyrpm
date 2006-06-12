@@ -330,7 +330,7 @@ def main():
                              "Block devices:\n",
                              "  7 loop\n" ]):
             return 1
-        # create usable /proc/devices for lvm
+        # create usable /proc/misc for lvm
         if not create_file(stage2_dir, "/proc/misc",
                            [ " 63 device-mapper" ]):
             return 1
@@ -364,12 +364,14 @@ def main():
                 source_release = "Fedora Core"
                 pkgs = source.repo.getPkgsByName("fedora-release")
             if len(pkgs) == 0:
-                print "ERROR: Could not fing release package in source."
+                print "ERROR: Could not find release package in source."
                 return
-            if len(pkgs) != 1:
+            if len(pkgs) > 1:
                 print "ERROR: Found more than one release package, exiting."
                 return
             source_version = pkgs[0]["version"]
+            # drop all letters from source_version
+            source_version = source_version.strip(string.letters)
             if len(source_version) == 0:
                 print "ERROR: No valid version of installation source"
                 return 1
@@ -396,7 +398,7 @@ def main():
         short_release = "FC"
         prefix = "Fedora"
     else:
-        print "ERROR: Unknown source release."
+        print "ERROR: Unknown source release '%s'." % source_release
         return 1
 
     try:
@@ -2408,12 +2410,9 @@ def main():
 #    create_file(target_chroot, "/etc/rpm/platform", 
 #                [ "%s-redhat-linux" % installation.arch ])
 
-    # /var/log/lastlog
+    # create /var/log/lastlog and /var/log/messages
     if ks.has_key("install"):
         create_file(target_chroot, "/var/log/lastlog", mode=0644)
-
-    # /var/log/messages
-    if ks.has_key("install"):
         create_file(target_chroot, "/var/log/messages", mode=0600)
 
     # print previous installed release
