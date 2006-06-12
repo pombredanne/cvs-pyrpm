@@ -215,6 +215,9 @@ def get_discinfo(discinfo):
         return None
 
     date = string.strip(lines[0])
+    # fix bad fedora core 5 entry
+    if string.strip(lines[1]) == "Fedora Core":
+        lines[1] = "Fedora Core 5"
     splits = string.rsplit(string.strip(lines[1]), " ", maxsplit=1)
     if not len(splits) == 2:
         print "ERROR: .discinfo in '%s' is malformed." % discinfo
