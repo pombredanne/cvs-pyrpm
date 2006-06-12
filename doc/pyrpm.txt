@@ -5,7 +5,8 @@ PyRPM
 // and you should probably read the corresponding .html page.
 
 The current location of the PyRPM project is at
-link:http://people.redhat.com/laroche/pyrpm/[].
+link:http://people.redhat.com/laroche/pyrpm/[],
+link:http://sf.net/projects/pyrpm/[] and link:http://freshmeat.net/projects/pyrpm/[].
 
 The newest version can be downloaded from
 link:http://people.redhat.com/laroche/pyrpm/download/[].
