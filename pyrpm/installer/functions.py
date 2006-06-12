@@ -349,7 +349,7 @@ def check_dir(buildroot, dir):
         return 0
     return 1
 
-def create_dir(buildroot, dir):
+def create_dir(buildroot, dir, mode=None):
     d = "%s/%s" % (buildroot, dir)
     try:
         check_exists(buildroot, dir)
@@ -361,6 +361,8 @@ def create_dir(buildroot, dir):
     else:
         if not os.path.isdir(d):
             raise IOError, "'%s' is no directory." % dir
+    if mode != None:
+        os.chmod(d, mode)
 
 def create_link(buildroot, source, target):
     t = "%s/%s" % (buildroot, target)
