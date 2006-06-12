@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import os, fcntl, struct, stat
+import os, fcntl, struct, stat, errno
 
 # struct loop_info64 {
 #        unsigned long long      lo_device;
@@ -160,8 +160,11 @@ class LOOP:
         l = LOOP(device)
         try:
             l._getInfo()
-        except:
+        except IOError:
             return 0
+        except ValueError:
+            # device is in use, but status failed
+            return 1
         return 1
     inUse = staticmethod(inUse)
 
@@ -198,8 +201,11 @@ class LOOP:
         info64 = self.__buildInfo64()
         try:
             info64 = fcntl.ioctl(_fd.fileno(), LOOP.LOOP_GET_STATUS64, info64)
-        except Exception, msg:
-            raise IOError, "ERROR: Could not get status64 on '%s'" % _fd
+        except Exception, (err, msg):
+            if err == errno.ENXIO:
+                # No such device or address
+                raise IOError, "ERROR: Could not get status64 on '%s'" % _fd
+            raise ValueError, "%s: %s" % (self.device, msg)
         self.__unpackInfo64(info64)
         if not fd:
             _fd.close()
@@ -267,8 +273,12 @@ def lolist():
             l = LOOP(dev)
             try:
                 l._getInfo()
-            except:
+            except IOError:
                 free += 1
+                continue
+            except ValueError, msg:
+                used += 1
+                print msg
                 continue
             used += 1
             line = "%s: [%04x]:%d (%s)" % (dev, l.lo_device, l.lo_inode,
