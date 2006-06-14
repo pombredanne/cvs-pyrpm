@@ -323,7 +323,7 @@ def umount_all(dir):
             failed = 1
             i += 1
         else:
-            mounted.remove(dir)
+            mounted.pop(i)
         if i >= len(mounted) and count > 0:
             time.sleep(1)
             i = 0

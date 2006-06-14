@@ -47,6 +47,7 @@ class LOOP:
     LO_NAME_SIZE      = 64
     LO_KEY_SIZE       = 32
 
+    LOOP_FIRST        = 0
     LOOP_MAX          = 256
     LOOP_NAME         = "/dev/loop%d"
 
@@ -169,7 +170,7 @@ class LOOP:
     inUse = staticmethod(inUse)
 
     def findUnused():
-        for i in xrange(LOOP.LOOP_MAX):
+        for i in xrange(LOOP.LOOP_FIRST, LOOP.LOOP_MAX):
             dev = LOOP.LOOP_NAME % i
             try:
                 mode = os.stat(dev).st_mode
