@@ -39,6 +39,12 @@ import pyrpm
 import pyrpm.database
 from pyrpm.installer import *
 
+# do not use first 4 loop devices
+# mkinitrd in old Fedora or Red Hat releases needs one and can only use
+# loop0 to loop3
+LOOP.LOOP_FIRST = 4
+
+
 #################################### dicts ####################################
 
 autopart = { }
@@ -62,6 +68,8 @@ def main():
     user_arch = None
     no_default_groups = 0
     autoerase = 0
+    no_buildstamp = 0
+    no_discinfo = 0
 
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
@@ -70,7 +78,8 @@ def main():
                                        "standalone", "wait", "xen", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
                                        "no-cache", "no-default-groups",
-                                       "drop-unresolved"])
+                                       "drop-unresolved", "no-buildstamp",
+                                       "no-discinfo"])
     except:
         usage()
         return
@@ -113,6 +122,10 @@ def main():
             no_default_groups = 1
         elif opt == "--drop-unresolved":
             autoerase = 1
+        elif opt == "--no-buildstamp":
+            no_buildstamp = 1
+        elif opt == "--no-discinfo":
+            no_discinfo = 1
         else:
             print "Unknown option '%s'" % opt
             usage()
@@ -213,9 +226,43 @@ def main():
     if not source.load(url):
         return 1
 
+    ### get source information via release package ###
+    # will be overwritte later by .buildstamp or .discinfo if not disabled
+
+    # get source information via release package
+    source_release = "Red Hat Enterprise Linux"
+    pkgs = source.repo.getPkgsByName("redhat-release")
+    if len(pkgs) == 0:
+        source_release = "Fedora Core"
+        pkgs = source.repo.getPkgsByName("fedora-release")
+    if len(pkgs) == 0:
+        print "ERROR: Could not find release package in source."
+        return
+    if len(pkgs) > 1:
+        print "ERROR: Found more than one release package, exiting."
+        return
+    source_version = pkgs[0]["version"]
+    # drop all letters from source_version
+    source_version = source_version.strip(string.letters)
+    if len(source_version) == 0:
+        print "ERROR: No valid version of installation source"
+        return 1
+    i = string.find(pkgs[0]["release"], "rawhide")
+    if i != -1 and string.find(source_version, ".") == -1:
+        source_version += ".90" # bad fix for rawhide
+    del i
+
+    # get installation arch
+    pkgs = source.repo.getPkgsByName("filesystem")
+    if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
+        pkgs = source.repo.getPkgsByName("coreutils")
+    if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
+        print "ERROR: Could not determine installation architecture."
+        return 1
+    source_arch = pkgs[0]["arch"]
+
     ############################## mount stage2  ##############################
 
-    source_arch = None
     if not no_stage2:
         stage2_img_dir = tempdir+"/stage2_img"
         os.mkdir(stage2_img_dir)
@@ -244,8 +291,7 @@ def main():
         if verbose:
             print "Mounting '%s' on '%s'" % (stage2, stage2_img_dir)
         try:
-            mount(stage2, stage2_img_dir, fstype,
-                        options="loop,defaults,ro")
+            mount(stage2, stage2_img_dir, fstype, options="loop,defaults,ro")
         except Exception, msg:
             print "Unable to mount stage2 image.\n" + \
                   "You could try to disable the use of the stage2 image" +\
@@ -255,14 +301,16 @@ def main():
             return 1
 
         ### analyze stage2 ###
-        if not os.path.exists("%s/.buildstamp" % stage2_img_dir):
-            print "ERROR: Buildstamp information is missing in stage2."
-            return 1
-        bs = get_buildstamp_info(stage2_img_dir)
-        if not bs:
-            print "ERROR: Failed to get buildstamp information from stage2"
-            return 1
-        (source_release, source_version, source_arch) = bs
+        if not no_buildstamp:
+            if not os.path.exists("%s/.buildstamp" % stage2_img_dir):
+                print "ERROR: Buildstamp information is missing in stage2."
+                return 1
+            bs = get_buildstamp_info(stage2_img_dir)
+            print bs
+            if not bs:
+                print "ERROR: Failed to get buildstamp information from stage2"
+                return 1
+            (source_release, source_version, source_arch) = bs
 
         ### create stage2 chroot ###
 
@@ -348,47 +396,12 @@ def main():
 
     else: # no_stage2
         stage2_dir = ""
-        source_release = None
         
         # get discinfo if available
-        if source.get(".discinfo"):
+        if not no_discinfo and source.get(".discinfo"):
             di = get_discinfo(source.get(".discinfo"))
             if di:
                 (source_release, source_version, source_arch) = di
-
-        # get source information via release package if discinfo was not found
-        if not source_release:
-            source_release = "Red Hat Enterprise Linux"
-            pkgs = source.repo.getPkgsByName("redhat-release")
-            if len(pkgs) == 0:
-                source_release = "Fedora Core"
-                pkgs = source.repo.getPkgsByName("fedora-release")
-            if len(pkgs) == 0:
-                print "ERROR: Could not find release package in source."
-                return
-            if len(pkgs) > 1:
-                print "ERROR: Found more than one release package, exiting."
-                return
-            source_version = pkgs[0]["version"]
-            # drop all letters from source_version
-            source_version = source_version.strip(string.letters)
-            if len(source_version) == 0:
-                print "ERROR: No valid version of installation source"
-                return 1
-            i = string.find(pkgs[0]["release"], "rawhide")
-            if i != -1 and string.find(source_version, ".") == -1:
-                source_version += ".90" # bad fix for rawhide
-            del i
-
-    if not source_arch:
-        # get installation arch
-        pkgs = source.repo.getPkgsByName("filesystem")
-        if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
-            pkgs = source.repo.getPkgsByName("coreutils")
-        if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
-            print "ERROR: Could not determine installation architecture."
-            return 1
-        source_arch = pkgs[0]["arch"]
 
     # verify source release and version
     if source_release == "Red Hat Enterprise Linux":
@@ -610,14 +623,17 @@ def main():
     # initialize dmsetup
     if (installation.release == "RHEL" and installation.version >= 5) or \
            (installation.release == "FC" and installation.version >= 4):
-        print "Initializing device mapper"
-        dmsetup = "/sbin/dmsetup info 2>/dev/ull"
-        (status, rusage, msg) = pyrpm.runScript(script=dmsetup,
-                                                chroot=stage2_chroot)
-        log(msg)
-        if status != 0:
-            print "ERROR: dmsetup failed."
-            return 1
+        if os.path.exists(stage2_dir+"/sbin/dmsetup"):
+            print "Initializing device mapper"
+            dmsetup = "/sbin/dmsetup info 2>/dev/ull"
+            (status, rusage, msg) = pyrpm.runScript(script=dmsetup,
+                                                    chroot=stage2_chroot)
+            log(msg)
+            if status != 0:
+                print "ERROR: dmsetup failed."
+                return 1
+        else:
+            print "WARNING: dmsetup is missing."
 
     # clearpart, initialize disks
     modified = [ ]
@@ -1384,9 +1400,6 @@ def main():
     if not no_stage2:
         # create disk and partition devices if they do not exist
         for disk in diskmap:
-            # these devices are managed by the disk class
-            if diskmap[disk].has_key("image"):
-                continue
             try:
                 check_exists(stage2_dir, diskmap[disk]["device"])
             except:
@@ -1859,7 +1872,7 @@ def main():
                      (part.has_key("fstype") and part["fstype"] == "swap"):
                 l = ""
                 if (installation.release == "RHEL" and installation.version >= 4) or \
-                       (installation.release == "FC" and installation.version >= 2):
+                       (installation.release == "FC" and installation.version > 2):
                     # no swap labels for RHEL-2.1, RHEL-3, FC-1
                     l = "-L '%s'" % label
                 mkswap = "/sbin/mkswap %s '%s' >/dev/null" % \
@@ -1931,6 +1944,7 @@ def main():
             opts = "defaults"
             if part.has_key("fsoptions"):
                 opts = part["fsoptions"]
+            print "Mounting '%s'" % mntpnt
             mount(d, dir, fstype=part["fstype"], options=opts)
 
     target_chroot = target_dir
@@ -2146,7 +2160,7 @@ def main():
 
     ############################## setup target ##############################
 
-    # create essential directories and files
+    # create essential directories
     os.umask(022)
 
     create_dir(target_chroot, "/boot/grub")
@@ -2154,8 +2168,6 @@ def main():
     create_dir(target_chroot, "/etc/rpm")
     create_dir(target_chroot, "/etc/sysconfig")
     create_dir(target_chroot, "/proc")
-    create_dir(target_chroot, "/proc/self/fd")
-    create_file(target_chroot, "/proc/self/fd/0", [ ])
     create_dir(target_chroot, "/root")
     if (installation.release == "RHEL" and installation.version >= 4) or \
            (installation.release == "FC" and installation.version >= 2):
@@ -2164,7 +2176,35 @@ def main():
     create_dir(target_chroot, "/var/log")
     create_dir(target_chroot, "/var/tmp", mode=1777)
 
-    # /dev
+    # mount temporary filesystems for /proc, /tmp
+    # /proc
+    try:
+        mount("None", target_dir+"/proc", fstype="ramfs")
+    except Exception, msg:
+        print "ERROR: Unable to mount temporary /proc: %s" % msg
+        return 1
+    create_dir(target_chroot, "/proc/.real_proc")
+    try:
+        mount("None", target_dir+"/proc/.real_proc", fstype="proc")
+    except Exception, msg:
+        print "ERROR: Unable to mount temporary /proc/.real_proc: %s" % msg
+        return 1
+    if (installation.release == "RHEL" and installation.version >= 4) or \
+           (installation.release == "FC" and installation.version >= 2):
+        # /sys
+        try:
+            mount("None", target_dir+"/sys", fstype="ramfs")
+        except Exception, msg:
+            print "ERROR: Unable to mount temporary /sys: %s" % msg
+            return 1
+    # /tmp
+    try:
+        mount("None", target_dir+"/tmp", fstype="ramfs")
+    except Exception, msg:
+        print "ERROR: Unable to mount temporary /tmp: %s" % msg
+        return 1
+
+    # create essential devices
     create_min_devices(target_chroot)
 
     # create /dev/mapper/control
@@ -2174,6 +2214,9 @@ def main():
                       0600 | stat.S_IFCHR, 10, 63)
 
     # create needed devices
+    for disk in diskmap:
+        copy_device(diskmap[disk]["device"], target_chroot,
+                    source_dir=stage2_dir)
     for onpart in partitionmap:
         if partitionmap[onpart].has_key("volgroup"):
             create_dir(target_chroot, "/dev/%s" % \
@@ -2183,6 +2226,40 @@ def main():
         else:
             copy_device(partitionmap[onpart]["device"], target_chroot,
                         source_dir=stage2_dir)
+            
+    if (installation.release == "RHEL" and installation.version >= 4) or \
+           (installation.release == "FC" and installation.version >= 2):
+        create_dir(target_chroot, "/sys/block")
+        create_dir(target_chroot, "/sys/bus")
+        create_dir(target_chroot, "/sys/class")
+        create_dir(target_chroot, "/sys/devices")
+        create_dir(target_chroot, "/sys/kernel")
+        create_dir(target_chroot, "/sys/module")
+
+    # create essential files in proc
+    # /proc/1/ is needed to calm down 'killall <process name>'
+    create_dir(target_chroot, "/proc/1/fd")
+    create_file(target_chroot, "/proc/1/fd/0", [ ])
+    create_file(target_chroot, "/proc/1/stat", [ ])
+    create_link(target_chroot, "/proc/.real_proc/self", "/proc/self")
+    create_file(target_chroot, "/proc/cmdline", [ ])
+    create_file(target_chroot, "/proc/cpuinfo", [ ])
+    # /proc/devices
+    if ks.has_key("install") and \
+           not os.path.exists(target_chroot+"/proc/devices"):
+        # create usable /proc/devices for lvm
+        create_file(target_chroot, "/proc/devices",
+                    [ "Character devices:\n",
+                      " 10 misc\n",
+                      "\n",
+                      "Block devices:\n",
+                      "  7 loop\n" ])
+    create_file(target_chroot, "/proc/modules", [ ])
+    create_file(target_chroot, "/proc/stat", [ ])
+    create_file(target_chroot, "/proc/swaps", [ ])
+    create_file(target_chroot, "/proc/uptime", [ ])
+    create_file(target_chroot, "/proc/version", [ ])
+    create_file(target_chroot, "/proc/vmstat", [ ])
 
     # /proc/mdstat
     if ks.has_key("install") and raidmap and \
@@ -2204,17 +2281,6 @@ def main():
                 content.append("VG:  %s\n" % group)
             create_file(target_chroot, "/proc/lvm/group", content)
 
-    # /proc/devices
-    if ks.has_key("install") and \
-           not os.path.exists(target_chroot+"/proc/devices"):
-        # create usable /proc/devices for lvm
-        create_file(target_chroot, "/proc/devices",
-                    [ "Character devices:\n",
-                      " 10 misc\n",
-                      "\n",
-                      "Block devices:\n",
-                      "  7 loop\n" ])
-
     if ks.has_key("install"):
         # /etc/sysconfig/kernel
         content = [ \
@@ -2226,87 +2292,108 @@ def main():
             'DEFAULTKERNEL=kernel\n' ]
         create_file(target_chroot, "/etc/sysconfig/kernel", content)
 
-    # /etc/fstab
+    # /etc/fstab, /etc/mtab, /proc/paritions and /proc/mounts
+    fstab_content = [ ]
+    mtab_content = [ ]
+    partition = partitionmap.keys()
+    partition.sort()
+    partition.reverse()
+
+    # sort by partition names and not onpart
+    onparts = { }
+    for onpart in partition:
+        name = partitionmap[onpart]["name"]
+        if name[:5] == "raid." or name[:3] == "pv.":
+            continue
+        onparts[name] = onpart
+    parts = onparts.keys()
+    parts.sort()
+
+    for name in parts:
+        onpart = onparts[name]
+        part = partitions[name]
+
+        major = minor = 0
+        if part.has_key("fstype") and name[:4] != "swap":
+            fs = part["fstype"]
+            major = 1
+            if name == "/":
+                minor = 1
+            else:
+                minor = 2
+            label = partitionmap[onpart]["label"]
+            if partitionmap[onpart]["label"]:
+                src = "LABEL=%s" % partitionmap[onpart]["label"]
+            elif partitionmap[onpart].has_key("lvm"):
+                # there is no device mapping for lvm, therefore use real
+                # device
+                src = partitionmap[onpart]["device"]
+            else:
+                src = "/dev/%s" % onpart
+            opts = "defaults"
+            if partitionmap[onpart].has_key("fsoptions"):
+                opts = partitionmap[onpart]["fsoptions"]
+            fstab_content.append("%s\t\t%s\t\t%s\t%s\t%d %d\n" % \
+                                 (src, name, fs, opts, major, minor))
+            mtab_content.append("/dev/%s %s %s rw %d %d\n" % \
+                                (onpart, name, fs, major, minor))
+        elif name[:4] == "swap":
+            continue
+        else:
+            print "WARNING: Unknown filesystem for '%s'" % onpart
+            continue
+    fstab_content.extend([ "none\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n",
+                           "none\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n",
+                           "none\t\t/proc\t\tproc\tdefaults\t0 0\n" ])
+    mtab_content.append("none /proc proc defaults 0 0\n")
+    if (installation.release == "RHEL" and installation.version >= 4) or \
+           (installation.release == "FC" and installation.version >= 2):
+        fstab_content.append("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
+        mtab_content.append("/dev/sys /sys sysfs defaults 0 0\n")
+    for name in parts:
+        if name[:4] != "swap":
+            continue
+        onpart = onparts[name]
+        if (installation.release == "RHEL" and installation.version < 4) or \
+               (installation.release == "FC" and installation.version <= 2) or \
+               not partitionmap[onpart]["label"]:
+            # pre RHEL-4, pre FC-2 does not support swap labels
+            if partitionmap[onpart].has_key("lvm"):
+                what = partitionmap[onpart]["device"]
+            else:
+                what = "/dev/%s" % onpart
+        else:
+            what = "LABEL=%s" % partitionmap[onpart]["label"]
+        fstab_content.append("%s\t\tswap\t\tswap\tdefaults\t0 0\n" % what)
+
     if ks.has_key("install") and \
            not os.path.exists(target_chroot+"/etc/fstab"):
         print "Writing '/etc/fstab'"
+        create_file(target_chroot, "/etc/fstab", fstab_content)
 
-        content = [ ]
-        mtab_content = [ ]
-        partition = partitionmap.keys()
-        partition.sort()
-        partition.reverse()
+    print "Writing temporary '/etc/mtab'"
+    create_file(target_chroot, "/etc/mtab", mtab_content)
 
-        # sort by partition names and not onpart
-        onparts = { }
-        for onpart in partition:
-            name = partitionmap[onpart]["name"]
-            if name[:5] == "raid." or name[:3] == "pv.":
-                continue
-            onparts[name] = onpart
-        parts = onparts.keys()
-        parts.sort()
+    print "Writing temporary '/proc/mounts'"
+    create_file(target_chroot, "/proc/mounts", mtab_content)
 
-        for name in parts:
-            onpart = onparts[name]
-            part = partitions[name]
-
-            major = minor = 0
-            if part.has_key("fstype") and name[:4] != "swap":
-                fs = part["fstype"]
-                major = 1
-                if name == "/":
-                    minor = 1
-                else:
-                    minor = 2
-                label = partitionmap[onpart]["label"]
-                if partitionmap[onpart]["label"]:
-                    src = "LABEL=%s" % partitionmap[onpart]["label"]
-                elif partitionmap[onpart].has_key("lvm"):
-                    # there is no device mapping for lvm, therefore use real
-                    # device
-                    src = partitionmap[onpart]["device"]
-                else:
-                    src = "/dev/%s" % onpart
-                opts = "defaults"
-                if partitionmap[onpart].has_key("fsoptions"):
-                    opts = partitionmap[onpart]["fsoptions"]
-                content.append("%s\t\t%s\t\t%s\t%s\t%d %d\n" % \
-                               (src, name, fs, opts, major, minor))
-                mtab_content.append("/dev/%s %s %s rw %d %d\n" % \
-                                    (onpart, name, fs, major, minor))
-            elif name[:4] == "swap":
-                continue
-            else:
-                print "WARNING: Unknown filesystem for '%s'" % onpart
-                continue
-        content.extend([ "none\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n",
-                         "none\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n",
-                         "none\t\t/proc\t\tproc\tdefaults\t0 0\n" ])
-#        mtab_content.append("none /proc proc defaults 0 0\n")
-        if (installation.release == "RHEL" and installation.version >= 4) or \
-               (installation.release == "FC" and installation.version >= 2):
-            content.append("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
-            mtab_content.append("/dev/sys /sys sysfs defaults 0 0\n")
-        for name in parts:
-            if name[:4] != "swap":
-                continue
-            onpart = onparts[name]
-            if (installation.release == "RHEL" and installation.version < 4) or \
-                   (installation.release == "FC" and installation.version < 2) or \
-                   not partitionmap[onpart]["label"]:
-                # pre RHEL-4, pre FC-2 does not support swap labels
-                if partitionmap[onpart].has_key("lvm"):
-                    what = partitionmap[onpart]["device"]
-                else:
-                    what = "/dev/%s" % onpart
-            else:
-                what = "LABEL=%s" % partitionmap[onpart]["label"]
-            content.append("%s\t\tswap\t\tswap\tdefaults\t0 0\n" % what)
-        create_file(target_chroot, "/etc/fstab", content)
-
-        print "Writing '/etc/mtab'"
-        create_file(target_chroot, "/etc/mtab", mtab_content)
+    partitions_content = [ "major minor  #blocks  name\n", "\n" ]
+    for disk in diskmap:
+        stats = os.stat(target_chroot + diskmap[disk]["device"])
+        partitions_content.append("%4d  %4d  %8d %s\n" % \
+                                  (os.major(stats.st_rdev),
+                                   os.minor(stats.st_rdev),
+                                   diskmap[disk]["length"], disk))
+        partition = diskmap[disk]["partition"]
+        for part in partition:
+            stats = os.stat(target_chroot + partition[part]["device"])
+            partitions_content.append("%4d  %4d  %8d %s\n" % \
+                                      (os.major(stats.st_rdev),
+                                       os.minor(stats.st_rdev),
+                                       partition[part]["length"],
+                                       "%s%d" % (disk, part)))
+    print "Writing temporary '/proc/partitions'"
+    create_file(target_chroot, "/proc/partitions", partitions_content)
 
     # /etc/mdadm.conf
     if ks.has_key("install") and has_raid and \
@@ -3083,6 +3170,10 @@ OPTIONS
   --drop-unresolved    Drop packages, which have unresolved dependencies in
                        installation mode. Please keep in mind that this could
                        result in a unusable system.
+  --no-buildstamp      Do not use .buildstamp information in stage2 images.
+                       Only usable without --no-stage2.
+  --no-discinfo        Do not use .discinfo information. Oly usable with
+                       --no-stage2.
 
 """
 # TODO:
