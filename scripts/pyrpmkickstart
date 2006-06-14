@@ -3172,8 +3172,8 @@ OPTIONS
                        result in a unusable system.
   --no-buildstamp      Do not use .buildstamp information in stage2 images.
                        Only usable without --no-stage2.
-  --no-discinfo        Do not use .discinfo information. Oly usable with
-                       --no-stage2.
+  --no-discinfo        Do not use .discinfo information. Only usable with
+                       --no-stage2 option.
 
 """
 # TODO:
