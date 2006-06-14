@@ -444,7 +444,11 @@ This is how the rpmdb is being checked:
    So you can copy the rpmdb files onto a central server to check them all.
  - Check if only packages with the correct architecture are installed. Make
    sure no arch-dependent rpm and a noarch package are installed at the
-   same time.
+   same time. Warn if we have more than one package installed for any
+   given name/arch pair (with the exception of "installonly" packages like
+   the kernel). Also warn if we have more than one package with the same
+   name that has different epoch/version/release. This is checking multilib
+   (also called compatarch) installations for some additional sanity.
  - `-q` and `\--quiet` output less progress information. `-v` or `\--verbose`
    add more output information. `\--rpmdbpath /var/lib/rpm/` can specify the
    directory which contains the database files. `--nofileconflicts` disables
