@@ -5406,6 +5406,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     verifyStructure(verbose, packages, triggername, "triggername")
     arch_hash = setMachineDistance(arch)
     checkdupes = {}
+    checkevr = {}
     # Find out "arch", "releasever" and set "checkdupes".
     for pkg in packages.values():
         if rpmdbpath != "/var/lib/rpm" and pkg["name"] in kernelpkgs:
@@ -5421,6 +5422,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
         if pkg["name"] not in installonlypkgs:
             checkdupes.setdefault("%s.%s" % (pkg["name"], pkg["arch"]),
                 []).append(pkg)
+            checkevr.setdefault("%s" % pkg["name"], []).append(pkg)
     # Check "arch" and dupes:
     for pkg in packages.values():
         if (pkg["name"] != "gpg-pubkey" and
@@ -5434,6 +5436,15 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     for pkg in checkdupes.keys():
         if len(checkdupes[pkg]) > 1:
             print "Warning: more than one package installed for %s." % pkg
+    for pkg in checkevr.keys():
+        if len(checkevr[pkg]) <= 1:
+            continue
+        p = checkevr[pkg][0]
+        evr = (p["epoch"], p["version"], p["release"])
+        for q in checkevr[pkg][1:]:
+            if evr != (q["epoch"], q["version"], q["release"]):
+                print p.getFilename(), "has different epoch/version/release", \
+                    " than", q.getFilename()
     # Read in repositories to compare packages:
     if verbose > 2 and configfiles:
         time3 = time.clock()
