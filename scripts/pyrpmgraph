@@ -128,7 +128,7 @@ if __name__ == '__main__':
                 if not os.path.isfile(n):
                     continue
                 _args.append(n)
-            # 
+            #
             i = 1
             for f in _args:
                 if verbose > 0:
@@ -161,7 +161,7 @@ if __name__ == '__main__':
         if verbose > 0 and len(args) > 0:
             print
     del args
-    
+
     if len(rpms) < 1:
         print "No packages."
         sys.exit(0)
@@ -298,7 +298,7 @@ if __name__ == '__main__':
                 # normalize vector: (_x,_y)
                 _x = (x2 - x1) / d
                 _y = (y2 - y1) / d
-                
+
                 _x1 = self.x + x1 + _x * w1
                 _y1 = self.y + y1 + _y * h1
                 _x2 = self.x + x2 - _x * w2
@@ -308,7 +308,7 @@ if __name__ == '__main__':
                       (_x1, _y1, _x2, _y2, _x2, _y2, _x2, _y2,
                        (_x1 + _x2) / 2, (_y1 + _y2) / 2)
                 s += '"node%08d" -> "node%08d" [style="%s", %s]\n' % \
-                     (self.nodes[node].index, self.nodes[next].index, 
+                     (self.nodes[node].index, self.nodes[next].index,
                       style, pos)
 
             return s
@@ -345,7 +345,7 @@ if __name__ == '__main__':
             loop.x = x
             loop.y = y
             if line_width < loop.width:
-                line_width = loop.width            
+                line_width = loop.width
             y += loop.height
             if y_max < y:
                 y_max = y
@@ -395,7 +395,7 @@ if __name__ == '__main__':
         fp.write('	headclip="true"\n');
         fp.write('	arrowsize="3.0"\n');
         fp.write(']\n')
-        
+
         for loop in loop_list:
             fp.write(str(loop))
 
@@ -409,7 +409,7 @@ if __name__ == '__main__':
     db = pyrpm.database.memorydb.RpmMemoryDB(pyrpm.rpmconfig, None)
     resolver = pyrpm.RpmResolver(pyrpm.rpmconfig, db)
     del db
-    
+
     loop_count = 0
 
     i = 0
@@ -438,7 +438,7 @@ if __name__ == '__main__':
             sys.exit(-1)
 
     # -----------------------------------------------------------------------
-    
+
     relations = pyrpm.RpmRelations(pyrpm.rpmconfig, resolver.installs,
                                    pyrpm.OP_INSTALL)
     del resolver
@@ -449,7 +449,7 @@ if __name__ == '__main__':
     printRelations(relations, relations, "%srpmgraph.dot" % prefix)
 
     components = pyrpm.ConnectedComponentsDetector(relations).detect(relations)
-    
+
     loops = [ ]
     print "# components: %d" % len(components)
     i = 0
