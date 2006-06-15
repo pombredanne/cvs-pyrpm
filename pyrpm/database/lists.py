@@ -24,7 +24,7 @@ def genBasenames2(oldfilenames):
     (basenames, dirnames) = ([], [])
     for filename in oldfilenames:
         (dirname, basename) = os.path.split(filename)
-        if dirname[-1:] != "/":
+        if dirname[-1:] != "/" and dirname != "":
             dirname += "/"
         basenames.append(basename)
         dirnames.append(dirname)
@@ -75,7 +75,7 @@ class FilenamesList:
 
     def numDuplicates(self, filename):
         (dirname, basename) = os.path.split(filename)
-        if len(dirname) > 0 and dirname[-1] != "/":
+        if dirname[-1:] != "/" and dirname != "":
             dirname += "/"
         return len(self.path.get(dirname, {}).get(basename, {}))
 
@@ -93,7 +93,7 @@ class FilenamesList:
         The list may point to internal structures of FilenamesList and may be
         changed by calls to addPkg() and removePkg()."""
         (dirname, basename) = os.path.split(name)
-        if dirname[-1:] != "/":
+        if dirname[-1:] != "/" and dirname != "":
             dirname += "/"
         return self.path.get(dirname, {}).get(basename, [])
 

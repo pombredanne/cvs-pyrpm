@@ -58,16 +58,17 @@ class _RpmFilenamesIterator:
     def index(self, name):
         if self.has_oldfilenames:
             return self.pkg["oldfilenames"].index(name)
-        basename = os.path.basename(name)
+        (dirname, basename) = os.path.split(name)
+        if dirname[-1:] != "/" and dirname != "":
+            dirname += "/"
         i = 0
-        while i < len(self.pkg["basenames"]):
-            i = self.pkg["basenames"].index(basename, i)
+        (basenames, dirnames, dirindexes) = (self.pkg["basenames"],
+            self.pkg["dirnames"], self.pkg["dirindexes"])
+        while i < len(basenames):
+            i = basenames.index(basename, i)
             if i < 0:
                 break
-            dirname = os.path.dirname(name)
-            if len(dirname) > 0 and dirname[-1] != "/":
-                dirname += "/"
-            if self.pkg["dirnames"][self.pkg["dirindexes"][i]] == dirname:
+            if dirnames[dirindexes[i]] == dirname:
                 return i
             i += 1
         raise ValueError
@@ -1052,9 +1053,8 @@ class RpmPackage(RpmData):
             self["dirnames"] = [ ]
             self["dirindexes"] = [ ]
             for filename in self["oldfilenames"]:
-                basename = os.path.basename(filename)
-                dirname = os.path.dirname(filename)
-                if dirname[-1] != "/":
+                (dirname, basename) = os.path.split(filename)
+                if dirname[-1:] != "/" and dirname != "":
                     dirname += "/"
                 dirindex = functions.bsearch(dirname, self["dirnames"],
                                              len(self["dirnames"]))
