@@ -103,7 +103,7 @@ class RpmCompsXML:
                    self.grouphash[group]["default"]:
                 groups.append(group)
         return groups
-                
+
     def getPackageNames(self, group):
         """Return a list of mandatory an default packages from group and its
         dependencies and the dependencies of the packages.

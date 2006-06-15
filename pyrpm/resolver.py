@@ -585,7 +585,7 @@ class RpmResolver:
         return result
 
     # ----
-    
+
     def checkDependencies(self):
         """Check dependencies, report errors.
 
@@ -682,7 +682,7 @@ class RpmResolver:
                         yield p, d
             if ok:
                 self.check_erases.discard(pkg)
-                
+
         if self.check_file_requires:
             ok = True
             # check if filenames are required and not provided by another
@@ -696,7 +696,7 @@ class RpmResolver:
                         ok = False
                         yield p, dep
             self.check_file_requires = not ok or bool(self.check_erases)
-        
+
         # check new packages
         for pkg in self.check_installs.copy():
             ok = True
@@ -713,7 +713,7 @@ class RpmResolver:
 
     def iterAllUnresolvedDependencies(self):
         """check all dependencies,
-        also return the alredy installed unresolved""" 
+        also return the alredy installed unresolved"""
         for pkg in self.database.getPkgs():
             for u in pkg["requires"]:
                 if u[0][:7] == "rpmlib(": # drop rpmlib requirements
@@ -757,7 +757,7 @@ class RpmResolver:
                 self.getPkgConflicts(r, r["conflicts"] + r["obsoletes"],
                                      conflicts)
             return conflicts
-        
+
         for name in self.database.getNames():
             for r in self.database.getPkgsByName(name):
                 self.config.printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())

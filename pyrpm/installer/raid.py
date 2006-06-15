@@ -115,7 +115,7 @@ class RAID:
 
     def writeConfig(self, file):
         print "TODO: RAID.writeConfig() ######################################"
-    	return 0
+        return 0
 
     # get size of raid device
     def info(device, chroot=None):
