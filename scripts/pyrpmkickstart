@@ -396,7 +396,7 @@ def main():
 
     else: # no_stage2
         stage2_dir = ""
-        
+
         # get discinfo if available
         if not no_discinfo and source.get(".discinfo"):
             di = get_discinfo(source.get(".discinfo"))
@@ -2226,7 +2226,7 @@ def main():
         else:
             copy_device(partitionmap[onpart]["device"], target_chroot,
                         source_dir=stage2_dir)
-            
+
     if (installation.release == "RHEL" and installation.version >= 4) or \
            (installation.release == "FC" and installation.version >= 2):
         create_dir(target_chroot, "/sys/block")
@@ -2494,7 +2494,7 @@ def main():
     # disable for now, it writes i386 instead of i686 and then rpm won't
     # install i586 rpms anymore: (TODO: re-enable this again)
 #    if ks.has_key("install") and not os.path.exists(target_chroot+"/etc/rpm/platform"):
-#    create_file(target_chroot, "/etc/rpm/platform", 
+#    create_file(target_chroot, "/etc/rpm/platform",
 #                [ "%s-redhat-linux" % installation.arch ])
 
     # create /var/log/lastlog and /var/log/messages
