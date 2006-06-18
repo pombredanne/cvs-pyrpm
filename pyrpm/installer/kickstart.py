@@ -127,8 +127,9 @@ class KickstartConfig(dict):
             if not in_packages and not in_post and not in_pre:
                 if len(args) == 1:
                     if opt in [ "autopart", "autostep", "cdrom", "cmdline",
-                                "install", "interactive", "reboot", "skipx",
-                                "text", "upgrade", "mouse" ]:
+                                "halt", "install", "interactive", "poweroff",
+                                "reboot", "shutdown", "skipx", "text",
+                                "upgrade", "mouse" ]:
                         self[opt] = None
                     else:
                         print "'%s' is unsupported" % line
