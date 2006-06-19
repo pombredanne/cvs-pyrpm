@@ -289,9 +289,30 @@ def get_installed_kernels(chroot=None):
     kernels = [ "%s-%s" % (pkg["version"], pkg["release"]) for pkg in list ]
     return kernels
 
+def fuser(what):
+    i = 0
+    log = ""
+    while os.system("/usr/sbin/lsof '%s' >/dev/null 2>&1" % what) == 0:
+        sig = "TERM"
+        if i == 20:
+            print "ERROR: Failed to kill processes using '%s': %s." % \
+                  (what, log)
+            return 1
+        elif i >= 15:
+            time.sleep(1)
+        elif i >= 10:
+            sig = "SIGKILL"
+        fuser = "/sbin/fuser -km -%s '%s'" % (sig, what)
+        (status, rusage, log) = functions.runScript(script=fuser)
+        if status == 256:
+            # nothing to do
+            break
+        i += 1
+
 def umount_all(dir):
     # umount target dir and included mount points
     mounted = [ ]
+    fstype = { }
     try:
         fd = open("/proc/mounts", "r")
     except Exception:
@@ -305,6 +326,7 @@ def umount_all(dir):
         i = margs[1].find(dir)
         if i == 0:
             mounted.append(margs[1])
+            fstype[margs[1]] = margs[2]
     fd.close()
     # sort reverse
     mounted.sort()
@@ -319,6 +341,8 @@ def umount_all(dir):
         if config.verbose:
             print "Umounting '%s' " % dir
         failed = 0
+        if fstype[dir] not in [ "sysfs", "proc" ]:
+            fuser(dir)
         if umount(dir) == 1:
             failed = 1
             i += 1
@@ -509,19 +533,24 @@ def chroot_device(device, chroot=None):
         return realpath(chroot, device)
     return device
 
-def compsLangsupport(comps, languages):
-    pkgs = [ ]
+def compsLangsupport(pkgs, comps, languages):
     for group in comps.grouphash.keys():
         if comps.grouphash[group].has_key("langonly") and \
                comps.grouphash[group]["langonly"] in languages:
-            optional_list = comps.getOptionalPackageNames(group)
-            for (name, requires) in optional_list:
+            for name in comps.getPackageNames(group):
+                if name in pkgs:
+                    continue
+                print "Adding package '%s' for langsupport" % name
+                pkgs.append(name)
+            conditional_list = comps.getConditionalPackageNames(group)
+            for (name, requires) in conditional_list:
+                if name in pkgs:
+                    continue
                 for req in requires:
                     if req in pkgs:
-                        print "Adding '%s' for langsupport" % name
+                        print "Adding package '%s' for langsupport" % name
                         pkgs.append(name)
                         break
-    return pkgs
 
 def addPkgByFileProvide(repo, name, pkgs, description):
     s = repo.searchFilenames(name)

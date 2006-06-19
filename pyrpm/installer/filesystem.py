@@ -42,31 +42,6 @@ def mount(what, where, fstype="ext3", options=None, arguments=None):
 
 
 def umount(what):
-    if not os.path.ismount(what):
-        # TODO: ismount is not working for bind mounts
-        stat = os.system("/bin/umount '%s' 2>/dev/null" % what)
-        if stat != 0:
-            return 1
-        return 0
-
-    i = 0
-    log = ""
-    while os.system("/usr/sbin/lsof '%s' >/dev/null 2>&1" % what) == 0:
-        sig = "TERM"
-        if i == 20:
-            print "ERROR: Failed to kill processes in '%s': %s." % (what, log)
-            return 1
-        elif i >= 15:
-            time.sleep(1)
-        elif i >= 10:
-            sig = "SIGKILL"
-        fuser = "/sbin/fuser -k -%s '%s'" % (sig, what)
-        (status, rusage, log) = functions.runScript(script=fuser)
-        if status == 256:
-            # nothing to do
-            break
-        i += 1
-
     stat = os.system("/bin/umount '%s' 2>/dev/null" % what)
     if stat != 0:
         print "ERROR: Umount of '%s' failed" % what
