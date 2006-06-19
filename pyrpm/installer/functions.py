@@ -324,7 +324,7 @@ def umount_all(dir):
             i += 1
         else:
             mounted.pop(i)
-        if i >= len(mounted) and count > 0:
+        if i >= len(mounted):
             time.sleep(1)
             i = 0
             count -= 1

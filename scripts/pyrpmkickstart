@@ -306,7 +306,6 @@ def main():
                 print "ERROR: Buildstamp information is missing in stage2."
                 return 1
             bs = get_buildstamp_info(stage2_img_dir)
-            print bs
             if not bs:
                 print "ERROR: Failed to get buildstamp information from stage2"
                 return 1
@@ -1408,7 +1407,7 @@ def main():
         for part in partition:
             try:
                 check_exists(stage2_dir, partition[part]["device"])
-            exxcept:
+            except:
                 copy_device(partition[part]["device"], stage2_dir)
         for onpart in partitionmap:
             # these devices are managed by the disk class
@@ -2252,6 +2251,8 @@ def main():
     create_file(target_chroot, "/proc/1/fd/0", [ ])
     create_file(target_chroot, "/proc/1/stat", [ ])
     create_link(target_chroot, "/proc/.real_proc/self", "/proc/self")
+    create_dir(target_chroot, "/proc/bus/pci")
+    create_file(target_chroot, "/proc/bus/pci/devices", [ ])
     create_file(target_chroot, "/proc/cmdline", [ ])
     create_file(target_chroot, "/proc/cpuinfo", [ ])
     # /proc/devices
@@ -2265,6 +2266,8 @@ def main():
                       "Block devices:\n",
                       "  7 loop\n" ])
     create_file(target_chroot, "/proc/modules", [ ])
+    create_dir(target_chroot, "/proc/net")
+    create_file(target_chroot, "/proc/net/unix", [ ])
     create_file(target_chroot, "/proc/stat", [ ])
     create_file(target_chroot, "/proc/swaps", [ ])
     create_file(target_chroot, "/proc/uptime", [ ])

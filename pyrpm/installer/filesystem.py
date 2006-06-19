@@ -50,27 +50,29 @@ def umount(what):
         return 0
 
     i = 0
-    failed = 0
-    while os.path.ismount(what) and i < 100:
-        if i == 1:
-            # kill all processes running in dir
-            print "Killing all processes running in  '%s'" % what
-        if i > 0:
-            (status, rusage, log) = functions.runScript(\
-                script="/sbin/fuser -k '%s'" % what)
-            if status != 0:
-                print "WARNING: Failed to kill processes."
+    log = ""
+    while os.system("/usr/sbin/lsof '%s' >/dev/null 2>&1" % what) == 0:
+        sig = "TERM"
+        if i == 20:
+            print "ERROR: Failed to kill processes in '%s': %s." % (what, log)
+            return 1
+        elif i >= 15:
             time.sleep(1)
-        stat = os.system("umount '%s' 2>/dev/null" % what)
-        if stat != 0:
-            failed = 1
-        else:
-            failed = 0
+        elif i >= 10:
+            sig = "SIGKILL"
+        fuser = "/sbin/fuser -k -%s '%s'" % (sig, what)
+        (status, rusage, log) = functions.runScript(script=fuser)
+        if status == 256:
+            # nothing to do
+            break
         i += 1
-    if failed == 1:
-        print "ERROR: Umount of '%s' failed" % what
 
-    return failed
+    stat = os.system("/bin/umount '%s' 2>/dev/null" % what)
+    if stat != 0:
+        print "ERROR: Umount of '%s' failed" % what
+        return 1
+
+    return 0
 
 def swapon(device):
     swapon = "/sbin/swapon '%s'" % device
