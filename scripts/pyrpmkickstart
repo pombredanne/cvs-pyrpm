@@ -1404,6 +1404,12 @@ def main():
                 check_exists(stage2_dir, diskmap[disk]["device"])
             except:
                 copy_device(diskmap[disk]["device"], stage2_dir)
+        partition = diskmap[disk]["partition"]
+        for part in partition:
+            try:
+                check_exists(stage2_dir, partition[part]["device"])
+            exxcept:
+                copy_device(partition[part]["device"], stage2_dir)
         for onpart in partitionmap:
             # these devices are managed by the disk class
             if diskmap[partitionmap[onpart]["disk"]].has_key("image"):
@@ -2217,6 +2223,10 @@ def main():
     for disk in diskmap:
         copy_device(diskmap[disk]["device"], target_chroot,
                     source_dir=stage2_dir)
+        partition = diskmap[disk]["partition"]
+        for part in partition:
+            copy_device(partition[part]["device"], target_chroot,
+                        source_dir=stage2_dir)
     for onpart in partitionmap:
         if partitionmap[onpart].has_key("volgroup"):
             create_dir(target_chroot, "/dev/%s" % \
