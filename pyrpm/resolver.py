@@ -778,8 +778,8 @@ class RpmResolver:
             # conflicts turned off, obsoletes are also conflicts, but in an
             # other level
             return obsoletes
-        if self.config.checkinstalled == 0:
-            for p in self.installs:
+        if self.config.checkinstalled == 0:            
+            for r in self.installs:
                 self.config.printDebug(1, "Checking for obsoletes for %s" % r.getNEVRA())
                 self.getPkgConflicts(r, r["obsoletes"], obsoletes)
             return obsoletes
