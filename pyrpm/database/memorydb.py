@@ -33,17 +33,32 @@ class RpmMemoryDB(db.RpmDatabase):
         self.names = { }  # name: [pkg, ..]
         self.__len__ = self.pkgs.__len__
         self.__getitem__ = self.pkgs.__getitem__
-        self.provides_list = lists.ProvidesList()
-        self.filenames_list = lists.FilenamesList()
-        self.requires_list = lists.RequiresList()
-        self.conflicts_list = lists.ConflictsList()
-        self.obsoletes_list = lists.ObsoletesList()
-        self.triggers_list = lists.TriggersList()
+        self._lists = [] # is going to contain self.*_list
         RpmMemoryDB.clear(self)
+
+    list_classes = {
+        "filenames_list" : lists.FilenamesList,
+        "provides_list" : lists.ProvidesList,
+        "conflicts_list" : lists.ConflictsList,
+        "requires_list" : lists.RequiresList,
+        "obsoletes_list" : lists.ObsoletesList,
+        "triggers_list" : lists.TriggersList,
+        }
+        
+    def __getattr__(self, name):
+        if self.list_classes.has_key(name):
+            l = self.list_classes[name]()
+            l.name = name
+            setattr(self, name, l)
+            self._lists.append(l)
+            for pkg in self.pkgs:
+                l.addPkg(pkg)
+            return l
+        raise AttributeError, name
 
     def __contains__(self, pkg):
         if pkg in self.names.get(pkg["name"], []):
-            return pkg
+            return True
         return None
 
     # clear all structures
@@ -51,14 +66,10 @@ class RpmMemoryDB(db.RpmDatabase):
         db.RpmDatabase.clear(self)
         self.pkgs[:] = [ ]
         self.names.clear()
-
-        self.provides_list.clear()
-        self.filenames_list.clear()
-        self.requires_list.clear()
-        self.conflicts_list.clear()
-        self.obsoletes_list.clear()
-        self.triggers_list.clear()
-
+        for l in self._lists:
+            delattr(self, l.name)
+        self._lists[:] = []
+            
     def open(self):
         """If the database keeps a connection, prepare it."""
         return self.OK
@@ -78,13 +89,8 @@ class RpmMemoryDB(db.RpmDatabase):
             return self.ALREADY_INSTALLED
         self.pkgs.append(pkg)
         self.names.setdefault(name, [ ]).append(pkg)
-
-        self.provides_list.addPkg(pkg)
-        self.filenames_list.addPkg(pkg)
-        self.requires_list.addPkg(pkg)
-        self.conflicts_list.addPkg(pkg)
-        self.obsoletes_list.addPkg(pkg)
-        self.triggers_list.addPkg(pkg)
+        for l in self._lists:
+            l.addPkg(pkg)
 
         return self.OK
 
@@ -102,14 +108,9 @@ class RpmMemoryDB(db.RpmDatabase):
         self.names[name].remove(pkg)
         if len(self.names[name]) == 0:
             del self.names[name]
-
-        self.provides_list.removePkg(pkg)
-        self.filenames_list.removePkg(pkg)
-        self.requires_list.removePkg(pkg)
-        self.conflicts_list.removePkg(pkg)
-        self.obsoletes_list.removePkg(pkg)
-        self.triggers_list.removePkg(pkg)
-
+        for l in self._lists:
+            l.removePkg(pkg)
+            
         return self.OK
 
     def searchName(self, name):
@@ -154,20 +155,9 @@ class RpmMemoryDB(db.RpmDatabase):
     # reload dependencies: provides, filenames, requires, conflicts, obsoletes
     # and triggers
     def reloadDependencies(self):
-        self.provides_list.clear()
-        self.filenames_list.clear()
-        self.requires_list.clear()
-        self.conflicts_list.clear()
-        self.obsoletes_list.clear()
-        self.triggers_list.clear()
-
-        for pkg in self.pkgs:
-            self.provides_list.addPkg(pkg)
-            self.filenames_list.addPkg(pkg)
-            self.requires_list.addPkg(pkg)
-            self.conflicts_list.addPkg(pkg)
-            self.obsoletes_list.addPkg(pkg)
-            self.triggers_list.addPkg(pkg)
+        for l in self._lists:
+            delattr(self, l.name)
+        self._lists[:] = []
 
     def searchProvides(self, name, flag, version):
         return self.provides_list.search(name, flag, version)
