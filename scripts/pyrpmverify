@@ -109,8 +109,8 @@ def main():
         _usage()
         return 1
 
-    db = database.getRpmDBFactory(rpmconfig, rpmconfig.dbpath,
-                                  rpmconfig.buildroot)
+    db = pyrpm.database.getRpmDBFactory(rpmconfig, rpmconfig.dbpath,
+                                        rpmconfig.buildroot)
     db.open()
     db.read()
     resolver = RpmResolver(rpmconfig, db, True)

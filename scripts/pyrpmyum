@@ -27,6 +27,7 @@ if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import __version__
 from pyrpm import *
+from pyrpm.yum import *
 
 def usage():
     print """

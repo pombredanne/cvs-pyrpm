@@ -140,7 +140,8 @@ def main():
         usage()
         return 0
 
-    pydb = database.getRpmDBFactory(rpmconfig, rpmconfig.dbpath, rpmconfig.buildroot)
+    pydb = pyrpm.database.getRpmDBFactory(rpmconfig, rpmconfig.dbpath,
+                                          rpmconfig.buildroot)
     control = RpmController(rpmconfig, operation, pydb)
     control.handleFiles(args)
     ops = control.getOperations()

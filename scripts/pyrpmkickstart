@@ -2194,6 +2194,7 @@ def main():
 
     # mount temporary filesystems for /proc, /tmp
     # /proc
+    print "Mounting temporary /proc"
     try:
         mount("None", target_dir+"/proc", fstype="ramfs")
     except Exception, msg:
@@ -2208,17 +2209,19 @@ def main():
     if (installation.release == "RHEL" and installation.version >= 4) or \
            (installation.release == "FC" and installation.version >= 2):
         # /sys
+        print "Mounting temporary /sys"
         try:
             mount("None", target_dir+"/sys", fstype="ramfs")
         except Exception, msg:
             print "ERROR: Unable to mount temporary /sys: %s" % msg
             return 1
-    # /tmp
-    try:
-        mount("None", target_dir+"/tmp", fstype="ramfs")
-    except Exception, msg:
-        print "ERROR: Unable to mount temporary /tmp: %s" % msg
-        return 1
+#    # /tmp
+#    print "Mounting temporary /tmp"
+#    try:
+#        mount("None", target_dir+"/tmp", fstype="ramfs")
+#    except Exception, msg:
+#        print "ERROR: Unable to mount temporary /tmp: %s" % msg
+#        return 1
 
     # create essential devices
     create_min_devices(target_chroot)
@@ -2790,10 +2793,10 @@ def main():
 
     if ks.has_key("install"):
         # /etc/sysconfig/desktop
-        print "Setting default desktop"
         desktop = "GNOME"
         if ks.has_key("xconfig") and ks["xconfig"].has_key("defaultdesktop"):
             desktop = ks["xconfig"]["defaultdesktop"]
+        print "Setting default desktop to '%s'" % desktop
         create_file(target_chroot, "/etc/sysconfig/desktop",
                     [ 'DESKTOP="%s"\n' % desktop ])
 

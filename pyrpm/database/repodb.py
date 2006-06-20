@@ -21,7 +21,7 @@ from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
 import memorydb
 from pyrpm.base import *
 from pyrpm.cache import NetworkCache
-from pyrpm.comps import RpmCompsXML
+from comps import RpmCompsXML
 import pyrpm.functions as functions
 import pyrpm.package as package
 import pyrpm.openpgp as openpgp

@@ -51,7 +51,8 @@ def main():
         elif opt in ("-v", "--verbose"):
             verbose += 1
 
-    spydb = database.getRpmDBFactory(rpmconfig, dbpath, rpmconfig.buildroot)
+    spydb = pyrpm.database.getRpmDBFactory(rpmconfig, dbpath,
+                                           rpmconfig.buildroot)
     spydb.read()
 
     if len(args) == 0:
@@ -59,7 +60,8 @@ def main():
     else:
         outdbpath = args[0]
 
-    tpydb = database.getRpmDBFactory(rpmconfig, outdbpath, rpmconfig.buildroot)
+    tpydb = pyrpm.database.getRpmDBFactory(rpmconfig, outdbpath,
+                                           rpmconfig.buildroot)
     for pkg in spydb.getPkgs():
         tpydb.addPkg(pkg)
 

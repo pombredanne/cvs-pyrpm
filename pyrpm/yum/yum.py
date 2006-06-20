@@ -19,12 +19,12 @@
 
 import fnmatch, re
 from time import clock
-from resolver import RpmResolver
-from control import RpmController
-from package import RpmPackage
-from functions import *
-from io import *
-import database, yumconfig
+from pyrpm.resolver import RpmResolver
+from pyrpm.control import RpmController
+from pyrpm.package import RpmPackage
+from pyrpm.functions import *
+from pyrpm.io import *
+import pyrpm.database as database, yumconfig
 
 
 # Global search dict. Needs to be move to database classes real soon.
@@ -107,7 +107,7 @@ class RpmYum:
         except IOError, e:
             printError("Error reading configuration: %s" % e)
             return 0
-        gexcludes = ''.join(self.config.excludes)
+        gexcludes = ' '.join(self.config.excludes)
         erepo = []
         for ritem in self.config.enablerepo:
             ritem = fnmatch.translate(ritem)

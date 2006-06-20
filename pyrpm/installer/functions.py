@@ -533,24 +533,52 @@ def chroot_device(device, chroot=None):
         return realpath(chroot, device)
     return device
 
-def compsLangsupport(pkgs, comps, languages):
-    for group in comps.grouphash.keys():
-        if comps.grouphash[group].has_key("langonly") and \
-               comps.grouphash[group]["langonly"] in languages:
-            for name in comps.getPackageNames(group):
-                if name in pkgs:
-                    continue
+def _compsLangsupport(pkgs, comps, languages, group):
+    if not comps.grouphash.has_key(group):
+        return
+
+    if not comps.grouphash[group].has_key("langonly") or \
+           not comps.grouphash[group]["langonly"] in languages:
+        return
+
+    # add grouplist
+    if comps.grouphash[group].has_key("grouplist"):
+        for _group in comps.grouphash[group]["grouplist"]["groupreqs"]:
+            _compsLangsupport(pkgs, comps, languages, _group)
+        for _group in comps.grouphash[group]["grouplist"]["metapkgs"]:
+            _compsLangsupport(pkgs, comps, languages, _group)
+
+    for name in comps.getPackageNames(group):
+        if name in pkgs:
+            continue
+        print "Adding package '%s' for langsupport" % name
+        pkgs.append(name)
+
+    # old style conditional
+    optional_list = comps.getOptionalPackageNames(group)
+    for (name, requires) in optional_list:
+        if name in pkgs:
+            continue
+        for req in requires:
+            if req in pkgs:
                 print "Adding package '%s' for langsupport" % name
                 pkgs.append(name)
-            conditional_list = comps.getConditionalPackageNames(group)
-            for (name, requires) in conditional_list:
-                if name in pkgs:
-                    continue
-                for req in requires:
-                    if req in pkgs:
-                        print "Adding package '%s' for langsupport" % name
-                        pkgs.append(name)
-                        break
+                break
+
+    # new style conditional
+    conditional_list = comps.getConditionalPackageNames(group)
+    for (name, requires) in conditional_list:
+        if name in pkgs:
+            continue
+        for req in requires:
+            if req in pkgs:
+                print "Adding package '%s' for langsupport" % name
+                pkgs.append(name)
+                break
+
+def compsLangsupport(pkgs, comps, languages):
+    for group in comps.grouphash.keys():
+        _compsLangsupport(pkgs, comps, languages, group)
 
 def addPkgByFileProvide(repo, name, pkgs, description):
     s = repo.searchFilenames(name)
@@ -561,7 +589,7 @@ def addPkgByFileProvide(repo, name, pkgs, description):
     if len(s) > 0:
         found = False
         for pkg in s:
-            if pkg in pkgs:
+            if pkg["name"] in pkgs:
                 found = True
                 break
         if not found:

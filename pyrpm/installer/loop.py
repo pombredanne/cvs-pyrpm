@@ -257,7 +257,7 @@ def losetup(filename, fd=None, device=None, offset=0):
     if not device:
         device = LOOP.findUnused()
     loop = LOOP(device)
-    if not loop.setup(filename, fd=None, offset=0):
+    if not loop.setup(filename, fd, offset):
         return None
     return loop.getDevice()
 

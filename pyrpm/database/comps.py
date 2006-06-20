@@ -18,7 +18,7 @@
 
 
 import libxml2
-import functions
+import pyrpm.functions as functions
 
 
 class RpmCompsXML:
