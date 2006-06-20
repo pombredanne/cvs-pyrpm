@@ -107,7 +107,7 @@ class RpmConfig:
         self.verifyallconfig = False
         self.keepcache = True           # Keep cached packages after install
 
-    def readConfig(filename="/etc/pyrpm.conf"):
+    def readConfig(self, filename="/etc/pyrpm.conf"):
         return execfile(filename)
 
     def printDebug(self, level, msg):
