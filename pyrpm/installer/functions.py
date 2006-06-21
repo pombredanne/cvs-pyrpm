@@ -384,7 +384,7 @@ def create_dir(buildroot, dir, mode=None):
         try:
             os.makedirs(d)
         except Exception, msg:
-            raise IOError, "Unable to create '%d':" % dir, msg
+            raise IOError, "Unable to create '%s':" % dir, msg
     else:
         if not os.path.isdir(d):
             raise IOError, "'%s' is no directory." % dir
