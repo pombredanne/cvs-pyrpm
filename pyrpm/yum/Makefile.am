@@ -1,8 +1,6 @@
-SUBDIRS = database installer yum
-
 PYTHON_FILES := $(notdir $(wildcard *.py))
 
-pyrpmdir = $(pkgdatadir)/pyrpm
+pyrpmdir = $(pkgdatadir)/pyrpm/yum
 pyrpm_PYTHON = $(PYTHON_FILES)
 
 CLEANFILES := $(notdir $(wildcard *~)) $(notdir $(wildcard *\#)) $(notdir $(wildcard \.\#*)) $(wildcard *\.pyc)
