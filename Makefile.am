@@ -6,6 +6,9 @@ EXTRA_DIST = AUTHORS ChangeLog NEWS README pyrpm.spec
 build: dist-bzip2
 	rpmbuild -ta pyrpm-@VERSION@.tar.bz2
 
+srpm: dist-bzip2
+	rpmbuild -ts pyrpm-@VERSION@.tar.bz2
+
 changelog:
 	rcs2log -v | sed -e 's|@.*\.redhat\.com|@redhat.com|g' > ChangeLog
 
