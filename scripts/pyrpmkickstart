@@ -193,6 +193,8 @@ def main():
     create_dir("", source_dir)
     create_dir("", target_dir)
     create_dir("", repos_dir)
+    for repo in ks["repository"]:
+        create_dir("", "%s/%s" % (repos_dir, repo))
     create_dir("", cache_dir)
 
     # create cache dir
@@ -612,7 +614,9 @@ def main():
     repos = { }
     if ks.has_key("repository"):
         for repo in ks["repository"]:
-            repos[repo] = Repository(pyrpm.rpmconfig, repos_dir, repo)
+            
+            repos[repo] = Repository(pyrpm.rpmconfig,
+                                     "%s/%s" % (repos_dir, repo), repo)
             print "Reading repodata from repository '%s'" % repo
             if not repos[repo].load(ks["repository"][repo]["url"]):
                 return 1
@@ -2587,8 +2591,6 @@ def main():
     fd.write("[base]\n")
     fd.write("name=dist %s\n" % installation)
     url = source.cache.baseurl
-    if url[0] == "/":
-        url = "file://%s" % url
     fd.write("baseurl=%s\n" % url)
     fd.write("\n")
     # add repos
@@ -2596,8 +2598,6 @@ def main():
         fd.write("[%s]\n" % repo)
         fd.write("name=%s\n" % repo)
         url = repos[repo].cache.baseurl
-        if url[0] == "/":
-            url = "file://%s" % url
         fd.write("baseurl=%s\n" % url)
         fd.write("\n")
     fd.close()
