@@ -384,7 +384,7 @@ def create_dir(buildroot, dir, mode=None):
         try:
             os.makedirs(d)
         except Exception, msg:
-            raise IOError, "Unable to create '%s':" % dir, msg
+            raise IOError, "Unable to create '%s': %s" % (dir, msg)
     else:
         if not os.path.isdir(d):
             raise IOError, "'%s' is no directory." % dir
@@ -399,7 +399,7 @@ def create_link(buildroot, source, target):
         try:
             os.symlink("../%s" % source, t)
         except Exception, msg:
-            raise IOError, "Unable to generate %s symlink:" % target, msg
+            raise IOError, "Unable to generate %s symlink: %s" % (target, msg)
     else:
         if not os.path.islink(t):
             raise IOError, "'%s' is not a link." % target
