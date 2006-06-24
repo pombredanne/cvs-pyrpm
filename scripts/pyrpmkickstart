@@ -614,7 +614,7 @@ def main():
     repos = { }
     if ks.has_key("repository"):
         for repo in ks["repository"]:
-            
+
             repos[repo] = Repository(pyrpm.rpmconfig,
                                      "%s/%s" % (repos_dir, repo), repo)
             print "Reading repodata from repository '%s'" % repo

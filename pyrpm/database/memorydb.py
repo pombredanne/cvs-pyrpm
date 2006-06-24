@@ -44,7 +44,7 @@ class RpmMemoryDB(db.RpmDatabase):
         "obsoletes_list" : lists.ObsoletesList,
         "triggers_list" : lists.TriggersList,
         }
-        
+
     def __getattr__(self, name):
         if self.list_classes.has_key(name):
             l = self.list_classes[name]()
@@ -69,7 +69,7 @@ class RpmMemoryDB(db.RpmDatabase):
         for l in self._lists:
             delattr(self, l.name)
         self._lists[:] = []
-            
+
     def open(self):
         """If the database keeps a connection, prepare it."""
         return self.OK
@@ -110,7 +110,7 @@ class RpmMemoryDB(db.RpmDatabase):
             del self.names[name]
         for l in self._lists:
             l.removePkg(pkg)
-            
+
         return self.OK
 
     def searchName(self, name):
