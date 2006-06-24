@@ -382,7 +382,7 @@ class YumConf(Conf):
         try:
             # FIXME: Loses white space around '=' in field values
             v = [v[0], string.joinfields(v[1:len(v)], '=')]
-        except(LookupError):
+        except LookupError:
             return None
 
         if not v:
