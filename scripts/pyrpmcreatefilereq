@@ -100,7 +100,7 @@ def writeFileReqList(targetdir, mainlist, filereqhash):
 
     for pkg in mainlist:
         i = 0
-        for fname in pkg["filenames"]:
+        for fname in pkg.iterFilenames():
             if fname in filereqhash.keys():
                 ffd.write("  <package name=\"%s\" arch=\"%s\">\n" %
                           (pkg["name"], pkg["arch"]));

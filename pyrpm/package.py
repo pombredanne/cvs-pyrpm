@@ -37,23 +37,24 @@ class _RpmFilenamesIterator:
     def __init__(self, pkg):
         self.pkg = pkg
         self.idx = -1
-        self.has_oldfilenames = self.pkg.has_key("oldfilenames")
+        self.has_oldfilenames = pkg.has_key("oldfilenames")
+        self.len = 0
+        if self.has_oldfilenames:
+            self.len = len(pkg["oldfilenames"])
+        elif pkg["basenames"] != None: # and pkg["dirnames"] != None:
+            self.len = len(pkg["basenames"])
 
     def __iter__(self):
         return self
 
     def __len__(self):
-        if self.has_oldfilenames:
-            return len(self.pkg["oldfilenames"])
-        if self.pkg["basenames"] != None and self.pkg["dirnames"] != None:
-            return len(self.pkg["basenames"])
-        return 0
+        return self.len
 
     def __getitem__(self, i):
         if self.has_oldfilenames:
             return self.pkg["oldfilenames"][i]
-        return self.pkg["dirnames"][self.pkg["dirindexes"][i]] \
-               + self.pkg["basenames"][i]
+        pkg = self.pkg
+        return pkg["dirnames"][pkg["dirindexes"][i]] + pkg["basenames"][i]
 
     def index(self, name):
         if self.has_oldfilenames:
@@ -75,11 +76,7 @@ class _RpmFilenamesIterator:
 
     def next(self):
         self.idx += 1
-        if self.has_oldfilenames:
-            if self.idx == len(self.pkg["oldfilenames"]):
-                raise StopIteration
-        if not self.pkg.has_key("basenames") or \
-               self.idx == len(self.pkg["basenames"]):
+        if self.idx == self.len:
             raise StopIteration
         return self[self.idx]
 
@@ -93,9 +90,10 @@ class RpmData(dict):
         RpmData.__hashcount__ += 1
 
     def __getitem__(self, item):
-        if item == "filenames":
-            return _RpmFilenamesIterator(self)
         return dict.get(self, item)
+
+    def iterFilenames(self):
+        return _RpmFilenamesIterator(self)
 
     def __repr__(self):
         return "FastRpmData: <0x" + str(self.hash) + ">"
@@ -445,7 +443,7 @@ class RpmPackage(RpmData):
 
         self.open()
         self.__readHeader()
-        files = self["filenames"]
+        files = self.iterFilenames()
         # Set umask to 022, especially important for scripts
         os.umask(022)
         if self["preunprog"] != None or self["postunprog"] != None:
@@ -463,14 +461,14 @@ class RpmPackage(RpmData):
                 self.config.printError("Output running pre uninstall script for package %s" % self.getNEVRA())
                 self.config.printError(log)
         # Generate the rpmfileinfo list, needed for erase verification
-        self.__generateFileInfoList()
+        rfilist = self.__generateFileInfoList()
         # Remove files starting from the end (reverse process to install)
         nfiles = len(files)
         n = 0
         pos = 0
         if self.config.printhash:
             self.config.printInfo(0, "\r\t\t\t\t\t\t ")
-        for i in xrange(len(files)-1, -1, -1):
+        for i in xrange(nfiles-1, -1, -1):
             n += 1
             npos = int(n*30/nfiles)
             if pos < npos and self.config.printhash:
@@ -491,8 +489,8 @@ class RpmPackage(RpmData):
                         except OSError:
                             self.config.printWarning(2, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
-                if self.rfilist.has_key(f):
-                    rfi = self.rfilist[f]
+                if rfilist.has_key(f):
+                    rfi = rfilist[f]
                     # Check if we need to erase the file
                     if not self.__verifyFileErase(rfi):
                         continue
@@ -549,13 +547,11 @@ class RpmPackage(RpmData):
 
         errors = []
         if not self.config.justdb:
-            self.__generateFileInfoList()
+            rfilist = self.__generateFileInfoList()
             selinux_enabled = (selinux is not None and
                                selinux.is_selinux_enabled() > 0)
-            files = self["filenames"]
-            for filename in files:
-                self.__verifyFile(errors, filename, db, selinux_enabled)
-            self.rfilist = None
+            for filename in self.iterFilenames():
+                self.__verifyFile(errors, filename, db, selinux_enabled, rfilist[filename])
         if resolver is not None:
             if not self.config.nodeps:
                 (unresolved, _) = resolver.getPkgDependencies(self)
@@ -618,7 +614,7 @@ class RpmPackage(RpmData):
         else:
             self.config.printInfo(1, "\n")
 
-    def __verifyFile(self, errors, filename, db, selinux_enabled):
+    def __verifyFile(self, errors, filename, db, selinux_enabled, rfi):
         """Verify the file named by filename.
 
         Append a list of failures for self.verify to errors.  Use db for
@@ -633,7 +629,6 @@ class RpmPackage(RpmData):
             else:
                 errors.append((filename, str(e)))
 
-        rfi = self.rfilist[filename]
         if rfi.flags & RPMFILE_GHOST:
             return
         if self.config.buildroot is None:
@@ -850,13 +845,12 @@ class RpmPackage(RpmData):
         defined; note that config.buildroot should be used for normal chroot
         operation."""
 
-        files = self["filenames"]
+        nfiles = len(self.iterFilenames())
         # We don't need those lists earlier, so we create them "on-the-fly"
         # before we actually start extracting files.
-        self.__generateFileInfoList()
+        rfilist = self.__generateFileInfoList()
         self.hardlinks = {}
         (filename, cpio, filesize) = self.io.read()
-        nfiles = len(files)
         n = 0
         pos = 0
         issrc = self.isSourceRPM()
@@ -874,8 +868,8 @@ class RpmPackage(RpmData):
                 # src.rpm has empty tag "dirnames", but we use absolut paths in
                 # io.read(), so at least the directory '/' is there ...
                 filename = filename[1:]
-            if self.rfilist.has_key(filename):
-                rfi = self.rfilist[filename]
+            if rfilist.has_key(filename):
+                rfi = rfilist[filename]
                 if self.__verifyFileInstall(rfi, db):
                     if filesize == 0 and stat.S_ISREG(rfi.mode): # Only hardlink reg
                         self.__possibleHardLink(rfi)
@@ -902,7 +896,6 @@ class RpmPackage(RpmData):
         if self.config.printhash:
             self.config.printInfo(0, "#"*(30-int(30*n/nfiles)))
         self.__handleRemainingHardlinks(useAttrs, pathPrefix)
-        self.rfilist = None
 
     def __verifyFileInstall(self, rfi, db):
         """Return 1 if file with RpmFileInfo rfi should be installed.
@@ -1045,36 +1038,36 @@ class RpmPackage(RpmData):
 
         # Don't recreate basnames/dirnames/dirindexes if we already have them.
         if self.has_key("dirnames") or self.has_key("basenames") or \
-           self.has_key("dirindexes"):
+           self.has_key("dirindexes") or not self["oldfilenames"]:
             return
 
-        if self["oldfilenames"] != None and len(self["oldfilenames"]) > 0:
-            self["basenames"] = [ ]
-            self["dirnames"] = [ ]
-            self["dirindexes"] = [ ]
-            for filename in self["oldfilenames"]:
-                (dirname, basename) = os.path.split(filename)
-                if dirname[-1:] != "/" and dirname != "":
-                    dirname += "/"
-                dirindex = functions.bsearch(dirname, self["dirnames"],
-                                             len(self["dirnames"]))
-                if dirindex < 0:
-                    self["dirnames"].append(dirname)
-                    dirindex = len(self["dirnames"]) - 1
-                self["basenames"].append(basename)
-                self["dirindexes"].append(dirindex)
+        (basenames, dirnames, dirindexes) = ([], [], [])
+        for filename in self["oldfilenames"]:
+            (dirname, basename) = os.path.split(filename)
+            if dirname[-1:] != "/" and dirname != "":
+                dirname += "/"
+            dirindex = functions.bsearch(dirname, dirnames)
+            if dirindex < 0:
+                dirindex = len(dirnames)
+                dirnames.append(dirname)
+            basenames.append(basename)
+            dirindexes.append(dirindex)
+        (self["basenames"], self["dirnames"], self["dirindexes"]) = \
+            (basenames, dirnames, dirindexes)
 
     def __generateFileInfoList(self):
-        """Build self.rfilist: {path name: RpmFileInfo}"""
-
+        """Build rfilist: {path name: RpmFileInfo}"""
         self.rpmusercache = RpmUserCache(self.config)
-        self.rfilist = {}
+        rfilist = {}
         issrc = self.isSourceRPM()
-        for filename in self["filenames"]:
-            rfi = self.getRpmFileInfo(filename)
+        i = 0
+        for filename in self.iterFilenames():
+            rfi = self.getRpmFileInfo(filename, i)
             if issrc:
                 rfi.filename = self.config.srpmdir + "/" + rfi.filename
-            self.rfilist[filename] = rfi
+            rfilist[filename] = rfi
+            i += 1
+        return rfilist
 
     def __possibleHardLink(self, rfi):
         """Add the given RpmFileInfo rfi as a possible hardlink"""
@@ -1122,14 +1115,15 @@ class RpmPackage(RpmData):
                                   pathPrefix = pathPrefix)
             self.__handleHardlinks(rfi, pathPrefix)
 
-    def getRpmFileInfo(self, filename):
+    def getRpmFileInfo(self, filename, i=None):
         """Return RpmFileInfo describing filename, or None if this package does
         not contain filename."""
 
-        try:
-            i = self["filenames"].index(filename)
-        except:
-            return None
+        if i == None:
+            try:
+                i = self.iterFilenames().index(filename)
+            except:
+                return None
         rpminode = None
         rpmmode = None
         rpmuid = None

@@ -93,13 +93,13 @@ class RpmResolver:
                 if self._checkObsoletes(pkg, dep, s, operation):
                     return self.CONFLICT
             # check conflicts for filenames
-            for f in pkg["filenames"]:
+            for f in pkg.iterFilenames():
                 dep = (f, 0, "")
                 s = self.database.searchObsoletes(f, 0, "")
                 if self._checkObsoletes(pkg, dep, s, operation):
                     return self.CONFLICT
             #for name in self.database.getObsoletes().keys():
-            #    if name.startswith("/") and name in pkg["filenames"]:
+            #    if name.startswith("/") and name in pkg.iterFilenames():
             #        return self.CONFLICT
 
         # Add RpmPackage
@@ -831,12 +831,11 @@ class RpmResolver:
         if self.config.checkinstalled == 0:
             # no conflicts if there is no new package
             for pkg in self.installs:
-                for name in pkg["filenames"]:
+                for name in pkg.iterFilenames():
                     dups = db.searchFilenames(name)
                     if len(dups) == 1: continue
                     self.config.printDebug(
-                        1, "Checking for file conflicts for '%s'" %\
-                        name)
+                        1, "Checking for file conflicts for '%s'" % name)
                     for j in xrange(len(dups)):
                         for k in xrange(j+1, len(dups)):
                             if not self._hasFileConflict(dups[j], dups[k],

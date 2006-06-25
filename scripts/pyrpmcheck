@@ -58,9 +58,9 @@ def checkDirs(list):
     dirs = {}
     # collect all directories
     for rpm in list:
-        if not rpm["filenames"]:
+        filenames = rpm.iterFilenames()
+        if not filenames:
             continue
-        filenames = rpm["filenames"]
         modes = rpm["filemodes"]
         users = rpm["fileusername"]
         groups = rpm["filegroupname"]
@@ -130,12 +130,12 @@ def checkSymlinks(list):
     allfiles = {}
     # collect all directories
     for rpm in list:
-        for f in rpm["filenames"]:
+        for f in rpm.iterFilenames():
             allfiles[f] = None
     for rpm in list:
-        if len(rpm["filenames"]) == 0:
+        if len(rpm.iterFilenames()) == 0:
             continue
-        for (f, mode, link) in zip(rpm["filenames"], rpm["filemodes"],
+        for (f, mode, link) in zip(rpm.iterFilenames(), rpm["filemodes"],
             rpm["filelinktos"]):
             if not S_ISLNK(mode):
                 continue

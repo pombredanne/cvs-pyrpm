@@ -14,7 +14,7 @@ for i in sys.argv[1:]:
     if not rpm.has_key("basenames"):
         continue
     flist = []
-    for f in rpm["filenames"]:
+    for f in rpm.iterFilenames():
         flist.append(f)
     rpm["oldfilenames"] = flist
     orig_dirnames = rpm["dirnames"]
@@ -41,6 +41,6 @@ for i in sys.argv[1:]:
 #    print "dirnames = ", rpm["dirnames"]
 #    print "dirindexes = ", rpm["dirindexes"]
 #    print "basenames = ", rpm["basenames"]
-#    for f in rpm["filenames"]:
+#    for f in rpm.iterFilenames():
 #	rfi = rpm.getRpmFileInfo(f)
 #	print rfi.filename, rfi.filecolor

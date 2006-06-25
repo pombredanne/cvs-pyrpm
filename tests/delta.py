@@ -572,7 +572,7 @@ class RpmDelta:
                                           dir=self.config.tempdir)
             _cpio = CPIOFile(source_name, "w")
             cpio_hash = { }
-            for filename in pkg["filenames"]:
+            for filename in pkg.iterFilenames():
                 fi = pkg.getRpmFileInfo(filename)
                 if fi.flags & pyrpm.RPMFILE_GHOST:
                     continue
@@ -592,13 +592,13 @@ class RpmDelta:
         hardlinks = { }
         last_hardlink = { }
         # generate hardlink hash
-        for filename in pkg["filenames"]:
+        for filename in pkg.iterFilenames():
             fi = pkg.getRpmFileInfo(filename)
             hlid = fi.getHardLinkID()
             if not hardlinks.has_key(hlid):
                 hardlinks[hlid] = [ ]
             hardlinks[hlid].append(filename)
-        for filename in pkg["filenames"]:
+        for filename in pkg.iterFilenames():
             fi = pkg.getRpmFileInfo(filename)
             hlid = fi.getHardLinkID()
             if hardlinks.has_key(hlid):
@@ -611,7 +611,7 @@ class RpmDelta:
         cpio_name = "%s/createcpio_%s" % (self.config.tempdir, pkg.getNEVRA())
         cpio = CPIOFile(cpio_name, "w")
 
-        for filename in pkg["filenames"]:
+        for filename in pkg.iterFilenames():
             fi = pkg.getRpmFileInfo(filename)
 
             if fi.flags & pyrpm.RPMFILE_GHOST:

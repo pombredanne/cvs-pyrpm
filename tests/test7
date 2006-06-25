@@ -13,8 +13,8 @@ for i in sys.argv[1:]:
 #    (fname, fdata) = pkg.io.read()
 #    while fname != "EOF":
 #	(fname, fdata) = pkg.io.read()
-#    for i in xrange(len(pkg["filenames"])):
-#        print pkg["filenames"][i], pkg["filemd5s"][i], pkg["filecolors"][i]
+#    for i in xrange(len(pkg.iterFilenames())):
+#        print pkg.iterFilenames()[i], pkg["filemd5s"][i], pkg["filecolors"][i]
         pkg.close()
     except (IOError, ValueError), e:
         sys.stderr.write("%s: %s\n" % (i, e))

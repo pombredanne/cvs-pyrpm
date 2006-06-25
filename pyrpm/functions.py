@@ -1075,9 +1075,9 @@ def raiseFatal(msg):
 # Exact reimplementation of glibc's bsearch algorithm. Used by rpm to
 # generate dirnames, dirindexes and basenames from oldfilenames (and we need
 # to do it the same way).
-def bsearch(key, list, len):
+def bsearch(key, list):
     l = 0
-    u = len
+    u = len(list)
     while l < u:
         idx = (l + u) / 2;
         if   key < list[idx]:
