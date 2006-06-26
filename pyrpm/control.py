@@ -196,6 +196,7 @@ class RpmController:
             for (op, pkg) in operations:
                 if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
                     pkg.reread(tags=self.config.resolvertags)
+                    pkg.close()
             if self.config.timer:
                 time1 = clock()
             ret = getFreeDiskspace(self.config, operations)
