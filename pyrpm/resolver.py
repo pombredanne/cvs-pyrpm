@@ -66,13 +66,13 @@ class RpmResolver:
     def clear(self):
         """Clear all changed data."""
 
-        self.installs = set() # Added RpmPackage's
-        self.check_installs = set()
+        self.installs = [ ] # Added RpmPackage's
+        self.check_installs = [ ]
         # new RpmPackage
         # => ["originally" installed RpmPackage removed by update]
         self.updates = { }
-        self.erases = set() # Removed RpmPackage's
-        self.check_erases = set()
+        self.erases = [ ] # Removed RpmPackage's
+        self.check_erases = [ ]
         self.check_file_requires = False
         # new RpmPackage =>
         # ["originally" installed RpmPackage obsoleted by update]
@@ -114,10 +114,10 @@ class RpmResolver:
                     return ret
 
         if not self.isInstalled(pkg):
-            self.installs.add(pkg)
+            self.installs.append(pkg)
         if pkg in self.erases:
             self.erases.remove(pkg)
-        self.check_installs.add(pkg)
+        self.check_installs.append(pkg)
 
         self.database.addPkg(pkg)
 
@@ -274,16 +274,17 @@ class RpmResolver:
             return self.NOT_INSTALLED
 
         if self.isInstalled(pkg):
-            self.erases.add(pkg)
+            self.erases.append(pkg)
         if pkg in self.installs:
             self.installs.remove(pkg)
-            self.check_installs.discard(pkg)
+            if pkg in self.check_installs:
+                self.check_installs.remove(pkg)
         if pkg in self.updates:
             del self.updates[pkg]
 
         if pkg in self.obsoletes:
             del self.obsoletes[pkg]
-        self.check_erases.add(pkg)
+        self.check_erases.append(pkg)
         self.check_file_requires = True
 
         self.database.removePkg(pkg)
@@ -667,7 +668,7 @@ class RpmResolver:
 
     def iterUnresolvedDependencies(self):
         """only check changes done to the database"""
-        for pkg in self.check_erases.copy():
+        for pkg in self.check_erases[:]:
             # check if provides are required and not provided by another
             # package
             ok = True
@@ -680,8 +681,8 @@ class RpmResolver:
                             continue
                         ok = False
                         yield p, d
-            if ok:
-                self.check_erases.discard(pkg)
+            if ok and pkg in self.check_erases:
+                self.check_erases.remove(pkg)
 
         if self.check_file_requires:
             ok = True
@@ -698,7 +699,7 @@ class RpmResolver:
             self.check_file_requires = not ok or bool(self.check_erases)
 
         # check new packages
-        for pkg in self.check_installs.copy():
+        for pkg in self.check_installs[:]:
             ok = True
             for u in pkg["requires"]:
                 if u[0][:7] == "rpmlib(": # drop rpmlib requirements
@@ -708,8 +709,8 @@ class RpmResolver:
                     continue
                 ok = False
                 yield pkg, u
-            if ok:
-                self.check_installs.discard(pkg)
+            if ok and pkg in self.check_installs:
+                self.check_installs.remove(pkg)
 
     def iterAllUnresolvedDependencies(self):
         """check all dependencies,
