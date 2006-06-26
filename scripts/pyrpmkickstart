@@ -193,8 +193,9 @@ def main():
     create_dir("", source_dir)
     create_dir("", target_dir)
     create_dir("", repos_dir)
-    for repo in ks["repository"]:
-        create_dir("", "%s/%s" % (repos_dir, repo))
+    if ks.has_key("repository"):
+        for repo in ks["repository"]:
+            create_dir("", "%s/%s" % (repos_dir, repo))
     create_dir("", cache_dir)
 
     # create cache dir
@@ -614,7 +615,6 @@ def main():
     repos = { }
     if ks.has_key("repository"):
         for repo in ks["repository"]:
-
             repos[repo] = Repository(pyrpm.rpmconfig,
                                      "%s/%s" % (repos_dir, repo), repo)
             print "Reading repodata from repository '%s'" % repo
