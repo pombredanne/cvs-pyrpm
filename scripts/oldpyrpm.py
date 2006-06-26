@@ -5884,16 +5884,20 @@ def main():
     releasever = ""
     updaterpms = 0
     exactarch = 1   # XXX: should be set via yum.conf
-    (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
-        ["help", "verbose", "quiet", "arch=", "releasever=",
-         "distroverpkg", "strict", "ignoresymlinks",
-         "digest", "nodigest", "payload", "nopayload",
-         "wait", "noverify", "small", "explode", "diff", "extract",
-         "excludes=", "nofileconflicts", "fileconflicts", "runorderer",
-         "updaterpms", "reposdir=", "disablereposdir", "enablerepos",
-         "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
-         "checkrpmdb", "checkdeps", "buildroot=", "installroot=", "root=",
-         "version", "baseurl=", "createrepo", "mercurial"])
+    try:
+        (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
+            ["help", "verbose", "quiet", "arch=", "releasever=",
+            "distroverpkg", "strict", "ignoresymlinks",
+            "digest", "nodigest", "payload", "nopayload",
+            "wait", "noverify", "small", "explode", "diff", "extract",
+            "excludes=", "nofileconflicts", "fileconflicts", "runorderer",
+            "updaterpms", "reposdir=", "disablereposdir", "enablerepos",
+            "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
+            "checkrpmdb", "checkdeps", "buildroot=", "installroot=", "root=",
+            "version", "baseurl=", "createrepo", "mercurial"])
+    except getopt.GetoptError, msg:
+        print "Error:", msg
+        return 1
     for (opt, val) in opts:
         if opt in ("-?", "-h", "--help"):
             usage()
