@@ -27,13 +27,6 @@ try:
 except:
     print >> sys.stderr, "Error: Couldn't import tempfile python module. Only check scripts available."
 
-try:
-    from urlgrabber import urlgrab
-    from urlgrabber.grabber import URLGrabError
-except:
-    print >> sys.stderr, "Error: Couldn't import urlgrabber python module. Only check scripts available."
-
-
 from io import *
 import openpgp
 import package
