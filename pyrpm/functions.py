@@ -702,32 +702,6 @@ def _uriToFilename(uri):
                 filename = filename[idx+2:]
     return filename
 
-def cacheLocal(url, subdir, force=0):
-    """Copy file from HTTP url to subdir/$(basename url).
-
-    Return local file path, or None on failure.  If the local file is already
-    present, use it if the timestamp is not too old unless force is true."""
-
-    if not url.startswith("http://"): # FIXME: ftp:// ?
-        return url
-    destdir = os.path.join(rpmconfig.cachedir, subdir)
-    if not os.path.isdir(destdir):
-        os.makedirs(destdir)
-    destfile = os.path.join(destdir, os.path.basename(url))
-    try:
-        if force:
-            f = urlgrab(url, destfile)
-        else:
-            f = urlgrab(url, destfile, reget='check_timestamp')
-    except URLGrabError, e:
-        # urlgrab fails with invalid range for already completely transfered
-        # files, pretty strange to me to be honest... :)
-        if e[0] == 9:
-            return destfile
-        else:
-            return None
-    return f
-
 def checksumCacheLocal(url, subdir, type):
     """Calculates and returns the checksum for a give URL and corresponding
     subdir. The type parameter is either "sha" or "md5".
