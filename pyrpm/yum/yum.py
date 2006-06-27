@@ -107,7 +107,6 @@ class RpmYum:
         except IOError, e:
             printError("Error reading configuration: %s" % e)
             return 0
-        gexcludes = ' '.join(self.config.excludes)
         erepo = []
         for ritem in self.config.enablerepo:
             ritem = fnmatch.translate(ritem)
@@ -121,8 +120,6 @@ class RpmYum:
         for key in conf.keys():
             sec = conf[key]
             if key == "main":
-                if sec.has_key("exclude"):
-                    gexcludes = conf[key]["exclude"] + " "
                 # exactarch can only be found in main section. Default False
                 if sec.has_key("exactarch") and sec["exactarch"] == "1":
                     self.config.exactarch = True
@@ -149,52 +146,23 @@ class RpmYum:
                     baseurls = sec["baseurl"][:]
                 else:
                     baseurls = []
-                # If we have mirrorlist grab it, read it and add the extended
-                # lines to our baseurls, just like yum does.
-                if sec.has_key("mirrorlist"):
-                    dirname = mkstemp_dir("/tmp", "mirrorlist")
-                    for mlist in sec["mirrorlist"]:
-                        mlist = conf.extendValue(mlist)
-                        self.config.printInfo(2, "Getting mirrorlist from %s\n" % mlist)
-                        fname = cacheLocal(mlist, dirname, 1)
-                        if fname:
-                            lines = open(fname).readlines()
-                            os.unlink(fname)
-                        else:
-                            lines = []
-                        for l in lines:
-                            l = l.replace("$ARCH", "$BASEARCH")[:-1]
-                            baseurls.append(conf.extendValue(l))
-                    os.rmdir(dirname)
-                if len(baseurls) == 0:
-                    printError("%s: No baseurls/mirrorlist for this section in conf file." % key)
-                    return 0
-                if not sec.has_key("exclude"):
-                    excludes = ""
-                else:
-                    excludes = sec["exclude"]
-                if not sec.has_key("gpgkey"):
-                    gpgkeys = []
-                else:
-                    gpgkeys = sec["gpgkey"]
                 if self.config.timer:
                     time1 = clock()
                 self.config.printInfo(1, "Reading repository %s\n" % key)
-                if self.__addSingleRepo(baseurls, gexcludes + excludes,
-                                        key, gpgkeys) == 0:
+                if self.__addSingleRepo(baseurls, conf, key) == 0:
                     return 0
                 if self.config.timer:
                     self.config.printInfo(0, "Reading repository took %s seconds\n" % (clock() - time1))
         return 1
 
-    def __addSingleRepo(self, baseurl, excludes, reponame, key_urls):
+    def __addSingleRepo(self, baseurls, conf, reponame):
         """Add a repository at baseurl as reponame.
 
         Return 1 on success 0 on errror (after warning the user).  Exclude
         packages matching whitespace-separated excludes."""
 
-        repo = database.repodb.RpmRepoDB(self.config, baseurl,
-                          self.config.buildroot, excludes, reponame, key_urls)
+        repo = database.repodb.RpmRepoDB(self.config, baseurls,
+                          self.config.buildroot, conf, reponame)
         if repo.read() == 0:
             self.config.printError("Error reading repository %s" % reponame)
             return 0
@@ -459,7 +427,7 @@ class RpmYum:
         # First pass through our args to find any directories and/or binary
         # rpms and create a memory repository from them to avoid special
         # cases.
-        memory_repo = database.repodb.RpmRepoDB(self.config, "", self.config.buildroot, "", "pyrpmyum-memory-repo", [])
+        memory_repo = database.repodb.RpmRepoDB(self.config, [], self.config.buildroot, None, "pyrpmyum-memory-repo")
         new_args = []
         for name in args:
             if   os.path.isfile(name) and name.endswith(".rpm"):

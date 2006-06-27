@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import libxml2, re
+import libxml2, re, os, os.path
 from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
 import memorydb
 from pyrpm.base import *
@@ -46,8 +46,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 RPMSENSE_EQUAL | RPMSENSE_LESS: "LE",
                 RPMSENSE_EQUAL | RPMSENSE_GREATER: "GE"}
 
-    def __init__(self, config, source, buildroot=None, excludes="",
-                 reponame="default", key_urls=[]):
+    def __init__(self, config, source, buildroot=None, yumconf = None,
+                 reponame="default"):
         """Exclude packages matching whitespace-separated excludes.  Use
         reponame for cache subdirectory name and pkg["yumreponame"].
 
@@ -55,10 +55,24 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
 
         memorydb.RpmMemoryDB.__init__(self, config, source, buildroot)
         self.baseurl = None
-        self.excludes = excludes.split()
+        self.yumconf = yumconf
         self.reponame = reponame
+        self.excludes = self.config.excludes[:]
+        self.mirrorlist = None
+        self.key_urls = []
+        if yumconf:
+            if self.yumconf.has_key("main"):
+                sec = self.yumconf["main"]
+                if sec.has_key("exclude"):
+                    self.excludes.extend(sec["exclude"].split())
+            sec = self.yumconf[self.reponame]
+            if sec.has_key("exclude"):
+                self.excludes.extend(sec["exclude"].split())
+            if sec.has_key("gpgkey"):
+                self.key_urls = sec["gpgkey"]
+            if sec.has_key("mirrorlist"):
+                self.mirrorlist = sec["mirrorlist"]
         self.repomd = None
-        self.key_urls = key_urls
         self.filelist_imported  = 0
         # Files included in primary.xml
         self._filerc = re.compile('^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$')
@@ -68,6 +82,19 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self.comps = None
 
     def read(self):
+        if not self.is_read and self.mirrorlist and self.yumconf:
+            for mlist in self.mirrorlist:
+                nc = NetworkCache(os.path.dirname(mlist), os.path.join(self.config.cachedir, self.reponame))
+                fname = nc.cache(os.path.basename(mlist), 1)
+                if fname:
+                    lines = open(fname).readlines()
+                    os.unlink(fname)
+                else:
+                    lines = []
+                for l in lines:
+                    l = l.replace("$ARCH", "$BASEARCH")[:-1]
+                    self.source.append(self.yumconf.extendValue(l))
+                nc.clear()
         self.is_read = 1 # FIXME: write-only
         for uri in self.source:
             # First we try and read the repomd file as a starting point.
