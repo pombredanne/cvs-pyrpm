@@ -2990,7 +2990,7 @@ def main():
                       '\tinitrd %s/initrd-%s.img\n' % (prefix, kernel) ] )
 
             create_file(target_chroot, "/boot/grub/grub.conf", content,
-                        force=1)
+                        force=1, mode=0600)
 
             # copy all grub stage files
             t = "/usr/share/grub/%s-redhat/" % installation.arch
@@ -3069,7 +3069,7 @@ def main():
                 content.append('setup (%s)\n' % hd)
             content.append('quit\n')
             content.append('EOF\n')
-            if not create_file(target_chroot, "/tmp/grub-setup", content):
+            if not create_file(target_chroot, "/tmp/grub-setup", content, mode=0600):
                 print "ERROR: grub setup failed"
             else:
                 try:
