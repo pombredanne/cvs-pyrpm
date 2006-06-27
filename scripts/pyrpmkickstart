@@ -561,7 +561,8 @@ def main():
 
     # run pre script and reload kickstart file
     if ks.has_key("install") and \
-           ks.has_key("pre") and len(ks["pre"]["script"]) > 0:
+           ks.has_key("pre") and ks["pre"].has_key("script") and \
+           len(ks["pre"]["script"]) > 0:
         print "Running pre script"
         interpreter = "/bin/sh"
         if ks["pre"].has_key("interpreter"):
@@ -618,7 +619,17 @@ def main():
             repos[repo] = Repository(pyrpm.rpmconfig,
                                      "%s/%s" % (repos_dir, repo), repo)
             print "Reading repodata from repository '%s'" % repo
-            if not repos[repo].load(ks["repository"][repo]["url"]):
+            baseurl = mirrorlist = exclude = None
+            if ks["repository"][repo].has_key("baseurl"):
+                baseurl = ks["repository"][repo]["baseurl"]
+            if ks["repository"][repo].has_key("mirrorlist"):
+                # TODO: as soon as RepoDB supports mirrorlist directly...
+                print "TODO: RepoDB has to support mirrorlists."
+#                mirrorlist = ks["repository"][repo]["mirrorlist"]
+            if ks["repository"][repo].has_key("exclude"):
+                exclude = ks["repository"][repo]["exclude"]
+            if not repos[repo].loadURL(baseurl=baseurl, mirrorlist=mirrorlist,
+                                       exclude=exclude):
                 return 1
 
     ############## clear and generate partitions and disklabels ##############
@@ -858,6 +869,8 @@ def main():
                 elif partition[part]["fstype"] in \
                        [ "ext2", "ext3", "xfs", "jfs", "reiserfs" ] and \
                        partition[part]["native_type"] == 0x83:
+                    # TODO: check if partition is already mounted
+                    print "Trying '%s'" % onpart
                     info = get_installation_info(partition[part]["device"],
                                                  partition[part]["fstype"],
                                                  fstemp_dir)
@@ -865,7 +878,7 @@ def main():
                         installed[onpart] = info
 
         # check volume groups and logical volumes
-        print "volgroup=%s" % pprint.pformat(volgroup)
+#        print "volgroup=%s" % pprint.pformat(volgroup)
         to_delete = [ ]
         for group in volgroup:
             vgmap[group] = LVM_VOLGROUP(group, chroot=stage2_chroot)
@@ -939,10 +952,9 @@ def main():
 
             raid.stop()
 
-
-        print "installed=%s" % pprint.pformat(installed)
-        sys.stdout.write("\nWaiting - Press any key to continue.")
-        c = sys.stdin.read(1)
+#        print "installed=%s" % pprint.pformat(installed)
+#        sys.stdout.write("\nWaiting - Press any key to continue.")
+#        c = sys.stdin.read(1)
 
         if len(installed) < 1:
             print "ERROR: Could not find any installations."
@@ -967,6 +979,10 @@ def main():
         elif len(installed) > 1:
             print "ERROR: More than one installation found, exiting."
             return 1
+
+        print "About to upgrade installation on '%s'" % upgrade
+        if not pyrpm.is_this_ok():
+            return 0
 
         swap_id = 0
         if upgrade:
@@ -1016,7 +1032,7 @@ def main():
         del mdmap
         del installed
         os.rmdir(fstemp_dir)
-        print "partitions=%s" % pprint.pformat(partitions)
+#        print "partitions=%s" % pprint.pformat(partitions)
 
     # create partitionmap
     partitionmap = { }
@@ -2133,6 +2149,11 @@ def main():
                 pkgs.append("firstboot")
 
             # append dhclient
+            if ks.has_key("bootloader") and not "grub" in pkgs:
+                print "Adding package 'grub'"
+                pkgs.append("grub")
+
+            # append grub
             if ks.has_key("network") and len(ks["network"]) > 0:
                 for net in ks["network"]:
                     if net["bootproto"] == "dhcp" and \
@@ -2590,15 +2611,20 @@ def main():
     fd.write("\n")
     fd.write("[base]\n")
     fd.write("name=dist %s\n" % installation)
-    url = source.cache.baseurl
-    fd.write("baseurl=%s\n" % url)
+    if source.baseurl:
+        fd.write("baseurl=%s\n" % source.baseurl)
+    # no repo.mirrorlist and repo.exclude for base
     fd.write("\n")
     # add repos
     for repo in repos:
         fd.write("[%s]\n" % repo)
         fd.write("name=%s\n" % repo)
-        url = repos[repo].cache.baseurl
-        fd.write("baseurl=%s\n" % url)
+        if repos[repo].baseurl:
+            fd.write("baseurl=%s\n" % repos[repo].baseurl)
+        if repos[repo].mirrorlist:
+            fd.write("mirrorlist=%s\n" % repos[repo].mirrorlist)
+        if repos[repo].exclude:
+            fd.write("exclude=%s\n" % string.join(repos[repo].exclude))
         fd.write("\n")
     fd.close()
 
@@ -3095,7 +3121,8 @@ def main():
 
     # run post script
     if ks.has_key("install") and \
-           ks.has_key("post") and len(ks["post"]["script"]) > 0:
+           ks.has_key("post") and ks["post"].has_key("script") and \
+           len(ks["post"]["script"]) > 0:
         print "Running post script"
 
         chroot = None
@@ -3249,6 +3276,9 @@ except Exception:
 
 ################################### cleanup ###################################
 
+# block signals for cleanup
+pyrpm.blockSignals()
+
 # wait one second before going on
 time.sleep(1)
 os.system("/bin/sync")
@@ -3307,6 +3337,7 @@ if tempdir:
         shutil.rmtree(tempdir)
     tempdir = None
 
+pyrpm.unblockSignals()
 sys.exit(status)
 
 # vim:ts=4:sw=4:showmatch:expandtab

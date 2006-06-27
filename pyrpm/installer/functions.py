@@ -156,14 +156,18 @@ def get_installation_info(device, fstype, dir):
         _release = load_release(dir)
         _fstab = load_fstab(dir)
         _mdadm = load_mdadm_conf(dir)
-        if _release and _fstab:
-            dict["release"] = _release
-            dict["fstab"] = _fstab
-            dict["mdadm-conf"] = _mdadm
         if config.verbose:
             print "Umounting '%s' " % dir
         umount(dir)
-        return dict
+        dict["release"] = "-- unknown --"
+        if _release:
+            dict["release"] = _release
+        if _mdadm:
+            dict["mdadm-conf"] = _mdadm
+        if _fstab:
+            dict["fstab"] = _fstab
+            return dict
+        return None
 
 def get_buildstamp_info(dir):
     release = version = arch = date = None
@@ -218,12 +222,12 @@ def get_discinfo(discinfo):
     # fix bad fedora core 5 entry
     if string.strip(lines[1]) == "Fedora Core":
         lines[1] = "Fedora Core 5"
-    splits = string.rsplit(string.strip(lines[1]), " ", maxsplit=1)
-    if not len(splits) == 2:
+    i = string.rfind(string.strip(lines[1]), " ")
+    if i == -1:
         print "ERROR: .discinfo in '%s' is malformed." % discinfo
         return None
-    release = string.strip(splits[0])
-    version = string.strip(splits[1])
+    release = string.strip(lines[1][:i])
+    version = string.strip(lines[1][i:])
     arch = string.strip(lines[2])
     del lines
 

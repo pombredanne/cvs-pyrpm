@@ -309,12 +309,15 @@ class RpmController:
                 if self.config.buildroot:
                     del operations
                     gc.collect()
+                    # Close database early: This is needed for RHEL-4, where
+                    # the path of the database file paths are used for
+                    # flushing and not the file descriptor.
+                    self.db.close()
                     os.chroot(self.config.buildroot)
                     # We're in a buildroot now, reset the buildroot in the db
                     # object
                     self.db.setBuildroot(None)
                     # Now reopen database
-                    self.db.close()
                     self.db.open()
                 while len(subop) > 0:
                     (op, pkg) = subop.pop(0)

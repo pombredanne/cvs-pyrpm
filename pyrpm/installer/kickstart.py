@@ -325,8 +325,25 @@ class KickstartConfig(dict):
                     self.convertLong(_dict, "spares")
                     _dict["partitions"] = _args[1:]
                     self[opt][_args[0]] = _dict
-                elif opt == "repo" or opt == "repository":
-                    self.parseSub("repository", args[1:], [ "url:" ])
+                elif opt == "repo":
+                    (_dict, _args) = self.parseArgs(opt, args[1:],
+                                                    [ "name:", "baseurl:",
+                                                      "mirrorlist:",
+                                                      "exclude:" ])
+                    if not _dict.has_key("name"):
+                        raise ValueError, "repo name not specified in '%s'" % \
+                              line
+                    if self.has_key(opt) and _dict["name"] in self[opt]:
+                        raise ValueError, "repo name '%s' is not unique." % \
+                              _dict["name"]
+                    dict = { }
+                    if _dict.has_key("baseurl"):
+                        dict["baseurl"] = _dict["baseurl"]
+                    if _dict.has_key("mirrorlist"):
+                        dict["mirrorlist"] = _dict["mirrorlist"]
+                    if _dict.has_key("exclude"):
+                        dict["exclude"] = string.split(_dict["exclude"], ",")
+                    self[opt][dict["name"]] = dict
                 elif opt == "rootpw":
                     self.parseSub(opt, args[1:], [ "iscrypted" ])
                 elif opt == "selinux":
@@ -644,11 +661,17 @@ class KickstartConfig(dict):
                           mntpoint
                 names.append(self["logvol"][mntpoint]["name"])
 
-        if self.has_key("repository"):
-            for name in self["repository"]:
-                repo = self["repository"][name]
-                if not repo.has_key("url"):
-                    raise ValueError, "url not set for repository %s." % repo
+        if self.has_key("repo"):
+            for name in self["repo"]:
+                repo = self["repo"][name]
+                if not repo.has_key("baseurl") and \
+                       not repo.has_key("mirrorlist"):
+                    raise ValueError, "No source specified for repo '%s'." % \
+                          repo
+                if repo.has_key("baseurl") and repo.has_key("mirrorlist"):
+                    raise ValueError, \
+                          "Baseurl and mirrorlist specified for repo '%s'." % \
+                          repo
 
         if self.has_key("url"):
             if not self["url"].has_key("url"):

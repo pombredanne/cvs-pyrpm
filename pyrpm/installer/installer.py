@@ -116,7 +116,9 @@ class Repository:
         self.config = config
         self.dir = dir
         self.name = name
-        self.source = None
+        self.baseurl = None
+        self.mirrorlist = None
+        self.exclude = None
         self.repo = None
         self.cache = None
         self.comps = None
@@ -126,17 +128,16 @@ class Repository:
             return self.cache.cache(filename)
         return None
 
-    def load(self, source):
-        self.source = source
-
-        if source == "cdrom":
+    def load(self, baseurl=None, mirrorlist=None, exclude=None):
+        source = baseurl
+        if source and source == "cdrom":
             # mount cdrom
             what = "/dev/cdrom"
             if config.verbose:
                 print "Mounting '%s' on '%s'" % (what, self.dir)
             mount(what, self.dir, fstype="auto", options="ro")
             source = "file://%s" % self.dir
-        elif source[:6] == "nfs://":
+        elif source and source[:6] == "nfs://":
             what = source[6:]
             splits = what.split("/", 1)
             if splits[0][-1] != ":":
@@ -149,15 +150,20 @@ class Repository:
             source = "file://%s" % self.dir
         # else: url
 
-        self.repo = repodb.RpmRepoDB(self.config, [ source ],
+        self.baseurl = source
+        self.mirrorlist = mirrorlist
+        self.exclude = exclude
+
+        # TODO: use mirrorlist
+        self.repo = repodb.RpmRepoDB(self.config, [ source ], 
                                      reponame=self.name)
         if not self.repo.read():
-            print "ERROR: Could not read repository."
+            print "ERROR: Could not read repository '%s'." % self.name
             return 0
 
         self.cache = self.repo.getNetworkCache()
         if not self.cache:
-            print "ERROR: Could no create cache."
+            print "ERROR: Could no get cache for repo '%s'." % self.name
             return 0
 
         self.comps = self.repo.comps
