@@ -155,7 +155,7 @@ class Repository:
         self.exclude = exclude
 
         # TODO: use mirrorlist
-        self.repo = repodb.RpmRepoDB(self.config, [ source ], 
+        self.repo = repodb.RpmRepoDB(self.config, [ source ],
                                      reponame=self.name)
         if not self.repo.read():
             print "ERROR: Could not read repository '%s'." % self.name

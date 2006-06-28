@@ -333,6 +333,8 @@ class KickstartConfig(dict):
                     if not _dict.has_key("name"):
                         raise ValueError, "repo name not specified in '%s'" % \
                               line
+                    if not self.has_key(opt):
+                        self[opt] = {}
                     if self.has_key(opt) and _dict["name"] in self[opt]:
                         raise ValueError, "repo name '%s' is not unique." % \
                               _dict["name"]
@@ -343,7 +345,7 @@ class KickstartConfig(dict):
                         dict["mirrorlist"] = _dict["mirrorlist"]
                     if _dict.has_key("exclude"):
                         dict["exclude"] = string.split(_dict["exclude"], ",")
-                    self[opt][dict["name"]] = dict
+                    self[opt][_dict["name"]] = dict
                 elif opt == "rootpw":
                     self.parseSub(opt, args[1:], [ "iscrypted" ])
                 elif opt == "selinux":

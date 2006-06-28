@@ -193,8 +193,8 @@ def main():
     create_dir("", source_dir)
     create_dir("", target_dir)
     create_dir("", repos_dir)
-    if ks.has_key("repository"):
-        for repo in ks["repository"]:
+    if ks.has_key("repo"):
+        for repo in ks["repo"]:
             create_dir("", "%s/%s" % (repos_dir, repo))
     create_dir("", cache_dir)
 
@@ -614,20 +614,20 @@ def main():
 
     # TODO: check repo names for invalid chars
     repos = { }
-    if ks.has_key("repository"):
-        for repo in ks["repository"]:
+    if ks.has_key("repo"):
+        for repo in ks["repo"]:
             repos[repo] = Repository(pyrpm.rpmconfig,
                                      "%s/%s" % (repos_dir, repo), repo)
             print "Reading repodata from repository '%s'" % repo
             baseurl = mirrorlist = exclude = None
-            if ks["repository"][repo].has_key("baseurl"):
-                baseurl = ks["repository"][repo]["baseurl"]
-            if ks["repository"][repo].has_key("mirrorlist"):
+            if ks["repo"][repo].has_key("baseurl"):
+                baseurl = ks["repo"][repo]["baseurl"]
+            if ks["repo"][repo].has_key("mirrorlist"):
                 # TODO: as soon as RepoDB supports mirrorlist directly...
                 print "TODO: RepoDB has to support mirrorlists."
-#                mirrorlist = ks["repository"][repo]["mirrorlist"]
-            if ks["repository"][repo].has_key("exclude"):
-                exclude = ks["repository"][repo]["exclude"]
+#                mirrorlist = ks["repo"][repo]["mirrorlist"]
+            if ks["repo"][repo].has_key("exclude"):
+                exclude = ks["repo"][repo]["exclude"]
             if not repos[repo].loadURL(baseurl=baseurl, mirrorlist=mirrorlist,
                                        exclude=exclude):
                 return 1
