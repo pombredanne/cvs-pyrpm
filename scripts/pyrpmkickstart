@@ -628,7 +628,7 @@ def main():
 #                mirrorlist = ks["repo"][repo]["mirrorlist"]
             if ks["repo"][repo].has_key("exclude"):
                 exclude = ks["repo"][repo]["exclude"]
-            if not repos[repo].loadURL(baseurl=baseurl, mirrorlist=mirrorlist,
+            if not repos[repo].load(baseurl=baseurl, mirrorlist=mirrorlist,
                                        exclude=exclude):
                 return 1
 

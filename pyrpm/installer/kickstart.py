@@ -338,6 +338,7 @@ class KickstartConfig(dict):
                     if self.has_key(opt) and _dict["name"] in self[opt]:
                         raise ValueError, "repo name '%s' is not unique." % \
                               _dict["name"]
+                    # XXX: Remove "name" from _dict instead of building dict?
                     dict = { }
                     if _dict.has_key("baseurl"):
                         dict["baseurl"] = _dict["baseurl"]
@@ -345,7 +346,7 @@ class KickstartConfig(dict):
                         dict["mirrorlist"] = _dict["mirrorlist"]
                     if _dict.has_key("exclude"):
                         dict["exclude"] = string.split(_dict["exclude"], ",")
-                    self[opt][_dict["name"]] = dict
+                    self[opt][_dict["name"]] = _dict
                 elif opt == "rootpw":
                     self.parseSub(opt, args[1:], [ "iscrypted" ])
                 elif opt == "selinux":
