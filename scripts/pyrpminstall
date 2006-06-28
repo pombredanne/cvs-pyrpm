@@ -24,6 +24,7 @@ if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import *
 from pyrpm import __version__
+from pyrpm.database import getRpmDBFactory
 
 def usage():
     print """

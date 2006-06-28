@@ -23,6 +23,7 @@ PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import *
+from pyrpm.yum.yum import RpmYum
 
 _flag_chars = [
     (RPMVERIFY_FILESIZE, 'S'), (RPMVERIFY_MODE, 'M'), (RPMVERIFY_MD5, '5'),
@@ -116,12 +117,13 @@ def main():
     resolver = RpmResolver(rpmconfig, db, True)
     if args:
         packages = []
-        for name in args:
-            found = functions.findPkgByNames([name,], db.getPkgs())
+        for name in args:            
+            found = db.searchPkgs(name)
             if found:
-                packages.append(found[0])
+                packages.extend(found)
             else:
                 rpmconfig.printError("%s: No match" % name)
+        normalizeList(packages)
     else:
         packages = db.getPkgs()
 
