@@ -95,7 +95,7 @@ class PyGZIP:
                 self.enddata = data[-8:]
             else:
                 self.enddata = self.enddata[-8+len(data):] + data
-            size = bytes - self.bufferlen
+            size = (bytes or 65536) - self.bufferlen
             if size > 65536:
                 size = 32768
             elif size > 32768:
@@ -115,8 +115,8 @@ class PyGZIP:
             # decompressor is smart and knows when to stop, so feeding it
             # extra data is harmless.
                 try:
-                    crc32 = unpack("<i", self.enddata[0:4]) # le signed int
-                    isize = unpack("<I", self.enddata[4:8]) # le unsigned int
+                    crc32 = unpack("<I", self.enddata[0:4])[0] #le signed int
+                    isize = unpack("<I", self.enddata[4:8])[0] #le unsigned int
                 except struct.error:
                     raise IOError, "Unexpected EOF"
                 if crc32 != self.crcval:
