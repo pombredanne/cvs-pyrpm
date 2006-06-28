@@ -1,4 +1,1347 @@
+2006-06-28  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.48, pyrpm/__init__.py 1.52, scripts/oldpyrpm.py 1.213:
+	- release 0.51
+
+2006-06-28  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/orderer.py 1.66:
+	[ffesti] orderer.py: use Dijkstra for breaking up ConnectedComponents
+	           Do no longer detect loops as this has exponential runtime.
+
+2006-06-28  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/installer/kickstart.py 1.8, scripts/pyrpmkickstart 1.83:
+	- with this basic "repo"-support seems to work
+
+	* scripts/pyrpmkickstart 1.82, pyrpm/installer/installer.py 1.6, pyrpm/installer/kickstart.py 1.7:
+	- first fixups for the "repo" support in pyrpmkickstart
+
+2006-06-27  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/control.py 1.95, pyrpm/installer/functions.py 1.15, pyrpm/installer/installer.py 1.5, pyrpm/installer/kickstart.py 1.6, scripts/pyrpmkickstart 1.81:
+	[tw]
+	* scrpts/pyrpmkickstart
+	- only use ks["pre"]["script"] if it exists
+	- use new anaconda kickstart repo style with additional excludes
+	- ask the user before upgrade starts, disabled debug messages
+	- block signals for cleanup
+
+	* pyrpm/control.py
+	- close database early: This is needed for RHEL-4, where the path of the
+	  database file paths are used for flushing and not the file descriptor.
+
+	* pyrpm/installer/functions.py
+	- make release anoptional field for update detection
+	- dropped string.rsplit from get_buildstamp_info function
+
+	* pyrpm/installer/installer.py
+	* pyrpm/installer/kickstart.py
+	- use new anaconda kickstart repo style with additional excludes
+
+2006-06-27  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.185:
+	- Dropped the urlgrabber imports from functions, not needed there anymore either
+
+	* pyrpm/functions.py 1.184:
+	- Finally got rid of cacheLocal, not needed anymore after last change
+
+	* pyrpm/yum/yum.py 1.2, pyrpm/database/repodb.py 1.23:
+	- Moved the whole yumconfig handling code into repodb (where it belongs)
+	- Fixed a bug in using --exclude and global excludes in the yum.conf file
+
+2006-06-27  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmkickstart 1.80: - grub files only readable by root
+
+2006-06-26  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.212: - nicer output if wrong options are given
+
+2006-06-26  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/resolver.py 1.112:
+	[ffesti] replaced sets by lists to run on Python < 2.4
+
+2006-06-26  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/control.py 1.94: [tw]
+	- fixed missing pkg.close after rewrite
+
+	* scripts/pyrpmkickstart 1.79: [tw]
+	- fixed missing if ks.has_key("repository") for repo create_dir
+
+2006-06-25  Florian La Roche  <laroche@redhat.com>
+
+	* tests/delta.py 1.7, tests/test 1.23, tests/test7 1.4, scripts/pyrpmcheck 1.16, scripts/pyrpmcreatefilereq 1.6, scripts/rpmtest/test_permissions.py 1.2, pyrpm/package.py 1.127, pyrpm/resolver.py 1.111, pyrpm/functions.py 1.183:
+	- pyrpm/functions.py: bsearch(): last arg moves into this function
+	- pyrpm/package.py:
+	  - _RpmFilenamesIterator: length is determined within __init__
+	    to simplify things
+	- RpmData(): move from "filenames" -> iterFilenames() function calls
+	- RpmPackage:__generateFileInfoList(): do not set self.rfilist, but
+	  return data (rfilist) from this function
+	- RpmPackage:__generateFileInfoList(): add another param to call
+	  getRpmFileInfo() so that filename index does not have to be computed
+
+2006-06-24  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/database/memorydb.py 1.11, pyrpm/resolver.py 1.110, scripts/pyrpmkickstart 1.78:
+	- ws cleanup
+
+	* pyrpm/yum/yumconfig.py 1.2: - adjust to how the other code is written
+
+	* pyrpm/installer/functions.py 1.14:
+	- raise: add msg output into string
+
+2006-06-22  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.77: [tw]
+	- fixed missing directories for repos in repos_dir
+	- dropped file: prefix from basurls again
+
+2006-06-21  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/installer/functions.py 1.13: - be able to report the problem
+
+	* configure.in 1.47: - add pyrpm/yum subdir
+
+	* pyrpm/Makefile.am 1.7, pyrpm/yum/.cvsignore 1.1, pyrpm/yum/Makefile.am 1.1:
+	- add new yum dir
+
+2006-06-21  Thomas Woerner  <twoerner@redhat.com>
+
+	* Makefile.am 1.19: [tw]
+	- build srpm
+
+2006-06-20  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/comps.py 1.10, pyrpm/database/comps.py 1.1, pyrpm/database/repodb.py 1.22, pyrpm/installer/functions.py 1.12, pyrpm/installer/loop.py 1.5, pyrpm/yum.py 1.120, pyrpm/yum/__init__.py 1.1, pyrpm/yum/yum.py 1.1, pyrpm/yum/yumconfig.py 1.1, pyrpm/yumconfig.py 1.26, scripts/pyrpminstall 1.29, scripts/pyrpmkickstart 1.76, scripts/pyrpmrebuilddb 1.15, scripts/pyrpmverify 1.3, scripts/pyrpmyum 1.54:
+	[tw]
+	pyrpm/database/comps.py
+	- moved comps.py into pyrpm/database
+
+	pyrpm/database/repodb.py
+	- using new import path for comps
+
+	pyrpm/installer/functions.py
+	- new function _compsLangsupport used by compsLangsupport
+	- fixed wrong in-check in addPkgByFileProvide: using names, not packages
+
+	pyrpm/installer/loop.py
+	- fixed loop.setup call in losetup, to not set back to default values
+
+	pyrpm/yum/__init__.py
+	pyrpm/yum/yumconfig.py
+	pyrpm/yum/yum.py
+	- moved yum.py and yumconfig.py into pyrpm/yum
+
+	pyrpm/yum/yum.py
+	- using new import paths for pyrpm base classes and comps
+	- fixed join of global excludes
+
+	scripts/pyrpmkickstart
+	- be more verbose on temporary mounts
+	- do not mount temporary /tmp in target
+	- be more verbose in desktop message
+
+	scripts/pyrpminstall
+	scripts/pyrpmrebuilddb
+	scripts/pyrpmverify
+	- using pyrpm.database instead of database
+
+	scripts/pyrpmyum
+	- using new import paths for yum and comps files
+
+2006-06-20  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/resolver.py 1.109: [ffesti] typo
+
+2006-06-20  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/config.py 1.60: - use self as first arg
+
+2006-06-20  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/memorydb.py 1.10:
+	[ffesti] build lists (indices) in memorydb on demand
+
+2006-06-19  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.46, pyrpm/__init__.py 1.51, scripts/oldpyrpm.py 1.211:
+	- release 0.50
+
+2006-06-19  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/filesystem.py 1.5, pyrpm/installer/functions.py 1.11, scripts/pyrpmkickstart 1.75:
+	[tw]
+	- rewrite of compsLangsupport code: always add mandatory packages, use
+	  conditional packages
+	- apply langsupport packages late: after user spullied package list has been
+	  added
+	- moved fuser code out of umount in new fuser function
+	- use new fuser funciton in umount_all if filesystem is not sysfs or proc
+
+	* pyrpm/installer/filesystem.py 1.4, pyrpm/installer/functions.py 1.10, scripts/pyrpmkickstart 1.74:
+	[tw]
+	- dropped debug print of buildstamp info
+	- fixed typo 'exxcept'
+	- creating temporary /proc/bus/pci/devices (empty!) in target_chroot
+	- creating temporary /proc/net/unix (empty!) in target_chroot
+	- fixed non-optimal fuser code in umount function
+	- dropped count check in umount_all function
+
+	* scripts/pyrpmkickstart 1.73: [tw]
+	- copy devices for all partitions into stage2 and target
+
+2006-06-18  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/installer/kickstart.py 1.5:
+	- add halt/poweroff/shutdown as further ignored commands
+
+2006-06-15  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/__init__.py 1.50, scripts/oldpyrpm.py 1.210, configure.in 1.45:
+	- release 0.49
+
+	* scripts/pyrpmgraph 1.3: - ws cleanup
+
+	* pyrpm/installer/raid.py 1.3, pyrpm/comps.py 1.9, pyrpm/resolver.py 1.108:
+	- whitespace fixes/cleanup
+
+	* pyrpm/database/lists.py 1.23, pyrpm/package.py 1.126:
+	- unify how a filename is split into basename/dirname
+	- use os.path.split() if possible
+
+	* scripts/pyrpmkickstart 1.72: - ws
+
+2006-06-14  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.71: [tw]
+	- fixed typo in --no-discinfo usage message
+
+	* scripts/pyrpmkickstart 1.70: [tw]
+	- new option --no-buildstamp
+	  do not use .buildstamp information in stage2 images
+	  only usable without --no-stage2
+	- new option --no-discinfo
+	  do not use .discinfo information. Only usable with --no-stage2 option
+	- always get source_release, source_version and source_arch from source repo
+	  will be overwritten later by buildstamp or discinfo, if not disabled
+	- added check for dmsetup availability
+	- copy the devices even for disk images into stage2_dir
+	- disabled swap labels for FC-2
+	- mount temporary filesystem (ramfs) for /proc, /sys and /tmp in target chroot
+	- create /sys/block, /sys/bus, /sys/class, /sys/devices, /sys/kernel and
+	  /sys/module directiries in the temporary /sys tree
+	- mount the real /proc to /proc/.real_proc in target chroot and link real
+	  /proc/.real_proc/self to /proc/self (needed for kernel and some gnome post
+	  install scripts)
+	- create fake /proc/1/fd/0 and /proc/1/stat (needed to calm down killall)
+	- create fake /proc/mounts and /proc/partitions with information from the used
+	  devices
+
+	* pyrpm/installer/functions.py 1.9, pyrpm/installer/loop.py 1.4: [tw]
+	- added LOOP.LOOP_FIRST: Set this to 4 to leave the first 4 loop devices untouched.
+
+	  This is needed for old releases like FC-2, where mkinitrd will only check the
+	  availability of the first 4 loop devices for initrd generation
+
+2006-06-14  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-tools.txt 1.15: - add more info about --checkrpmdb details
+
+	* scripts/oldpyrpm.py 1.209:
+	- check if any duplicate installed rpms (with the same name) have
+	  differing epoch/version/release. This should check multilib installs
+	  for some additional sanity.
+
+2006-06-12  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm.txt 1.14:
+	- add links to sourceforge and freshmeat project pages
+
+2006-06-12  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.69: [tw]
+	- fixed typo in comment for /proc/misc create_file
+	- fixed typo in release check
+	- fixed source_version in no-stage2: drop letters
+	- use one if for /var/log/lastlog and /var/log/messages creation
+
+	* pyrpm/installer/functions.py 1.8: [tw]
+	- fixed malformed .discentry of Fedora Core 5
+
+2006-06-12  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.208: - allow Pubkey file to not exist
+
+2006-06-12  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.68: [tw]
+	- fixed unandled exception of Disk class
+	- using mode for create_dir and create_file
+	- fixed wrong varibale usage in wait output (target_chroot instead of
+	  target_dir)
+
+	* pyrpm/installer/functions.py 1.7: [tw]
+	- added mode to create_dir function
+
+	* pyrpm/installer/loop.py 1.3: [tw]
+	- fixed bug where device is in use, but status fails
+
+	* pyrpm/installer/x.py 1.6: [tw]
+	- better hwdata.Cards usage and error/warning messages
+	- using hwdata.Monitors
+
+2006-06-10  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-links.txt 1.12: - add packaging link for FC/FE
+
+	* scripts/pyrpmkickstart 1.67: - whitespace changes
+
+	* scripts/oldpyrpm.py 1.207:
+	- disable data output for failed utf-8 checks
+
+	* scripts/oldpyrpm.py 1.206: - update todo list
+	- try to use () more often instead of line-continuation
+	  via "\" at the end of the line, much more consistent look
+	- rpm(sig)tagrequired moves inline
+	- add "kernelpkgs" list
+	- improve setMachineDistance() and remove machineDistance()
+	  now completely
+	- do not optimize memory usage by looping over
+	  file{user,group}name
+	- enable utf-8 checks for summary, description, changelog
+	- make genBasenames() compatibel with /bin/rpm and also
+	  change it to work correctly for source rpms
+	- add a verification if genBasenames() is working right for
+	  all available rpm packages
+	- selectNewestRpm(): no need for a special case without arch
+	  setup. Also better debug output.
+	- getPkgsNewest(): change basearch to exactarch
+	- RpmRepo:
+	  - allow a fast mode that only reads in very little
+	    data ("fast" param)
+	  - start reading repomd.xml
+	  - add __parsePrimary()
+	  - optimize __parseFilelist()
+	- change "chroot" to "buildroot" for consistency
+	- use "rpmdbpath" across all code, don't change it to
+	  dbpath or other names in some functions
+	- add getChangeLogFromRpm(): new is to not only look at
+	  the date, but also allow a real data compare to get
+	  better output
+	- add exactarch option
+
+2006-06-09  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmgraph 1.2, scripts/pyrpmverify 1.2: - vim trailer
+
+	* pyrpm/elf.py 1.2, pyrpm/functions.py 1.182, pyrpm/installer/config.py 1.2, pyrpm/installer/devices.py 1.2, pyrpm/installer/filesystem.py 1.3, pyrpm/installer/firewall.py 1.2, pyrpm/installer/functions.py 1.6, pyrpm/installer/installer.py 1.4, pyrpm/installer/loop.py 1.2, pyrpm/installer/lvm.py 1.3, pyrpm/installer/network.py 1.2, pyrpm/installer/raid.py 1.2, pyrpm/installer/x.py 1.5, pyrpm/openpgp.py 1.10, pyrpm/package.py 1.125, pyrpm/resolver.py 1.107, pyrpm/yum.py 1.119:
+	- runScript(): output also for "exit 0" case
+	- create_file(): allow a param to specify the mode of the file
+	- whitespace changes
+
+2006-06-09  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/repodb.py 1.21, pyrpm/functions.py 1.181, pyrpm/yum.py 1.118, pyrpm/config.py 1.59:
+	- Added --archlist option for fine granular arch selection
+	- Added --autoeraseexclude option to be able to specify package names/globs to
+	  be excluded from autoerasing
+	- Simplified fnmatch.translate() code segments
+	- Fixed missing return checkes for __doAutoerase() calls in RpmYum
+
+2006-06-08  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/x.py 1.4: [tw]
+	- fixed typos with dpms variable
+	- only uotput warnings for card and driver if there is no matching entry for
+	  both of them
+
+2006-06-08  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.117:
+	- Fixed proper selection of packages in RpmYum.__handleUpdatePkglist() to
+	  select the newest package even for comps-less repositories.
+
+2006-06-08  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/hwdata.py 1.1, pyrpm/installer/x.py 1.3: [tw]
+	- new hwdata.py providing hwdata classes for /usr/share/hwdata
+	- using new hwdata classes in x configration class with additional fixes like
+	  dmps option for monitors or like using kickstart configuration only if
+	  matching entry is found in hw databases
+
+	* pyrpm/installer/x.py 1.2: [tw]
+	- new hwdataCards to parse /usr/share/hwdata/Cards completely
+
+2006-06-01  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.66: [tw]
+	- new option --drop-unresolved:
+	  Drop packages, which have unresolved dependencies in installation mode.
+	  Please keep in mind that this could result in a unusable system.
+	- updated usage output
+
+	* scripts/pyrpmkickstart 1.65, pyrpm/installer/filesystem.py 1.2, pyrpm/installer/functions.py 1.5, pyrpm/installer/installer.py 1.3, pyrpm/installer/disk.py 1.2:
+	[tw]
+
+	pyrpm/installer/disk.py
+	- dropped mount, swapon and filesystem functions, already moved over to
+	  installer/filesystem
+
+	pyrpm/installer/filesystem.py
+	- fixed wrong status return if ismount is not working
+
+	pyrpm/installer/functions.py
+	- dropped old copy_device code
+	- new function addPkgByFileProvide for code reuse
+
+	pyrpm/installer/installer.py
+	- use filesystem for mount etc.
+
+	scripts/pyrpmkickstart
+	- new option --no-default-groups
+	  the new default behaviour is to use base and core as default groups, use this
+	  option to go back to the old behaviour to not use any groups by default
+	- mount ramfs early in stage2 mode, otherwise nfs sources will be hidden
+	- create devices ofr unmapped disks again
+	- new group selection code: use new comps functions
+	- using new addPkgByFileProvide function
+	- fixed baseurl for nfs repos in yum.conf
+	- fixed typo in remove temporary devices section
+
+	* pyrpm/comps.py 1.8: [tw]
+	- new function getGroups, returns all group ids
+	- new function getNameOfGroup to return group id by name
+	- using getNameOfGroup for getGroupNames
+
+	* pyrpm/comps.py 1.7: [tw]
+	- new function hasGroup to check if a group id or a group name or a localized
+	  group name is valid
+	- new function getGroup to get group id for group ids, names and localized
+	  names
+	- new function getGroupNames to get all group names for a specific lang
+	  (optional)
+
+2006-05-30  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/orderer.py 1.65: [tw] - fixed typo
+
+2006-05-30  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/db.py 1.8, pyrpm/resolver.py 1.106, pyrpm/yum.py 1.116:
+	[ffesti]
+
+	Modified resolver heavily
+
+	 * resolver.py
+	  - only check new/removed packages if not config.checkinstalled
+	  - remove packages that are ok onyl once
+	  - iterUnresolvedDependencies()
+	  - iterAllUnresolvedDependencies()
+	  - use the above in getUnresolvedDependencies()
+	 * pyrpm/yum.py
+	  - use Resolver.iterUnresolvedDependencies()
+
+2006-05-24  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/__init__.py 1.49, scripts/oldpyrpm.py 1.205, configure.in 1.44:
+	- release 0.48
+
+	* doc/pyrpm-links.txt 1.11: - add a link to mock
+
+2006-05-24  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/control.py 1.93:
+	- Fixed no buildroot changes (stopped after installing 100 packages ;)).
+
+2006-05-23  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.64: [tw]
+	- first support for user arch option (missing for yum call at the moment)
+	- renamed buildroot to target_chroot
+	- renamed arch to source_arch
+	- copy all grub stage files to /boot/grub/
+
+2006-05-23  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmyum 1.53: - Fixed usage().
+
+2006-05-23  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/kickstart.py 1.4: [tw]
+	- more fixes for the dropped __getitem__ function, using has_key, now
+
+2006-05-22  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/control.py 1.92, pyrpm/package.py 1.124:
+	- Moved actual caching of packages in controler to runOperations() method
+	- In case of size checks reread relevant information directly from original
+	  source
+	- Fixed RpmPackage.read() to use yumrepo if available.
+
+	* pyrpm/control.py 1.91:
+	- No need to fork anymore when we're not in a buildroot.
+
+2006-05-22  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.204:
+	- set arch_hash later if we want todo a check of all rpms if they build on
+	  certain specific architectures
+
+2006-05-21  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.43, pyrpm/__init__.py 1.48, scripts/oldpyrpm.py 1.203:
+	- release 0.47
+
+2006-05-20  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.202: - remove unused mercurial/git code
+
+2006-05-19  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-links.txt 1.10: - add link to rpmdb-recovery text
+
+2006-05-18  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/kickstart.py 1.3, scripts/pyrpmkickstart 1.63: [tw]
+	- dropped __getitem__ function from KickstartConfig class, using has_key for
+	  conditionals
+
+2006-05-18  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-links.txt 1.9: - add some more links
+
+2006-05-15  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.201:
+	- fix extraction of "./" for filesystem rpm
+	- more info on error message if size does not match
+	- add "--ignoresymlinks" as option that changes the
+	  behaviour of findRpms() for symlinks
+	- start to remove mercurial code snippets, more to come
+
+2006-05-11  Ludek Smid  <lsmid@redhat.com>
+
+	* pyrpm/database/repodb.py 1.20:
+	- checking if package is excluded no longer skips XML tag
+
+2006-05-09  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/package.py 1.123:
+	- Fixed new cleanup code for packages without files/dirs.
+
+2006-05-09  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmgraph 1.1: [tw] new pyrpmgraph
+	- based on old pyrpm rpmgraph test script with adaptions to new orderer
+	- prints rpmgraph.dot, component_%%%.dot and loops.dot files
+
+2006-05-05  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmkickstart 1.62, scripts/oldpyrpm.py 1.200, pyrpm/__init__.py 1.47, configure.in 1.42:
+	- release 0.46
+	- pyrpmkickstart:
+	  - disable /etc/rpm/platform for now: it writes i386 instead
+	    of i686 for me and then /bin/rpm cannot install i686 packages anymore
+	  - create /proc/self/fd/0 to allow installing fc5+ from a fc4 guest system:
+	    this is only a problem if /proc is not mounted.
+
+2006-05-05  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.115: - Fixed typo in new RpmYum.remove() method.
+
+2006-05-04  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/rpmdb.py 1.5, pyrpm/functions.py 1.180, pyrpm/package.py 1.122, pyrpm/yum.py 1.114, tests/rpmdbtestBasenames 1.3, tests/rpmdbtestDirnames 1.3, tests/rpmdbtestPackages 1.8:
+	- Final speed optimization to archCompat() function
+	- Added a cleanup phase for package removal to remove empty and unowned
+	  directories.
+	- Fixed some of the in code documentation for the new update algorithm
+	- Removed timer for selectNewestPackage() call in yum, never called anymore
+	- Fixed a major problem with the rpmdb code where it wouldn't properly close
+	  the DB4 database files, ending up in half flushed db files and corruptors.
+	- Misc. test script changes.
+
+2006-05-04  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/functions.py 1.4, scripts/pyrpmkickstart 1.61: [tw]
+	- new function get_buildstamp_info
+	- new function get_discinfo
+	- fixed use of incomplete logical volume entries
+
+	* pyrpm/resolver.py 1.105: [tw]
+	- fixed bug in getUnresolvedDependencies where it was using the wrong dep
+
+	* pyrpm/database/memorydb.py 1.9: [tw]
+	another fix for the clear function
+
+2006-05-03  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/package.py 1.121: - Fixed missing output of script error logs.
+	- Added new cleanup stage after normal package file removal, should make a
+	  much more cleaned up system after massive erases.
+	- Fixed my pyrpmcheckinstall hack to automatically only happen when
+	  pyrpmcheckinstall is running.
+
+2006-05-03  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/yumconfig.py 1.25:
+	- allow "plugins" and "metadata_expire" as yum var names
+
+2006-05-03  Thomas Woerner  <twoerner@redhat.com>
+
+	* tests/rpmresolve.py 1.15: [tw]
+	- only exit if len(ops) == 0 and len(installed) == 0 and
+	  pyrpm.rpmconfig.checkinstalled == 0
+	- only load pacakges if len(ops) > 0
+	- better output for conflicts and unresolved dependencies
+
+	* tests/rpmresolve.py 1.14: [tw]
+	- new option to enable file conflict check
+	- new option to enable check of installed packages
+	- new option for detailed requires output
+	- moved global variables into main
+	- output fileconflicts if option is given
+
+2006-05-03  Philip Knirsch  <pknirsch@redhat.com>
+
+	* doc/pyrpm-devel.txt 1.5: - Added/extended documentation about:
+	  o Version compare algorithm
+	  o Obsoletes
+	  o Multilib systems
+	  o Dependency resolving on multilib systems
+	  o Update algorithm (especially for multilib systems)
+	  o Pre/Post install/uninstall scripts and triggers
+
+2006-05-02  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/config.py 1.58, pyrpm/yum.py 1.113, scripts/pyrpmrebuilddb 1.14:
+	- Added group and username to resolvertags
+	- Don't add same package twice in new yum update/install function
+	- Fixed pyrpmrebuilddb to work properly again after database moving stuff
+
+2006-05-01  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.199: - add some more git repos to look at
+
+2006-04-29  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.198, scripts/pyrpmcreaterepo 1.11, pyrpm/createrepo.py 1.13, pyrpm/database/repodb.py 1.19:
+	- adjust pyrpmcreaterepo output to be more like upstream
+
+2006-04-28  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.60: [tw]
+	- enable usage of real devices for update option
+	- use volgroup and vgmap for root detection in upgrade mode
+	- cleaned up some upgrade code
+	- using get_installation_info
+	- determine lvm volumes
+	- enable use of LABEL= for upgrade
+	- renamed sourcepart to src
+	- fixed usage of buildroot_copy
+
+	* pyrpm/installer/lvm.py 1.2: [tw]
+	- new start function for logical volumes
+
+	* pyrpm/installer/kickstart.py 1.2: [tw]
+	- added missing krb5 configuration options
+
+	* pyrpm/installer/installer.py 1.2: [tw]
+	- fixed usage of nfs url (real url versus kickstart style)
+
+	* pyrpm/installer/functions.py 1.3: [tw]
+	- new function get_installation_info to get release, fstab and mdadm.conf from
+	  a mounted chroot
+	- do not try to create device with copy_device if target already exists
+	- use buildroot as an argument for buildroot_copy
+
+	* pyrpm/database/repodb.py 1.18: [tw]
+	- return 1 if there is a filereq file
+
+2006-04-28  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/functions.py 1.179:
+	- always set RPM_INSTALL_PREFIX and set RPM_INSTALL_PREFIX<n> in addition
+
+	* configure.in 1.41: - add new dir pyrpm/installer
+
+	* pyrpm/database/lists.py 1.22: - keep things even a little bit smaller
+
+	* pyrpm/database/lists.py 1.21:
+	- improve performance to check if dep for the package itself
+	  is missing
+
+	* pyrpm/installer/Makefile.am 1.1, pyrpm/Makefile.am 1.6:
+	- add Makefile.am and changes for new dir "pyrpm/installer"
+
+	* pyrpm/installer/.cvsignore 1.1: - add .cvsignore file
+
+	* scripts/pyrpmkickstart 1.59:
+	- do not overwrite "source", so use "sourcepart" variable instead
+	- "buildroot_copy" is broken, so fix with using "copy_file" for now
+
+	* pyrpm/installer/functions.py 1.2: - fix unset vars in error output
+
+	* pyrpm/yum.py 1.112: - fix bug with setting of "sec" variable
+
+	* scripts/oldpyrpm.py 1.197:
+	- cacheLocal: move data from repositories into subdir and
+	  use "mirrorlist" as filename for any mirrorlist instead
+	  of trying to use the basename of an url
+
+	* scripts/oldpyrpm.py 1.196: - cacheLocal:
+	  - add verbose option
+	  - allow empty filename
+	- yum.conf: add plugins and metadata_expire to possible vars
+	- do not create separate tmpdir for mirrorlist, no need to
+	  then also delete cache dir/file
+	- mirrorlist: correctly substitue for $basearch
+	- start using os.sep even more
+
+2006-04-27  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.178:
+	- Fixed a small bug in the new RPM_INSTALL_PREFIX code.
+
+2006-04-26  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/database/lists.py 1.20: [tw]
+	- fixed clear functions
+	- search functions in ProvidesList and ConflictsList return a dictionary with
+	  the matching package rules
+
+	* pyrpm/resolver.py 1.104:
+	[tw] first version of reduced package checks in getUnresolvedDependencies
+	- this version is usable, but slower
+
+	* pyrpm/database/memorydb.py 1.8: [tw]
+	- fixed clear function e.g. for __len__
+	- fixed searchDependency to use searchProvides().keys()
+
+	* pyrpm/database/db.py 1.7:
+	[tw] fixed clear function usage for __len__ etc.
+
+	* pyrpm/disk.py 1.14, pyrpm/kickstart.py 1.21, pyrpm/loop.py 1.4: [tw]
+	- files have been moved to pyrpm.installer
+	  use import pyrpm.installer
+
+	* scripts/pyrpmkickstart 1.58: [tw]
+	- new raid-update support
+	- lvm-update not fully functional, yet
+	- using new pyrpm.installer: moved lots of functions and classed to
+	  pyrpm.installer.X
+	- fixed fc5 installation with lvm and raid with dmsetup
+
+	- code cleanup not finished
+
+	* pyrpm/installer/config.py 1.1, pyrpm/installer/devices.py 1.1, pyrpm/installer/disk.py 1.1, pyrpm/installer/filesystem.py 1.1, pyrpm/installer/firewall.py 1.1, pyrpm/installer/functions.py 1.1, pyrpm/installer/installer.py 1.1, pyrpm/installer/kickstart.py 1.1, pyrpm/installer/loop.py 1.1, pyrpm/installer/lvm.py 1.1, pyrpm/installer/network.py 1.1, pyrpm/installer/raid.py 1.1, pyrpm/installer/x.py 1.1, pyrpm/installer/__init__.py 1.1:
+	[tw] - new installer specific directory
+
+2006-04-25  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.177:
+	- Removed one check too much for archCompat(). Fixed.
+
+	* pyrpm/functions.py 1.176, pyrpm/base.py 1.57:
+	- Optimized archCompat() and archDuplicate() functions to avoid unecessary
+	  checks.
+
+2006-04-25  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/database/lists.py 1.19: [tw]
+	- simple fix for FilenamesList.duplicates: only return duplicates
+
+2006-04-24  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.111:
+	- Fixed bug where i was still using selectNewestPkgs() in runDepRes() which is
+	  now obsolete with the new package selection algorithm.
+
+2006-04-23  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/cache.py 1.10: - no need to call os.path.join() here again
+
+	* scripts/oldpyrpm.py 1.195: - add moin wiki to mirror list
+
+2006-04-21  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/lists.py 1.18, pyrpm/database/repodb.py 1.17, pyrpm/yum.py 1.110, tests/test 1.22, pyrpm/cache.py 1.9, pyrpm/comps.py 1.6, pyrpm/config.py 1.57, pyrpm/control.py 1.90:
+	- First revision of completely rewritten package update algorithm in yum.
+	  Should work correctly now for multilib systems. Still needs a lot of tests
+	  though.
+	- Fixed a bug in the NetworkCache class where some tests would fail if run as
+	  a user because the cachedir creation would traceback. Fixed.
+	- Removed getTypes() method again from RpmCompsXML class as it's not needed.
+	- Added support for keepcache option in yum.conf
+	- Added support for exactarch option in yum.conf
+	- Fixed the removal of self provides in ProvideList class
+	- RpmRepoDB filelist import now converts the filenames on read into
+	  basnames/dirnames/dirindexes format to speed up FilenamesList and simplify
+	  the logic there.
+
+2006-04-21  Ludek Smid  <lsmid@redhat.com>
+
+	* scripts/oldpyrpm.py 1.194: * scripts/oldpyrpm.py
+	- checkSymlinks now traverse path and follow links to other directories
+
+2006-04-19  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/rpmdb.py 1.4: - Small optimization
+
+2006-04-18  Ludek Smid  <lsmid@redhat.com>
+
+	* scripts/pyrpminstall 1.28, pyrpm/control.py 1.89, pyrpm/functions.py 1.175, pyrpm/package.py 1.120:
+	* pyrpm/control.py
+	- Fixed parameters of RpmResolver constructor
+	* pyrpm/functions.py
+	- Added pkg argument to runScript function
+	- When pkg is specified, runScript defines RPM_INSTALL_PREFIX and
+	  RPM_INSTALL_PREFIX<n> variables in the environment of a script
+	* pyrpm/package.py
+	- Invocations of pyrpm.functions.runScript function now uses pkg argument
+	* scripts/pyrpminstall
+	- Fixed getRpmDBFactory call
+
+2006-04-13  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/yumconfig.py 1.24, scripts/oldpyrpm.py 1.193:
+	- add keepcache as param in /etc/yum.conf
+
+2006-04-13  Ludek Smid  <lsmid@redhat.com>
+
+	* pyrpm/createrepo.py 1.12:
+	- removed usage of obsolete API from pyrpm.package.RpmPackage
+
+2006-04-11  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-tools.txt 1.14:
+	- added more docu for pyrpmverify (from Miloslav Trmac <mitr@redhat.com>)
+
+	* scripts/pyrpmcreaterepo 1.10:
+	- Add patch from Ludek Smid with a new option --globinfo that can be used to
+	  enable or disable(default) generation of fileglob/dirglob tags.
+
+	* pyrpm/createrepo.py 1.11, scripts/oldpyrpm.py 1.192:
+	- patch from Ludek Smid that changes from <tag></tag> to <tag/>
+
+2006-04-10  Miloslav Trmac  <mitr@redhat.com>
+
+	* pyrpm/yumconfig.py 1.23, scripts/pyrpmcheckinstall 1.3, scripts/pyrpmcheckrepo 1.15, scripts/pyrpmrandomizer 1.18, scripts/pyrpmverify 1.1, pyrpm/elf.py 1.1, pyrpm/functions.py 1.174, pyrpm/package.py 1.119, pyrpm/resolver.py 1.103, pyrpm/yum.py 1.109, doc/pyrpm-tools.txt 1.13, pyrpm/base.py 1.56, pyrpm/config.py 1.56, pyrpm/control.py 1.88:
+	* pyrpm/base.py (RpmFileInfo): Rename "linktos" to "linkto", all users updated.
+	* pyrpm/config.py (RpmConfig): Add prelink_undo, diff, verifyallconfig.
+	* pyrpm/elf.py: New file (partial ELF parsing to check for prelinked files).
+	* pyrpm/functions.py:
+	- (runScript): Update documentation.
+	- (installFile): New parameter pathPrefix.
+	- (updateDigestFromFile): Return number of bytes processed.
+	- (shellCommandLine): New function, for safely calling system() and popen().
+	- (parseYumOptions): New options diff, verifyallconfig.  Return [], not None,
+	  if no arguments are specified, all users updated.
+	* pyrpm/package.py:
+	- (RpmPackage.verifySignature): Renamed from verify, all users updated.
+	- (RpmPackage.verify, RpmPackage.extract): New methods.
+	- (RpmPackage.__extract, RpmPackage.__handleRemainingHardlinks): New
+	  parameters pathPrefix and useAttrs.
+	- (RpmPackage.__handleHardlinks): New parameter pathPrefix.
+	* pyrpm/resolver.py (RpmResolver.getPkgConflicts): New method, split out common
+	  code from getConflicts() and getObsoletes().
+	* pyrpm/yum.py (prepareTransaction): New parameter localDb.
+	* pyrpm/yumConfig.py (YumConf.parseFile): Handle multiple values on a single
+	  line for "multiline" config keys.
+	* scripts/pyrpmverify: New file.
+	* doc/pyrpm-tools.txt: Document pyrpmverify
+
+	* pyrpm/database/repodb.py 1.16, pyrpm/openpgp.py 1.9:
+	* pyrpm/openpgp.py:
+	- (isolateASCIIArmor): New function.
+	- (_mergeSigs, _PublicKey.merge): Fix a type mismatch and a pasto.
+	* pyrpm/database/repodb.py (RpmRepoDB.read): Handle key files with text around
+	  the ASCII-armored data.
+
+	* scripts/pyrpminstall 1.27: Fix grammar.
+
+2006-04-10  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/hashlist.py 1.25: [tw]
+	- fixed clear to not generate new structures, clear them only
+	  __len__, __repr__, index, has_key and keys was pointing to the old structure
+
+	* pyrpm/orderer.py 1.64: [tw] missed one addRel call
+
+2006-04-10  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/lists.py 1.17:
+	- Doh, forgot to import RPMSENSE_EQUAL. Fixed.
+
+2006-04-10  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/orderer.py 1.63: [tw]
+	- moved genRelations back into RpmRelations class, with an additional clean
+	  to the internal structure
+	  config structure in RpmRelations is initialized again, now
+	- renamed addRel to addRelation
+
+2006-04-10  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/repodb.py 1.15, pyrpm/orderer.py 1.62, pyrpm/yum.py 1.108, tests/rpmresolve.py 1.13:
+	[ffesti] Small bugfixes
+
+2006-04-10  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/lists.py 1.16:
+	- Forgot to mask the flag instead of a direct check (flags might contain more
+	  than RPMSENSE_EQUAL ;)).
+
+	* pyrpm/database/lists.py 1.15, pyrpm/package.py 1.118:
+	- Moved the self provides code from RpmPackage to ProvideList where it belongs.
+
+2006-04-09  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/orderer.py 1.61:
+	- move building a RpmResolver from RpmRelations up into the orderer,
+	  new function genRelations()
+
+	* pyrpm/orderer.py 1.60:
+	- move debug output into new function printRel()
+
+	* scripts/oldpyrpm.py 1.191: - adjust verbose levels
+
+	* doc/pyrpm.txt 1.13:
+	- add info on python limits and rpm dep size due to filelists
+
+	* doc/pycheckrc 1.2: - update some more limits for pychecker
+
+	* tests/rpmgraph.py 1.5: - add fileflags
+
+2006-04-07  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.190: - cleanup
+
+	* pyrpm/orderer.py 1.59: - make addPkg() inline
+	- for addRel() remove some not needed checks, all rpms are added into
+	  the list, so this does not have to get checked while adding a relation
+
+	* pyrpm/orderer.py 1.58: - remove debug routines
+	- rename .append() into .addRel()
+
+	* tests/rpmgraph.py 1.4: - calling RpmResolver now needs a new db
+
+	* scripts/oldpyrpm.py 1.189: - add HashList.index()
+	- add timing to checkDeps(), mostly the big filelists take all CPU...
+	- copy in new orderer from Florian Festi
+
+2006-04-05  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.188:
+	- lines with "rpm --import" often contain filenames with *RPM* in them
+
+	* scripts/oldpyrpm.py 1.187: - add freshrpms to vendor/packager
+
+	* scripts/oldpyrpm.py 1.186: - allow exceptions to checkScripts()
+	- add livna as vendor string
+	- 0-sized files are now allowed to have missing md5sums, broken rpm/kernel
+	  is deployed and used
+
+	* scripts/oldpyrpm.py 1.185: - check postin instead of post
+	- check scripts if they contain %
+
+	* scripts/oldpyrpm.py 1.184: - move checkScripts() to better place
+
+	* scripts/oldpyrpm.py 1.183: - check scripts to not contain "RPM"
+	- add Fedora Project into list of possible strings
+	- add patch to rpmvercmp version comparison routine
+
+	* doc/Makefile.am 1.13: - remove *.bak files
+
+	* pyrpm/Makefile.am 1.5, pyrpm/database/Makefile.am 1.3, scripts/Makefile.am 1.16, tests/Makefile.am 1.9:
+	- also remove *.pyc on "make clean"
+
+	* tests/rpmgraph.py 1.3: - add rpmgraph.py again
+
+	* pyrpm/orderer.py 1.57:
+	- debug functions are needed for rpmgraph, put them back in again
+
+2006-04-04  Thomas Woerner  <twoerner@redhat.com>
+
+	* tests/rpmgraph.py 1.2: [tw]
+	- dropping rpmgraph: debug functionality was dropped from orderer, therefore
+	  this script is not usable anymore
+
+2006-04-02  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/package.py 1.117, pyrpm/resolver.py 1.102, pyrpm/functions.py 1.173, pyrpm/io.py 1.128, pyrpm/orderer.py 1.56:
+	- revert last change, "rpmlib()" is already filtered at that point
+	- change a few .startswith() and .endswith() function calls into
+	  direct string comparisons
+
+	* pyrpm/orderer.py 1.55:
+	- also ignore "rpmlib()" requirements for the orderer
+
+	* doc/pyrpm.txt 1.12: - PyRpm -> PyRPM
+
+	* doc/pyrpm-tools.txt 1.12: - fix typos
+
+	* configure.in 1.40, pyrpm/__init__.py 1.46, scripts/oldpyrpm.py 1.182:
+	- release 0.45
+
+	* doc/pyrpm-links.txt 1.8: - add link to yumex
+
+	* doc/pyrpm.txt 1.11: - add a section with requirements for pyrpm
+
+	* pyrpm.spec.in 1.17:
+	- do not require asciidoc anymore, .html files are now also part
+	  of official releases
+
+	* pyrpm/database/lists.py 1.14: - also optimize _remove()
+
+2006-04-01  Florian La Roche  <laroche@redhat.com>
+
+	* doc/Makefile.am 1.12:
+	- also ship pre-generated .html files, so not everyone needs
+	  to install asciidoc
+
+	* pyrpm/database/db.py 1.6, pyrpm/database/lists.py 1.13:
+	- small optims
+
+	* pyrpm/control.py 1.87, pyrpm/io.py 1.127, tests/delta.py 1.6:
+	- don't pass self.config
+
+	* pyrpm/cache.py 1.8, pyrpm/control.py 1.86, pyrpm/database/repodb.py 1.14:
+	- NetworkCache does not need a self.config
+
+	* pyrpm/base.py 1.55, pyrpm/orderer.py 1.54, pyrpm/package.py 1.116:
+	- do not pss self.config if not needed
+
+	* pyrpm/orderer.py 1.53: - docu/ws changes
+
+	* pyrpm/orderer.py 1.52: - docu/whitespace changes
+
+	* pyrpm/orderer.py 1.51: - add RpmRelations.addPkg()
+
+	* pyrpm/database/lists.py 1.12, pyrpm/database/memorydb.py 1.7:
+	- these classes don't need self.config at all
+
+	* pyrpm/database/lists.py 1.11:
+	- oldfilenames was not used in all functions, so added a conversion
+	  into dirnames/basenames and removed self.oldfilenames
+	- remove unused implementations of FilenamesList()
+
+	* pyrpm/functions.py 1.172: - add fixes to rpmvercmp function
+
+	* pyrpm/orderer.py 1.50: - do not import time
+
+	* pyrpm/orderer.py 1.49:
+	- move operationFlag() into standalone function
+
+	* pyrpm/orderer.py 1.48: - remove empty debug code
+
+	* pyrpm/orderer.py 1.47:
+	- since VIRTUAL is gone, remove extra calls to isHard and HARD/SOFT
+
+	* pyrpm/orderer.py 1.46: - dropped_relations is not used anywhere
+
+2006-03-31  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/__init__.py 1.45, scripts/oldpyrpm.py 1.181, configure.in 1.39:
+	- release 0.44
+
+2006-03-31  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/functions.py 1.171, scripts/pyrpmkickstart 1.57: [tw]
+	- fixed lately introduced flush call in ok function
+	- fixed host and machine arch compare in pyrpmkickstart
+
+2006-03-30  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/__init__.py 1.44, scripts/oldpyrpm.py 1.180, configure.in 1.38:
+	- 0.43
+
+	* scripts/oldpyrpm.py 1.179: - add pointer to openvz git server
+
+	* scripts/oldpyrpm.py 1.178:
+	- add FC-6 as distribution tag for strict checking
+
+2006-03-26  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/loop.py 1.3: - add vim trailer
+
+	* doc/pyrpm-devel.txt 1.4, doc/pyrpm-tools.txt 1.11, doc/pyrpm.txt 1.10:
+	- whitespace changes
+
+	* scripts/pyrpmcheckinstall 1.2: - whitespace change
+
+	* pyrpm/disk.py 1.13, pyrpm/kickstart.py 1.20, pyrpm/loop.py 1.2, pyrpm/orderer.py 1.45:
+	- whitespace changes
+
+	* pyrpm/disk.py 1.12:
+	- quick fix to allow pyrpmyum to actually work without pyparted installed
+
+	* pyrpm/functions.py 1.170, pyrpm/yum.py 1.107, scripts/pyrpmkickstart 1.56:
+	- define a new function raw_input2() that is doing a flush after the
+	  question
+	- define is_this_ok() and use this for pyrpmyum and pyrpmkickstart
+
+2006-03-25  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.177, configure.in 1.37, pyrpm/__init__.py 1.43:
+	- release 0.42
+
+2006-03-24  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm.txt 1.9, doc/pyrpm-tools.txt 1.10: - fix docu typos
+
+	* doc/pyrpm.txt 1.8: - fix typo
+
+2006-03-23  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/comps.py 1.5, pyrpm/database/repodb.py 1.13, pyrpm/package.py 1.115, pyrpm/yum.py 1.106:
+	- Added a compstype attribute to RpmPackage in which the "highest" type for
+	  yumrepo packages is stored in case a comps.xml is available
+	- Read the comps.xml at the right place in repodb
+	- Extended our comps class to allow queries for types of package names
+	- RpmYum.__handleUpdatePkglist() now honors the comps type of packages if
+	  available and tries to use highest priority packages first
+
+	* pyrpm/config.py 1.55, pyrpm/database/repodb.py 1.12, pyrpm/functions.py 1.169, pyrpm/yum.py 1.105:
+	- Fixed bug in getFreeCacheSpace() where for buildroots we could end up in an
+	  infinite loop.
+	- Removed compsfile from our config class and made the comps object a use case
+	  in our repodb classes so each repo can now have a comps object (if a
+	  comps.xml file is available).
+
+2006-03-22  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm.txt 1.7:
+	- Find out how todo linebreaks with asciidoc and only do one
+	  level of enumerations.
+
+2006-03-22  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/sqlitedb.py 1.6, pyrpm/disk.py 1.11, pyrpm/functions.py 1.168, pyrpm.spec.in 1.16:
+	- Make sqlite and pyparted optional. Only i case they actually get used
+	  we now raise an ImportError.
+	- Improved and fixed some bugs in the calcFreeDiskspace() function. Now works
+	  correctly, also for changeroots and for updates the necessary size is much
+	  closer to reality (as opposed to before).
+
+2006-03-20  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.55: [tw] - fixed runScript usage
+
+	* pyrpm/disk.py 1.10: [tw]
+	- added lvm support
+
+	* pyrpm/kickstart.py 1.19: [tw]
+	- added tags logvol and volgroup
+	- allowing reiserfs
+	- new function convertDouble
+
+2006-03-16  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/control.py 1.85, pyrpm/database/repodb.py 1.11, pyrpm/package.py 1.114, pyrpm/yum.py 1.104:
+	- Don't use the dict of packages to store yumrepo in packages, use a class
+	  variable (to separate the header info from "meta" info properly)
+	- Additionally store the original href in a package if it comes from a yum
+	  repository. Needed for cache clearing after successfull installation
+	- After a successfull installation remove all packages that were installed
+	  from the cache.
+	- Some minor typo fixes
+	- Treat update and upgrade the same way in respect to install_only packages,
+	  just like yum.
+
+2006-03-16  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.176, configure.in 1.36, pyrpm/__init__.py 1.42:
+	- release version 0.41
+
+2006-03-14  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/functions.py 1.167: [tw]
+	- fixed all returns of runScript to return a triple
+
+	* pyrpm/disk.py 1.9, pyrpm/package.py 1.113, pyrpm/functions.py 1.166:
+	[tw]
+	- runScript now returns triple, added program output
+
+2006-03-13  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.54: [tw]
+	- check existance of /usr/bin/bash in stage2 early
+	- set fstype in partitions structure from kickstart for raid partitions
+	- allow xfs and jfs partition types
+	- new needed_fstypes array to contain all needed filesystem types
+	- check if all needed filesystem utilities are available
+	- create links in stage2 image dir for those utilities
+	- create /dev/mdX in stage2 for old mdadm versions
+	- dropped all size parameters for filesystem formatters and mdadm
+	- fixed location of mdadm.log (mdadm --detail output)
+	- fixed scope of xorg-x11-drivers check for FC-5
+	- install packages containing needed filesystem utilities
+	- dropped mkraid support
+	- fixed install version check for /sys in fstab
+	- fixed missing newline in /proc/mdstat file
+
+	* pyrpm/kickstart.py 1.18: [tw]
+	- allow to use RAIDx and raidX with "raid --level=" contrary to documentation
+	  (anaconda is using it)
+	- added checks for /boot or / (containing /boot) to be a ext2 or ext3
+	  filesystem
+	- added checks for /boot or / (containing /boot) to have raid level 1 if it
+	  is a software raid partition
+
+2006-03-12  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.175:
+	- add .tbz to be recognized as binary files
+
+	* scripts/oldpyrpm.py 1.174:
+	- further fixups to get src.rpm checkin working again, it is
+	  still a bit ugly written
+
+	* scripts/oldpyrpm.py 1.173:
+	- git git imports from src.rpm working again
+	- xen 3.0 can be removed, devel branch is enough
+
+2006-03-10  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.53: [tw]
+	- new function get_system_md_devices to get the raid devices of the system,
+	  needed for md device remapping of guest installations
+	- new function zero_raidheader to zero out the raid header - mdadm nags on
+	  exisiting raid headers
+	- determining the source installation arch for grub and /etc/rpm/platform
+	  with additional guest - host compat check
+	- more sanity checks for raid partitions
+	- write partitionmap for raid devices early
+	- dropped use of labels for raid devices - mount by label is not possible and
+	  will detect a partition e.g. for raid level1 and not /dev/mdX
+	- link mdadm or mkraid in stage2 to /sbin
+	- raid generation in stage2 (only mdadm support right now)
+	- fixed old "swap" usage in partitiomap and mountap
+	- add mdadm to packages if there are raid partitions
+	- create dir /proc early in guest
+	- create /etc/mtab in guest with mount information
+	- write /etc/mdadm.conf in guest
+	- create minimal /proc/mdstat in guest
+	- fixed creation of /etc/sysconfig/network in guest
+	  networking is always enabled in /Etc/sysconfig/network because lo is always
+	  there, hostname is localhost.localdomain or first supplied hostname, use
+	  first supplied gateway
+	- write /etc/sysconfig/network-scripts/ifcfg-lo in guest if it does not exists
+
+	* pyrpm/disk.py 1.8, pyrpm/loop.py 1.1: [tw]
+	disk.py
+	- new import loop
+	- set maxsize of partitions in disk images
+	- moved lolist, losetup and lofree over to new loop.py
+
+	loop.py
+	- new file
+	- loop ioctl handling with necessary defines
+	- new functions lo_get_info64 and lo_set_info64 to get and set loop
+	  information
+	- new function lo_set_maxsize to set the maximum size of a loop device
+	  - needed for partitions in disk images
+
+2006-03-10  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum.py 1.103:
+	- Use empty string instead of string module for join ;)
+
+	* scripts/pyrpmyum 1.52, doc/pyrpm-tools.txt 1.9, pyrpm/comps.py 1.4, pyrpm/config.py 1.54, pyrpm/functions.py 1.165, pyrpm/package.py 1.112, pyrpm/yum.py 1.102:
+	- Added some sample on how to use pyrpmcheckinstall
+	- Fixed a few typos
+	- Added all missing yum command line options, mainly for --exclude
+	- Added a small (currently documented out) hack to prevent script failure
+	  reports from bash and glibc (as they always fail if deinstalled)
+
+2006-03-09  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmkickstart 1.52: - Looks like a typo
+
+2006-03-06  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/cache.py 1.7: - Fixed wrong check for local cached files.
+
+2006-03-06  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.51: [tw]
+	- moved /proc/partition reader in new function get_system_disks
+	- new raid support (partial)
+	- dropped source_cache variable
+	- initialize disk if disklabel is not valid
+	- added support for gpt - disabled for now
+	- kickstart class is using "swap.id" for swap partitions
+	- fixed error message for mkswap failures
+
+	* pyrpm/kickstart.py 1.17: [tw]
+	- added raid tag with sanity checks
+	- enabled use of more than one swap partition with internal swap.id
+
+	* pyrpm/disk.py 1.7: [tw]
+	- fixed creation of raid partition
+	- fixed print_partitions for invalid msdos or boot disk labels
+
+2006-03-01  Philip Knirsch  <pknirsch@redhat.com>
+
+	* doc/pyrpm.txt 1.6:
+	- Added a nice feature section to the main docu file.
+
+2006-02-24  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/Makefile.am 1.15: - add pyrpmcheckinstall
+
+2006-02-22  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmcheckinstall 1.1:
+	- Added script to check install and removal of each package in a repository
+
+	* scripts/pyrpmrandomizer 1.17, pyrpm/database/repodb.py 1.10, pyrpm/functions.py 1.164, pyrpm/package.py 1.111:
+	- Removed some unecessary code
+	- Fixed the output of error messages for failed scripts
+	- First rough cut of write code for repomd.xml
+
+2006-02-17  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.50: [tw]
+	- use repodb for all repos
+	- load repodb for repos early to check if repos are valid before partitioning
+	  and formatting
+
+2006-02-17  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.172:
+	- checkrpmdb: Better info output on what config files are used and what
+	  repositories are used. Timing info on reading the repositories.
+
+	* doc/pyrpm-tools.txt 1.8: - add better example for --checkrpmdb
+
+	* scripts/oldpyrpm.py 1.171:
+	- add --enablerepos to read /etc/yum.conf and /etc/yum.repos.d/
+
+2006-02-16  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.49: [tw]
+	- use traceback module for exceptions in main
+	- fixed baseurl of repos (dropped leading file://)
+
+	* pyrpm/disk.py 1.6: [tw]
+	- set partition type by name in Disk::set_type
+	- only free loop dvices if they are used
+	- create temporary partitions for all free primary ids up to the desired id for
+	  primary and extended partitions on dos disklabels
+
 2006-02-15  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.35, pyrpm/__init__.py 1.41, scripts/oldpyrpm.py 1.170:
+	- release 0.40
+
+	* ChangeLog 1.18: - update changelog
 
 	* doc/pyrpm-tools.txt 1.7: - update of the docu for --checkrpmdb
 
