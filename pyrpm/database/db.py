@@ -39,7 +39,7 @@ class RpmDatabase:
         self.is_read = 0                # 1 if the database was already read
 
     def __contains__(self, pkg):
-        return None
+        raise NotImplementedError
 
     # clear all structures
     def clear(self):
@@ -64,18 +64,16 @@ class RpmDatabase:
         raise NotImplementedError
 
     # add package
-    def addPkg(self, pkg):
+    def addPkg(self, pkg, nowrite=None):
         raise NotImplementedError
 
     # add package list
-    def addPkgs(self, pkgs):
-        raise NotImplementedError
+    def addPkgs(self, pkgs, nowrite=None):
+        for pkg in pkgs:
+            self.addPkg(pkg, nowrite)
 
     # remove package
-    def removePkg(self, pkg):
-        raise NotImplementedError
-
-    def searchName(self, name):
+    def removePkg(self, pkg, nowrite=None):
         raise NotImplementedError
 
     def getPkgs(self, dep):
@@ -90,7 +88,7 @@ class RpmDatabase:
     def getPkgsByName(self, name):
         raise NotImplementedError
 
-    def getProvides(self):
+    def iterProvides(self):
         raise NotImplementedError
 
     def getFilenames(self):
@@ -102,22 +100,26 @@ class RpmDatabase:
     def getFileDuplicates(self):
         raise NotImplementedError
 
-    def getRequires(self):
+    def iterRequires(self):
         raise NotImplementedError
 
     def getFileRequires(self):
-        return [file for file in self.getRequires().keys() if file[0]=="/"]
+        return [file for file, f, ver, pkg in self.iterRequires()
+                if file[0]=="/"]
 
-    def getConflicts(self):
+    def iterConflicts(self):
         raise NotImplementedError
 
-    def getObsoletes(self):
+    def iterObsoletes(self):
         raise NotImplementedError
 
-    def getTriggers(self):
+    def iterTriggers(self):
         raise NotImplementedError
 
     def reloadDependencies(self):
+        raise NotImplementedError
+
+    def searchPkgs(self, names):
         raise NotImplementedError
 
     def searchProvides(self, dep):

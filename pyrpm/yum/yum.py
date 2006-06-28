@@ -27,9 +27,6 @@ from pyrpm.io import *
 import pyrpm.database as database, yumconfig
 
 
-# Global search dict. Needs to be move to database classes real soon.
-pyrpmyum_finddict = None
-
 class RpmYum:
     def __init__(self, config):
         self.config = config
@@ -325,8 +322,7 @@ class RpmYum:
         return self.__addBestPkg(pkglist)
 
     def remove(self, name):
-        dict = buildPkgRefDict(self.pydb.getPkgs())
-        self.pkgs.extend(findPkgByNames([name,], self.pydb.getPkgs(), dict))
+        self.pkgs.extend(self.pydb.searchPkgs([name, ]))
 
     def groupRemove(self, name):
         args = self.getGroupPackages(name)
@@ -358,13 +354,11 @@ class RpmYum:
             return self.__findPkgsByDep(name, 0, "")
 
     def __findPkgsByName(self, name):
-        global pyrpmyum_finddict
-        if pyrpmyum_finddict == None:
-            pkglist = []
-            for repo in self.repos:
-                    pkglist.extend(repo.getPkgs())
-            pyrpmyum_finddict = buildPkgRefDict(pkglist)
-        return findPkgByNames([name,], [], pyrpmyum_finddict)
+        pkglist = []
+        for repo in self.repos:
+            pkglist.extend(repo.searchPkgs([name,]))
+        normalizeList(pkglist)
+        return pkglist
 
     def __findPkgsByDep(self, dname, dflags, dversion):
         pkglist = []

@@ -26,9 +26,6 @@ class RpmMemoryDB(db.RpmDatabase):
 
     def __init__(self, config, source, buildroot=None):
         db.RpmDatabase.__init__(self, config, source, buildroot)
-        self.config = config
-        self.source = source
-        self.buildroot = buildroot
         self.pkgs = [ ]   # [pkg, ..]
         self.names = { }  # name: [pkg, ..]
         self.__len__ = self.pkgs.__len__
@@ -43,6 +40,7 @@ class RpmMemoryDB(db.RpmDatabase):
         "requires_list" : lists.RequiresList,
         "obsoletes_list" : lists.ObsoletesList,
         "triggers_list" : lists.TriggersList,
+        "nevra_list" : lists.NevraList,
         }
 
     def __getattr__(self, name):
@@ -83,7 +81,7 @@ class RpmMemoryDB(db.RpmDatabase):
         return self.OK
 
     # add package
-    def addPkg(self, pkg):
+    def addPkg(self, pkg, nowrite=None):
         name = pkg["name"]
         if pkg in self.names.get(name, []):
             return self.ALREADY_INSTALLED
@@ -94,13 +92,8 @@ class RpmMemoryDB(db.RpmDatabase):
 
         return self.OK
 
-    # add package list
-    def addPkgs(self, pkgs):
-        for pkg in pkgs:
-            self.addPkg(pkg)
-
     # remove package
-    def removePkg(self, pkg):
+    def removePkg(self, pkg, nowrite=None):
         name = pkg["name"]
         if not pkg in self.names.get(name, []):
             return self.NOT_INSTALLED
@@ -128,8 +121,8 @@ class RpmMemoryDB(db.RpmDatabase):
     def getPkgsByName(self, name):
         return self.names.get(name, [ ])
 
-    def getProvides(self):
-        return self.provides_list
+    def iterProvides(self):
+        return iter(self.provides_list)
 
     def getFilenames(self):
         return self.filenames_list
@@ -139,18 +132,18 @@ class RpmMemoryDB(db.RpmDatabase):
 
     def getFileDuplicates(self):
         return self.filenames_list.duplicates()
+    
+    def iterRequires(self):
+        return iter(self.requires_list)
 
-    def getRequires(self):
-        return self.requires_list
+    def iterConflicts(self):
+        return iter(self.conflicts_list)
 
-    def getConflicts(self):
-        return self.conflicts_list
+    def iterObsoletes(self):
+        return iter(self.obsoletes_list)
 
-    def getObsoletes(self):
-        return self.obsoletes_list
-
-    def getTriggers(self):
-        return self.triggers_list
+    def iterTriggers(self):
+        return iter(self.triggers_list)
 
     # reload dependencies: provides, filenames, requires, conflicts, obsoletes
     # and triggers
@@ -175,16 +168,20 @@ class RpmMemoryDB(db.RpmDatabase):
         return self.obsoletes_list.search(name, flag, version)
 
     def searchTriggers(self, name, flag, version):
-        return self.trigger_list.search(name, flag, version)
+        return self.triggers_list.search(name, flag, version)
 
     def searchDependency(self, name, flag, version):
         """Return list of RpmPackages from self.names providing
         (name, RPMSENSE_* flag, EVR string) dep."""
         s = self.searchProvides(name, flag, version).keys()
+        
         if name[0] == '/': # all filenames are beginning with a '/'
             s += self.searchFilenames(name)
         return s
 
+    def searchPkgs(self, names):
+        return self.nevra_list.search(names)
+    
     def _getDBPath(self):
         """Return a physical path to the database."""
 

@@ -16,6 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
+
 import libxml2, re, os, os.path
 from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
 import memorydb
@@ -25,7 +26,7 @@ from comps import RpmCompsXML
 import pyrpm.functions as functions
 import pyrpm.package as package
 import pyrpm.openpgp as openpgp
-
+import lists
 
 class RpmRepoDB(memorydb.RpmMemoryDB):
     """A (mostly) read-only RPM database storage in repodata XML.
@@ -171,7 +172,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
     def getNetworkCache(self):
         return self.nc
 
-    def addPkg(self, pkg, unused_nowrite=None):
+    def addPkg(self, pkg, nowrite=None):
         # Doesn't know how to write things out, so nowrite is ignored
         if self.__isExcluded(pkg):
             return 0
@@ -371,8 +372,11 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             (self.config.archlist != None and not pkg["arch"] in self.config.archlist)):
                 self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
                 return 1
-        excludes = functions.findPkgByNames(self.excludes, [pkg])
-        return len(excludes) > 0
+            
+        index = lists.NevraList()
+        index.addPkg(pkg)
+        result = index.search(self.excludes)
+        return bool(result)
 
     def __escape(self, s):
         """Return escaped string converted to UTF-8"""

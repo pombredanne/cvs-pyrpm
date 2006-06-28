@@ -23,72 +23,6 @@ import package
 from resolver import *
 from orderer import *
 
-
-class _Triggers:
-    """A database of triggers searchable by %name"""
-
-    def __init__(self):
-        # %name => (RPMSENSE_* flag, EVR string, interpreter, script,
-        # RpmPackage containing the trigger)
-        self.triggers = {}
-
-    def append(self, name, flag, version, tprog, tscript, rpm):
-        """Add tscript interpreted by tprog from RpmPackage rpm to triggers on
-        (name, RPMSENSE_* flag, EVR string version)."""
-
-        if not self.triggers.has_key(name):
-            self.triggers[name] = [ ]
-        self.triggers[name].append((flag, version, tprog, tscript, rpm))
-
-    def remove(self, name, flag, version, tprog, tscript, rpm):
-        """Remove tscript interpreted by tprog from RpmPackage rpm from
-        triggers on (name, RPMSENSE_* flag, EVR string version), if it
-        exists."""
-
-        if not self.triggers.has_key(name):
-            return
-        for t in self.triggers[name]:
-            if t[0] == flag and t[1] == version and t[2] == tprog and t[3] == tscript and t[4] == rpm:
-                self.triggers[name].remove(t)
-        if len(self.triggers[name]) == 0:
-            del self.triggers[name]
-
-    def addPkg(self, rpm):
-        """Add triggers from RpmPackage rpm to the database."""
-
-        for t in rpm["triggers"]:
-            self.append(t[0], t[1], t[2], t[3], t[4], rpm)
-
-    def removePkg(self, rpm):
-        """Remove triggers from RpmPackage rpm from the database."""
-
-        for t in rpm["triggers"]:
-            self.remove(t[0], t[1], t[2], t[3], t[4], rpm)
-
-    def search(self, name, flag, version):
-        """Search for triggers with same type as RPMSENSE_TRIGGER* flag
-        matching name, EVR string version.
-
-        Return a list of (interpreter, script, RpmPackage containing the
-        trigger)."""
-
-        if not self.triggers.has_key(name):
-            return [ ]
-        ret = [ ]
-        for t in self.triggers[name]:
-            if (t[0] & RPMSENSE_TRIGGER) != (flag & RPMSENSE_TRIGGER):
-                continue
-            if t[1] == "":
-                ret.append((t[2], t[3], t[4]))
-            else:
-                # FIXME: flag is RPMSENSE_TRIGGER*, the first evrCompare always
-                # returns False.
-                if evrCompare(version, flag, t[1]) and \
-                       evrCompare(version, t[0], t[1]):
-                    ret.append((t[2], t[3], t[4]))
-        return ret
-
-
 class RpmController:
     """RPM state manager, handling package installation and deinstallation."""
 
@@ -191,7 +125,6 @@ class RpmController:
                              (clock() - time1))
             if not ret:
                 return None
-        self.triggerlist = _Triggers()
         if not self.config.ignoresize:
             for (op, pkg) in operations:
                 if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
@@ -220,7 +153,6 @@ class RpmController:
             self.config.printInfo(1, "Caching network packages\n")
         for (op, pkg) in operations:
             if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
-                self.triggerlist.addPkg(pkg)
                 if not self.config.nocache and \
                    (pkg.source.startswith("http://") or \
                     pkg.yumrepo != None):
@@ -249,8 +181,6 @@ class RpmController:
                         self.config.printInfo(2, "Signature of package %s correct\n" % pkg.getNEVRA())
                     pkg.close()
                     pkg.clear(ntags=self.config.resolvertags)
-        for pkg in self.db.getPkgs():
-            self.triggerlist.addPkg(pkg)
         numops = len(operations)
         numops_chars = len("%d" % numops)
         gc.collect()
@@ -428,7 +358,7 @@ class RpmController:
 
         Return 1 if found, 0 if not."""
 
-        pkgs = findPkgByNames([pkgname,], self.db.getPkgs())
+        pkgs = self.db.searchPkgs([pkgname,])
         if len(pkgs) == 0:
             return 0
         self.rpms.append(pkgs[0])
@@ -455,103 +385,82 @@ class RpmController:
         persistently if not nowrite."""
 
         if not pkg.isSourceRPM():
-            return self.db.erasePkg(pkg, nowrite)
+            return self.db.removePkg(pkg, nowrite)
         return 1
+
+    # Triggers
 
     def __runTriggerIn(self, pkg):
         """Run %triggerin scripts after installation of RpmPackage pkg.
-
         Return 1 on success, 0 on failure."""
-
-        if self.config.justdb or self.config.notriggers or pkg.isSourceRPM():
-            return 1
-        tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERIN, pkg.getEVR())
-        # Set umask to 022, especially important for scripts
-        os.umask(022)
-        tnumPkgs = str(len(self.db.getPkgsByName(pkg["name"]))+1)
-        # any-%triggerin
-        for (prog, script, spkg) in tlist:
-            if spkg == pkg:
-                continue
-            snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
-            try:
-                runScript(prog, script, [snumPkgs, tnumPkgs])
-            except (IOError, OSError), e:
-                self.config.printError("%s: Error running any trigger in script: %s" % (spkg.getNEVRA(), e))
-                return 0
-        # new-%triggerin
-        for (prog, script, spkg) in tlist:
-            if spkg != pkg:
-                continue
-            try:
-                runScript(prog, script, [tnumPkgs, tnumPkgs])
-            except (IOError, OSError), e:
-                self.config.printError("%s: Error running new trigger in script: %s" % (spkg.getNEVRA(), e))
-                return 0
-        return 1
-
+        return self.__runTrigger(pkg, RPMSENSE_TRIGGERIN, False, "in")
+    
     def __runTriggerUn(self, pkg):
         """Run %triggerun scripts before removal of RpmPackage pkg.
-
         Return 1 on success, 0 on failure."""
-
-        if self.config.justdb or self.config.notriggers or pkg.isSourceRPM():
-            return 1
-        tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERUN, pkg.getEVR())
-        # Set umask to 022, especially important for scripts
-        os.umask(022)
-        tnumPkgs = str(len(self.db.getPkgsByName(pkg["name"]))-1)
-        # old-%triggerun
-        for (prog, script, spkg) in tlist:
-            if spkg != pkg:
-                continue
-            try:
-                runScript(prog, script, [tnumPkgs, tnumPkgs])
-            except (IOError, OSError), e:
-                self.config.printError("%s: Error running old trigger un script: %s" % (spkg.getNEVRA(), e))
-                return 0
-        # any-%triggerun
-        for (prog, script, spkg) in tlist:
-            if spkg == pkg:
-                continue
-            snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
-            try:
-                runScript(prog, script, [snumPkgs, tnumPkgs])
-            except (IOError, OSError), e:
-                self.config.printError("%s: Error running any trigger un script: %s" % (spkg.getNEVRA(), e))
-                return 0
-        return 1
+        return self.__runTrigger(pkg, RPMSENSE_TRIGGERUN, True, "un")
 
     def __runTriggerPostUn(self, pkg):
         """Run %triggerpostun scripts after removal of RpmPackage pkg.
+        Return 1 on success, 0 on failure."""
+        return self.__runTrigger(pkg, RPMSENSE_TRIGGERPOSTUN, True, "postun")
 
+    def __runTrigger(self, pkg, flag, selffirst, triggername):
+        """Run "flag" trigger scripts for RpmPackage pkg.
         Return 1 on success, 0 on failure."""
 
         if self.config.justdb or self.config.notriggers or pkg.isSourceRPM():
             return 1
-        tlist = self.triggerlist.search(pkg["name"], RPMSENSE_TRIGGERPOSTUN, pkg.getEVR())
+        triggers = self.db.searchTriggers(pkg["name"], flag, pkg.getEVR())
+        triggers.pop(pkg, None) # remove this package
         # Set umask to 022, especially important for scripts
         os.umask(022)
-        tnumPkgs = str(len(self.db.getPkgsByName(pkg["name"]))-1)
-        # old-%triggerpostun
-        for (prog, script, spkg) in tlist:
-            if spkg != pkg:
-                continue
-            try:
-                runScript(prog, script, [tnumPkgs, tnumPkgs])
-            except (IOError, OSError), e:
-                self.config.printError("%s: Error running old trigger postun script: %s" % (spkg.getNEVRA(), e))
-                return 0
-        # any-%triggerpostun
-        for (prog, script, spkg) in tlist:
-            if spkg == pkg:
-                continue
-            snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
-            try:
-                runScript(prog, script, [snumPkgs, tnumPkgs])
-            except (IOError, OSError), e:
-                self.config.printError("%s: Error running any trigger postun script: %s" % (spkg.getNEVRA(), e))
-                return 0
-        return 1
 
+        tnumPkgs = str(len(self.db.getPkgsByName(pkg["name"]))+1)
+
+        if selffirst:
+            r1 = self.__executePkgTriggers(pkg, flag, triggername, tnumPkgs)
+            r2 = self.__executeTriggers(triggers, triggername, tnumPkgs)
+        else:
+            r2 = self.__executeTriggers(triggers, triggername, tnumPkgs)
+            r1 = self.__executePkgTriggers(pkg, flag, triggername, tnumPkgs)
+        return r1 and r2
+
+    def __executeTriggers(self, tlist, triggername, tnumPkgs):
+        """execute a list of given triggers
+        Return 1 on success, 0 on failure."""
+        
+        result = 1
+        for spkg, l in tlist.iteritems():
+            snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
+            for name, f, v, prog, scripts in l:
+                try:
+                    runScript(prog, script, [snumPkgs, tnumPkgs])
+                except (IOError, OSError), e:
+                    self.config.printError(
+                        "%s: Error running trigger %s script: %s" %
+                        (spkg.getNEVRA(), triggername, e))
+                    result = 0
+        return result
+
+    def __executePkgTriggers(self, pkg, flag, triggername, tnumPkgs):
+        """Execute all triggers of matching "flag" of a package
+        that are tiggered by the package itself
+        Return 1 on success, 0 on failure."""
+        
+        result = 1
+        evr = (pkg.getEpoch(), pkg["version"], pkg["release"])
+        for name, f, v, prog, scripts in pkg["triggers"]:
+            if (functions.rangeCompare(flag, evr, f, functions.evrSplit(v)) or
+                (v == "" and functions.evrCompare(evr, flag, evr))):
+                # compare with package version for unversioned provides
+                try:
+                    runScript(prog, script, [tnumPkgs, tnumPkgs])
+                except (IOError, OSError), e:
+                    self.config.printError(
+                        "%s: Error running trigger %s script: %s" %
+                        (pkg.getNEVRA(), triggername, e))
+                    result = 0
+        return result                   
+                            
 # vim:ts=4:sw=4:showmatch:expandtab

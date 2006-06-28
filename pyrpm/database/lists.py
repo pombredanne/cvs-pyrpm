@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import os
+import os, re
 import pyrpm.functions as functions
 from pyrpm.base import RPMSENSE_EQUAL
 
@@ -172,6 +172,10 @@ class ProvidesList:
 
         return ret
 
+    def __iter__(self):
+        for name, l in self.hash.iteritems():
+            for entry in l:
+                yield  (name, ) + entry
 
 class ConflictsList(ProvidesList):
     """A database of Conflicts:"""
@@ -181,15 +185,17 @@ class ConflictsList(ProvidesList):
         """Add Provides: by RpmPackage rpm. If no self provide is done it will
         be added automatically."""
 
-        for (name, flag, version) in rpm[self.TAG]:
-            self.hash.setdefault(name, [ ]).append((flag, version, rpm))
+        for entry in rpm[self.TAG]:
+            name = entry[0]
+            self.hash.setdefault(name, [ ]).append( entry[1:] + (rpm,) )
 
     def removePkg(self, rpm):
         """Remove Provides: by RpmPackage rpm"""
 
-        for (name, flag, version) in rpm[self.TAG]:
+        for entry in rpm[self.TAG]:
+            name = entry[0]
             list = self.hash[name]
-            list.remove( (flag, version, rpm) )
+            list.remove( entry[1:] + (rpm,) )
             if len(list) == 0:
                 del self.hash[name]
 
@@ -202,14 +208,16 @@ class ConflictsList(ProvidesList):
             return { }
         evr = functions.evrSplit(version)
         ret = { }
-        for (f, v, rpm) in self.hash[name]:
+        for entry in self.hash[name]:
+            f, v = entry[:2]
+            rpm = entry[-1]
             if rpm in ret:
                 continue
             if version == "":
-                ret.setdefault(rpm, [ ]).append((name, f, v))
+                ret.setdefault(rpm, [ ]).append( (name,) + entry[:-1] )
                 continue
             if functions.rangeCompare(flag, evr, f, functions.evrSplit(v)):
-                ret.setdefault(rpm, [ ]).append((name, f, v))
+                ret.setdefault(rpm, [ ]).append( (name,) + entry[:-1] )
                 continue
 
         return ret
@@ -229,19 +237,40 @@ class TriggersList(ConflictsList):
     """A database of Triggers:"""
     TAG = "triggers"
 
-    def addPkg(self, rpm):
-        """Add Provides: by RpmPackage rpm"""
+class NevraList:
 
-        for (name, flag, version, scriptprog, scripts) in rpm[self.TAG]:
-            self.hash.setdefault(name, [ ]).append((flag, version, rpm))
+    def __init__(self):
+        self.hash = { }
 
-    def removePkg(self, rpm):
-        """Remove Provides: by RpmPackage rpm"""
+    def clear(self):
+        self.hash.clear()
 
-        for (name, flag, version, scriptprog, scripts) in rpm[self.TAG]:
-            list = self.hash[name]
-            list.remove( (flag, version, rpm) )
-            if len(list) == 0:
+
+    def addPkg(self, pkg):
+        for name in pkg.getAllNames():
+            self.hash.setdefault(name, []).append(pkg)
+
+    def removePkg(self, pkg):
+        for name in pkg.getAllNames():
+            self.hash[name].remove(pkg)
+            if not self.hash[name]:
                 del self.hash[name]
+
+    _fnmatchre = re.compile(".*[\*\[\]\{\}\?].*")
+
+    def search(self, pkgnames):
+        result = []
+        hash = self.hash
+        for pkgname in pkgnames:
+            if hash.has_key(pkgname):
+                result.extend(hash[pkgname])
+            if self._fnmatchre.match(pkgname):
+                restring = fnmatch.translate(pkgname)
+                regex = re.compile(restring)
+                for item in hash.keys():
+                    if regex.match(item):
+                        result.extend(hash[item])
+        functions.normalizeList(result)
+        return result
 
 # vim:ts=4:sw=4:showmatch:expandtab

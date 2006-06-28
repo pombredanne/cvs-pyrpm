@@ -18,7 +18,7 @@
 #
 
 
-import os.path, stat, sys, pwd, grp, md5, sha
+import os.path, stat, sys, pwd, grp, md5, sha, bisect
 from io import getRpmIOFactory
 from base import *
 import elf
@@ -59,6 +59,13 @@ class _RpmFilenamesIterator:
     def index(self, name):
         if self.has_oldfilenames:
             return self.pkg["oldfilenames"].index(name)
+
+        #idx = bisect.bisect_left(self, name)
+        #if self[idx] == name:
+        #    return idx
+        #else:
+        #    raise ValueError
+
         (dirname, basename) = os.path.split(name)
         if dirname[-1:] != "/" and dirname != "":
             dirname += "/"
@@ -73,6 +80,13 @@ class _RpmFilenamesIterator:
                 return i
             i += 1
         raise ValueError
+
+    def __contains__(self, name):
+        try:
+            idx = self.index(name)
+        except ValueError:
+            return False
+        return True
 
     def next(self):
         self.idx += 1
@@ -1204,6 +1218,21 @@ class RpmPackage(RpmData):
         if self.isSourceRPM():
             return "%s.src" % self.getNEVR()
         return "%s.%s" % (self.getNEVR(), self["arch"])
+
+    def getAllNames(self):
+        """Return all valid NEVRA combinations"""
+        (n, e, v, r, a) = (self["name"], self.getEpoch(), self["version"],
+            self["release"], self["arch"])
+        na = "%s.%s" % (n, a)
+        nv = "%s-%s" % (n, v)
+        nva = "%s.%s" % (nv, a)
+        nvr = "%s-%s" % (nv, r)
+        nvra = "%s.%s" % (nvr, a)
+        nev = "%s-%s:%s" % (n, e, v)
+        neva = "%s.%s" % (nev, a)
+        nevr = "%s-%s" % (nev, r)
+        nevra = "%s.%s" % (nevr, a)
+        return (n, na, nv, nva, nvr, nvra, nev, neva, nevr, nevra)
 
     def getProvides(self):
         """Return built value for self["provides"].

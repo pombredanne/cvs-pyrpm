@@ -1,6 +1,8 @@
 #
 # Copyright (C) 2004, 2005 Red Hat, Inc.
-# Authors: Phil Knirsch, Thomas Woerner, Florian La Roche
+# Authors: Phil Knirsch <pknirsch@redhat.com>
+#          Thomas Woerner <twoerner@redhat.com>
+#          Florian Festi <ffesti@redhat.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
@@ -16,30 +18,61 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import os, time, struct
+import sys, time, struct, os, bsddb, re, fnmatch
 (pack, unpack) = (struct.pack, struct.unpack)
-from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
-import bsddb
 from binascii import b2a_hex, a2b_hex
+sys.path.append('../..')
+import pyrpm.base as base
 from pyrpm.base import *
-import memorydb
 import pyrpm.functions as functions
 import pyrpm.io as io
 import pyrpm.package as package
+import db
 import pyrpm.openpgp as openpgp
+import lists
 
+class RpmDB(db.RpmDatabase):
 
-class RpmDB(memorydb.RpmMemoryDB):
-    """Standard RPM database storage in BSD db."""
-
+    zero = pack("I", 0)
+    
     def __init__(self, config, source, buildroot=None):
-        memorydb.RpmMemoryDB.__init__(self, config, source, buildroot)
-        self.zero = pack("I", 0)
-        self.dbopen = False
-        self.maxid = 0
+        db.RpmDatabase.__init__(self, config, source, buildroot)
         # Correctly initialize the tscolor based on the current arch
         self.config.tscolor = self.__getInstallColor()
         self.netsharedpath = self.__getNetSharedPath()
+
+        self.clear()
+        self.dbopen = 0
+        self.obsoletes_list = None
+
+        self.path = self._getDBPath()
+
+
+    def __contains__(self, pkg):
+        return hasattr(pkg, "db") and pkg.db is self and \
+               self.getPkgById(pkg["install_id"]) is pkg
+    
+    # clear all structures
+    def clear(self):
+        self.obsoletes_list = None
+        self._pkgs.clear()
+        
+    def setBuildroot(self, buildroot):
+        """Set database chroot to buildroot."""
+        self.buildroot = buildroot
+
+    def iterId(self, data):
+        for i in xrange(0, len(data), 8):
+            yield data[i:i+4]
+
+    def iterIdIdx(self, data):
+        for i in xrange(0, len(data), 8):
+            yield data[i:i+4], struct.unpack("I", data[i+4:i+8])[0]
+
+    def getPkgsFromData(self, data):
+        result = [self.getPkgById(data[i:i+4])
+                  for i in xrange(0, len(data), 8)]
+        return filter(None, result)
 
     def open(self):
         self.__openDB4()
@@ -63,21 +96,17 @@ class RpmDB(memorydb.RpmMemoryDB):
         self.dbopen = False
 
     def read(self):
-        # Never fails, attempts to recover as much as possible
-        if self.is_read:
-            return 1
-        self.is_read = 1
-        dbpath = self._getDBPath()
-        if not os.path.isdir(dbpath):
-            return 1
-        try:
-            db = bsddb.hashopen(os.path.join(dbpath, "Packages"), "r")
-        except bsddb.error:
-            return 1
-        for key in db.keys():
+        """Read the database in memory."""
+        return self.OK
+
+    def _readObsoletes(self):
+        t1 = time.time()
+        self.obsoletes_list = lists.ObsoletesList()
+
+        for key, data in self.packages_db.iteritems():
             rpmio = io.RpmFileIO(self.config, "dummy")
             pkg = package.RpmPackage(self.config, "dummy")
-            data = db[key]
+            pkg.key = key
             try:
                 val = unpack("I", key)[0]
             except struct.error:
@@ -87,99 +116,158 @@ class RpmDB(memorydb.RpmMemoryDB):
             if val == 0:
                 self.maxid = unpack("I", data)[0]
                 continue
-
             try:
                 (indexNo, storeSize) = unpack("!2I", data[0:8])
             except struct.error:
                 self.config.printError("Value for key %s in rpmdb is too short"
                                        % repr(key))
                 continue
+
             if len(data) < indexNo*16 + 8:
                 self.config.printError("Value for key %s in rpmdb is too short"
                                        % repr(key))
                 continue
+
             indexdata = data[8:indexNo*16+8]
             storedata = data[indexNo*16+8:]
-            pkg["signature"] = {}
+            found = False
             for idx in xrange(0, indexNo):
                 try:
-                    (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
-                                                           storedata)
+                    tag = unpack("!I", indexdata[idx*16:idx*16+4])[0]
+                    if tag in [1090,1114,1115,]: # obsoletes
+                        found = True
+                        (tag, tagval) = rpmio.getHeaderByIndex(
+                            idx, indexdata, storedata)
+                        pkg[base.rpmtagname[tag]] = tagval
                 except ValueError, e:
                     self.config.printError("Invalid header entry %s in %s: %s"
                                            % (idx, key, e))
-                    continue
-                if rpmtag.has_key(tag):
-                    if rpmtagname[tag] == "archivesize":
-                        pkg["signature"]["payloadsize"] = tagval
-                    else:
-                        pkg[rpmtagname[tag]] = tagval
-                if   tag == 257:
-                    pkg["signature"]["size_in_sig"] = tagval
-                elif tag == 261:
-                    pkg["signature"]["md5"] = tagval
-                elif tag == 262:
-                    pkg["signature"]["gpg"] = tagval
-                elif tag == 264:
-                    pkg["signature"]["badsha1_1"] = tagval
-                elif tag == 265:
-                    pkg["signature"]["badsha1_2"] = tagval
-                elif tag == 267:
-                    pkg["signature"]["dsaheader"] = tagval
-                elif tag == 269:
-                    pkg["signature"]["sha1header"] = tagval
-            if pkg["name"] == "gpg-pubkey":
-                continue # FIXME
-                try:
-                    keys = openpgp.parsePGPKeys(pkg["description"])
-                except ValueError, e:
-                    self.config.printError("Invalid key package %s: %s"
-                                           % (pkg["name"], e))
-                    continue
-                for k in keys:
-                    self.keyring.addKey(k)
-                continue
-            if not pkg.has_key("arch"): # FIXME: when does this happen?
-                continue
-            pkg.generateFileNames()
-            pkg.source = "rpmdb:/"+os.path.join(dbpath, pkg.getNEVRA())
+                    #XXX
+            pkg["obsoletes"] = pkg.getObsoletes()
+            if pkg["obsoletes"]:
+                self.obsoletes_list.addPkg(pkg)
+                pkg.pop("obsoletename", None)
+                pkg.pop("obsoleteflags", None)
+                pkg.pop("obsoleteversion", None)
+                pkg.pop("obsoletes")
+        self.is_read = 1
+        print "Obsoletes took", time.time() - t1
+        return self.OK
+
+    def read_rpm(self, key, db):
+        rpmio = io.RpmFileIO(self.config, "dummy")
+        pkg = package.RpmPackage(self.config, "dummy")
+        pkg.key = key
+        data = db[key]
+        try:
+            val = unpack("I", key)[0]
+        except struct.error:
+            self.config.printError("Invalid key %s in rpmdb" % repr(key))
+            return None
+
+        if val == 0:
+            return None
+
+        try:
+            (indexNo, storeSize) = unpack("!2I", data[0:8])
+        except struct.error:
+            self.config.printError("Value for key %s in rpmdb is too short"
+                                   % repr(key))
+            return None
+
+        if len(data) < indexNo*16 + 8:
+            self.config.printError("Value for key %s in rpmdb is too short"
+                                   % repr(key))
+            return None
+        indexdata = data[8:indexNo*16+8]
+        storedata = data[indexNo*16+8:]
+        pkg["signature"] = {}
+        for idx in xrange(0, indexNo):
             try:
-                pkg["provides"] = pkg.getProvides()
-                pkg["requires"] = pkg.getRequires()
-                pkg["obsoletes"] = pkg.getObsoletes()
-                pkg["conflicts"] = pkg.getConflicts()
-                pkg["triggers"] = pkg.getTriggers()
+                (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
+                                                       storedata)
             except ValueError, e:
-                self.config.printError("Error in package %s: %s"
-                                       % pkg.getNEVRA(), e)
-                continue
-            pkg["install_id"] = val
-            memorydb.RpmMemoryDB.addPkg(self, pkg)
-            pkg.io = None
-            pkg.header_read = 1
-            rpmio.hdr = {}
-        return 1
+                self.config.printError("Invalid header entry %s in %s: %s"
+                                       % (idx, key, e))
+                return None
+
+            if rpmtag.has_key(tag):
+                # XXX use param
+                if rpmtagname[tag] not in self.config.resolvertags:
+                    continue
+                
+                if rpmtagname[tag] == "archivesize":
+                    pkg["signature"]["payloadsize"] = tagval
+                else:
+                    pkg[rpmtagname[tag]] = tagval
+            if   tag == 257:
+                pkg["signature"]["size_in_sig"] = tagval
+            elif tag == 261:
+                pkg["signature"]["md5"] = tagval
+            elif tag == 262:
+                pkg["signature"]["gpg"] = tagval
+            elif tag == 264:
+                pkg["signature"]["badsha1_1"] = tagval
+            elif tag == 265:
+                pkg["signature"]["badsha1_2"] = tagval
+            elif tag == 267:
+                pkg["signature"]["dsaheader"] = tagval
+            elif tag == 269:
+                pkg["signature"]["sha1header"] = tagval
+        if pkg["name"] == "gpg-pubkey":
+            return None  # FIXME
+            try:
+                keys = openpgp.parsePGPKeys(pkg["description"])
+            except ValueError, e:
+                self.config.printError("Invalid key package %s: %s"
+                                       % (pkg["name"], e))
+                return None
+            for k in keys:
+                self.keyring.addKey(k)
+            return None
+        if not pkg.has_key("arch"): # FIXME: when does this happen?
+            return None
+        pkg.generateFileNames()
+        pkg.source = "rpmdb:/"+os.path.join(self.path, pkg.getNEVRA())
+        try:
+            pkg["provides"] = pkg.getProvides()
+            pkg["requires"] = pkg.getRequires()
+            pkg["obsoletes"] = pkg.getObsoletes()
+            pkg["conflicts"] = pkg.getConflicts()
+            pkg["triggers"] = pkg.getTriggers()
+        except ValueError, e:
+            self.config.printError("Error in package %s: %s"
+                                   % pkg.getNEVRA(), e)
+            return None
+        pkg["install_id"] = val
+        pkg.io = None
+        pkg.header_read = 1
+        rpmio.hdr = {}
+        pkg.db = self
+        return pkg
 
     def write(self):
         return 1
 
     def addPkg(self, pkg, nowrite=None):
-        memorydb.RpmMemoryDB.addPkg(self, pkg)
+        result = 1
+        if not nowrite:
+            result = self._addPkg(pkg)
+        if self.obsoletes_list and result:
+            self.obsoletes_list.add(pkg)
+        return result
 
-        if nowrite:
-            return 1
-
+    def _addPkg(self, pkg):
         functions.blockSignals()
         try:
             self.__openDB4()
 
             try:
-                self.maxid = unpack("I", self.packages_db[self.zero])[0]
+                maxid = unpack("I", self.packages_db[self.zero])[0]
             except:
-                pass
+                maxid = 0
 
-            self.maxid += 1
-            pkgid = self.maxid
+            pkgid = maxid + 1
 
             rpmio = io.RpmFileIO(self.config, "dummy")
             if pkg["signature"].has_key("size_in_sig"):
@@ -221,22 +309,24 @@ class RpmDB(memorydb.RpmMemoryDB):
                             pkg, False)
             self.__writeDB4(self.sigmd5_db, "install_md5", pkgid, pkg, False)
             self.__writeDB4(self.triggername_db, "triggername", pkgid, pkg)
-            self.packages_db[self.zero] = pack("I", self.maxid)
+            self.packages_db[self.zero] = pack("I", pkgid)
         except bsddb.error:
             functions.unblockSignals()
-            memorydb.RpmMemoryDB.removePkg(self, pkg)
             return 0 # Due to the blocking, this is now virtually atomic
         functions.unblockSignals()
         return 1
 
-    def erasePkg(self, pkg, nowrite=None):
+    def removePkg(self, pkg, nowrite=None):
+        result = 1
+        if not nowrite:
+            result = self._removePkg(pkg)
+        if self.obsoletes_list and result:
+            self.obsoletes_list.remove(pkg)
+        return result
+
+    def _removePkg(self, pkg):
         if not pkg.has_key("install_id"):
             return 0
-
-        memorydb.RpmMemoryDB.removePkg(self, pkg)
-
-        if nowrite:
-            return 1
 
         functions.blockSignals()
         try:
@@ -266,7 +356,6 @@ class RpmDB(memorydb.RpmMemoryDB):
             del self.packages_db[pack("I", pkgid)]
         except bsddb.error:
             functions.unblockSignals()
-            memorydb.RpmMemoryDB.addPkg(self, pkg)
             return 0 # FIXME: keep trying?
         functions.unblockSignals()
         return 1
@@ -280,9 +369,6 @@ class RpmDB(memorydb.RpmMemoryDB):
         if not os.path.isdir(dbpath):
             os.makedirs(dbpath)
 
-        if not self.is_read:
-            self.read() # Never fails
-
         if self.dbopen:
             return
 
@@ -293,43 +379,36 @@ class RpmDB(memorydb.RpmMemoryDB):
                 os.unlink(os.path.join(dbpath, "__db.00%d" % i))
             except OSError:
                 pass
-        self.basenames_db      = bsddb.hashopen(os.path.join(dbpath,
-                                                             "Basenames"), "c")
-        self.conflictname_db   = bsddb.hashopen(os.path.join(dbpath,
-                                                             "Conflictname"),
-                                                "c")
-        self.dirnames_db       = bsddb.btopen(os.path.join(dbpath, "Dirnames"),
-                                              "c")
-        self.filemd5s_db       = bsddb.hashopen(os.path.join(dbpath,
-                                                             "Filemd5s"), "c")
-        self.group_db          = bsddb.hashopen(os.path.join(dbpath, "Group"),
-                                                "c")
-        self.installtid_db     = bsddb.btopen(os.path.join(dbpath,
-                                                           "Installtid"), "c")
-        self.name_db           = bsddb.hashopen(os.path.join(dbpath, "Name"),
-                                                "c")
-        self.packages_db       = bsddb.hashopen(os.path.join(dbpath,
-                                                             "Packages"), "c")
-        self.providename_db    = bsddb.hashopen(os.path.join(dbpath,
-                                                             "Providename"),
-                                                "c")
-        self.provideversion_db = bsddb.btopen(os.path.join(dbpath,
-                                                           "Provideversion"),
-                                              "c")
-        self.requirename_db    = bsddb.hashopen(os.path.join(dbpath,
-                                                             "Requirename"),
-                                                "c")
-        self.requireversion_db = bsddb.btopen(os.path.join(dbpath,
-                                                           "Requireversion"),
-                                              "c")
-        self.sha1header_db     = bsddb.hashopen(os.path.join(dbpath,
-                                                             "Sha1header"),
-                                                "c")
-        self.sigmd5_db         = bsddb.hashopen(os.path.join(dbpath, "Sigmd5"),
-                                                "c")
-        self.triggername_db    = bsddb.hashopen(os.path.join(dbpath,
-                                                             "Triggername"),
-                                                "c")
+        self.basenames_db      = bsddb.hashopen(
+            os.path.join(dbpath, "Basenames"), "c")
+        self.conflictname_db   = bsddb.hashopen(
+            os.path.join(dbpath, "Conflictname"), "c")
+        self.dirnames_db       = bsddb.btopen(
+            os.path.join(dbpath, "Dirnames"), "c")
+        self.filemd5s_db       = bsddb.hashopen(
+            os.path.join(dbpath, "Filemd5s"), "c")
+        self.group_db          = bsddb.hashopen(
+            os.path.join(dbpath, "Group"), "c")
+        self.installtid_db     = bsddb.btopen(
+            os.path.join(dbpath, "Installtid"), "c")
+        self.name_db           = bsddb.hashopen(
+            os.path.join(dbpath, "Name"), "c")
+        self.packages_db       = bsddb.hashopen(
+            os.path.join(dbpath, "Packages"), "c")
+        self.providename_db    = bsddb.hashopen(
+            os.path.join(dbpath, "Providename"), "c")
+        self.provideversion_db = bsddb.btopen(
+            os.path.join(dbpath, "Provideversion"), "c")
+        self.requirename_db    = bsddb.hashopen(
+            os.path.join(dbpath, "Requirename"), "c")
+        self.requireversion_db = bsddb.btopen(
+            os.path.join(dbpath, "Requireversion"), "c")
+        self.sha1header_db     = bsddb.hashopen(
+            os.path.join(dbpath, "Sha1header"), "c")
+        self.sigmd5_db         = bsddb.hashopen(
+            os.path.join(dbpath, "Sigmd5"), "c")
+        self.triggername_db    = bsddb.hashopen(
+            os.path.join(dbpath, "Triggername"), "c")
         self.dbopen = True
 
     def __removeId(self, db, tag, pkgid, pkg, useidx=True, func=str):
@@ -475,5 +554,221 @@ class RpmDB(memorydb.RpmMemoryDB):
             return liststr.split(",")
         except:
             return []
+
+    def getPkgById(self, id):
+        if self._pkgs.has_key(id):
+            return self._pkgs[id]
+        else:
+            pkg = self.read_rpm(id, self.packages_db)
+            if pkg is not None:
+                self._pkgs[id] = pkg
+            return pkg
+
+    def searchName(self, name):
+        data = self.name_db.get(name, '')
+        result = [self.getPkgById(id) for id in self.iterId(data)]
+        return filter(None, result)
+            
+    def getPkgs(self):
+        result = [self.getPkgById(key) for key in self.packages_db.keys()]
+        return filter(None, result)
+
+    def getNames(self):
+        return self.name_db.keys()
+
+    def hasName(self, name):
+        return self.name_db.has_key(name)
+
+    def getPkgsByName(self, name):
+        return self.searchName(name)
+
+    def _iter(self, tag, db=None):
+        for pkg in self.getPkgs():
+            l = pkg[tag]
+            for name, flag, version in l:
+                yield name, flag, version, pkg
+
+    def _iter2(self, tag, db):
+        for name, data in db:
+            for id, idx in self.iterIdIdx(data):
+                pkg = self.getPkg(id)
+                if pkg:
+                    yield pkg["tag"][idx] + (pkg,)
+
+    def iterProvides(self):
+        return self._iter("provides")
+
+    def getFilenames(self):
+        raise NotImplementedError
+
+    def numFileDuplicates(self, filename):        
+        dirname, basename = os.path.split(filename)
+        if len(dirname) > 0 and dirname[-1] != "/":
+            dirname += "/"
+        nr = 0
+        for id, idx in self.iterId(self.basenames_db.get(basename), ''):
+            pkg = self.getPkgById(id)
+            if not pkg: continue
+            if pk["filenames"][idx] == filename:
+                nr += 1
+        return nr
+
+    def getFileRequires(self):
+        return [name for name in self.requirename_db if name[0]=='/']
+        
+    def getFileDuplicates(self):
+        import time
+        t1 = time.time()
+        print "getFileDuplicates"
+        duplicates = {}
+        for basename, data in self.basenames_db.iteritems():
+            if len(data) <= 8: continue
+            for id, idx in self.iterIdIdx(data):
+                pkg = self.getPkgById(id)
+                if not pkg: continue
+                file = pkg["filenames"][idx]
+                duplicates.setdefault(file, [ ]).append(pkg)
+        for filename, pkglist in duplicates.iteritems():
+            if len(pkglist)<2:
+                del duplicates[filename]
+        print "done", time.time()-t1
+        return duplicates
+                            
+    def iterRequires(self):
+        return self._iter("requires")
+
+    def iterConflicts(self):
+        return self._iter("conflicts", self.conflictname_db)
+
+    def iterObsoletes(self):
+        if self.obsoletes_list is None:
+            self._readObsoletes()
+        return iter(self.obsoletes_list)
+
+    def iterTriggers(self):
+        return self._iter2("triggers", self.triggername_db)
+
+    def reloadDependencies(self):
+        self.obsoletes_list = None
+    
+    def _search(self, db, attr, name, flag, version):
+        data = db.get(name, '')
+        result = {}
+        evr = functions.evrSplit(version)
+        for id, idx in self.iterIdIdx(data):
+            pkg = self.getPkgById(id)
+            if not pkg: continue
+            name_, flag_, version_ = pkg[attr][idx]
+            if version == "":
+                result.setdefault(pkg, [ ]).append((name_, flag_, version_))
+            elif functions.rangeCompare(flag, evr,
+                                        flag_, functions.evrSplit(version_)):
+                result.setdefault(pkg, [ ]).append((name_, flag_, version_))
+            elif version_ == "": # compare with package version for unversioned provides
+                evr2 = (pkg.getEpoch(), pkg["version"], pkg["release"])
+                if functions.evrCompare(evr2, flag, evr):
+                    result.setdefault(pkg, [ ]).append(
+                        (name_, flag_, version_))
+        return result
+
+    def searchProvides(self, name, flag, version):
+        return self._search(self.providename_db, "provides",
+                            name, flag, version)
+
+    def searchFilenames(self, filename):
+        dirname, basename = filename.rsplit('/', 1)
+        data1 = self.basenames_db.get(basename, "")
+        data2 = self.dirnames_db.get(dirname + '/', '')
+        dirname_ids = {}
+        for id in self.iterId(data2):
+            dirname_ids[id] = None
+
+        #print `data1` , `data2`, set2
+        result = []
+        for id, idx in self.iterIdIdx(data1):
+            if id not in dirname_ids:
+                continue
+            pkg = self.getPkgById(id)
+            if pkg and pkg["filenames"][idx] == filename:
+                result.append(pkg)
+            #elif pkg:
+            #    print "dropping", pkg.getNEVRA(), pkg["filenames"][idx] 
+        return result
+
+    def searchRequires(self, name, flag, version):
+        return self._search(self.requirename_db, "requires",
+                            name, flag, version)
+
+    def searchConflicts(self, name, flag, version):
+        return self._search(self.conflictname_db, "conflicts",
+                            name, flag, version)
+
+    def searchObsoletes(self, name, flag, version):
+        if self.obsoletes_list is None:
+            self._readObsoletes()            
+        
+        result = self.obsoletes_list.search(name, flag, version)
+        result = [self.getPkgById(pkg.key) for pkg in result]
+        return filter(None, result)
+
+    def searchTriggers(self, name, flag, version):
+        return self._search(self.triggername_db, "triggers",
+                            name, flag, version)
+
+
+
+    # Use precompiled regex for faster checks
+    __fnmatchre__ = re.compile(".*[\*\[\]\?].*")
+    __splitre__ = re.compile(r"([:*?\-.]|\[[^]]+\])")
+
+    def searchPkgs(self, names):
+        """Return a list of RpmPackage's from pkgs matching pkgnames.
+        pkgnames is a list of names, each name can contain epoch, version,
+        release and arch. If the name doesn't match literally, it is
+        interpreted as a glob pattern. The resulting list contains all matches
+        in arbitrary order, and it may contain a single package more than
+        once."""
+        result = []
+        pkgnames = None
+        for name in names:
+            parts = self.__splitre__.split(name)
+            if self.__fnmatchre__.match(name):
+                regex = re.compile(fnmatch.translate(name))
+                if pkgnames is None:
+                    pkgnames = self.getNames()
+                for pkgname in pkgnames:
+                    if pkgname.startswith(parts[0]):
+                        pkgs = self.getPkgsByName(pkgname)
+                        for pkg in pkgs:
+                            for n in pkg.getAllNames():
+                                if regex.match(n):
+                                    result.append(pkg)
+                                    break
+            else:
+                print parts
+                for idx in xrange(1, len(parts)+1, 2):
+                    pkgs = self.getPkgsByName(''.join(parts[:idx]))
+                    for pkg in pkgs:
+                        for n in pkg.getAllNames():
+                            if n == name:
+                                result.append(pkg)
+                                break
+        #normalizeList(result)
+        return result
+
+    def _getDBPath(self):
+        """Return a physical path to the database."""
+        
+        if   self.source[:6] == 'pydb:/':
+            tsource = self.source[6:]
+        elif self.source[:7] == 'rpmdb:/':
+            tsource = self.source[7:]
+        else:
+            tsource = self.source
+            
+        if self.buildroot != None:
+            return self.buildroot + tsource
+        else:
+            return tsource
 
 # vim:ts=4:sw=4:showmatch:expandtab

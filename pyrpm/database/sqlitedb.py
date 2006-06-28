@@ -144,7 +144,7 @@ class RpmSQLiteDB(memorydb.RpmMemoryDB):
             return 0
         return 1
 
-    def erasePkg(self, pkg, nowrite=None):
+    def removePkg(self, pkg, nowrite=None):
         if not self.cx:
             return 0
 
