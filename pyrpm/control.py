@@ -433,7 +433,7 @@ class RpmController:
         result = 1
         for spkg, l in tlist.iteritems():
             snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
-            for name, f, v, prog, scripts in l:
+            for name, f, v, prog, script in l:
                 try:
                     runScript(prog, script, [snumPkgs, tnumPkgs])
                 except (IOError, OSError), e:
@@ -450,7 +450,7 @@ class RpmController:
         
         result = 1
         evr = (pkg.getEpoch(), pkg["version"], pkg["release"])
-        for name, f, v, prog, scripts in pkg["triggers"]:
+        for name, f, v, prog, script in pkg["triggers"]:
             if (functions.rangeCompare(flag, evr, f, functions.evrSplit(v)) or
                 (v == "" and functions.evrCompare(evr, flag, evr))):
                 # compare with package version for unversioned provides
