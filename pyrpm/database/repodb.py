@@ -745,6 +745,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         for pkg in pkgs:
             if pkg.getNEVRA() == nevra:
                 if len(dhash) == 0:
+                    (didx, dnameold) = (-1, None)
+                    (dnames, dindexes, bnames) = ([], [], [])
                     for f in filelist:
                         idx = f.rindex("/")
                         if idx < 0:
@@ -752,16 +754,14 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                         dname = f[:idx+1]
                         fname = f[idx+1:]
                         dhash.setdefault(dname, []).append(fname)
-                    dnames = dhash.keys()[:]
-                    dnames.sort()
-                    dindexes = []
-                    bnames = []
-                    for f in filelist:
-                        idx = f.rindex("/")
-                        dname = f[:idx+1]
-                        fname = f[idx+1:]
-                        dindexes.append(dnames.index(dname))
                         bnames.append(fname)
+                        if dnameold == dname:
+                            dindexes.append(didx)
+                        else:
+                            dnames.append(dname)
+                            didx += 1
+                            dindexes.append(didx)
+                            dnameold = dname
                 pkg["dirnames"] = dnames
                 pkg["dirindexes"] = dindexes
                 pkg["basenames"] = bnames
