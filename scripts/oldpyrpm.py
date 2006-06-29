@@ -2175,6 +2175,11 @@ class ReadRpm:
             if mydep not in provs:
                 self.printErr("no provides for own rpm package, rpm=%s" % ver)
         self.getTriggers()
+        # Check for /tmp/ and /usr/src in the provides:
+        if self.strict and self["providename"]:
+            for n in self["providename"]:
+                if n.find("/tmp/") != -1 or n.find("/usr/src") != -1:
+                    self.printErr("suspicous provides: %s" % n)
 
         # check file* tags to be consistent:
         reqfiletags = ["fileusername", "filegroupname", "filemodes",
