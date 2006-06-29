@@ -514,12 +514,10 @@ class RpmYum:
             elif op == OP_ERASE:
                 epkgs += 1
             self.config.printInfo(1, "\t%s %s\n" % (op, pkg.getNEVRA()))
-        i = 0
-        while i < len(self.erase_list):
-            if self.erase_list[i] not in self.pydb.getPkgs():
-                self.erase_list.pop(i)
-            else:
-                i += 1
+
+        self.erase_list = [pkg for pkg in self.erase_list
+                           if pkg in self.pydb]
+
         if len(self.erase_list) > 0:
             self.config.printInfo(0, "Warning: Following packages will be automatically removed from your system:\n")
             for pkg in self.erase_list:
