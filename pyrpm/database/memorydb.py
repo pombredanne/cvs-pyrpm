@@ -121,9 +121,6 @@ class RpmMemoryDB(db.RpmDatabase):
     def getPkgsByName(self, name):
         return self.names.get(name, [ ])
 
-    def iterProvides(self):
-        return iter(self.provides_list)
-
     def getFilenames(self):
         return self.filenames_list
 
@@ -133,6 +130,9 @@ class RpmMemoryDB(db.RpmDatabase):
     def getFileDuplicates(self):
         return self.filenames_list.duplicates()
     
+    def iterProvides(self):
+        return iter(self.provides_list)
+
     def iterRequires(self):
         return iter(self.requires_list)
 

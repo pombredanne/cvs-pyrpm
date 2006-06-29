@@ -190,9 +190,10 @@ class RpmYum:
                 return 0
             if self.config.timer:
                 self.config.printInfo(0, "Reading local RPM database took %s seconds\n" % (clock() - time1))
-        for pkg in self.pydb.getPkgs():
-            if "redhat-release" in [ dep[0] for dep in pkg["provides"] ]:
-                rpmconfig.relver = pkg["version"]
+
+        for pkg in self.pydb.searchProvides("redhat-release", 0, ""):
+            rpmconfig.relver = pkg["version"]
+            
         for yumconf in self.config.yumconf:
             if os.path.isfile(yumconf):
                 if not self.repos_read and not self.command == "remove":
