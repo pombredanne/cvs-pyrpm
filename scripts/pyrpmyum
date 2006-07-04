@@ -20,7 +20,7 @@
 # Author: Phil Knirsch
 #
 
-import sys, os, getopt, errno
+import sys, os
 
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:

@@ -40,8 +40,6 @@ class RpmYum:
         self.confirm = 1
         # Default: No command
         self.command = None
-        # List of packages to be installed/updated/removed
-        self.pkgs = []
         # List of RpmRepo's
         self.repos = [ ]
         # Internal list of packages that are have to be erased
@@ -206,7 +204,6 @@ class RpmYum:
         db.addPkgs(self.pydb.getPkgs())
         self.opresolver = RpmResolver(self.config, db)
         del db
-        self.pkgs = []
         self.__generateObsoletesList()
         return 1
 
@@ -222,7 +219,7 @@ class RpmYum:
 
     def install(self, name):
         pkglist = self.__findPkgs(name)
-        return self.__addBestPkg(pkglist)
+        return self.__handleBestPkg("install", pkglist)
 
     def groupInstall(self, name):
         args = self.getGroupPackages(name)
@@ -232,7 +229,7 @@ class RpmYum:
 
     def installByDep(self, dname, dflags, dversion):
         pkglist = self.__findPkgsByDep(dname, dflags, dversion)
-        return self.__addBestPkg(pkglist)
+        return self.__handleBestPkg("install", pkglist)
 
     def update(self, name):
         # First find all matching packages. Remember, name can be a glob, too,
@@ -255,12 +252,12 @@ class RpmYum:
         # Now go over all package names we found and find the correct update
         # packages.
         for name in pkgnamehash.keys():
-            dbpkgs = self.pydb.getPkgsByName(name)
+            dbpkgs = self.opresolver.getDatabase().getPkgsByName(name)
             # If the package name is either in our always_install list, no
             # package with that name was installed we simply try to select the
             # best matching package update for this arch.
             if name in self.always_install or len(dbpkgs) == 0:
-                self.__addBestPkg(pkgnamehash[name])
+                self.__handleBestPkg("update", pkgnamehash[name])
                 continue
             # Next trick: We now know that this is an update package and we
             # have at least 1 package with that name installed. In order to
@@ -280,7 +277,7 @@ class RpmYum:
                 # matching package again as we allow arch switches to 64bit
                 # for updates.
                 if not is_multi:
-                    self.__addBestPkg(pkgnamehash[name])
+                    self.__handleBestPkg("update", pkgnamehash[name])
                     continue
                 # OK, we have several archs for this package installed, we now
                 # need to filter them to 32bit and 64bit buckets and later
@@ -306,7 +303,7 @@ class RpmYum:
                     return 0
                 # Find the best matching package for the given list of packages
                 # and archs.
-                self.__addBestPkg(pkgnamearchhash[name][arch], march, True)
+                self.__handleBestPkg("update", pkgnamearchhash[name][arch], march, True)
                 # Trick to avoid multiple adds for same arch, after handling
                 # it once we clear the update package list.
                 pkgnamearchhash[name][arch] = []
@@ -320,10 +317,10 @@ class RpmYum:
 
     def updateByDep(self, dname, dflags, dversion):
         pkglist = self.__findPkgsByDep(dname, dflags, dversion)
-        return self.__addBestPkg(pkglist)
+        return self.__handleBestPkg("update", pkglist)
 
     def remove(self, name):
-        self.pkgs.extend(self.pydb.searchPkgs([name, ]))
+        self.__handleBestPkg("remove", self.pydb.searchPkgs([name, ]))
 
     def groupRemove(self, name):
         args = self.getGroupPackages(name)
@@ -332,7 +329,7 @@ class RpmYum:
 
     def removeByDep(self, dname, dflags, dversion, all=True):
         pkglist = self.pydb.searchDependency(dname, dflags, dversion)
-        return self.__addBestPkg(pkglist)
+        return self.__handleBestPkg("remove", pkglist)
 
     def __readPackage(self, name):
         try:
@@ -367,26 +364,84 @@ class RpmYum:
             pkglist.extend(repo.searchDependency(dname, dflags, dversion))
         return pkglist
 
-    def __addBestPkg(self, pkglist, arch=None, exactarch=False):
+    def __handleBestPkg(self, cmd, pkglist, arch=None, exactarch=False, is_filereq=0):
+        # Handle removes directly here, they don't need any special handling.
+        if cmd.endswith("remove"):
+            for upkg in pkglist:
+                self.opresolver.erase(upkg)
+            return 1
+        # If no arch has been set use the one of our current machine
         if arch == None:
             arch = self.config.machine
+        # Order the elements of the potential packages by machine
+        # distance and evr
         orderList(pkglist, arch)
-        # We only add the first package where we find that file
-        if len(pkglist) > 0:
-            # In case of exactarch it needs to match precisely.
-            if exactarch and pkglist[0]["arch"] != arch:
-                return 0
-            if not pkglist[0] in self.pkgs:
-                self.pkgs.append(pkglist[0])
-            return 1
-        return 0
+        # Prepare a pkg name hash for possibly newer packages that have "higher"
+        # ranked packages via the comps with lower version in other repos.
+        pkgnamehash = {}
+        ret = 0
+        for type in ["mandatory", "default", "optional", None]:
+            for upkg in pkglist:
+                # Skip all packages that are either blocked via our erase_list
+                # or that are already in the opresolver
+                if upkg in self.erase_list or \
+                   upkg in self.opresolver.getDatabase():
+                    continue
+                # If exactarch is set skip all packages that don't match
+                # the arch exactly.
+                if exactarch and pkglist[0]["arch"] != arch:
+                    continue
+                # If no package with the same name has already been found enter
+                # it in the pkgnamehash. That way pkgnamehash will always
+                # contain the newest not-blocked available package for each
+                # name.
+                if not pkgnamehash.has_key(upkg["name"]):
+                    pkgnamehash[upkg["name"]] = upkg
+                # If the compstype doesn't fit, skip it for now.
+                if upkg.compstype != type:
+                    continue
+                # Now we need to replace the fitting package with the newest
+                # version available (which could be the same).
+                upkg = pkgnamehash[upkg["name"]]
+                # "fake" Source RPMS to be noarch rpms without any reqs/deps 
+                # etc. except if we want pyrpmyum to install the buildprereqs
+                # from the srpm.
+                if upkg.isSourceRPM():
+                    upkg["arch"] = "noarch"
+                    upkg["provides"] = []
+                    upkg["conflicts"] = []
+                    upkg["obsoletes"] = []
+                # Only try to update if the package itself or the update package
+                # are noarch or if they are buildarchtranslate or arch
+                # compatible. Some exception needs to be done for
+                # filerequirements.
+                if not (is_filereq or \
+                        archDuplicate(upkg["arch"], arch) or \
+                        archCompat(upkg["arch"], arch) or \
+                        archCompat(arch, upkg["arch"])):
+                    continue
+                # Depending on the command we gave to handle we need to either
+                # install, update or remove the package now.
+                if   cmd.endswith("install"):
+                    ret = self.opresolver.install(upkg)
+                elif cmd.endswith("update") or cmd.endswith("upgrade"):
+                    if upkg["name"] in self.always_install:
+                        ret = self.opresolver.install(upkg)
+                    else:
+                        ret = self.opresolver.update(upkg)
+                if ret > 0:
+                    break
+            if ret > 0:
+                break
+        if ret > 0:
+            self.__handleObsoletes(upkg)
+        return ret
 
     def runArgs(self, args):
-        """Set self.pkgs to RpmPackage's to work with, based on args.
+        """Find all packages that match the args and run the given command on
+        them.
 
-        Return 1 on success, 0 on error (after warning the user).  Self.pkgs
-        may contain several matches for a single package; in that case, the
-        best matches are first."""
+        Return 1 on success, 0 on error (after warning the user)."""
 
         if self.config.timer:
             time1 = clock()
@@ -397,6 +452,11 @@ class RpmYum:
                 # Hardcode the inverse package obsolete code here as we
                 # need to use the reverse logic to later cases.
                 for opkg in self.__obsoleteslist:
+                    # Never add obsolete packages that are already in the DB
+                    # with the same name.
+                    if len(self.opresolver.getDatabase().getPkgsByName(opkg["name"])) > 0:
+                        continue
+                    # Loop through all obsoletes
                     for u in opkg["obsoletes"]:
                         s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
                         if len(s) == 0:
@@ -451,31 +511,10 @@ class RpmYum:
         return 1
 
     def runDepRes(self):
-        """Set up self.opresolver from self.pkgs.
+        """Run the complete depresolution.
 
         Return 1."""
         # ... or 0 if __runDepResolution fails, which currently can't happen.
-
-        # "fake" Source RPMS to be noarch rpms without any reqs/deps etc.
-        # except if we want pyrpmyum to install the buildprereqs from the
-        # srpm.
-        for pkg in self.pkgs:
-            if pkg.isSourceRPM():
-                pkg["arch"] = "noarch"
-                pkg["provides"] = []
-                pkg["conflicts"] = []
-                pkg["obsoletes"] = []
-        # Filter newest packages
-        # Shouldn't be needed anymore. Verify...
-        #self.pkgs = selectNewestPkgs(self.pkgs)
-        if self.config.timer:
-            time1 = clock()
-        # Add packages to be processed to our operation resolver
-        for pkg in self.pkgs:
-            self.__appendPkg(pkg)
-        if self.config.timer:
-            self.config.printInfo(0, "adding packages to opresolver took %s seconds\n" % (clock() - time1))
-        self.pkgs = []
         ret = 1
         if self.config.timer:
             time1 = clock()
@@ -546,24 +585,7 @@ class RpmYum:
             for pkg in repo.getPkgs():
                 if len(pkg["obsoletes"]) > 0:
                     self.__obsoleteslist.append(pkg)
-
-    def __appendPkg(self, pkg):
-        """Add RpmPackage pkg to self.opresolver, depending on self.command.
-
-        Return an RpmList error code (after warning the user)."""
-
-        if   self.command.endswith("install"):
-            return self.opresolver.install(pkg)
-        elif self.command.endswith("update") or \
-             self.command.endswith("upgrade"):
-            if pkg["name"] in self.always_install:
-                return self.opresolver.install(pkg)
-            else:
-                return self.opresolver.update(pkg)
-        elif self.command.endswith("remove"):
-            return self.opresolver.erase(pkg)
-        else:
-            raise AssertionError, "Invalid command"
+        orderList(self.__obsoleteslist, self.config.machine)
 
     def __runDepResolution(self):
         """Try to resolve all dependencies and remove all conflicts..
@@ -690,13 +712,13 @@ class RpmYum:
         # distance and evr.
         # Special handling of filerequirements need to be done here in order to
         # allow cross buildarchtranslate compatible package updates.
-        ret = self.__handleUpdatePkglist(pkg, pkg_list, dep[0][0] == "/")
+        ret = self.__handleBestPkg("update", pkg_list, pkg["arch"], False, dep[0][0] == "/")
         if ret > 0:
             return 1
         # Ok, we didn't find any package that could fullfill the
         # missing deps. Now what we do is we look for updates of that
         # package in all repos and try to update it.
-        ret = self.__findUpdatePkg(pkg)
+        ret = self.update(pkg["name"])
         if ret > 0:
             return 1
         # OK, left over unresolved deps, but now we already have the
@@ -724,21 +746,21 @@ class RpmYum:
             for pkg1 in conflicts:
                 for (c, pkg2) in conflicts[pkg1]:
                     if   c[1] & RPMSENSE_LESS != 0:
-                        if self.__findUpdatePkg(pkg2) > 0:
+                        if self.update(pkg2["name"]) > 0:
                             handled_conflict = 1
                             ret = 1
                             break
                     elif c[1] & RPMSENSE_GREATER != 0:
-                        if self.__findUpdatePkg(pkg1) > 0:
+                        if self.update(pkg1["name"]) > 0:
                             handled_conflict = 1
                             ret = 1
                             break
                     else:
-                        if   self.__findUpdatePkg(pkg1) > 0:
+                        if   self.update(pkg1["name"]) > 0:
                             handled_conflict = 1
                             ret = 1
                             break
-                        elif self.__findUpdatePkg(pkg2) > 0:
+                        elif self.update(pkg2["name"]) > 0:
                             handled_conflict = 1
                             ret = 1
                             break
@@ -752,11 +774,11 @@ class RpmYum:
                 handled_fileconflict = 0
                 for pkg1 in conflicts:
                     for (c, pkg2) in conflicts[pkg1]:
-                        if self.__findUpdatePkg(pkg2) > 0:
+                        if self.update(pkg2["name"]) > 0:
                             handled_fileconflict = 1
                             ret = 1
                             break
-                        elif self.__findUpdatePkg(pkg1) > 0:
+                        elif self.update(pkg1["name"]) > 0:
                             handled_fileconflict = 1
                             ret = 1
                             break
@@ -797,66 +819,6 @@ class RpmYum:
             else:
                 break
         return obsoleted
-
-    def __findUpdatePkg(self, pkg):
-        """Get packages matching %name of RpmPackae pkg and choose the best one
-        and add it to self.opresolver.
-
-        Return 0 if no suitable package found, RpmList error code otherwise
-        (after warning the user)."""
-
-        pkg_list = []
-        for repo in self.repos:
-            pkg_list.extend(repo.getPkgsByName(pkg["name"]))
-        return self.__handleUpdatePkglist(pkg, pkg_list)
-
-    def __handleUpdatePkglist(self, pkg, pkg_list, is_filereq=0):
-        """Choose a package from a list of RpmPackage's pkg_list that has the
-        same base arch as RpmPackage pkg, and add it to self.opresolver.
-
-        Return 0 if no suitable package found, RpmList error code otherwise
-        (after warning the user)."""
-
-        # Order the elements of the potential packages by machine
-        # distance and evr
-        orderList(pkg_list, self.config.machine)
-        # Prepare a pkg name hash for possibly newer packages that have "higher"
-        # ranked packages via the comps with lower version in other repos.
-        pkgnamehash = {}
-        ret = 0
-        for type in ["mandatory", "default", "optional", None]:
-            for upkg in pkg_list:
-                # Skip all packages that are either blocked via our erase_list
-                # or that are already in the opresolver
-                if upkg in self.erase_list or upkg in self.opresolver.getDatabase():
-                    continue
-                # If no package with the same name has already been found enter
-                # it in the pkgnamehash. That way pkgnamehash will always
-                # contain the newest not-blocked available package for each
-                # name.
-                if not pkgnamehash.has_key(upkg["name"]):
-                    pkgnamehash[upkg["name"]] = upkg
-                # If the compstype doesn't fit, skip it for now.
-                if upkg.compstype != type:
-                    continue
-                # Now we need to replace the fitting package with the newest
-                # version available (which could be the same).
-                upkg = pkgnamehash[upkg["name"]]
-                # Only try to update if the package itself or the update package
-                # are noarch or if they are buildarchtranslate or arch
-                # compatible. Some exception needs to be done for
-                # filerequirements.
-                if not (is_filereq or \
-                        archDuplicate(upkg["arch"], pkg["arch"]) or \
-                        archCompat(upkg["arch"], pkg["arch"]) or \
-                        archCompat(pkg["arch"], upkg["arch"])):
-                    continue
-                ret = self.opresolver.update(upkg)
-                if ret > 0:
-                    break
-            if ret > 0:
-                break
-        return ret
 
     def __doAutoerase(self, pkg):
         """Try to remove RpmPackage pkg from self.opresolver to resolve a
