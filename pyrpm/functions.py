@@ -33,6 +33,7 @@ import package
 
 from config import rpmconfig
 from base import *
+from pyrpm import __version__
 
 # Number of bytes to read from file at once when computing digests
 DIGEST_CHUNK = 65536
@@ -224,7 +225,8 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
             os.chdir("/")
             # FIXME: what about PATH=%{_install_script_path}?
             e = {"HOME": "/", "USER": "root", "LOGNAME": "root",
-                "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin"}
+                 "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin",
+                 "PYRPM_VERSION" : __version__}
             if pkg and pkg["prefixes"]:
                 e["RPM_INSTALL_PREFIX"] = pkg["prefixes"][0]
                 idx = 1
