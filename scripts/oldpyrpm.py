@@ -1198,14 +1198,14 @@ class UGid:
 class Uid(UGid):
     def transform(self, buildroot):
         # "uid=0" if no /etc/passwd exists at all.
-        if not os.path.isfile(buildroot + "/etc/passwd"):
+        if not os.path.exists(buildroot + "/etc/passwd"):
             for uid in self.ugid.keys():
                 self.ugid[uid] = 0
                 if uid != "root":
                     print "Warning: user %s not found, using uid 0." % uid
             return
         # Parse /etc/passwd if glibc is not yet installed.
-        if buildroot or not os.path.isfile(buildroot + "/sbin/ldconfig"):
+        if buildroot or not os.path.exists(buildroot + "/sbin/ldconfig"):
             uidhash = parseFile(buildroot + "/etc/passwd", self.ugid)
             for uid in self.ugid.keys():
                 if uidhash.has_key(uid):
@@ -1228,14 +1228,14 @@ class Uid(UGid):
 class Gid(UGid):
     def transform(self, buildroot):
         # "gid=0" if no /etc/group exists at all.
-        if not os.path.isfile(buildroot + "/etc/group"):
+        if not os.path.exists(buildroot + "/etc/group"):
             for gid in self.ugid.keys():
                 self.ugid[gid] = 0
                 if gid != "root":
                     print "Warning: group %s not found, using gid 0." % gid
             return
         # Parse /etc/group if glibc is not yet installed.
-        if buildroot or not os.path.isfile(buildroot + "/sbin/ldconfig"):
+        if buildroot or not os.path.exists(buildroot + "/sbin/ldconfig"):
             gidhash = parseFile(buildroot + "/etc/group", self.ugid)
             for gid in self.ugid.keys():
                 if gidhash.has_key(gid):
@@ -3952,7 +3952,7 @@ class RpmRepo:
 
         # if we"ve got a group file then checksum it once and be done
         groupfile = repodir + "/comps.xml"
-        if os.path.isfile(groupfile):
+        if os.path.exists(groupfile):
             timestamp = os.stat(groupfile).st_mtime
             csum = getChecksum(groupfile, self.checksum)
             data = reporoot.newChild(None, "data", None)
@@ -4898,17 +4898,18 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
     files = pkg.getFilenames()
     i = pkg.getSpecfile(files)
     specfile = files[i]
+    fullspecfile = "%s/%s" % (pkgdir, specfile)
 
     (changelognum, changelogtime) = getChangeLogFromRpm(pkg, oldpkg)
-    if os.path.exists("%s/%s" % (pkgdir, specfile)):
-        checksum = getChecksum("%s/%s" % (pkgdir, specfile))
+    if os.path.exists(fullspecfile): # os.access(fullspecfile, os.R_OK)
+        checksum = getChecksum(fullspecfile)
         # same spec file in repo and in rpm: nothing to do
         if checksum == pkg["filemd5s"][i]:
             return
         # If we don't have the previous package anymore, but there is still
         # a specfile, read the time of the last changelog entry.
         if changelognum == -1 and changelogtime == None:
-            l = open("%s/%s" % (pkgdir, specfile), "r").readlines()
+            l = open(fullspecfile, "r").readlines()
             while l:
                 if l[0] == "%changelog\n":
                     l.pop(0)
@@ -4959,7 +4960,7 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
             md5data = pkg["filemd5s"][i]
             fdir = "%s/%s" % (filecache, md5data[0:2])
             fname = "%s/%s.bin" % (fdir, md5data)
-            if not os.path.isfile(fname):
+            if not os.path.exists(fname):
                 makeDirs(fdir)
                 doLnOrCopy(fsrc, fname)
             if pkg["name"] in EXTRACT_SOURCE_FOR:
