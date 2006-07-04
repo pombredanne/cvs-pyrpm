@@ -47,7 +47,7 @@ def x_config(ks, buildroot, installation):
         try:
             cards = hwdata.Cards(buildroot)
         except Exception, msg:
-            config.log("WARNING: %s" % msg)
+            config.log("WARNING: %s\n" % msg)
         else:
             dict = cards.get(ks["xconfig"]["card"])
             if dict and dict.has_key("driver"):
@@ -87,7 +87,7 @@ def x_config(ks, buildroot, installation):
         try:
             monitors = hwdata.Monitors(buildroot)
         except Exception, msg:
-            config.log("WARNING: %s" % msg)
+            config.log("WARNING: %s\n" % msg)
         else:
             dict = monitors.get(ks["xconfig"]["monitor"])
             if dict:
