@@ -223,9 +223,10 @@ class RpmYum:
 
     def groupInstall(self, name):
         args = self.getGroupPackages(name)
+        ret = 0
         for pkgname in args:
-            self.install(pkgname)
-        return 1
+            ret |= self.install(pkgname)
+        return ret
 
     def installByDep(self, dname, dflags, dversion):
         pkglist = self.__findPkgsByDep(dname, dflags, dversion)
@@ -251,13 +252,15 @@ class RpmYum:
             pkgnamearchhash.setdefault(pkg["name"], {}).setdefault(pkg["arch"], []).append(pkg)
         # Now go over all package names we found and find the correct update
         # packages.
+        ret = 0
         for name in pkgnamehash.keys():
-            dbpkgs = self.opresolver.getDatabase().getPkgsByName(name)
+            # Get a copy of the current db packages for the given name
+            dbpkgs = self.opresolver.getDatabase().getPkgsByName(name)[:]
             # If the package name is either in our always_install list, no
             # package with that name was installed we simply try to select the
             # best matching package update for this arch.
             if name in self.always_install or len(dbpkgs) == 0:
-                self.__handleBestPkg("update", pkgnamehash[name])
+                ret |= self.__handleBestPkg("update", pkgnamehash[name])
                 continue
             # Next trick: We now know that this is an update package and we
             # have at least 1 package with that name installed. In order to
@@ -277,7 +280,7 @@ class RpmYum:
                 # matching package again as we allow arch switches to 64bit
                 # for updates.
                 if not is_multi:
-                    self.__handleBestPkg("update", pkgnamehash[name])
+                    ret |= self.__handleBestPkg("update", pkgnamehash[name])
                     continue
                 # OK, we have several archs for this package installed, we now
                 # need to filter them to 32bit and 64bit buckets and later
@@ -290,30 +293,52 @@ class RpmYum:
                     del pkgnamearchhash[name][arch]
             # Ok, now we have to find matching updates for all installed archs.
             for ipkg in dbpkgs:
-                # If we are not doing exactarch we allow archs to be switched
-                # inside of the given buildarch translation.
-                if not self.config.exactarch:
-                    arch = buildarchtranslate[ipkg["arch"]]
+                # First see if we're dealing with a noarch package. Just allow
+                # any package to be used then.
+                if   ipkg["arch"] == "noarch":
+                    arch = "noarch"
                     march = self.config.machine
-                else:
+                    for a in pkgnamearchhash[name].keys():
+                        if a == arch:
+                            continue
+                        pkgnamearchhash[name][arch].extend(pkgnamearchhash[name][a])
+                # Now for exactarch we really need to find a perfect arch match.
+                elif self.config.exactarch:
                     arch = ipkg["arch"]
                     march = arch
+                    # Add all noarch packages for arch -> noarch transitions
+                    pkgnamearchhash[name].setdefault(arch, []).extend(pkgnamearchhash[name].setdefault("noarch", {}))
+                # If we are not doing exactarch we allow archs to be switched
+                # inside of the given buildarch translation.
+                else:
+                    arch = buildarchtranslate[ipkg["arch"]]
+                    march = self.config.machine
+                    # Add all noarch packages for arch -> noarch transitions
+                    pkgnamearchhash[name].setdefault(arch, []).extend(pkgnamearchhash[name].setdefault("noarch", {}))
                 if not pkgnamearchhash[name].has_key(arch):
                     self.config.printError("Can't find update package with matching arch for package %s" % ipkg.getNEVRA())
                     return 0
                 # Find the best matching package for the given list of packages
                 # and archs.
-                self.__handleBestPkg("update", pkgnamearchhash[name][arch], march, True)
+                r = self.__handleBestPkg("update", pkgnamearchhash[name][arch], march, self.config.exactarch)
+                # In case we had a successfull update make sure we erase the
+                # package we just updated. Otherwise cross arch switches won't
+                # work properly.
+                # DISALBED CURRENTLY. need to verify this is correct.
+                #if r > 0:
+                #   self.opresolver.erase(ipkg)
+                ret |= r
                 # Trick to avoid multiple adds for same arch, after handling
                 # it once we clear the update package list.
                 pkgnamearchhash[name][arch] = []
-        return 1
+        return ret
 
     def groupUpdate(self, name):
         args = self.getGroupPackages(name)
+        ret = 0
         for pkgname in args:
-            self.update(pkgname)
-        return 1
+            ret |= self.update(pkgname)
+        return ret
 
     def updateByDep(self, dname, dflags, dversion):
         pkglist = self.__findPkgsByDep(dname, dflags, dversion)
@@ -379,9 +404,15 @@ class RpmYum:
         # Prepare a pkg name hash for possibly newer packages that have "higher"
         # ranked packages via the comps with lower version in other repos.
         pkgnamehash = {}
+        # Also have a hash for package names that have already been handled.
+        donehash = {}
         ret = 0
+        upkg = None
         for type in ["mandatory", "default", "optional", None]:
             for upkg in pkglist:
+                # Skip package names that have already been handled.
+                if donehash.has_key(upkg["name"]):
+                    continue
                 # Skip all packages that are either blocked via our erase_list
                 # or that are already in the opresolver
                 if upkg in self.erase_list or \
@@ -389,7 +420,8 @@ class RpmYum:
                     continue
                 # If exactarch is set skip all packages that don't match
                 # the arch exactly.
-                if exactarch and pkglist[0]["arch"] != arch:
+                if exactarch and upkg["arch"] != arch and \
+                                 upkg["arch"] != "noarch":
                     continue
                 # If no package with the same name has already been found enter
                 # it in the pkgnamehash. That way pkgnamehash will always
@@ -423,17 +455,14 @@ class RpmYum:
                 # Depending on the command we gave to handle we need to either
                 # install, update or remove the package now.
                 if   cmd.endswith("install"):
-                    ret = self.opresolver.install(upkg)
+                    ret |= self.opresolver.install(upkg)
                 elif cmd.endswith("update") or cmd.endswith("upgrade"):
                     if upkg["name"] in self.always_install:
-                        ret = self.opresolver.install(upkg)
+                        ret |= self.opresolver.install(upkg)
                     else:
-                        ret = self.opresolver.update(upkg)
-                if ret > 0:
-                    break
-            if ret > 0:
-                break
-        if ret > 0:
+                        ret |= self.opresolver.update(upkg)
+                donehash[upkg["name"]] = 1
+        if upkg and ret > 0:
             self.__handleObsoletes(upkg)
         return ret
 
