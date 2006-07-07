@@ -2964,86 +2964,6 @@ class RpmRelations:
             raise
         return order
 
-class Loop(HashList):
-
-    def __init__(self, relations, pkgs):
-        HashList.__init__(self)
-        self.relations = relations
-        # start with pkg with smallest hash number
-        # to be able to detect identical loops
-        min_hash = None
-        min_idx = 0
-        for i in xrange(len(pkgs)):
-            if min_hash is None or hash(pkgs[i]) < min_hash:
-                min_hash = hash(pkgs[i])
-                min_idx = i
-
-        for i in xrange(min_idx, len(pkgs)):
-            self[pkgs[i]] = pkgs[i]
-        for i in xrange(min_idx):
-            self[pkgs[i]] = pkgs[i]
-
-    def __cmp__(self, other):
-        """compare loops: Sort by size first, use hash values of the pkgs
-        from the beginning then."""
-        result = cmp(len(self), len(other))
-        if result == 0:
-            for i in xrange(len(self)): # both have same lenght
-                result = cmp(hash(self[i]), hash(other[i]))
-                if result != 0:
-                    return result
-        return result
-
-    def __iter__(self):
-        """Return Iterator. Iterator returns (Node, Next) Tuples."""
-        idx = 1
-        while idx < len(self):
-            yield(self.list[idx - 1], self.list[idx])
-            idx += 1
-        yield(self.list[-1], self.list[0])
-
-    def containsRequirement(self, pkg, pre):
-        if pkg in self and pre in self:
-            idx = self.index(pre)
-            return self[idx - 1] is pkg
-        return 0
-
-    def containsHardRequirement(self):
-        """Does the loop contain any hard relations?"""
-        for pkg, pre in self:
-            if self.relations[pkg].pre[pre]:
-                return 1
-        return 0
-
-    def breakUp(self):
-        """Searches for the relation that has the maximum distance
-        from hard requirements and removes it.
-        Returns (Node, Next) of the removed requirement.
-
-        Assumes self.containsHardRequirement() == 1"""
-
-        # find the requirement that has the largest distance
-        # to a hard requirement
-        distances = [0]
-        for pkg, pre in self:
-            if self.relations[pkg].pre[pre]:
-                distances.append(0)
-            else:
-                distances.append(distances[-1] + 1)
-        for idx in xrange(len(distances)):
-            if distances[idx] == 0 and idx > 0:
-                break
-            else:
-                distances[idx] += distances[-1]
-        maxd = -1
-        max_idx = 0
-        for idx in xrange(len(distances)):
-            if distances[idx] > maxd:
-                maxd = distances[idx]
-                max_idx = idx
-        self.relations.removeRelation(self[max_idx - 1], self[max_idx])
-        return (self[max_idx - 1], self[max_idx])
-
 
 class ConnectedComponent:
     """Contains a Strongly Connected Component (SCC).
@@ -3093,7 +3013,6 @@ class ConnectedComponent:
         relations[self].weight = len(self.pkgs)
         # uncomment for use of the dict based weight algorithm
         # relations[self].weight = self.pkgs.copy()
-        self.detectLoops()
 
     def __len__(self):
         return len(self.pkgs)
@@ -3103,39 +3022,6 @@ class ConnectedComponent:
 
     def getNEVRA(self):
         return "Component: " + ",".join([pkg.getNEVRA() for pkg in self.pkgs])
-
-    def detectLoops(self):
-        """Sets self.loops.
-        self.loops is sorted with Loop.__cmp__() and the loops are unique.
-        """
-        loops = []
-        self._detectLoops([], self.pkgs.iterkeys().next(), loops)
-        # remove duplicates
-        loops.sort()
-        previous = Loop(self.relations, []) # dummy loop of size 0
-        self.loops = []
-        for loop in loops:
-            if loop != previous:
-                self.loops.append(loop)
-            previous = loop
-
-    def _detectLoops(self, path, pkg, loops):
-        """Do a DFS walk in orderer.RpmRelations relations from RpmPackage pkg,
-        add discovered loops to loops.
-
-        The list of RpmPackages path contains the path from the search root to
-        the current package.  loops is a list of Loop objects."""
-        for p in self.relations[pkg].pre:
-            # "p in path" is O(N), can be O(1) with another hash.
-            if len(path) > 0 and p in path:
-                w = path[path.index(p):] # make shallow copy of loop
-                w.append(pkg)
-                w.append(p)
-                loops.append(Loop(self.relations, w))
-            else:
-                path.append(pkg)
-                self._detectLoops(path, p, loops)
-                path.pop()
 
     def processLeafNodes(self, order):
         """Remove all leaf nodes with the component and append them to order.
@@ -3160,69 +3046,53 @@ class ConnectedComponent:
         for pkg in component.pkgs:
             del self.pkgs[pkg]
 
-    def genCounter(self):
-        """Count number of times each arcs is represented in the list of loop
-        tuples loops.
-
-        Return a HashList: RpmPackage A =>
-        HashList :RpmPackage B => number of loops in which A requires B."""
-
-        counter = HashList()
-        for loop in self.loops:
-            for node, next in loop:
-                # first and last pkg are the same, use once
-                if node not in counter:
-                    counter[node] = HashList()
-                if next not in counter[node]:
-                    counter[node][next] = 1
-                else:
-                    counter[node][next] += 1
-        return counter
-
     def breakUp(self, order):
-        """Remove this component from the graph by breaking it apart.
-        Assumes that the LoopGroup is a leaf."""
-
-        hardloops = [l for l in self.loops
-                     if l.containsHardRequirement()]
-
-        if hardloops:
-            # loops with hard requirements found!
-            # break up  one of these loops and recursivly try again
-
-            # break up smallest loop
-            pkg, pre = hardloops[0].breakUp()
-
-            components = ConnectedComponentsDetector(self.relations
-                ).detect(self.pkgs)
-            for component in components:
-                self.removeSubComponent(component)
-                self.pkgs[component] = component
-
-            self.processLeafNodes(order)
+        hard_requirements = []
+        for pkg in self.pkgs:
+            for (p, req) in self.relations[pkg].pre.iteritems():
+                if req:
+                    hard_requirements.append((pkg, p))
+        # pick requirement to delete
+        weights = { }
+        # calculate minimal distance to a pre req
+        for pkg, nextpkg in  hard_requirements:
+            # dijkstra
+            edge = [nextpkg]
+            weights[nextpkg] = 0
+            while edge:
+                node = edge.pop()
+                weight = weights[node] + 1
+                for next_node, ishard in self.relations[node].pre.iteritems():
+                    if ishard:
+                        continue
+                    w = weights.get(next_node, None)
+                    if w is not None and w < weight:
+                        continue
+                    weights[next_node] = weight
+                    edge.append(next_node)
+                edge.sort()
+                edge.reverse()
+        if weights:
+            # get pkg with largest minimal distance
+            (weigth, pkg) = max(( (w, p) for (p, w) in weights.iteritems() ))
+            # get the predesessor with largest minimal distance
+            (weight, prepkg) = max(( (weights[p], p) for p in \
+                                     self.relations[pkg].post ))
         else:
-            # No loops with hard requirements found, breaking up everything
-            while self.loops:
-                # find most used relation
-                counter = self.genCounter()
-
-                max_count_node = None
-                max_count_next = None
-                max_count = 0
-
-                for node in counter:
-                    for next in counter[node]:
-                        if counter[node][next] > max_count:
-                            max_count_node = node
-                            max_count_next = next
-                            max_count = counter[node][next]
-
-                self.relations.removeRelation(max_count_node, max_count_next)
-                # remove loops that got broken up
-                self.loops = [l for l in self.loops
-                    if not l.containsRequirement(max_count_node, max_count_next)]
-            # collect the nodes after all loops got broken up
-            self.processLeafNodes(order)
+            prepkg = self.pkgs.iterkeys().next() # any pkg
+            pkg = self.relations[prepkg].pre.iterkeys().next() # any successor
+        if self.relations[prepkg].pre[pkg]:
+            print "Breaking pre requirement for %s: %s" % (prepkg.getNEVRA(),
+                pkg.getNERVA())
+        # remove this requirement
+        self.relations.removeRelation(prepkg, pkg)
+        # rebuild components
+        components = ConnectedComponentsDetector(self.relations).detect(self.pkgs)
+        for component in components:
+            self.removeSubComponent(component)
+            self.pkgs[component] = component
+        # collect nodes
+        self.processLeafNodes(order)
 
 
 class ConnectedComponentsDetector:
