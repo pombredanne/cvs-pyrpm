@@ -3789,20 +3789,19 @@ class RpmRepo:
         origpfd.close()
         origffd.close()
         origofd.close()
-        os.rename(pfdtmp, repodir + "/primary.xml.gz")
-        os.rename(ffdtmp, repodir + "/filelists.xml.gz")
-        os.rename(ofdtmp, repodir + "/other.xml.gz")
         del self.filerequires
 
         repodoc = libxml2.newDoc("1.0")
         reporoot = repodoc.newChild(None, "repomd", None)
         repons = reporoot.newNs("http://linux.duke.edu/metadata/repo", None)
         reporoot.setNs(repons)
-        workfiles = [(repodir + "/other.xml.gz", "other",),
-            (repodir + "/filelists.xml.gz", "filelists"),
-            (repodir + "/primary.xml.gz", "primary")]
-        for (ffile, ftype) in workfiles:
-            if ffile.endswith(".gz"):
+        workfiles = [(ofdtmp, 1, "other"), (ffdtmp, 1, "filelists"),
+            (pfdtmp, 1, "primary")]
+        groupfile = repodir + "/comps.xml"
+        if os.path.exists(groupfile):
+            workfiles.append((groupfile, 0, "group"))
+        for (ffile, gzfile, ftype) in workfiles:
+            if gzfile:
                 zfo = PyGZIP(ffile, None, None, None)
                 uncsum = getChecksum(zfo, self.checksum)
             timestamp = os.stat(ffile).st_mtime
@@ -3812,28 +3811,19 @@ class RpmRepo:
             location = data.newChild(None, "location", None)
             if baseurl != None:
                 location.newProp("xml:base", baseurl)
-            location.newProp("href", "repodata/" + ftype + ".xml.gz")
+            if gzfile:
+                location.newProp("href", "repodata/" + ftype + ".xml.gz")
+            else:
+                location.newProp("href", "repodata/comps.xml")
             checksum = data.newChild(None, "checksum", csum)
             checksum.newProp("type", self.checksum)
             timestamp = data.newChild(None, "timestamp", str(timestamp))
-            if ffile.endswith(".gz"):
+            if gzfile:
                 unchecksum = data.newChild(None, "open-checksum", uncsum)
                 unchecksum.newProp("type", self.checksum)
-
-        # if we"ve got a group file then checksum it once and be done
-        groupfile = repodir + "/comps.xml"
-        if os.path.exists(groupfile):
-            timestamp = os.stat(groupfile).st_mtime
-            csum = getChecksum(groupfile, self.checksum)
-            data = reporoot.newChild(None, "data", None)
-            data.newProp("type", "group")
-            location = data.newChild(None, "location", None)
-            if baseurl != None:
-                location.newProp("xml:base", baseurl)
-            location.newProp("href", "repodata/comps.xml")
-            checksum = data.newChild(None, "checksum", csum)
-            checksum.newProp("type", self.checksum)
-            timestamp = data.newChild(None, "timestamp", str(timestamp))
+        os.rename(pfdtmp, repodir + "/primary.xml.gz")
+        os.rename(ffdtmp, repodir + "/filelists.xml.gz")
+        os.rename(ofdtmp, repodir + "/other.xml.gz")
         repodoc.saveFormatFileEnc(repodir + "/repomd.xml", "UTF-8", 1)
         del repodoc
 
