@@ -824,29 +824,57 @@ class RpmYum:
 
         Return 1 if pkg was obsoleted, 0 if not."""
 
-        # FIXME: will this loop forever on obsoletes: cycle?
         obsoleted = 0
+        pkglist = []
+        # Loop until we have found the end of the obsolete chain
         while 1:
             found = 0
+            # Go over all packages we know have obsoletes
             for opkg in self.__obsoleteslist:
-                if opkg in self.opresolver.getDatabase() or opkg in self.erase_list:
+                # If the package has already been tried once or is in our
+                # erase_list skip it.
+                if opkg in pkglist or opkg in self.erase_list:
                     continue
+                # Never obsolete packages with the same name
                 if pkg["name"] == opkg["name"]:
                     continue
+                # Go through all obsoletes
                 for u in opkg["obsoletes"]:
+                    # Look in our current database for matches
                     s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
+                    # If the package for which we're checking the obsoletes
+                    # right now isn't in the list skip it.
                     if not pkg in s:
                             continue
-                    if self.opresolver.update(opkg) > 0:
+                    # Found a matching obsoleting package. Try adding it to
+                    # our opresolver with an update so it obsoletes the
+                    # installed package
+                    ret = self.opresolver.update(opkg)
+                    # If it has already been added before readd it by erasing
+                    # it and adding it again. This will ensure that the
+                    # obsoleting will occur.
+                    if ret == self.opresolver.ALREADY_ADDED:
+                        self.opresolver.erase(opkg)
+                        ret = self.opresolver.update(opkg)
+                    # If everything went well note this and terminate the
+                    # inner obsoletes loop
+                    if ret > 0:
                         obsoleted = 1
                         found = 1
                         break
+                # If we found and handled one obsolete proplerly break the
+                # loop over the obsoletes packages and restart
                 if found:
                     break
+            # In case we found an obsolete in the last round replace the package
+            # we're trying to obsolete with the one we just added and make
+            # another run. Otherwise we're finished and can return.
             if found:
                 pkg = opkg
+                pkglist.append(pkg)
             else:
                 break
+        # Return wether we obsoleted any package this time or not.
         return obsoleted
 
     def __doAutoerase(self, pkg):
