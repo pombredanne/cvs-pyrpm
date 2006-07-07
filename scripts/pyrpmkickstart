@@ -270,14 +270,19 @@ def main():
         stage2_img_dir = tempdir+"/stage2_img"
         os.mkdir(stage2_img_dir)
 
+        # This could also use .discinfo:
         stage2 = source.get("RedHat/base/stage2.img")
         if not stage2:
             stage2 = source.get("Fedora/base/stage2.img")
         if not stage2:
+            stage2 = source.get("images/stage2.img")
+        if not stage2:
             print "ERROR: Could not find stage2 image in installation source."
+            print "Maybe use the option --no-stage2."
             return 1
         if not os.path.exists(stage2):
             print "ERROR: Could not get stage2 image from installation source."
+            print "Maybe use the option --no-stage2."
             return 1
 
         fstype = None # no fstype needed for compressed rom fs
@@ -2307,7 +2312,12 @@ def main():
     create_file(target_chroot, "/proc/modules", [ ])
     create_dir(target_chroot, "/proc/net")
     create_file(target_chroot, "/proc/net/unix", [ ])
-    create_file(target_chroot, "/proc/stat", [ ])
+    create_file(target_chroot, "/proc/stat",
+        ["cpu  90726 6 9635 1623012 38482 1961 0 0\n",
+         "cpu0 90726 6 9635 1623012 38482 1961 0 0\n",
+         "processes 26341\n",
+         "procs_running 1\n",
+         "procs_blocked 0\n"])
     create_file(target_chroot, "/proc/swaps", [ ])
     create_file(target_chroot, "/proc/uptime", [ ])
     create_file(target_chroot, "/proc/version", [ ])
@@ -3017,6 +3027,8 @@ def main():
 
             create_file(target_chroot, "/boot/grub/grub.conf", content,
                         force=1, mode=0600)
+            if not os.access(target_chroot + "/etc/grub.conf", os.R_OK):
+                os.symlink("../boot/grub/grub.conf", target_chroot + "/etc/grub.conf")
 
             # copy all grub stage files
             t = "/usr/share/grub/%s-redhat/" % installation.arch
