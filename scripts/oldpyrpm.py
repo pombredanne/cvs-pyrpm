@@ -45,6 +45,7 @@
 # - Optionally import the full tree for the initial import (e.g. FC releases).
 # - Optionally also sort by time for e.g. FC updates dirs.
 # general:
+# - list of older kernel names not running, to remove them
 # - How todo save shell escapes for os.system()
 # - Better error handling in PyGZIP.
 # - streaming read for cpio files
@@ -799,12 +800,15 @@ headermatch = (
 
 # Names of all possible kernel packages:
 kernelpkgs = ["kernel", "kernel-smp", "kernel-bigmem", "kernel-enterprise",
-    "kernel-unsupported", "kernel-modules", "kernel-xen0", "kernel-xenU",
-    "kernel-PAE", "kernel-PAE-devel", "kernel-kdump", "kernel-kdump-devel"]
+    "kernel-xen0", "kernel-xenU", "kernel-PAE", "kernel-kdump", "kernel-BOOT",
+    "kernel-hugemem", "kernel-largesmp", "kernel-summit"]
 # Packages which are always installed and not updated:
 installonlypkgs = kernelpkgs[:]
 installonlypkgs.extend( ["gpg-pubkey", "kernel-debug", "kernel-devel",
-    "kernel-source"] )
+    "kernel-unsupported", "kernel-modules", "kernel-PAE-devel",
+    "kernel-kdump-devel", "kernel-source", "kernel-xen0-devel",
+    "kernel-xenU-devel", "kernel-smp-devel", "kernel-hugemem-devel",
+    "kernel-largesmp-devel"] )
 
 # This is RPMCANONCOLOR in /bin/rpm source, values change over time.
 def getInstallColor(arch):
@@ -1955,6 +1959,15 @@ class ReadRpm:
             if self.sig[sig] != None and self[hdr] == None:
                 self[hdr] = self.sig[sig]
 
+    def isInstallonly(self):
+        """Can several packages be installed at the same time or should this
+        rpm be normally installed only once?"""
+        if (self["name"] in installonlypkgs or
+            self["name"].startswith("kernel-module") or
+            "kernel-modules" in self.hdr.get("providename", [])):
+            return 1
+        return 0
+
     def buildOnArch(self, arch):
         # do not build if this arch is in the exclude list
         exclude = self["excludearch"]
@@ -2050,6 +2063,11 @@ class ReadRpm:
                         self.printErr("not utf-8 in %s" % i)
                         #self.printErr("text: %s" % j)
                         break
+        if (self["name"][:6] == "kernel" and self["name"] not in
+            ("kernel-utils", "kernel-doc", "kernel-pcmcia-cs",
+             "kernel-debuginfo", "kernel-ib", "kernel-headers")):
+            if not self.isInstallonly():
+                self.printErr("possible kernel rpm")
         for i in ("md5",):
             if not self.sig.has_key(i):
                 self.printErr("sig header is missing: %s" % i)
@@ -3074,10 +3092,10 @@ class ConnectedComponent:
                 edge.reverse()
         if weights:
             # get pkg with largest minimal distance
-            (weigth, pkg) = max(( (w, p) for (p, w) in weights.iteritems() ))
+            (weigth, pkg) = max([ [w, p] for (p, w) in weights.iteritems() ])
             # get the predesessor with largest minimal distance
-            (weight, prepkg) = max(( (weights[p], p) for p in \
-                                     self.relations[pkg].post ))
+            (weight, prepkg) = max([ [weights[p], p] for p in \
+                                     self.relations[pkg].post ])
         else:
             prepkg = self.pkgs.iterkeys().next() # any pkg
             pkg = self.relations[prepkg].pre.iterkeys().next() # any successor
@@ -5285,7 +5303,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
                 print "Change 'arch' setting to be:", arch
         if not releasever and pkg["name"] in distroverpkg:
             releasever = pkg["version"]
-        if pkg["name"] not in installonlypkgs:
+        if not pkg.isInstallonly():
             checkdupes.setdefault("%s.%s" % (pkg["name"], pkg["arch"]),
                 []).append(pkg)
             checkevr.setdefault("%s" % pkg["name"], []).append(pkg)
@@ -5972,7 +5990,7 @@ def main():
         installrpms = []
         eraserpms = []
         for r in h.values():
-            if r[0]["name"] in installonlypkgs:
+            if r[0].isInstallonly():
                 # XXX check if there is a newer "kernel" around
                 continue
             newest = selectNewestRpm(r, arch_hash, verbose)
