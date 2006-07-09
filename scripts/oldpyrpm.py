@@ -45,7 +45,6 @@
 # - Optionally import the full tree for the initial import (e.g. FC releases).
 # - Optionally also sort by time for e.g. FC updates dirs.
 # general:
-# - list of older kernel names not running, to remove them
 # - How todo save shell escapes for os.system()
 # - Better error handling in PyGZIP.
 # - streaming read for cpio files
@@ -5761,6 +5760,8 @@ def main():
     specifyarch = 0
     buildroot = ""
     checkrpmdb = 0
+    checkoldkernel = 0
+    numkeepkernels = 3
     checkdeps = 0
     baseurl = None
     createrepo = 0
@@ -5777,8 +5778,9 @@ def main():
             "excludes=", "nofileconflicts", "fileconflicts", "runorderer",
             "updaterpms", "reposdir=", "disablereposdir", "enablerepos",
             "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
-            "checkrpmdb", "checkdeps", "buildroot=", "installroot=", "root=",
-            "version", "baseurl=", "createrepo", "mercurial"])
+            "checkrpmdb", "checkoldkernel", "numkeepkernels=", "checkdeps",
+            "buildroot=", "installroot=", "root=", "version", "baseurl=",
+            "createrepo", "mercurial"])
     except getopt.GetoptError, msg:
         print "Error:", msg
         return 1
@@ -5850,6 +5852,10 @@ def main():
                 cachedir += "/"
         elif opt == "--checkrpmdb":
             checkrpmdb = 1
+        elif opt == "--checkoldkernel":
+            checkoldkernel = 1
+        elif opt == "--numkeepkernels":
+            numkeepkernels = int(val)
         elif opt == "--checkdeps":
             checkdeps = 1
         elif opt in ("--buildroot", "--installroot", "--root"):
@@ -5890,6 +5896,41 @@ def main():
         if readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles,
             buildroot, arch, verbose, checkfileconflicts, reposdirs):
             return 1
+    elif checkoldkernel:
+        ver = kernelversion
+        for s in ("bigmem", "enterprise", "smp", "hugemem", "PAE",
+            "guest", "hypervisor", "xen0", "xenU", "xen"):
+            if ver.endswith(s):
+                ver = ver[:-len(s)]
+        # also remove all lower case letters at the end now?
+        try:
+            (v, r) = ver.split("-", 1)
+        except ValueError:
+            print "Failed to read version and release of the", \
+                "currently running kernel."
+            (v, r) = (None, None)
+        (packages, keyring, maxtid, pkgdata, swapendian) = \
+            readPackages(buildroot, rpmdbpath, verbose, 0, importanttags)
+        kernels = []
+        for pkg in packages.values():
+            if pkg["name"] in kernelpkgs:
+                kernels.append(pkg)
+        kernels.sort(pkgCompare)
+        kernels.reverse()
+        (vr, removekern) = ([], [])
+        for pkg in kernels:
+            if (pkg["version"], pkg["release"]) not in vr:
+                vr.append( (pkg["version"], pkg["release"]) )
+            if (len(vr) > numkeepkernels and
+                (v, r) != (pkg["version"], pkg["release"])):
+                removekern.append(pkg)
+        if verbose > 2:
+            print "You have the following kernels installed:"
+            for pkg in kernels:
+                print pkg.getFilename()
+            print "The following older kernels should be removed:"
+        for pkg in removekern:
+            print pkg.getFilename()
     elif createrepo:
         for a in args:
             if not os.path.isdir(a):
