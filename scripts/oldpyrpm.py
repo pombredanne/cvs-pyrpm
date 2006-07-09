@@ -1862,6 +1862,10 @@ class ReadRpm:
         return "%s-%s-%s.%s.rpm" % (self["name"], self["version"],
             self["release"], self.getArch())
 
+    def getFilename2(self):
+        return "%s-%s-%s.%s" % (self["name"], self["version"],
+            self["release"], self.getArch())
+
     def __verifyDeps(self, name, flags, version):
         n = self[name]
         f = self[flags]
@@ -5930,7 +5934,7 @@ def main():
                 print pkg.getFilename()
             print "The following older kernels should be removed:"
         for pkg in removekern:
-            print pkg.getFilename()
+            print pkg.getFilename2()
     elif createrepo:
         for a in args:
             if not os.path.isdir(a):
