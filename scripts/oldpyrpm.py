@@ -936,12 +936,14 @@ arch_compats = {
     "s390x": ["s390",],
 }
 
-def setMachineDistance(arch):
+def setMachineDistance(arch, archlist=None):
     h = {}
     h["noarch"] = 0 # noarch is best
     h[arch] = 1     # second best is same arch
     ind = 2
-    for a in arch_compats.get(arch, []):
+    if archlist == None:
+        archlist = arch_compats.get(arch, [])
+    for a in archlist:
         h[a] = ind
         ind += 1
     return h
@@ -5220,7 +5222,7 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
     return rethash
 
 def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
-    arch, verbose, checkfileconflicts, reposdirs):
+    arch, archlist, specifyarch, verbose, checkfileconflicts, reposdirs):
     from binascii import b2a_hex
     if verbose:
         print "Reading rpmdb, this can take some time..."
@@ -5291,12 +5293,13 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     verifyStructure(verbose, packages, sha1header, "install_sha1header", 0)
     verifyStructure(verbose, packages, sigmd5, "install_md5", 0)
     verifyStructure(verbose, packages, triggername, "triggername")
-    arch_hash = setMachineDistance(arch)
+    arch_hash = setMachineDistance(arch, archlist)
     checkdupes = {}
     checkevr = {}
     # Find out "arch", "releasever" and set "checkdupes".
     for pkg in packages.values():
-        if rpmdbpath != "/var/lib/rpm" and pkg["name"] in kernelpkgs:
+        if (not specifyarch and rpmdbpath != "/var/lib/rpm" and
+            pkg["name"] in kernelpkgs):
             # This would apply if we e.g. go from i686 -> x86_64, but
             # would also go from i686 -> s390 if such a kernel would
             # accidentally be installed. Good enough for the normal case.
@@ -5730,6 +5733,7 @@ def main():
         usage()
         return 0
     (_, hostname, kernelversion, _, arch) = os.uname()
+    archlist = None
     owner = None
     if os.geteuid() == 0:
         owner = 1
@@ -5775,7 +5779,7 @@ def main():
     exactarch = 1   # XXX: should be set via yum.conf
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
-            ["help", "verbose", "quiet", "arch=", "releasever=",
+            ["help", "verbose", "quiet", "arch=", "archlist=", "releasever=",
             "distroverpkg", "strict", "ignoresymlinks",
             "digest", "nodigest", "payload", "nopayload",
             "wait", "noverify", "small", "explode", "diff", "extract",
@@ -5802,6 +5806,11 @@ def main():
             configfiles.append(val)
         elif opt == "--arch":
             arch = val
+            specifyarch = 1
+        elif opt == "--archlist":
+            archlist = val.split(",")
+            arch = archlist[0]
+            archlist = archlist[1:]
             specifyarch = 1
         elif opt == "--releasever":
             releasever = val
@@ -5898,7 +5907,8 @@ def main():
         checkArch(args[0], ignoresymlinks)
     elif checkrpmdb:
         if readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles,
-            buildroot, arch, verbose, checkfileconflicts, reposdirs):
+            buildroot, arch, archlist, specifyarch, verbose,
+            checkfileconflicts, reposdirs):
             return 1
     elif checkoldkernel:
         ver = kernelversion
@@ -5945,7 +5955,7 @@ def main():
     elif mercurial:
         createMercurial(verbose)
     elif updaterpms:
-        arch_hash = setMachineDistance(arch)
+        arch_hash = setMachineDistance(arch, archlist)
         # Read all packages in rpmdb.
         if verbose > 2:
             time1 = time.clock()
@@ -6129,7 +6139,7 @@ def main():
                     time1 = time.clock()
                     print "Check as if kernel has the", \
                         "architecture \"%s\" now:" % arch
-                    arch_hash = setMachineDistance(arch)
+                    arch_hash = setMachineDistance(arch, archlist)
                     installrpms = getPkgsNewest(repo, arch, arch_hash,
                         verbose, 0, 1)
                     if strict:
