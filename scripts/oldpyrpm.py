@@ -2066,11 +2066,11 @@ class ReadRpm:
                         self.printErr("not utf-8 in %s" % i)
                         #self.printErr("text: %s" % j)
                         break
-        if (self["name"][:6] == "kernel" and self["name"] not in
-            ("kernel-utils", "kernel-doc", "kernel-pcmcia-cs",
-             "kernel-debuginfo", "kernel-ib", "kernel-headers")):
-            if not self.isInstallonly():
-                self.printErr("possible kernel rpm")
+        if (self.strict and self["name"][:6] == "kernel" and
+            self["name"] not in ("kernel-utils", "kernel-doc",
+            "kernel-pcmcia-cs", "kernel-debuginfo", "kernel-ib",
+            "kernel-headers") and not self.isInstallonly()):
+            self.printErr("possible kernel rpm")
         for i in ("md5",):
             if not self.sig.has_key(i):
                 self.printErr("sig header is missing: %s" % i)
