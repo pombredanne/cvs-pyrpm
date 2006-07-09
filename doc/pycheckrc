@@ -13,11 +13,11 @@ checkImplicitReturns = False
 limit = 0
 
 # max # of lines in a function
-maxLines = 400
+maxLines = 450
 
 # max # of branches in a function
-maxBranches = 70
+maxBranches = 80
 
 # max # of local vars in a function
-maxLocals = 70
+maxLocals = 80
 
