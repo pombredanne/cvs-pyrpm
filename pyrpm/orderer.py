@@ -663,10 +663,17 @@ class ConnectedComponent:
 
         if weights:
             # get pkg with largest minimal distance
-            weigth, pkg = max([(w, p) for p, w in weights.iteritems()])
+            weight = -1
+            for p, w in weights.iteritems():
+                if w > weight:
+                    weight, pkg = w, p
+
             # get the predesessor with largest minimal distance
-            weight, prepkg = max([(weights[p], p) for p in
-                                  self.relations[pkg].post])
+            weight = -1
+            for p in self.relations[pkg].post:
+                w = weights[p]
+                if w > weight:
+                    weight, prepkg = w, p
         else:
             prepkg = self.pkgs.iterkeys().next() # any pkg
             pkg = self.relations[prepkg].pre.iterkeys().next() # any successor
