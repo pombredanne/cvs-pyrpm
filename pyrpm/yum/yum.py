@@ -674,9 +674,13 @@ class RpmYum:
         # next one until only unresolvable deps remain.
         ret = 0
         unresolved = self.opresolver.iterUnresolvedDependencies()
-
+        # Store our unresolvable deps in here.
+        unresolvable = []
         while True:
             for pkg, dep in unresolved:
+                # Have we already tried to resolve this dep? If yes, skip it
+                if dep in unresolvable:
+                    continue
                 self.config.printInfo(2, "Dependency iteration %s\n" %
                                       str(self.iteration))
                 self.iteration += 1
@@ -688,6 +692,8 @@ class RpmYum:
                     ret = 1
                     unresolved = self.opresolver.iterUnresolvedDependencies()
                     break
+                # Add this dep to the ones we can't resolve at the moment
+                unresolvable.append(dep)
             else: # exit while loop if we got through the for loop
                 break
         return ret
