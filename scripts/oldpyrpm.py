@@ -3078,7 +3078,7 @@ class ConnectedComponent:
         # pick requirement to delete
         weights = { }
         # calculate minimal distance to a pre req
-        for pkg, nextpkg in  hard_requirements:
+        for pkg, nextpkg in hard_requirements:
             # dijkstra
             edge = [nextpkg]
             weights[nextpkg] = 0
@@ -3097,18 +3097,45 @@ class ConnectedComponent:
                 edge.reverse()
         if weights:
             # get pkg with largest minimal distance
-            (weigth, pkg) = max([ [w, p] for (p, w) in weights.iteritems() ])
+            weight = -1
+            for p, w in weights.iteritems():
+                if w > weight:
+                    weight, pkg2 = w, p
             # get the predesessor with largest minimal distance
-            (weight, prepkg) = max([ [weights[p], p] for p in \
-                                     self.relations[pkg].post ])
+            weight = -1
+            for p in self.relations[pkg2].post:
+                w = weights[p]
+                if w > weight:
+                    weight, pkg1 = w, p
         else:
-            prepkg = self.pkgs.iterkeys().next() # any pkg
-            pkg = self.relations[prepkg].pre.iterkeys().next() # any successor
-        if self.relations[prepkg].pre[pkg]:
-            print "Breaking pre requirement for %s: %s" % (prepkg.getNEVRA(),
-                pkg.getNERVA())
+            # search the relation that will most likely set a pkg free:
+            # relations that are the last post (pre) of the start (end) pkg
+            # are good, if there are lots of pre/post at the side
+            # where the relation is the last it is even better
+            # to make less relations better we use the negative values
+            weight = None
+            for p1 in self.pkgs:
+                pre = len(self.relations[p1].pre)
+                post = len(self.relations[p1].post)
+                for p2 in self.relations[p1].pre.iterkeys():
+                    pre2 = len(self.relations[p2].pre)
+                    post2 = len(self.relations[p2].post)
+                    if pre < post2: # start is more interesting
+                        w = (-pre, post, -post2, pre)
+                    elif pre > post2: #  end is more interesting
+                        w = (-post2, pre2, -pre, post2)
+                    else: # == both same, add the numbers of per and post
+                        w = (-pre, post+pre2)
+                    if w > weight:
+                        # python handles comparison of tuples from left to
+                        #  right (like strings)
+                        weight = w
+                        pkg1, pkg2 = p1, p2
+        if self.relations[pkg1].pre[pkg2]:
+            print "Breaking pre requirement for %s: %s" % (pkg1.getNEVRA(),
+                pkg2.getNEVRA())
         # remove this requirement
-        self.relations.removeRelation(prepkg, pkg)
+        self.relations.removeRelation(pkg1, pkg2)
         # rebuild components
         components = ConnectedComponentsDetector(self.relations).detect(self.pkgs)
         for component in components:
