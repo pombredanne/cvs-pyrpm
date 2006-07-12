@@ -1219,10 +1219,24 @@ class RpmPackage(RpmData):
             return "%s.src" % self.getNEVR()
         return "%s.%s" % (self.getNEVR(), self["arch"])
 
+    def getNVR(self):
+        """Return %name-%version-%release."""
+
+        return "%s-%s" % (self["name"], self.getVR())
+
+    def getNVRA(self):
+        """Return %name-%version-%release.%arch."""
+
+        if self.isSourceRPM():
+            return "%s.src" % self.getNVR()
+        return "%s.%s" % (self.getNVR(), self["arch"])
+
     def getAllNames(self):
         """Return all valid NEVRA combinations"""
         (n, e, v, r, a) = (self["name"], self.getEpoch(), self["version"],
             self["release"], self["arch"])
+        if self.isSourceRPM():
+            a = "src"
         na = "%s.%s" % (n, a)
         nv = "%s-%s" % (n, v)
         nva = "%s.%s" % (nv, a)

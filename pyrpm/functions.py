@@ -1395,7 +1395,8 @@ def readDir(dir, list, rtags=None):
                 rpmconfig.printError("%s: %s\n" % (pkg, e))
                 continue
             if not rpmconfig.ignorearch and \
-               not archCompat(pkg["arch"], rpmconfig.machine):
+               not archCompat(pkg["arch"], rpmconfig.machine) and \
+               not pkg.isSourceRPM():
                 rpmconfig.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
                 continue
             rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())

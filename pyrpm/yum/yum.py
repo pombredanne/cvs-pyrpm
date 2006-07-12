@@ -462,8 +462,10 @@ class RpmYum:
                     else:
                         ret |= self.opresolver.update(upkg)
                 donehash[upkg["name"]] = 1
-        if upkg and ret > 0:
-            self.__handleObsoletes(upkg)
+                # We just handled one package, make sure we handle it's
+                # obsoletes.
+                if upkg and ret > 0:
+                    self.__handleObsoletes(upkg)
         return ret
 
     def runArgs(self, args):
@@ -518,13 +520,13 @@ class RpmYum:
                 pkg = self.__readPackage(name)
                 if pkg != None:
                     memory_repo.addPkg(pkg)
-                    new_args.append(pkg["name"])
+                    new_args.append(pkg.getNVRA())
             elif os.path.isdir(name):
                 pkglist = []
                 functions.readDir(name, pkglist)
                 for pkg in pkglist:
                     memory_repo.addPkg(pkg)
-                    new_args.append(pkg["name"])
+                    new_args.append(pkg.getNVRA())
             else:
                 new_args.append(name)
         # Append our new temporary repo to our internal repositories
@@ -825,7 +827,8 @@ class RpmYum:
         Return 1 if pkg was obsoleted, 0 if not."""
 
         obsoleted = 0
-        pkglist = []
+        pkglist = []        # List of packages we have used for obsoleting,
+                            # needed for endless loop detection and prevention.
         # Loop until we have found the end of the obsolete chain
         while 1:
             found = 0
