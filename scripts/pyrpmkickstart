@@ -218,15 +218,18 @@ def main():
 
     source = Repository(pyrpm.rpmconfig, source_dir, "base")
 
+    baseexclude = None
     if ks.has_key("cdrom"):
         url = "cdrom"
     elif ks.has_key("nfs"):
         url = "nfs://%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
     else:
         url = ks["url"]["url"]
+        if ks["url"].has_key("exclude"):
+            baseexclude = ks["url"]["exclude"]
 
     print "Reading repodata from installation source ..."
-    if not source.load(url):
+    if not source.load(url, exclude=baseexclude):
         return 1
 
     ### get source information via release package ###
@@ -2615,9 +2618,12 @@ def main():
     fd.write("retries=20\n")
     fd.write("obsoletes=1\n")
     fd.write("reposdir=%s/yum.repos.d\n" % tempdir)
+    exclude = string.join(baseexclude or "")
     if ks.has_key("install") and \
            ks.has_key("packages") and ks["packages"].has_key("drop"):
-        fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
+        exclude = exclude + " " + string.join(ks["packages"]["drop"])
+    if exclude:
+        fd.write("exclude=%s\n" % exclude)
     fd.write("\n")
     fd.write("[base]\n")
     fd.write("name=dist %s\n" % installation)

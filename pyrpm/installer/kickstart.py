@@ -351,9 +351,11 @@ class KickstartConfig(dict):
                 elif opt == "timezone":
                     self.parseSub(opt, args[1:], [ "utc" ])
                 elif opt == "url":
-                    self.parseSimple(opt, args[1:], [ "url:" ])
+                    self.parseSimple(opt, args[1:], [ "url:", "exclude:" ])
                     if not self[opt].has_key("url"):
                         raise ValueError, "Error in line '%s'" % line
+                    if self[opt].has_key("exclude"):
+                        self[opt]["exclude"] = self[opt]["exclude"].split(",")
                 elif opt == "xconfig":
                     self.parseSimple("xconfig", args[1:],
                                      [ "noprobe", "card:", "videoram:",
