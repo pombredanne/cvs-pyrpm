@@ -538,7 +538,7 @@ class ConnectedComponent:
                         pkg1, pkg2 = p1, p2
         if self.relations[pkg1].pre[pkg2]:
             self.config.printError("Breaking pre requirement for %s: %s" %
-                                   (prepkg.getNEVRA(), pkg.getNERVA()))
+                                   (prepkg.getNEVRA(), pkg.getNEVRA()))
             
         # remove this requirement
         self.relations.removeRelation(pkg1, pkg2)
