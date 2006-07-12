@@ -378,107 +378,6 @@ class RpmRelations:
 
 # ----------------------------------------------------------------------------
 
-
-# no longer in use
-# delete soon
-class Loop(HashList):
-
-    def __init__(self, relations, pkgs):
-        HashList.__init__(self)
-        self.relations = relations
-
-        # start with pkg with smallest hash number
-        # to be able to detect identical loops
-        min_hash = None
-        min_idx = 0
-        for i in xrange(len(pkgs)):
-            if min_hash is None or hash(pkgs[i]) < min_hash:
-                min_hash = hash(pkgs[i])
-                min_idx = i
-
-        for i in xrange(min_idx, len(pkgs)):
-            self[pkgs[i]] = pkgs[i]
-        for i in xrange(min_idx):
-            self[pkgs[i]] = pkgs[i]
-
-    # ----
-
-    def __cmp__(self, other):
-        """compare loops: Sort by size first, use hash values of the pkgs
-        from the beginning then."""
-        result = cmp(len(self), len(other))
-        if result == 0:
-            for i in xrange(len(self)): # both have same lenght
-                result = cmp(hash(self[i]), hash(other[i]))
-                if result != 0:
-                    return result
-        return result
-
-    # ----
-
-    def __iter__(self):
-        """Return Iterator. Iterator returns (Node, Next) Tuples."""
-        idx = 1
-        while idx < len(self):
-            yield(self.list[idx-1], self.list[idx])
-            idx += 1
-        yield(self.list[-1], self.list[0])
-
-    # ----
-
-    def containsRequirement(self, pkg, pre):
-        if pkg in self and pre in self:
-            idx = self.index(pre)
-            return self[idx - 1] is pkg
-        return False
-
-    # ----
-
-    def containsHardRequirement(self):
-        """Does the loop contain any hard relations?"""
-        for pkg, pre in self:
-            if self.relations[pkg].pre[pre]:
-                return True
-        return False
-
-    # ----
-
-    def breakUp(self):
-        """Searches for the relation that has the maximum distance
-        from hard requirements and removes it.
-        Returns (Node, Next) of the removed requirement.
-
-        Assumes self.containsHardRequirement() == True"""
-
-        # find the requirement that has the largest distance
-        # to a hard requirement
-
-        distances = [0]
-        for pkg, pre in self:
-            if self.relations[pkg].pre[pre]:
-                distances.append(0)
-            else:
-                distances.append(distances[-1] + 1)
-
-        for idx in xrange(len(distances)):
-            if distances[idx] == 0 and idx > 0:
-                break
-            else:
-                distances[idx] += distances[-1]
-
-        maxd = -1
-        max_idx = 0
-        for idx in xrange(len(distances)):
-            if distances[idx] > maxd:
-                maxd = distances[idx]
-                max_idx = idx
-
-        self.relations.removeRelation(self[max_idx-1], self[max_idx])
-
-        return (self[max_idx-1], self[max_idx])
-
-# ----------------------------------------------------------------------------
-
 class ConnectedComponent:
     """Contains a Strongly Connected Component (SCC).
     This is a (maximal) set of nodes that are all reachable from
@@ -546,46 +445,6 @@ class ConnectedComponent:
 
     # ----
 
-    def detectLoops(self):
-        """Sets self.loops.
-        self.loops is sorted with Loop.__cmp__() and the loops are unique.
-        """
-
-        loops = [ ]
-        self._detectLoops([ ], self.pkgs.iterkeys().next(), loops)
-        # remove duplicates
-        loops.sort()
-        previous = Loop(self.relations, []) # dummy loop of size 0
-        self.loops = []
-        for loop in loops:
-            if loop != previous:
-                self.loops.append(loop)
-            previous = loop
-
-    # ----
-
-    def _detectLoops(self, path, pkg, loops):
-        """Do a DFS walk in orderer.RpmRelations relations from RpmPackage pkg,
-        add discovered loops to loops.
-
-        The list of RpmPackages path contains the path from the search root to
-        the current package.  loops is a list of Loop objects.
-        """
-
-        for p in self.relations[pkg].pre:
-            # "p in path" is O(N), can be O(1) with another hash.
-            if len(path) > 0 and p in path:
-                w = path[path.index(p):] # make shallow copy of loop
-                w.append(pkg)
-                w.append(p)
-                loops.append(Loop(self.relations, w))
-            else:
-                path.append(pkg)
-                self._detectLoops(path, p, loops)
-                path.pop()
-
-    # ----
-
     def processLeafNodes(self, order):
         """Remove all leaf nodes with the component and append them to order.
         """
@@ -610,27 +469,6 @@ class ConnectedComponent:
         """Remove all packages of a sub component from own package list."""
         for pkg in component.pkgs:
             del self.pkgs[pkg]
-
-    # ----
-
-    def genCounter(self):
-        """Count number of times each arcs is represented in the list of loop
-        tuples loops.
-
-        Return a HashList: RpmPackage A =>
-        HashList :RpmPackage B => number of loops in which A requires B."""
-
-        counter = HashList()
-        for loop in self.loops:
-            for node, next in loop:
-                # first and last pkg are the same, use once
-                if node not in counter:
-                    counter[node] = HashList()
-                if next not in counter[node]:
-                    counter[node][next] = 1
-                else:
-                    counter[node][next] += 1
-        return counter
 
     # ----
 
