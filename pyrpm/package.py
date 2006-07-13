@@ -443,11 +443,12 @@ class RpmPackage(RpmData):
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running post install script: %s" \
                     % (self.getNEVRA(), e))
-            if rusage != None and len(rusage):
-                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "postin", str(rusage[0]), str(rusage[1])))
-            if log or status != 0:
-                self.config.printError("Output running post install script for package %s" % self.getNEVRA())
-                self.config.printError(log)
+            else:
+                if rusage != None and len(rusage):
+                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "postin", str(rusage[0]), str(rusage[1])))
+                if log or status != 0:
+                    self.config.printError("Output running post install script for package %s" % self.getNEVRA())
+                    self.config.printError(log)
 
     def erase(self, db=None):
         """Open package, read its header and remove it.
