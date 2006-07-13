@@ -307,8 +307,6 @@ def main():
             print "Unable to mount stage2 image.\n" + \
                   "You could try to disable the use of the stage2 image" +\
                   " with the\noption --no-stage2."
-            traceback.print_exc()
-            print msg
             return 1
 
         ### analyze stage2 ###
