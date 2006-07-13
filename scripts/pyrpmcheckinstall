@@ -48,10 +48,6 @@ DIRS:     Directories with packages for possible installation
 PACKAGES: Same for rpm binary packages"""
 
 
-class FakeRepo(RpmMemoryDB):
-    def isFilelistImported(self):
-        return 1
-
 #
 # Main program
 #
@@ -85,10 +81,10 @@ def main():
                 pkglist.append(pkg)
 
     # Create fake repository
-    frepo = FakeRepo(rpmconfig, "memory")
+    memory_repo = database.repodb.RpmRepoDB(rpmconfig, [], rpmconfig.buildroot, None, "pyrpmcheckinstall-memory-repo")
     for pkg in pkglist:
-        frepo.addPkg(pkg)
-    yum.repos.append(frepo)
+        memory_repo.addPkg(pkg)
+    yum.repos.append(memory_repo)
 
     yum.setCommand("update")
     if yum.prepareTransaction() == 0:
