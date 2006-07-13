@@ -425,11 +425,12 @@ class RpmPackage(RpmData):
                 self.config.printError("\n%s: Error running pre install script: %s" \
                     % (self.getNEVRA(), e))
                 # return 0
-            if rusage != None and len(rusage):
-                sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
-            if log or status != 0:
-                self.config.printError("Output running pre install script for package %s" % self.getNEVRA())
-                self.config.printError(log)
+            else:
+                if rusage != None and len(rusage):
+                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (self.getNEVRA(), "prein", str(rusage[0]), str(rusage[1])))
+                if log or status != 0:
+                    self.config.printError("Output running pre install script for package %s" % self.getNEVRA())
+                    self.config.printError(log)
         self.__extract(db)
         if self.config.printhash:
             self.config.printInfo(0, "\n")

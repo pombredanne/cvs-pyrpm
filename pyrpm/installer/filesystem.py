@@ -34,8 +34,9 @@ def mount(what, where, fstype="ext3", options=None, arguments=None):
         _fstype = "-t '%s'" % fstype
     else:
         _fstype = ""
-    mount = "/bin/mount %s %s %s '%s' '%s'" % (args, opts, _fstype, what,
-                                               where)
+    mount = "/bin/mount %s %s %s '%s' '%s' 2>/dev/null" % (args, opts,
+                                                           _fstype, what,
+                                                           where)
     stat = os.system(mount)
     if stat != 0:
         raise IOError, "mount of '%s' on '%s' failed" % (what , where)
