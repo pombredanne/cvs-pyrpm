@@ -35,15 +35,17 @@ class RpmYum:
         self.autoerase = 0
         # package names/globs to be excluded from autoerasing of autoerase is
         # enabled.
-        self.autoeraseexclude = []
+        self.autoeraseexclude = [ ]
         # Default: Ask user for confirmation of complete operation
         self.confirm = 1
         # Default: No command
         self.command = None
         # List of RpmRepo's
         self.repos = [ ]
+        # List of languages we want to install for.
+        self.langs = [ ]
         # Internal list of packages that are have to be erased
-        self.erase_list = []
+        self.erase_list = [ ]
         # Our database
         self.pydb = None
         # Flag wether we already read all the repos
@@ -455,17 +457,26 @@ class RpmYum:
                 # Depending on the command we gave to handle we need to either
                 # install, update or remove the package now.
                 if   cmd.endswith("install"):
-                    ret |= self.opresolver.install(upkg)
+                    r = self.opresolver.install(upkg)
                 elif cmd.endswith("update") or cmd.endswith("upgrade"):
                     if upkg["name"] in self.always_install:
-                        ret |= self.opresolver.install(upkg)
+                        r = self.opresolver.install(upkg)
                     else:
-                        ret |= self.opresolver.update(upkg)
+                        r = self.opresolver.update(upkg)
                 donehash[upkg["name"]] = 1
                 # We just handled one package, make sure we handle it's
                 # obsoletes.
-                if upkg and ret > 0:
+                if upkg and r > 0:
+                    l = []
+                    for repo in self.repos:
+                        if repo.comps:
+                            for lang in self.langs:
+                                l.extend(repo.comps.getLangOnlyPackageNames(lang, upkg["name"]))
+                    normalizeList(l)
+                    for name in l:
+                        self.update(name)
                     self.__handleObsoletes(upkg)
+                ret |= r
         return ret
 
     def runArgs(self, args):

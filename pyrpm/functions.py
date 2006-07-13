@@ -749,7 +749,8 @@ def parseYumOptions(argv, yum):
          "oldpackage", "autoerase", "autoeraseexclude=", "servicehack",
          "installpkgs=", "arch=", "archlist=", "checkinstalled", "rusage",
          "srpmdir=", "enablerepo=", "disablerepo=", "nocache", "cachedir=",
-         "exclude=", "obsoletes", "noplugins", "diff", "verifyallconfig"])
+         "exclude=", "obsoletes", "noplugins", "diff", "verifyallconfig",
+         "languages="])
     except getopt.error, e:
         # FIXME: all to stderr
         print "Error parsing command-line arguments: %s" % e
@@ -866,6 +867,8 @@ def parseYumOptions(argv, yum):
             rpmconfig.diff = True
         elif opt == "--verifyallconfig":
             rpmconfig.verifyallconfig = True
+        elif opt == "--languages":
+            yum.langs = val.split()
 
     if rpmconfig.verbose > 1:
         rpmconfig.warning = rpmconfig.verbose - 1

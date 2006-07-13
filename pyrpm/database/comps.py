@@ -31,6 +31,7 @@ class RpmCompsXML:
         self.source = source
         self.grouphash = {}             # group id => { key => value }
         self.pkgtypehash = {}           # pkgname => [type, ...]
+        self.langhash = {}              # language => group
 
     def __str__(self):
         return str(self.grouphash)
@@ -143,6 +144,21 @@ class RpmCompsXML:
 
         return self.__getPackageNames(group, ["conditional"])
 
+    def getLangOnlyPackageNames(self, lang, pkgname):
+        """Return a list of package names where the pkgname is required for the
+        given language.
+        """
+
+        if not self.langhash.has_key(lang):
+            return []
+        ret = []
+        group = self.langhash[lang]
+        conlist = self.getConditionalPackageNames(group["id"])
+        for pname, reqlist in conlist:
+            if pkgname in reqlist:
+                ret.append(pname)
+        return ret
+
     def hasType(self, pkgname, type):
         if not self.pkgtypehash.has_key(pkgname):
             return False
@@ -225,6 +241,7 @@ class RpmCompsXML:
                 group["default"] = functions.parseBoolean(node.content)
             elif node.name == "langonly":
                 group["langonly"] = node.content
+                self.langhash[group["langonly"]] = group
             elif node.name == "packagelist":
                 group["packagelist"] = self.__parsePackageList(node.children)
             elif node.name == "grouplist":
