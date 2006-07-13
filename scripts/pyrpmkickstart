@@ -138,10 +138,10 @@ def main():
     if user_arch:
         if user_arch not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
             print "ERROR: User requested arch is not compatible with " \
-                  "system arch."
+                  "host system arch."
             return 1
         if user_arch == "noarch":
-            print "ERROR: Noarch is now allowed as instalaltion arch."
+            print "ERROR: Noarch is now allowed as installation arch."
             return 1
 
     # kickstart file
@@ -2642,6 +2642,35 @@ def main():
         fd.write("\n")
     fd.close()
 
+#    # TODO: use RpmYum class instead of external pyrpmyum call
+#    config = RpmConfig()
+#    config.cachedir = cache_dir
+#    config.buildroot = target_chroot
+#    # TODO: yum debug
+#    # TODO: checkinstalled for upgrade?
+#    # TODO: honor user_arch
+#    yum = RpmYum(config)
+#    
+#    lockfile = lockPyrpm()
+#    if lockfile == None:
+#        printError("couldn't lock pyrpmyum")
+#        return 0
+#    if not yum.setCommand(args[0]):
+#        return 0
+#    if not yum.prepareTransaction():
+#        return 0
+#    if not yum.runArgs(args[1:]):
+#        return 0
+#    if not yum.runDepRes():
+#        return 0
+#    if not yum.runCommand():
+#        return 0
+#    if lockfile:
+#        try:
+#            os.unlink(lockfile)
+#        except OSError:
+#            pass
+
     # yum
     if orig_yum:
         yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf, target_chroot)
@@ -3220,30 +3249,34 @@ OPTIONS
   -v  | --verbose  Be verbose, and more, ..
   -y  | --yes      Do not ask questions, assume yes.
 
-  --label-prefix       Prepend prefix before labels on partitions
-  --no-cleanup         Do not cleanup temporary directory and files.
-  --wait               Wait after installation before umounting.
-  --xen                Write a simple xen config file.
-  --yum                Use yum instead of pyrpmyum.
-  --repo-comps         Load comps file in repos and use them for package and
-                       group selection.
-  --no-stage2          Do not mount stage2.img from installation source, use
-                       host system tools to format partitions. This does not
-                       work for all host and client system combinations, but
-                       could help with others.
-  --upgrade=<part>     Upgrade installation in partition <part>. This is only
-                       useful for upgrades and if there is more than one
-                       installation on the supplied disks.
-  --no-cache           Do not cache RPM's (e.g. for http and ftp sources).
-  --no-default-groups  Do not use base and core as default groups. This is
-                       useful for minimal installations.
-  --drop-unresolved    Drop packages, which have unresolved dependencies in
-                       installation mode. Please keep in mind that this could
-                       result in a unusable system.
-  --no-buildstamp      Do not use .buildstamp information in stage2 images.
-                       Only usable without --no-stage2.
-  --no-discinfo        Do not use .discinfo information. Only usable with
-                       --no-stage2 option.
+  --arch=<arch>            Set installation arch for guest. This is needed to
+                           to install a i586 guest from a i686 installation
+                           tree. It is not usable for multilib guest systems at
+                           the moment.
+  --drop-unresolved        Drop packages, which have unresolved dependencies in
+                           installation mode. Please keep in mind that this
+                           could result in an incomplete and unusable system.
+  --label-prefix=<string>  Prepend prefix before labels on partitions
+  --no-stage2              Do not mount stage2.img from installation source,
+                           use host system tools to format partitions. This
+                           does not work for all host and client system
+                           combinations, but could help with others.
+  --no-buildstamp          Do not use .buildstamp information in stage2 images.
+                           Only usable without --no-stage2.
+  --no-cache               Do not cache RPM's (e.g. for http and ftp sources).
+  --no-cleanup             Do not cleanup temporary directory and files.
+  --no-default-groups      Do not use base and core as default groups. This is
+                           useful for minimal installations.
+  --no-discinfo            Do not use .discinfo information. Only usable with
+                           --no-stage2 option.
+  --repo-comps             Load comps file in repos and use them for package
+                           and group selection.
+  --upgrade=<part>         Upgrade installation in partition <part>. This is
+                           only useful for upgrades and if there is more than#
+                           one installation on the supplied disks.
+  --wait                   Wait after installation before umounting.
+  --xen                    Write a simple xen config file.
+  --yum                    Use yum instead of pyrpmyum.
 
 """
 # TODO:
