@@ -5938,6 +5938,9 @@ def main():
             checkfileconflicts, reposdirs):
             return 1
     elif checkoldkernel:
+        mykernelpkgs = kernelpkgs[:]
+        for i in kernelpkgs:
+            mykernelpkgs.append(i + "-devel")
         ver = kernelversion
         for s in ("bigmem", "enterprise", "smp", "hugemem", "PAE",
             "guest", "hypervisor", "xen0", "xenU", "xen"):
@@ -5954,7 +5957,7 @@ def main():
             readPackages(buildroot, rpmdbpath, verbose, 0, importanttags)
         kernels = []
         for pkg in packages.values():
-            if pkg["name"] in kernelpkgs:
+            if pkg["name"] in mykernelpkgs:
                 kernels.append(pkg)
         kernels.sort(pkgCompare)
         kernels.reverse()
