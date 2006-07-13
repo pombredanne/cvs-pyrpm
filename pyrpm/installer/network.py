@@ -40,7 +40,7 @@ def network_config(ks, buildroot):
 
     _hostname = None
     _gateway = None
-    if ks["network"] and len(ks["network"]) > 0:
+    if ks.has_key("network") and len(ks["network"]) > 0:
         # check network devices and set device for entries where no device
         # is specified
         network_devices = [ ]
