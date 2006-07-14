@@ -832,13 +832,11 @@ class RpmResolver:
                     if len(dups) == 1: continue
                     self.config.printDebug(
                         1, "Checking for file conflicts for '%s'" % name)
-                    for j in xrange(len(dups)):
-                        for k in xrange(j+1, len(dups)):
-                            if not self._hasFileConflict(dups[j], dups[k],
-                                                         name):
-                                continue
-                            conflicts.setdefault(dups[j], [ ]).append(
-                                (name, dups[k]))
+                    for p in dups:
+                        if p is pkg: continue
+                        if self._hasFileConflict(pkg, p, name):
+                            conflicts.setdefault(pkg, [ ]).append(
+                                (name, p))
             return conflicts
 
         # duplicates: { name: [(pkg, idx),..], .. }
