@@ -365,12 +365,7 @@ class RpmResolver:
 
         Return 1 if the conflict is "real", 0 if it should be ignored.
         pkg1_fi is RpmFileInfo of filename in pkg1."""
-        # it is ok if there is a file conflict which is in
-        # installed_file_conflicts and not checkinstalled
-        if self.config.checkinstalled == 0 and \
-               pkg1 in self.installed_file_conflicts and \
-               (filename,pkg2) in self.installed_file_conflicts[pkg1]:
-            return 0
+
         # pkg1_fi = pkg1.getRpmFileInfo(idx1)
         pkg1_fi = pkg1.getRpmFileInfo(filename)
         pkg2_fi = pkg2.getRpmFileInfo(filename)
