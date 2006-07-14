@@ -760,7 +760,7 @@ class RpmYum:
         # distance and evr.
         # Special handling of filerequirements need to be done here in order to
         # allow cross buildarchtranslate compatible package updates.
-        ret = self.__handleBestPkg("update", pkg_list, pkg["arch"], False, dep[0][0] == "/")
+        ret = self.__handleBestPkg("update", pkg_list, None, False, dep[0][0] == "/")
         if ret > 0:
             return 1
         # Ok, we didn't find any package that could fullfill the
