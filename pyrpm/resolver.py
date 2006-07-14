@@ -850,6 +850,7 @@ class RpmResolver:
                     if not self._hasFileConflict(dups[j], dups[k], name):
                         continue
                     conflicts.setdefault(dups[j], [ ]).append((name, dups[k]))
+                    conflicts.setdefault(dups[k], [ ]).append((name, dups[j]))
         return conflicts
 
     # ----
