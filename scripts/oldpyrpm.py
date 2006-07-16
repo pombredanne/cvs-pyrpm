@@ -45,7 +45,7 @@
 # - Optionally import the full tree for the initial import (e.g. FC releases).
 # - Optionally also sort by time for e.g. FC updates dirs.
 # general:
-# - Can we get rid of doRead()?
+# - Should we get rid of doRead()?
 # - How todo save shell escapes for os.system()
 # - Better error handling in PyGZIP.
 # - streaming read for cpio files
@@ -1027,7 +1027,7 @@ def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
         elif ttype == RPM_INT16:
             data = pack("!%dH" % count, *value)
             pad = (2 - (offset % 2)) % 2
-        elif ttype == RPM_INT8 or ttype == RPM_CHAR:
+        elif ttype == RPM_CHAR or ttype == RPM_INT8:
             data = pack("!%dB" % count, *value)
         elif ttype == RPM_INT64:
             data = pack("!%dQ" % count, *value)
@@ -1432,62 +1432,69 @@ class ReadRpm:
 
     def __readIndex(self, pad, rpmdb=None):
         if rpmdb:
-            data = doRead(self.fd, 8)
+            data = self.fd.read(8)
             (indexNo, storeSize) = unpack("!2I", data)
             magic = "\x8e\xad\xe8\x01\x00\x00\x00\x00"
             data = magic + data
             if indexNo < 1:
                 self.raiseErr("bad index magic")
         else:
-            data = doRead(self.fd, 16)
+            data = self.fd.read(16)
             (magic, indexNo, storeSize) = unpack("!8s2I", data)
             if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
                 self.raiseErr("bad index magic")
-        fmt = doRead(self.fd, 16 * indexNo)
-        fmt2 = doRead(self.fd, storeSize)
+        fmt = self.fd.read(16 * indexNo)
+        fmt2 = self.fd.read(storeSize)
         padfmt = ""
+        padlen = 0
         if pad != 1:
-            padfmt = doRead(self.fd, (pad - (storeSize % pad)) % pad)
+            padlen = (pad - (storeSize % pad)) % pad
+            padfmt = self.fd.read(padlen)
+        if (len(fmt) != 16 * indexNo or len(fmt2) != storeSize or
+            padlen != len(padfmt)):
+            self.raiseErr("did not read Index correctly")
         return (indexNo, storeSize, data, fmt, fmt2,
-            16 + len(fmt) + len(fmt2) + len(padfmt))
+            16 + len(fmt) + storeSize + padlen)
 
     def __parseIndex(self, indexNo, fmt, fmt2, dorpmtag):
         hdr = HdrIndex()
-        if len(dorpmtag) == 0:
+        if not dorpmtag:
             return hdr
         for i in xrange(0, indexNo * 16, 16):
             (tag, ttype, offset, count) = unpack("!4I", fmt[i:i + 16])
-            if not dorpmtag.has_key(tag):
+            myrpmtag = dorpmtag.get(tag)
+            if not myrpmtag:
                 #print "unknown tag:", (tag,ttype,offset,count), self.filename
                 continue
-            nametag = dorpmtag[tag][4]
-            if ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
-                data = []
-                for _ in xrange(count):
-                    end = fmt2.index("\x00", offset)
-                    data.append(fmt2[offset:end])
-                    offset = end + 1
-            elif ttype == RPM_STRING:
+            nametag = myrpmtag[4]
+            if ttype == RPM_STRING:
                 data = fmt2[offset:fmt2.index("\x00", offset)]
             elif ttype == RPM_INT32:
                 # distinguish between signed and unsigned ints
-                if dorpmtag[tag][3] & 8:
+                if myrpmtag[3] & 8:
                     data = unpack("!%di" % count,
                         fmt2[offset:offset + count * 4])
                 else:
                     data = unpack("!%dI" % count,
                         fmt2[offset:offset + count * 4])
-            elif ttype == RPM_INT8 or ttype == RPM_CHAR:
-                data = unpack("!%dB" % count, fmt2[offset:offset + count])
-            elif ttype == RPM_INT16:
-                data = unpack("!%dH" % count, fmt2[offset:offset + count * 2])
-            elif ttype == RPM_INT64:
-                data = unpack("!%dQ" % count, fmt2[offset:offset + count * 8])
+            elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
+                data = []
+                for _ in xrange(count):
+                    end = fmt2.index("\x00", offset)
+                    data.append(fmt2[offset:end])
+                    offset = end + 1
             elif ttype == RPM_BIN:
                 data = fmt2[offset:offset + count]
+            elif ttype == RPM_INT16:
+                data = unpack("!%dH" % count, fmt2[offset:offset + count * 2])
+            elif ttype == RPM_CHAR or ttype == RPM_INT8:
+                data = unpack("!%dB" % count, fmt2[offset:offset + count])
+            elif ttype == RPM_INT64:
+                data = unpack("!%dQ" % count, fmt2[offset:offset + count * 8])
             else:
                 self.raiseErr("unknown tag header")
                 data = None
+            # XXX: move this above to reduce number of checks
             if nametag == "group":
                 self.rpmgroup = ttype
             # Ignore duplicate entries as long as they are identical.
@@ -1520,8 +1527,8 @@ class ReadRpm:
         if rpmdb == None:
             if self.__openFd(None, headerend):
                 return 1
-            leaddata = doRead(self.fd, 96)
-            if leaddata[:4] != "\xed\xab\xee\xdb":
+            leaddata = self.fd.read(96)
+            if leaddata[:4] != "\xed\xab\xee\xdb" or len(leaddata) != 96:
                 #from binascii import b2a_hex
                 self.printErr("no rpm magic found")
                 #print "wrong lead: %s" % b2a_hex(leaddata[:4])
@@ -2052,6 +2059,8 @@ class ReadRpm:
         return (indexNo, storeSize, fmt, fmt2)
 
     def __doVerify(self):
+        if self.rpmgroup not in (None, RPM_STRING, RPM_I18NSTRING):
+            self.printErr("rpmgroup out of range")
         self.__verifyWriteHeader(self.hdr.hash, rpmtag,
             "immutable", self.hdrdata, 1, self.rpmgroup)
         if self.strict:
@@ -3926,6 +3935,8 @@ class RpmRepo:
                 if Readf() != 1:
                     break
                 tmphash["timestamp"] = reader.Value()
+            elif self.verbose > 4:
+                print "new repomd entry: %s" % name
         return rethash
 
     def __parsePrimary(self, reader):
@@ -4084,10 +4095,9 @@ class RpmRepo:
                 elif name == "size":
                     props = getProps(reader)
                     pkg.sig["size_in_sig"][0] += int(props.get("package", "0"))
-                #elif name in ("summary", "description", "packager", "url", "time"):
-                #    pass
-                #else:
-                #    print name
+                elif self.verbose > 4 and name not in ("summary",
+                    "description", "packager", "url", "time"):
+                    print "new package entry: %s" % name
         return pkg
 
     def __parseFilelist(self, reader):
@@ -4101,8 +4111,8 @@ class RpmRepo:
             if NodeTypef() != TYPE_ELEMENT or Namef() != "package":
                 continue
             props = getProps(reader)
-            pname = props.get("name", "noname")
-            arch = props.get("arch", "nonarch")
+            pname = props.get("name", "no-name")
+            arch = props.get("arch", "no-arch")
             (epoch, version, release) = ("", "", "")
             while Readf() == 1:
                 ntype = NodeTypef()
@@ -4116,6 +4126,8 @@ class RpmRepo:
                         epoch   = props["epoch"]
                         version = props["ver"]
                         release = props["rel"]
+                    elif self.verbose > 4:
+                        print "new filelist: %s" % name
                 elif ntype == TYPE_END_ELEMENT:
                     if Namef() == "package":
                         break
@@ -4236,11 +4248,9 @@ class RpmRepo:
                 elif name == "file":
                     reader.Read()
                     filelist.append(reader.Value())
-                #elif name in ("rpm:vendor", "rpm:buildhost", "rpm:group",
-                #    "rpm:license"):
-                #    pass
-                #else:
-                #    print name
+                elif self.verbose > 4 and name not in ("rpm:vendor",
+                    "rpm:buildhost", "rpm:group", "rpm:license"):
+                    print "new repo entry: %s" % name
         pkg["oldfilenames"] = filelist
         #(pkg["basenames"], pkg["dirindexes"], pkg["dirnames"]) = \
         #    genBasenames(filelist)
