@@ -45,6 +45,7 @@
 # - Optionally import the full tree for the initial import (e.g. FC releases).
 # - Optionally also sort by time for e.g. FC updates dirs.
 # general:
+# - Can we get rid of doRead()?
 # - How todo save shell escapes for os.system()
 # - Better error handling in PyGZIP.
 # - streaming read for cpio files
@@ -3399,10 +3400,10 @@ def findRpms(dir, uselstat=None, verbose=0):
         for f in os.listdir(d):
             path = "%s/%s" % (d, f)
             st = s(path)
-            if S_ISDIR(st.st_mode):
-                dirs.append(path)
-            elif S_ISREG(st.st_mode) and f[-4:] == ".rpm":
+            if S_ISREG(st.st_mode) and f[-4:] == ".rpm":
                 files.append(path)
+            elif S_ISDIR(st.st_mode):
+                dirs.append(path)
             else:
                 if verbose > 2:
                     print "ignoring non-rpm", path
@@ -6200,8 +6201,10 @@ def run_main(main):
         del prof
         print "Starting profil statistics. This takes some time..."
         s = hotshot.stats.load(htfilename)
-        s.strip_dirs().sort_stats("time").print_stats(100)
-        s.strip_dirs().sort_stats("cumulative").print_stats(100)
+        s.strip_dirs()
+        s.sort_stats("time").print_stats(100)
+        s.sort_stats("cumulative").print_stats(100)
+        s.sort_stats("calls").print_stats(100)
         os.unlink(htfilename)
     else:
         ret = main()
