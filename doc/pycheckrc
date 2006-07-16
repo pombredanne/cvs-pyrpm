@@ -19,5 +19,5 @@ maxLines = 450
 maxBranches = 80
 
 # max # of local vars in a function
-maxLocals = 80
+maxLocals = 90
 
