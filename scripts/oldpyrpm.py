@@ -3352,7 +3352,7 @@ def selectNewestRpm(rpms, arch_hash, verbose):
                     rpm.getFilename()
     return newest
 
-def getPkgsNewest(rpms, arch=None, arch_hash=None, verbose=0,
+def getPkgsNewest(rpms, arch=None, arch_hash={}, verbose=0,
     exactarch=1, nosrc=0):
     # Add all rpms by name,arch into a hash.
     h = {}
@@ -5572,7 +5572,7 @@ def checkArch(path, ignoresymlinks):
     rpmnames = h.keys()
     rpmnames.sort()
     for r in rpmnames:
-        h[r] = [selectNewestRpm(h[r], None, 1)]
+        h[r] = [selectNewestRpm(h[r], {}, 1)]
     # Print table of archs to look at.
     for i in xrange(len(arch) + 2):
         s = ""
@@ -5584,7 +5584,7 @@ def checkArch(path, ignoresymlinks):
         print "%29s  %s" % ("", s)
     showrpms = []
     for rp in rpmnames:
-        srpm = r.h[rp][0]
+        srpm = h[rp][0]
         builds = {}
         showit = 0
         n = 1
