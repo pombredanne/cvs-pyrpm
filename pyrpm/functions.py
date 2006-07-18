@@ -1338,14 +1338,10 @@ def orderList(list, arch):
     distance = [ machineDistance(l["arch"], arch) for l in list ]
     for i in xrange(len(list)):
         for j in xrange(i + 1, len(list)):
-            if distance[i] > distance[j]:
+            if list[i] < list[j] or \
+               (list[i] == list[j] and distance[i] > distance[j]):
                 (list[i], list[j]) = (list[j], list[i])
                 (distance[i], distance[j]) = (distance[j], distance[i])
-                continue
-            if distance[i] == distance[j] and list[i] < list[j]:
-                (list[i], list[j]) = (list[j], list[i])
-                (distance[i], distance[j]) = (distance[j], distance[i])
-                continue
 
 def machineDistance(arch1, arch2):
     """Return machine distance between arch1 and arch2, as defined by
