@@ -1983,6 +1983,9 @@ def main():
 
     ############################ package selection ############################
 
+    # for langsupport
+    languages = [ ]
+
     if ks.has_key("install"):
         groups = [ ]
         if ks["packages"].has_key("groups") and \
@@ -2147,6 +2150,21 @@ def main():
                 print "Adding package 'kernel'"
                 pkgs.append("kernel")
 
+            # append kernel-devel for FC-6 and RHEL-5
+            if "gcc" in pkgs and \
+                   ((installation.release == "RHEL" and \
+                     installation.version >= 5) or \
+                    (installation.release == "FC" and \
+                     installation.version >= 6)):
+                if "kernel" in pkgs:
+                    if not "kernel-devel" in pkgs:
+                        print "Adding package 'kernel-devel'"
+                        pkgs.append("kernel-devel")
+                elif "kernel-smp" in pkgs:
+                    if not "kernel-smp-devel" in pkgs:
+                        print "Adding package 'kernel-smp-devel'"
+                        pkgs.append("kernel-smp-devel")
+
             # append firstboot
             if ks.has_key("firstboot") and \
                    not ks["firstboot"].has_key("disabled") and \
@@ -2179,7 +2197,6 @@ def main():
                             pkgs.append(pkg)
 
             # get langsupport packages
-            languages = [ ]
             if ks.has_key("langsupport"):
                 if ks["langsupport"].has_key("default"):
                     languages.append(ks["langsupport"]["default"][:2])
@@ -2677,8 +2694,11 @@ def main():
     else:
         yum = "PATH=%s:${PATH}; export PATH; " % (PYBINDIR) + \
               "PYTHONPATH=%s; export PYTHONPATH; " % (PYRPMDIR) + \
-              "pyrpmyum -y --hash -c '%s' --root='%s' --cachedir='%s'" % \
-              (yum_conf, target_chroot, cache_dir)
+              "pyrpmyum -y --hash -c '%s'" % (yum_conf) + \
+              " --root='%s'" % (target_chroot) + \
+              " --cachedir='%s'" % (cache_dir)
+        if len(languages) > 0:
+            yum += " --languages='%s'" % (" ".join(languages))
         # --servicehack
         if no_cache:
             yum += " --nocache"
