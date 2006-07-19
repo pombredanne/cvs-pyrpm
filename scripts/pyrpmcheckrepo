@@ -28,12 +28,24 @@ from pyrpm.yum.yum  import RpmYum
 
 def usage():
     print """
-    pyrpmcheckrepo [options] install [dirs | regex] update [repo] [dirs | regex]
+    pyrpmcheckrepo [outputoptions] [options] install [dirs | regex] update [repo] [dirs | regex]
 
     The dirs and regex following the install command will be used to simulate
     the original installed system.
     The first option following the update command can be a repo, rest is the
     same as for install.
+
+outputoptions
+    [--files] print file names insted of NEVRA
+    [--script] ommit headings, just output packages
+
+    [--install] pkgs to be installed
+    [--notinstalled] pkgs from the install that did not get installed
+    [--installed] pkg list after install
+    [--update] pkgs to be installed as update
+    [--leftover] pkgs not updated
+    [--updated] pkg list after update
+    [--notupdated] pkgs from the update that did not get installed
 
 options:
     [-?, --help] [--version]
@@ -49,17 +61,6 @@ options:
 
 Warning: Some of the options are not evaluated yet"""
 
-
-def list2dict(l, fn=None):
-    d = {}
-    if fn:
-        for e in l:
-            k, v = fn(e)
-            d[k] = v
-    
-    for e in l:
-        d[e] = None
-    return d
 
 def tuples2dict(l):
     d = {}
@@ -78,31 +79,39 @@ def diff(d1, d2):
             del d[e]
     return d
 
-def sum(d1, d2):
-    d = d1.copy()
-    d.update(d2)
-    return d2
+def print_dict(d, message, options):
+    if not options["--script"]:
+        print message
+    if options["--files"]:
+        for nevra, p in d.iteritems():
+            print p.source
+    else:
+        for nevra in d:
+            print nevra
+    
 
-def print_results(install, installed, update, updated):
+def print_results(options, install, installed, update, updated):
+    print_files = options["--files"]
+    
     install = tuples2dict([(p.getNEVRA(), p) for p in install])
     installed = tuples2dict([(p.getNEVRA(), p) for p in installed])
     update = tuples2dict([(p.getNEVRA(), p) for p in update])
     updated = tuples2dict([(p.getNEVRA(), p) for p in updated])
 
-    not_installed = diff(install, installed)
-    leftover = diff(installed, updated)
-    not_updated = diff(update, updated)
-
-    print "Not installed:"
-    for p in not_installed:
-        print "\t%s" % p
-    print "Leftover:"
-    for p in leftover:
-        print "\t%s" % p
-    print "Not installed updates:"
-    for p in not_updated:
-        print "\t%s" % p
-
+    if options["--notinstalled"]:
+        print_dict(diff(install, installed), "Not installed:", options)
+    if options["--install"]:
+         print_dict(install, "Install:", options)
+    if options["--installed"]:
+        print_dict(installed, "Installed:", options)
+    if options["--update"]:
+        print_dict(update, "Update:", options)
+    if options["--leftover"]:
+        print_dict(diff(installed, updated), "Leftovers:", options)
+    if options["--updated"]:
+        print_dict(updated, "Updated:", options)
+    if options["--notupdated"]:
+        print_dict(diff(update, updated), "Not updated:", options)
 
 #
 # Main program
@@ -135,7 +144,35 @@ def main():
     yum.setConfirm(0)
 
     # Argument parsing
-    args = parseYumOptions(sys.argv[1:], yum)
+    output_options = {
+        "--files" : 0,
+        "--script" : 0,
+        "--install" : 0,
+        "--notinstalled" : 0,
+        "--installed" : 0,
+        "--update" : 0,
+        "--leftover" : 0,
+        "--updated" : 0,
+        "--notupdated" : 0,
+        }
+
+    nr = 1
+    for nr, arg in enumerate(sys.argv):
+        if nr == 0: continue
+        if output_options.has_key(arg):
+            output_options[arg] = 1
+        else:
+            break
+
+        for opt, val in output_options.iteritems():
+            if opt in ["--files", "--script"]: continue
+            if val: break # at least one thing to output
+        else:
+            # if nothing to output
+            # restore old behavior
+            output_options["--leftover"] = 1
+            
+    args = parseYumOptions(sys.argv[nr:], yum)
     if not args:
         usage()
         return 0
@@ -200,7 +237,8 @@ def main():
 
     updated = resolver.getDatabase().getPkgs()
     
-    print_results(install, installed, update, updated)
+    print_results(output_options, install, installed, update, updated)
+
     return 1
 
 if __name__ == '__main__':
