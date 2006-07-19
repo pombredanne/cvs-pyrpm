@@ -176,7 +176,7 @@ class RpmYum:
         database again."""
 
         self.erase_list = []
-        if localDb:
+        if localDb is not None:
             self.pydb = localDb
         else:
             if self.config.timer:
