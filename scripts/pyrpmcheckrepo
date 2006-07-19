@@ -24,6 +24,7 @@ if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import __version__
 from pyrpm import *
+from pyrpm.yum.yum  import RpmYum
 
 def usage():
     print """
@@ -60,7 +61,9 @@ def main():
     rpmconfig.nofileconflicts = 1
 
     # Default is to be a little verbose.
-    rpmconfig.verbose = 1
+    rpmconfig.verbose = 0
+    rpmconfig.debug = 0
+    rpmconfig.warning = 1
 
     # We always do run in test mode
     rpmconfig.test = 1
@@ -104,39 +107,38 @@ def main():
         upargs = upargs[1:]
 
     yum.setCommand("update")
-    if yum.prepareTransaction() == 0:
+    db = database.memorydb.RpmMemoryDB("", None)
+    if yum.prepareTransaction(db) == 0:
         return 0
     if yum.runArgs(instargs) == 0:
         return 0
-    yum.runDepRes()
+    if yum.runDepRes() == 0:
+        return 0
     if yum.runCommand() == 0:
         return 0
 
-    installed = yum.opresolver.getList()
+    installed = yum.opresolver.getDatabase().getPkgs()
     for pkg in installed:
         # Error checking is not really necessary, what could go wrong?
         yum.pydb.addPkg(pkg, 1)
 
-    yum.opresolver = RpmResolver(rpmconfig, installed)
+    yum.opresolver = RpmResolver(rpmconfig, yum.pydb)
     if yum.runArgs(upargs) == 0:
         return 0
-    yum.runDepRes()
+    if yum.runDepRes() == 0:
+        return 0
     if yum.runCommand() == 0:
         return 0
     resolver = yum.opresolver
 
     ihash = { }
     for pkg in installed:
-        if not pkg.has_key("epoch"):
-            pkg["epoch"] = (0,)
         ihash[pkg.getNEVRA()] = 1
 
     llist = []
-    for pkg in resolver.getList():
+    for pkg in resolver.getDatabase().getPkgs():
         nevra = pkg.getNEVRA()
-        if not pkg.has_key("epoch"):
-            pkg["epoch"] = (0,)
-        if ihash.has_key(pkg.getNEVRA()):
+        if ihash.has_key(nevra):
             llist.append(nevra)
 
     if len(llist) == 0:
