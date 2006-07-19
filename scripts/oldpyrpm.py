@@ -2150,7 +2150,8 @@ class ReadRpm:
             if self["distribution"] not in (None, "Red Hat", "Red Hat Linux",
                 "Red Hat FC-3", "Red Hat (FC-3)", "Red Hat (FC-4)",
                 "Red Hat (FC-5)", "Red Hat (FC-6)", "Fedora Extras",
-                "Red Hat (scratch)", "Red Hat (RHEL-3)", "Red Hat (RHEL-4)"):
+                "Red Hat (scratch)", "Red Hat (RHEL-3)", "Red Hat (RHEL-4)",
+                "Red Hat (RHEL-5)"):
                 self.printErr("unknown distribution: %s" % self["distribution"])
         arch = self["arch"]
         if self["rhnplatform"] not in (None, arch):
