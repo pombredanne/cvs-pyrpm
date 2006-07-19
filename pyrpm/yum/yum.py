@@ -51,8 +51,10 @@ class RpmYum:
         # Flag wether we already read all the repos
         self.repos_read = 0
         # Our list of package names that get installed instead of updated
-        self.always_install = ["kernel", "kernel-smp", "kernel-bigmem",
-            "kernel-enterprise", "kernel-debug", "kernel-unsupported"]
+        self.always_install = ["kernel", "kernel-devel", "kernel-smp",
+            "kernel-smp-devel", "kernel-bigmem", "kernel-bigmem-devel",
+            "kernel-enterprise", "kernel-enterprise-devel", "kernel-debug",
+            "kernel-unsupported"]
         # List of valid commands
         self.command_list = ["install", "update", "upgrade", "remove", \
                              "groupinstall", "groupupdate", "groupupgrade", \
@@ -88,8 +90,8 @@ class RpmYum:
         if self.command not in self.command_list:
             self.config.printError("Invalid command")
             return 0
-        if self.command == "upgrade" or self.command == "groupupgrade":
-            self.always_install = [ ]
+        #if self.command == "upgrade" or self.command == "groupupgrade":
+        #    self.always_install = [ ]
         return 1
 
     def addRepo(self, file):
