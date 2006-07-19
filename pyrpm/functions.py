@@ -1335,13 +1335,10 @@ def orderList(list, arch):
     """Order RpmPackage list by "distance" to arch (ascending) and EVR
     (descending), in that order."""
 
-    distance = [ machineDistance(l["arch"], arch) for l in list ]
-    for i in xrange(len(list)):
-        for j in xrange(i + 1, len(list)):
-            if list[i] < list[j] or \
-               (list[i] == list[j] and distance[i] > distance[j]):
-                (list[i], list[j]) = (list[j], list[i])
-                (distance[i], distance[j]) = (distance[j], distance[i])
+    tmplist = [(l, -machineDistance(l["arch"], arch)) for l in list ]
+    tmplist.sort()
+    tmplist.reverse()
+    list[:] = [l[0] for l in tmplist]
 
 def machineDistance(arch1, arch2):
     """Return machine distance between arch1 and arch2, as defined by
