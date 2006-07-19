@@ -154,6 +154,7 @@ class RpmCompsXML:
         ret = []
         group = self.langhash[lang]
         conlist = self.getConditionalPackageNames(group["id"])
+        conlist.extend(self.getOptionalPackageNames(group["id"]))
         for pname, reqlist in conlist:
             if pkgname in reqlist:
                 ret.append(pname)
