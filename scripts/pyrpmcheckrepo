@@ -50,6 +50,60 @@ options:
 Warning: Some of the options are not evaluated yet"""
 
 
+def list2dict(l, fn=None):
+    d = {}
+    if fn:
+        for e in l:
+            k, v = fn(e)
+            d[k] = v
+    
+    for e in l:
+        d[e] = None
+    return d
+
+def tuples2dict(l):
+    d = {}
+    for k, v in l:
+        d[k] = v
+    return d
+
+def addlist2dict(d, l):
+    for e in l:
+        d[e] = None
+
+def diff(d1, d2):
+    d = d1.copy()
+    for e in d2:
+        if d.has_key(e):
+            del d[e]
+    return d
+
+def sum(d1, d2):
+    d = d1.copy()
+    d.update(d2)
+    return d2
+
+def print_results(install, installed, update, updated):
+    install = tuples2dict([(p.getNEVRA(), p) for p in install])
+    installed = tuples2dict([(p.getNEVRA(), p) for p in installed])
+    update = tuples2dict([(p.getNEVRA(), p) for p in update])
+    updated = tuples2dict([(p.getNEVRA(), p) for p in updated])
+
+    not_installed = diff(install, installed)
+    leftover = diff(installed, updated)
+    not_updated = diff(update, updated)
+
+    print "Not installed:"
+    for p in not_installed:
+        print "\t%s" % p
+    print "Leftover:"
+    for p in leftover:
+        print "\t%s" % p
+    print "Not installed updates:"
+    for p in not_updated:
+        print "\t%s" % p
+
+
 #
 # Main program
 #
@@ -61,9 +115,9 @@ def main():
     rpmconfig.nofileconflicts = 1
 
     # Default is to be a little verbose.
-    rpmconfig.verbose = 0
-    rpmconfig.debug = 0
-    rpmconfig.warning = 1
+    rpmconfig.verbose = -1
+    rpmconfig.debug = -1
+    rpmconfig.warning = -1
 
     # We always do run in test mode
     rpmconfig.test = 1
@@ -117,12 +171,21 @@ def main():
     if yum.runCommand() == 0:
         return 0
 
+    # all packages from the cmd line
+    install = {}
+    for repo in yum.repos:
+        addlist2dict(install, repo.getPkgs())
+    # the packages that really got installed
+    #  some arch trans compatible or broken pkgs might be missing
     installed = yum.opresolver.getDatabase().getPkgs()
     for pkg in installed:
         # Error checking is not really necessary, what could go wrong?
         yum.pydb.addPkg(pkg, 1)
 
+    not_installed = diff(install, installed)
+
     yum.opresolver = RpmResolver(rpmconfig, yum.pydb)
+    yum.repos = []
     if yum.runArgs(upargs) == 0:
         return 0
     if yum.runDepRes() == 0:
@@ -131,22 +194,13 @@ def main():
         return 0
     resolver = yum.opresolver
 
-    ihash = { }
-    for pkg in installed:
-        ihash[pkg.getNEVRA()] = 1
+    update = {}
+    for repo in yum.repos:
+        addlist2dict(update, repo.getPkgs())        
 
-    llist = []
-    for pkg in resolver.getDatabase().getPkgs():
-        nevra = pkg.getNEVRA()
-        if ihash.has_key(nevra):
-            llist.append(nevra)
-
-    if len(llist) == 0:
-        return 1
-    llist.sort()
-    print "Leftover/repoless packages:"
-    for nevra in llist:
-        print "\t%s" % nevra
+    updated = resolver.getDatabase().getPkgs()
+    
+    print_results(install, installed, update, updated)
     return 1
 
 if __name__ == '__main__':
