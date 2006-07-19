@@ -277,8 +277,8 @@ class RpmResolver:
             self.erases.append(pkg)
         if pkg in self.installs:
             self.installs.remove(pkg)
-            if pkg in self.check_installs:
-                self.check_installs.remove(pkg)
+        if pkg in self.check_installs:
+            self.check_installs.remove(pkg)
         if pkg in self.updates:
             del self.updates[pkg]
 
