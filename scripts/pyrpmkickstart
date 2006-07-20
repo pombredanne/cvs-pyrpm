@@ -2702,6 +2702,8 @@ def main():
         # --servicehack
         if no_cache:
             yum += " --nocache"
+        if verbose:
+            yum += " -v"
     if ks.has_key("packages") and ks["packages"].has_key("ignoredeps") and \
            ks["packages"].has_key("ignoremissing"):
         yum += " --nodeps"
