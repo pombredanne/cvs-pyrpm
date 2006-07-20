@@ -493,20 +493,9 @@ class RpmYum:
         # We unfortunatly still need to special case the argless remove
         if len(args) == 0:
             if self.command == "update" or self.command == "upgrade":
-                # Hardcode the inverse package obsolete code here as we
-                # need to use the reverse logic to later cases.
-                for opkg in self.__obsoleteslist:
-                    # Never add obsolete packages that are already in the DB
-                    # with the same name.
-                    if len(self.opresolver.getDatabase().getPkgsByName(opkg["name"])) > 0:
-                        continue
-                    # Loop through all obsoletes
-                    for u in opkg["obsoletes"]:
-                        s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
-                        if len(s) == 0:
-                            continue
-                        if self.opresolver.update(opkg) > 0:
-                            break
+                # For complete updates we need to do a full obsoletes run, not
+                # on a specific package.
+                self.__handleObsoletes()
                 for name in self.opresolver.getDatabase().getNames():
                     args.append(name)
         # Select proper function to be called for every argument. We have
@@ -624,12 +613,20 @@ class RpmYum:
         """Generate a list of all installed/available RpmPackage's that
         obsolete something and store it in self.__obsoleteslist."""
 
-        self.__obsoleteslist = []
+        self.__obsoleteslist = [ ]
         for repo in self.repos:
             for pkg in repo.getPkgs():
                 if len(pkg["obsoletes"]) > 0:
                     self.__obsoleteslist.append(pkg)
         orderList(self.__obsoleteslist, self.config.machine)
+        nhash = { }
+        nlist = [ ]
+        for pkg in self.__obsoleteslist:
+            if nhash.has_key(pkg["name"]):
+                continue
+            nlist.append(pkg)
+            nhash[pkg["name"]] = 1
+        self.__obsoleteslist = nlist
 
     def __runDepResolution(self):
         """Try to resolve all dependencies and remove all conflicts..
@@ -839,7 +836,7 @@ class RpmYum:
             return self.__handleConflictAutoerases()
         return ret
 
-    def __handleObsoletes(self, pkg):
+    def __handleObsoletes(self, pkg=None):
         """Try to replace RpmPackage pkg in self.opresolver by a package
         obsoleting it, iterate until no obsoletes: applies.
 
@@ -857,8 +854,8 @@ class RpmYum:
                 # erase_list skip it.
                 if opkg in pkglist or opkg in self.erase_list:
                     continue
-                # Never obsolete packages with the same name
-                if pkg["name"] == opkg["name"]:
+                # Never add obsolete packages for packages with the same name.
+                if pkg != None and pkg["name"] == opkg["name"]:
                     continue
                 # Go through all obsoletes
                 for u in opkg["obsoletes"]:
@@ -866,7 +863,7 @@ class RpmYum:
                     s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
                     # If the package for which we're checking the obsoletes
                     # right now isn't in the list skip it.
-                    if not pkg in s:
+                    if pkg != None and not pkg in s:
                             continue
                     # Found a matching obsoleting package. Try adding it to
                     # our opresolver with an update so it obsoletes the
