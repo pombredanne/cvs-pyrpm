@@ -800,15 +800,15 @@ headermatch = (
 
 # Names of all possible kernel packages:
 kernelpkgs = ["kernel", "kernel-smp", "kernel-bigmem", "kernel-enterprise",
-    "kernel-xen0", "kernel-xenU", "kernel-PAE", "kernel-kdump", "kernel-BOOT",
-    "kernel-hugemem", "kernel-largesmp", "kernel-summit"]
+    "kernel-xen0", "kernel-xenU", "kernel-xen", "kernel-PAE", "kernel-kdump",
+    "kernel-BOOT", "kernel-hugemem", "kernel-largesmp", "kernel-summit"]
 # Packages which are always installed and not updated:
 installonlypkgs = kernelpkgs[:]
 installonlypkgs.extend( ["gpg-pubkey", "kernel-debug", "kernel-devel",
     "kernel-unsupported", "kernel-modules", "kernel-PAE-devel",
     "kernel-kdump-devel", "kernel-source", "kernel-xen0-devel",
-    "kernel-xenU-devel", "kernel-smp-devel", "kernel-hugemem-devel",
-    "kernel-largesmp-devel"] )
+    "kernel-xenU-devel", "kernel-xen-devel", "kernel-smp-devel",
+    "kernel-hugemem-devel", "kernel-largesmp-devel"] )
 
 # This is RPMCANONCOLOR in /bin/rpm source, values change over time.
 def getInstallColor(arch):
