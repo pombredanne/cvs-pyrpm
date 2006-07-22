@@ -1991,7 +1991,7 @@ class ReadRpm:
         if exclusive and arch not in exclusive:
             return None
         # return 2 if this will build into a "noarch" rpm
-        if self["buildarchs"] == [ "noarch" ]:
+        if self["buildarchs"] == ["noarch"]:
             return 2
         # otherwise build this rpm normally for this arch
         return 1
@@ -3087,7 +3087,7 @@ class ConnectedComponent:
                 if req:
                     hard_requirements.append((pkg, p))
         # pick requirement to delete
-        weights = { }
+        weights = {}
         # calculate minimal distance to a pre req
         for pkg, nextpkg in hard_requirements:
             # dijkstra
@@ -3403,7 +3403,7 @@ def findRpms(dir, uselstat=None, verbose=0):
     s = os.stat
     if uselstat:
         s = os.lstat
-    dirs = [ dir ]
+    dirs = [dir]
     files = []
     while dirs:
         d = dirs.pop()
@@ -4788,11 +4788,11 @@ srpm_repos = [
     #  fedora + "updates/testing/1/SRPMS"], None, 30),
     # Red Hat Enterprise Linux
     ("Red Hat Enterprise Linux 4", "RHEL4",
-     [ mirror + "rhel/4/en/os/i386/SRPMS", rhelupdates + "4"], None, 30),
+     [mirror + "rhel/4/en/os/i386/SRPMS", rhelupdates + "4"], None, 30),
     ("Red Hat Enterprise Linux 3", "RHEL3",
-     [ mirror + "rhel/3/en/os/i386/SRPMS", rhelupdates + "3"], None, 30),
+     [mirror + "rhel/3/en/os/i386/SRPMS", rhelupdates + "3"], None, 30),
     ("Red Hat Enterprise Linux 2.1", "RHEL2.1",
-     [ mirror + "rhel/2.1AS/en/os/i386/SRPMS", rhelupdates + "2.1"], None, 30),
+     [mirror + "rhel/2.1AS/en/os/i386/SRPMS", rhelupdates + "2.1"], None, 30),
 ]
 
 def getChangeLogFromRpm(pkg, oldpkg):
