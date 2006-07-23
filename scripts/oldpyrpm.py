@@ -4759,7 +4759,9 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                 print "%s:" % key, "No url for this section in conf file."
                 return None
             repo = RpmRepo(baseurls, excludes, verbose, key, readsrc, fast)
-            repo.read()
+            if repo.read() == 0:
+                print "Cannot read repo %s." % key
+                return None
             if not readdebug:
                 repo.delDebuginfo()
             if readcompsfile:
@@ -4775,8 +4777,8 @@ def testMirrors(verbose):
     for (mirrorlist, releasever, arch, basearch) in (
         # FC-releases
         (ml + "fedora-core-$releasever", "4", "i686", "i386"),
-        (ml + "fedora-core-debug-$releasever", "4", "i686", "i386"),
-        (ml + "fedora-core-source-$releasever", "4", "i686", "i386"),
+        #(ml + "fedora-core-debug-$releasever", "4", "i686", "i386"),
+        #(ml + "fedora-core-source-$releasever", "4", "i686", "i386"),
         (ml + "fedora-core-$releasever", "5", "i686", "i386"),
         (ml + "fedora-core-debug-$releasever", "5", "i686", "i386"),
         (ml + "fedora-core-source-$releasever", "5", "i686", "i386"),
@@ -4786,15 +4788,15 @@ def testMirrors(verbose):
         (ml + "fedora-core-rawhide-source", "6", "i686", "i386"),
         # FC-updates
         (ml + "updates-released-fc$releasever", "4", "i686", "i386"),
-        (ml + "updates-released-debug-fc$releasever", "4", "i686", "i386"),
-        (ml + "updates-released-source-fc$releasever", "4", "i686", "i386"),
+        #(ml + "updates-released-debug-fc$releasever", "4", "i686", "i386"),
+        #(ml + "updates-released-source-fc$releasever", "4", "i686", "i386"),
         (ml + "updates-released-fc$releasever", "5", "i686", "i386"),
         (ml + "updates-released-debug-fc$releasever", "5", "i686", "i386"),
         (ml + "updates-released-source-fc$releasever", "5", "i686", "i386"),
         # FC-updates-testing
         (ml + "updates-testing-fc$releasever", "4", "i686", "i386"),
-        (ml + "updates-testing-debug-fc$releasever", "4", "i686", "i386"),
-        (ml + "updates-testing-source-fc$releasever", "4", "i686", "i386"),
+        #(ml + "updates-testing-debug-fc$releasever", "4", "i686", "i386"),
+        #(ml + "updates-testing-source-fc$releasever", "4", "i686", "i386"),
         (ml + "updates-testing-fc$releasever", "5", "i686", "i386"),
         (ml + "updates-testing-debug-fc$releasever", "5", "i686", "i386"),
         (ml + "updates-testing-source-fc$releasever", "5", "i686", "i386"),
