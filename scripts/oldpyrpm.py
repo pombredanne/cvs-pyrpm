@@ -1170,8 +1170,8 @@ def Uri2Filename(filename):
     if filename[:6] == "file:/":
         filename = filename[5:]
         if filename[1] == "/":
-            idx = filename[2:].index("/")
-            filename = filename[idx + 2:]
+            idx = filename.index("/", 2)
+            filename = filename[idx:]
     return filename
 
 def isUrl(filename):
@@ -4703,6 +4703,23 @@ class YumConf(Conf):
         raise Exception, "read only"
 
 
+def readMirrorlist(mirrorlist, conf, key, verbose):
+    baseurls = []
+    for mlist in mirrorlist:
+        mlist = conf.extendValue(mlist)
+        if verbose > 2:
+            print "Getting mirrorlist from %s." % mlist
+        fname = cacheLocal([mlist], "mirrorlist", key,
+            1, verbose, nofilename=1)
+        if not fname:
+            continue
+        for l in open(fname).readlines():
+            l = l.strip()
+            l = l.replace("$ARCH", "$basearch")
+            if l and l[0] != "#":
+                baseurls.append(conf.extendValue(l))
+    return baseurls
+
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
     readsrc, reposdirs, verbose, readcompsfile=0, fast=1):
     # Read in /etc/yum.conf config files.
@@ -4726,19 +4743,8 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
             if sec.has_key("mirrorlist"):
-                for mlist in sec["mirrorlist"]:
-                    mlist = conf.extendValue(mlist)
-                    if verbose > 2:
-                        print "Getting mirrorlist from %s." % mlist
-                    fname = cacheLocal([mlist], "mirrorlist", key,
-                        1, verbose, nofilename=1)
-                    lines = []
-                    if fname:
-                        lines = open(fname).readlines()
-                    for l in lines:
-                        l = l.replace("$ARCH", "$basearch")[:-1]
-                        if l:
-                            baseurls.append(conf.extendValue(l))
+                baseurls.extend(readMirrorlist(sec["mirrorlist"], conf, key,
+                    verbose))
             if not baseurls:
                 print "%s:" % key, "No url for this section in conf file."
                 return None
