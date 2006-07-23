@@ -4534,6 +4534,13 @@ class Conf:
             self.lines = []
 
 
+def replaceVars(line, releasever, arch, basearch):
+    line = line.replace("$releasever", releasever)
+    line = line.replace("$arch", arch)
+    line = line.replace("$basearch", basearch)
+    return line
+
+
 class YumConfSubDict(DictType):
     def __init__(self, parent_conf, stanza, initdict=None):
         DictType.__init__(self, initdict)
@@ -4586,10 +4593,8 @@ class YumConf(Conf):
 
     def extendValue(self, value):
         """replaces known $vars in values"""
-        for var in YumConf.Variables:
-            if value.find("$" + var) != -1:
-                value = value.replace("$" + var, self.__dict__[var])
-        return value
+        return replaceVars(value, self.__dict__["releasever"],
+            self.__dict__["arch"], self.__dict__["basearch"])
 
     def checkVar(self, stanza, varname):
         """check variablename, if allowed in the config file"""
@@ -4674,7 +4679,6 @@ class YumConf(Conf):
         return None
 
     def findnextcodeline(self):
-        # cannot rename, because of inherited class
         return self.findnextline("^[\t ]*[\[0-9A-Za-z_]+.*")
 
     def isStanzaDecl(self):
@@ -4703,10 +4707,10 @@ class YumConf(Conf):
         raise Exception, "read only"
 
 
-def readMirrorlist(mirrorlist, conf, key, verbose):
+def readMirrorlist(mirrorlist, releasever, arch, basearch, key, verbose):
     baseurls = []
     for mlist in mirrorlist:
-        mlist = conf.extendValue(mlist)
+        mlist = replaceVars(mlist, releasever, arch, basearch)
         if verbose > 2:
             print "Getting mirrorlist from %s." % mlist
         fname = cacheLocal([mlist], "mirrorlist", key,
@@ -4717,7 +4721,7 @@ def readMirrorlist(mirrorlist, conf, key, verbose):
             l = l.strip()
             l = l.replace("$ARCH", "$basearch")
             if l and l[0] != "#":
-                baseurls.append(conf.extendValue(l))
+                baseurls.append(replaceVars(l, releasever, arch, basearch))
     return baseurls
 
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
@@ -4743,8 +4747,8 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
             if sec.has_key("mirrorlist"):
-                baseurls.extend(readMirrorlist(sec["mirrorlist"], conf, key,
-                    verbose))
+                baseurls.extend(readMirrorlist(sec["mirrorlist"], releasever,
+                    arch, barch, key, verbose))
             if not baseurls:
                 print "%s:" % key, "No url for this section in conf file."
                 return None
