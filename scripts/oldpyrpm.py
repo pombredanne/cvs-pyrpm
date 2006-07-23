@@ -458,6 +458,8 @@ class GzipFile(gzip.GzipFile):
 
 cachedir = "/var/cache/pyrpm/"
 
+sockettimeout = 20.0
+
 
 # rpm tag types
 #RPM_NULL = 0
@@ -1381,9 +1383,10 @@ class ReadRpm:
                 try:
                     if offset or headerend:
                         self.fd = urlgrabber.urlopen(self.filename,
-                            range=(offset, headerend))
+                            range=(offset, headerend), timeout=sockettimeout)
                     else:
-                        self.fd = urlgrabber.urlopen(self.filename)
+                        self.fd = urlgrabber.urlopen(self.filename,
+                            timeout=sockettimeout)
                 #except urlgrabber.grabber.URLGrabError, e:
                 #    raise IOError, str(e)
                 except urlgrabber.grabber.URLGrabError:
@@ -3555,9 +3558,10 @@ def cacheLocal(urls, filename, subdir, force=0, verbose=0, nofilename=0):
             print "cacheLocal: localfile:", localfile
         try:
             if force:
-                f = urlgrabber.urlgrab(url, localfile)
+                f = urlgrabber.urlgrab(url, localfile, timeout=sockettimeout)
             else:
-                f = urlgrabber.urlgrab(url, localfile, reget="check_timestamp")
+                f = urlgrabber.urlgrab(url, localfile, reget="check_timestamp",
+                    timeout=sockettimeout)
         except urlgrabber.grabber.URLGrabError, e:
             if verbose > 4:
                 print "cacheLocal: error: e:", e
@@ -3716,7 +3720,7 @@ class RpmRepo:
         self.compsfile = None
         self.fast = fast
 
-    def read(self):
+    def read(self, onlyrepomd=0):
         for filename in self.filenames:
             if self.verbose > 2:
                 print "Reading yum repository %s." % filename
@@ -3729,6 +3733,8 @@ class RpmRepo:
             if reader == None:
                 continue
             repomd = self.__parseRepomd(reader)
+            if onlyrepomd:
+                return 1
             # XXX
             filename = cacheLocal([filename], "/repodata/primary.xml.gz",
                 self.reponame + "/repo", 1)
@@ -4708,7 +4714,7 @@ class YumConf(Conf):
 
 
 def readMirrorlist(mirrorlist, releasever, arch, basearch, key, verbose):
-    baseurls = []
+    baseurls = {}
     for mlist in mirrorlist:
         mlist = replaceVars(mlist, releasever, arch, basearch)
         if verbose > 2:
@@ -4721,8 +4727,8 @@ def readMirrorlist(mirrorlist, releasever, arch, basearch, key, verbose):
             l = l.strip()
             l = l.replace("$ARCH", "$basearch")
             if l and l[0] != "#":
-                baseurls.append(replaceVars(l, releasever, arch, basearch))
-    return baseurls
+                baseurls[replaceVars(l, releasever, arch, basearch)] = None
+    return baseurls.keys()
 
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
     readsrc, reposdirs, verbose, readcompsfile=0, fast=1):
@@ -4761,6 +4767,55 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                     "/repodata/comps.xml", key + "/repo")
             repos.append(repo)
     return repos
+
+
+def testMirrors(verbose):
+    verbose += 1 # We are per default more verbose.
+    ml = "http://fedora.redhat.com/Download/mirrors/"
+    for (mirrorlist, releasever, arch, basearch) in (
+        # FC-releases
+        (ml + "fedora-core-$releasever", "4", "i686", "i386"),
+        (ml + "fedora-core-debug-$releasever", "4", "i686", "i386"),
+        (ml + "fedora-core-source-$releasever", "4", "i686", "i386"),
+        (ml + "fedora-core-$releasever", "5", "i686", "i386"),
+        (ml + "fedora-core-debug-$releasever", "5", "i686", "i386"),
+        (ml + "fedora-core-source-$releasever", "5", "i686", "i386"),
+        # FC-development
+        (ml + "fedora-core-rawhide", "6", "i686", "i386"),
+        (ml + "fedora-core-rawhide-debug", "6", "i686", "i386"),
+        (ml + "fedora-core-rawhide-source", "6", "i686", "i386"),
+        # FC-updates
+        (ml + "updates-released-fc$releasever", "4", "i686", "i386"),
+        (ml + "updates-released-debug-fc$releasever", "4", "i686", "i386"),
+        (ml + "updates-released-source-fc$releasever", "4", "i686", "i386"),
+        (ml + "updates-released-fc$releasever", "5", "i686", "i386"),
+        (ml + "updates-released-debug-fc$releasever", "5", "i686", "i386"),
+        (ml + "updates-released-source-fc$releasever", "5", "i686", "i386"),
+        # FC-updates-testing
+        (ml + "updates-testing-fc$releasever", "4", "i686", "i386"),
+        (ml + "updates-testing-debug-fc$releasever", "4", "i686", "i386"),
+        (ml + "updates-testing-source-fc$releasever", "4", "i686", "i386"),
+        (ml + "updates-testing-fc$releasever", "5", "i686", "i386"),
+        (ml + "updates-testing-debug-fc$releasever", "5", "i686", "i386"),
+        (ml + "updates-testing-source-fc$releasever", "5", "i686", "i386"),
+        # Fedora Extras
+        (ml + "fedora-extras-$releasever", "4", "i686", "i386"),
+        (ml + "fedora-extras-debug-$releasever", "4", "i686", "i386"),
+        (ml + "fedora-extras-source-$releasever", "4", "i686", "i386"),
+        (ml + "fedora-extras-$releasever", "5", "i686", "i386"),
+        (ml + "fedora-extras-debug-$releasever", "5", "i686", "i386"),
+        (ml + "fedora-extras-source-$releasever", "5", "i686", "i386"),
+        (ml + "fedora-extras-devel", "6", "i686", "i386"),
+        ):
+        print "---------------------------------------"
+        m = readMirrorlist([mirrorlist], releasever, arch, basearch,
+            "testmirrors", verbose)
+        #print m
+        if verbose > 2:
+            for reponame in m:
+                repo = RpmRepo([reponame], "", verbose, "testmirrors", 1, 1)
+                if repo.read(1) == 0:
+                    print "failed"
 
 
 def writeFile(filename, data, mode=None):
@@ -5826,6 +5881,7 @@ def main():
     releasever = ""
     updaterpms = 0
     exactarch = 1   # XXX: should be set via yum.conf
+    testmirrors = 0
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
             ["help", "verbose", "quiet", "arch=", "archlist=", "releasever=",
@@ -5837,7 +5893,7 @@ def main():
             "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
             "checkrpmdb", "checkoldkernel", "numkeepkernels=", "checkdeps",
             "buildroot=", "installroot=", "root=", "version", "baseurl=",
-            "createrepo", "mercurial"])
+            "createrepo", "mercurial", "testmirrors"])
     except getopt.GetoptError, msg:
         print "Error:", msg
         return 1
@@ -5942,6 +5998,8 @@ def main():
             createrepo = 1
         elif opt == "--mercurial":
             mercurial = 1
+        elif opt == "--testmirrors":
+            testmirrors = 1
     # Select of what we want todo here:
     if diff:
         diff = diffTwoSrpms(args[0], args[1], explode)
@@ -6006,6 +6064,8 @@ def main():
             repo.createRepo(baseurl, ignoresymlinks)
     elif mercurial:
         createMercurial(verbose)
+    elif testmirrors:
+        testMirrors(verbose)
     elif updaterpms:
         arch_hash = setMachineDistance(arch, archlist)
         # Read all packages in rpmdb.
