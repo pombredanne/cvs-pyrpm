@@ -4802,8 +4802,8 @@ def testMirrors(verbose):
         (ml + "updates-testing-source-fc$releasever", "5", "i686", "i386"),
         # Fedora Extras
         (ml + "fedora-extras-$releasever", "4", "i686", "i386"),
-        (ml + "fedora-extras-debug-$releasever", "4", "i686", "i386"),
-        (ml + "fedora-extras-source-$releasever", "4", "i686", "i386"),
+        #(ml + "fedora-extras-debug-$releasever", "4", "i686", "i386"),
+        #(ml + "fedora-extras-source-$releasever", "4", "i686", "i386"),
         (ml + "fedora-extras-$releasever", "5", "i686", "i386"),
         (ml + "fedora-extras-debug-$releasever", "5", "i686", "i386"),
         (ml + "fedora-extras-source-$releasever", "5", "i686", "i386"),
