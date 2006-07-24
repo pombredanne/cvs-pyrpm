@@ -3719,6 +3719,7 @@ class RpmRepo:
         self.pkglist = {}
         self.compsfile = None
         self.fast = fast
+        self.repomd = None
 
     def read(self, onlyrepomd=0):
         for filename in self.filenames:
@@ -3732,7 +3733,9 @@ class RpmRepo:
             reader = libxml2.newTextReaderFilename(filename2)
             if reader == None:
                 continue
-            repomd = self.__parseRepomd(reader)
+            self.repomd = self.__parseRepomd(reader)
+            if not self.repomd:
+                continue
             if onlyrepomd:
                 return 1
             # XXX
@@ -4818,6 +4821,11 @@ def testMirrors(verbose):
                 repo = RpmRepo([reponame], "", verbose, "testmirrors", 1, 1)
                 if repo.read(1) == 0:
                     print "failed"
+                else:
+                    try:
+                        print time.strftime("%Y/%m/%d", time.gmtime(int(repo.repomd["primary"]["timestamp"])))
+                    except:
+                        print "FAILED"
 
 
 def writeFile(filename, data, mode=None):
