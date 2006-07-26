@@ -22,7 +22,7 @@ from pyrpm.yum import *
 
 def usage():
     print """
-pyrpmdbverify [-h, --help] [--dbpath=] [-c YUMCONFIG] [PACKAGES | DIRS]
+pyrpmdbverify [-h, --help] [-v] [--dbpath=] [-c YUMCONFIG] [PACKAGES | DIRS]
 
 --help:       This usage ;)
 --dbpath:     Specifies a different path for the rpmdb. Default is /var/lib/rpm
@@ -31,6 +31,7 @@ pyrpmdbverify [-h, --help] [--dbpath=] [-c YUMCONFIG] [PACKAGES | DIRS]
 -c:           Use the yum repositories specified in the given config file to
               test the rpms against. Can be used together with additional
               packages.
+-v            verbose
 PACKAGES | DIRS: Optional single rpms or directories of rpms against which the
                  the headers from the rpmdb will be checked against.
 """
@@ -189,7 +190,7 @@ def verifyStructure(hash, tag, useidx=True):
         if hash.has_key(id):
             taghash = hash[id]
         if not useidx:
-            if   not taghash:
+            if not taghash:
                 print "Error in %s db: No database entries found for package %s" % (tag, pkg.getNEVRA())
             elif refhash not in taghash[0]:
                 print "Error in %s db: %s not referenced for package %s" % (tag, refhash, pkg.getNEVRA())
@@ -216,6 +217,9 @@ def verifyStructure(hash, tag, useidx=True):
                 print "Error in %s db: No database entries found for package %s" % (tag, pkg.getNEVRA())
                 break
             if not taghash.has_key(idx):
+                # XXX: This does happen for .spec files with translations:
+                #Group:          System/Libraries
+                #Group(de):      System/Bibliotheken
                 print "Error in %s db: Index %s not found in db for package %s" % (tag, idx, pkg.getNEVRA())
                 continue
             if not val in taghash[idx]:
@@ -360,12 +364,15 @@ def checkRpmDB(pkglist):
     packages_db = hashopen(dbpath+"/Packages", "r")
     for id in packages.keys():
         pkg = packages[id]
+        if pkg["name"] == "gpg-pubkey":
+            continue
         if not pkg["signature"].has_key("sha1header"):
             print "Skipping package %s, no sha1header." % pkg.getNEVRA()
             continue
         # Silently skip packages not found
         if not sha1hash.has_key(pkg["signature"]["sha1header"]):
-#            print "Skipping package %s, not found in packagelist." % pkg.getNEVRA()
+            if rpmconfig.verbose > 2:
+                print "Skipping package %s, not found in packagelist." % pkg.getNEVRA()
             continue
         if sha1hash[pkg["signature"]["sha1header"]].yumrepo:
             fname = sha1hash[pkg["signature"]["sha1header"]].yumrepo.baseurl
@@ -431,7 +438,7 @@ def main():
 
     # Argument parsing
     try:
-      opts, args = getopt.getopt(sys.argv[1:], "?hc:",
+      opts, args = getopt.getopt(sys.argv[1:], "?hc:v",
         ["help", "dbpath=", "nointernal", "noexternal"])
     except getopt.error, e:
         print "Error parsing command list arguments: %s" % e
@@ -451,6 +458,8 @@ def main():
             external_check = 0
         elif opt == "-c":
             yumconf.append(val)
+        elif opt == "-v":
+            rpmconfig.verbose += 1
 
     readRpmDB()
     for pkg in packages.values():
