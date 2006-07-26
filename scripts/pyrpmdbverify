@@ -367,7 +367,12 @@ def checkRpmDB(pkglist):
         if not sha1hash.has_key(pkg["signature"]["sha1header"]):
 #            print "Skipping package %s, not found in packagelist." % pkg.getNEVRA()
             continue
-        opkg = readRpmPackage(rpmconfig, sha1hash[pkg["signature"]["sha1header"]].source)
+        if sha1hash[pkg["signature"]["sha1header"]].yumrepo:
+            fname = sha1hash[pkg["signature"]["sha1header"]].yumrepo.baseurl
+        else:
+            fname = ""
+        fname += "/" + sha1hash[pkg["signature"]["sha1header"]].source
+        opkg = readRpmPackage(rpmconfig, fname)
         # Fill in the package with own information and some additional things
         # we got from the rpmdb package and see if we can recreate the same
         # binary package header.
@@ -402,6 +407,8 @@ def checkRpmDB(pkglist):
         data2 = packages_db[pack("I", id)][8:]
         if data1 != data2:
             print "Error: Couldn't recreate rpmdb package header correctly for package %s" % opkg.getNEVRA()
+            #print b2a_hex(data1)
+            #print b2a_hex(data2)
         diffPkgs(opkg, pkg)
         diffPkgs(pkg, opkg)
 
