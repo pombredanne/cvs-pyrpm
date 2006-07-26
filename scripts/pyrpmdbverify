@@ -17,6 +17,7 @@ if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import __version__
 from pyrpm import *
+from pyrpm.yum import *
 
 
 def usage():
@@ -353,7 +354,8 @@ def checkRpmDB(pkglist):
     print "Checking RpmDB against list of packages."
     sha1hash = {}
     for pkg in pkglist:
-        sha1hash[pkg["signature"]["sha1header"]] = pkg
+        if pkg["signature"].has_key("sha1header"):
+            sha1hash[pkg["signature"]["sha1header"]] = pkg
     rpmio = RpmFileIO(rpmconfig, "dummy")
     packages_db = hashopen(dbpath+"/Packages", "r")
     for id in packages.keys():
