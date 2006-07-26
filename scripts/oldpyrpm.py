@@ -4774,44 +4774,41 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
     return repos
 
 
-def testMirrors(verbose):
+def testMirrors(verbose, args):
     verbose += 1 # We are per default more verbose.
-    ml = "http://fedora.redhat.com/Download/mirrors/"
-    for (mirrorlist, releasever, arch, basearch) in (
-        # FC-releases
-        (ml + "fedora-core-$releasever", "4", "i686", "i386"),
-        #(ml + "fedora-core-debug-$releasever", "4", "i686", "i386"),
-        #(ml + "fedora-core-source-$releasever", "4", "i686", "i386"),
-        (ml + "fedora-core-$releasever", "5", "i686", "i386"),
-        (ml + "fedora-core-debug-$releasever", "5", "i686", "i386"),
-        (ml + "fedora-core-source-$releasever", "5", "i686", "i386"),
-        # FC-development
-        (ml + "fedora-core-rawhide", "6", "i686", "i386"),
-        (ml + "fedora-core-rawhide-debug", "6", "i686", "i386"),
-        (ml + "fedora-core-rawhide-source", "6", "i686", "i386"),
-        # FC-updates
-        (ml + "updates-released-fc$releasever", "4", "i686", "i386"),
-        #(ml + "updates-released-debug-fc$releasever", "4", "i686", "i386"),
-        #(ml + "updates-released-source-fc$releasever", "4", "i686", "i386"),
-        (ml + "updates-released-fc$releasever", "5", "i686", "i386"),
-        (ml + "updates-released-debug-fc$releasever", "5", "i686", "i386"),
-        (ml + "updates-released-source-fc$releasever", "5", "i686", "i386"),
-        # FC-updates-testing
-        (ml + "updates-testing-fc$releasever", "4", "i686", "i386"),
-        #(ml + "updates-testing-debug-fc$releasever", "4", "i686", "i386"),
-        #(ml + "updates-testing-source-fc$releasever", "4", "i686", "i386"),
-        (ml + "updates-testing-fc$releasever", "5", "i686", "i386"),
-        (ml + "updates-testing-debug-fc$releasever", "5", "i686", "i386"),
-        (ml + "updates-testing-source-fc$releasever", "5", "i686", "i386"),
-        # Fedora Extras
-        (ml + "fedora-extras-$releasever", "4", "i686", "i386"),
-        #(ml + "fedora-extras-debug-$releasever", "4", "i686", "i386"),
-        #(ml + "fedora-extras-source-$releasever", "4", "i686", "i386"),
-        (ml + "fedora-extras-$releasever", "5", "i686", "i386"),
-        (ml + "fedora-extras-debug-$releasever", "5", "i686", "i386"),
-        (ml + "fedora-extras-source-$releasever", "5", "i686", "i386"),
-        (ml + "fedora-extras-devel", "6", "i686", "i386"),
-        ):
+    sockettimeout = 10.0
+    if args:
+        args = [ (a, "5", "i686", "i386") for a in args ]
+    else:
+        ml = "http://fedora.redhat.com/Download/mirrors/"
+        args = [
+            # FC-releases
+            (ml + "fedora-core-$releasever", "4", "i686", "i386"),
+            (ml + "fedora-core-$releasever", "5", "i686", "i386"),
+            (ml + "fedora-core-debug-$releasever", "5", "i686", "i386"),
+            (ml + "fedora-core-source-$releasever", "5", "i686", "i386"),
+            # FC-development
+            (ml + "fedora-core-rawhide", "6", "i686", "i386"),
+            (ml + "fedora-core-rawhide-debug", "6", "i686", "i386"),
+            (ml + "fedora-core-rawhide-source", "6", "i686", "i386"),
+            # FC-updates
+            (ml + "updates-released-fc$releasever", "4", "i686", "i386"),
+            (ml + "updates-released-fc$releasever", "5", "i686", "i386"),
+            (ml + "updates-released-debug-fc$releasever", "5", "i686", "i386"),
+            (ml + "updates-released-source-fc$releasever", "5", "i686","i386"),
+            # FC-updates-testing
+            (ml + "updates-testing-fc$releasever", "4", "i686", "i386"),
+            (ml + "updates-testing-fc$releasever", "5", "i686", "i386"),
+            (ml + "updates-testing-debug-fc$releasever", "5", "i686", "i386"),
+            (ml + "updates-testing-source-fc$releasever", "5", "i686", "i386"),
+            # Fedora Extras
+            (ml + "fedora-extras-$releasever", "4", "i686", "i386"),
+            (ml + "fedora-extras-$releasever", "5", "i686", "i386"),
+            (ml + "fedora-extras-debug-$releasever", "5", "i686", "i386"),
+            (ml + "fedora-extras-source-$releasever", "5", "i686", "i386"),
+            (ml + "fedora-extras-devel", "6", "i686", "i386"),
+        ]
+    for (mirrorlist, releasever, arch, basearch) in args:
         print "---------------------------------------"
         m = readMirrorlist([mirrorlist], releasever, arch, basearch,
             "testmirrors", verbose)
@@ -6075,7 +6072,7 @@ def main():
     elif mercurial:
         createMercurial(verbose)
     elif testmirrors:
-        testMirrors(verbose)
+        testMirrors(verbose, args)
     elif updaterpms:
         arch_hash = setMachineDistance(arch, archlist)
         # Read all packages in rpmdb.
