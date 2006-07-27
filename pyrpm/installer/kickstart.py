@@ -129,7 +129,7 @@ class KickstartConfig(dict):
                     if opt in [ "autopart", "autostep", "cdrom", "cmdline",
                                 "halt", "install", "interactive", "poweroff",
                                 "reboot", "shutdown", "skipx", "text",
-                                "upgrade", "mouse" ]:
+                                "upgrade", "mouse", "zerombr" ]:
                         self[opt] = None
                     else:
                         print "'%s' is unsupported" % line

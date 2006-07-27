@@ -67,6 +67,23 @@ def get_system_md_devices():
     fd.close()
     return map
 
+def mounted_devices():
+    # dict <mount point>:<filesystem type>
+    mounted = [ ]
+    try:
+        fd = open("/proc/mounts", "r")
+    except Exception:
+        print "ERROR: Unable to open '/proc/mounts' for reading."
+        return
+    while 1:
+        line = fd.readline()
+        if not line:
+            break
+        margs = line.split()
+        mounted.append(margs[0])
+    fd.close()
+    return mounted
+
 def load_release(chroot=""):
     f = "%s/etc/redhat-release" % chroot
     if not (os.path.exists(f) and os.path.isfile(f)):
@@ -92,6 +109,8 @@ def load_fstab(chroot=""):
         line = fd.readline()
         if not line:
             break
+        if len(line) < 1 or line[0] == "#":
+            continue
         line = line.strip()
         splits = line.split()
         if len(splits) != 6:

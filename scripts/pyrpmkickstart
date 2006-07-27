@@ -465,6 +465,9 @@ def main():
     # get system logical volumes
     system["lvmap"] = LVM_VOLGROUP.display()
 
+    # TODO: add other usable disklabels
+    usable_disklabels = [ "msdos" ]
+
     ##########################################################################
     #################### prepare installation environment ####################
     ##########################################################################
@@ -657,49 +660,59 @@ def main():
 
     # clearpart, initialize disks
     modified = [ ]
-    if ks.has_key("install") and \
-           ks.has_key("clearpart") and not ks["clearpart"].has_key("none"):
-        disklabel = "msdos"
-        linuxtypes = [ 0x82, 0x83, 0x8e, 0xfd ]
-        drives = diskmap.keys()
-        if ks["clearpart"].has_key("drives"):
-            drives = ks["clearpart"]["drives"]
-            for disk in drives:
-                if diskmap.has_key(disk):
-                    continue
-                print "ERROR: clearpart --drives: disk %s is not available" % \
-                      disk
-                return 1
-        for disk in drives:
-            if ks["clearpart"].has_key("initlabel") or \
-                   (ks.has_key("zerombr") and \
-                    ks["zerombr"].has_key("yes")) or \
-                   not diskmap[disk].has_disklabel():
-                print "Initializing disk '%s'" % disk
-                diskmap[disk].new_disklabel(disklabel)
-                if not disk in modified:
-                    modified.append(disk)
-            elif diskmap[disk]["disklabel"] != disklabel:
-                print "Initializing disk '%s' to '%s' disklabel" % \
-                      (disk, disklabel)
-                diskmap[disk].new_disklabel(disklabel)
-                if not disk in modified:
-                    modified.append(disk)
-            elif ks["clearpart"].has_key("all"):
-                print "Removing all partitions on disk '%s'" % disk
-                diskmap[disk].delete_all_partitions()
-                if not disk in modified:
-                    modified.append(disk)
-            elif ks["clearpart"].has_key("linux"):
-                partition = diskmap[disk]["partition"].keys()
-                partition.reverse()
-                for i in partition:
-                    partition = diskmap[disk]["partition"][i]
-                    if partition["native_type"] in linuxtypes:
-                        print "Removing partition %d on %s" % (i, disk)
-                        diskmap[disk].delete_partition(i)
+
+    if ks.has_key("install"):
+        if ks.has_key("zerombr") and ks["zerombr"] == "yes":
+            for disk in diskmap.keys():
+                if not diskmap[disk].has_disklabel() or \
+                       diskmap[disk]["disklabel"] not in usable_disklabels:
+                    print "Initializing disk '%s'" % disk
+                    diskmap[disk].new_disklabel(usable_disklabels[0])
+                    if not disk in modified:
+                        modified.append(disk)
+                else:
+                    if diskmap[disk]["disklabel"] == "msdos":
+                        zero_device(diskmap[disk]["device"], 446)
+                    else:
+                        print "ERROR: Unkown mbr size for disklabel " + \
+                              "'%s' on '%s'" % (diskmap[disk]["disklabel"],
+                                                disk)
+                        return 1
+
+        if ks.has_key("clearpart"):
+            linuxtypes = [ 0x82, 0x83, 0x8e, 0xfd ]
+            drives = diskmap.keys()
+            if ks["clearpart"].has_key("drives"):
+                drives = ks["clearpart"]["drives"]
+                normalizeList(drives)
+                for disk in drives:
+                    if not diskmap.has_key(disk):
+                        print "ERROR: clearpart --drives: " + \
+                              "disk %s is not available" % disk
+                        return 1
+                for disk in drives:
+                    if ks["clearpart"].has_key("initlabel") and \
+                           disk not in modified:
+                        # disk has to be initialized and disk is not modified
+                        print "Initializing disk '%s'" % disk
+                        diskmap[disk].new_disklabel(usable_disklabels[0])
                         if not disk in modified:
                             modified.append(disk)
+                    elif ks["clearpart"].has_key("all"):
+                        print "Removing all partitions on disk '%s'" % disk
+                        diskmap[disk].delete_all_partitions()
+                        if not disk in modified:
+                            modified.append(disk)
+                    elif ks["clearpart"].has_key("linux"):
+                        partition = diskmap[disk]["partition"].keys()
+                        partition.reverse()
+                        for i in partition:
+                            partition = diskmap[disk]["partition"][i]
+                            if partition["native_type"] in linuxtypes:
+                                print "Removing partition %d on %s" % (i, disk)
+                                diskmap[disk].delete_partition(i)
+                                if not disk in modified:
+                                    modified.append(disk)
 
     ####################### disk / partition selection #######################
 
@@ -1109,6 +1122,12 @@ def main():
                 return 1
             if not diskmap.has_key(ondisk):
                 print "ERROR: '%s' is not defined." % ondisk
+                return 1
+            if not diskmap[ondisk].has_disklabel():
+                print "ERROR: Disk '%s' is not initialized." % ondisk
+                return 1
+            if not diskmap[disk]["disklabel"] in usable_disklabels:
+                print "ERROR: Disk '%s' has no usable disklabel." % ondisk
                 return 1
             to_create.setdefault(ondisk, [ ]).append(name)
 
@@ -1700,6 +1719,16 @@ def main():
             # dependent)
     to_format.sort()
     to_format.reverse()
+
+    # check if partitions marked for formatting are already mounted (in use)
+    mounted_devs = mounted_devices()
+    mounted = 0
+    for onpart in to_format:
+        if partitionmap[onpart]["device"] in mounted_devs:
+            print "ERROR: '%s' is currently mounted." % onpart
+            mounted += 1
+    if mounted > 0:
+        return 1
 
     # check if all needed programs are there: mdadm, lvm, mkswap, mkfs.X and
     # tune2fs
