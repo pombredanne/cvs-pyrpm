@@ -1,5 +1,6 @@
 DOCFILES = pyrpm.txt pyrpm-devel.txt pyrpm-tools.txt pyrpm-links.txt
-EXTRA_DIST = $(DOCFILES) $(DOCFILES:.txt=.html) pycheckrc
+EXTRA_DIST = $(DOCFILES) $(DOCFILES:.txt=.html) pycheckrc asciidoc.conf \
+	favicon.ico linux.gif
 
 CLEANFILES := $(notdir $(wildcard *~)) $(notdir $(wildcard *\#)) \
 	$(notdir $(wildcard \.\#*)) $(notdir $(wildcard *\.bak))
@@ -10,8 +11,8 @@ CLEANFILES := $(notdir $(wildcard *~)) $(notdir $(wildcard *\#)) \
 
 all: $(DOCFILES:.txt=.html)
 
-.txt.html:
-	asciidoc -b html4 $< > $@
+.txt.html: asciidoc.conf
+	asciidoc -f asciidoc.conf -b html4 -o $@ $<
 
 clean:
 	rm -rf $(DOCFILES:.txt=.html)
