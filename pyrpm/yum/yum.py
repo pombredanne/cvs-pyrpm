@@ -863,8 +863,8 @@ class RpmYum:
                     s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
                     # If the package for which we're checking the obsoletes
                     # right now isn't in the list skip it.
-                    if pkg != None and not pkg in s:
-                            continue
+                    if not pkg in s:
+                        continue
                     # Found a matching obsoleting package. Try adding it to
                     # our opresolver with an update so it obsoletes the
                     # installed package
