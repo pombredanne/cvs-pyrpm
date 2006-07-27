@@ -1,6 +1,6 @@
-AC_INIT(pyrpm.spec.in)
-AM_INIT_AUTOMAKE(pyrpm, 0.55)
-AM_PATH_PYTHON
+AC_INIT(pyrpm, 0.55)
+AM_INIT_AUTOMAKE
+AM_PATH_PYTHON(2.3)
 
 AC_OUTPUT([
 Makefile
