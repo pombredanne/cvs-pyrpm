@@ -328,9 +328,8 @@ class RpmYum:
                 # In case we had a successfull update make sure we erase the
                 # package we just updated. Otherwise cross arch switches won't
                 # work properly.
-                # DISALBED CURRENTLY. need to verify this is correct.
-                #if r > 0:
-                #   self.opresolver.erase(ipkg)
+                if r > 0 and ipkg in self.opresolver.getDatabase():
+                    self.opresolver.erase(ipkg)
                 ret |= r
                 # Trick to avoid multiple adds for same arch, after handling
                 # it once we clear the update package list.
