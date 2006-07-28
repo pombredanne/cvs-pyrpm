@@ -660,24 +660,20 @@ def main():
 
     # clearpart, initialize disks
     modified = [ ]
+    zero_mbr = [ ]
 
     if ks.has_key("install"):
         if ks.has_key("zerombr") and ks["zerombr"] == "yes":
             for disk in diskmap.keys():
                 if not diskmap[disk].has_disklabel() or \
                        diskmap[disk]["disklabel"] not in usable_disklabels:
-                    print "Initializing disk '%s'" % disk
+                    print "Initializing disk '%s' to '%s' type." % \
+                          (disk, usable_disklabels[0])
                     diskmap[disk].new_disklabel(usable_disklabels[0])
                     if not disk in modified:
                         modified.append(disk)
                 else:
-                    if diskmap[disk]["disklabel"] == "msdos":
-                        zero_device(diskmap[disk]["device"], 446)
-                    else:
-                        print "ERROR: Unkown mbr size for disklabel " + \
-                              "'%s' on '%s'" % (diskmap[disk]["disklabel"],
-                                                disk)
-                        return 1
+                    zero_mbr.append(disk)
 
         if ks.has_key("clearpart"):
             linuxtypes = [ 0x82, 0x83, 0x8e, 0xfd ]
@@ -690,29 +686,30 @@ def main():
                         print "ERROR: clearpart --drives: " + \
                               "disk %s is not available" % disk
                         return 1
-                for disk in drives:
-                    if ks["clearpart"].has_key("initlabel") and \
-                           disk not in modified:
-                        # disk has to be initialized and disk is not modified
-                        print "Initializing disk '%s'" % disk
-                        diskmap[disk].new_disklabel(usable_disklabels[0])
-                        if not disk in modified:
-                            modified.append(disk)
-                    elif ks["clearpart"].has_key("all"):
-                        print "Removing all partitions on disk '%s'" % disk
-                        diskmap[disk].delete_all_partitions()
-                        if not disk in modified:
-                            modified.append(disk)
-                    elif ks["clearpart"].has_key("linux"):
-                        partition = diskmap[disk]["partition"].keys()
-                        partition.reverse()
-                        for i in partition:
-                            partition = diskmap[disk]["partition"][i]
-                            if partition["native_type"] in linuxtypes:
-                                print "Removing partition %d on %s" % (i, disk)
-                                diskmap[disk].delete_partition(i)
-                                if not disk in modified:
-                                    modified.append(disk)
+            for disk in drives:
+                if ks["clearpart"].has_key("initlabel") and \
+                       disk not in modified:
+                    # disk has to be initialized and disk is not modified
+                    print "Initializing disk '%s' to '%s' type." % \
+                          (disk, usable_disklabels[0])
+                    diskmap[disk].new_disklabel(usable_disklabels[0])
+                    if not disk in modified:
+                        modified.append(disk)
+                elif ks["clearpart"].has_key("all"):
+                    print "Removing all partitions on disk '%s'" % disk
+                    diskmap[disk].delete_all_partitions()
+                    if not disk in modified:
+                        modified.append(disk)
+                elif ks["clearpart"].has_key("linux"):
+                    partition = diskmap[disk]["partition"].keys()
+                    partition.reverse()
+                    for i in partition:
+                        partition = diskmap[disk]["partition"][i]
+                        if partition["native_type"] in linuxtypes:
+                            print "Removing partition %d on %s" % (i, disk)
+                            diskmap[disk].delete_partition(i)
+                            if not disk in modified:
+                                modified.append(disk)
 
     ####################### disk / partition selection #######################
 
@@ -855,13 +852,14 @@ def main():
                     info["onpart"] = onpart
                     if mdmap.has_key(dev):
                         dict = mdmap[dev]
-                        for tag in [ "uuid", "magic", "level",
-                                     "raid-devices" ]:
-                            if dict[tag] != info[tag]:
-                                print "WARNING: Ignoring partition '%s'," % \
-                                      (onpart) + \
-                                      " because of uuid mismatch." % dev
-                                continue
+# TODO: do something
+#                        for tag in [ "uuid", "magic", "level",
+#                                     "raid-devices" ]:
+#                            if dict[tag] != info[tag]:
+#                                print "WARNING: Ignoring partition '%s'," % \
+#                                      (onpart) + \
+#                                      " because of uuid mismatch."
+#                                continue
                     else:
                         mdmap[dev] = { }
                         dict = mdmap[dev]
@@ -1298,17 +1296,18 @@ def main():
                             match = free
                             break
                     if not match:
-                        print "ERROR: Extended partition does not fit onto %s." % \
-                              disk
+                        print "ERROR: Extended partition does not fit " + \
+                              "onto %s." % disk
                         return 1
 
                     start = long(match["start"])
                     end = start + (size_logical) * diskmap[disk]["units"] - 1
 
                     if end > match["end"]:
-                        print "ERROR: Size calculation wrong for the extended " + \
-                              "partition: Size is "+ (end-start+1) \
-                              +" and should be "+ (match["end"]-start+1) + "."
+                        print "ERROR: Size calculation wrong for the " + \
+                              "extended partition: " + \
+                              "Size is %d " % (end-start+1) + \
+                              "and should be %d." % (match["end"]-start+1)
                         return 1
 
                     print "Creating extended partition on disk %s" % disk
@@ -1394,6 +1393,15 @@ def main():
     if len(modified) > 0 and confirm == 1:
         if not pyrpm.is_this_ok():
             return 0
+
+    # zero mbr's
+    for disk in zero_mbr:
+        if diskmap[disk]["disklabel"] == "msdos":
+            zero_device(diskmap[disk]["device"], 446)
+        else:
+            print "ERROR: Do not know how to clear mbr on '%s' " % (disk) + \
+                  "with disklabel '%s'." % (diskmap[disk]["disklabel"])
+            return 1
 
     # commit changes
     for disk in modified:
@@ -1646,8 +1654,8 @@ def main():
         if part.has_key("label"):
             label = part["label"]
         if len(label) > 16:
-            print "WARNING: Label '%s' for '%s' is too long," % (label, onpart) + \
-                  ", tuncating to 16 chars."
+            print "WARNING: Label '%s' for '%s' " % (label, onpart) + \
+                  "is too long, tuncating to 16 chars."
             label = label[:16]
 
         # add or increase label id as long as label in labels
@@ -3123,7 +3131,7 @@ def main():
                 return 1
             for f in [ "stage1", "stage2", "e2fs_stage1_5" ]:
                 if not f in list:
-                    print "ERROR: grub stage file '%s' " % f + \
+                    print "ERROR: grub stage file '%s' " % (f) + \
                           "is missing in installation tree."
                     return 1
             for entry in list:
