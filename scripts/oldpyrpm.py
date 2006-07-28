@@ -984,7 +984,7 @@ def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
     (offset, store, stags1, stags2, stags3) = (0, [], [], [], [])
     # Sort by number and also first normal tags, then install_keys tags
     # and at the end the region tag.
-    for tagname in tags.keys():
+    for tagname in tags.iterkeys():
         tagnum = taghash[tagname][0]
         if tagname == region:
             stags3.append((tagnum, tagname))
@@ -1207,7 +1207,7 @@ class Uid(UGid):
     def transform(self, buildroot):
         # "uid=0" if no /etc/passwd exists at all.
         if not os.path.exists(buildroot + "/etc/passwd"):
-            for uid in self.ugid.keys():
+            for uid in self.ugid.iterkeys():
                 self.ugid[uid] = 0
                 if uid != "root":
                     print "Warning: user %s not found, using uid 0." % uid
@@ -1215,7 +1215,7 @@ class Uid(UGid):
         # Parse /etc/passwd if glibc is not yet installed.
         if buildroot or not os.path.exists(buildroot + "/sbin/ldconfig"):
             uidhash = parseFile(buildroot + "/etc/passwd", self.ugid)
-            for uid in self.ugid.keys():
+            for uid in self.ugid.iterkeys():
                 if uidhash.has_key(uid):
                     self.ugid[uid] = uidhash[uid]
                 else:
@@ -1223,7 +1223,7 @@ class Uid(UGid):
                     self.ugid[uid] = 0
             return
         # Normal lookup of users via glibc.
-        for uid in self.ugid.keys():
+        for uid in self.ugid.iterkeys():
             if uid == "root":
                 self.ugid[uid] = 0
             else:
@@ -1237,7 +1237,7 @@ class Gid(UGid):
     def transform(self, buildroot):
         # "gid=0" if no /etc/group exists at all.
         if not os.path.exists(buildroot + "/etc/group"):
-            for gid in self.ugid.keys():
+            for gid in self.ugid.iterkeys():
                 self.ugid[gid] = 0
                 if gid != "root":
                     print "Warning: group %s not found, using gid 0." % gid
@@ -1245,7 +1245,7 @@ class Gid(UGid):
         # Parse /etc/group if glibc is not yet installed.
         if buildroot or not os.path.exists(buildroot + "/sbin/ldconfig"):
             gidhash = parseFile(buildroot + "/etc/group", self.ugid)
-            for gid in self.ugid.keys():
+            for gid in self.ugid.iterkeys():
                 if gidhash.has_key(gid):
                     self.ugid[gid] = gidhash[gid]
                 else:
@@ -1253,7 +1253,7 @@ class Gid(UGid):
                     self.ugid[gid] = 0
             return
         # Normal lookup of users via glibc.
-        for gid in self.ugid.keys():
+        for gid in self.ugid.iterkeys():
             if gid == "root":
                 self.ugid[gid] = 0
             else:
@@ -1764,7 +1764,7 @@ class ReadRpm:
                 del devinode[di]
         # sanity check hardlinks
         if self.verify:
-            for hardlinks in devinode.values():
+            for hardlinks in devinode.itervalues():
                 j = hardlinks[0]
                 mode = self["filemodes"][j]
                 mtime = self["filemtimes"][j]
@@ -1811,7 +1811,7 @@ class ReadRpm:
         else:
             for filename in filenamehash.iterkeys():
                 self.printErr("file not in cpio: %s" % filename)
-            if extract and len(devinode.keys()):
+            if extract and devinode.keys():
                 self.printErr("hardlinked files remain from cpio")
         del c, fd
         self.closeFd()
@@ -3098,7 +3098,7 @@ class ConnectedComponent:
             while edge:
                 node = edge.pop()
                 weight = weights[node] + 1
-                for next_node, ishard in self.relations[node].pre.iteritems():
+                for (next_node, ishard) in self.relations[node].pre.iteritems():
                     if ishard:
                         continue
                     w = weights.get(next_node, None)
@@ -3111,7 +3111,7 @@ class ConnectedComponent:
         if weights:
             # get pkg with largest minimal distance
             weight = -1
-            for p, w in weights.iteritems():
+            for (p, w) in weights.iteritems():
                 if w > weight:
                     weight, pkg2 = w, p
             # get the predesessor with largest minimal distance
@@ -3281,10 +3281,9 @@ class RpmOrderer:
         operation."""
         resolver = self.resolver
         relations = RpmRelations(rpms)
-        for (n, f, v) in resolver.requires_list.keys():
+        for ((n, f, v), rpms) in resolver.requires_list.iteritems():
             if n[:7] in ("rpmlib(", "config("):
                 continue
-            rpms = resolver.requires_list[(n, f, v)]
             resolved = resolver.searchDependency(n, f, v)
             if resolved:
                 f2 = operationFlag(f, operation)
@@ -3371,8 +3370,8 @@ def getPkgsNewest(rpms, arch=None, arch_hash={}, verbose=0,
         h.setdefault( (rpm["name"], rarch) , []).append(rpm)
     # For each arch select one newest rpm.
     pkgs = []
-    for r in h.keys():
-        pkgs.append(selectNewestRpm(h[r], arch_hash, verbose))
+    for r in h.itervalues():
+        pkgs.append(selectNewestRpm(r, arch_hash, verbose))
     if arch:
         # Add all rpms into a hash by their name.
         h = {}
@@ -3389,7 +3388,7 @@ def getPkgsNewest(rpms, arch=None, arch_hash={}, verbose=0,
         # By name find the newest rpm and then decide if a noarch
         # rpm is the newest (and all others are deleted) or if an
         # arch-dependent rpm is newest (and all noarchs are removed).
-        for rpms in h.values():
+        for rpms in h.itervalues():
             newest = selectNewestRpm(rpms, arch_hash, verbose)
             if newest["arch"] == "noarch":
                 for r in rpms:
@@ -3610,7 +3609,7 @@ def parsePackages(pkgs, requests, casematch=1):
             else:
                 regex = re.compile(restring, flags=re.I)
             foundit = 0
-            for item in pkgdict.keys():
+            for item in pkgdict.iterkeys():
                 if regex.match(item):
                     matched.extend(pkgdict[item])
                     foundit = 1
@@ -3961,8 +3960,7 @@ class RpmRepo:
                         self.pkglist[pkg.getNEVRA0()] = pkg
 
     def delDebuginfo(self):
-        for nevra in self.pkglist.keys():
-            pkg = self.pkglist[nevra]
+        for (nevra, pkg) in self.pkglist.iteritems():
             # or should we search for "-debuginfo" only?
             if (pkg["name"].endswith("-debuginfo") or
                 pkg["name"] == "glibc-debuginfo-common"):
@@ -4741,7 +4739,7 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
         conf = YumConf(verbose, releasever, arch, barch, buildroot, c,
             reposdirs)
         #print conf.vars
-        for key in conf.vars.keys():
+        for key in conf.vars.iterkeys():
             if key == "main":
                 #mainconf = conf.vars["main"]
                 #if mainconf.has_key("distroverpkg"):
@@ -4774,6 +4772,7 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
 
 
 def testMirrors(verbose, args):
+    global sockettimeout
     verbose += 1 # We are per default more verbose.
     sockettimeout = 10.0
     if args:
@@ -5164,8 +5163,7 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
 
 def verifyStructure(verbose, packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
-    for tid in phash.keys():
-        mytag = phash[tid]
+    for (tid, mytag) in phash.iteritems():
         if not packages.has_key(tid):
             print "Error %s: Package id %s doesn't exist" % (tag, tid)
             if verbose > 2:
@@ -5179,25 +5177,24 @@ def verifyStructure(verbose, packages, phash, tag, useidx=1):
             pkgtag = packages[tid]["basenames2"]
         else:
             pkgtag = packages[tid][tag]
-        for idx in mytag.keys():
+        for (idx, mytagidx) in mytag.iteritems():
             if useidx:
                 try:
                     val = pkgtag[idx]
                 except:
                     print "Error %s: index %s is not in package" % (tag, idx)
                     if verbose > 2:
-                        print mytag[idx]
+                        print mytagidx
             else:
                 if idx != 0:
                     print "Error %s: index %s out of range" % (tag, idx)
                 val = pkgtag
-            if mytag[idx] != val:
-                print "Error %s: %s != %s in package %s" % (tag, mytag[idx],
+            if mytagidx != val:
+                print "Error %s: %s != %s in package %s" % (tag, mytagidx,
                     val, packages[tid].getFilename())
     # Go through /var/lib/rpm/Packages and check if data is correctly
     # copied over to the other files.
-    for tid in packages.keys():
-        pkg = packages[tid]
+    for (tid, pkg) in packages.iteritems():
         if tag == "dirindexes" and pkg["dirindexes2"] != None:
             refhash = pkg["dirindexes2"]
         elif tag == "dirnames" and pkg["dirnames2"] != None:
@@ -5382,14 +5379,14 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
         if verbose > 2:
             time1 = time.clock()
     # Checking data integrity of the rpmdb:
-    for tid in packages.keys():
+    for tid in packages.iterkeys():
         if tid > maxtid:
             print "wrong tid:", tid
     verifyStructure(verbose, packages, basenames, "basenames")
     verifyStructure(verbose, packages, conflictname, "conflictname")
     verifyStructure(verbose, packages, dirnames, "dirnames")
-    for x in filemd5s.values():
-        for y in x.keys():
+    for x in filemd5s.itervalues():
+        for y in x.iterkeys():
             x[y] = b2a_hex(x[y])
     verifyStructure(verbose, packages, filemd5s, "filemd5s")
     verifyStructure(verbose, packages, group, "group")
@@ -5407,7 +5404,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     checkdupes = {}
     checkevr = {}
     # Find out "arch", "releasever" and set "checkdupes".
-    for pkg in packages.values():
+    for pkg in packages.itervalues():
         if (not specifyarch and rpmdbpath != "/var/lib/rpm" and
             pkg["name"] in kernelpkgs):
             # This would apply if we e.g. go from i686 -> x86_64, but
@@ -5424,7 +5421,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
                 []).append(pkg)
             checkevr.setdefault("%s" % pkg["name"], []).append(pkg)
     # Check "arch" and dupes:
-    for pkg in packages.values():
+    for pkg in packages.itervalues():
         if (pkg["name"] != "gpg-pubkey" and
             arch_hash.get(pkg["arch"]) == None):
             print "Warning: did not expect package with this arch: %s" % \
@@ -5433,15 +5430,15 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
             checkdupes.has_key("%s.noarch" % pkg["name"])):
             print "Warning: noarch and arch-dependent package installed:", \
                 pkg.getFilename()
-    for pkg in checkdupes.keys():
-        if len(checkdupes[pkg]) > 1:
+    for (pkg, value) in checkdupes.iteritems():
+        if len(value) > 1:
             print "Warning: more than one package installed for %s." % pkg
-    for pkg in checkevr.keys():
-        if len(checkevr[pkg]) <= 1:
+    for (pkg, value) in checkevr.iteritems():
+        if len(value) <= 1:
             continue
-        p = checkevr[pkg][0]
+        p = value[0]
         evr = (p["epoch"], p["version"], p["release"])
-        for q in checkevr[pkg][1:]:
+        for q in value[1:]:
             if evr != (q["epoch"], q["version"], q["release"]):
                 print p.getFilename(), "has different epoch/version/release", \
                     " than", q.getFilename()
@@ -5454,8 +5451,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
         return 1
     if verbose > 2 and configfiles:
         print "Needed", time.clock() - time3, "seconds to read the repos."
-    for tid in packages.keys():
-        pkg = packages[tid]
+    for (tid, pkg) in packages.iteritems():
         if pkg["name"] == "gpg-pubkey":
             continue
         # Check if we could write the rpmdb data again.
@@ -5602,7 +5598,7 @@ def checkSrpms(ignoresymlinks):
         h = {}
         for rpm in rpms:
             h.setdefault(rpm["name"], []).append(rpm)
-        for v in h.values():
+        for v in h.itervalues():
             v.sort(pkgCompare)
             for i in xrange(len(v) - 1):
                 if (v[i].hdr.getOne("buildtime") >
@@ -5618,7 +5614,7 @@ def checkSrpms(ignoresymlinks):
     h = {}
     for rpm in rpms:
         h.setdefault(rpm["name"], []).append(rpm)
-    for v in h.values():
+    for v in h.itervalues():
         v.sort(pkgCompare)
         i = 0
         while i < len(v) - 1:
@@ -5747,15 +5743,15 @@ def checkProvides(repo):
                 provides.setdefault(p, []).append(rpm)
     if provides.keys():
         print "Duplicate provides:"
-    for p in provides.keys():
+    for (p, value) in provides.iteritems():
         # only look at duplicate keys
-        if len(provides[p]) <= 1:
+        if len(value) <= 1:
             continue
         # if no require can match this, ignore duplicates
         if not requires.has_key(p[0]):
             continue
         x = []
-        for rpm in provides[p]:
+        for rpm in value:
             #x.append(rpm.getFilename())
             if rpm["name"] not in x:
                 x.append(rpm["name"])
@@ -6042,7 +6038,7 @@ def main():
         (packages, keyring, maxtid, pkgdata, swapendian) = \
             readPackages(buildroot, rpmdbpath, verbose, 0, importanttags)
         kernels = []
-        for pkg in packages.values():
+        for pkg in packages.itervalues():
             if pkg["name"] in mykernelpkgs:
                 kernels.append(pkg)
         kernels.sort(pkgCompare)
@@ -6086,7 +6082,7 @@ def main():
         # for pkgname in distroverpkg:
         #    if packages.has_key(pkgname):
         #        releasever = packages[pkgname]["version"]
-        for pkg in packages.values():
+        for pkg in packages.itervalues():
             if pkg["name"] in distroverpkg:
                 releasever = pkg["version"]
                 break
@@ -6145,7 +6141,7 @@ def main():
         h = {}
         # Read all packages from rpmdb, then add all newer packages
         # from the repositories.
-        for rpm in packages.values():
+        for rpm in packages.itervalues():
             if rpm["name"] == "gpg-pubkey":
                 continue
             rarch = rpm["arch"]
@@ -6162,7 +6158,7 @@ def main():
         # Now select which rpms to install/erase:
         installrpms = []
         eraserpms = []
-        for r in h.values():
+        for r in h.itervalues():
             if r[0].isInstallonly():
                 # XXX check if there is a newer "kernel" around
                 continue
@@ -6173,7 +6169,7 @@ def main():
             installrpms.append(newest)
         # Check noarch constraints.
         #if None:
-        #  for rpms in h.values():
+        #  for rpms in h.itervalues():
         #    newest = selectNewestRpm(rpms, arch_hash, verbose)
         #    if newest["arch"] == "noarch":
         #        for r in rpms:
@@ -6212,7 +6208,7 @@ def main():
             return 1
         headerend = {}
         for r in repos:
-            for p in r.pkglist.values():
+            for p in r.pkglist.itervalues():
                 args.append(p.filename)
                 if p["rpm:header-range:end"]:
                     headerend[p.filename] = p["rpm:header-range:end"]
