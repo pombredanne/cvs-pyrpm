@@ -1331,12 +1331,27 @@ def normalizeList(list):
             h[item] = 1
             i += 1
 
+def pkgmdcmp((pkg1, md1), (pkg2, md2)):
+    # Need a special comparator function for this as pkg equality atm isn't
+    # really working as intended and screws us bigtime.
+    # We need to order pkg NEVRs ascending and machine distance descending,
+    # thats why the return values are counterwise for pkg and md comparisons.
+    if   pkg1 < pkg2:
+        return -1
+    elif pkg1 > pkg2:
+        return 1
+    if   md1 < md2:
+        return 1
+    elif md1 > md2:
+        return -1
+    return 0
+
 def orderList(list, arch):
     """Order RpmPackage list by "distance" to arch (ascending) and EVR
     (descending), in that order."""
 
-    tmplist = [(l, -machineDistance(l["arch"], arch)) for l in list ]
-    tmplist.sort()
+    tmplist = [(l, machineDistance(l["arch"], arch)) for l in list ]
+    tmplist.sort(pkgmdcmp)
     tmplist.reverse()
     list[:] = [l[0] for l in tmplist]
 
