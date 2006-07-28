@@ -673,6 +673,7 @@ def main():
                     if not disk in modified:
                         modified.append(disk)
                 else:
+                    print "Clearing MBR on disk '%s'." % disk
                     zero_mbr.append(disk)
 
         if ks.has_key("clearpart"):
@@ -1565,38 +1566,45 @@ def main():
         part = partitions[name]
 
         # check partition types
-        if not p["native_type"]:
-            print "ERROR: Partition '%s' has no type." % onpart
-            error = 1
-#        elif p["native_type"] < 1:
-#            if disk["disklabel"] != "gpt":
-#                print "ERROR: Partition '%s' has illegal type %d." % \
-#                      (onpart, p["native_type"])
-#                error = 1
-        elif p["fstype"] == None:
-            # no filesystem type, nothing to do
-            pass
-        else:
-            if p["native_type"] == 0x83 and part.has_key("fstype") and \
-                   part["fstype"] in \
-                   [ "ext2", "ext3", "xfs", "jfs", "reiserfs" ]:
-                continue
-            elif p["native_type"] == 0x82 and name[:4] == "swap":
-                continue
-            elif p["native_type"] == 0xfd: # raid
-                continue
-            elif p["native_type"] == 0x8e: # lvm
-                continue
-            else:
-                print "ERROR: Filesystem '%s'" % (p["fstype"]) + \
-                      " with code 0x%x on" % (p["native_type"]) + \
-                      " '%s' is not supported" % (onpart)
+        if diskmap[disk]["disklabel"] == "msdos":
+            if not p["native_type"]:
+                print "ERROR: Partition '%s' has no type." % onpart
                 error = 1
-                continue
-            print "ERROR: Partition '%s'" % (onpart) +\
-                  " does not match filesystem '%s'" % (part["fstype"]) + \
-                  " for '%s'" % (name)
-            error = 1
+            elif p["native_type"] < 1:
+                print "ERROR: Partition '%s' has illegal type %d." % \
+                      (onpart, p["native_type"])
+                error = 1
+            elif p["fstype"] == None:
+                # no filesystem type, nothing to do
+                pass
+            else:
+                if p["native_type"] == 0x83 and part.has_key("fstype") and \
+                       part["fstype"] in \
+                       [ "ext2", "ext3", "xfs", "jfs", "reiserfs" ]:
+                    continue
+                elif p["native_type"] == 0x82 and name[:4] == "swap":
+                    continue
+                elif p["native_type"] == 0xfd: # raid
+                    continue
+                elif p["native_type"] == 0x8e: # lvm
+                    continue
+                else:
+                    print "ERROR: Filesystem '%s'" % (p["fstype"]) + \
+                          " with code 0x%x on" % (p["native_type"]) + \
+                          " '%s' is not supported" % (onpart)
+                    error = 1
+                    continue
+                print "ERROR: Partition '%s'" % (onpart) +\
+                      " does not match filesystem '%s'" % (part["fstype"]) + \
+                      " for '%s'" % (name)
+                error = 1
+        elif diskmap[disk]["disklabel"] == "gpt":
+            # TODO: partition checks for gpt
+            continue
+        else:
+            print "ERROR: Unsupported disklabel '%s'." % \
+                  diskmap[disk]["disklabel"]
+            return 1
 
     if error:
         return 1
@@ -3402,6 +3410,8 @@ if wait:
     sys.stdout.write("\nWaiting - Press any key to continue.")
     sys.stdout.flush()
     c = sys.stdin.read(1)
+
+print "Cleaning up, please wait."
 
 if devmap:
     # remove temporary devices
