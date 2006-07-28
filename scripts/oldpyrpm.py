@@ -1387,10 +1387,9 @@ class ReadRpm:
                     else:
                         self.fd = urlgrabber.urlopen(self.filename,
                             timeout=sockettimeout)
-                #except urlgrabber.grabber.URLGrabError, e:
-                #    raise IOError, str(e)
-                except urlgrabber.grabber.URLGrabError:
+                except urlgrabber.grabber.URLGrabError: #, e:
                     self.printErr("could not open file")
+                    #print str(e)
                     return 1
             else:
                 try:
@@ -5525,7 +5524,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
                 repopkg = r.pkglist[nevra]
                 headerend = None
                 if repopkg["rpm:header-range:end"]:
-                    headerend = repopkg["rpm:header-range:end"] + 1
+                    headerend = repopkg["rpm:header-range:end"]
                 rpm = ReadRpm(repopkg.filename)
                 if rpm.readHeader(rpmsigtag, rpmtag, 1, headerend=headerend):
                     print "Cannot read %s.\n" % repopkg.filename
@@ -6216,7 +6215,7 @@ def main():
             for p in r.pkglist.values():
                 args.append(p.filename)
                 if p["rpm:header-range:end"]:
-                    headerend[p.filename] = p["rpm:header-range:end"] + 1
+                    headerend[p.filename] = p["rpm:header-range:end"]
         time1 = time.clock()
         checkarchs = []
         for a in args:
