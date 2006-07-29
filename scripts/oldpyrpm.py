@@ -3090,7 +3090,7 @@ class ConnectedComponent:
         # pick requirement to delete
         weights = {}
         # calculate minimal distance to a pre req
-        for pkg, nextpkg in hard_requirements:
+        for (pkg, nextpkg) in hard_requirements:
             # dijkstra
             edge = [nextpkg]
             weights[nextpkg] = 0
