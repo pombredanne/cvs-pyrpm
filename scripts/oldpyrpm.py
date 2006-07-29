@@ -1471,6 +1471,8 @@ class ReadRpm:
             nametag = myrpmtag[4]
             if ttype == RPM_STRING:
                 data = fmt2[offset:fmt2.index("\x00", offset)]
+                if nametag == "group":
+                    self.rpmgroup = ttype
             elif ttype == RPM_INT32:
                 # distinguish between signed and unsigned ints
                 if myrpmtag[3] & 8:
@@ -1496,9 +1498,6 @@ class ReadRpm:
             else:
                 self.raiseErr("unknown tag header")
                 data = None
-            # XXX: move this above to reduce number of checks
-            if nametag == "group":
-                self.rpmgroup = ttype
             # Ignore duplicate entries as long as they are identical.
             # They happen for packages signed with several keys or for
             # relocated packages in the rpmdb.
