@@ -100,9 +100,9 @@ class NetworkCache:
                 pass
         try:
             if force:
-                f = urlgrab(sourceurl, destfile)
+                f = urlgrab(sourceurl, destfile, timeout=30.0)
             else:
-                f = urlgrab(sourceurl, destfile, reget='check_timestamp')
+                f = urlgrab(sourceurl, destfile, timeout=30.0, reget='check_timestamp')
         except Exception, e:
             # urlgrab fails with invalid range for already completely transfered
             # files, pretty strange to me to be honest... :)
