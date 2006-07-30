@@ -1,4 +1,497 @@
+2006-07-30  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/__init__.py 1.57, scripts/oldpyrpm.py 1.248, configure.in 1.54:
+	- release 0.56
+
+	* scripts/oldpyrpm.py 1.247:
+	- update to current set of yum.conf variable names
+
+	* pyrpm/cache.py 1.11:
+	- hardcode a timeout of 30.0 seconds, this should get proper
+	  configuration vodoo
+
+	* scripts/Makefile.am 1.17, scripts/oldpyrpm.py 1.246, scripts/pyrexoldpyrpm.py 1.1:
+	- a first start to support pyrex compilations
+
+2006-07-29  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.245:
+	- make this consistent with the rest of the code
+
+	* scripts/oldpyrpm.py 1.244:
+	- move rpmgroup check into the RPM_STRING part
+
+2006-07-28  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.243:
+	- fix reducing sockettimeout to test mirrors
+	- more use of .iterkeys(), .itervalues() and .iteritems()
+
+2006-07-28  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.92: [tw]
+	- be more verbose on zerombr
+	- clear mbr only after user commits
+	- some gpt enhancements, but gpt not in list of supported disklabels, yet
+
+2006-07-28  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.192:
+	- Fixed orderList(), didn't work properly for NEVR equal packages.
+
+2006-07-28  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.91: [tw]
+	- fixed some messages
+	- fixed indenting of clearpart code
+
+2006-07-28  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum/yum.py 1.17:
+	- Reenable and fix cross arch updates properly without any dangling old
+	  packages.
+
+2006-07-28  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.242:
+	- fix to correctly use persistent connections
+
+2006-07-27  Florian La Roche  <laroche@redhat.com>
+
+	* doc/Makefile.am 1.14, doc/asciidoc.conf 1.1, doc/favicon.ico 1.1, doc/linux.gif 1.1:
+	- always add the linux penguin on the docu files and make this the default
+
+2006-07-27  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/functions.py 1.16, pyrpm/installer/kickstart.py 1.11, scripts/pyrpmkickstart 1.90:
+	[tw]
+	[tw]
+	scripts/pyrpmkickstart:
+	- new list for usable disklabels - has to be extended e.g. for gpt on ia64
+	- initlabel with zerombr if disklabel is empty of unusable (not in
+	  usable_disklabels)
+	- "zerombr yes": zero mbr if disklabel is usable
+	- check for vaild disklabel before creating partitions
+	- check if device is already mounted before trying to format partition (device)
+
+	pyrpm/installer/functions.py:
+	- new function to get mounted devices
+	- ignore lines beginning with '#' in /etc/fstab
+
+	pyrpm/installer/kickstart.py:
+	- allow zerombr without option (has no effect at all)
+
+2006-07-27  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum/yum.py 1.16:
+	- Fixed problem with bogous obsoletes for full updates if a package wasn't
+	  installed (tried to be too clever again...)
+
+2006-07-27  Karsten Hopp  <karsten@redhat.com>
+
+	* Makefile.cvs 1.1: - simple makefile to build pyrpm from scratch
+
+	* pyrpm.spec.in 1.18: - BR asciidoc
+
+	* configure.in 1.53: - syntax fixes
+
+2006-07-26  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmdbverify 1.35: - add a verbose flag "-v"
+	- silently skip opengpg entries
+	- warn about not-found packages if verbose is increased
+
+2006-07-26  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmdbverify 1.34:
+	- Fixed problem with new source generation for RpmRepoDB packages.
+
+2006-07-26  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmdbverify 1.33:
+	- prevent sha1 traceback (code still ok then, does it rely on sha1 present?)
+	- fix move of classes
+
+	* scripts/oldpyrpm.py 1.241:
+	- allow specifying mirrorlist files/urls on the commandline
+	- default to 10 sec timeout if testing mirrorlist files
+
+2006-07-25  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.52, pyrpm/__init__.py 1.56, scripts/oldpyrpm.py 1.240:
+	- release 0.55
+
+2006-07-24  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.239: - keep repomd data around
+	- make minimal check if repomd data has actually been parsed
+	- output data from repodata update (timestamp) within mirrorlist test
+
+2006-07-23  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.238: - exclude more from FE4
+
+	* scripts/oldpyrpm.py 1.237: - add proper error checking in readRepos()
+	- disable a few mirrorlist tests
+
+	* scripts/oldpyrpm.py 1.236:
+	- new global var sockettimeout with 20.0 seconds
+	- use sockettimeout for urlgrabber calls
+	- RpmRepo: allow reading only the repomd.xml file
+	- readMirrorlist(): filter duplicates
+	- new "--testmirrors" which is calling the function
+	  testMirrors() to check a few FC/FE mirrorlists
+
+	* scripts/oldpyrpm.py 1.235:
+	- define a new function replaceVars, so that we don't require a
+	  yum config anymore for readMirrorlist()
+
+	* scripts/oldpyrpm.py 1.234:
+	- Uri2Filename: add a starting index instead of generating a new string
+	- readMirrorlist(): new function to read a mirrorlist
+	- allow comments in a mirrorlist and more robust parsing
+
+2006-07-22  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.233: - whitespace changes
+
+	* scripts/oldpyrpm.py 1.232: - add kernel-xen and kernel-xen-devel
+
+2006-07-20  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum/yum.py 1.15:
+	- Only have one code to handle any obsolete case
+	- Only select the newest package with obsoletes for each name in obsoletes list
+	- Improved the obsoletes handling somewhat. Some cornercases with obsolete
+	  loops are still undecidable and will stay that way.
+
+2006-07-20  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmkickstart 1.89: - add a -v to pyrpmyum if verbose is set
+
+2006-07-19  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/database/comps.py 1.3:
+	- also add optional package names, comps.xml is not a very stable place
+
+2006-07-19  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.191:
+	- Extremely improved the runtime of our orderList() function
+
+2006-07-19  Florian Festi  <ffesti@redhat.com>
+
+	* scripts/pyrpmcheckrepo 1.18: [ffesti]
+	- new command line interface for scripts/pyrpmcheckrepo to output different lists of pkgs
+
+	* scripts/pyrpmcheckrepo 1.17: [ffesti]
+	- better output
+
+2006-07-19  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.231: - add new version
+
+2006-07-19  Florian Festi  <ffesti@redhat.com>
+
+	* scripts/pyrpmcheckrepo 1.16: [ffesti]
+	- fixed (update to new interfaces)
+
+	* pyrpm/resolver.py 1.116: [ffesti]
+	- fixed bug that did not let packages get removed from the check_installs list. Triggered by more complicated autoerase cascades.
+
+	* pyrpm/yum/yum.py 1.14: [ffesti]
+	-  minor bug triggered when empty db is given as parameter (bool(db)==False!!!!!)
+
+2006-07-19  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/yum/yum.py 1.13: - make the list of installonly packages bigger
+	- do not empty installonly list for "upgrade" to be
+	  more compatibel to yum
+
+2006-07-18  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.230, configure.in 1.51, pyrpm/__init__.py 1.55:
+	- release 0.54
+
+2006-07-18  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.190:
+	- Changed ordering in orderList to sort by version/arch instead of the other
+	  way round.
+
+2006-07-18  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.88: [tw]
+	- use supported languages from kickstart file for yum
+	- add kernel-devel package if gcc is in pkgs (partly useful right now, will be
+	  ok with RpmYum class and final package selection)
+
+2006-07-17  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.229: - fix checkarch option
+
+2006-07-16  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.228:
+	- change some calls to doRead() into fd.read()
+	- __parseIndex(): optimize order of checks
+	- doVerify(): verify the type of "group"
+	- reading repos: warn about new/unknown entries if verbose > 4
+
+	* scripts/oldpyrpm.py 1.227:
+	- first check for regular files then for dirs
+	- add profiling data for the number of function calls
+
+	* doc/pycheckrc 1.4: - update another limit
+
+2006-07-14  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum/yum.py 1.12:
+	- Fixed problem with depsolver where i tried to be too clever and stay close
+	  to the package architecture that had the requirement. Using machine arch
+	  again now.
+
+2006-07-14  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/resolver.py 1.115: [ffesti]
+	- fixed getFileConflicts for checkinstalled == 1
+
+	* pyrpm/resolver.py 1.114: [ffesti]
+	- fixed getFileConflicts for checkinstalled == 0
+
+2006-07-14  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/resolver.py 1.113: [tw]
+	- dropped old installed_X remains
+
+2006-07-13  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.87: [tw]
+	- fixed error messages for arch tests
+	- added first code for RpmYum class usae (inactive)
+	- added missing usage output
+
+2006-07-13  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmcheckinstall 1.5:
+	- Removed the unecessary FakeRepo class from pyrpmcheckinstall
+	- Fixed the creation of the binary rpm memory repo
+
+2006-07-13  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.226:
+	- also add the -devel rpms to be removed, but this is getting even more
+	  ugly now. Maybe they should just be part of kernelpkgs in the first
+	  place.
+
+2006-07-13  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/comps.py 1.2, pyrpm/functions.py 1.189, pyrpm/yum/yum.py 1.11:
+	- Added --languages support for all yum applications. Parameter is a space
+	  separated list of languages to install for.
+
+2006-07-13  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/network.py 1.3: [tw]
+	- use has_key on primary kickstart key tests
+
+	* pyrpm/package.py 1.131: [tw]
+	- only use rusage and log in else tree (now for post script)
+
+	* scripts/pyrpmkickstart 1.86:
+	[tw] no traceback and msg output for stage2.img mount
+
+	* pyrpm/installer/filesystem.py 1.6, pyrpm/package.py 1.130: [tw]
+	pyrpm/package.py
+	- use of rusage and log in else tree
+
+	pyrpm/installer/filesystem.py
+	- no mount error messages
+
+2006-07-13  Nils Philippsen  <nphilipp@redhat.com>
+
+	* scripts/pyrpmrebuilddb 1.16:
+	remove "pyrpm." prefix due to "from pyrpm import *"
+
+2006-07-12  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.50, pyrpm/__init__.py 1.54, scripts/oldpyrpm.py 1.225:
+	- release 0.53
+
+	* scripts/oldpyrpm.py 1.224: - keep up with the changes to the orderer
+
+	* pyrpm/orderer.py 1.72: - and this should also be adjusted
+
+	* pyrpm/orderer.py 1.71: - fix typo
+
+2006-07-12  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum/yum.py 1.10:
+	- Cache unresolvable deps in the depsolver to speed things up drastically for
+	  cases where the same dep appears very often.
+
+2006-07-12  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/installer/kickstart.py 1.10, scripts/pyrpmkickstart 1.85:
+	- also allow "url --exclude" to work
+
+2006-07-12  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/orderer.py 1.70: [ffesti] removed now unused loop handling code
+
+	* pyrpm/orderer.py 1.69:
+	[ffesti] New algorithm for breaking up connected components without prereqs.
+
+2006-07-12  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/repodb.py 1.26, pyrpm/yum/yum.py 1.9, pyrpm/functions.py 1.188, pyrpm/package.py 1.129:
+	- Fix the package selection if you give packages on the command line
+	- Fix problem with installation of SRPMS, works now as expected again.
+	- Fix bug with obsolete handling for large package lists where the obsoleting
+	  was done way too late for only one package.
+
+2006-07-11  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/orderer.py 1.68: [ffesti] list comprehention -> loops
+
+	* pyrpm/orderer.py 1.67:
+	[ffesti] remove generator construct for Py 2.2 compatibility
+
+2006-07-09  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.223:
+	- add option --archlist= to allow specifying compat archs
+	  instead of looking into hardwired compar_arch dict.
+
+	* doc/pycheckrc 1.3: - extend the limits
+
+	* scripts/oldpyrpm.py 1.222:
+	- require strict mode to search for possible new kernel names
+
+	* scripts/oldpyrpm.py 1.221:
+	- output in a way we could feed to "rpm -r `oldpyrpm.py --checkoldkernels`"
+
+	* scripts/oldpyrpm.py 1.220:
+	- only keep a certain number of kernel revisions
+
+2006-07-08  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.219, pyrpm/__init__.py 1.53, configure.in 1.49:
+	- release 0.52
+
+	* scripts/oldpyrpm.py 1.218:
+	- more complete list of possible kernel packages
+	- automatic check if a package might be a kernel package
+	- .isInstallonly() function to detect if a package might
+	  be ok to be installed more than once
+	- run again on python 2.3
+
+2006-07-07  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.217:
+	- createrepo: rename files directly before writing repomd.xml
+
+	* scripts/oldpyrpm.py 1.216:
+	- take new code for the orderer from Florian Festi
+
+	* scripts/pyrpmkickstart 1.84:
+	- also search for images/stage2.img (FC-development is using that now)
+	- add a dummy /proc/stat file as some apps seem to require this
+	- add a /etc/grub.conf symlink file
+
+2006-07-07  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum/yum.py 1.8:
+	- Some tweaking to the way we do obsoletes handling. Hopefully this fixes all
+	  cornercases now properly.
+
+2006-07-06  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum/yum.py 1.7:
+	- Several bugfixes to the new package selection code for updates and during
+	  depsolving, especially for multilib.
+
+2006-07-04  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum/yum.py 1.6, scripts/pyrpmcheckinstall 1.4, scripts/pyrpmyum 1.55:
+	- Reworked the obsolete handling for full updates, should work correctly
+	  now on multilib systems, too.
+	- Dropped the whole old code for handling packages in depresolving in yum and
+	  now use only the new all-purpose methods.
+	- Fixed missing import in pyrpmcheckinstall
+	- Removed unecessary imports from pyrpmyum
+
+2006-07-04  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/installer/x.py 1.7: - add newline to warning messages
+
+2006-07-04  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/functions.py 1.187:
+	[ffesti] added PYRPM_VERSION to environment of scripts, fixed minor import problem
+
+2006-07-04  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.215:
+	- use os.path.exists() instead of os.path.isfile() and similar cleanups
+
+2006-07-02  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/database/lists.py 1.25: - import fnmatch
+
+2006-07-01  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/kickstart.py 1.9: [tw]
+	- reverted to exclude list
+
+2006-06-29  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.214:
+	- check all rpms for suspicous provides: containing /tmp/ or /usr/src
+
+2006-06-29  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/yum/yum.py 1.5:
+		* yum/yum.py use in operator of database insted of the pkg list
+
+	* pyrpm/yum/yum.py 1.4, pyrpm/database/memorydb.py 1.13:
+		* yum/yum.py: use db.search insted of looping over all pkgs
+
 2006-06-28  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/control.py 1.97: - fix typo
+
+	* pyrpm/database/repodb.py 1.25:
+	- generate dirnames/dirindexes/basenames within one pass
+
+2006-06-28  Florian Festi  <ffesti@redhat.com>
+
+	* scripts/pyrpminstall 1.30, scripts/pyrpmverify 1.4: 	* minor fixes
+
+	* pyrpm/database/__init__.py 1.4, pyrpm/database/db.py 1.9, pyrpm/database/lists.py 1.24, pyrpm/database/memorydb.py 1.12, pyrpm/database/repodb.py 1.24, pyrpm/database/rpmdb.py 1.6, pyrpm/database/rpmmemorydb.py 1.1, pyrpm/database/sqlitedb.py 1.7, pyrpm/yum/yum.py 1.3, pyrpm/control.py 1.96, pyrpm/functions.py 1.186, pyrpm/package.py 1.128:
+		* control.py: rewrote triggerhandling, now uses DB.searchTriggers()
+		* functions.py: removed getBuildArchList() (unused), buildPkgRefDict()
+		  and findPkgByNames() (moved to db)
+		* package.py: added Package.getAllNames()
+		* database.*:
+		- renamed DB.get* to DB.iter*() and make it return an iterator
+		- added nowrite=None param to all .addPkg()
+		- renamed .erasePkg to .removePkg to get consistent interface
+		- added .searchPkgs() as replacement of functions.findPkgByNames()
+		* database.memorydb: build lists (self.*_list) only on demand
+		* database.rpmdb: class no longer inherits from MemoryDB,
+		- all queries now run directly on the database files
+		* database.rpmmemorydb: inherits from memorydb and rpmdb,
+		  similar to the old rpmdb
+		* database.lists: added .__iter__() to all lists, added NevraList,
+		  fixed TriggersList
+		* yum.yum: adapted new database interface
+
+	* pyrpm/io.py 1.129: 	- fixed gzip crc handling and read(bytes=None)
+
+2006-06-28  Florian La Roche  <laroche@redhat.com>
+
+	* ChangeLog 1.19: - add newer changelog data
 
 	* configure.in 1.48, pyrpm/__init__.py 1.52, scripts/oldpyrpm.py 1.213:
 	- release 0.51
