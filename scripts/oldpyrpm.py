@@ -4761,18 +4761,20 @@ class YumConf(Conf):
     """Simple Yum config file parser."""
 
     MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
-        "logfile", "gpgcheck", "assumeyes", "tolerant", "exclude", "exactarch",
+        "logfile", "gpgcheck", "assumeyes", "alwaysprompt", "tolerant",
+        "exclude", "exactarch",
         "installonlypkgs", "kernelpkgnames", "showdupesfromrepos", "obsoletes",
         "overwrite_groups", "installroot", "rss-filename", "distroverpkg",
         "diskspacecheck", "tsflags", "recent", "retries", "keepalive",
-        "throttle", "bandwidth", "commands", "keepcache", "proxy",
-        "proxy_username", "proxy_password", "pkgpolicy", "plugins",
-        "metadata_expire")
+        "timeout", "http_caching", "throttle", "bandwidth", "commands",
+        "keepcache", "proxy", "proxy_username", "proxy_password", "pkgpolicy",
+        "plugins", "pluginpath", "metadata_expire")
     MultiLines = ("baseurl", "mirrorlist")
     RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
-        "keepalive", "retries", "throttle", "bandwidth", "proxy",
-        "proxy_username", "proxy_password")
+        "keepalive", "timeout", "http_caching", "retries", "throttle",
+        "bandwidth", "metadata_expire", "proxy", "proxy_username",
+        "proxy_password")
     Variables = ("releasever", "arch", "basearch")
 
     def __init__(self, verbose, releasever, arch, basearch, buildroot="",
