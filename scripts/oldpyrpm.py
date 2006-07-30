@@ -116,6 +116,7 @@ try:
 except:
     print "libxml2 is not imported, do not try to use repodata."
 
+# python-only
 if sys.version_info < (2, 3):
     from types import StringType
     basestring = StringType
@@ -156,10 +157,21 @@ if sys.version_info < (2, 3):
         return _name_sequence
 else:
     from tempfile import _get_candidate_names, TMP_MAX
+# python-only-end
+# pyrex-code
+#from tempfile import _get_candidate_names, TMP_MAX
+#cdef extern from "string.h":
+#    int strlen(char *)
+#cdef extern from "netinet/in.h":
+#    unsigned int ntohl(unsigned int netlong)
+#cdef extern from "Python.h":
+#    object PyString_FromStringAndSize(char *s, int len)
+# pyrex-code-end
 
 # optimized routines instead of:
 #from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, \
 #   S_ISBLK, S_ISSOCK
+# python-only
 def S_ISREG(mode):
     return (mode & 0170000) == 0100000
 def S_ISLNK(mode):
@@ -174,6 +186,23 @@ def S_ISBLK(mode):
     return (mode & 0170000) == 0060000
 def S_ISSOCK(mode):
     return (mode & 0170000) == 0140000
+# python-only-end
+# pyrex-code
+#cdef S_ISREG(int mode):
+#    return (mode & 0170000) == 0100000
+#cdef S_ISLNK(int mode):
+#    return (mode & 0170000) == 0120000
+#cdef S_ISDIR(int mode):
+#    return (mode & 0170000) == 0040000
+#cdef S_ISFIFO(int mode):
+#    return (mode & 0170000) == 0010000
+#cdef S_ISCHR(int mode):
+#    return (mode & 0170000) == 0020000
+#cdef S_ISBLK(int mode):
+#    return (mode & 0170000) == 0060000
+#cdef S_ISSOCK(int mode):
+#    return (mode & 0170000) == 0140000
+# pyrex-code-end
 
 # Use this filename prefix for all temp files to be able
 # to search them and delete them again if they are left
@@ -476,6 +505,22 @@ RPM_I18NSTRING = 9
 # RPM_STRING_ARRAY for app + params, otherwise a single RPM_STRING
 RPM_ARGSTRING = 12
 RPM_GROUP = 13
+# pyrex-code
+#cdef int cRPM_CHAR, cRPM_INT8, cRPM_INT16, cRPM_INT32, cRPM_INT64
+#cdef int cRPM_STRING, cRPM_BIN, cRPM_STRING_ARRAY, cRPM_I18NSTRING
+#cdef int cRPM_ARGSTRING, cRPM_GROUP
+#cRPM_CHAR = 1
+#cRPM_INT8 = 2
+#cRPM_INT16 = 3
+#cRPM_INT32 = 4
+#cRPM_INT64 = 5
+#cRPM_STRING = 6
+#cRPM_BIN = 7
+#cRPM_STRING_ARRAY = 8
+#cRPM_I18NSTRING = 9
+#cRPM_ARGSTRING = 12
+#cRPM_GROUP = 13
+# pyrex-code-end
 
 # RPMSENSEFLAGS
 RPMSENSE_ANY        = 0
@@ -1023,7 +1068,15 @@ def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
             count = 1
             data = "%s\x00" % value
         elif ttype == RPM_STRING_ARRAY or ttype == RPM_I18NSTRING:
+            # python-only
             data = "".join( [ "%s\x00" % value[i] for i in xrange(count) ] )
+            # python-only-end
+            # pyrex-code
+            #k = []
+            #for i in xrange(count):
+            #    k.append("%s\x00" % value[i])
+            #data = "".join(k)
+            # pyrex-code-end
         elif ttype == RPM_BIN:
             data = value
         elif ttype == RPM_INT16:
@@ -1070,20 +1123,26 @@ def stringCompare(str1, str2):
     i2 = 0
     while i1 < lenstr1 and i2 < lenstr2:
         # remove leading separators
-        while i1 < lenstr1 and not _xisalnum(str1[i1]): i1 += 1
-        while i2 < lenstr2 and not _xisalnum(str2[i2]): i2 += 1
+        while i1 < lenstr1 and not _xisalnum(str1[i1]):
+            i1 += 1
+        while i2 < lenstr2 and not _xisalnum(str2[i2]):
+            i2 += 1
         if i1 == lenstr1 or i2 == lenstr2: # bz 178798
             break
         # start of the comparison data, search digits or alpha chars
         j1 = i1
         j2 = i2
         if j1 < lenstr1 and _xisdigit(str1[j1]):
-            while j1 < lenstr1 and _xisdigit(str1[j1]): j1 += 1
-            while j2 < lenstr2 and _xisdigit(str2[j2]): j2 += 1
+            while j1 < lenstr1 and _xisdigit(str1[j1]):
+                j1 += 1
+            while j2 < lenstr2 and _xisdigit(str2[j2]):
+                j2 += 1
             isnum = 1
         else:
-            while j1 < lenstr1 and _xisalpha(str1[j1]): j1 += 1
-            while j2 < lenstr2 and _xisalpha(str2[j2]): j2 += 1
+            while j1 < lenstr1 and _xisalpha(str1[j1]):
+                j1 += 1
+            while j2 < lenstr2 and _xisalpha(str2[j2]):
+                j2 += 1
             isnum = 0
         # check if we already hit the end
         if j1 == i1: return -1
@@ -1092,8 +1151,10 @@ def stringCompare(str1, str2):
             return -1
         if isnum:
             # ignore leading "0" for numbers (1.01 == 1.000001)
-            while i1 < j1 and str1[i1] == "0": i1 += 1
-            while i2 < j2 and str2[i2] == "0": i2 += 1
+            while i1 < j1 and str1[i1] == "0":
+                i1 += 1
+            while i2 < j2 and str2[i2] == "0":
+                i2 += 1
             # longer size of digits wins
             if j1 - i1 > j2 - i2: return 1
             if j2 - i2 > j1 - i1: return -1
@@ -1458,6 +1519,66 @@ class ReadRpm:
         return (indexNo, storeSize, data, fmt, fmt2,
             16 + len(fmt) + storeSize + padlen)
 
+# pyrex-code
+#    def __parseIndex(self, indexNo, fmt, fmt2, dorpmtag):
+#        cdef int i, j, indexNo2, tag, ttype, offset, count, datalen
+#        cdef char * fmtsp, * fmt2sp
+#        cdef int * fmtp, * fmt2p
+#        indexNo2 = indexNo
+#        fmtsp = fmt
+#        fmt2sp = fmt2
+#        fmtp = <int *>fmtsp
+#        hdr = HdrIndex()
+#        if not dorpmtag:
+#            return hdr
+#        for i from 0 <= i < indexNo2:
+#            j = i * 4
+#            tag = ntohl(fmtp[j])
+#            myrpmtag = dorpmtag.get(tag)
+#            if not myrpmtag:
+#                continue
+#            nametag = myrpmtag[4]
+#            ttype = ntohl(fmtp[j + 1])
+#            offset = ntohl(fmtp[j + 2])
+#            count = ntohl(fmtp[j + 3])
+#            if ttype == cRPM_STRING:
+#                data = PyString_FromStringAndSize(fmt2sp + offset,
+#                    strlen(fmt2sp + offset))
+#                if nametag == "group":
+#                    self.rpmgroup = ttype
+#            elif ttype == cRPM_INT32:
+#                # distinguish between signed and unsigned ints
+#                if myrpmtag[3] & 8:
+#                    #fmt2p = <int *>(fmt2sp + offset)
+#                    #data = []
+#                    #for j from 0 <= j < count:
+#                    #    data.append(ntohl(fmt2p[count]))
+#                    data = unpack("!%di" % count,
+#                        fmt2[offset:offset + count * 4])
+#                else:
+#                    #fmt2p = <int *>(fmt2sp + offset)
+#                    #data = []
+#                    #for j from 0 <= j < count:
+#                    #    data.append(ntohl(fmt2p[count]))
+#                    data = unpack("!%dI" % count,
+#                        fmt2[offset:offset + count * 4])
+#            elif ttype == cRPM_STRING_ARRAY or ttype == cRPM_I18NSTRING:
+#                data = []
+#                for j from 0 <= j < count:
+#                    datalen = strlen(fmt2sp + offset)
+#                    data.append(PyString_FromStringAndSize(fmt2sp + offset,
+#                       datalen))
+#                    offset = offset + datalen + 1
+#            elif ttype == cRPM_BIN:
+#                data = fmt2[offset:offset + count]
+#            elif ttype == cRPM_INT16:
+#                data = unpack("!%dH" % count, fmt2[offset:offset + count * 2])
+#            elif ttype == cRPM_CHAR or ttype == cRPM_INT8:
+#                data = unpack("!%dB" % count, fmt2[offset:offset + count])
+#            elif ttype == cRPM_INT64:
+#                data = unpack("!%dQ" % count, fmt2[offset:offset + count * 8])
+# pyrex-code-end
+# python-only
     def __parseIndex(self, indexNo, fmt, fmt2, dorpmtag):
         hdr = HdrIndex()
         if not dorpmtag:
@@ -1495,6 +1616,7 @@ class ReadRpm:
                 data = unpack("!%dB" % count, fmt2[offset:offset + count])
             elif ttype == RPM_INT64:
                 data = unpack("!%dQ" % count, fmt2[offset:offset + count * 8])
+# python-only-end
             else:
                 self.raiseErr("unknown tag header")
                 data = None
@@ -1736,8 +1858,16 @@ class ReadRpm:
             return []
         dirnames = self["dirnames"]
         dirindexes = self["dirindexes"]
+        # python-only
         return [ "%s%s" % (dirnames[dirindexes[i]], basenames[i])
                  for i in xrange(len(basenames)) ]
+        # python-only-end
+        # pyrex-code
+        #ret = []
+        #for i in xrange(len(basenames)):
+        #    ret.append("%s%s" % (dirnames[dirindexes[i]], basenames[i]))
+        #return ret
+        # pyrex-code-end
 
     def readPayload(self, func, filenames=None, extract=None):
         self.__openFd(96 + self.sigdatasize + self.hdrdatasize)
@@ -1812,7 +1942,9 @@ class ReadRpm:
                 self.printErr("file not in cpio: %s" % filename)
             if extract and devinode.keys():
                 self.printErr("hardlinked files remain from cpio")
+        # python-only
         del c, fd
+        # python-only-end
         self.closeFd()
 
     def getSpecfile(self, filenames=None):
@@ -1939,6 +2071,7 @@ class ReadRpm:
         for (n, f, v) in self.__getDeps(name, flag, version):
             phash[(n, f, v)].remove(self)
 
+    # python-only
     def getTriggers(self):
         deps = self.__getDeps("triggername", "triggerflags", "triggerversion")
         index = self["triggerindex"]
@@ -1960,6 +2093,7 @@ class ReadRpm:
             scripts = [ scripts[i] for i in index ]
             progs = [ progs[i] for i in index ]
         return [(n, f, v, progs.pop(0), scripts.pop(0)) for (n, f, v) in deps]
+    # python-only-end
 
     def genSigHeader(self):
         """Take data from the signature header and append it to the hdr."""
@@ -2209,7 +2343,9 @@ class ReadRpm:
                 provs.append(mydep)
             if mydep not in provs:
                 self.printErr("no provides for own rpm package, rpm=%s" % ver)
+        # python-only
         self.getTriggers()
+        # python-only-end
         # Check for /tmp/ and /usr/src in the provides:
         if self.strict and self["providename"]:
             for n in self["providename"]:
@@ -2656,7 +2792,15 @@ class FilenamesList:
             dirnames = pkg["dirnames"]
             for dirname in dirnames:
                 path.setdefault(dirname, {})
+            # python-only
             dirnames = [ dirnames[di] for di in dirindexes ]
+            # python-only-end
+            # pyrex-code
+            #dirnames2 = []
+            #for di in dirindexes:
+            #    dirnames2.append(dirnames[di])
+            #dirnames = dirnames2
+            # pyrex-code-end
         else:
             if pkg["oldfilenames"] == None:
                 return
@@ -2677,7 +2821,15 @@ class FilenamesList:
         if basenames != None:
             dirindexes = pkg["dirindexes"]
             dirnames = pkg["dirnames"]
+            # python-only
             dirnames = [ dirnames[di] for di in dirindexes ]
+            # python-only-end
+            # pyrex-code
+            #dirnames2 = []
+            #for di in dirindexes:
+            #    dirnames2.append(dirnames[di])
+            #dirnames = dirnames2
+            # pyrex-code-end
         else:
             if pkg["oldfilenames"] == None:
                 return
@@ -2696,7 +2848,15 @@ class FilenamesList:
             dirname += "/"
         ret = self.path.get(dirname, {}).get(basename, [])
         if self.checkfileconflicts:
+            # python-only
             return [ r[0] for r in ret ]
+            # python-only-end
+            # pyrex-code
+            #ret2 = []
+            #for r in ret:
+            #    ret2.append(r[0])
+            #return ret2
+            # pyrex-code-end
         return ret
 
 
@@ -3056,7 +3216,15 @@ class ConnectedComponent:
         return repr(self)
 
     def getNEVRA(self):
+        # python-only
         return "Component: " + ",".join([pkg.getNEVRA() for pkg in self.pkgs])
+        # python-only-end
+        # pyrex-code
+        #ret = []
+        #for pkg in self.pkgs:
+        #    ret.append(pkg.getNEVRA())
+        #return "Component: " + ",".join(ret)
+        # pyrex-code-end
 
     def processLeafNodes(self, order):
         """Remove all leaf nodes with the component and append them to order.
@@ -3195,7 +3363,15 @@ class ConnectedComponentsDetector:
         for pkg in pkgs:
             if not self.states.has_key(pkg):
                 self._process(pkg)
+        # python-only
         return [ConnectedComponent(self.relations, pkgs) for pkgs in self.sccs]
+        # python-only-end
+        # pyrex-code
+        #ret = []
+        #for pkgs in self.sccs:
+        #    ret.append(ConnectedComponent(self.relations, pkgs))
+        #return ret
+        # pyrex-code-end
 
     def _process(self, pkg):
         """Descent recursivly"""
@@ -3430,8 +3606,15 @@ class RpmInfo:
             self.sigdatasize = int(self.sigdatasize)
             self.hdrdatasize = int(self.hdrdatasize)
             self.pkgsize = int(self.pkgsize)
+            # python-only
             self.deps = [ (pkg[i], int(pkg[i + 1]), pkg[i + 2]) \
                 for i in xrange(10, len(pkg), 3) ]
+            # python-only-end
+            # pyrex-code
+            #self.deps = []
+            #for i in xrange(10, len(pkg), 3):
+            #    self.deps.append((pkg[i], int(pkg[i + 1]), pkg[i + 2]))
+            # pyrex-code-end
         else: # if isinstance(pkg, ReadRpm):
             self.filename = pkg.filename
             self.name = pkg["name"]
@@ -3497,7 +3680,14 @@ class RpmCSV:
         self.pkglist.append(RpmInfo(pkg))
 
     def writeCSV(self, filename, check=1):
+        # python-only
         csv = [ pkg.getCSV() for pkg in self.pkglist ]
+        # python-only-end
+        # pyrex-code
+        #csv = []
+        #for pkg in self.pkglist:
+        #    csv.append(pkg.getCSV())
+        # pyrex-code-end
         # Check if any value contains a wrong character.
         if check:
             for l in csv:
@@ -3852,11 +4042,15 @@ class RpmRepo:
         pfd.write("</metadata>\n")
         ffd.write("</filelists>\n")
         ofd.write("</otherdata>\n")
+        # python-only
         del pfd, ffd, ofd
+        # python-only-end
         origpfd.close()
         origffd.close()
         origofd.close()
+        # python-only
         del self.filerequires
+        # python-only-end
 
         repodoc = libxml2.newDoc("1.0")
         reporoot = repodoc.newChild(None, "repomd", None)
@@ -3892,7 +4086,9 @@ class RpmRepo:
         os.rename(ffdtmp, repodir + "/filelists.xml.gz")
         os.rename(ofdtmp, repodir + "/other.xml.gz")
         repodoc.saveFormatFileEnc(repodir + "/repomd.xml", "UTF-8", 1)
+        # python-only
         del repodoc
+        # python-only-end
 
         return 1
 
@@ -4016,7 +4212,9 @@ class RpmRepo:
         fd.write(output + "\n")
         pkg_node.unlinkNode()
         pkg_node.freeNode()
+        # python-only
         del pkg_node
+        # python-only-end
 
     def __writePkgInfo(self, parent, pkg):
         pkg_node = parent.newChild(None, "package", None)
@@ -4033,7 +4231,9 @@ class RpmRepo:
         fd.write(output + "\n")
         pkg_node.unlinkNode()
         pkg_node.freeNode()
+        # python-only
         del pkg_node
+        # python-only-end
 
     def __writeOther(self, fd, parent, pkg):
         pkg_node = self.__writePkgInfo(parent, pkg)
@@ -4044,12 +4244,16 @@ class RpmRepo:
                 clog.addContent(utf8String(text))
                 clog.newProp("author", utf8String(name))
                 clog.newProp("date", str(ctime))
+                # python-only
                 del clog
+                # python-only-end
         output = pkg_node.serialize("UTF-8", self.pretty)
         fd.write(output + "\n")
         pkg_node.unlinkNode()
         pkg_node.freeNode()
+        # python-only
         del pkg_node
+        # python-only-end
 
     def __parsePackage(self, reader):
         Readf = reader.Read
@@ -4772,10 +4976,19 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
 
 def testMirrors(verbose, args):
     global sockettimeout
-    verbose += 1 # We are per default more verbose.
+    # We are per default more verbose:
+    verbose += 1
     sockettimeout = 10.0
     if args:
+        # python-only
         args = [ (a, "5", "i686", "i386") for a in args ]
+        # python-only-end
+        # pyrex-code
+        #args2 = []
+        #for a in args:
+        #    args2.append((a, "5", "i686", "i386"))
+        #args = args2
+        # pyrex-code-end
     else:
         ml = "http://fedora.redhat.com/Download/mirrors/"
         args = [
@@ -4982,7 +5195,9 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
         fd.write("\n" + pkg.getChangeLog(changelognum, changelogtime))
     fd.write("\n")
     fd.close()
+    # python-only
     del fd
+    # python-only-end
     changelog = "-F " + tmpfile
     # Add a user name and email:
     user = "cvs@devel.redhat.com"
@@ -5787,10 +6002,62 @@ def checkScripts(repo):
                         line.find("rpm --eval") != -1):
                         continue
                     # ignore `date +string`
+                    # python-only
                     if re.compile(".*date \'?\+").match(line):
                         continue
+                    # python-only-end
+                    # pyrex-code
+                    #if re.compile(".*date \'?\\+").match(line):
+                    #    continue
+                    # pyrex-code-end
                     print rpm.filename, "contains \"%\""
                     break
+
+def Python2Pyrex():
+    delete = 0
+    pyrexcode = 0
+    for line in sys.stdin.readlines():
+        l = line.strip()
+        if delete:
+            if l == "# python-only-end":
+                delete = 0
+        elif l == "# python-only":
+            delete = 1
+        elif l == "# pyrex-code":
+            pyrexcode = 1
+        elif l == "# pyrex-code-end":
+            pyrexcode = 0
+        elif pyrexcode:
+            while line[0] and line[0] == " ":
+                sys.stdout.write(line[0])
+                line = line[1:]
+            sys.stdout.write(line[1:])
+        elif l.find(" " + "+= ") != -1:
+            x = line.find(" " + "+= ")
+            sys.stdout.write(line[:x])
+            y = line[:x].strip()
+            sys.stdout.write(" = " + y + " + (")
+            sys.stdout.write(line[x + 4:-1] + ")\n")
+        elif l.find(" " + "-= ") != -1:
+            x = line.find(" " + "-= ")
+            sys.stdout.write(line[:x])
+            y = line[:x].strip()
+            sys.stdout.write(" = " + y + " - (")
+            sys.stdout.write(line[x + 4:-1] + ")\n")
+        elif l.find(" " + "|= ") != -1:
+            x = line.find(" " + "|= ")
+            sys.stdout.write(line[:x])
+            y = line[:x].strip()
+            sys.stdout.write(" = " + y + " | (")
+            sys.stdout.write(line[x + 4:-1] + ")\n")
+        elif l.find(" " + "&= ") != -1:
+            x = line.find(" " + "&= ")
+            sys.stdout.write(line[:x])
+            y = line[:x].strip()
+            sys.stdout.write(" = " + y + " & (")
+            sys.stdout.write(line[x + 4:-1] + ")\n")
+        else:
+            sys.stdout.write(line)
 
 
 def usage():
@@ -5879,6 +6146,7 @@ def main():
     baseurl = None
     createrepo = 0
     mercurial = 0
+    pyrex = 0
     releasever = ""
     updaterpms = 0
     exactarch = 1   # XXX: should be set via yum.conf
@@ -5894,7 +6162,7 @@ def main():
             "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
             "checkrpmdb", "checkoldkernel", "numkeepkernels=", "checkdeps",
             "buildroot=", "installroot=", "root=", "version", "baseurl=",
-            "createrepo", "mercurial", "testmirrors"])
+            "createrepo", "mercurial", "pyrex", "testmirrors"])
     except getopt.GetoptError, msg:
         print "Error:", msg
         return 1
@@ -5999,6 +6267,8 @@ def main():
             createrepo = 1
         elif opt == "--mercurial":
             mercurial = 1
+        elif opt == "--pyrex":
+            pyrex = 1
         elif opt == "--testmirrors":
             testmirrors = 1
     # Select of what we want todo here:
@@ -6065,6 +6335,8 @@ def main():
             repo.createRepo(baseurl, ignoresymlinks)
     elif mercurial:
         createMercurial(verbose)
+    elif pyrex:
+        Python2Pyrex()
     elif testmirrors:
         testMirrors(verbose, args)
     elif updaterpms:
@@ -6233,7 +6505,9 @@ def main():
                         rpm["arch"] not in checkarchs):
                         checkarchs.append(rpm["arch"])
                     repo.append(rpm)
+                # python-only
                 del rpm
+                # python-only-end
         if verbose > 2:
             time2 = time.clock()
             print "Needed", time2 - time1, "seconds to read", len(repo), \
@@ -6280,7 +6554,9 @@ def run_main(main):
         prof = hotshot.Profile(htfilename)
         prof.runcall(main)
         prof.close()
+        # python-only
         del prof
+        # python-only-end
         print "Starting profil statistics. This takes some time..."
         s = hotshot.stats.load(htfilename)
         s.strip_dirs()
