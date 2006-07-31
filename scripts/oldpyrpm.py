@@ -2077,22 +2077,24 @@ class ReadRpm:
         index = self["triggerindex"]
         scripts = self["triggerscripts"]
         progs = self["triggerscriptprog"]
-        if deps == []:
-            if self.verify:
+        if self.verify:
+            if deps == []:
                 if index != None or scripts != None or progs != None:
                     self.printErr("wrong triggers still exist")
-            return []
-        if self.verify and len(scripts) != len(progs):
-            self.printErr("wrong triggers")
+            else:
+                if len(scripts) != len(progs):
+                    self.printErr("wrong triggers")
+                if index == None:
+                    if len(deps) != len(scripts):
+                        self.printErr("wrong triggers")
+                else:
+                    if len(deps) != len(index):
+                        self.printErr("wrong triggers")
         if index == None:
-            if self.verify and len(deps) != len(scripts):
-                self.printErr("wrong triggers")
-        else:
-            if self.verify and len(deps) != len(index):
-                self.printErr("wrong triggers")
-            scripts = [ scripts[i] for i in index ]
-            progs = [ progs[i] for i in index ]
-        return [(n, f, v, progs.pop(0), scripts.pop(0)) for (n, f, v) in deps]
+            return [(deps[i][0], deps[i][1], deps[i][2], progs[i], scripts[i])
+                for i in xrange(len(deps))]
+        return [(deps[i][0], deps[i][1], deps[i][2], progs[index[i]],
+                scripts[index[i]]) for i in xrange(len(deps))]
     # python-only-end
 
     def genSigHeader(self):
