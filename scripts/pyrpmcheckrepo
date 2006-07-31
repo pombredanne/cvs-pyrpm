@@ -72,11 +72,17 @@ def addlist2dict(d, l):
     for e in l:
         d[e] = None
 
-def diff(d1, d2):
-    d = d1.copy()
-    for e in d2:
-        if d.has_key(e):
-            del d[e]
+def diff(d1, d2, neg=False):
+    if not neg:
+        d = d1.copy()
+        for e in d2:
+            if d.has_key(e):
+                del d[e]
+    else:
+        d = {}
+        for e in d2:
+            if d1.has_key(e):
+                d[e] = d2[e]
     return d
 
 def print_dict(d, message, options):
@@ -107,7 +113,7 @@ def print_results(options, install, installed, update, updated):
     if options["--update"]:
         print_dict(update, "Update:", options)
     if options["--leftover"]:
-        print_dict(diff(installed, updated), "Leftovers:", options)
+        print_dict(diff(installed, updated, True), "Leftovers:", options)
     if options["--updated"]:
         print_dict(updated, "Updated:", options)
     if options["--notupdated"]:
@@ -236,7 +242,7 @@ def main():
         addlist2dict(update, repo.getPkgs())        
 
     updated = resolver.getDatabase().getPkgs()
-    
+
     print_results(output_options, install, installed, update, updated)
 
     return 1
