@@ -236,10 +236,13 @@ class RpmYum:
         pkglist = self.__findPkgsByDep(dname, dflags, dversion)
         return self.__handleBestPkg("install", pkglist)
 
-    def update(self, name):
+    def update(self, name, exact=False):
         # First find all matching packages. Remember, name can be a glob, too,
         # so we might get a list of packages with different names.
-        pkglist = self.__findPkgs(name)
+        if exact:
+            pkglist = self.__findPkgsByExactName(name)
+        else:
+            pkglist = self.__findPkgs(name)
         # Next we generate two temporary hashes. One with just a list of
         # packages for each name and a second with a subhash for each package
         # for each arch. Both are needed for speed reasons. The first one for
@@ -392,6 +395,14 @@ class RpmYum:
             pkglist.extend(repo.searchDependency(dname, dflags, dversion))
         return pkglist
 
+    def __findPkgsByExactName(self, name):
+        pkglist = []
+        for repo in self.repos:
+            pkglist.extend(repo.getPkgsByName(name))
+        normalizeList(pkglist)
+        return pkglist
+                                    
+
     def __handleBestPkg(self, cmd, pkglist, arch=None, exactarch=False, is_filereq=0):
         # Handle removes directly here, they don't need any special handling.
         if cmd.endswith("remove"):
@@ -496,7 +507,7 @@ class RpmYum:
                 # on a specific package.
                 self.__handleObsoletes()
                 for name in self.opresolver.getDatabase().getNames():
-                    args.append(name)
+                    self.update(name, exact=True)
         # Select proper function to be called for every argument. We have
         # a fixed operation for runArgs(), so use a reference to the
         # corresponding function.
@@ -612,11 +623,12 @@ class RpmYum:
         """Generate a list of all installed/available RpmPackage's that
         obsolete something and store it in self.__obsoleteslist."""
 
+        obsoletes = {}
         self.__obsoleteslist = [ ]
         for repo in self.repos:
-            for pkg in repo.getPkgs():
-                if len(pkg["obsoletes"]) > 0:
-                    self.__obsoleteslist.append(pkg)
+            for entry in repo.iterObsoletes():
+                 obsoletes[entry[-1]] = None
+        self.__obsoleteslist = obsoletes.keys()
         orderList(self.__obsoleteslist, self.config.machine)
         nhash = { }
         nlist = [ ]
