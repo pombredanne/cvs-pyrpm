@@ -41,6 +41,7 @@ class RpmDB(db.RpmDatabase):
         self.config.tscolor = self.__getInstallColor()
         self.netsharedpath = self.__getNetSharedPath()
 
+        self._pkgs = { }
         self.clear()
         self.dbopen = 0
         self.obsoletes_list = None
@@ -106,7 +107,7 @@ class RpmDB(db.RpmDatabase):
         for key, data in self.packages_db.iteritems():
             rpmio = io.RpmFileIO(self.config, "dummy")
             pkg = package.RpmPackage(self.config, "dummy")
-            pkg.key = key
+            pkg["install_id"] = key
             try:
                 val = unpack("I", key)[0]
             except struct.error:
@@ -643,7 +644,11 @@ class RpmDB(db.RpmDatabase):
     def iterObsoletes(self):
         if self.obsoletes_list is None:
             self._readObsoletes()
-        return iter(self.obsoletes_list)
+        for name, l in self.obsoletes_list.hash.iteritems():
+            for f, v, p in l:
+                p = self.getPkgById(p["install_id"])
+                if p:
+                    yield  name, f, v, p
 
     def iterTriggers(self):
         return self._iter2("triggers", self.triggername_db)
@@ -708,7 +713,7 @@ class RpmDB(db.RpmDatabase):
             self._readObsoletes()            
         
         result = self.obsoletes_list.search(name, flag, version)
-        result = [self.getPkgById(pkg.key) for pkg in result]
+        result = [self.getPkgById(pkg["install_id"]) for pkg in result]
         return filter(None, result)
 
     def searchTriggers(self, name, flag, version):
