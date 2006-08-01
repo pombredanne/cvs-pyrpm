@@ -170,15 +170,6 @@ class RpmMemoryDB(db.RpmDatabase):
     def searchTriggers(self, name, flag, version):
         return self.triggers_list.search(name, flag, version)
 
-    def searchDependency(self, name, flag, version):
-        """Return list of RpmPackages from self.names providing
-        (name, RPMSENSE_* flag, EVR string) dep."""
-        s = self.searchProvides(name, flag, version).keys()
-        
-        if name[0] == '/': # all filenames are beginning with a '/'
-            s += self.searchFilenames(name)
-        return s
-
     def searchPkgs(self, names):
         return self.nevra_list.search(names)
     
