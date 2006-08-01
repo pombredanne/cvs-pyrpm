@@ -81,12 +81,12 @@ class NetworkCache:
         except:
             return None
 
-    def cache(self, uri, force=0):
+    def cache(self, uri, force=0, copy_local=0):
         """Cache the given uri/file. If the uri is a real uri then we cache it
         in our external cache, otherwise we use our baseurl and treat the
         parameter as a relative path to it."""
 
-        if self.is_local and not self.__isURI(uri):
+        if self.is_local and not self.__isURI(uri) and not copy_local:
             path = os.path.join(self.baseurl, uri)
             if os.path.exists(path):
                 return path
@@ -100,9 +100,11 @@ class NetworkCache:
                 pass
         try:
             if force:
-                f = urlgrab(sourceurl, destfile, timeout=30.0)
+                f = urlgrab(sourceurl, destfile,
+                            timeout=30.0, copy_local=copy_local)
             else:
-                f = urlgrab(sourceurl, destfile, timeout=30.0, reget='check_timestamp')
+                f = urlgrab(sourceurl, destfile, timeout=30.0,
+                            reget='check_timestamp', copy_local=copy_local)
         except Exception, e:
             # urlgrab fails with invalid range for already completely transfered
             # files, pretty strange to me to be honest... :)
