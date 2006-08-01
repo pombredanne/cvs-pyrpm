@@ -218,30 +218,29 @@ def main():
     install = {}
     for repo in yum.repos:
         addlist2dict(install, repo.getPkgs())
+
     # the packages that really got installed
     #  some arch trans compatible or broken pkgs might be missing
     installed = yum.opresolver.getDatabase().getPkgs()
-    for pkg in installed:
-        # Error checking is not really necessary, what could go wrong?
-        yum.pydb.addPkg(pkg, 1)
-
     not_installed = diff(install, installed)
-
-    yum.opresolver = RpmResolver(rpmconfig, yum.pydb)
+    
     yum.repos = []
+    db = database.memorydb.RpmMemoryDB("", None)
+    db.addPkgs(installed)
+    if yum.prepareTransaction(db) == 0:
+        return 0
     if yum.runArgs(upargs) == 0:
         return 0
     if yum.runDepRes() == 0:
         return 0
     if yum.runCommand() == 0:
         return 0
-    resolver = yum.opresolver
 
     update = {}
     for repo in yum.repos:
         addlist2dict(update, repo.getPkgs())        
 
-    updated = resolver.getDatabase().getPkgs()
+    updated = yum.opresolver.getDatabase().getPkgs()
 
     print_results(output_options, install, installed, update, updated)
 
