@@ -76,7 +76,7 @@ class RpmDatabase:
     def removePkg(self, pkg, nowrite=None):
         raise NotImplementedError
 
-    def getPkgs(self, dep):
+    def getPkgs(self):
         raise NotImplementedError
 
     def getNames(self):
@@ -88,9 +88,6 @@ class RpmDatabase:
     def getPkgsByName(self, name):
         raise NotImplementedError
 
-    def iterProvides(self):
-        raise NotImplementedError
-
     def getFilenames(self):
         raise NotImplementedError
 
@@ -98,6 +95,9 @@ class RpmDatabase:
         raise NotImplementedError
 
     def getFileDuplicates(self):
+        raise NotImplementedError
+
+    def iterProvides(self):
         raise NotImplementedError
 
     def iterRequires(self):
@@ -122,26 +122,32 @@ class RpmDatabase:
     def searchPkgs(self, names):
         raise NotImplementedError
 
-    def searchProvides(self, dep):
+    def searchProvides(self, name, flag, version):
         raise NotImplementedError
 
-    def searchFilenames(self, dep):
+    def searchFilenames(self, name, flag, version):
         raise NotImplementedError
 
-    def searchRequires(self, dep):
+    def searchRequires(self, name, flag, version):
         raise NotImplementedError
 
-    def searchConflicts(self, dep):
+    def searchConflicts(self, name, flag, version):
         raise NotImplementedError
 
-    def searchObsoletes(self, dep):
+    def searchObsoletes(self, name, flag, version):
         raise NotImplementedError
 
-    def searchTriggers(self, dep):
+    def searchTriggers(self, name, flag, version):
         raise NotImplementedError
 
     def searchDependency(self, name, flag, version):
-        raise NotImplementedError
+        """Return list of RpmPackages from self.names providing
+        (name, RPMSENSE_* flag, EVR string) dep."""
+        s = self.searchProvides(name, flag, version).keys()
+        
+        if name[0] == '/': # all filenames are beginning with a '/'
+            s += self.searchFilenames(name)
+        return s
 
     def _getDBPath(self):
         raise NotImplementedError
