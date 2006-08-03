@@ -98,21 +98,23 @@ def main():
     if lockfile == None:
         printError("couldn't lock pyrpmyum")
         return 0
-    if not yum.setCommand(args[0]):
-        return 0
-    if not yum.prepareTransaction():
-        return 0
-    if not yum.runArgs(args[1:]):
-        return 0
-    if not yum.runDepRes():
-        return 0
-    if not yum.runCommand():
-        return 0
-    if lockfile:
-        try:
-            os.unlink(lockfile)
-        except OSError:
-            pass
+    try:
+        if not yum.setCommand(args[0]):
+            return 0
+        if not yum.prepareTransaction():
+            return 0
+        if not yum.runArgs(args[1:]):
+            return 0
+        if not yum.runDepRes():
+            return 0
+        if not yum.runCommand():
+            return 0
+    finally:
+        if lockfile:
+            try:
+                os.unlink(lockfile)
+            except OSError:
+                pass
     return 1
 
 if __name__ == '__main__':
