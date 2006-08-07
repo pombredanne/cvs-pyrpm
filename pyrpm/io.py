@@ -452,6 +452,19 @@ class RpmStreamIO(RpmIO):
             self.hdr[tag] = self.__parseTag(index, storedata)
         return (tag, self.hdr[tag])
 
+    def getIndexData(self, idx, indexdata):
+        return unpack("!4I", indexdata[idx*16:(idx+1)*16])
+
+    def getHeaderByIndexData(self, index, storedata):
+        tag = index[0]
+        # ignore duplicate entries as long as they are identical
+        if self.hdr.has_key(tag):
+            if self.hdr[tag] != self.__parseTag(index, storedata):
+                self.config.printError("%s: tag %d included twice" % (self.source, tag))
+        else:
+            self.hdr[tag] = self.__parseTag(index, storedata)
+        return self.hdr[tag]
+
     def __readIndex(self, pad, issig=None):
         """Read and verify header index and data.
 

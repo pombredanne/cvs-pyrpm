@@ -185,18 +185,26 @@ class RpmDB(db.RpmDatabase):
         pkg["signature"] = {}
         for idx in xrange(0, indexNo):
             try:
-                (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
-                                                       storedata)
+                index = rpmio.getIndexData(idx, indexdata)
             except ValueError, e:
                 self.config.printError("Invalid header entry %s in %s: %s"
                                        % (idx, key, e))
                 return None
 
+            tag = index[0] 
             if rpmtag.has_key(tag):
                 # XXX use param
                 if rpmtagname[tag] not in self.config.resolvertags:
                     continue
-                
+            try:
+                tagval = rpmio.getHeaderByIndexData(index, storedata)
+            except ValueError, e:
+                self.config.printError("Invalid header entry %s in %s: %s"
+                                       % (idx, key, e))
+                return None
+                                            
+
+            if rpmtag.has_key(tag):
                 if rpmtagname[tag] == "archivesize":
                     pkg["signature"]["payloadsize"] = tagval
                 else:
