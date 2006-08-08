@@ -460,7 +460,8 @@ class SqliteDB(repodb.RpmRepoDB):
     def readPrimary(self):
         return self.getDbFile("primary")
     
-    def addFilesToPkg(self, name, epoch, version, release, arch, filelist):
+    def addFilesToPkg(self, name, epoch, version, release, arch, filelist,
+                      filetypelist):
         """Add a package to the filelists cache"""
         cur = self._primarydb.cursor()
         fcur = self._filelistsdb.cursor()
