@@ -559,6 +559,7 @@ class SqliteDB(repodb.RpmRepoDB):
             val = data[key]
             if val is not None and name in base.rpmtag:
                 pkg[name] = val
+        pkg['pkgKey'] = data['pkgKey']
         pkg['epoch'] = [int(pkg['epoch'])]    
         pkg.source = data['location_href']
         pkg.issrc = 0
