@@ -344,12 +344,11 @@ class SqliteDB(repodb.RpmRepoDB):
             try:
                 csum, db = self.loadCache(dbfilename)
             except sqlite.Error, e:
-                print e
+                self.conf.printError(e)
                 csum = None
             if self.repomd.has_key(dbtype) and \
                    self.repomd[dbtype].has_key("checksum") and \
                    csum == self.repomd[dbtype]["checksum"]:
-                print "X", csum, self.repomd[dbtype]["checksum"]
                 setattr(self, "_%sdb" % dbtype, db)
                 return 1
 
@@ -606,7 +605,7 @@ class SqliteDB(repodb.RpmRepoDB):
     def getPkgs(self):
         cur = self._primarydb.cursor()
         cur.execute('select pkgKey from packages')
-        result = [self.getPkgById(ob.pkgKey) for ob in cur.fetchall()]
+        result = [self.getPkgByKey(ob.pkgKey) for ob in cur.fetchall()]
         return filter(None, result)
 
     def getNames(self):
