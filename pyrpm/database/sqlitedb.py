@@ -539,7 +539,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
     # add package
     def addPkg(self, pkg, nowrite=None):
-        if self.__isExcluded(pkg):
+        if self._isExcluded(pkg):
             return 0
         cur = self._primarydb.cursor()
         data = {}

@@ -197,7 +197,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
 
     def addPkg(self, pkg, nowrite=None):
         # Doesn't know how to write things out, so nowrite is ignored
-        if self.__isExcluded(pkg):
+        if self._isExcluded(pkg):
             return 0
         return memorydb.RpmMemoryDB.addPkg(self, pkg)
 
@@ -386,7 +386,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     continue
                 self.__parseFilelist(reader, props["name"], arch)
 
-    def __isExcluded(self, pkg):
+    def _isExcluded(self, pkg):
         """Return True if RpmPackage pkg is excluded by configuration."""
 
         if pkg["arch"] == "src":
@@ -447,7 +447,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                            "sourcerpm", "requirename", "requireflags",
                            "requireversion"))
         for pkg in tmplist:
-            if self.__isExcluded(pkg):
+            if self._isExcluded(pkg):
                 continue
             for reqname in pkg["requirename"]:
                 if reqname[0] == "/":
@@ -642,7 +642,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 elif not excheck and pname != None and pepoch != None and \
                      pversion != None and prelease != None and parch != None:
                     excheck = 1
-                    if self.__isExcluded(pkg):
+                    if self._isExcluded(pkg):
                         return None
                 continue
             if name == "name":
