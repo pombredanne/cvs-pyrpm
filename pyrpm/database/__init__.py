@@ -34,12 +34,13 @@ def getRpmDBFactory(config, source, root=None):
     if   source[:5] == 'mem:/':
         return memorydb.RpmMemoryDB(config, source[5:], root)
     elif source[:6] == 'repo:/':
-        return repodb.RpmRepoDB(config, source[6:], root)
+        return sqlitedb.SqliteDB(config, source[6:], root)
+        #return repodb.RpmRepoDB(config, source[6:], root)
     elif source[:7] == 'rpmdb:/':
         #return rpmshadowdb.RpmDB(config, source[7:], root)
         return rpmmemorydb.RpmMemoryDB(config, source[7:], root)
     elif source[:10] == 'sqlitedb:/':
-        return sqlitedb.RpmSQLiteDB(config, source[10:], root)
+        return sqlitedb.SqliteDB(config, source[10:], root)
     elif source[:5] == 'dir:/':
         return directorydb.RpmDirectoryDB(config, source[4:], root)
     return rpmmemorydb.RpmMemoryDB(config, source, root)

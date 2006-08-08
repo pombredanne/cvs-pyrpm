@@ -1066,14 +1066,22 @@ def evrSplit(evr):
     """Split evr to components.
 
     Return (E, V, R).  Default epoch to 0, release to "" if not specified."""
+    e, v, r = evrSplitString(evr)
+    if e == '':
+        e = '0'
+    return e, v, r
 
+def evrSplitString(evr):
+    """Split evr to components.
+
+    Return (E, V, R).  Default epoch and release to "" if not specified."""
     i = 0
     p = evr.find(":") # epoch
     if p != -1:
         epoch = evr[:p]
         i = p + 1
     else:
-        epoch = "0"
+        epoch = ""
     p = evr.find("-", i) # version
     if p != -1:
         version = evr[i:p]
@@ -1082,6 +1090,14 @@ def evrSplit(evr):
         version = evr[i:]
         release = ""
     return (epoch, version, release)
+
+def evrMerge(e, v, r):
+    result = v or ""
+    if r:
+        result = "%s-%s" % (result, r)
+    if e:
+        result = "%s:%s" % (e, result)
+    return result
 
 def envraSplit(envra):
     """split [e:]name-version-release.arch into the 4 possible subcomponents.

@@ -160,8 +160,10 @@ class RpmYum:
         Return 1 on success 0 on errror (after warning the user).  Exclude
         packages matching whitespace-separated excludes."""
 
-        repo = database.repodb.RpmRepoDB(self.config, baseurls,
-                          self.config.buildroot, conf, reponame)
+        #repo = database.repodb.RpmRepoDB(self.config, baseurls,
+        #                  self.config.buildroot, conf, reponame)
+        repo = database.sqlitedb.SqliteDB(self.config, baseurls,
+                   self.config.buildroot, conf, reponame)
         if repo.read() == 0:
             self.config.printError("Error reading repository %s" % reponame)
             return 0
@@ -193,7 +195,10 @@ class RpmYum:
             if self.config.timer:
                 self.config.printInfo(0, "Reading local RPM database took %s seconds\n" % (clock() - time1))
 
-        for pkg in self.pydb.searchProvides("redhat-release", 0, ""):
+        db = database.memorydb.RpmMemoryDB(self.config, None)
+        db.addPkgs(self.pydb.getPkgs())
+
+        for pkg in db.searchProvides("redhat-release", 0, ""):
             rpmconfig.relver = pkg["version"]
             
         for yumconf in self.config.yumconf:
@@ -204,10 +209,7 @@ class RpmYum:
             else:
                 printWarning(1, "Couldn't find given yum config file, skipping read of repo %s" % yumconf)
         self.repos_read = 1
-        db = database.memorydb.RpmMemoryDB(self.config, None)
-        db.addPkgs(self.pydb.getPkgs())
         self.opresolver = RpmResolver(self.config, db)
-        del db
         self.__generateObsoletesList()
         return 1
 

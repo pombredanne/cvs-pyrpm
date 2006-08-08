@@ -791,7 +791,6 @@ class RpmPackage(RpmData):
             e2 = 0
         else:
             e2 = pkg["epoch"][0]
-
         return e1 == e2
 
     def isIdentical(self, pkg):

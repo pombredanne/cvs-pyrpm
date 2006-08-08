@@ -35,7 +35,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
     is not populated at all."""
 
     # A mapping between strings and RPMSENSE_* comparison flags
-    flagmap = { None: None,
+    flagmap = { 0 : None,
+                None: 0,
                 "EQ": RPMSENSE_EQUAL,
                 "LT": RPMSENSE_LESS,
                 "GT": RPMSENSE_GREATER,
@@ -82,7 +83,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self.nc = None
         self.comps = None
 
-    def read(self):
+    def readMirrorList(self):
         if not self.is_read and self.mirrorlist and self.yumconf:
             for mlist in self.mirrorlist:
                 nc = NetworkCache(os.path.dirname(mlist), os.path.join(self.config.cachedir, self.reponame))
@@ -96,76 +97,98 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     l = l.replace("$ARCH", "$BASEARCH")[:-1]
                     self.source.append(self.yumconf.extendValue(l))
                 nc.clear()
+
+    def readRepoMD(self):
+        # First we try and read the repomd file as a starting point.
+        filename = self.nc.cache("repodata/repomd.xml", 1)
+        if not filename:
+            return 0
+        try:
+            reader = libxml2.newTextReaderFilename(filename)
+        except libxml2.libxmlError:
+            return 0
+        # Create our network cache object
+        self.baseurl = self.nc.baseurl
+        self.repomd = self._parseNode(reader)
+        return 1
+
+    def readComps(self):
+        # Try to read a comps.xml file if there is any before we parse the
+        # primary.xml
+        if self.repomd.has_key("group"):
+            try:
+                filename = self.nc.cache("repodata/comps.xml", 1)
+                self.comps = RpmCompsXML(self.config, filename)
+                self.comps.read()
+            except:
+                pass
+        return 1
+
+    def readPrimary(self):
+        # If we have either a local cache of the primary.xml.gz file or if
+        # it is already local (nfs or local file system) we calculate it's
+        # checksum and compare it with the one from repomd. If they are
+        # the same we don't need to cache it again and can directly use it.
+        (csum, destfile) = self.nc.checksum("repodata/primary.xml.gz", "sha")
+        if self.repomd.has_key("primary") and \
+           self.repomd["primary"].has_key("checksum") and \
+           csum == self.repomd["primary"]["checksum"]:
+            filename = destfile
+        else:
+            filename = self.nc.cache("repodata/primary.xml.gz", 1)
+        if not filename:
+            return 0
+        try:
+            reader = libxml2.newTextReaderFilename(filename)
+        except libxml2.libxmlError:
+            return 0
+        self._parseNode(reader)
+        return 1
+
+    def readPGPKeys(self):
+        for url in self.key_urls:
+            filename = self.nc.cache(url, 1)
+            try:
+                f = file(filename)
+                key_data = f.read()
+                f.close()
+            except Exception, e:
+                self.config.printError("Error reading GPG key %s: %s"
+                                       % (filename, e))
+                continue
+            try:
+                key_data = openpgp.isolateASCIIArmor(key_data)
+                keys = openpgp.parsePGPKeys(key_data)
+            except Exception, e:
+                self.config.printError("Invalid GPG key %s: %s" % (url, e))
+                continue
+            for k in keys:
+                self.keyring.addKey(k)
+        return 1
+
+    def readFilereq(self):
+        # Last but not least if we can find the filereq.xml.gz file use it
+        # and import the files from there into our packages.
+        filename = self.nc.cache("filereq.xml.gz", 1)
+        # If we can't find the filereq.xml.gz file it doesn't matter
+        if not filename:
+            return 1
+        try:
+            reader = libxml2.newTextReaderFilename(filename)
+        except libxml2.libxmlError:
+            return 1
+        self._parseNode(reader)
+
+    def read(self):
+        self.readMirrorList()
         self.is_read = 1 # FIXME: write-only
         for uri in self.source:
-            # First we try and read the repomd file as a starting point.
             self.nc = NetworkCache(uri, os.path.join(self.config.cachedir, self.reponame))
-            filename = self.nc.cache("repodata/repomd.xml", 1)
-            if not filename:
-                continue
-            try:
-                reader = libxml2.newTextReaderFilename(filename)
-            except libxml2.libxmlError:
-                continue
-            # Create our network cache object
-            self.baseurl = uri
-            self.repomd = self.__parseNode(reader)
-            # If we have either a local cache of the primary.xml.gz file or if
-            # it is already local (nfs or local file system) we calculate it's
-            # checksum and compare it with the one from repomd. If they are
-            # the same we don't need to cache it again and can directly use it.
-            (csum, destfile) = self.nc.checksum("repodata/primary.xml.gz", "sha")
-            if self.repomd.has_key("primary") and \
-               self.repomd["primary"].has_key("checksum") and \
-               csum == self.repomd["primary"]["checksum"]:
-                filename = destfile
-            else:
-                filename = self.nc.cache("repodata/primary.xml.gz", 1)
-            if not filename:
-                continue
-            try:
-                reader = libxml2.newTextReaderFilename(filename)
-            except libxml2.libxmlError:
-                continue
-            # Try to read a comps.xml file if there is any before we parse the
-            # primary.xml
-            if self.repomd.has_key("group"):
-                try:
-                    filename = self.nc.cache("repodata/comps.xml", 1)
-                    self.comps = RpmCompsXML(self.config, filename)
-                    self.comps.read()
-                except:
-                    pass
-            self.__parseNode(reader)
-            for url in self.key_urls:
-                filename = self.nc.cache(url, 1)
-                try:
-                    f = file(filename)
-                    key_data = f.read()
-                    f.close()
-                except Exception, e:
-                    self.config.printError("Error reading GPG key %s: %s"
-                                           % (filename, e))
-                    continue
-                try:
-                    key_data = openpgp.isolateASCIIArmor(key_data)
-                    keys = openpgp.parsePGPKeys(key_data)
-                except Exception, e:
-                    self.config.printError("Invalid GPG key %s: %s" % (url, e))
-                    continue
-                for k in keys:
-                    self.keyring.addKey(k)
-            # Last but not least if we can find the filereq.xml.gz file use it
-            # and import the files from there into our packages.
-            filename = self.nc.cache("filereq.xml.gz", 1)
-            # If we can't find the filereq.xml.gz file it doesn't matter
-            if not filename:
-                return 1
-            try:
-                reader = libxml2.newTextReaderFilename(filename)
-            except libxml2.libxmlError:
-                return 1
-            self.__parseNode(reader)
+            if not self.readRepoMD(): continue
+            if not self.readComps(): continue
+            if not self.readPrimary(): continue
+            if not self.readPGPKeys(): continue
+            if not self.readFilereq(): continue
             return 1
         return 0
 
@@ -208,9 +231,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             reader = libxml2.newTextReaderFilename(filename)
         except libxml2.libxmlError:
             return 0
-        self.__parseNode(reader)
+        self._parseNode(reader)
         self.filelist_imported = 1
         return 1
+
 
     def createRepo(self):
         """Create repodata metadata for self.source.
@@ -311,7 +335,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                self._filerc.match(fname) or \
                self._dirrc.match(fname)
 
-    def __parseNode(self, reader):
+    def _parseNode(self, reader):
         """Parse <package> tags from libxml2.xmlTextReader reader."""
 
         # Make local variables for heavy used functions to speed up this loop
@@ -599,6 +623,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         pkg = package.RpmPackage(self.config, "dummy", db = self)
         pkg["signature"] = {}
         pkg["signature"]["size_in_sig"] = [0,]
+        pkg.time_file = None
         pname = None
         pepoch = None
         pversion = None
@@ -620,7 +645,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     if self.__isExcluded(pkg):
                         return None
                 continue
-            if    name == "name":
+            if name == "name":
                 if Readf() != 1:
                     break
                 pname = Valuef()
@@ -672,38 +697,38 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     pkg["signature"]["size_in_sig"][0] += int(props["package"])
                 except KeyError:
                     raise ValueError, "Missing package= in <size>"
+                pkg.sizes = props
             elif name == "format":
                 self.__parseFormat(reader, pkg)
+            elif name == "time":
+                props = self.__getProps(reader)
+                pkg.time_file = props.get('file', None)
+                pkg['buildtime'] = props.get('build', None)
+            else:
+                for pkgtag, xmltag in (("summary", "summary"),
+                                       ("description", "description"),
+                                       ("url", "url"),
+                                       ("packager", "packager")):
+                    if name != xmltag: continue
+                    if Readf() != 1:
+                        break
+                    val = Valuef()
+                    if val == '\n  ': val = None # fix for empty tags
+                    pkg[pkgtag] = val
+                else:
+                    continue
+                break # break while loop if break in for loop
         pkg.header_read = 1
         pkg["provides"] = pkg.getProvides()
         pkg["requires"] = pkg.getRequires()
         pkg["obsoletes"] = pkg.getObsoletes()
         pkg["conflicts"] = pkg.getConflicts()
         pkg["triggers"] = pkg.getTriggers()
-        if pkg.has_key("providename"):
-            del pkg["providename"]
-        if pkg.has_key("provideflags"):
-            del pkg["provideflags"]
-        if pkg.has_key("provideversion"):
-            del pkg["provideversion"]
-        if pkg.has_key("requirename"):
-            del pkg["requirename"]
-        if pkg.has_key("requireflags"):
-            del pkg["requireflags"]
-        if pkg.has_key("requireversion"):
-            del pkg["requireversion"]
-        if pkg.has_key("obsoletename"):
-            del pkg["obsoletename"]
-        if pkg.has_key("obsoleteflags"):
-            del pkg["obsoleteflags"]
-        if pkg.has_key("obsoleteversion"):
-            del pkg["obsoleteversion"]
-        if pkg.has_key("conflictname"):
-            del pkg["conflictname"]
-        if pkg.has_key("conflictflags"):
-            del pkg["conflictflags"]
-        if pkg.has_key("conflictversion"):
-            del pkg["conflictversion"]
+        # clean up list
+        for tag in ("provide", "require", "obsolete",
+                    "conflict", "trigger"):
+            for suffix in ("name", "flags", "version"):
+                pkg.pop(tag + suffix, None) # remove if set
         return pkg
 
     def __parseFilelist(self, reader, pname, arch):
@@ -718,6 +743,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         Namef = reader.Name
         Valuef = reader.Value
         filelist = []
+        typelist = []
         version, release, epoch = None, None, None
         while Readf() == 1:
             ntype = NodeTypef()
@@ -735,11 +761,18 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 release = props.get("rel")
                 epoch   = props.get("epoch")
             elif name == "file":
+                props = self.__getProps(reader)
                 if Readf() != 1:
                     break
                 filelist.append(Valuef())
+                typelist.append(props.get("type", "file"))
         if version is None or release is None or epoch is None:
             raise ValueError, "Missing version information"
+        self.addFilesToPkg(pname, epoch, version, release, arch,
+                           filelist, typelist)
+
+    def addFilesToPkg(self, pname, epoch, version, release, arch,
+                      filelist, filetypelist):
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
         pkgs = self.getPkgsByName(pname)
         dhash = {}
@@ -768,7 +801,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 pkg["basenames"] = bnames
                 if pkg.has_key("oldfilenames"):
                     del pkg["oldfilenames"]
-
+                pkg.filetypelist = filetypelist
                 # get rid of old dirnames, dirindexes and basenames
                 #if pkg.has_key("dirnames"):
                 #    del pkg["dirnames"]
@@ -871,6 +904,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         Namef = reader.Name
         Valuef = reader.Value
         pkg["oldfilenames"] = []
+        pkg.filetypelist = []
         while Readf() == 1:
             ntype = NodeTypef()
             if ntype != XML_READER_TYPE_ELEMENT and \
@@ -881,10 +915,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 if name == "format":
                     break
                 continue
-            elif name == "rpm:sourcerpm":
-                if Readf() != 1:
-                    break
-                pkg["sourcerpm"] = Valuef()
             elif name == "rpm:header-range":
                 props = self.__getProps(reader)
                 try:
@@ -896,22 +926,27 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 pkg.range_signature = [96, header_start-96]
                 pkg.range_header = [header_start, header_end-header_start]
                 pkg.range_payload = [header_end, None]
-            elif name == "rpm:provides":
-                plist = self.__parseDeps(reader, name)
-                pkg["providename"], pkg["provideflags"], pkg["provideversion"] = plist
-            elif name == "rpm:requires":
-                plist = self.__parseDeps(reader, name)
-                pkg["requirename"], pkg["requireflags"], pkg["requireversion"] = plist
-            elif name == "rpm:obsoletes":
-                plist = self.__parseDeps(reader, name)
-                pkg["obsoletename"], pkg["obsoleteflags"], pkg["obsoleteversion"] = plist
-            elif name == "rpm:conflicts":
-                plist = self.__parseDeps(reader, name)
-                pkg["conflictname"], pkg["conflictflags"], pkg["conflictversion"] = plist
             elif name == "file":
+                props = self.__getProps(reader)
+                pkg.filetypelist.append(props.get("type", "file"))
                 if Readf() != 1:
                     break
                 pkg["oldfilenames"].append(Valuef())
+            else:
+                for tag in ("provide", "require", "obsolete", "conflict"): 
+                    if name != "rpm:%ss" % tag: continue
+                    plist = self.__parseDeps(reader, name)
+                    (pkg[tag + 'name'], pkg[tag + 'flags'],
+                     pkg[tag + 'version']) = plist
+                    
+                for pkgtag, xmltag in (("license", "rpm:license"),
+                                       ("sourcerpm", "rpm:sourcerpm"),
+                                       ("vendor", "rpm:vendor"),
+                                       ("buildhost", "rpm:buildhost"),
+                                       ("group", "rpm:group")):
+                    if name != xmltag: continue
+                    if Readf() != 1: return
+                    pkg[pkgtag] = Valuef()
 
     def __filterDuplicateDeps(self, deps):
         """Return the list of (name, flags, release) dependencies deps with
