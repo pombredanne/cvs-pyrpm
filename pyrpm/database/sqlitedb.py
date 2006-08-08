@@ -38,18 +38,45 @@ except ImportError:
 
 class SqliteRpmPackage(package.RpmPackage):
 
-    def __getitem__(self, name):
-        if self.has_key(name):
-            return self.get(name)            
-        if name in ('requires','provides','conflicts','obsoletes'):
-            self[name] = self.yumrepo.getDependencies(name, self['pkgKey'])
-            return self[name]
-        if name in ('basenames', 'dirnames', 'dirindexes', 'oldfilenames'):
-            if (not self.has_key('basenames') and
-                not self.has_key('oldfilenames')):
-                self.yumrepo.getFiles(self)
-                return self.get(name, None)
+    def __init__(self, config, source, verify=None, hdronly=None, db=None):
+        self.filesloaded = False
+        package.RpmPackage.__init__(self, config, source, verify, hdronly, db)
 
+    def has_key(self, name):
+        if dict.has_key(self, name):
+            return True
+        elif not self.filesloaded and \
+             name in ('basenames', 'dirnames', 'dirindexes', 'oldfilenames'):
+            self.filesloaded = True
+            self.yumrepo.getFiles(self)
+            return dict.has_key(self, name)
+        elif name in ('requires','provides','conflicts','obsoletes'):
+            return True
+        return False
+        
+    def __getitem__(self, name):
+        if dict.has_key(self, name):
+            return dict.get(self, name)            
+        if name in ('requires','provides','conflicts','obsoletes'):
+            deps = self.yumrepo.getDependencies(name, self['pkgKey'])
+            self[name] = deps 
+            return deps
+        if (name in ('basenames', 'dirnames', 'dirindexes', 'oldfilenames') and
+            not self.filesloaded):
+            self.filesloaded = True
+            self.yumrepo.getFiles(self)
+            return self.get(name, None)
+
+    def get(self, key, value=None):
+        if self.has_key(key):
+            return self[key]
+        else:
+            return value
+
+    def reread(self, tags=None, ntags=None):
+        package.RpmPackagereread(self, tags, ntags)
+        self.filesloaded = True
+    
 class SqliteDB(repodb.RpmRepoDB):
     COLUMNS = (
             'pkgId',
@@ -247,7 +274,7 @@ class SqliteDB(repodb.RpmRepoDB):
         """)
         cur.execute("CREATE INDEX keyfile ON filelist (pkgKey)")
         cur.execute("CREATE INDEX pkgId ON packages (pkgId)")
-        self._db.commit()
+        self._filelistsdb.commit()
     
     def createOthersTables(self):
         """Create the required tables for other.xml.gz metadata in the sqlite 
@@ -267,7 +294,7 @@ class SqliteDB(repodb.RpmRepoDB):
         """)
         cur.execute("CREATE INDEX keychange ON changelog (pkgKey)")
         cur.execute("CREATE INDEX pkgId ON packages (pkgId)")
-        self._db.commit()
+        self._othersdb.commit()
 
 
         
@@ -485,10 +512,6 @@ class SqliteDB(repodb.RpmRepoDB):
         cur.execute('select * from packages where pkgKey="%s"' % pkgKey)
         ob = cur.fetchone()
         pkg = self._buildRpm(ob)
-        #for tag in ('requires','provides','conflicts','obsoletes'):
-        #    pkg[tag] = self.getDependencies(tag, pkgKey)
-        # files
-        #pkg["oldfilenames"] = self.getFiles(pkgKey)
         return pkg
 
     def getFiles(self, pkg):
@@ -507,14 +530,18 @@ class SqliteDB(repodb.RpmRepoDB):
                 dirindexes.extend([idx] * len(base))
             if pkg.has_key('oldfilenames'):
                 del pkg['oldfilenames']
-            pkg['basenames'] = basenames
-            pkg['dirnames'] = dirnames
-            pkg['dirindexes'] = dirindexes
+            if basenames:
+                pkg['basenames'] = basenames
+                pkg['dirnames'] = dirnames
+                pkg['dirindexes'] = dirindexes
         else:
             cur = self._primarydb.cursor()
             cur.execute(
                 'select * from files where pkgKey="%s"' % pkgKey)
-            pkg['oldfilenames'] = [ob.name for ob in cur.fetchall()]
+            files = [ob.name for ob in cur.fetchall()]
+            if files:
+                pkg['oldfilenames'] = files
+                pkg.generateFileNames()
 
     def getDependencies(self, tag, pkgKey):
         cur = self._primarydb.cursor()
@@ -529,7 +556,9 @@ class SqliteDB(repodb.RpmRepoDB):
         pkg.yumrepo = self
         for key in data.keys():
             name = self.DB2PKG.get(key, key)
-            pkg[name] = data[key]
+            val = data[key]
+            if val is not None and name in base.rpmtag:
+                pkg[name] = val
         pkg['epoch'] = [int(pkg['epoch'])]    
         pkg.source = data['location_href']
         pkg.issrc = 0
