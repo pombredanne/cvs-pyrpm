@@ -74,7 +74,7 @@ class SqliteRpmPackage(package.RpmPackage):
             return value
 
     def reread(self, tags=None, ntags=None):
-        package.RpmPackagereread(self, tags, ntags)
+        package.RpmPackage.reread(self, tags, ntags)
         self.filesloaded = True
     
 class SqliteDB(repodb.RpmRepoDB):
