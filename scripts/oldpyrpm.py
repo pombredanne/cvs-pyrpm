@@ -2071,7 +2071,6 @@ class ReadRpm:
         for (n, f, v) in self.__getDeps(name, flag, version):
             phash[(n, f, v)].remove(self)
 
-    # python-only
     def getTriggers(self):
         deps = self.__getDeps("triggername", "triggerflags", "triggerversion")
         index = self["triggerindex"]
@@ -2090,12 +2089,16 @@ class ReadRpm:
                 else:
                     if len(deps) != len(index):
                         self.printErr("wrong triggers")
+    # python-only
         if index == None:
-            return [(deps[i][0], deps[i][1], deps[i][2], progs[i], scripts[i])
-                for i in xrange(len(deps))]
-        return [(deps[i][0], deps[i][1], deps[i][2], progs[index[i]],
-                scripts[index[i]]) for i in xrange(len(deps))]
+            return [ (deps[i][0], deps[i][1], deps[i][2], progs[i], scripts[i])
+                for i in xrange(len(deps)) ]
+        return [ (deps[i][0], deps[i][1], deps[i][2], progs[index[i]],
+                scripts[index[i]]) for i in xrange(len(deps)) ]
     # python-only-end
+    # pyrex-code
+    #    return []
+    # pyrex-code-end
 
     def genSigHeader(self):
         """Take data from the signature header and append it to the hdr."""
@@ -2345,9 +2348,7 @@ class ReadRpm:
                 provs.append(mydep)
             if mydep not in provs:
                 self.printErr("no provides for own rpm package, rpm=%s" % ver)
-        # python-only
         self.getTriggers()
-        # python-only-end
         # Check for /tmp/ and /usr/src in the provides:
         if self.strict and self["providename"]:
             for n in self["providename"]:
@@ -3219,7 +3220,8 @@ class ConnectedComponent:
 
     def getNEVRA(self):
         # python-only
-        return "Component: " + ",".join([pkg.getNEVRA() for pkg in self.pkgs])
+        return "Component: " + \
+            ",".join([ pkg.getNEVRA() for pkg in self.pkgs ])
         # python-only-end
         # pyrex-code
         #ret = []
@@ -3366,7 +3368,8 @@ class ConnectedComponentsDetector:
             if not self.states.has_key(pkg):
                 self._process(pkg)
         # python-only
-        return [ConnectedComponent(self.relations, pkgs) for pkgs in self.sccs]
+        return [ ConnectedComponent(self.relations, pkgs) \
+            for pkgs in self.sccs ]
         # python-only-end
         # pyrex-code
         #ret = []
@@ -3970,7 +3973,6 @@ class RpmRepo:
             value = rpmtag[i]
             rt[i] = value
             rt[value[0]] = value
-        self.filerequires = []
         filenames = findRpms(filename, ignoresymlinks)
         filenames.sort()
         i = 0
@@ -3984,9 +3986,6 @@ class RpmRepo:
             if self.excludes and self.__isExcluded(pkg):
                 filenames.pop(i)
                 continue
-            for reqname in pkg.hdr.get("requirename", []):
-                if reqname[0] == "/":
-                    self.filerequires.append(reqname)
             i += 1
         numpkg = len(filenames)
         repodir = filename + "/repodata"
@@ -4050,9 +4049,6 @@ class RpmRepo:
         origpfd.close()
         origffd.close()
         origofd.close()
-        # python-only
-        del self.filerequires
-        # python-only-end
 
         repodoc = libxml2.newDoc("1.0")
         reporoot = repodoc.newChild(None, "repomd", None)
@@ -4088,10 +4084,6 @@ class RpmRepo:
         os.rename(ffdtmp, repodir + "/filelists.xml.gz")
         os.rename(ofdtmp, repodir + "/other.xml.gz")
         repodoc.saveFormatFileEnc(repodir + "/repomd.xml", "UTF-8", 1)
-        # python-only
-        del repodoc
-        # python-only-end
-
         return 1
 
     def __parseRepomd(self, reader):
@@ -4214,9 +4206,6 @@ class RpmRepo:
         fd.write(output + "\n")
         pkg_node.unlinkNode()
         pkg_node.freeNode()
-        # python-only
-        del pkg_node
-        # python-only-end
 
     def __writePkgInfo(self, parent, pkg):
         pkg_node = parent.newChild(None, "package", None)
@@ -4233,9 +4222,6 @@ class RpmRepo:
         fd.write(output + "\n")
         pkg_node.unlinkNode()
         pkg_node.freeNode()
-        # python-only
-        del pkg_node
-        # python-only-end
 
     def __writeOther(self, fd, parent, pkg):
         pkg_node = self.__writePkgInfo(parent, pkg)
@@ -4246,16 +4232,10 @@ class RpmRepo:
                 clog.addContent(utf8String(text))
                 clog.newProp("author", utf8String(name))
                 clog.newProp("date", str(ctime))
-                # python-only
-                del clog
-                # python-only-end
         output = pkg_node.serialize("UTF-8", self.pretty)
         fd.write(output + "\n")
         pkg_node.unlinkNode()
         pkg_node.freeNode()
-        # python-only
-        del pkg_node
-        # python-only-end
 
     def __parsePackage(self, reader):
         Readf = reader.Read
@@ -6006,14 +5986,8 @@ def checkScripts(repo):
                         line.find("rpm --eval") != -1):
                         continue
                     # ignore `date +string`
-                    # python-only
-                    if re.compile(".*date \'?\+").match(line):
+                    if re.compile(".*date \'?\\+").match(line):
                         continue
-                    # python-only-end
-                    # pyrex-code
-                    #if re.compile(".*date \'?\\+").match(line):
-                    #    continue
-                    # pyrex-code-end
                     print rpm.filename, "contains \"%\""
                     break
 
