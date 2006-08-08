@@ -604,7 +604,10 @@ class SqliteDB(repodb.RpmRepoDB):
             return None
 
     def getPkgs(self):
-        raise NotImplementedError
+        cur = self._primarydb.cursor()
+        cur.execute('select pkgKey from packages')
+        result = [self.getPkgById(ob.pkgKey) for ob in cur.fetchall()]
+        return filter(None, result)
 
     def getNames(self):
         cur = self._primarydb.cursor()
@@ -612,7 +615,9 @@ class SqliteDB(repodb.RpmRepoDB):
         return [ob.name for ob in cur.fetchall()]
 
     def hasName(self, name):
-        raise NotImplementedError
+        cur.self._primarydb.cursor()
+        cur.execute('select name from packages where name="%s"' % name)
+        return bool(cur.fetchone())
 
     def getPkgsByName(self, name):
         cur = self._primarydb.cursor()
