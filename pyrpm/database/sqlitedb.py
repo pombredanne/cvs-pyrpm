@@ -472,10 +472,14 @@ class SqliteDB(repodb.RpmRepoDB):
         """Add a package to the filelists cache"""
         cur = self._primarydb.cursor()
         fcur = self._filelistsdb.cursor()
-        cur.execute("select pkgId, pkgKey from packages where name=%s"
-                    "and epoch=%s and version=%s and release=%s and arch=%s",
+        cur.execute('select pkgId, pkgKey from packages where name="%s" '
+                    'and epoch="%s" and version="%s" and release="%s" '
+                    'and arch="%s"' %
                     (name, epoch, version, release, arch))
         op = cur.fetchone()
+        if op is None:
+            # package not found
+            return
         pkgKey = op["pkgKey"]
         pkgId = op["pkgId"]
         if self._pkgs.has_key(pkgKey):
