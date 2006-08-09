@@ -248,9 +248,13 @@ class RpmDB(db.RpmDatabase):
         storedata = data[indexNo*16+8:]
         pkg["signature"] = {}
 
+        # read the tags
         ok = self.readTags(pkg, tags, storedata)
         if not ok:
             return None
+        if not pkg.has_key("epoch"):
+            pkg["epoch"] = [ 0 ]
+
 
         if pkg["name"] == "gpg-pubkey":
             return None  # FIXME
