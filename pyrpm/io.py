@@ -583,7 +583,6 @@ class RpmStreamIO(RpmIO):
             # Convert back the RPM_ARGSTRING to RPM_STRING
             if ttype == RPM_ARGSTRING:
                 ttype = RPM_STRING
-            #print tag, ttype, value
             (count, data) = self.__generateTag(ttype, value)
             pad = self.__alignTag(ttype)
             self.offset += len(pad)

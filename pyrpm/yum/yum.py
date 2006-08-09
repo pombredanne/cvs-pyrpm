@@ -327,9 +327,15 @@ class RpmYum:
                 if not pkgnamearchhash[name].has_key(arch):
                     self.config.printError("Can't find update package with matching arch for package %s" % ipkg.getNEVRA())
                     return 0
+
+                # Filter packages with lower versions from our final list
+                l = []
+                for p in pkgnamearchhash[name][arch]:
+                    if pkgCompare(ipkg, p) < 0:
+                        l.append(p)
                 # Find the best matching package for the given list of packages
                 # and archs.
-                r = self.__handleBestPkg("update", pkgnamearchhash[name][arch], march, self.config.exactarch)
+                r = self.__handleBestPkg("update", l, march, self.config.exactarch)
                 # In case we had a successfull update make sure we erase the
                 # package we just updated. Otherwise cross arch switches won't
                 # work properly.
@@ -479,7 +485,7 @@ class RpmYum:
                         r = self.opresolver.update(upkg)
                 donehash[upkg["name"]] = 1
                 # We just handled one package, make sure we handle it's
-                # obsoletes.
+                # obsoletes and language related packages
                 if upkg and r > 0:
                     l = []
                     for repo in self.repos:
