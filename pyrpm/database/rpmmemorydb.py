@@ -27,6 +27,15 @@ class RpmMemoryDB(memorydb.RpmMemoryDB, rpmdb.RpmDB):
         memorydb.RpmMemoryDB.__init__(self, config, source, buildroot)
         rpmdb.RpmDB.__init__(self, config, source, buildroot)
 
+        self.tags = {}
+        for tag in config.resolvertags:
+            if tag.startswith("file"):
+                continue
+            self.tags[tag] = None
+
+
+    open = rpmdb.RpmDB.open
+        
     def read(self):
         # Never fails, attempts to recover as much as possible
         if self.is_read:
@@ -39,7 +48,7 @@ class RpmMemoryDB(memorydb.RpmMemoryDB, rpmdb.RpmDB):
         except bsddb.error:
             return 1
         for key in db.keys():
-            pkg = self.read_rpm(key, db)
+            pkg = self.readRpm(key, db, self.tags)
             if pkg is not None:
                 memorydb.RpmMemoryDB.addPkg(self, pkg)
         return 1

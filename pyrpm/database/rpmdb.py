@@ -31,6 +31,51 @@ import db
 import pyrpm.openpgp as openpgp
 import lists
 
+class RpmDBPackage(package.RpmPackage):
+
+    filetags = {'basenames' : None,
+                'dirnames' : None,
+                'dirindexes' : None,
+                'oldfilenames' : None}
+
+    def __init__(self, config, source, verify=None, hdronly=None, db=None):
+        self.indexdata = {}
+        package.RpmPackage.__init__(self, config, source, verify, hdronly, db)
+
+    def has_key(self, key):
+        if self.indexdata.has_key(key): return True
+        return key in ('requires','provides','conflicts','obsoletes')
+
+    def __getitem__(self, name):
+        if dict.has_key(self, name):
+            return dict.get(self, name)
+        if name in ('requires','provides','conflicts','obsoletes'):
+            tags = [name[:-1] + suffix for suffix in
+                    ("name", "flags", "version")]
+            self.db.readTags(self, tags)        
+        elif not self.indexdata.has_key(name):
+            return None
+        elif name in self.filetags:
+            if (not self.has_key('basenames') and
+                not self.has_key('oldfilenames')):
+                self.db.readTags(self, self.filetags)
+        else:
+            self.db.readTags(self, {name : None})
+        return self.get(name)
+
+    def get(self, key, value=None):
+        if self.has_key(key):
+            return self[key]
+        else:
+            return value
+
+    def setdefault(self, key, value):
+        if self.has_key(key):
+            return self[key]
+        else:
+            self[key] = value
+            return value
+        
 class RpmDB(db.RpmDatabase):
 
     zero = pack("I", 0)
@@ -48,6 +93,17 @@ class RpmDB(db.RpmDatabase):
 
         self.path = self._getDBPath()
 
+        self.tags = {}
+        for tag in config.resolvertags:
+            if tag in ("providename", "provideflags", "provideversion",
+                       "requirename", "requireflags", "requireversion",
+                       "obsoletename", "obsoleteflags", "obsoleteversion",
+                       "conflictname", "conflictflags", "conflictversion",
+                       'oldfilenames', 'basenames', 'dirnames', 'dirindexes'):
+                continue
+            if tag.startswith("file"):
+                continue
+            self.tags[tag] = None
 
     def __contains__(self, pkg):
         return hasattr(pkg, "db") and pkg.db is self and \
@@ -155,10 +211,10 @@ class RpmDB(db.RpmDatabase):
         print "Obsoletes took", time.time() - t1
         return self.OK
 
-    def read_rpm(self, key, db):
-        rpmio = io.RpmFileIO(self.config, "dummy")
-        pkg = package.RpmPackage(self.config, "dummy")
+    def readRpm(self, key, db, tags):
+        pkg = RpmDBPackage(self.config, "dummy")
         pkg.key = key
+        pkg.db = self
         data = db[key]
         try:
             val = unpack("I", key)[0]
@@ -180,49 +236,22 @@ class RpmDB(db.RpmDatabase):
             self.config.printError("Value for key %s in rpmdb is too short"
                                    % repr(key))
             return None
-        indexdata = data[8:indexNo*16+8]
+        indexdata = unpack("!%sI" % (indexNo*4), data[8:indexNo*16+8])
+        indexes = zip(indexdata[0::4], indexdata[1::4],
+                      indexdata[2::4], indexdata[3::4])
+        indexdata = {}
+        for idx in indexes:
+            if rpmtagname.has_key(idx[0]):
+                indexdata[rpmtagname[idx[0]]] = idx
+        pkg.indexdata = indexdata
+        
         storedata = data[indexNo*16+8:]
         pkg["signature"] = {}
-        for idx in xrange(0, indexNo):
-            try:
-                index = rpmio.getIndexData(idx, indexdata)
-            except ValueError, e:
-                self.config.printError("Invalid header entry %s in %s: %s"
-                                       % (idx, key, e))
-                return None
 
-            tag = index[0] 
-            if rpmtag.has_key(tag):
-                # XXX use param
-                if rpmtagname[tag] not in self.config.resolvertags:
-                    continue
-            try:
-                tagval = rpmio.getHeaderByIndexData(index, storedata)
-            except ValueError, e:
-                self.config.printError("Invalid header entry %s in %s: %s"
-                                       % (idx, key, e))
-                return None
-                                            
+        ok = self.readTags(pkg, tags, storedata)
+        if not ok:
+            return None
 
-            if rpmtag.has_key(tag):
-                if rpmtagname[tag] == "archivesize":
-                    pkg["signature"]["payloadsize"] = tagval
-                else:
-                    pkg[rpmtagname[tag]] = tagval
-            if   tag == 257:
-                pkg["signature"]["size_in_sig"] = tagval
-            elif tag == 261:
-                pkg["signature"]["md5"] = tagval
-            elif tag == 262:
-                pkg["signature"]["gpg"] = tagval
-            elif tag == 264:
-                pkg["signature"]["badsha1_1"] = tagval
-            elif tag == 265:
-                pkg["signature"]["badsha1_2"] = tagval
-            elif tag == 267:
-                pkg["signature"]["dsaheader"] = tagval
-            elif tag == 269:
-                pkg["signature"]["sha1header"] = tagval
         if pkg["name"] == "gpg-pubkey":
             return None  # FIXME
             try:
@@ -234,26 +263,63 @@ class RpmDB(db.RpmDatabase):
             for k in keys:
                 self.keyring.addKey(k)
             return None
+
         if not pkg.has_key("arch"): # FIXME: when does this happen?
             return None
-        pkg.generateFileNames()
+
         pkg.source = "rpmdb:/"+os.path.join(self.path, pkg.getNEVRA())
-        try:
-            pkg["provides"] = pkg.getProvides()
-            pkg["requires"] = pkg.getRequires()
-            pkg["obsoletes"] = pkg.getObsoletes()
-            pkg["conflicts"] = pkg.getConflicts()
-            pkg["triggers"] = pkg.getTriggers()
-        except ValueError, e:
-            self.config.printError("Error in package %s: %s"
-                                   % pkg.getNEVRA(), e)
-            return None
         pkg["install_id"] = val
         pkg.io = None
         pkg.header_read = 1
-        rpmio.hdr = {}
-        pkg.db = self
         return pkg
+        
+
+    def readTags(self, pkg, tags, storedata=None): 
+        rpmio = io.RpmFileIO(self.config, "dummy")
+
+        if storedata is None:
+            data = self.packages_db[pkg.key]
+            storedata = data[len(pkg.indexdata)*16+8:]
+
+        
+        for tag in tags:
+            if pkg.indexdata.has_key(tag):
+                index = pkg.indexdata[tag]
+            else:
+                continue
+            try:
+                tagval = rpmio.getHeaderByIndexData(index, storedata)
+            except ValueError, e:
+                self.config.printError("Invalid header entry %s in %s: %s"
+                                       % (idx, key, e))
+                return 0
+                                            
+            if tag == "archivesize":
+                pkg["signature"]["payloadsize"] = tagval
+            else:
+                pkg[tag] = tagval
+            if tag.startswith("install_"):
+                pkg["signature"][tag[8:]] = tagval
+
+        
+        try:
+            if "basenames" in tags and pkg.has_key("oldfilenames"):
+                pkg.generateFileNames()
+            if "providename" in tags:
+                pkg["provides"] = pkg.getProvides()
+            if "requirename" in tags:
+                pkg["requires"] = pkg.getRequires()
+            if "obsoletename" in tags:
+                pkg["obsoletes"] = pkg.getObsoletes()
+            if "conflictname" in tags:
+                pkg["conflicts"] = pkg.getConflicts()
+            if "triggername" in tags:
+                pkg["triggers"] = pkg.getTriggers()
+        except ValueError, e:
+            self.config.printError("Error in package %s: %s"
+                                   % pkg.getNEVRA(), e)
+            return 0
+        return 1
 
     def write(self):
         return 1
@@ -568,7 +634,7 @@ class RpmDB(db.RpmDatabase):
         if self._pkgs.has_key(id):
             return self._pkgs[id]
         else:
-            pkg = self.read_rpm(id, self.packages_db)
+            pkg = self.readRpm(id, self.packages_db, self.tags)
             if pkg is not None:
                 self._pkgs[id] = pkg
             return pkg

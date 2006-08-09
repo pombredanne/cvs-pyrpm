@@ -123,7 +123,6 @@ class ProvidesList:
     def addPkg(self, rpm):
         """Add Provides: by RpmPackage rpm. If no self provide is done it will
         be added automatically."""
-
         for (name, flag, version) in rpm[self.TAG]:
             self.hash.setdefault(name, [ ]).append((flag, version, rpm))
         sver = rpm.getEVR()

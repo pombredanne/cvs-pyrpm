@@ -73,6 +73,13 @@ class SqliteRpmPackage(package.RpmPackage):
         else:
             return value
 
+    def setdefault(self, key, value):
+        if self.has_key(key):
+            return self[key]
+        else:
+            self[key] = value
+            return value
+
     def reread(self, tags=None, ntags=None):
         package.RpmPackage.reread(self, tags, ntags)
         self.filesloaded = True
