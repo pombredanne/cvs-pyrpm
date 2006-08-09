@@ -378,7 +378,7 @@ class SqliteDB(repodb.RpmRepoDB):
             try:
                 csum, db = self.loadCache(dbfilename)
             except sqlite.Error, e:
-                self.conf.printError(e)
+                self.config.printError(e)
                 csum = None
             if self.repomd.has_key(dbtype) and \
                    self.repomd[dbtype].has_key("checksum") and \
