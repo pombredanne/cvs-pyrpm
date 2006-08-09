@@ -141,10 +141,12 @@ class NetworkCache:
             digest = md5.new()
         else:
             return (None, None)
-        if self.is_local and not self.__isURI(uri):
+
+        fname = self.getCachedFilename(uri)
+
+        if (not os.path.exists(fname) and
+            self.is_local and not self.__isURI(uri)):
             fname = os.path.join(self.baseurl, uri)
-        else:
-            fname = self.getCachedFilename(uri)
         try:
             fd = open(fname)
             updateDigestFromFile(digest, fd)
