@@ -238,7 +238,7 @@ class RpmYum:
         pkglist = self.__findPkgsByDep(dname, dflags, dversion)
         return self.__handleBestPkg("install", pkglist)
 
-    def update(self, name, exact=False):
+    def update(self, name, exact=False, do_obsolete=True):
         # First find all matching packages. Remember, name can be a glob, too,
         # so we might get a list of packages with different names.
         if exact:
@@ -269,7 +269,7 @@ class RpmYum:
             # package with that name was installed we simply try to select the
             # best matching package update for this arch.
             if name in self.always_install or len(dbpkgs) == 0:
-                ret |= self.__handleBestPkg("update", pkgnamehash[name])
+                ret |= self.__handleBestPkg("update", pkgnamehash[name], do_obsolete=do_obsolete)
                 continue
             # Next trick: We now know that this is an update package and we
             # have at least 1 package with that name installed. In order to
@@ -289,7 +289,7 @@ class RpmYum:
                 # matching package again as we allow arch switches to 64bit
                 # for updates.
                 if not is_multi:
-                    ret |= self.__handleBestPkg("update", pkgnamehash[name])
+                    ret |= self.__handleBestPkg("update", pkgnamehash[name], do_obsolete=do_obsolete)
                     continue
                 # OK, we have several archs for this package installed, we now
                 # need to filter them to 32bit and 64bit buckets and later
@@ -335,7 +335,7 @@ class RpmYum:
                         l.append(p)
                 # Find the best matching package for the given list of packages
                 # and archs.
-                r = self.__handleBestPkg("update", l, march, self.config.exactarch)
+                r = self.__handleBestPkg("update", l, march, self.config.exactarch, do_obsolete=do_obsolete)
                 # In case we had a successfull update make sure we erase the
                 # package we just updated. Otherwise cross arch switches won't
                 # work properly.
@@ -411,7 +411,7 @@ class RpmYum:
         return pkglist
                                     
 
-    def __handleBestPkg(self, cmd, pkglist, arch=None, exactarch=False, is_filereq=0):
+    def __handleBestPkg(self, cmd, pkglist, arch=None, exactarch=False, is_filereq=0, do_obsolete=True):
         # Handle removes directly here, they don't need any special handling.
         if cmd.endswith("remove"):
             for upkg in pkglist:
@@ -495,7 +495,8 @@ class RpmYum:
                     normalizeList(l)
                     for name in l:
                         self.update(name)
-                    self.__handleObsoletes(upkg)
+                    if do_obsolete:
+                        self.__handleObsoletes(upkg)
                 ret |= r
         return ret
 
@@ -515,7 +516,7 @@ class RpmYum:
                 # on a specific package.
                 self.__handleObsoletes()
                 for name in self.opresolver.getDatabase().getNames():
-                    self.update(name, exact=True)
+                    self.update(name, exact=True, do_obsolete=False)
         # Select proper function to be called for every argument. We have
         # a fixed operation for runArgs(), so use a reference to the
         # corresponding function.
