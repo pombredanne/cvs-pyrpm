@@ -44,12 +44,13 @@ class RpmDBPackage(package.RpmPackage):
 
     def has_key(self, key):
         if self.indexdata.has_key(key): return True
-        return key in ('requires','provides','conflicts','obsoletes')
+        return key in ('requires','provides','conflicts',
+                       'obsoletes', 'triggers')
 
     def __getitem__(self, name):
         if dict.has_key(self, name):
             return dict.get(self, name)
-        if name in ('requires','provides','conflicts','obsoletes'):
+        if name in ('requires','provides','conflicts','obsoletes', 'triggers'):
             tags = [name[:-1] + suffix for suffix in
                     ("name", "flags", "version")]
             self.db.readTags(self, tags)        

@@ -83,6 +83,12 @@ class SqliteRpmPackage(package.RpmPackage):
     def reread(self, tags=None, ntags=None):
         package.RpmPackage.reread(self, tags, ntags)
         self.filesloaded = True
+
+    def clearFilelist(self):
+        self.filesloaded = False
+        for tag in ('basenames', 'dirnames', 'dirindexes', 'oldfilenames'):
+            if dict.has_key(self, tag):
+                del self[tag]        
     
 class SqliteDB(repodb.RpmRepoDB):
     COLUMNS = (
@@ -507,15 +513,14 @@ class SqliteDB(repodb.RpmRepoDB):
         # try mirror that just worked
         if self.getDbFile("filelists"):
             for pkg in self._pkgs.itervalues():
-                if pkg.has_key("oldfilenames"):
-                    del pkg["oldfilenames"]
+                pkg.clearFilelist()
             return 1
         for uri in self.source:
             self.nc = NetworkCache(uri, os.path.join(self.config.cachedir, self.reponame))
             if not self.getDbFile("filelists"): continue
             for pkg in self._pkgs.itervalues():
                 if pkg.has_key("oldfilenames"):
-                    del pkg["oldfilenames"]
+                    pkg.clearFilelist()                    
             return 1
         return 0
             
