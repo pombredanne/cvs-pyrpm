@@ -286,6 +286,7 @@ class RpmController:
                         try:
                             if not self.config.justdb:
                                 pkg.install(self.db)
+                                self.__runTriggerIn(pkg) # Ignore errors
                             else:
                                 if self.config.printhash:
                                     self.config.printInfo(0, "\n")
@@ -295,17 +296,17 @@ class RpmController:
                             self.config.printError("Error installing %s: %s"
                                                    % (pkg.getNEVRA(), e))
                             sys.exit(1)
-                        self.__runTriggerIn(pkg) # Ignore errors
                         if self.__addPkgToDB(pkg) == 0:
                             self.config.printError("Couldn't add package %s "
                                                    "to database."
                                                    % pkg.getNEVRA())
                             sys.exit(1)
                     elif op == OP_ERASE:
-                        self.__runTriggerUn(pkg) # Ignore errors
                         try:
                             if not self.config.justdb:
+                                self.__runTriggerUn(pkg) # Ignore errors
                                 pkg.erase(self.db)
+                                self.__runTriggerPostUn(pkg) # Ignore errors
                             else:
                                 if self.config.printhash:
                                     self.config.printInfo(0, "\n")
@@ -315,7 +316,6 @@ class RpmController:
                             self.config.printError("Error erasing %s: %s"
                                                    % (pkg.getNEVRA(), e))
                             sys.exit(1)
-                        self.__runTriggerPostUn(pkg) # Ignore errors
                         if self.__erasePkgFromDB(pkg) == 0:
                             self.config.printError("Couldn't erase package %s "
                                                    "from database."
