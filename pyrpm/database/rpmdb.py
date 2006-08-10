@@ -40,6 +40,7 @@ class RpmDBPackage(package.RpmPackage):
 
     def __init__(self, config, source, verify=None, hdronly=None, db=None):
         self.indexdata = {}
+
         package.RpmPackage.__init__(self, config, source, verify, hdronly, db)
 
     def has_key(self, key):
@@ -58,9 +59,7 @@ class RpmDBPackage(package.RpmPackage):
         elif not self.indexdata.has_key(name):
             return None
         elif name in self.filetags:
-            if (not self.has_key('basenames') and
-                not self.has_key('oldfilenames')):
-                self.db.readTags(self, self.filetags)
+            self.db.readTags(self, self.filetags)
         else:
             self.db.readTags(self, {name : None})
         return self.get(name)
@@ -95,21 +94,17 @@ class RpmDB(db.RpmDatabase):
 
         self.path = self._getDBPath()
 
-        self.tags = {}
-        for tag in config.resolvertags:
-            if tag in ("providename", "provideflags", "provideversion",
-                       "requirename", "requireflags", "requireversion",
-                       "obsoletename", "obsoleteflags", "obsoleteversion",
-                       "conflictname", "conflictflags", "conflictversion",
-                       'oldfilenames', 'basenames', 'dirnames', 'dirindexes'):
-                continue
-            if tag.startswith("file"):
-                continue
-            self.tags[tag] = None
+        self.tags = {
+            "name" : None,
+            "epoch" : None,
+            "version" : None,
+            "release" : None,
+            "arch" : None,
+            }
 
     def __contains__(self, pkg):
         return hasattr(pkg, "db") and pkg.db is self and \
-               self.getPkgById(pkg["install_id"]) is pkg
+               self.getPkgById(pkg.key) is pkg
     
     # clear all structures
     def clear(self):
@@ -159,13 +154,12 @@ class RpmDB(db.RpmDatabase):
         return self.OK
 
     def _readObsoletes(self):
-        t1 = time.time()
         self.obsoletes_list = lists.ObsoletesList()
 
         for key, data in self.packages_db.iteritems():
             rpmio = io.RpmFileIO(self.config, "dummy")
             pkg = package.RpmPackage(self.config, "dummy")
-            pkg["install_id"] = key
+            pkg.key = key
             try:
                 val = unpack("I", key)[0]
             except struct.error:
@@ -210,7 +204,6 @@ class RpmDB(db.RpmDatabase):
                 pkg.pop("obsoleteversion", None)
                 pkg.pop("obsoletes")
         self.is_read = 1
-        print "Obsoletes took", time.time() - t1
         return self.OK
 
     def readRpm(self, key, db, tags):
@@ -774,7 +767,7 @@ class RpmDB(db.RpmDatabase):
             if id not in dirname_ids:
                 continue
             pkg = self.getPkgById(id)
-            if pkg and pkg["filenames"][idx] == filename:
+            if pkg and pkg.iterFilenames()[idx] == filename:
                 result.append(pkg)
             #elif pkg:
             #    print "dropping", pkg.getNEVRA(), pkg["filenames"][idx] 
@@ -792,9 +785,13 @@ class RpmDB(db.RpmDatabase):
         if self.obsoletes_list is None:
             self._readObsoletes()            
         
-        result = self.obsoletes_list.search(name, flag, version)
-        result = [self.getPkgById(pkg["install_id"]) for pkg in result]
-        return filter(None, result)
+        r = self.obsoletes_list.search(name, flag, version)
+        result = {}
+        for pkg, obsoletes in r.iteritems():
+            pkg = self.getPkgById(pkg.key)
+            if pkg is not None:
+                result[pkg] = obsoletes
+        return result
 
     def searchTriggers(self, name, flag, version):
         return self._search(self.triggername_db, "triggers",
