@@ -44,6 +44,7 @@ class RpmDBPackage(package.RpmPackage):
 
     def has_key(self, key):
         if self.indexdata.has_key(key): return True
+        if dict.has_key(self, key): return True
         return key in ('requires','provides','conflicts',
                        'obsoletes', 'triggers')
 

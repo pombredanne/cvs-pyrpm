@@ -35,6 +35,8 @@ class RpmMemoryDB(memorydb.RpmMemoryDB, rpmdb.RpmDB):
 
 
     open = rpmdb.RpmDB.open
+    close = rpmdb.RpmDB.close
+
         
     def read(self):
         # Never fails, attempts to recover as much as possible

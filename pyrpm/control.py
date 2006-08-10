@@ -205,6 +205,7 @@ class RpmController:
                     return 0
             else:
                 pid = 0
+            # parent process needs to keep its database up2date
             if pid != 0:
                 (rpid, status) = os.waitpid(pid, 0)
                 if status != 0:
@@ -235,6 +236,9 @@ class RpmController:
                         # Shouldn't really happen when pkg is open for reading,
                         # anyway.
                         pass
+                self.db.close() # reopen database to get working connections
+                self.db.open()
+            # really do the work
             else:
                 if self.config.buildroot:
                     del operations
