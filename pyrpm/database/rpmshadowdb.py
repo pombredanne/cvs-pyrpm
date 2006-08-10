@@ -32,7 +32,7 @@ class RpmDiskDB(rpmdb.RpmDB):
             return self.NOT_INSTALLED
 
 
-class RpmDB(jointdb.JointDB):
+class RpmShadowDB(jointdb.JointDB):
 
     def __init__(self, config, source, buildroot=None):
         jointdb.JointDB.__init__(self, config, source, buildroot)

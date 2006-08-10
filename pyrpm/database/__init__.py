@@ -22,7 +22,7 @@ import rpmdb
 import rpmmemorydb
 import repodb
 import sqlitedb
-#import rpmshadowdb
+import rpmshadowdb
 #import directorydb
 
 def getRpmDBFactory(config, source, root=None):
