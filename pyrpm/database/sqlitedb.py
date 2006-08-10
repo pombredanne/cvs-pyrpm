@@ -148,6 +148,8 @@ class SqliteDB(repodb.RpmRepoDB):
         PKG2DB[v] = k
     
 
+    tags = 'pkgKey, name, arch, version, epoch, release, location_href'
+
     def __init__(self, config, source, buildroot=None, yumconf = None,
                  reponame="default"):
         db.RpmDatabase.__init__(self, config, source, buildroot)
@@ -186,6 +188,7 @@ class SqliteDB(repodb.RpmRepoDB):
         self._filelistsdb = None
         self._othersdb = None
         self._pkgs = { }
+        
 
     def create(self, filename):
         """Create an initial database"""
@@ -524,11 +527,27 @@ class SqliteDB(repodb.RpmRepoDB):
             return 1
         return 0
             
-    def read_rpm(self, pkgKey):
+    def readRpm(self, pkgKey):
         cur = self._primarydb.cursor()
-        cur.execute('select * from packages where pkgKey="%s"' % pkgKey)
+        cur.execute('select %s from packages where pkgKey="%s"' %
+                    (self.tags, pkgKey))
         ob = cur.fetchone()
         pkg = self._buildRpm(ob)
+        return pkg
+
+    def _buildRpm(self, data):
+        pkg = SqliteRpmPackage(self.config, source='', db=self)
+        pkg.yumrepo = self
+        for key in data.keys():
+            name = self.DB2PKG.get(key, key)
+            val = data[key]
+            if val is not None and name in base.rpmtag:
+                pkg[name] = val
+        pkg['pkgKey'] = data['pkgKey']
+        pkg['epoch'] = [int(pkg['epoch'])]    
+        pkg.source = data['location_href']
+        pkg.issrc = 0
+        pkg["triggers"] = []
         return pkg
 
     def getFiles(self, pkg):
@@ -568,21 +587,6 @@ class SqliteDB(repodb.RpmRepoDB):
             ob['epoch'], ob['version'], ob['release']))
                 for ob in cur.fetchall()]
     
-    def _buildRpm(self, data):
-        pkg = SqliteRpmPackage(self.config, source='', db=self)
-        pkg.yumrepo = self
-        for key in data.keys():
-            name = self.DB2PKG.get(key, key)
-            val = data[key]
-            if val is not None and name in base.rpmtag:
-                pkg[name] = val
-        pkg['pkgKey'] = data['pkgKey']
-        pkg['epoch'] = [int(pkg['epoch'])]    
-        pkg.source = data['location_href']
-        pkg.issrc = 0
-        pkg["triggers"] = []
-        return pkg
-
     # add package
     def addPkg(self, pkg, nowrite=None):
         if self._isExcluded(pkg):
@@ -635,7 +639,7 @@ class SqliteDB(repodb.RpmRepoDB):
     def getPkgByKey(self, pkgKey):
         if self._pkgs.has_key(pkgKey):
             return self._pkgs[pkgKey]
-        pkg = self.read_rpm(pkgKey)
+        pkg = self.readRpm(pkgKey)
         if pkg:
             self._pkgs[pkgKey] = pkg
         return pkg
