@@ -303,7 +303,9 @@ class RpmYum:
                 # matching package again as we allow arch switches to 64bit
                 # for updates.
                 if not is_multi:
-                    ret |= self.__handleBestPkg("update", pkgnamehash[name], do_obsolete=do_obsolete)
+                    l = self._filterPkgVersion(max(dbpkgs), pkgnamehash[name])
+                    ret |= self.__handleBestPkg("update", l,
+                                                do_obsolete=do_obsolete)
                     continue
                 # OK, we have several archs for this package installed, we now
                 # need to filter them to 32bit and 64bit buckets and later
@@ -343,10 +345,7 @@ class RpmYum:
                     return 0
 
                 # Filter packages with lower versions from our final list
-                l = []
-                for p in pkgnamearchhash[name][arch]:
-                    if pkgCompare(ipkg, p) < 0:
-                        l.append(p)
+                l = self._filterPkgVersion(ipkg, pkgnamearchhash[name][arch])
                 # Find the best matching package for the given list of packages
                 # and archs.
                 r = self.__handleBestPkg("update", l, march, self.config.exactarch, do_obsolete=do_obsolete)
@@ -360,6 +359,13 @@ class RpmYum:
                 # it once we clear the update package list.
                 pkgnamearchhash[name][arch] = []
         return ret
+
+    def _filterPkgVersion(self, pkg, pkglist):
+        l = []
+        for p in pkglist:
+            if pkgCompare(pkg, p) < 0:
+                l.append(p)
+        return l
 
     def groupUpdate(self, name):
         args = self.getGroupPackages(name)
