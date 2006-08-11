@@ -736,17 +736,17 @@ class RpmDB(db.RpmDatabase):
         for id, idx in self.iterIdIdx(data):
             pkg = self.getPkgById(id)
             if not pkg: continue
-            name_, flag_, version_ = pkg[attr][idx]
+            dep = pkg[attr][idx]
+            name_, flag_, version_ = dep[:3] 
             if version == "":
-                result.setdefault(pkg, [ ]).append((name_, flag_, version_))
+                result.setdefault(pkg, [ ]).append(dep)
             elif functions.rangeCompare(flag, evr,
                                         flag_, functions.evrSplit(version_)):
-                result.setdefault(pkg, [ ]).append((name_, flag_, version_))
+                result.setdefault(pkg, [ ]).append(dep)
             elif version_ == "": # compare with package version for unversioned provides
                 evr2 = (pkg.getEpoch(), pkg["version"], pkg["release"])
                 if functions.evrCompare(evr2, flag, evr):
-                    result.setdefault(pkg, [ ]).append(
-                        (name_, flag_, version_))
+                    result.setdefault(pkg, [ ]).append(dep)
         return result
 
     def searchProvides(self, name, flag, version):
