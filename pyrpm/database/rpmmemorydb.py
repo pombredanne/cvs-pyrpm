@@ -32,7 +32,8 @@ class RpmMemoryDB(memorydb.RpmMemoryDB, rpmdb.RpmDB):
             if tag.startswith("file"):
                 continue
             self.tags[tag] = None
-
+        del self.obsoletes_list # set in rpmdb.RpmDB.__init__
+                                # but needs to be removed to get auto created
 
     open = rpmdb.RpmDB.open
     close = rpmdb.RpmDB.close
