@@ -144,7 +144,6 @@ class RpmDatabase:
         """Return list of RpmPackages from self.names providing
         (name, RPMSENSE_* flag, EVR string) dep."""
         s = self.searchProvides(name, flag, version).keys()
-        
         if name[0] == '/': # all filenames are beginning with a '/'
             s += self.searchFilenames(name)
         return s

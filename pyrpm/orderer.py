@@ -539,7 +539,7 @@ class ConnectedComponent:
         if self.relations[pkg1].pre[pkg2]:
             self.config.printError("Breaking pre requirement for %s: %s" %
                                    (pkg1.getNEVRA(), pkg2.getNEVRA()))
-            
+
         # remove this requirement
         self.relations.removeRelation(pkg1, pkg2)
 
@@ -551,7 +551,7 @@ class ConnectedComponent:
 
         # collect nodes
         self.processLeafNodes(order)
-        
+
 # ----------------------------------------------------------------------------
 
 class ConnectedComponentsDetector:

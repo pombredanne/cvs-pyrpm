@@ -38,7 +38,7 @@ class RpmMemoryDB(memorydb.RpmMemoryDB, rpmdb.RpmDB):
     open = rpmdb.RpmDB.open
     close = rpmdb.RpmDB.close
 
-        
+
     def read(self):
         # Never fails, attempts to recover as much as possible
         if self.is_read:
@@ -71,5 +71,5 @@ class RpmMemoryDB(memorydb.RpmMemoryDB, rpmdb.RpmDB):
         if result:
             memorydb.RpmMemoryDB.removePkg(self, pkg)
         return result
-    
+
 # vim:ts=4:sw=4:showmatch:expandtab

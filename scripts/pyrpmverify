@@ -94,8 +94,8 @@ def _usage():
     print """pyrpmverify [--diff] [PACKAGE]...
 
 Options:
-  [--diff]		Show diffs for of modified files
-  [--verifyallconfig]	Force verification of all config files
+  [--diff]              Show diffs for of modified files
+  [--verifyallconfig]   Force verification of all config files
 
 See (pyrpmyum --help) for other options.
 """
@@ -117,7 +117,7 @@ def main():
     resolver = RpmResolver(rpmconfig, db, True)
     if args:
         packages = []
-        for name in args:            
+        for name in args:
             found = db.searchPkgs(name)
             if found:
                 packages.extend(found)

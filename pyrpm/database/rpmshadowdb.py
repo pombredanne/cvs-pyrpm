@@ -51,14 +51,14 @@ class RpmShadowDB(jointdb.JointDB):
             if result == self.OK:
                 return result
         return result
-        
+
     def removePkg(self, pkg):
         for db in self.dbs:
             result = db.removePkg(pkg)
             if result == self.OK:
                 return result
         return result
-            
+
     def load_into_ram(self):
         if len(self.dbs) == 1: return
         self.memorydb.addPkgs(self.diskdb.getPkgs())

@@ -34,7 +34,7 @@ class JointDB(db.RpmDatabase):
 
     def __init__(self, config, source, buildroot=None):
         self.dbs = []
-        
+
         self.config = config
         self.source = source
         self.buildroot = buildroot
@@ -87,7 +87,7 @@ class JointDB(db.RpmDatabase):
                 else:
                     result[key] = pkgs
         return result
-    
+
     # add package
     def addPkg(self, pkg):
         raise NotImplementedError
@@ -119,7 +119,7 @@ class JointDB(db.RpmDatabase):
             if db.hasName(name):
                 return True
         return False
-    
+
     def getPkgsByName(self, name):
         result = []
         for db in self.dbs:
@@ -161,7 +161,7 @@ class JointDB(db.RpmDatabase):
         for db in self.dbs:
             result.extend(db.getFileRequires())
         return result
-                
+
     def iterProvides(self):
         return chain(*[db.iterProvides() for db in self.dbs])
 
@@ -204,7 +204,7 @@ class JointDB(db.RpmDatabase):
         return self._merge_search_results(
             [db.searchObsoletes(name, flag, version)
              for db in self.dbs])
-    
+
     def searchTriggers(self, name, flag, version):
         return self._merge_search_results(
             [db.searchTriggers(name, flag, version)

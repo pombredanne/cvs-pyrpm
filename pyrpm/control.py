@@ -398,7 +398,7 @@ class RpmController:
         """Run %triggerin scripts after installation of RpmPackage pkg.
         Return 1 on success, 0 on failure."""
         return self.__runTrigger(pkg, RPMSENSE_TRIGGERIN, False, "in")
-    
+
     def __runTriggerUn(self, pkg):
         """Run %triggerun scripts before removal of RpmPackage pkg.
         Return 1 on success, 0 on failure."""
@@ -433,7 +433,7 @@ class RpmController:
     def __executeTriggers(self, tlist, triggername, tnumPkgs):
         """execute a list of given triggers
         Return 1 on success, 0 on failure."""
-        
+
         result = 1
         for spkg, l in tlist.iteritems():
             snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
@@ -451,7 +451,7 @@ class RpmController:
         """Execute all triggers of matching "flag" of a package
         that are tiggered by the package itself
         Return 1 on success, 0 on failure."""
-        
+
         result = 1
         evr = (pkg.getEpoch(), pkg["version"], pkg["release"])
         for name, f, v, prog, script in pkg["triggers"]:
@@ -465,6 +465,6 @@ class RpmController:
                         "%s: Error running trigger %s script: %s" %
                         (pkg.getNEVRA(), triggername, e))
                     result = 0
-        return result                   
-                            
+        return result
+
 # vim:ts=4:sw=4:showmatch:expandtab

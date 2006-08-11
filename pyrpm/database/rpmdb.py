@@ -55,7 +55,7 @@ class RpmDBPackage(package.RpmPackage):
         if name in ('requires','provides','conflicts','obsoletes', 'triggers'):
             tags = [name[:-1] + suffix for suffix in
                     ("name", "flags", "version")]
-            self.db.readTags(self, tags)        
+            self.db.readTags(self, tags)
         elif not self.indexdata.has_key(name):
             return None
         elif name in self.filetags:
@@ -76,11 +76,11 @@ class RpmDBPackage(package.RpmPackage):
         else:
             self[key] = value
             return value
-        
+
 class RpmDB(db.RpmDatabase):
 
     zero = pack("I", 0)
-    
+
     def __init__(self, config, source, buildroot=None):
         db.RpmDatabase.__init__(self, config, source, buildroot)
         # Correctly initialize the tscolor based on the current arch
@@ -105,12 +105,12 @@ class RpmDB(db.RpmDatabase):
     def __contains__(self, pkg):
         return hasattr(pkg, "db") and pkg.db is self and \
                self.getPkgById(pkg.key) is pkg
-    
+
     # clear all structures
     def clear(self):
         self.obsoletes_list = None
         self._pkgs.clear()
-        
+
     def setBuildroot(self, buildroot):
         """Set database chroot to buildroot."""
         self.buildroot = buildroot
@@ -239,7 +239,7 @@ class RpmDB(db.RpmDatabase):
             if rpmtagname.has_key(idx[0]):
                 indexdata[rpmtagname[idx[0]]] = idx
         pkg.indexdata = indexdata
-        
+
         storedata = data[indexNo*16+8:]
         pkg["signature"] = {}
 
@@ -271,16 +271,16 @@ class RpmDB(db.RpmDatabase):
         pkg.io = None
         pkg.header_read = 1
         return pkg
-        
 
-    def readTags(self, pkg, tags, storedata=None): 
+
+    def readTags(self, pkg, tags, storedata=None):
         rpmio = io.RpmFileIO(self.config, "dummy")
 
         if storedata is None:
             data = self.packages_db[pkg.key]
             storedata = data[len(pkg.indexdata)*16+8:]
 
-        
+
         for tag in tags:
             if pkg.indexdata.has_key(tag):
                 index = pkg.indexdata[tag]
@@ -292,7 +292,7 @@ class RpmDB(db.RpmDatabase):
                 self.config.printError("Invalid header entry %s in %s: %s"
                                        % (idx, key, e))
                 return 0
-                                            
+
             if tag == "archivesize":
                 pkg["signature"]["payloadsize"] = tagval
             else:
@@ -300,7 +300,7 @@ class RpmDB(db.RpmDatabase):
             if tag.startswith("install_"):
                 pkg["signature"][tag[8:]] = tagval
 
-        
+
         try:
             if "basenames" in tags and pkg.has_key("oldfilenames"):
                 pkg.generateFileNames()
@@ -642,7 +642,7 @@ class RpmDB(db.RpmDatabase):
         data = self.name_db.get(name, '')
         result = [self.getPkgById(id) for id in self.iterId(data)]
         return filter(None, result)
-            
+
     def getPkgs(self):
         result = [self.getPkgById(key) for key in self.packages_db.keys()]
         return filter(None, result)
@@ -675,8 +675,8 @@ class RpmDB(db.RpmDatabase):
     def getFilenames(self):
         raise NotImplementedError
 
-    def numFileDuplicates(self, filename):        
-        dirname, basename = os.path.split(filename)
+    def numFileDuplicates(self, filename):
+        (dirname, basename) = os.path.split(filename)
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
         nr = 0
@@ -690,7 +690,7 @@ class RpmDB(db.RpmDatabase):
 
     def getFileRequires(self):
         return [name for name in self.requirename_db if name[0]=='/']
-        
+
     def getFileDuplicates(self):
         import time
         t1 = time.time()
@@ -708,7 +708,7 @@ class RpmDB(db.RpmDatabase):
                 del duplicates[filename]
         print "done", time.time()-t1
         return duplicates
-                            
+
     def iterRequires(self):
         return self._iter("requires")
 
@@ -729,7 +729,7 @@ class RpmDB(db.RpmDatabase):
 
     def reloadDependencies(self):
         self.obsoletes_list = None
-    
+
     def _search(self, db, attr, name, flag, version):
         data = db.get(name, '')
         result = {}
@@ -738,7 +738,7 @@ class RpmDB(db.RpmDatabase):
             pkg = self.getPkgById(id)
             if not pkg: continue
             dep = pkg[attr][idx]
-            name_, flag_, version_ = dep[:3] 
+            name_, flag_, version_ = dep[:3]
             if version == "":
                 result.setdefault(pkg, [ ]).append(dep)
             elif functions.rangeCompare(flag, evr,
@@ -771,7 +771,7 @@ class RpmDB(db.RpmDatabase):
             if pkg and pkg.iterFilenames()[idx] == filename:
                 result.append(pkg)
             #elif pkg:
-            #    print "dropping", pkg.getNEVRA(), pkg["filenames"][idx] 
+            #    print "dropping", pkg.getNEVRA(), pkg["filenames"][idx]
         return result
 
     def searchRequires(self, name, flag, version):
@@ -784,8 +784,8 @@ class RpmDB(db.RpmDatabase):
 
     def searchObsoletes(self, name, flag, version):
         if self.obsoletes_list is None:
-            self._readObsoletes()            
-        
+            self._readObsoletes()
+
         r = self.obsoletes_list.search(name, flag, version)
         result = {}
         for pkg, obsoletes in r.iteritems():
@@ -841,14 +841,14 @@ class RpmDB(db.RpmDatabase):
 
     def _getDBPath(self):
         """Return a physical path to the database."""
-        
+
         if   self.source[:6] == 'pydb:/':
             tsource = self.source[6:]
         elif self.source[:7] == 'rpmdb:/':
             tsource = self.source[7:]
         else:
             tsource = self.source
-            
+
         if self.buildroot != None:
             return self.buildroot + tsource
         else:

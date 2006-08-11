@@ -199,7 +199,7 @@ class RpmYum:
                 self.config.printInfo(0, "Reading local RPM database took %s seconds\n" % (clock() - time1))
         if self.config.timer:
             time1 = clock()
-                            
+
 
         if localDb:
             db = database.memorydb.RpmMemoryDB(self.config, None)
@@ -208,10 +208,10 @@ class RpmYum:
             db = database.rpmshadowdb.RpmShadowDB(self.config,
                                                   self.config.dbpath,
                                                   self.config.buildroot)
-            
+
         for pkg in db.searchProvides("redhat-release", 0, ""):
             rpmconfig.relver = pkg["version"]
-            
+
         for yumconf in self.config.yumconf:
             if os.path.isfile(yumconf):
                 if not self.repos_read and not self.command == "remove":
@@ -224,7 +224,7 @@ class RpmYum:
         self.__generateObsoletesList()
         if self.config.timer:
             self.config.printInfo(0, "Preparing transaction took %s seconds\n" % (clock() - time1))
-                            
+
         return 1
 
     def getGroupPackages(self, name):
@@ -429,7 +429,7 @@ class RpmYum:
             pkglist.extend(repo.getPkgsByName(name))
         normalizeList(pkglist)
         return pkglist
-                                    
+
 
     def __handleBestPkg(self, cmd, pkglist, arch=None, exactarch=False, is_filereq=0, do_obsolete=True):
         # Handle removes directly here, they don't need any special handling.
@@ -477,7 +477,7 @@ class RpmYum:
                 # Now we need to replace the fitting package with the newest
                 # version available (which could be the same).
                 upkg = pkgnamehash[upkg["name"]]
-                # "fake" Source RPMS to be noarch rpms without any reqs/deps 
+                # "fake" Source RPMS to be noarch rpms without any reqs/deps
                 # etc. except if we want pyrpmyum to install the buildprereqs
                 # from the srpm.
                 if upkg.isSourceRPM():

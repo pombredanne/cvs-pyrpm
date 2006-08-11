@@ -397,7 +397,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
            not pkg.isSourceRPM():
                 self.config.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
                 return 1
-            
+
         index = lists.NevraList()
         index.addPkg(pkg)
         result = index.search(self.excludes)
@@ -933,12 +933,12 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     break
                 pkg["oldfilenames"].append(Valuef())
             else:
-                for tag in ("provide", "require", "obsolete", "conflict"): 
+                for tag in ("provide", "require", "obsolete", "conflict"):
                     if name != "rpm:%ss" % tag: continue
                     plist = self.__parseDeps(reader, name)
                     (pkg[tag + 'name'], pkg[tag + 'flags'],
                      pkg[tag + 'version']) = plist
-                    
+
                 for pkgtag, xmltag in (("license", "rpm:license"),
                                        ("sourcerpm", "rpm:sourcerpm"),
                                        ("vendor", "rpm:vendor"),

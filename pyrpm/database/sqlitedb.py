@@ -1,4 +1,4 @@
-# Copyright 2005 Duke University 
+# Copyright 2005 Duke University
 # Copyright (C) 2006 Red Hat, Inc.
 # Authors: Florian Festi <ffesti@redhat.com>
 #
@@ -53,13 +53,13 @@ class SqliteRpmPackage(package.RpmPackage):
         elif name in ('requires','provides','conflicts','obsoletes'):
             return True
         return False
-        
+
     def __getitem__(self, name):
         if dict.has_key(self, name):
-            return dict.get(self, name)            
+            return dict.get(self, name)
         if name in ('requires','provides','conflicts','obsoletes'):
             deps = self.yumrepo.getDependencies(name, self['pkgKey'])
-            self[name] = deps 
+            self[name] = deps
             return deps
         if (name in ('basenames', 'dirnames', 'dirindexes', 'oldfilenames') and
             not self.filesloaded):
@@ -88,8 +88,8 @@ class SqliteRpmPackage(package.RpmPackage):
         self.filesloaded = False
         for tag in ('basenames', 'dirnames', 'dirindexes', 'oldfilenames'):
             if dict.has_key(self, tag):
-                del self[tag]        
-    
+                del self[tag]
+
 class SqliteDB(repodb.RpmRepoDB):
     COLUMNS = (
             'pkgId',
@@ -122,9 +122,9 @@ class SqliteDB(repodb.RpmRepoDB):
 
     DB2PKG = {
         # 'time_file' : '' # -> pkg.time_file
-        'time_build' : 'buildtime', 
+        'time_build' : 'buildtime',
         'rpm_buildhost' : 'buildhost',
-        
+
         'rpm_license': 'license',
         'rpm_vendor': 'vendor',
         'rpm_group': 'group',
@@ -136,7 +136,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
         # 'size_package' : '' pkg.sizes[]
         # 'size_installed' : ''
-        # 'size_archive' : '', 
+        # 'size_archive' : '',
 
         # 'location_href' : '', pkg.source
         # 'location_base' : '', ''
@@ -146,7 +146,7 @@ class SqliteDB(repodb.RpmRepoDB):
     PKG2DB = { }
     for k, v in DB2PKG.iteritems():
         PKG2DB[v] = k
-    
+
 
     tags = 'pkgKey, name, arch, version, epoch, release, location_href'
 
@@ -188,11 +188,11 @@ class SqliteDB(repodb.RpmRepoDB):
         self._filelistsdb = None
         self._othersdb = None
         self._pkgs = { }
-        
+
 
     def create(self, filename):
         """Create an initial database"""
-        
+
         # If it exists, remove it as we were asked to create a new one
         if (os.path.exists(filename)):
             try:
@@ -204,7 +204,7 @@ class SqliteDB(repodb.RpmRepoDB):
         # this fails
         try:
             f = open(filename,'w')
-            return sqlite.connect(filename) 
+            return sqlite.connect(filename)
         except IOError:
             self.config.printWarning(1, "Could not create sqlite cache file, using in memory cache instead")
             return sqlite.connect(":memory:")
@@ -223,8 +223,8 @@ class SqliteDB(repodb.RpmRepoDB):
                 }
         val = self.insertHash("db_info", data, cur)
         db.commit()
-        
-        
+
+
     def insertHash(self, table, hash, cursor):
         """Insert the key value pairs in hash into a database table"""
 
@@ -248,9 +248,9 @@ class SqliteDB(repodb.RpmRepoDB):
         query += ")"
         cursor.execute(query)# XXX ??? .encode('utf8'))
         return cursor.lastrowid
-    
+
     def loadCache(self, filename):
-        """Load cache from filename, check if it is valid and that dbversion 
+        """Load cache from filename, check if it is valid and that dbversion
         matches the required dbversion"""
         db = sqlite.connect(filename)
         cur = db.cursor()
@@ -267,13 +267,13 @@ class SqliteDB(repodb.RpmRepoDB):
             self.config.printInfo(2, "Cache file is version %s, we need %s, will regenerate", info['dbversion'], dbversion)
             raise sqlite.DatabaseError, "Older version of yum sqlite: %s" % info['dbversion']
 
-        # This appears to be a valid database, return checksum value and 
+        # This appears to be a valid database, return checksum value and
         # database object
         self.config.printInfo(1, "Loaded %s\n" % filename)
         return (info['checksum'], db)
-    
+
     def createFilelistsTables(self):
-        """Create the required tables for filelists metadata in the sqlite 
+        """Create the required tables for filelists metadata in the sqlite
            database"""
         cur = self._filelistsdb.cursor()
         self.createDbInfo(cur)
@@ -291,9 +291,9 @@ class SqliteDB(repodb.RpmRepoDB):
         cur.execute("CREATE INDEX keyfile ON filelist (pkgKey)")
         cur.execute("CREATE INDEX pkgId ON packages (pkgId)")
         self._filelistsdb.commit()
-    
+
     def createOthersTables(self):
-        """Create the required tables for other.xml.gz metadata in the sqlite 
+        """Create the required tables for other.xml.gz metadata in the sqlite
            database"""
         cur = self._othersdb.cursor()
         self.createDbInfo(cur)
@@ -313,9 +313,9 @@ class SqliteDB(repodb.RpmRepoDB):
         self._othersdb.commit()
 
 
-        
+
     def createPrimaryTables(self):
-        """Create the required tables for primary metadata in the sqlite 
+        """Create the required tables for primary metadata in the sqlite
            database"""
 
         cur = self._primarydb.cursor()
@@ -361,7 +361,7 @@ class SqliteDB(repodb.RpmRepoDB):
     def open(self):
         """If the database keeps a connection, prepare it."""
         return 1
-    
+
     def close(self):
         """If the database keeps a connection, close it."""
         for db in (self._primarydb, self._filelistsdb, self._othersdb):
@@ -396,7 +396,7 @@ class SqliteDB(repodb.RpmRepoDB):
                 return 1
 
         # try to get %dbtype.xml.gz.sqlite.bz2 from repository
-        for force in [0, 1]:            
+        for force in [0, 1]:
             filenamebz2 = self.nc.cache(
                 "repodata/%s.xml.gz.sqlite.bz2" % dbtype, force)
             if not filenamebz2:
@@ -462,7 +462,7 @@ class SqliteDB(repodb.RpmRepoDB):
                 self.createFilelistsTables()
             elif dbtype == 'other':
                 self.createOthersTables()
-            
+
             try:
                 reader = libxml2.newTextReaderFilename(filename)
             except libxml2.libxmlError:
@@ -475,7 +475,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
     def readPrimary(self):
         return self.getDbFile("primary")
-    
+
     def addFilesToPkg(self, name, epoch, version, release, arch, filelist,
                       filetypelist):
         """Add a package to the filelists cache"""
@@ -493,12 +493,12 @@ class SqliteDB(repodb.RpmRepoDB):
         pkgId = op["pkgId"]
         if self._pkgs.has_key(pkgKey):
             self._pkgs[pkgKey]['oldfilenames'] = filelist
-       
+
         dirs = {}
         for filename, ftype in zip(filelist, filetypelist):
-            (dirname,filename) = (os.path.split(filename))
-            if (not dirs.has_key(dirname)):
-                dirs[dirname] = {'files' : [], 'types' : []}    
+            (dirname, filename) = os.path.split(filename)
+            if not dirs.has_key(dirname):
+                dirs[dirname] = {'files' : [], 'types' : []}
             dirs[dirname]['files'].append(filename)
             dirs[dirname]['types'].append(ftype[0])
 
@@ -523,10 +523,10 @@ class SqliteDB(repodb.RpmRepoDB):
             if not self.getDbFile("filelists"): continue
             for pkg in self._pkgs.itervalues():
                 if pkg.has_key("oldfilenames"):
-                    pkg.clearFilelist()                    
+                    pkg.clearFilelist()
             return 1
         return 0
-            
+
     def readRpm(self, pkgKey):
         cur = self._primarydb.cursor()
         cur.execute('select %s from packages where pkgKey="%s"' %
@@ -544,7 +544,7 @@ class SqliteDB(repodb.RpmRepoDB):
             if val is not None and name in base.rpmtag:
                 pkg[name] = val
         pkg['pkgKey'] = data['pkgKey']
-        pkg['epoch'] = [int(pkg['epoch'])]    
+        pkg['epoch'] = [int(pkg['epoch'])]
         pkg.source = data['location_href']
         pkg.issrc = 0
         pkg["triggers"] = []
@@ -586,7 +586,7 @@ class SqliteDB(repodb.RpmRepoDB):
         return [(ob['name'], self.flagmap[ob['flags']], functions.evrMerge(
             ob['epoch'], ob['version'], ob['release']))
                 for ob in cur.fetchall()]
-    
+
     # add package
     def addPkg(self, pkg, nowrite=None):
         if self._isExcluded(pkg):
@@ -612,7 +612,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
         pkgKey = self.insertHash('packages', data, cur)
 
-        
+
         for tag in ('requires','provides','conflicts','obsoletes'):
             for  n, f, v in pkg[tag]:
                 epoch, version, release = functions.evrSplitString(v)
@@ -631,7 +631,7 @@ class SqliteDB(repodb.RpmRepoDB):
         for f, t in  zip(pkg.iterFilenames(), pkg.filetypelist):
             self.insertHash(
                 'files', {'name' : f, 'type' : t[0], 'pkgKey' : pkgKey}, cur)
-                        
+
     # remove package
     def removePkg(self, pkg, nowrite=None):
         raise NotImplementedError
@@ -674,7 +674,7 @@ class SqliteDB(repodb.RpmRepoDB):
         cur.execute('select pkgKey from packages where name="%s"' % name)
         result = [self.getPkgByKey(ob['pkgKey']) for ob in cur.fetchall()]
         return filter(None, result)
-        
+
     def getFilenames(self):
         raise NotImplementedError
 
@@ -748,7 +748,7 @@ class SqliteDB(repodb.RpmRepoDB):
                                 break
         #normalizeList(result)
         return result
-        
+
     def _search(self, attr_table, name, flag, version):
         """return list of packages having prcotype name (any evr and flag)"""
         result = { }
@@ -819,22 +819,22 @@ class SqliteDB(repodb.RpmRepoDB):
         if not self._filelistsdb:
             return result
 
-        cur = self._filelistsdb.cursor() 
+        cur = self._filelistsdb.cursor()
         (dirname, filename) = os.path.split(name)
         if name.find('%') == -1: # no %'s in the thing safe to LIKE
             cur.execute("SELECT * FROM filelist WHERE "
                         'dirname="%s" AND filenames LIKE "%%%s%%"' %
                         (dirname,filename))
-        else: 
+        else:
             cur.execute('SELECT * FROM filelist where dirname="%s"' % dirname)
 
         files = cur.fetchall()
-            
+
         for res in files:
             quicklookup = {}
             if filename and not filename in res['filenames'].split('/'):
                 continue
-                
+
             pkg = self.getPkgByKey(res['pkgKey'])
             if pkg:
                 result.append(pkg)

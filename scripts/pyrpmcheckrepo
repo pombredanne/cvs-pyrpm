@@ -94,11 +94,11 @@ def print_dict(d, message, options):
     else:
         for nevra in d:
             print nevra
-    
+
 
 def print_results(options, install, installed, update, updated):
     print_files = options["--files"]
-    
+
     install = tuples2dict([(p.getNEVRA(), p) for p in install])
     installed = tuples2dict([(p.getNEVRA(), p) for p in installed])
     update = tuples2dict([(p.getNEVRA(), p) for p in update])
@@ -177,7 +177,7 @@ def main():
             # if nothing to output
             # restore old behavior
             output_options["--leftover"] = 1
-            
+
     args = parseYumOptions(sys.argv[nr:], yum)
     if not args:
         usage()
@@ -237,7 +237,7 @@ def main():
 
     update = {}
     for repo in yum.repos:
-        addlist2dict(update, repo.getPkgs())        
+        addlist2dict(update, repo.getPkgs())
 
     updated = yum.opresolver.getDatabase().getPkgs()
 

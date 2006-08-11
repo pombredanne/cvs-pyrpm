@@ -129,7 +129,7 @@ class RpmMemoryDB(db.RpmDatabase):
 
     def getFileDuplicates(self):
         return self.filenames_list.duplicates()
-    
+
     def iterProvides(self):
         return iter(self.provides_list)
 
@@ -172,7 +172,7 @@ class RpmMemoryDB(db.RpmDatabase):
 
     def searchPkgs(self, names):
         return self.nevra_list.search(names)
-    
+
     def _getDBPath(self):
         """Return a physical path to the database."""
 

@@ -2712,7 +2712,7 @@ def main():
 #    # TODO: checkinstalled for upgrade?
 #    # TODO: honor user_arch
 #    yum = RpmYum(config)
-#    
+#
 #    lockfile = lockPyrpm()
 #    if lockfile == None:
 #        printError("couldn't lock pyrpmyum")
