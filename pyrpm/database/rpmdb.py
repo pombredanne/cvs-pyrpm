@@ -680,10 +680,11 @@ class RpmDB(db.RpmDatabase):
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
         nr = 0
-        for id, idx in self.iterId(self.basenames_db.get(basename), ''):
+        for id, idx in self.iterIdIdx(self.basenames_db.get(basename, '')):
             pkg = self.getPkgById(id)
-            if not pkg: continue
-            if pk["filenames"][idx] == filename:
+            if not pkg:
+                continue
+            if pkg.iterFilenames()[idx] == filename:
                 nr += 1
         return nr
 
