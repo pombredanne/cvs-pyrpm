@@ -1209,14 +1209,12 @@ def labelCompare(e1, e2):
     Return an integer with the same sign as (e1 - e2).  If either of the tuples
     has empty release, ignore releases in comparison."""
 
-    if e2[2] == "": # no release
-        e1 = (e1[0], e1[1], "")
-    elif e1[2] == "": # no release
-        e2 = (e2[0], e2[1], "")
     r = stringCompare(e1[0], e2[0])
     if r == 0:
         r = stringCompare(e1[1], e2[1])
         if r == 0:
+            if e1[2] == "" or e2[2] == "": # no release
+                return 0
             r = stringCompare(e1[2], e2[2])
     return r
 
