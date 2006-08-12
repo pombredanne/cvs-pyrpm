@@ -106,7 +106,7 @@ import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
 import os, os.path, pwd, grp, zlib, gzip, errno, re, fnmatch, glob, time
-import md5, sha
+import md5, sha, signal
 from types import DictType, IntType, ListType
 from struct import pack, unpack
 try:
@@ -354,6 +354,24 @@ def getChecksum(fd, digest="md5"):
 
 def getMD5(fpath):
     return getChecksum(fpath, "md5")
+
+supported_signals = [signal.SIGINT, signal.SIGTERM, signal.SIGHUP]
+#supported_signals.extend([signal.SIGSEGV, signal.SIGBUS, signal.SIGABRT,
+# signal.SIGILL, signal.SIGFPE])
+
+def setSignals(handler, supported_signals2):
+    signals = {}
+    for key in supported_signals2:
+        signals[key] = signal.signal(key, handler)
+    return signals
+
+def blockSignals():
+    #global supported_signals
+    return setSignals(signal.SIG_IGN, supported_signals)
+
+def resetSignals(signals):
+    for (key, value) in signals.iteritems():
+        signal.signal(key, value)
 
 
 # Optimized routines that use zlib to extract data, since
@@ -1345,7 +1363,7 @@ class CPIO:
             self.size -= size + pad
         return data
 
-    def readCpio(self, func, filenamehash, devinode, filenames, extract):
+    def readCpio(self, func, filenamehash, devinode, filenames, extract, db):
         while 1:
             # (magic, inode, mode, uid, gid, nlink, mtime, filesize,
             # devMajor, devMinor, rdevMajor, rdevMinor, namesize, checksum)
@@ -1371,7 +1389,7 @@ class CPIO:
                 filename = filename[:-1]
             if extract:
                 func(filename, int(data[54:62], 16), self.__readDataPad,
-                    filenamehash, devinode, filenames)
+                    filenamehash, devinode, filenames, db)
             else:
                 # (name, inode, mode, nlink, mtime, filesize, dev, rdev)
                 filedata = (filename, int(data[6:14], 16),
@@ -1380,7 +1398,7 @@ class CPIO:
                     int(data[62:70], 16) * 256 + int(data[70:78], 16),
                     int(data[78:86], 16) * 256 + int(data[86:94], 16))
                 func(filedata, self.__readDataPad, filenamehash, devinode,
-                    filenames)
+                    filenames, db)
         return None
 
 
@@ -1695,7 +1713,7 @@ class ReadRpm:
         #    self[i] = y
         return None
 
-    def verifyCpio(self, filedata, read_data, filenamehash, devinode, _):
+    def verifyCpio(self, filedata, read_data, filenamehash, devinode, _, db):
         # Overall result is that apart from the filename information
         # we should not depend on any data from the cpio header.
         # Data is also stored in rpm tags and the cpio header has
@@ -1779,7 +1797,7 @@ class ReadRpm:
                             % (filename, ctx.hexdigest(), md5sum))
 
     def extractCpio(self, filename, datasize, read_data, filenamehash,
-            devinode, filenames):
+            devinode, filenames, db):
         data = ""
         if datasize:
             data = read_data(datasize)
@@ -1799,6 +1817,24 @@ class ReadRpm:
         filename = "%s%s" % (self.buildroot, filename)
         dirname = pathdirname(filename)
         makeDirs(dirname)
+        doextract = 1
+        if db:
+            try:
+                (mode2, inode2, dev2, nlink2, uid2, gid2, filesize2,
+                    atime2, mtime2, ctime2) = os.stat(filename)
+                # XXX consider reg / non-reg files
+                if (flag & RPMFILE_CONFIG) and S_ISREG(mode):
+                    changedfile = 1
+                    # XXX go through db if we find a same file
+                    if changedfile:
+                        if flag & RPMFILE_NOREPLACE:
+                            filename += ".rpmnew"
+                        else:
+                            pass # ln file -> file.rpmorig
+                else:
+                    pass # XXX higher arch and our package not noarch
+            except:
+                pass
         if S_ISREG(mode):
             di = devinode.get((dev, inode, md5sum))
             if di == None or data:
@@ -1869,7 +1905,7 @@ class ReadRpm:
         #return ret
         # pyrex-code-end
 
-    def readPayload(self, func, filenames=None, extract=None):
+    def readPayload(self, func, filenames=None, extract=None, db=None):
         self.__openFd(96 + self.sigdatasize + self.hdrdatasize)
         devinode = {}     # this will contain possibly hardlinked files
         filenamehash = {} # full filename of all files
@@ -1935,7 +1971,8 @@ class ReadRpm:
             self.printErr("unknown payload format")
             return
         c = CPIO(self.filename, fd, self.issrc, cpiosize)
-        if c.readCpio(func, filenamehash, devinode, filenames, extract) == None:
+        if c.readCpio(func, filenamehash, devinode, filenames,
+            extract, db) == None:
             pass # error output is already done
         else:
             for filename in filenamehash.iterkeys():
@@ -2483,6 +2520,79 @@ class ReadRpm:
         return 0
 
 
+def iterId(data):
+    for i in xrange(0, len(data), 8):
+        yield data[i:i+4]
+
+def iterIdIdx(data):
+    for i in xrange(0, len(data), 8):
+        yield data[i:i+4], unpack("I", data[i+4:i+8])[0]
+
+
+class RpmDB:
+
+    zero = pack("I", 0)
+
+    def __init__(self, buildroot="", rpmdbpath="/var/lib/rpm/"):
+        self.buildroot = buildroot
+        self.rpmdbpath = rpmdbpath
+        self._pkgs = {}
+        self.openDB4()
+
+    def openDB4(self):
+        import bsddb
+        dbpath = self.buildroot + self.rpmdbpath
+        makeDirs(dbpath)
+        for i in xrange(9):
+            try:
+                os.unlink(dbpath + "__db.00%d" % i)
+            except OSError:
+                pass
+        flag = "c"
+        self.basenames_db = bsddb.hashopen(dbpath + "Basenames", flag)
+        self.conflictname_db = bsddb.hashopen(dbpath + "Conflictname", flag)
+        self.dirnames_db = bsddb.btopen(dbpath + "Dirnames", flag)
+        self.filemd5s_db = bsddb.hashopen(dbpath + "Filemd5s", flag)
+        self.group_db = bsddb.hashopen(dbpath + "Group", flag)
+        self.installtid_db = bsddb.btopen(dbpath + "Installtid", flag)
+        self.name_db = bsddb.hashopen(dbpath + "Name", flag)
+        self.packages_db = bsddb.hashopen(dbpath + "Packages", flag)
+        self.providename_db = bsddb.hashopen(dbpath + "Providename", flag)
+        self.provideversion_db = bsddb.btopen(dbpath + "Provideversion", flag)
+        self.requirename_db = bsddb.hashopen(dbpath + "Requirename", flag)
+        self.requireversion_db = bsddb.btopen(dbpath + "Requireversion", flag)
+        self.sha1header_db  = bsddb.hashopen(dbpath + "Sha1header", flag)
+        self.sigmd5_db = bsddb.hashopen(dbpath + "Sigmd5", flag)
+        self.triggername_db = bsddb.hashopen(dbpath + "Triggername", flag)
+
+    def getPkgById(self, id):
+        if self._pkgs.has_key(id):
+            return self._pkgs[id]
+        else:
+            #pkg = self.readRpm(id, self.packages_db, self.tags)
+            #if pkg is not None:
+            #    self._pkgs[id] = pkg
+            #return pkg
+            return None
+
+    def searchFilenames(self, filename):
+        (dirname, basename) = pathsplit2(filename)
+        data1 = self.basenames_db.get(basename, "")
+        data2 = self.dirnames_db.get(dirname, "")
+        dirname_ids = {}
+        for id_ in iterId(data2):
+            dirname_ids[id_] = None
+        result = []
+        for (id_, idx) in iterIdIdx(data1):
+            if id_ not in dirname_ids:
+                continue
+            #pkg = self.getPkgById(id_)
+            #if pkg and pkg.iterFilenames()[idx] == filename:
+            #    result.append(pkg)
+            result.append( (id_, idx) )
+        return result
+
+
 def readRpm(filenames, sigtag, tag):
     rpms = []
     for filename in filenames:
@@ -2507,7 +2617,7 @@ def verifyRpm(filename, verify, strict, payload, nodigest, hdrtags, keepdata,
     rpm.closeFd()
     return rpm
 
-def extractRpm(filename, buildroot, owner=None):
+def extractRpm(filename, buildroot, owner=None, db=None):
     """Extract a rpm into a directory."""
     if isinstance(filename, basestring):
         rpm = ReadRpm(filename)
@@ -2529,7 +2639,7 @@ def extractRpm(filename, buildroot, owner=None):
         rpm.uid.transform(buildroot)
         rpm.gid = Gid(rpm["filegroupname"])
         rpm.gid.transform(buildroot)
-    rpm.readPayload(rpm.extractCpio, extract=1)
+    rpm.readPayload(rpm.extractCpio, extract=1, db=db)
 
 def sameSrcRpm(a, b):
     # Packages with the same md5sum for the payload are the same.
@@ -5620,7 +5730,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     checkevr = {}
     # Find out "arch", "releasever" and set "checkdupes".
     for pkg in packages.itervalues():
-        if (not specifyarch and rpmdbpath != "/var/lib/rpm" and
+        if (not specifyarch and rpmdbpath != "/var/lib/rpm/" and
             pkg["name"] in kernelpkgs):
             # This would apply if we e.g. go from i686 -> x86_64, but
             # would also go from i686 -> s390 if such a kernel would
@@ -6128,6 +6238,7 @@ def main():
     excludes = ""
     checksrpms = 0
     rpmdbpath = "/var/lib/rpm/"
+    withdb = 0
     reposdirs = []
     checkarch = 0
     checkfileconflicts = 0
@@ -6154,10 +6265,10 @@ def main():
             "wait", "noverify", "small", "explode", "diff", "extract",
             "excludes=", "nofileconflicts", "fileconflicts", "runorderer",
             "updaterpms", "reposdir=", "disablereposdir", "enablerepos",
-            "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "cachedir=",
-            "checkrpmdb", "checkoldkernel", "numkeepkernels=", "checkdeps",
-            "buildroot=", "installroot=", "root=", "version", "baseurl=",
-            "createrepo", "mercurial", "pyrex", "testmirrors"])
+            "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "withdb",
+            "cachedir=", "checkrpmdb", "checkoldkernel", "numkeepkernels=",
+            "checkdeps", "buildroot=", "installroot=", "root=", "version",
+            "baseurl=", "createrepo", "mercurial", "pyrex", "testmirrors"])
     except getopt.GetoptError, msg:
         print "Error:", msg
         return 1
@@ -6228,6 +6339,8 @@ def main():
             rpmdbpath = val
             if rpmdbpath[-1:] != "/":
                 rpmdbpath += "/"
+        elif opt == "--withdb":
+            withdb = 1
         elif opt == "--cachedir":
             cachedir = val
             if cachedir[-1:] != "/":
@@ -6272,8 +6385,11 @@ def main():
         if diff != "":
             print diff
     elif extract:
+        db = None
+        if withdb:
+            db = RpmDB(buildroot, rpmdbpath)
         for a in args:
-            extractRpm(a, buildroot, owner)
+            extractRpm(a, buildroot, owner, db)
     elif checksrpms:
         checkSrpms(ignoresymlinks)
     elif checkarch:
