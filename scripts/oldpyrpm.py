@@ -311,7 +311,7 @@ def mkstemp_mknod(dirname, pre, mode, rdev):
 
 def doLnOrCopy(src, dst):
     """Hardlink or copy a file "src" to a new file "dst"."""
-    dstdir = os.path.dirname(dst)
+    dstdir = pathdirname(dst)
     tmp = mkstemp_link(dstdir, tmpprefix, src)
     if tmp == None:
         # no hardlink possible, copy the data into a new file
@@ -1797,7 +1797,7 @@ class ReadRpm:
         if self.relocated:
             filename = self.__relocatedFile(filename)
         filename = "%s%s" % (self.buildroot, filename)
-        dirname = os.path.dirname(filename)
+        dirname = pathdirname(filename)
         makeDirs(dirname)
         if S_ISREG(mode):
             di = devinode.get((dev, inode, md5sum))
@@ -1814,7 +1814,7 @@ class ReadRpm:
                         if self.relocated:
                             fn2 = self.__relocatedFile(fn2)
                         fn2 = "%s%s" % (self.buildroot, fn2)
-                        dirname = os.path.dirname(fn2)
+                        dirname = pathdirname(fn2)
                         makeDirs(dirname)
                         tmpfilename = mkstemp_link(dirname, tmpprefix, filename)
                         if tmpfilename == None:
@@ -2750,6 +2750,29 @@ def bsearch(key, list):
             return idx
     return -1
 
+def pathsplit(filename):
+    j = i = filename.rfind("/") + 1
+    while j > 1 and filename[j - 1] == "/":
+        j -= 1
+    return (filename[:j], filename[i:])
+    #return os.path.split(filename)
+
+def pathdirname(filename):
+    j = filename.rfind("/") + 1
+    while j > 1 and filename[j - 1] == "/":
+        j -= 1
+    return filename[:j]
+    #return pathsplit(filename)[0]
+    #return os.path.dirname(filename)
+
+def pathsplit2(filename):
+    i = filename.rfind("/")
+    return (filename[:i + 1], filename[i + 1:])
+    #(dirname, basename) = os.path.split(filename)
+    #if dirname[-1:] != "/" and dirname != "":
+    #    dirname += "/"
+    #return (dirname, basename)
+
 def genBasenames(oldfilenames):
     """Split oldfilenames into basenames, dirindexes, dirnames. Do this
     exactly like /bin/rpm does. A faster version would cache the last result
@@ -2757,9 +2780,7 @@ def genBasenames(oldfilenames):
     to verify rpm packages until now."""
     (basenames, dirindexes, dirnames) = ([], [], [])
     for filename in oldfilenames:
-        (dirname, basename) = os.path.split(filename)
-        if dirname[-1:] != "/" and dirname != "":
-            dirname += "/"
+        (dirname, basename) = pathsplit2(filename)
         dirindex = bsearch(dirname, dirnames)
         if dirindex < 0:
             dirindex = len(dirnames)
@@ -2771,9 +2792,7 @@ def genBasenames(oldfilenames):
 def genBasenames2(oldfilenames):
     (basenames, dirnames) = ([], [])
     for filename in oldfilenames:
-        (dirname, basename) = os.path.split(filename)
-        if dirname[-1:] != "/" and dirname != "":
-            dirname += "/"
+        (dirname, basename) = pathsplit2(filename)
         basenames.append(basename)
         dirnames.append(dirname)
     return (basenames, dirnames)
@@ -2846,9 +2865,7 @@ class FilenamesList:
 
     def searchDependency(self, name):
         """Return list of packages providing file with name."""
-        (dirname, basename) = os.path.split(name)
-        if dirname[-1:] != "/" and dirname != "":
-            dirname += "/"
+        (dirname, basename) = pathsplit2(name)
         ret = self.path.get(dirname, {}).get(basename, [])
         if self.checkfileconflicts:
             # python-only
@@ -3700,7 +3717,7 @@ class RpmCSV:
                     if "," in item:
                         return None
         # Write new CSV file with crc checksum.
-        (fd, tmp) = mkstemp_file(os.path.dirname(filename))
+        (fd, tmp) = mkstemp_file(pathdirname(filename))
         crcval = zlib.crc32("")
         for l in csv:
             data = ",".join(l) + "\n"
@@ -3742,7 +3759,7 @@ def cacheLocal(urls, filename, subdir, force=0, verbose=0, nofilename=0):
             print "cacheLocal: looking at url:", url
         if not url.startswith("http://") and not url.startswith("ftp://"):
             return url
-        (dirname, basename) = os.path.split(filename)
+        (dirname, basename) = pathsplit(filename)
         localdir = cachedir + subdir + dirname
         makeDirs(localdir)
         localfile = "%s/%s" % (localdir, basename)
@@ -5020,7 +5037,7 @@ def testMirrors(verbose, args):
 
 
 def writeFile(filename, data, mode=None):
-    (fd, tmpfile) = mkstemp_file(os.path.dirname(filename), special=1)
+    (fd, tmpfile) = mkstemp_file(pathdirname(filename), special=1)
     fd.write("".join(data))
     if mode != None:
         os.chmod(tmpfile, mode & 07777)
@@ -5892,7 +5909,7 @@ def checkSymlinks(repo):
             if not S_ISLNK(mode):
                 continue
             if link[:1] != "/":
-                link = "%s/%s" % (os.path.dirname(f), link)
+                link = "%s/%s" % (pathdirname(f), link)
             link = os.path.normpath(link)
             if allfiles.has_key(link):
                 goodlinks[f] = link
