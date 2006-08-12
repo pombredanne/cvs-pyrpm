@@ -924,11 +924,12 @@ class RpmPackage(RpmData):
         if not stat.S_ISREG(rfi.mode):
             return 1
         plist = db.searchFilenames(rfi.filename)
-        # File not already in db -> write it
+        # File not already in db -> write it. We should still preserve
+        # NOREPLACE files?
         if len(plist) == 0:
             return 1
-        # Don't install ghost files ;)
-        # FIXME: check at the very start?
+        # Don't install ghost files ;) (Should never happen, they are not
+        # part of the cpio data.)
         if rfi.flags & RPMFILE_GHOST:
             return 0
         # Not a config file -> always overwrite it, resolver didn't say we
@@ -944,12 +945,13 @@ class RpmPackage(RpmData):
                    self["arch"] in arch_compats[pkg["arch"]]:
                     return 0
             return 1
-        # File should exist in filesystem but doesn't...
-        if not os.path.exists(rfi.filename):
+        try:
+            (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime,
+                ctime) = os.stat(rfi.filename)
+        except:
+            # File should exist in filesystem but doesn't...
             self.config.printWarning(1, "%s: File doesn't exist" % rfi.filename)
             return 1
-        (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
-            = os.stat(rfi.filename)
         # File on disc is not a regular file -> don't try to calc an md5sum
         if stat.S_ISREG(mode):
             try:
