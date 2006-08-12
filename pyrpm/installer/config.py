@@ -64,7 +64,6 @@ verbose = 0
 ################################## functions ##################################
 
 def log(data):
-    global logger
     logger.log(data)
 
 # vim:ts=4:sw=4:showmatch:expandtab
