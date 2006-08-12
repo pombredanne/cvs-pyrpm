@@ -332,7 +332,7 @@ class RpmDB(db.RpmDatabase):
         return result
 
     def _addPkg(self, pkg):
-        functions.blockSignals()
+        signals = functions.blockSignals()
         try:
             self.__openDB4()
 
@@ -385,9 +385,9 @@ class RpmDB(db.RpmDatabase):
             self.__writeDB4(self.triggername_db, "triggername", pkgid, pkg)
             self.packages_db[self.zero] = pack("I", pkgid)
         except bsddb.error:
-            functions.unblockSignals()
+            functions.unblockSignals(signals)
             return 0 # Due to the blocking, this is now virtually atomic
-        functions.unblockSignals()
+        functions.unblockSignals(signals)
         return 1
 
     def removePkg(self, pkg, nowrite=None):
@@ -402,7 +402,7 @@ class RpmDB(db.RpmDatabase):
         if not pkg.has_key("install_id"):
             return 0
 
-        functions.blockSignals()
+        signals = functions.blockSignals()
         try:
             self.__openDB4()
 
@@ -429,9 +429,9 @@ class RpmDB(db.RpmDatabase):
             self.__removeId(self.triggername_db, "triggername", pkgid, pkg)
             del self.packages_db[pack("I", pkgid)]
         except bsddb.error:
-            functions.unblockSignals()
+            functions.unblockSignals(signals)
             return 0 # FIXME: keep trying?
-        functions.unblockSignals()
+        functions.unblockSignals(signals)
         return 1
 
     def __openDB4(self):

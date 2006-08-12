@@ -90,7 +90,6 @@ class RpmConfig:
         self.tmpdir = None
         self.supported_signals = [ signal.SIGINT, signal.SIGTERM,
                                    signal.SIGHUP ]
-        self.signals = [ ]               # Stack of saved signal halders
         self.srpmdir = "/usr/src/redhat/SOURCES" # Dir where srpms will be
                                                  # installed to
         self.enablerepo = [ ]           # Manually enabled repos

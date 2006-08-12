@@ -444,34 +444,22 @@ def doLock(filename):
 def setSignals(handler):
     """Set the typical signals to handler, save previous handlers."""
 
-    global rpmconfig
     signals = { }
     for key in rpmconfig.supported_signals:
         signals[key] = signal.signal(key, handler)
-    rpmconfig.signals.append(signals)
+    return signals
 
-def resetSignals():
+def unblockSignals(signals):
     """Restore previously saved handlers of the typical signals."""
 
-    global rpmconfig
-    try:
-        signals = rpmconfig.signals.pop()
-    except IndexError:
-        raise RuntimeError, "resetSignals() without matching setSignals()"
-    for key in signals:
-        signal.signal(key, signals[key])
+    for (key, value) in signals.iteritems():
+        signal.signal(key, value)
 
 def blockSignals():
     """Blocks the typical signals to avoid interruption during critical code
     segments. Save previous handlers."""
 
-    setSignals(signal.SIG_IGN)
-
-def unblockSignals():
-    """Unblock the previously blocked signals and restore the original signal
-    handlers."""
-
-    resetSignals()
+    return setSignals(signal.SIG_IGN)
 
 def _unlink(file):
     """Unlink file, ignoring errors."""

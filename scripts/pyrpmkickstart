@@ -328,7 +328,7 @@ def main():
         check_exists(stage2_img_dir, "/usr/bin/bash")
 
         # copytree does not like to get a signal
-        pyrpm.blockSignals()
+        signals = pyrpm.blockSignals()
         for f in os.listdir(stage2_img_dir):
             s = "%s/%s" % (stage2_img_dir, f)
             d = "%s/%s" % (stage2_dir, f)
@@ -336,7 +336,7 @@ def main():
                 shutil.copytree(s, d, symlinks=True)
             else:
                 shutil.copy2(s, d)
-        pyrpm.unblockSignals()
+        pyrpm.unblockSignals(signals)
 
         if verbose:
             print "Umounting '%s' " % stage2_img_dir
@@ -3381,19 +3381,21 @@ if os.geteuid() != 0:
     print "ERROR: You have to be root to perform an installation."
     sys.exit(1)
 
-pyrpm.rpmconfig.supported_signals.extend([signal.SIGSEGV, signal.SIGBUS, signal.SIGABRT, signal.SIGILL, signal.SIGFPE])
-pyrpm.setSignals(exitHandler)
+pyrpm.rpmconfig.supported_signals.extend([signal.SIGSEGV, signal.SIGBUS,
+    signal.SIGABRT, signal.SIGILL, signal.SIGFPE])
+signals = pyrpm.setSignals(exitHandler)
 
 try:
     status = main()
 except Exception:
     traceback.print_exc()
     status = 1
+#pyrpm.unblockSignals(signals)
 
 ################################### cleanup ###################################
 
 # block signals for cleanup
-pyrpm.blockSignals()
+signals = pyrpm.blockSignals()
 
 # wait one second before going on
 time.sleep(1)
@@ -3455,7 +3457,7 @@ if tempdir:
         shutil.rmtree(tempdir)
     tempdir = None
 
-pyrpm.unblockSignals()
+pyrpm.unblockSignals(signals)
 sys.exit(status)
 
 # vim:ts=4:sw=4:showmatch:expandtab
