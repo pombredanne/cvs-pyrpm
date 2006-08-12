@@ -1190,14 +1190,10 @@ def stringCompare(str1, str2):
 # EVR compare: uses stringCompare to compare epoch/version/release
 def labelCompare(e1, e2):
     # remove comparison of the release string if one of them is missing
-    if e2[2] == "":
-        e1 = (e1[0], e1[1], "")
-    elif e1[2] == "":
-        e2 = (e2[0], e2[1], "")
     r = stringCompare(e1[0], e2[0])
     if r == 0:
         r = stringCompare(e1[1], e2[1])
-        if r == 0:
+        if r == 0 and e1[2] != "" and e2[2] != "":
             r = stringCompare(e1[2], e2[2])
     return r
 
