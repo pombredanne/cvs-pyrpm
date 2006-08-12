@@ -923,11 +923,6 @@ class RpmPackage(RpmData):
         # File is not a regular file -> just do it
         if not stat.S_ISREG(rfi.mode):
             return 1
-        plist = db.searchFilenames(rfi.filename)
-        # File not already in db -> write it. We should still preserve
-        # NOREPLACE files?
-        if len(plist) == 0:
-            return 1
         # Don't install ghost files ;) (Should never happen, they are not
         # part of the cpio data.)
         if rfi.flags & RPMFILE_GHOST:
@@ -940,7 +935,7 @@ class RpmPackage(RpmData):
             # overwrite it.
             if self["arch"] == "noarch":
                 return 1
-            for pkg in plist:
+            for pkg in db.searchFilenames(rfi.filename):
                 if not functions.archDuplicate(self["arch"], pkg["arch"]) and \
                    self["arch"] in arch_compats[pkg["arch"]]:
                     return 0
@@ -966,6 +961,10 @@ class RpmPackage(RpmData):
         # Same file in new rpm as on disk -> just write it.
         if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid \
             and rfi.filesize == filesize and rfi.md5sum == md5sum:
+            return 1
+        plist = db.searchFilenames(rfi.filename)
+        # File not already in db -> write it.
+        if len(plist) == 0:
             return 1
         # File has changed on disc, now check if it has changed between the
         # different packages that share it and the new package
