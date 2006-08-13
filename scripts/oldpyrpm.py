@@ -2547,15 +2547,6 @@ class ReadRpm:
         return 0
 
 
-def iterId(data):
-    for i in xrange(0, len(data), 8):
-        yield data[i:i+4]
-
-def iterIdIdx(data):
-    for i in xrange(0, len(data), 8):
-        yield data[i:i+4], unpack("I", data[i+4:i+8])[0]
-
-
 class RpmDB:
 
     zero = pack("I", 0)
@@ -2607,12 +2598,15 @@ class RpmDB:
         data1 = self.basenames_db.get(basename, "")
         data2 = self.dirnames_db.get(dirname, "")
         dirname_ids = {}
-        for id_ in iterId(data2):
+        for i in xrange(0, len(data2), 8):
+            id_ = data2[i:i + 4]
             dirname_ids[id_] = None
         result = []
-        for (id_, idx) in iterIdIdx(data1):
+        for i in xrange(0, len(data1), 8):
+            id_ = data1[i:i + 4]
             if id_ not in dirname_ids:
                 continue
+            idx = unpack("I", data1[i + 4:i + 8])[0]
             #pkg = self.getPkgById(id_)
             #if pkg and pkg.iterFilenames()[idx] == filename:
             #    result.append(pkg)
