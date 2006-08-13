@@ -374,6 +374,27 @@ def resetSignals(signals):
         signal.signal(key, value)
 
 
+class PrintHash:
+
+    def __init__(self, numobjects=100, hashlength=30):
+        self.numobjects = numobjects
+        self.hashlength = hashlength
+        self.num = 0
+        self.hashpos = 1
+        self._doprint("#")
+
+    def _doprint(self, msg):
+        sys.stdout.write(msg)
+        sys.stdout.flush()
+
+    def nextObject(self):
+        self.num += 1
+        npos = (self.num * self.hashlength) / self.numobjects
+        if self.hashpos < npos:
+            self._doprint("#"*(npos - self.hashpos))
+            self.hashpos = npos
+
+
 # Optimized routines that use zlib to extract data, since
 # "import gzip" doesn't give good data handling (old code
 # can still easily be enabled to compare performance):
@@ -4090,6 +4111,8 @@ class RpmRepo:
         # Strip trailing slashes.
         while filename[-1:] == "/":
             filename = filename[:-1]
+        if self.verbose >= 2:
+            print "Creating yum metadata repository for dir %s:" % filename
         rt = {}
         for i in ("name", "epoch", "version", "release", "arch",
             "requirename"):
@@ -4098,8 +4121,13 @@ class RpmRepo:
             rt[value[0]] = value
         filenames = findRpms(filename, ignoresymlinks)
         filenames.sort()
+        if self.verbose >= 2:
+            print "Reading %d .rpm files:" % len(filenames)
+            printhash = PrintHash(len(filenames), 60)
         i = 0
         while i < len(filenames):
+            if self.verbose >= 2:
+                printhash.nextObject()
             path = filenames[i]
             pkg = ReadRpm(path)
             if pkg.readHeader({}, rt):
@@ -4110,6 +4138,9 @@ class RpmRepo:
                 filenames.pop(i)
                 continue
             i += 1
+        if self.verbose >= 2:
+            print "\nWriting repo data for %d .rpm files:" % len(filenames)
+            printhash = PrintHash(len(filenames), 60)
         numpkg = len(filenames)
         repodir = filename + "/repodata"
         makeDirs(repodir)
@@ -4154,6 +4185,8 @@ class RpmRepo:
         oroot.setNs(otherns)
 
         for path in filenames:
+            if self.verbose >= 2:
+                printhash.nextObject()
             pkg = ReadRpm(path)
             if pkg.readHeader(rpmsigtag, rpmtag):
                 print "Cannot read %s.\n" % path
@@ -4207,6 +4240,8 @@ class RpmRepo:
         os.rename(ffdtmp, repodir + "/filelists.xml.gz")
         os.rename(ofdtmp, repodir + "/other.xml.gz")
         repodoc.saveFormatFileEnc(repodir + "/repomd.xml", "UTF-8", 1)
+        if self.verbose >= 2:
+            print ""
         return 1
 
     def __parseRepomd(self, reader):
