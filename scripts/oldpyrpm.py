@@ -387,12 +387,22 @@ class PrintHash:
         sys.stdout.write(msg)
         sys.stdout.flush()
 
-    def nextObject(self):
-        self.num += 1
-        npos = (self.num * self.hashlength) / self.numobjects
+    def nextObject(self, finish=None):
+        if finish:
+            npos = self.numobjects
+        else:
+            self.num += 1
+            npos = (self.num * self.hashlength) / self.numobjects
+            if npos > self.numobjects:
+                npos = self.numobjects
+        msg = ""
         if self.hashpos < npos:
-            self._doprint("#"*(npos - self.hashpos))
+            msg = "#" * (npos - self.hashpos)
             self.hashpos = npos
+        if finish:
+            msg += "\n"
+        if msg:
+            self._doprint(msg)
 
 
 # Optimized routines that use zlib to extract data, since
@@ -4139,7 +4149,8 @@ class RpmRepo:
                 continue
             i += 1
         if self.verbose >= 2:
-            print "\nWriting repo data for %d .rpm files:" % len(filenames)
+            printhash.nextObject(finish=1)
+            print "Writing repo data for %d .rpm files:" % len(filenames)
             printhash = PrintHash(len(filenames), 60)
         numpkg = len(filenames)
         repodir = filename + "/repodata"
@@ -4241,7 +4252,7 @@ class RpmRepo:
         os.rename(ofdtmp, repodir + "/other.xml.gz")
         repodoc.saveFormatFileEnc(repodir + "/repomd.xml", "UTF-8", 1)
         if self.verbose >= 2:
-            print ""
+            printhash.nextObject(finish=1)
         return 1
 
     def __parseRepomd(self, reader):
