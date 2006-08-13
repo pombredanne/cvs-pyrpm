@@ -1860,8 +1860,11 @@ class ReadRpm:
                             pass # ln file -> file.rpmorig
                 else:
                     pass # XXX higher arch and our package not noarch
+                    #doextract = 0
             except:
                 pass
+        if not doextract:
+            return
         if S_ISREG(mode):
             di = devinode.get((dev, inode, md5sum))
             if di == None or data:
@@ -2651,8 +2654,7 @@ def extractRpm(filename, buildroot, owner=None, db=None):
         if buildroot[-1:] != "/" and buildroot != "":
             buildroot += "/"
     else:
-        while buildroot[-1:] == "/":
-            buildroot = buildroot[:-1]
+        buildroot = buildroot.rstrip("/")
     rpm.buildroot = buildroot
     rpm.owner = owner
     if owner:
@@ -2882,17 +2884,13 @@ def bsearch(key, list):
     return -1
 
 def pathsplit(filename):
-    j = i = filename.rfind("/") + 1
-    while j > 1 and filename[j - 1] == "/":
-        j -= 1
-    return (filename[:j], filename[i:])
+    i = filename.rfind("/") + 1
+    return (filename[:i].rstrip("/") or "/", filename[i:])
     #return os.path.split(filename)
 
 def pathdirname(filename):
     j = filename.rfind("/") + 1
-    while j > 1 and filename[j - 1] == "/":
-        j -= 1
-    return filename[:j]
+    return filename[:j].rstrip("/") or "/"
     #return pathsplit(filename)[0]
     #return os.path.dirname(filename)
 
@@ -3880,10 +3878,7 @@ def cacheLocal(urls, filename, subdir, force=0, verbose=0, nofilename=0):
     for url in urls:
         if not url:
             continue
-        url = Uri2Filename(url)
-        # remove trailing slashes "/"
-        while url[-1:] == "/":
-            url = url[:-1]
+        url = Uri2Filename(url).rstrip("/")
         if nofilename == 0:
             url += filename
         if verbose > 4:
@@ -4111,10 +4106,7 @@ class RpmRepo:
         return 0
 
     def createRepo(self, baseurl, ignoresymlinks):
-        filename = Uri2Filename(self.filenames[0])
-        # Strip trailing slashes.
-        while filename[-1:] == "/":
-            filename = filename[:-1]
+        filename = Uri2Filename(self.filenames[0]).rstrip("/")
         if self.verbose >= 2:
             print "Creating yum metadata repository for dir %s:" % filename
         rt = {}
