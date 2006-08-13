@@ -495,15 +495,14 @@ class RpmPackage(RpmData):
                 self.config.printDebug(1, "File/Dir %s still in db, not removing..." % f)
                 continue
             try:
-                st = os.lstat(rfi.filename)
+                st = os.lstat(f)
             except:
-                st = None
-            if st and stat.S_ISDIR(st.st_mode):
-                if len(os.listdir(f)) == 0:
-                    try:
-                        os.rmdir(f)
-                    except OSError:
-                        self.config.printWarning(2, "Couldn't remove dir %s from pkg %s" % (f, self.source))
+                continue
+            if stat.S_ISDIR(st.st_mode):
+                try:
+                    os.rmdir(f)
+                except OSError:
+                    self.config.printWarning(3, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
                 if rfilist.has_key(f):
                     rfi = rfilist[f]
@@ -513,8 +512,7 @@ class RpmPackage(RpmData):
                     try:
                         os.unlink(f)
                     except OSError:
-                        if not (rfi.flags & RPMFILE_GHOST):
-                            self.config.printWarning(2, "Couldn't remove file %s from pkg %s" \
+                        self.config.printWarning(2, "Couldn't remove file %s from pkg %s" \
                                 % (f, self.source))
         if nfiles == 0:
             nfiles = 1
@@ -1015,15 +1013,11 @@ class RpmPackage(RpmData):
             # Is this a %ghost config file?
             if rfi.flags & RPMFILE_GHOST:
                 return 0        # Don't remove if %ghost file
-            # File should exist in filesystem but doesn't...
-            if st == None:
-                self.config.printWarning(2, "%s: File doesn't exist" % rfi.filename)
-                return 0
             (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime,
                 ctime) = st
             # File on disc is not a regular file -> don't try to calc an md5sum
             md5sum = ''
-            if stat.S_ISREG(mode):
+            if stat.S_ISREG(st.st_mode):
                 try:
                     f = open(rfi.filename)
                     m = md5.new()
