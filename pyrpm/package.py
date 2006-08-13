@@ -485,38 +485,37 @@ class RpmPackage(RpmData):
         if self.config.printhash:
             self.config.printInfo(0, "\r\t\t\t\t\t\t ")
         for i in xrange(nfiles-1, -1, -1):
-            n += 1
-            npos = int(n*30/nfiles)
-            if pos < npos and self.config.printhash:
-                self.config.printInfo(0, "#"*(npos-pos))
-            pos = npos
+            if self.config.printhash:
+                n += 1
+                npos = int(n*30/nfiles)
+                if pos < npos:
+                    self.config.printInfo(0, "#"*(npos-pos))
+                    pos = npos
             f = files[i]
             if db.numFileDuplicates(f) > 1:
                 self.config.printDebug(1, "File/Dir %s still in db, not removing..." % f)
                 continue
-            try:
-                st = os.lstat(f)
-            except:
+            if not rfilist.has_key(f):
                 continue
-            if stat.S_ISDIR(st.st_mode):
+            rfi = rfilist[f]
+            if stat.S_ISDIR(rfi.mode):
                 try:
                     os.rmdir(f)
                 except OSError:
                     self.config.printWarning(3, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
-                if rfilist.has_key(f):
-                    rfi = rfilist[f]
-                    # Check if we need to erase the file
-                    if not self.__verifyFileErase(rfi, st):
+                # Check if we need to erase the file
+                if rfi.flags & RPMFILE_CONFIG:
+                    if not self.__verifyFileErase(rfi):
                         continue
-                    try:
-                        os.unlink(f)
-                    except OSError:
-                        self.config.printWarning(2, "Couldn't remove file %s from pkg %s" \
-                                % (f, self.source))
-        if nfiles == 0:
-            nfiles = 1
+                try:
+                    os.unlink(f)
+                except OSError:
+                    self.config.printWarning(3, "Couldn't remove file %s from pkg %s" \
+                            % (f, self.source))
         if self.config.printhash:
+            if nfiles == 0:
+                nfiles = 1
             self.config.printInfo(0, "#"*(30-int(30*n/nfiles)) + "\n")
         else:
             self.config.printInfo(1, "\n")
@@ -1004,43 +1003,44 @@ class RpmPackage(RpmData):
             break
         return do_write
 
-    def __verifyFileErase(self, rfi, st):
+    def __verifyFileErase(self, rfi):
         """Return 1 if file with RpmFileInfo rfi should be erased.
 
         Modify rfi.filename if necessary.  Raise OSError."""
-        # Special case config files
-        if rfi.flags & RPMFILE_CONFIG:
-            # Is this a %ghost config file?
-            if rfi.flags & RPMFILE_GHOST:
-                return 0        # Don't remove if %ghost file
-            (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime,
-                ctime) = st
-            # File on disc is not a regular file -> don't try to calc an md5sum
-            md5sum = ''
-            if stat.S_ISREG(st.st_mode):
-                try:
-                    f = open(rfi.filename)
-                    m = md5.new()
-                    functions.updateDigestFromFile(m, f)
-                    f.close()
-                    md5sum = m.hexdigest()
-                except IOError, e:
-                    self.config.printWarning(0, "%s: %s" % (rfi.filename, e))
-            # Same file in new rpm as on disk -> just erase it.
-            if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid \
-                and rfi.filesize == filesize and rfi.md5sum == md5sum:
-                return 1
-            try:
-                os.rename(rfi.filename, rfi.filename+".rpmsave")
-            except OSError, e:
-                self.config.printError("%s: Can't rename edited config "
-                                       "file %s"
-                                       % (self.getNEVRA(), rfi.filename))
-            # We only get here if it was a config file, no ghost and has been
-            # edited and renamed to .rpmsave on disc, so no need to remove
-            # anymore.
+        # Is this a %ghost config file?
+        if rfi.flags & RPMFILE_GHOST:
+            return 0        # Don't remove if %ghost file
+        try:
+            st = os.lstat(f)
+        except:
             return 0
-        return 1
+        (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime,
+            ctime) = st
+        # File on disc is not a regular file -> don't try to calc an md5sum
+        md5sum = ''
+        if stat.S_ISREG(st.st_mode):
+            try:
+                f = open(rfi.filename)
+                m = md5.new()
+                functions.updateDigestFromFile(m, f)
+                f.close()
+                md5sum = m.hexdigest()
+            except IOError, e:
+                self.config.printWarning(0, "%s: %s" % (rfi.filename, e))
+        # Same file in new rpm as on disk -> just erase it.
+        if rfi.mode == mode and rfi.uid == uid and rfi.gid == gid \
+            and rfi.filesize == filesize and rfi.md5sum == md5sum:
+            return 1
+        try:
+            os.rename(rfi.filename, rfi.filename+".rpmsave")
+        except OSError, e:
+            self.config.printError("%s: Can't rename edited config "
+                                   "file %s"
+                                   % (self.getNEVRA(), rfi.filename))
+        # We only get here if it was a config file, no ghost and has been
+        # edited and renamed to .rpmsave on disc, so no need to remove
+        # anymore.
+        return 0
 
     def generateFileNames(self):
         """Generate basenames, dirnames and dirindexes for old packages from
