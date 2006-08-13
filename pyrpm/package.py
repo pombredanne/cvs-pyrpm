@@ -494,21 +494,21 @@ class RpmPackage(RpmData):
             if db.numFileDuplicates(f) > 1:
                 self.config.printDebug(1, "File/Dir %s still in db, not removing..." % f)
                 continue
-            if os.path.isdir(f):
+            try:
+                st = os.lstat(rfi.filename)
+            except:
+                st = None
+            if st and stat.S_ISDIR(st.st_mode):
                 if len(os.listdir(f)) == 0:
                     try:
                         os.rmdir(f)
                     except OSError:
-                        # Maybe it's symlink....
-                        try:
-                            os.unlink(f)
-                        except OSError:
-                            self.config.printWarning(2, "Couldn't remove dir %s from pkg %s" % (f, self.source))
+                        self.config.printWarning(2, "Couldn't remove dir %s from pkg %s" % (f, self.source))
             else:
                 if rfilist.has_key(f):
                     rfi = rfilist[f]
                     # Check if we need to erase the file
-                    if not self.__verifyFileErase(rfi):
+                    if not self.__verifyFileErase(rfi, st):
                         continue
                     try:
                         os.unlink(f)
@@ -1006,7 +1006,7 @@ class RpmPackage(RpmData):
             break
         return do_write
 
-    def __verifyFileErase(self, rfi):
+    def __verifyFileErase(self, rfi, st):
         """Return 1 if file with RpmFileInfo rfi should be erased.
 
         Modify rfi.filename if necessary.  Raise OSError."""
@@ -1016,11 +1016,11 @@ class RpmPackage(RpmData):
             if rfi.flags & RPMFILE_GHOST:
                 return 0        # Don't remove if %ghost file
             # File should exist in filesystem but doesn't...
-            if not os.path.exists(rfi.filename):
+            if st == None:
                 self.config.printWarning(2, "%s: File doesn't exist" % rfi.filename)
                 return 0
-            (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime, ctime) \
-                = os.stat(rfi.filename)
+            (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime,
+                ctime) = st
             # File on disc is not a regular file -> don't try to calc an md5sum
             md5sum = ''
             if stat.S_ISREG(mode):
