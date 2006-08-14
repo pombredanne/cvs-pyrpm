@@ -377,6 +377,8 @@ def resetSignals(signals):
 class PrintHash:
 
     def __init__(self, numobjects=100, hashlength=30):
+        if not numobjects:
+            numobjects = 1
         self.numobjects = numobjects
         self.hashlength = hashlength
         self.num = 0
