@@ -375,13 +375,18 @@ def resetSignals(signals):
 
 
 class PrintHash:
+    """'numobjects' indicates how often we will call.nectObject()
+    and 'hashlength' gives the number of '#' hash chars we want to
+    output.  """
 
     def __init__(self, numobjects=100, hashlength=30):
+        # Make sure we don't get a division by zero.
         if not numobjects:
             numobjects = 1
         self.numobjects = numobjects
         self.hashlength = hashlength
         self.num = 0
+        # Immediately output something to indicate a first start:
         self.hashpos = 1
         self._doprint("#")
 
@@ -391,12 +396,14 @@ class PrintHash:
 
     def nextObject(self, finish=None):
         if finish:
-            npos = self.numobjects
+            # Output the rest of the hashes now:
+            npos = self.hashlength
         else:
             self.num += 1
             npos = (self.num * self.hashlength) / self.numobjects
-            if npos > self.numobjects:
-                npos = self.numobjects
+            # In case we call .nextObject() too often:
+            if npos > self.hashlength:
+                npos = self.hashlength
         msg = ""
         if self.hashpos < npos:
             msg = "#" * (npos - self.hashpos)
