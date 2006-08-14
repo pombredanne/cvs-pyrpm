@@ -45,6 +45,20 @@ To only get the errors and have a minimal log make it quiet:
 pyrpmcheckinstall -y -q -c fc4-i386.conf -r /mnt/build/test &> /tmp/installtest
 -----------------------
 
+To work on a directory use this:
+
+-----------------------
+DEST=/mnt/build/test
+for d in dev dev/shm dev/pts proc sys ; do
+  mkdir -p $DEST/$d
+  mount --bind /$d $DEST/$d
+done
+mkdir -p $DEST/etc
+touch $DEST/etc/fstab
+pyrpmcheckinstall -y -c /dev/null -r /mnt/build/test /mirror/fedora/development/i386/os/Fedora/RPMS &> /tmp/installtest
+# grep for "Error" in the logs
+-----------------------
+
 
 pyrpmcheckrepo
 --------------
