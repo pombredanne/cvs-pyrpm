@@ -5818,7 +5818,8 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
             continue
         # Check if we could write the rpmdb data again.
         region = "immutable"
-        if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
+        rpmversion = pkg["rpmversion"]
+        if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
             install_keys["archivesize"] = 1
         if pkg["immutable1"] != None:
             region = "immutable1"
@@ -5830,7 +5831,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
             install_keys["basenames"] = 1
         (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
             region, {}, 1, pkg.rpmgroup)
-        if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
+        if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
             del install_keys["archivesize"]
         if pkg["immutable1"] != None:
             del install_keys["providename"]
@@ -5845,7 +5846,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
             print "rpmdb header is not aligned to 4"
         if data != pkgdata[tid]:
             print "writeHeader() would not write the same rpmdb data for", \
-                pkg["name"], "(rpm-%s)" % pkg["rpmversion"]
+                pkg["name"], "(rpm-%s)" % rpmversion
             if verbose > 2:
                 # This should be some more generic diff routine for headers.
                 if fmt != pkg.hdrdata[3]:
@@ -5871,7 +5872,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
             pkg.sig = HdrIndex()
             if pkg["archivesize"] != None:
                 pkg.sig["payloadsize"] = pkg["archivesize"]
-                if pkg["rpmversion"][:3] not in ("4.0", "3.0", "2.2"):
+                if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
                     del pkg["archivesize"]
             (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash,
                 rpmdbtag, region, install_keys, 0, pkg.rpmgroup)
