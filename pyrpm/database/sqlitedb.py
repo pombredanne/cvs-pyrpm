@@ -58,7 +58,7 @@ class SqliteRpmPackage(package.RpmPackage):
         if dict.has_key(self, name):
             return dict.get(self, name)
         if name in ('requires','provides','conflicts','obsoletes'):
-            deps = self.yumrepo.getDependencies(name, self['pkgKey'])
+            deps = self.yumrepo.getDependencies(name, self.pkgKey)
             self[name] = deps
             return deps
         if (name in ('basenames', 'dirnames', 'dirindexes', 'oldfilenames') and
@@ -543,7 +543,7 @@ class SqliteDB(repodb.RpmRepoDB):
             val = data[key]
             if val is not None and name in base.rpmtag:
                 pkg[name] = val
-        pkg['pkgKey'] = data['pkgKey']
+        pkg.pkgKey = data['pkgKey']
         pkg['epoch'] = [int(pkg['epoch'])]
         pkg.source = data['location_href']
         pkg.issrc = 0
@@ -551,7 +551,7 @@ class SqliteDB(repodb.RpmRepoDB):
         return pkg
 
     def getFiles(self, pkg):
-        pkgKey = pkg['pkgKey']
+        pkgKey = pkg.pkgKey
         if self._filelistsdb:
             cur = self._filelistsdb.cursor()
             cur.execute("SELECT * FROM filelist WHERE pkgKey=%s" % pkgKey)
@@ -611,7 +611,7 @@ class SqliteDB(repodb.RpmRepoDB):
             data['size_' + k] = v
 
         pkgKey = self.insertHash('packages', data, cur)
-
+        pkg.pkgKey = pkgKey
 
         for tag in ('requires','provides','conflicts','obsoletes'):
             for  n, f, v in pkg[tag]:
