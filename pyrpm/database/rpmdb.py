@@ -88,6 +88,7 @@ class RpmDB(db.RpmDatabase):
         self.netsharedpath = self.__getNetSharedPath()
 
         self._pkgs = { }
+        self.basenames_cache = {}
         self.clear()
         self.dbopen = 0
         self.obsoletes_list = None
@@ -109,6 +110,7 @@ class RpmDB(db.RpmDatabase):
     # clear all structures
     def clear(self):
         self.obsoletes_list = None
+        self.basenames_cache = {}
         self._pkgs.clear()
 
     def setBuildroot(self, buildroot):
@@ -329,6 +331,7 @@ class RpmDB(db.RpmDatabase):
             result = self._addPkg(pkg)
         if self.obsoletes_list and result:
             self.obsoletes_list.add(pkg)
+        self.basenames_cache = {}
         return result
 
     def _addPkg(self, pkg):
@@ -394,8 +397,11 @@ class RpmDB(db.RpmDatabase):
         result = 1
         if not nowrite:
             result = self._removePkg(pkg)
+        if hasattr(pkg, 'key'):
+            self._pkgs.pop(pkg.key, None)
         if self.obsoletes_list and result:
             self.obsoletes_list.remove(pkg)
+        self.basenames_cache = {}
         return result
 
     def _removePkg(self, pkg):
@@ -679,14 +685,20 @@ class RpmDB(db.RpmDatabase):
         (dirname, basename) = os.path.split(filename)
         if len(dirname) > 0 and dirname[-1] != "/":
             dirname += "/"
-        nr = 0
-        for id, idx in self.iterIdIdx(self.basenames_db.get(basename, '')):
-            pkg = self.getPkgById(id)
-            if not pkg:
-                continue
-            if pkg.iterFilenames()[idx] == filename:
-                nr += 1
-        return nr
+        if not self.basenames_cache.has_key(basename):
+            data = self.basenames_db.get(basename, '')
+            #if len(data) > 80: # 8 byte/entry
+
+            filedict = {}
+            self.basenames_cache[basename] = filedict
+
+            for id, idx in self.iterIdIdx(data):
+                pkg = self.getPkgById(id)
+                if not pkg:
+                    continue
+                filedict.setdefault(filename, []).append((pkg, idx))
+                                                
+        return len(self.basenames_cache[basename].get(filename, []))
 
     def getFileRequires(self):
         return [name for name in self.requirename_db if name[0]=='/']
@@ -701,7 +713,7 @@ class RpmDB(db.RpmDatabase):
             for id, idx in self.iterIdIdx(data):
                 pkg = self.getPkgById(id)
                 if not pkg: continue
-                file = pkg["filenames"][idx]
+                file = pkg.iterFilenames()[idx]
                 duplicates.setdefault(file, [ ]).append(pkg)
         for filename, pkglist in duplicates.iteritems():
             if len(pkglist)<2:
@@ -720,7 +732,7 @@ class RpmDB(db.RpmDatabase):
             self._readObsoletes()
         for name, l in self.obsoletes_list.hash.iteritems():
             for f, v, p in l:
-                p = self.getPkgById(p["install_id"])
+                p = self.getPkgById(p.key)
                 if p:
                     yield  name, f, v, p
 
@@ -771,7 +783,7 @@ class RpmDB(db.RpmDatabase):
             if pkg and pkg.iterFilenames()[idx] == filename:
                 result.append(pkg)
             #elif pkg:
-            #    print "dropping", pkg.getNEVRA(), pkg["filenames"][idx]
+            #    print "dropping", pkg.getNEVRA(), pkg.iterFilenames()[idx] 
         return result
 
     def searchRequires(self, name, flag, version):

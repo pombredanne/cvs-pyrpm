@@ -181,8 +181,9 @@ class JointDB(db.RpmDatabase):
         for db in self.dbs: db.reloadDependencies()
 
     def searchProvides(self, name, flag, version):
-        return self._merge_search_results([db.searchProvides(name, flag, version)
-                                           for db in self.dbs])
+        return self._merge_search_results(
+            [db.searchProvides(name, flag, version)
+             for db in self.dbs])
 
     def searchFilenames(self, filename):
         result = []
