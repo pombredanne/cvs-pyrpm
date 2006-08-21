@@ -239,8 +239,9 @@ class RpmController:
                         # Shouldn't really happen when pkg is open for reading,
                         # anyway.
                         pass
-                self.db.close() # reopen database to get working connections
-                self.db.open()
+                self.db.sync()
+                #self.db.close() # reopen database to get working connections
+                #self.db.open()
             # really do the work
             else:
                 if self.config.buildroot:

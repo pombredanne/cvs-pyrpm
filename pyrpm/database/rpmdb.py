@@ -21,11 +21,9 @@
 import sys, time, struct, os, bsddb, re, fnmatch
 (pack, unpack) = (struct.pack, struct.unpack)
 from binascii import b2a_hex, a2b_hex
-sys.path.append('../..')
-import pyrpm.base as base
 from pyrpm.base import *
-import pyrpm.functions as functions
 import pyrpm.io as io
+import pyrpm.functions as functions
 import pyrpm.package as package
 import db
 import pyrpm.openpgp as openpgp
@@ -101,6 +99,9 @@ class RpmDB(db.RpmDatabase):
             "version" : None,
             "release" : None,
             "arch" : None,
+            "obsoletename" : None,
+            "obsoleteflags" : None,
+            "obsoleteversion" : None,
             }
 
     def __contains__(self, pkg):
@@ -110,7 +111,7 @@ class RpmDB(db.RpmDatabase):
     # clear all structures
     def clear(self):
         self.obsoletes_list = None
-        self.basenames_cache = {}
+        self.basenames_cache.clear()
         self._pkgs.clear()
 
     def setBuildroot(self, buildroot):
@@ -155,56 +156,21 @@ class RpmDB(db.RpmDatabase):
         """Read the database in memory."""
         return self.OK
 
+    def sync(self):
+        """Bring database into an valid state after packages have been
+        added/removed with nowrite=True and with nowrite=False in a
+        parallel process"""
+        self.close()
+        self.clear()
+        self.open()
+        return self.OK
+
     def _readObsoletes(self):
         self.obsoletes_list = lists.ObsoletesList()
 
-        for key, data in self.packages_db.iteritems():
-            rpmio = io.RpmFileIO(self.config, "dummy")
-            pkg = package.RpmPackage(self.config, "dummy")
-            pkg.key = key
-            try:
-                val = unpack("I", key)[0]
-            except struct.error:
-                self.config.printError("Invalid key %s in rpmdb" % repr(key))
-                continue
+        for pkg in self.getPkgs():
+            self.obsoletes_list.addPkg(pkg)
 
-            if val == 0:
-                self.maxid = unpack("I", data)[0]
-                continue
-            try:
-                (indexNo, storeSize) = unpack("!2I", data[0:8])
-            except struct.error:
-                self.config.printError("Value for key %s in rpmdb is too short"
-                                       % repr(key))
-                continue
-
-            if len(data) < indexNo*16 + 8:
-                self.config.printError("Value for key %s in rpmdb is too short"
-                                       % repr(key))
-                continue
-
-            indexdata = data[8:indexNo*16+8]
-            storedata = data[indexNo*16+8:]
-            found = False
-            for idx in xrange(0, indexNo):
-                try:
-                    tag = unpack("!I", indexdata[idx*16:idx*16+4])[0]
-                    if tag in [1090,1114,1115,]: # obsoletes
-                        found = True
-                        (tag, tagval) = rpmio.getHeaderByIndex(
-                            idx, indexdata, storedata)
-                        pkg[base.rpmtagname[tag]] = tagval
-                except ValueError, e:
-                    self.config.printError("Invalid header entry %s in %s: %s"
-                                           % (idx, key, e))
-                    #XXX
-            pkg["obsoletes"] = pkg.getObsoletes()
-            if pkg["obsoletes"]:
-                self.obsoletes_list.addPkg(pkg)
-                pkg.pop("obsoletename", None)
-                pkg.pop("obsoleteflags", None)
-                pkg.pop("obsoleteversion", None)
-                pkg.pop("obsoletes")
         self.is_read = 1
         return self.OK
 
@@ -269,7 +235,6 @@ class RpmDB(db.RpmDatabase):
             return None
 
         pkg.source = "rpmdb:/"+os.path.join(self.path, pkg.getNEVRA())
-        pkg["install_id"] = val
         pkg.io = None
         pkg.header_read = 1
         return pkg
@@ -326,12 +291,14 @@ class RpmDB(db.RpmDatabase):
         return 1
 
     def addPkg(self, pkg, nowrite=None):
-        result = 1
-        if not nowrite:
-            result = self._addPkg(pkg)
-        if self.obsoletes_list and result:
-            self.obsoletes_list.add(pkg)
-        self.basenames_cache = {}
+        if nowrite:
+            return 1
+        result = self._addPkg(pkg)
+        if result:
+            self._pkgs[pkg.key] = pkg
+            if self.obsoletes_list:
+                self.obsoletes_list.addPkg(pkg)
+        self.basenames_cache.clear()
         return result
 
     def _addPkg(self, pkg):
@@ -344,7 +311,9 @@ class RpmDB(db.RpmDatabase):
             except:
                 maxid = 0
 
-            pkgid = maxid + 1
+            pkgid = pack("I", maxid + 1)
+            pkg.key = pkgid
+            pkg.db = self
 
             rpmio = io.RpmFileIO(self.config, "dummy")
             if pkg["signature"].has_key("size_in_sig"):
@@ -375,7 +344,7 @@ class RpmDB(db.RpmDatabase):
                             lambda x:pack("i", x))
             self.__writeDB4(self.name_db, "name", pkgid, pkg, False)
             (headerindex, headerdata) = rpmio._generateHeader(pkg, 4)
-            self.packages_db[pack("I", pkgid)] = headerindex[8:]+headerdata
+            self.packages_db[pkgid] = headerindex[8:]+headerdata
             self.__writeDB4(self.providename_db, "providename", pkgid, pkg)
             self.__writeDB4(self.provideversion_db, "provideversion", pkgid,
                             pkg)
@@ -386,7 +355,7 @@ class RpmDB(db.RpmDatabase):
                             pkg, False)
             self.__writeDB4(self.sigmd5_db, "install_md5", pkgid, pkg, False)
             self.__writeDB4(self.triggername_db, "triggername", pkgid, pkg)
-            self.packages_db[self.zero] = pack("I", pkgid)
+            self.packages_db[self.zero] = pkgid
         except bsddb.error:
             functions.unblockSignals(signals)
             return 0 # Due to the blocking, this is now virtually atomic
@@ -394,25 +363,26 @@ class RpmDB(db.RpmDatabase):
         return 1
 
     def removePkg(self, pkg, nowrite=None):
-        result = 1
-        if not nowrite:
-            result = self._removePkg(pkg)
-        if hasattr(pkg, 'key'):
-            self._pkgs.pop(pkg.key, None)
+        if nowrite:
+            return 1
+        if (not hasattr(pkg, 'key') or
+            not hasattr(pkg, 'db') or
+            pkg.db is not self):
+            return 0
+        
+        result = self._removePkg(pkg)
+        self._pkgs.pop(pkg.key, None)
         if self.obsoletes_list and result:
-            self.obsoletes_list.remove(pkg)
-        self.basenames_cache = {}
+            self.obsoletes_list.removePkg(pkg)
+        self.basenames_cache.clear()
         return result
 
     def _removePkg(self, pkg):
-        if not pkg.has_key("install_id"):
-            return 0
+        pkgid = pkg.key
 
         signals = functions.blockSignals()
         try:
             self.__openDB4()
-
-            pkgid = pkg["install_id"]
 
             self.__removeId(self.basenames_db, "basenames", pkgid, pkg)
             self.__removeId(self.conflictname_db, "conflictname", pkgid, pkg)
@@ -433,7 +403,7 @@ class RpmDB(db.RpmDatabase):
                             pkg, False)
             self.__removeId(self.sigmd5_db, "install_md5", pkgid, pkg, False)
             self.__removeId(self.triggername_db, "triggername", pkgid, pkg)
-            del self.packages_db[pack("I", pkgid)]
+            del self.packages_db[pkgid]
         except bsddb.error:
             functions.unblockSignals(signals)
             return 0 # FIXME: keep trying?
@@ -510,7 +480,7 @@ class RpmDB(db.RpmDatabase):
                 continue
             data = db[key]
             ndata = ""
-            rdata = pack("2I", pkgid, idx)
+            rdata = pkgid + pack("I", idx)
             for i in xrange(0, len(data), 8):
                 if not data[i:i+8] == rdata:
                     ndata += data[i:i+8]
@@ -547,10 +517,7 @@ class RpmDB(db.RpmDatabase):
                     continue
                 else:
                     tnamehash[key] = 1
-            if not db.has_key(key):
-                db[key] = pack("2I", pkgid, idx)
-            else:
-                db[key] += pack("2I", pkgid, idx)
+            db[key] = db.get(key, "") + (pkgid + pack("I", idx))
             if not useidx:
                 break
 

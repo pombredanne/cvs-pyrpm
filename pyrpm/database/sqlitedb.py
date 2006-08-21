@@ -189,6 +189,8 @@ class SqliteDB(repodb.RpmRepoDB):
         self._othersdb = None
         self._pkgs = { }
 
+    def sync(self):
+        return self.OK
 
     def create(self, filename):
         """Create an initial database"""

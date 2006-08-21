@@ -205,9 +205,7 @@ class RpmYum:
             db = database.memorydb.RpmMemoryDB(self.config, None)
             db.addPkgs(self.pydb.getPkgs())
         else:
-            db = database.rpmshadowdb.RpmShadowDB(self.config,
-                                                  self.config.dbpath,
-                                                  self.config.buildroot)
+            db = database.rpmshadowdb.RpmShadowDB(self.pydb)
 
         for pkg in db.searchProvides("redhat-release", 0, ""):
             rpmconfig.relver = pkg["version"]

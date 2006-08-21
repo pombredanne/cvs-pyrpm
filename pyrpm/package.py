@@ -220,12 +220,12 @@ class RpmPackage(RpmData):
         self.range_payload = (None, None) # Payload; length is always None
 
     def clear(self, tags=None, ntags=None):
-        """Drop read data and prepare for rereading it, unless install_id is
-        known."""
-
-        if self.has_key("install_id"):
+        """Drop read data and prepare for rereading it, unless it is
+        a rpmdb package."""
+        
+        if hasattr(self, "key"): # XXX really needed?
             return
-
+                    
         for key in self.keys():
             if tags and key in tags:
                 del self[key]
@@ -238,12 +238,12 @@ class RpmPackage(RpmData):
         self.rpmusercache = RpmUserCache(self.config)
 
     def open(self, mode="r"):
-        """Open the package if it is not already open and install_id is not
-        known.
+        """Open the package if it is not already open and is not
+        from rpmdb.
 
         Raise IOError."""
 
-        if self.has_key("install_id"):
+        if hasattr(self, "key"):
             return
 
         if self.io != None:
@@ -256,11 +256,11 @@ class RpmPackage(RpmData):
         self.io.open(mode)
 
     def close(self):
-        """Close the package IO if install_id is not known.
+        """Close the package IO if .key is not set.
 
         Raise IOError."""
 
-        if self.has_key("install_id"):
+        if hasattr(self, "key"):
             return
 
         if self.io != None:

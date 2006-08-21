@@ -63,6 +63,12 @@ class RpmDatabase:
         """Read the database in memory."""
         raise NotImplementedError
 
+    def sync(self):
+        """Bring database into an valid state after packages have been
+        added/removed with nowrite=True and with nowrite=False in a
+        parallel process"""
+        raise NotImplementedError
+    
     # add package
     def addPkg(self, pkg, nowrite=None):
         raise NotImplementedError

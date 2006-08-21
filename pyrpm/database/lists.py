@@ -190,7 +190,6 @@ class ConflictsList(ProvidesList):
 
     def removePkg(self, rpm):
         """Remove Provides: by RpmPackage rpm"""
-
         for entry in rpm[self.TAG]:
             name = entry[0]
             list = self.hash[name]

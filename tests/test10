@@ -121,7 +121,8 @@ baseurl=file://$FEDORA/updates/$1/$ARCH/
 EOF
 }
 
-DATA=/mnt/data/karsten
+DATA=/tmp/test
+#DATA=/mnt/data/karsten
 #DATA=/mnt/data/laroche
 
 
