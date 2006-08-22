@@ -31,6 +31,8 @@ class RpmDatabase:
     NOT_INSTALLED = -3
 
     def __init__(self, config, source, buildroot=None):
+        if self.__class__ is RpmDatabase:
+            raise NotImplementedError, "Abstract class"
         self.config = config
         self.source = source
         self.buildroot = buildroot
