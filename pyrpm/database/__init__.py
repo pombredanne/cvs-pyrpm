@@ -37,13 +37,11 @@ def getRpmDBFactory(config, source, root=None):
         return sqlitedb.SqliteDB(config, source[6:], root)
         #return repodb.RpmRepoDB(config, source[6:], root)
     elif source[:7] == 'rpmdb:/':
-        #return rpmshadowdb.RpmDB(config, source[7:], root)
-        return rpmmemorydb.RpmMemoryDB(config, source[7:], root)
+        return rpmdb.RpmDB(config, source[7:], root)
     elif source[:10] == 'sqlitedb:/':
         return sqlitedb.SqliteDB(config, source[10:], root)
     elif source[:5] == 'dir:/':
         return directorydb.RpmDirectoryDB(config, source[4:], root)
-    return rpmmemorydb.RpmMemoryDB(config, source, root)
-    #return rpmshadowdb.RpmDB(config, source, root)
+    return rpmdb.RpmDB(config, source, root)
 
 # vim:ts=4:sw=4:showmatch:expandtab

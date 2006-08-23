@@ -165,6 +165,11 @@ class RpmDB(db.RpmDatabase):
         self.open()
         return self.OK
 
+    def getMemoryCopy(self):
+        from pyrpm.database.rpmshadowdb import RpmShadowDB
+        db = RpmShadowDB(self)
+        return db
+
     def _readObsoletes(self):
         self.obsoletes_list = lists.ObsoletesList()
 

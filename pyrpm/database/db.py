@@ -70,6 +70,12 @@ class RpmDatabase:
         added/removed with nowrite=True and with nowrite=False in a
         parallel process"""
         raise NotImplementedError
+
+    def getMemoryCopy(self):
+        from pyrpm.database.memorydb import RpmMemoryDB
+        db = RpmMemoryDB(self.config, self.source, self.buildroot)
+        db.addPkgs(self.getPkgs())
+        return db
     
     # add package
     def addPkg(self, pkg, nowrite=None):

@@ -185,12 +185,9 @@ class RpmYum:
                 time1 = clock()
             # Create and read db
             self.config.printInfo(1, "Reading local RPM database\n")
-            self.pydb = database.rpmdb.RpmDB(self.config,
-                                             self.config.dbpath,
-                                             self.config.buildroot )
-            #self.pydb = database.getRpmDBFactory(self.config,
-            #                                     self.config.dbpath,
-            #                                     self.config.buildroot)
+            self.pydb = database.getRpmDBFactory(self.config,
+                                                 self.config.dbpath,
+                                                 self.config.buildroot)
             self.pydb.open()
             if not self.pydb.read():
                 self.config.printError("Error reading the RPM database")
@@ -200,12 +197,7 @@ class RpmYum:
         if self.config.timer:
             time1 = clock()
 
-
-        if localDb:
-            db = database.memorydb.RpmMemoryDB(self.config, None)
-            db.addPkgs(self.pydb.getPkgs())
-        else:
-            db = database.rpmshadowdb.RpmShadowDB(self.pydb)
+        db = self.pydb.getMemoryCopy()
 
         for pkg in db.searchProvides("redhat-release", 0, ""):
             rpmconfig.relver = pkg["version"]
