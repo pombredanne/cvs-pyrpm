@@ -3415,6 +3415,13 @@ if wait:
 
 print "Cleaning up, please wait."
 
+if source:
+    source.close()
+    source = None
+for repo in repos:
+    repos[repo].close()
+repos = None
+
 if devmap:
     # remove temporary devices
     for dev in devmap:
