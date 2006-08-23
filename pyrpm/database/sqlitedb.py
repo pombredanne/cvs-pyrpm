@@ -493,7 +493,7 @@ class SqliteDB(repodb.RpmRepoDB):
             return
         pkgKey = op["pkgKey"]
         pkgId = op["pkgId"]
-        if self._pkgs.has_key(pkgKey):
+        if self._pkgs.has_key(pkgKey) and self._pkgs[pkgKey] is not None:
             self._pkgs[pkgKey]['oldfilenames'] = filelist
 
         dirs = {}
@@ -518,13 +518,14 @@ class SqliteDB(repodb.RpmRepoDB):
         # try mirror that just worked
         if self.getDbFile("filelists"):
             for pkg in self._pkgs.itervalues():
-                pkg.clearFilelist()
+                if pkg is not None:
+                    pkg.clearFilelist()
             return 1
         for uri in self.source:
             self.nc = NetworkCache(uri, os.path.join(self.config.cachedir, self.reponame))
             if not self.getDbFile("filelists"): continue
             for pkg in self._pkgs.itervalues():
-                if pkg.has_key("oldfilenames"):
+                if pkg is not None:
                     pkg.clearFilelist()
             return 1
         return 0
