@@ -126,7 +126,7 @@ class KickstartConfig(dict):
 
             if not in_packages and not in_post and not in_pre:
                 if len(args) == 1:
-                    if opt in [ "autopart", "autostep", "cdrom", "cmdline",
+                    if opt in [ "autopart", "autostep", "cmdline",
                                 "halt", "install", "interactive", "poweroff",
                                 "reboot", "shutdown", "skipx", "text",
                                 "upgrade", "mouse", "zerombr" ]:
@@ -164,6 +164,11 @@ class KickstartConfig(dict):
                     if self["bootloader"].has_key("driveorder"):
                         order = self["bootloader"]["driveorder"].split(",")
                         self["bootloader"]["driveorder"] = order
+                elif opt == "cdrom":
+                    self.parseSimple(opt, args[1:], [ "exclude:" ])
+                    if self[opt].has_key("exclude"):
+                        self[opt]["exclude"] = string.split( \
+                            self[opt]["exclude"], ",")
                 elif opt == "clearpart":
                     self.parseSimple(opt, args[1:],
                                      [ "all", "drives:", "initlabel", "linux",
@@ -282,10 +287,13 @@ class KickstartConfig(dict):
                             dict["nameserver"].append(string.strip(split))
                 elif opt == "nfs":
                     self.parseSimple(opt, args[1:],
-                                     [ "server:", "dir:" ])
+                                     [ "server:", "dir:", "exclude:" ])
                     if not self[opt].has_key("server") or \
                        not self[opt].has_key("dir"):
                         raise ValueError, "Error in line '%s'" % line
+                    if self[opt].has_key("exclude"):
+                        self[opt]["exclude"] = string.split( \
+                            self[opt]["exclude"], ",")
                 elif opt == "part" or opt == "partition":
                     if args[1] == "swap":
                         args[1] = "swap.%d" % swap_id

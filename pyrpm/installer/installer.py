@@ -17,6 +17,8 @@
 #
 
 from pyrpm.database import repodb
+from pyrpm.database import sqlitedb
+from pyrpm.yum import Conf
 from disk import *
 import config
 from devices import *
@@ -99,9 +101,9 @@ keyboard_models = {
 ################################### classes ###################################
 
 class Installation:
-    def __init__(self, version, release, arch):
-        self.release = version
-        self.version = release
+    def __init__(self, release, version, arch):
+        self.release = release
+        self.version = version
         self.arch = arch
         self.devices = Devices()
 
@@ -128,16 +130,16 @@ class Repository:
             return self.cache.cache(filename)
         return None
 
-    def load(self, baseurl=None, mirrorlist=None, exclude=None):
+    def load(self, baseurl, mirrorlist=None, exclude=None):
         source = baseurl
-        if source and source == "cdrom":
+        if source == "cdrom":
             # mount cdrom
             what = "/dev/cdrom"
             if config.verbose:
                 print "Mounting '%s' on '%s'" % (what, self.dir)
             mount(what, self.dir, fstype="auto", options="ro")
             source = "file://%s" % self.dir
-        elif source and source[:6] == "nfs://":
+        elif source[:6] == "nfs://":
             what = source[6:]
             splits = what.split("/", 1)
             if splits[0][-1] != ":":
@@ -148,15 +150,26 @@ class Repository:
                 print "Mounting '%s' on '%s'" % (source, self.dir)
             mount(what, self.dir, fstype="nfs", options="ro")
             source = "file://%s" % self.dir
-        # else: url
+        # else: source == url
 
+        if exclude or mirrorlist:
+            yumconf = Conf()
+            if exclude:
+                yumconf["exclude"] = exclude
+            if mirrorlist:
+                yumconf["mirrorlist"] = mirrorlist
+        else:
+            yumconf = None
+
+        self.baseurl_orig = baseurl
         self.baseurl = source
         self.mirrorlist = mirrorlist
         self.exclude = exclude
 
-        # TODO: use mirrorlist
-        self.repo = repodb.RpmRepoDB(self.config, [ source ],
-                                     reponame=self.name)
+        self.repo = sqlitedb.SqliteDB(self.config, [ source ], yumconf=yumconf,
+                                      reponame=self.name)
+#        self.repo = repodb.RpmRepoDB(self.config, [ source ], yumconf=yumconf,
+#                                     reponame=self.name)
         if not self.repo.read():
             print "ERROR: Could not read repository '%s'." % self.name
             return 0
@@ -168,5 +181,10 @@ class Repository:
 
         self.comps = self.repo.comps
         return 1
+
+    def close(self):
+        self.cache = None
+        self.comps = None
+        self.repo.close()
 
 # vim:ts=4:sw=4:showmatch:expandtab

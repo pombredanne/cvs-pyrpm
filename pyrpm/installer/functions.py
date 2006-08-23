@@ -16,12 +16,13 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import os, os.path, stat
+import os, os.path, stat, signal
 import pyrpm.functions as functions
 import pyrpm.database as database
 import pyrpm.config
 import config
 from filesystem import *
+from installer import Repository
 
 def get_system_disks():
     disks = [ ]
@@ -315,22 +316,31 @@ def get_installed_kernels(chroot=None):
 def fuser(what):
     i = 0
     log = ""
-    while os.system("/usr/sbin/lsof '%s' >/dev/null 2>&1" % what) == 0:
-        sig = "TERM"
-        if i == 20:
-            print "ERROR: Failed to kill processes using '%s': %s." % \
-                  (what, log)
-            return 1
-        elif i >= 15:
-            time.sleep(1)
-        elif i >= 10:
-            sig = "SIGKILL"
-        fuser = "/sbin/fuser -km -%s '%s'" % (sig, what)
-        (status, rusage, log) = functions.runScript(script=fuser)
-        if status == 256:
-            # nothing to do
+
+    sig = signal.SIGTERM
+    while 1:
+        lsof = "/usr/sbin/lsof -t +D '%s' 2>/dev/null" % what
+        (status, rusage, msg) = functions.runScript(script=lsof)
+        if msg == "":
             break
+        pids = msg.strip().split()
+        if len(pids) == 0:
+            break
+        for pid in pids:
+            try:
+                p = int(pid)
+            except:
+                continue
+            os.kill(p, sig)
         i += 1
+        if i == 20:
+            print "ERROR: Failed to kill processes:"
+            os.system("/usr/sbin/lsof +D '%s'" % what)
+            break
+        if i > 15:
+            time.sleep(1)
+        if i > 10:
+            sig = signal.SIGKILL
 
 def umount_all(dir):
     # umount target dir and included mount points
@@ -622,5 +632,104 @@ def addPkgByFileProvide(repo, name, pkgs, description):
     else:
         raise ValueError, "Could not find package providing '%s'" % (name) + \
               "needed for %s." % (description)
+
+def load_source_repo(ks, source_dir):
+    source = Repository(pyrpm.rpmconfig, source_dir, "base")
+
+    exclude = None
+    if ks.has_key("cdrom"):
+        url = "cdrom"
+        if ks["cdrom"].has_key("exclude"):
+            exclude = ks["nfs"]["exclude"]
+    elif ks.has_key("nfs"):
+        url = "nfs://%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
+        if ks["nfs"].has_key("exclude"):
+            exclude = ks["nfs"]["exclude"]
+    else:
+        url = ks["url"]["url"]
+        if ks["url"].has_key("exclude"):
+            exclude = ks["url"]["exclude"]
+
+    print "Reading repodata from installation source ..."
+    if not source.load(url, exclude=exclude):
+        raise IOError, "Loading of source failed."
+
+    return source
+
+def load_repos(ks, repos_dir):
+    if not ks.has_key("repo"):
+        return { }
+
+    repos = { }
+    failed = [ ]
+    for repo in ks["repo"]:
+        repos[repo] = Repository(pyrpm.rpmconfig,
+                                 "%s/%s" % (repos_dir, repo), repo)
+        print "Reading repodata from repository '%s'" % repo
+        baseurl = mirrorlist = exclude = None
+        if ks["repo"][repo].has_key("baseurl"):
+            baseurl = ks["repo"][repo]["baseurl"]
+        if ks["repo"][repo].has_key("mirrorlist"):
+            # TODO: as soon as RepoDB supports mirrorlist directly...
+            mirrorlist = ks["repo"][repo]["mirrorlist"]
+        if ks["repo"][repo].has_key("exclude"):
+            exclude = ks["repo"][repo]["exclude"]
+        if not repos[repo].load(baseurl, mirrorlist=mirrorlist,
+                                exclude=exclude):
+            failed.append(repo)
+
+    if len(failed) > 0:
+        raise IOError, "Loading of repo '%s' failed." % "', '".join(failed)
+
+    return repos
+
+def release_info(source):        
+    # get source information via release package
+    release = "Red Hat Enterprise Linux"
+    pkgs = source.repo.getPkgsByName("redhat-release")
+    if len(pkgs) == 0:
+        release = "Fedora Core"
+        pkgs = source.repo.getPkgsByName("fedora-release")
+    if len(pkgs) == 0:
+        raise ValueError, "Could not find release package in source."
+    if len(pkgs) > 1:
+        raise ValueError, "Found more than one release package, exiting."
+    version = pkgs[0]["version"]
+    arch = pkgs[0]["arch"]
+    # drop all letters from version
+    version = version.strip(string.letters)
+    if len(version) == 0:
+        raise ValueError, "No valid version of installation source"
+    i = string.find(pkgs[0]["release"], "rawhide")
+    if i != -1 and string.find(version, ".") == -1:
+        version += ".90" # bad fix for rawhide
+    del i
+
+    if arch == "noarch":
+        # get installation arch
+        pkgs = source.repo.getPkgsByName("filesystem")
+        if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
+            pkgs = source.repo.getPkgsByName("coreutils")
+        if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
+            raise ValueError, "Could not determine installation architecture."
+        arch = pkgs[0]["arch"]
+
+    return (release, version, arch)
+
+def run_script(ks, type, chroot):
+    print "Running %s script" % type
+    interpreter = "/bin/sh"
+    if ks[type].has_key("interpreter"):
+        interpreter = ks[type]["interpreter"]
+    (status, rusage, msg) = pyrpm.runScript(interpreter, ks[type]["script"],
+                                            chroot=chroot)
+    log(msg)
+    if status != 0:
+        if ks[type].has_key("erroronfail"):
+            print "ERROR: Script failed, aborting."
+            return 0
+        else:
+            print "WARNING: Script failed."
+    return 1
 
 # vim:ts=4:sw=4:showmatch:expandtab

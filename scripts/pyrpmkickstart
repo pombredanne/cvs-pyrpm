@@ -39,6 +39,11 @@ import pyrpm
 import pyrpm.database
 from pyrpm.installer import *
 
+if not PARTED_MODULE_LOADED:
+    print "ERROR: Import of parted module failed. " \
+          "Please install the pyparted package if it is not installed already."
+    sys.exit(1)
+
 # do not use first 4 loop devices
 # mkinitrd in old Fedora or Red Hat releases needs one and can only use
 # loop0 to loop3
@@ -64,12 +69,12 @@ def main():
            partitionmap, devmap, wait, orig_yum, target_dir, \
            label_prefix, standalone, stage2_img_dir, repo_comps, upgrade, \
            no_stage2, no_cache, raidmap, log, stage2_chroot, \
-           vgmap
+           vgmap, source, repos
     user_arch = None
     no_default_groups = 0
     autoerase = 0
-    no_buildstamp = 0
     no_discinfo = 0
+    has_raid = False
 
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvy",
@@ -78,8 +83,7 @@ def main():
                                        "standalone", "wait", "xen", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
                                        "no-cache", "no-default-groups",
-                                       "drop-unresolved", "no-buildstamp",
-                                       "no-discinfo"])
+                                       "drop-unresolved", "no-discinfo" ])
     except:
         usage()
         return
@@ -122,8 +126,6 @@ def main():
             no_default_groups = 1
         elif opt == "--drop-unresolved":
             autoerase = 1
-        elif opt == "--no-buildstamp":
-            no_buildstamp = 1
         elif opt == "--no-discinfo":
             no_discinfo = 1
         else:
@@ -216,56 +218,29 @@ def main():
 
     ### load source ###
 
-    source = Repository(pyrpm.rpmconfig, source_dir, "base")
-
-    baseexclude = None
-    if ks.has_key("cdrom"):
-        url = "cdrom"
-    elif ks.has_key("nfs"):
-        url = "nfs://%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
-    else:
-        url = ks["url"]["url"]
-        if ks["url"].has_key("exclude"):
-            baseexclude = ks["url"]["exclude"]
-
-    print "Reading repodata from installation source ..."
-    if not source.load(url, exclude=baseexclude):
+    try:
+        source = load_source_repo(ks, source_dir)
+    except Exception, msg:
+        print "ERROR: %s" % msg
         return 1
 
-    ### get source information via release package ###
-    # will be overwritte later by .buildstamp or .discinfo if not disabled
+    ### get source information ###
 
-    # get source information via release package
-    source_release = "Red Hat Enterprise Linux"
-    pkgs = source.repo.getPkgsByName("redhat-release")
-    if len(pkgs) == 0:
-        source_release = "Fedora Core"
-        pkgs = source.repo.getPkgsByName("fedora-release")
-    if len(pkgs) == 0:
-        print "ERROR: Could not find release package in source."
-        return
-    if len(pkgs) > 1:
-        print "ERROR: Found more than one release package, exiting."
-        return
-    source_version = pkgs[0]["version"]
-    # drop all letters from source_version
-    source_version = source_version.strip(string.letters)
-    if len(source_version) == 0:
-        print "ERROR: No valid version of installation source"
-        return 1
-    i = string.find(pkgs[0]["release"], "rawhide")
-    if i != -1 and string.find(source_version, ".") == -1:
-        source_version += ".90" # bad fix for rawhide
-    del i
-
-    # get installation arch
-    pkgs = source.repo.getPkgsByName("filesystem")
-    if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
-        pkgs = source.repo.getPkgsByName("coreutils")
-    if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
-        print "ERROR: Could not determine installation architecture."
-        return 1
-    source_arch = pkgs[0]["arch"]
+    source_release = source_version = source_arch = None
+    # get discinfo if available
+    if not no_discinfo and source.get(".discinfo"):
+        di = get_discinfo(source.get(".discinfo"))
+        if di:
+            (source_release, source_version, source_arch) = di
+    if not source_release or not source_version or not source_arch:
+        # get source information via release package
+        # will be overwritte later by .buildstamp or .discinfo if not disabled
+        try:
+            (source_release, source_version, source_arch) = \
+                             release_info(source)
+        except Exception, msg:
+            print "ERROR: %s" % msg
+            return 1
 
     ############################## mount stage2  ##############################
 
@@ -273,7 +248,6 @@ def main():
         stage2_img_dir = tempdir+"/stage2_img"
         os.mkdir(stage2_img_dir)
 
-        # This could also use .discinfo:
         stage2 = source.get("RedHat/base/stage2.img")
         if not stage2:
             stage2 = source.get("Fedora/base/stage2.img")
@@ -281,22 +255,20 @@ def main():
             stage2 = source.get("images/stage2.img")
         if not stage2:
             print "ERROR: Could not find stage2 image in installation source."
-            print "Maybe use the option --no-stage2."
+            print "Try to use option --no-stage2."
             return 1
         if not os.path.exists(stage2):
             print "ERROR: Could not get stage2 image from installation source."
-            print "Maybe use the option --no-stage2."
+            print "Try to use option --no-stage2."
             return 1
 
         fstype = None # no fstype needed for compressed rom fs
+
         # determine stage2.img filesystem type
         fd = open(stage2, "r")
         magic = fd.read(4)
         fd.close()
-        if len(magic) != 4:
-            print "ERROR: %s is not a valid stage2 image" % stage2
-            return 1
-        if magic == "hsqs" or magic == "sqsh":
+        if len(magic) == 4 and (magic == "hsqs" or magic == "sqsh"):
             fstype = "squashfs"
 
         if verbose:
@@ -310,7 +282,7 @@ def main():
             return 1
 
         ### analyze stage2 ###
-        if not no_buildstamp:
+        if verbose:
             if not os.path.exists("%s/.buildstamp" % stage2_img_dir):
                 print "ERROR: Buildstamp information is missing in stage2."
                 return 1
@@ -318,7 +290,12 @@ def main():
             if not bs:
                 print "ERROR: Failed to get buildstamp information from stage2"
                 return 1
-            (source_release, source_version, source_arch) = bs
+            if bs[0] != source_release or bs[1] != source_version or \
+                   bs[2] != source_arch:
+                print "WARNING: Release info does not match buildstamp: \n" \
+                      "  %s-%s.%s <=> %s-%s.%s" % (bs[0], bs[1], bs[2],
+                                                   source_release,
+                                                   source_version, source_arch)
 
         ### create stage2 chroot ###
 
@@ -404,12 +381,6 @@ def main():
 
     else: # no_stage2
         stage2_dir = ""
-
-        # get discinfo if available
-        if not no_discinfo and source.get(".discinfo"):
-            di = get_discinfo(source.get(".discinfo"))
-            if di:
-                (source_release, source_version, source_arch) = di
 
     # verify source release and version
     if source_release == "Red Hat Enterprise Linux":
@@ -551,7 +522,7 @@ def main():
             diskmap[disk].print_info()
             diskmap[disk].print_partitions()
 
-    ### start installation process ###
+    ####################### start installation process #######################
 
     if standalone and ks.has_key("network") and \
            (ks.has_key("nfs") or \
@@ -563,30 +534,14 @@ def main():
         # 2) (re)start networking
         print "TODO: start network"
 
-    has_raid = False
-    fstypes = [ ]
-
     ########################## kickstart second pass ##########################
 
     # run pre script and reload kickstart file
     if ks.has_key("install") and \
            ks.has_key("pre") and ks["pre"].has_key("script") and \
            len(ks["pre"]["script"]) > 0:
-        print "Running pre script"
-        interpreter = "/bin/sh"
-        if ks["pre"].has_key("interpreter"):
-            interpreter = ks["pre"]["interpreter"]
-        (status, rusage, msg) = pyrpm.runScript(interpreter,
-                                                ks["pre"]["script"],
-                                                chroot=stage2_chroot)
-        log(msg)
-        if status != 0:
-            if ks["pre"].has_key("erroronfail"):
-                print "ERROR: Pre script failed, aborting."
-                return 1
-            else:
-                print "WARNING: Pre script failed, aborting."
-
+        if not run_script(ks, "pre", stage2_chroot):
+            return 1
         # parse file again
         ks.clear()
         ks.parse(ks_file)
@@ -619,27 +574,13 @@ def main():
               ks["keyboard"]
         return 1
 
-    ########################### create repo caches ###########################
+    ############################### load repos ###############################
 
-    # TODO: check repo names for invalid chars
-    repos = { }
-    if ks.has_key("repo"):
-        for repo in ks["repo"]:
-            repos[repo] = Repository(pyrpm.rpmconfig,
-                                     "%s/%s" % (repos_dir, repo), repo)
-            print "Reading repodata from repository '%s'" % repo
-            baseurl = mirrorlist = exclude = None
-            if ks["repo"][repo].has_key("baseurl"):
-                baseurl = ks["repo"][repo]["baseurl"]
-            if ks["repo"][repo].has_key("mirrorlist"):
-                # TODO: as soon as RepoDB supports mirrorlist directly...
-                print "TODO: RepoDB has to support mirrorlists."
-#                mirrorlist = ks["repo"][repo]["mirrorlist"]
-            if ks["repo"][repo].has_key("exclude"):
-                exclude = ks["repo"][repo]["exclude"]
-            if not repos[repo].load(baseurl=baseurl, mirrorlist=mirrorlist,
-                                       exclude=exclude):
-                return 1
+    try:
+        repos = load_repos(ks, repos_dir)
+    except Exception, msg:
+        print "ERROR: %s" % msg
+        return 1
 
     ############## clear and generate partitions and disklabels ##############
 
@@ -1933,7 +1874,7 @@ def main():
                     tune2fs = "/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
                               partitionmap[onpart]["device"]
 
-                    print "Tuning filesystem '%s'" % onpart
+                    print "Tuning filesystem '%s'" % name
                     if verbose:
                         print tune2fs
 
@@ -2678,17 +2619,17 @@ def main():
     fd.write("retries=20\n")
     fd.write("obsoletes=1\n")
     fd.write("reposdir=%s/yum.repos.d\n" % tempdir)
-    exclude = string.join(baseexclude or "")
     if ks.has_key("install") and \
            ks.has_key("packages") and ks["packages"].has_key("drop"):
-        exclude = exclude + " " + string.join(ks["packages"]["drop"])
-    if exclude:
-        fd.write("exclude=%s\n" % exclude)
+        fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
     fd.write("\n")
     fd.write("[base]\n")
     fd.write("name=dist %s\n" % installation)
     if source.baseurl:
         fd.write("baseurl=%s\n" % source.baseurl)
+    if source.exclude:
+        fd.write("exclude=%s\n" % string.join(source.exclude))
+
     # no repo.mirrorlist and repo.exclude for base
     fd.write("\n")
     # add repos
@@ -3137,7 +3078,7 @@ def main():
                 print "ERROR: grub stage files are missing in " + \
                       "installation tree."
                 return 1
-            for f in [ "stage1", "stage2", "e2fs_stage1_5" ]:
+            for f in [ "stage1", "stage2" ]:
                 if not f in list:
                     print "ERROR: grub stage file '%s' " % (f) + \
                           "is missing in installation tree."
@@ -3235,27 +3176,13 @@ def main():
     if ks.has_key("install") and \
            ks.has_key("post") and ks["post"].has_key("script") and \
            len(ks["post"]["script"]) > 0:
-        print "Running post script"
-
         chroot = None
         if not ks["post"].has_key("nochroot"):
             chroot = target_chroot
         elif stage2_chroot:
             chroot = stage2_chroot
-        interpreter = "/bin/sh"
-        if ks["post"].has_key("interpreter"):
-            interpreter = ks["post"]["interpreter"]
-
-        (status, rusage, msg) = pyrpm.runScript(interpreter,
-                                                ks["post"]["script"],
-                                                chroot=chroot)
-        log(msg)
-        if status != 0:
-            if ks["post"].has_key("erroronfail"):
-                print "ERROR: post script failed"
-                return 1
-            else:
-                print "WARNING: post script failed"
+        if not run_script(ks, "post", chroot):
+            return 1
 
     if xen:
         print "Writing xen.conf"
@@ -3328,8 +3255,6 @@ OPTIONS
                            use host system tools to format partitions. This
                            does not work for all host and client system
                            combinations, but could help with others.
-  --no-buildstamp          Do not use .buildstamp information in stage2 images.
-                           Only usable without --no-stage2.
   --no-cache               Do not cache RPM's (e.g. for http and ftp sources).
   --no-cleanup             Do not cleanup temporary directory and files.
   --no-default-groups      Do not use base and core as default groups. This is
@@ -3375,6 +3300,8 @@ no_stage2 = 0
 no_cache = 0
 stage2_chroot = None
 vgmap = None
+source = None
+repos = { }
 
 # abort if user is not root
 if os.geteuid() != 0:
