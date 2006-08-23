@@ -723,7 +723,7 @@ def run_script(ks, type, chroot):
         interpreter = ks[type]["interpreter"]
     (status, rusage, msg) = pyrpm.runScript(interpreter, ks[type]["script"],
                                             chroot=chroot)
-    log(msg)
+    config.log(msg)
     if status != 0:
         if ks[type].has_key("erroronfail"):
             print "ERROR: Script failed, aborting."
