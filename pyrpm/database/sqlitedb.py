@@ -644,6 +644,9 @@ class SqliteDB(repodb.RpmRepoDB):
         pkg = self.readRpm(pkgKey)
         if pkg:
             self._pkgs[pkgKey] = pkg
+            if self._isExcluded(pkg):
+                self._pkgs[pkgKey] = None
+                return None
         return pkg
 
     def getPkgById(self, pkgId):
