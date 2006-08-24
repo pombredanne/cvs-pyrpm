@@ -275,7 +275,6 @@ class SqliteDB(repodb.RpmRepoDB):
 
         # This appears to be a valid database, return checksum value and
         # database object
-        self.config.printInfo(1, "Loaded %s\n" % filename)
         return (info['checksum'], db)
 
     def createFilelistsTables(self):
@@ -379,6 +378,10 @@ class SqliteDB(repodb.RpmRepoDB):
 
 
     def getDbFile(self, dbtype):
+
+        self.config.printInfo(1, "Loading %s for %s...\n" %
+                              (dbtype, self.reponame))
+        
         cachebase = os.path.join(self.config.cachedir, self.reponame)
         cachepath = os.path.join(self.config.cachedir, self.reponame, "sqlite")
 
@@ -524,6 +527,7 @@ class SqliteDB(repodb.RpmRepoDB):
             for pkg in self._pkgs.itervalues():
                 if pkg is not None:
                     pkg.clearFilelist()
+            self.filelist_imported = True
             return 1
         for uri in self.source:
             self.nc = NetworkCache(uri, os.path.join(self.config.cachedir, self.reponame))
@@ -531,6 +535,7 @@ class SqliteDB(repodb.RpmRepoDB):
             for pkg in self._pkgs.itervalues():
                 if pkg is not None:
                     pkg.clearFilelist()
+            self.filelist_imported = True
             return 1
         return 0
 
