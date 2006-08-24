@@ -596,8 +596,6 @@ class SqliteDB(repodb.RpmRepoDB):
 
     # add package
     def addPkg(self, pkg, nowrite=None):
-        if self._isExcluded(pkg):
-            return 0
         cur = self._primarydb.cursor()
         data = {}
         for tag in self.COLUMNS:
