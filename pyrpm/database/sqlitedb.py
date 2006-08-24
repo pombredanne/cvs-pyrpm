@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import sys, os, re, sqlite, bz2, shutil
+import sys, os, re, bz2, shutil
 import libxml2
 
 from pyrpm import *
@@ -35,6 +35,11 @@ try:
     USEYUM = yum.sqlitecache.dbversion == dbversion
 except ImportError:
     USEYUM = False
+
+try:
+    import sqlite
+except ImportError:
+    sqlite = None
 
 class SqliteRpmPackage(package.RpmPackage):
 
@@ -153,7 +158,6 @@ class SqliteDB(repodb.RpmRepoDB):
     def __init__(self, config, source, buildroot=None, yumconf = None,
                  reponame="default"):
         db.RpmDatabase.__init__(self, config, source, buildroot)
-        #self.filename = os.path.join(buildroot, "primary.xml.gz.sqlite")
         self.baseurl = None
         self.yumconf = yumconf
         self.reponame = reponame
@@ -845,3 +849,7 @@ class SqliteDB(repodb.RpmRepoDB):
             if pkg:
                 result.append(pkg)
         return result
+
+# fall back to RpmRepoDB if sqlite is not installed
+if sqlite is None:
+    SqliteDB = repodb.RpmRepoDB
