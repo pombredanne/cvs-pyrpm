@@ -13,7 +13,7 @@ checkImplicitReturns = False
 limit = 0
 
 # max # of lines in a function
-maxLines = 450
+maxLines = 500
 
 # max # of branches in a function
 maxBranches = 80
