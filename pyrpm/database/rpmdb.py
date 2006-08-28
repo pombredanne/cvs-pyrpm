@@ -296,6 +296,7 @@ class RpmDB(db.RpmDatabase):
         return 1
 
     def addPkg(self, pkg, nowrite=None):
+        self.basenames_cache.clear()
         if nowrite:
             return 1
         result = self._addPkg(pkg)
@@ -303,7 +304,6 @@ class RpmDB(db.RpmDatabase):
             self._pkgs[pkg.key] = pkg
             if self.obsoletes_list:
                 self.obsoletes_list.addPkg(pkg)
-        self.basenames_cache.clear()
         return result
 
     def _addPkg(self, pkg):
@@ -368,6 +368,7 @@ class RpmDB(db.RpmDatabase):
         return 1
 
     def removePkg(self, pkg, nowrite=None):
+        self.basenames_cache.clear()
         if nowrite:
             return 1
         if (not hasattr(pkg, 'key') or
@@ -379,7 +380,6 @@ class RpmDB(db.RpmDatabase):
         self._pkgs.pop(pkg.key, None)
         if self.obsoletes_list and result:
             self.obsoletes_list.removePkg(pkg)
-        self.basenames_cache.clear()
         return result
 
     def _removePkg(self, pkg):
@@ -668,8 +668,8 @@ class RpmDB(db.RpmDatabase):
                 pkg = self.getPkgById(id)
                 if not pkg:
                     continue
-                filedict.setdefault(filename, []).append((pkg, idx))
-                                                
+                f = pkg.iterFilenames()[idx]
+                filedict.setdefault(f, []).append(pkg)
         return len(self.basenames_cache[basename].get(filename, []))
 
     def getFileRequires(self):
