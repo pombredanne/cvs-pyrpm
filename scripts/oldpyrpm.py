@@ -14,7 +14,8 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 # Copyright 2004, 2005 Red Hat, Inc.
 #
-# Author: Paul Nasrat, Florian La Roche, Phil Knirsch, Thomas Woerner
+# Author: Paul Nasrat, Florian La Roche, Phil Knirsch, Thomas Woerner,
+#         Florian Festi
 #
 
 #
@@ -78,15 +79,21 @@
 #   doing this in an extra pass. That's why it is then already too late
 #   to set distroverpkg within the config file at all.
 # - support reading some vars from yum.conf like distroverpkg
+# - distroverpkg should take the Provides: to search for the right rpms.
 # - yum.conf variables are case independent?
 # - For repos stop switching to another server once repomd.xml is read in.
 #   Currently also all rpms are associated/hardcoded with the first server.
-#   Rpms could be cached regardless of the mirror they come from.
-#   Read repomd.xml.
+#   Rpms could be cached regardless of the mirror they come from. By sha1sum?
 # - cacheLocal:
+#   - If we get data from several mirrors, how should we combine data without
+#     refetching data too often or overriding data too soon? If we know a
+#     checksum for all data, we could store data by checksum filename?
 #   - check if local files really exist with os.stat()?,
-#     maybe only once per repo?
+#     maybe only once per repo? (for repo sorting)
 #   - sort several urls to list local ones first, add mirror speed check
+#   - Read the complete file into memory, no local files for: repomd.xml
+#     and mirrorlist.
+# - Can we cache the mirrorlist for some time?
 # things to be noted, probably not getting fixed:
 # - "badsha1_2" has the size added in reversed order to compute the final
 #   sha1 sum. A patch to python shamodule.c could allow to verify also these
@@ -107,7 +114,7 @@ if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
 import os, os.path, pwd, grp, zlib, gzip, errno, re, fnmatch, glob, time
 import md5, sha, signal
-from types import DictType, IntType, ListType
+from types import IntType, ListType
 from struct import pack, unpack
 try:
     import libxml2
@@ -340,7 +347,10 @@ def doRead(fd, size):
 
 def getChecksum(fd, digest="md5"):
     if isinstance(fd, basestring):
-        fd = open(fd, "rb")
+        try:
+            fd = open(fd, "rb")
+        except:
+            return None
     if digest == "md5":
         ctx = md5.new()
     else:
@@ -724,7 +734,7 @@ rpmtag = {
     "buildtime": [1006, RPM_INT32, 1, 8], # time of rpm build
     "buildhost": [1007, RPM_STRING, None, 0], # hostname where rpm was built
     "cookie": [1094, RPM_STRING, None, 0], # build host and time
-    "group": [1016, RPM_GROUP, None, 0], # comps.xml is used now
+    "group": [1016, RPM_GROUP, None, 0], # comps.xml/groupfile is used now
     "size": [1009, RPM_INT32, 1, 0],                # sum of all file sizes
     "distribution": [1010, RPM_STRING, None, 0],
     "vendor": [1011, RPM_STRING, None, 0],
@@ -2904,8 +2914,8 @@ def pathdirname(filename):
     #return os.path.dirname(filename)
 
 def pathsplit2(filename):
-    i = filename.rfind("/")
-    return (filename[:i + 1], filename[i + 1:])
+    i = filename.rfind("/") + 1
+    return (filename[:i], filename[i:])
     #(dirname, basename) = os.path.split(filename)
     #if dirname[-1:] != "/" and dirname != "":
     #    dirname += "/"
@@ -3881,7 +3891,8 @@ def checkCSV():
     csv2.writeCSV("/tmp/csv2")
 
 
-def cacheLocal(urls, filename, subdir, force=0, verbose=0, nofilename=0):
+def cacheLocal(urls, filename, subdir, verbose, checksum=None,
+    checksumtype=None, nofilename=0):
     import urlgrabber
 
     for url in urls:
@@ -3898,24 +3909,26 @@ def cacheLocal(urls, filename, subdir, force=0, verbose=0, nofilename=0):
         localdir = cachedir + subdir + dirname
         makeDirs(localdir)
         localfile = "%s/%s" % (localdir, basename)
+        if checksum and getChecksum(localfile, checksumtype) == checksum:
+            return localfile
         if verbose > 4:
             print "cacheLocal: localfile:", localfile
         try:
-            if force:
-                f = urlgrabber.urlgrab(url, localfile, timeout=sockettimeout)
-            else:
-                f = urlgrabber.urlgrab(url, localfile, reget="check_timestamp",
-                    timeout=sockettimeout)
+            f = urlgrabber.urlgrab(url, localfile, timeout=sockettimeout)
         except urlgrabber.grabber.URLGrabError, e:
             if verbose > 4:
                 print "cacheLocal: error: e:", e
             # urlgrab fails with invalid range for already completely transfered
             # files, pretty strange to me to be honest... :)
             if e[0] == 9:
+                if checksum and getChecksum(localfile, checksumtype) != checksum:
+                    continue
                 return localfile
             continue
         if verbose > 4:
             print "cacheLocal: return:", f
+        if checksum and getChecksum(f, checksumtype) != checksum:
+            continue
         return f
     return None
 
@@ -4058,23 +4071,23 @@ class RpmRepo:
         self.reponame = reponame
         self.readsrc = readsrc
         self.filelist_imported = 0
-        self.checksum = "sha" # or "md5"
+        self.checksum = "sha" # "sha" or "md5"
         self.pretty = 1
         self.pkglist = {}
-        self.compsfile = None
+        self.groupfile = None
         self.fast = fast
         self.repomd = None
 
-    def read(self, onlyrepomd=0):
+    def read(self, onlyrepomd=0, readgroupfile=0):
         for filename in self.filenames:
             if self.verbose > 2:
                 print "Reading yum repository %s." % filename
-            self.filename = Uri2Filename(filename)
-            filename2 = cacheLocal([filename], "/repodata/repomd.xml",
-                self.reponame + "/repo", 1)
-            if not filename2:
+            self.filename = filename
+            repomd = cacheLocal([filename], "/repodata/repomd.xml",
+                self.reponame + "/repo", self.verbose)
+            if not repomd:
                 continue
-            reader = libxml2.newTextReaderFilename(filename2)
+            reader = libxml2.newTextReaderFilename(repomd)
             if reader == None:
                 continue
             self.repomd = self.__parseRepomd(reader)
@@ -4082,39 +4095,54 @@ class RpmRepo:
                 continue
             if onlyrepomd:
                 return 1
-            # XXX
-            filename = cacheLocal([filename], "/repodata/primary.xml.gz",
-                self.reponame + "/repo", 1)
-            if not filename:
+            repoprimary = self.repomd.get("primary", {})
+            pchecksum = repoprimary.get("checksum", "no")
+            pchecksumtype = repoprimary.get("checksum_type", "md5")
+            primary = cacheLocal([filename], "/repodata/primary.xml.gz",
+                self.reponame + "/repo", self.verbose, pchecksum,
+                pchecksumtype)
+            if not primary:
                 continue
-            reader = libxml2.newTextReaderFilename(filename)
+            reader = libxml2.newTextReaderFilename(primary)
             if reader == None:
                 continue
             self.__parsePrimary(reader)
             self.__removeExcluded()
+            repogroupfile = self.repomd.get("group", {})
+            groupfile = repogroupfile.get("location")
+            if readgroupfile and groupfile:
+                gchecksum = repogroupfile.get("checksum", "no")
+                gchecksumtype = repogroupfile.get("checksum_type", "md5")
+                groupfile = cacheLocal([filename], "/" + groupfile,
+                    self.reponame + "/repo", self.verbose, gchecksum,
+                    gchecksumtype)
+                if not groupfile:
+                    continue
+                self.groupfile = groupfile
+                # Now parse the groupfile?
             return 1
         return 0
 
     def importFilelist(self):
         if self.filelist_imported:
             return 1
-        for filename in self.filenames:
-            if self.verbose > 2:
-                print "Reading full filelist from %s." % filename
-            self.filename = Uri2Filename(filename)
-            filename = cacheLocal([filename], "/repodata/filelists.xml.gz",
-                self.reponame + "/repo", 1)
-            if not filename:
-                continue
-            reader = libxml2.newTextReaderFilename(filename)
-            if reader == None:
-                continue
-            self.__parseFilelist(reader)
-            self.filelist_imported = 1
-            return 1
-        return 0
+        if self.verbose > 2:
+            print "Reading full filelist from %s." % self.filename
+        repofilelists = self.repomd.get("filelists", {})
+        fchecksum = repofilelists.get("checksum", "no")
+        fchecksumtype = repofilelists.get("checksum_type", "md5")
+        filelists = cacheLocal([self.filename], "/repodata/filelists.xml.gz",
+            self.reponame + "/repo", self.verbose, fchecksum, fchecksumtype)
+        if not filelists:
+            return 0
+        reader = libxml2.newTextReaderFilename(filelists)
+        if reader == None:
+            return 0
+        self.__parseFilelist(reader)
+        self.filelist_imported = 1
+        return 1
 
-    def createRepo(self, baseurl, ignoresymlinks):
+    def createRepo(self, baseurl, ignoresymlinks, groupfile):
         filename = Uri2Filename(self.filenames[0]).rstrip("/")
         if self.verbose >= 2:
             print "Creating yum metadata repository for dir %s:" % filename
@@ -4218,9 +4246,9 @@ class RpmRepo:
         reporoot.setNs(repons)
         workfiles = [(ofdtmp, 1, "other"), (ffdtmp, 1, "filelists"),
             (pfdtmp, 1, "primary")]
-        groupfile = repodir + "/comps.xml"
-        if os.path.exists(groupfile):
-            workfiles.append((groupfile, 0, "group"))
+        ngroupfile = repodir + "/" + groupfile
+        if os.path.exists(ngroupfile):
+            workfiles.append((ngroupfile, 0, "group"))
         for (ffile, gzfile, ftype) in workfiles:
             if gzfile:
                 zfo = PyGZIP(ffile, None, None, None)
@@ -4235,7 +4263,7 @@ class RpmRepo:
             if gzfile:
                 location.newProp("href", "repodata/" + ftype + ".xml.gz")
             else:
-                location.newProp("href", "repodata/comps.xml")
+                location.newProp("href", "repodata/" + groupfile)
             checksum = data.newChild(None, "checksum", csum)
             checksum.newProp("type", self.checksum)
             timestamp = data.newChild(None, "timestamp", str(timestamp))
@@ -4286,9 +4314,10 @@ class RpmRepo:
             elif name == "checksum" or name == "open-checksum":
                 props = getProps(reader)
                 ptype = props.get("type")
-                if ptype != "sha":
+                if ptype not in ("sha", "md5"):
                     print "Unsupported checksum type %s in repomd.xml for file %s" % (ptype, fname)
                     continue
+                tmphash[name + "_type"] = ptype
                 if Readf() != 1:
                     break
                 tmphash[name] = reader.Value()
@@ -4448,6 +4477,8 @@ class RpmRepo:
                     elif props["type"] == "sha":
                         Readf()
                         pkg.sig["sha1header"] = reader.Value()
+                    elif self.verbose > 4:
+                        print "unknown checksum type"
                 elif name == "size":
                     props = getProps(reader)
                     pkg.sig["size_in_sig"][0] += int(props.get("package", "0"))
@@ -4671,9 +4702,7 @@ class RpmCompsXML:
     def __str__(self):
         return str(self.grouphash)
 
-    def read(self, reponame):
-        filename = cacheLocal([self.filename], "/repodata/comps.xml",
-            reponame + "/repo", 1)
+    def read(self, filename):
         doc = libxml2.parseFile(filename)
         if doc == None:
             return 0
@@ -4813,97 +4842,30 @@ class RpmCompsXML:
         return 1
 
 
-class Conf:
-    """Simple yum.conf parser (read only) mostly copied from rhpl.ConfSMB."""
 
-    def __init__(self, verbose, filename, commenttype="#", separators="\t ",
-            separator="\t"):
-        self.verbose = verbose
-        self.filename = filename
-        self.commenttype = commenttype
-        self.separators = separators
-        self.separator = separator
-        self.codedict = {}
-        self.splitdict = {}
-        self.line = 0
-        # self.line is a "point" -- 0 is before the first line;
-        # 1 is between the first and second lines, etc.
-        # The "current" line is the line after the point.
-        self.read()
+def getVars(releasever, arch, basearch):
+    replacevars = {}
+    replacevars["$releasever"] = releasever
+    replacevars["$RELEASEVER"] = releasever
+    replacevars["$arch"] = arch
+    replacevars["$ARCH"] = arch
+    replacevars["$basearch"] = basearch
+    replacevars["$BASEARCH"] = basearch
+    for i in xrange(10):
+        key = "YUM%d" % i
+        value = os.environ.get(key)
+        if value:
+            replacevars[key.lower()] = value
+            replacevars[key] = value
+    return replacevars
 
-    def nextline(self):
-        self.line = min([self.line + 1, len(self.lines)])
-
-    def findnextline(self, regexp=None):
-        while self.line < len(self.lines):
-            if not regexp:
-                return 1
-            if hasattr(regexp, "search"):
-                if regexp.search(self.lines[self.line]):
-                    return 1
-            elif re.search(regexp, self.lines[self.line]):
-                return 1
-            self.line += 1
-        return 0
-
-    def findnextcodeline(self):
-        # optional whitespace followed by non-comment character
-        # defines a codeline.  blank lines, lines with only whitespace,
-        # and comment lines do not count.
-        if not self.codedict.has_key((self.separators, self.commenttype)):
-            self.codedict[(self.separators, self.commenttype)] = \
-                re.compile("^[" + self.separators + "]*" + \
-                "[^" + self.commenttype + self.separators + "]+")
-        codereg = self.codedict[(self.separators, self.commenttype)]
-        return self.findnextline(codereg)
-
-    def getline(self):
-        if self.line >= len(self.lines):
-            return ""
-        return self.lines[self.line]
-
-    def getfields(self):
-        # returns list of fields split by self.separators
-        if self.line >= len(self.lines):
-            return []
-        seps = "[" + self.separators + "]+"
-        if not self.splitdict.has_key(seps):
-            self.splitdict[seps] = re.compile(seps)
-        regexp = self.splitdict[seps]
-        return regexp.split(self.lines[self.line])
-
-    def read(self):
-        if os.path.isfile(self.filename) and os.access(self.filename, os.R_OK):
-            if self.verbose > 2:
-                print "Reading in config file %s." % self.filename
-            self.file = open(self.filename, "r", -1)
-            self.lines = self.file.readlines()
-            # strip newlines
-            for index in xrange(len(self.lines)):
-                if len(self.lines[index]) and self.lines[index][-1] == "\n":
-                    self.lines[index] = self.lines[index][:-1]
-                if len(self.lines[index]) and self.lines[index][-1] == "\r":
-                    self.lines[index] = self.lines[index][:-1]
-            self.file.close()
-        else:
-            self.lines = []
-
-
-def replaceVars(line, releasever, arch, basearch):
-    line = line.replace("$releasever", releasever)
-    line = line.replace("$arch", arch)
-    line = line.replace("$basearch", basearch)
+def replaceVars(line, vars):
+    for (key, value) in vars.iteritems():
+        line = line.replace(key, value)
     return line
 
 
-class YumConfSubDict(DictType):
-    def __init__(self, parent_conf, stanza, initdict=None):
-        DictType.__init__(self, initdict)
-        self.conf = parent_conf
-        self.stanza = stanza
-
-
-class YumConf(Conf):
+class YumConf:
     """Simple Yum config file parser."""
 
     MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
@@ -4943,15 +4905,26 @@ class YumConf(Conf):
 
         self.stanza_re = re.compile("^\s*\[(?P<stanza>[^\]]*)]\s*(?:;.*)?$",
             re.I)
-        Conf.__init__(self, self.verbose, self.myfilename, "#;", "=", "=")
+        self.line = 0
+        self.lines = []
+        self.vars = {}
         self.has_key = self.vars.has_key
         self.keys = self.vars.keys
         self.__getitem__ = self.vars.__getitem__
+        self.read()
 
-    def extendValue(self, value):
-        """replaces known $vars in values"""
-        return replaceVars(value, self.__dict__["releasever"],
-            self.__dict__["arch"], self.__dict__["basearch"])
+    def nextline(self):
+        self.line = min([self.line + 1, len(self.lines)])
+
+    def findnextline(self, regexp):
+        while self.line < len(self.lines):
+            if hasattr(regexp, "search"):
+                if regexp.search(self.lines[self.line]):
+                    return 1
+            elif re.search(regexp, self.lines[self.line]):
+                return 1
+            self.line += 1
+        return 0
 
     def checkVar(self, stanza, varname):
         """check variablename, if allowed in the config file"""
@@ -4963,11 +4936,24 @@ class YumConf(Conf):
                 return 1
         return 0
 
+    def read2(self, filename, verbose):
+        if os.path.isfile(filename) and os.access(filename, os.R_OK):
+            if verbose > 2:
+                print "Reading in config file %s." % filename
+            self.lines = open(filename, "r").readlines()
+            # strip newlines
+            for index in xrange(len(self.lines)):
+                if self.lines[index][-1:] == "\n":
+                    self.lines[index] = self.lines[index][:-1]
+                if self.lines[index][-1:] == "\r":
+                    self.lines[index] = self.lines[index][:-1]
+        else:
+            self.lines = []
+
     def read(self):
         """read all config files"""
-        self.vars = {}
         self.filename = self.myfilename
-        Conf.read(self)
+        self.read2(self.filename, self.verbose)
         self.parseFile()
         if self.vars.has_key("main") and self.vars["main"].has_key("reposdir"):
             k = self.buildroot + self.vars["main"]["reposdir"]
@@ -4976,7 +4962,7 @@ class YumConf(Conf):
         for reposdir in self.reposdirs:
             for filename in glob.glob(reposdir + "/*.repo"):
                 self.filename = filename
-                Conf.read(self)
+                self.read2(filename, self.verbose)
                 self.parseFile()
 
     def parseFile(self):
@@ -4995,28 +4981,36 @@ class YumConf(Conf):
                 if not v:
                     break
                 if not self.checkVar(stanza, v[0]):
-                    if (not v[1]) and (prevname in YumConf.MultiLines):
-                        value = self.extendValue(v[0])
+                    if not v[1] and prevname in YumConf.MultiLines:
+                        replacevars = getVars(self.__dict__["releasever"],
+                            self.__dict__["arch"], self.__dict__["basearch"])
+                        value = replaceVars(v[0], replacevars)
                         stanzavars[prevname].append(value)
                         self.nextline()
                         continue
-                    sys.stderr.write("Bad variable %s in %s\n" \
-                                     % (v[0], self.filename))
+                    sys.stderr.write("Bad variable %s in %s\n" % (v[0],
+                        self.filename))
                     self.nextline()
                     continue
                 name = v[0]
-                value = self.extendValue(v[1])
+                replacevars = getVars(self.__dict__["releasever"],
+                    self.__dict__["arch"], self.__dict__["basearch"])
+                value = replaceVars(v[1], replacevars)
                 if name in YumConf.MultiLines:
                     stanzavars[name] = [value,]
                 else:
                     stanzavars[name] = value
                 prevname = name
                 self.nextline()
-            self.vars[stanza] = YumConfSubDict(self, stanza, stanzavars)
+            self.vars[stanza] = stanzavars
         self.line = 0
 
     def getEntry(self):
-        v = self.getfields()
+        # returns list of fields split by "="
+        if self.line >= len(self.lines):
+            v = []
+        else:
+            v = self.lines[self.line].split("=", 1)
         try:
             v = [v[0], "=".join(v[1:len(v)])]
         except(LookupError):
@@ -5038,6 +5032,11 @@ class YumConf(Conf):
     def findnextcodeline(self):
         return self.findnextline("^[\t ]*[\[0-9A-Za-z_]+.*")
 
+    def getline(self):
+        if self.line >= len(self.lines):
+            return ""
+        return self.lines[self.line]
+
     def isStanzaDecl(self):
         # return true if the current line is of the form [...]
         if self.stanza_re.match(self.getline()):
@@ -5057,32 +5056,27 @@ class YumConf(Conf):
         self.line = 0
         return 0
 
-    def __setitem__(self, stanza, value):
-        raise Exception, "read only"
-
-    def __delitem__(self, stanza):
-        raise Exception, "read only"
-
 
 def readMirrorlist(mirrorlist, releasever, arch, basearch, key, verbose):
+    replacevars = getVars(releasever, arch, basearch)
     baseurls = {}
     for mlist in mirrorlist:
-        mlist = replaceVars(mlist, releasever, arch, basearch)
+        mlist = replaceVars(mlist, replacevars)
         if verbose > 2:
             print "Getting mirrorlist from %s." % mlist
         fname = cacheLocal([mlist], "mirrorlist", key,
-            1, verbose, nofilename=1)
+            verbose, nofilename=1)
         if not fname:
             continue
         for l in open(fname).readlines():
             l = l.strip()
             l = l.replace("$ARCH", "$basearch")
             if l and l[0] != "#":
-                baseurls[replaceVars(l, releasever, arch, basearch)] = None
+                baseurls[replaceVars(l, replacevars)] = None
     return baseurls.keys()
 
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
-    readsrc, reposdirs, verbose, readcompsfile=0, fast=1):
+    readsrc, reposdirs, verbose, readgroupfile=0, fast=1):
     # Read in /etc/yum.conf config files.
     repos = []
     for c in configfiles:
@@ -5110,14 +5104,11 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                 print "%s:" % key, "No url for this section in conf file."
                 return None
             repo = RpmRepo(baseurls, excludes, verbose, key, readsrc, fast)
-            if repo.read() == 0:
+            if repo.read(readgroupfile=readgroupfile) == 0:
                 print "Cannot read repo %s." % key
                 return None
             if not readdebug:
                 repo.delDebuginfo()
-            if readcompsfile:
-                repo.compsfile = cacheLocal(baseurls,
-                    "/repodata/comps.xml", key + "/repo")
             repos.append(repo)
     return repos
 
@@ -6289,6 +6280,7 @@ def main():
     checkdeps = 0
     baseurl = None
     createrepo = 0
+    groupfile = "comps.xml"
     mercurial = 0
     pyrex = 0
     releasever = ""
@@ -6306,7 +6298,8 @@ def main():
             "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "withdb",
             "cachedir=", "checkrpmdb", "checkoldkernel", "numkeepkernels=",
             "checkdeps", "buildroot=", "installroot=", "root=", "version",
-            "baseurl=", "createrepo", "mercurial", "pyrex", "testmirrors"])
+            "baseurl=", "createrepo", "groupfile=", "mercurial", "pyrex",
+            "testmirrors"])
     except getopt.GetoptError, msg:
         print "Error:", msg
         return 1
@@ -6411,6 +6404,8 @@ def main():
             reposdirs.extend(["/etc/yum.repos.d", "/etc/yum/repos.d"])
         elif opt == "--createrepo":
             createrepo = 1
+        elif opt == "--groupfile":
+            groupfile = val
         elif opt == "--mercurial":
             mercurial = 1
         elif opt == "--pyrex":
@@ -6481,7 +6476,7 @@ def main():
                 print "Createrepo needs a directory name:", a
                 break
             repo = RpmRepo([a], excludes, verbose)
-            repo.createRepo(baseurl, ignoresymlinks)
+            repo.createRepo(baseurl, ignoresymlinks, groupfile)
     elif mercurial:
         createMercurial(verbose)
     elif pyrex:
