@@ -1,8 +1,8 @@
 PyRPM Tool descriptions
 =======================
 
-In order to understand what each of the tools really does this section describes
-the behaviour of the tools in more detail for each tool.
+In order to understand what each of the tools really does this section
+describes the behaviour of the tools in more detail for each tool.
 
 
 pyrpmcheck
@@ -121,7 +121,9 @@ pyrpmdbverify
 This tool actually really reads all DB4 files in /var/lib/rpm (or, if you use
 the `\--dbpath` option, in that directory) and tries to cross check the entries
 with the rpm header that is found in Packages. The pyrpm-devel documentation
-contains a lot more detail about the structure of link:pyrpm-devel.txt#rpmdb[rpmdb]. Simply put we check if for every entry in every file there is a
+contains a lot more detail about the structure of
+link:pyrpm-devel.txt#rpmdb[rpmdb]. Simply put we check if for every entry in
+every file there is a
 corresponding entry in Packages and vice versa. There are some exceptions and
 special cases, but all known ones are handled correctly. The one check that is
 very unreliable is the SHA1 header checksum tests as this test has to rely on a
@@ -132,8 +134,8 @@ Additional binary packages or a yum config file with yum repositories can be
 specified to test the rpmdb headers against those packages for additional
 verification.
 
-Link to a page with more information on rpmdb repair information is available at
-link:http://www.rpm.org/hintskinks/repairdb/[].
+Link to a page with more information on rpmdb repair information is available
+at link:http://www.rpm.org/hintskinks/repairdb/[].
 
 Check the rpmdb of the current system with internal cross checks
 -----------------------
@@ -272,8 +274,8 @@ This is our main stress test tool. With it you can run literally thousands of
 update and erase operations in a buildroot and after several days scan the
 output for any problems. It works simply by alternating between trying to
 randomly install one rpm package (including needed dependent rpms) and
-randomly removing one package. There are several special
-options which help circumvent some strange problems. The first is `\--servicehack`
+randomly removing one package. There are several special options which help
+circumvent some strange problems. The first is `\--servicehack`
 which simply changes `/sbin/service` to "exit 0" as especially some of the
 postuninstall scripts really misbehave otherwise and you don't need any
 services started or stopped in a buildroot anyway for testing. The second is
@@ -290,9 +292,9 @@ pyrpmrandomizer --servicehack -y -v -c fc3-updates-i386.conf -r /mnt/build/test 
 pyrpmrebuilddb
 --------------
 
-Ever had to use `rpm \--rebuilddb`? Well, here is our version of it. It tries to
-do the same thing as rpm where it takes /var/lib/rpm/Packages and rebuilds the
-database with that information. The default path for the new db is ./rpmdb
+Ever had to use `rpm \--rebuilddb`? Well, here is our version of it. It tries
+to do the same thing as rpm where it takes /var/lib/rpm/Packages and rebuilds
+the database with that information. The default path for the new db is ./rpmdb
 so that your original one won't be overwritten.
 Currently `/var/lib/rpm/Pubkeys` is not yet rebuild.
 

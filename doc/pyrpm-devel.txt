@@ -54,8 +54,9 @@ without going into too much techincal detail. This should help understand how
 rpm works and what problems it solves (and which it doesn't and why yum is
 needed). Following that will be a section that describes then what yum does
 and what problems it solves (and again, which it can't solve and which we try
-to solve in our yum derivate). Afterwards we will go more into the rpm binary format and the format of yum repositories as well as several interessting points
-about the way rpm works and the problems that appear with doing to.
+to solve in our yum derivate). Afterwards we will go more into the rpm binary
+format and the format of yum repositories as well as several interessting
+points about the way rpm works and the problems that appear with doing to.
 
 
 What are dependencies?
@@ -81,8 +82,8 @@ B requires C
 So in order to be able to install A we need to install B and C as well, as
 B needs C.
 
-Requires and provides can be versioned and have additional flags like <, <=, ==,
->=, > which need to be handled properly.
+Requires and provides can be versioned and have additional flags like <, <=,
+==, >=, > which need to be handled properly.
 
 
 How are versions compared? (by Tom "Spot" Callaway and Paul Nasrat)
@@ -277,8 +278,8 @@ color is 0 if the file is arch independant (text files, etc), 1 if it's a 32bit
 binary and 2 if it is a 64bit binary. If the color is 0, normal file conflict
 handling is done. If the color larger than 0 and both colors are equal, again,
 normal file conflicts and handling is done. If both are larger than 0 and
-differ then the "higher" color wins, meaning the 64bit binary. No file conflicts
-will be done for that case either.
+differ then the "higher" color wins, meaning the 64bit binary. No file
+conflicts will be done for that case either.
 
 
 How do Updates work?

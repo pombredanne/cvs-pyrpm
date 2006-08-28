@@ -6,14 +6,16 @@ PyRPM
 
 The current location of the PyRPM project is at
 link:http://people.redhat.com/laroche/pyrpm/[],
-link:http://sf.net/projects/pyrpm/[] and link:http://freshmeat.net/projects/pyrpm/[].
+link:http://sf.net/projects/pyrpm/[] and
+link:http://freshmeat.net/projects/pyrpm/[].
 
 The newest version can be downloaded from
 link:http://people.redhat.com/laroche/pyrpm/download/[].
 
 Please send patches to link:mailto:laroche@redhat.com[Florian La Roche],
-link:mailto:pknirsch@redhat.com[Phil Knirsch] and
-link:mailto:twoerner@redhat.com[Thomas Wörner].
+link:mailto:pknirsch@redhat.com[Phil Knirsch],
+link:mailto:twoerner@redhat.com[Thomas Wörner] and
+link:mailto:ffesti@redhat.com[Florian Festi].
 
 The cvs source code repository is automatically converted to a
 link:http://kernel.org/git/[git] repository at

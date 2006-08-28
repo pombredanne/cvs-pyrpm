@@ -10,6 +10,8 @@ link:mailto:pknirsch@redhat.com[Phil Knirsch]
 
 link:mailto:twoerner@redhat.com[Thomas Woerner]
 
+link:mailto:ffesti@redhat.com[Florian Festi]
+
 PyRPM is an experimental project to look at rpm package management. It is 
 a python module and a collection of scripts that provide similar functionality
 as rpm, yum and co. It is written from ground up and is implemented only in
