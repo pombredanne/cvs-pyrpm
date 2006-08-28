@@ -2414,7 +2414,7 @@ def main():
     mtab_content.append("none /proc proc defaults 0 0\n")
     if (installation.release == "RHEL" and installation.version >= 4) or \
            (installation.release == "FC" and installation.version >= 2):
-        fstab_content.append("/dev/sys\t\t/sys\t\tsysfs\tdefaults\t0 0\n")
+        fstab_content.append("/dev/sys\t/sys\t\tsysfs\tdefaults\t0 0\n")
         mtab_content.append("/dev/sys /sys sysfs defaults 0 0\n")
     for name in parts:
         if name[:4] != "swap":
