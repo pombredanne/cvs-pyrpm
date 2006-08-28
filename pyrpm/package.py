@@ -223,7 +223,7 @@ class RpmPackage(RpmData):
         """Drop read data and prepare for rereading it, unless it is
         a rpmdb package."""
         
-        if hasattr(self, "key"): # XXX really needed?
+        if hasattr(self, "key"): # TODO: really needed?
             return
                     
         for key in self.keys():

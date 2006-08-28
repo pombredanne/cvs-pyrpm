@@ -22,6 +22,7 @@ import sys, os, random
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
+from pyrpm.yum.yum import RpmYum
 from pyrpm import __version__
 from pyrpm import *
 
@@ -103,7 +104,8 @@ def main():
 
 
     # Create fake repository
-    frepo = FakeRepo(pkglist)
+    frepo = pyrpm.database.memorydb.RpmMemoryDB(rpmconfig, None)
+    frepo.addPkgs(pkglist)
 
     # Always use the same random sequence
     random.seed(12345)
