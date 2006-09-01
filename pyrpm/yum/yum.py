@@ -225,6 +225,9 @@ class RpmYum:
         for repo in self.repos:
             if repo.comps != None:
                 pkglist.extend(repo.comps.getPackageNames(name))
+                lang = repo.comps.getGroupLanguage(name)
+                if lang and not lang in self.langs:
+                    self.langs.append(lang)
         return pkglist
 
     def install(self, name):

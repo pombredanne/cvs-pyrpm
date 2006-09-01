@@ -105,6 +105,13 @@ class RpmCompsXML:
                 groups.append(group)
         return groups
 
+    def getGroupLanguage(self, group):
+        """Return the language of a given group. langonly entry or None."""
+        name = self.getGroup(group)
+        if name == None:
+            return None
+        return self.grouphash[name].get("langonly")
+
     def getPackageNames(self, group):
         """Return a list of mandatory an default packages from group and its
         dependencies and the dependencies of the packages.
