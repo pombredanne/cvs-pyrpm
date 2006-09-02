@@ -658,7 +658,7 @@ try:
                 print "%*s   %s  %10d  %10d  %11s  %2x  %s" % \
                       (l, device, boot, partition["unit-start"],
                        partition["unit-end"], block_str,
-                       partition["native_type"], type)   
+                       partition["native_type"], type)
 
 except: # import parted
     PARTED_MODULE_LOADED = False

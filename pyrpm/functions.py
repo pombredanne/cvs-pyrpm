@@ -499,7 +499,7 @@ def readExact(fd, size):
         raise IOError, "Unexpected EOF"
     return data
 
-def updateDigestFromFile(digest, fd, bytes = None):
+def updateDigestFromFile(digest, fd, bytes=None):
     """Update digest with data from fd, until EOF or only specified bytes.
 
     Return the number of bytes processed."""

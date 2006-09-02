@@ -222,10 +222,10 @@ class RpmPackage(RpmData):
     def clear(self, tags=None, ntags=None):
         """Drop read data and prepare for rereading it, unless it is
         a rpmdb package."""
-        
+
         if hasattr(self, "key"): # TODO: really needed?
             return
-                    
+
         for key in self.keys():
             if tags and key in tags:
                 del self[key]

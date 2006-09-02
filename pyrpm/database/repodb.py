@@ -48,7 +48,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 RPMSENSE_EQUAL | RPMSENSE_LESS: "LE",
                 RPMSENSE_EQUAL | RPMSENSE_GREATER: "GE"}
 
-    def __init__(self, config, source, buildroot=None, yumconf = None,
+    def __init__(self, config, source, buildroot=None, yumconf=None,
                  reponame="default"):
         """Exclude packages matching whitespace-separated excludes.  Use
         reponame for cache subdirectory name and pkg["yumreponame"].

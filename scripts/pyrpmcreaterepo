@@ -309,7 +309,7 @@ def getChecksum(sumtype, file):
 class OutputFile:
     """One of the output XML files, filled in one subtree at a time."""
 
-    def __init__(self, cmds, cmdstag, tag, ns, pkgcount, otherattrs = ''):
+    def __init__(self, cmds, cmdstag, tag, ns, pkgcount, otherattrs=''):
         self.doc = libxml2.newDoc("1.0")
         self.roottag = tag
         self.root = self.doc.newChild(None, self.roottag, None)

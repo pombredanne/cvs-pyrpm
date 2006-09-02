@@ -683,7 +683,7 @@ def load_repos(ks, repos_dir):
 
     return repos
 
-def release_info(source):        
+def release_info(source):
     # get source information via release package
     release = "Red Hat Enterprise Linux"
     pkgs = source.repo.getPkgsByName("redhat-release")

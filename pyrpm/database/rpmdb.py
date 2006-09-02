@@ -375,7 +375,7 @@ class RpmDB(db.RpmDatabase):
             not hasattr(pkg, 'db') or
             pkg.db is not self):
             return 0
-        
+
         result = self._removePkg(pkg)
         self._pkgs.pop(pkg.key, None)
         if self.obsoletes_list and result:
@@ -755,7 +755,7 @@ class RpmDB(db.RpmDatabase):
             if pkg and pkg.iterFilenames()[idx] == filename:
                 result.append(pkg)
             #elif pkg:
-            #    print "dropping", pkg.getNEVRA(), pkg.iterFilenames()[idx] 
+            #    print "dropping", pkg.getNEVRA(), pkg.iterFilenames()[idx]
         return result
 
     def searchRequires(self, name, flag, version):

@@ -37,7 +37,7 @@ class RpmSpecFile:
                  "changelog" ]
 
 
-    def __init__(self, filename = None, lines = None, packagename = None):
+    def __init__(self, filename=None, lines=None, packagename=None):
         """filename: filename of the specfile
         lines: array of specfile lines
         packagename: if no lines or filename is specified,
@@ -127,7 +127,7 @@ class RpmSpecFile:
             return [self.Name]
 
 
-    def getSection(self, section, package = None):
+    def getSection(self, section, package=None):
         """Returns the section from package
         If package is not specified, the section from all packages will be
         returned, each prefixed with the package name.

@@ -10,7 +10,7 @@ class RpmDiskShadowDB(rpmdb.RpmDB):
         self.rpmdb = rpmdb
 
         rpmdb.open()
-        
+
         self.netsharedpath = rpmdb.netsharedpath
 
         # Shared instances !!!
@@ -50,7 +50,7 @@ class RpmDiskShadowDB(rpmdb.RpmDB):
             return None
         else:
             return pkg
-    
+
     def addPkg(self, pkg):
         if (hasattr(pkg, 'key') and
             self._pkgs.has_key(pkg.key) and

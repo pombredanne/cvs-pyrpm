@@ -155,7 +155,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
     tags = 'pkgKey, name, arch, version, epoch, release, location_href'
 
-    def __init__(self, config, source, buildroot=None, yumconf = None,
+    def __init__(self, config, source, buildroot=None, yumconf=None,
                  reponame="default"):
         db.RpmDatabase.__init__(self, config, source, buildroot)
         self.baseurl = None
@@ -381,7 +381,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
         self.config.printInfo(1, "Loading %s for %s...\n" %
                               (dbtype, self.reponame))
-        
+
         cachebase = os.path.join(self.config.cachedir, self.reponame)
         cachepath = os.path.join(self.config.cachedir, self.reponame, "sqlite")
 

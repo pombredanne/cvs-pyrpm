@@ -85,7 +85,7 @@ class RpmController:
         if resolver == None:
             nodeps = 0
             db = self.db.getMemoryCopy()
-            
+
             resolver = RpmResolver(self.config, db)
             for r in self.rpms:
                 # Ignore errors from RpmResolver, the functions already warn

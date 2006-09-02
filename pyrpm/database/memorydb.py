@@ -79,7 +79,7 @@ class RpmMemoryDB(db.RpmDatabase):
     def read(self):
         """Read the database in memory."""
         return self.OK
-    
+
     def sync(self):
         """Bring database into an valid state after packages have been
         added/removed with nowrite=True and with nowrite=False in a

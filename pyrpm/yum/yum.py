@@ -170,7 +170,7 @@ class RpmYum:
         self.repos.append(repo)
         return 1
 
-    def prepareTransaction(self, localDb = None):
+    def prepareTransaction(self, localDb=None):
         """Open the RPM database and prepare the transaction.
 
         Return 1 in success, 0 on error (after warning the user).  If localDb
