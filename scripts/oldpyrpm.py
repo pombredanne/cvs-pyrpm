@@ -4877,54 +4877,28 @@ class YumConf:
         "timeout", "http_caching", "throttle", "bandwidth", "commands",
         "keepcache", "proxy", "proxy_username", "proxy_password", "pkgpolicy",
         "plugins", "pluginpath", "metadata_expire")
-    MultiLines = ("baseurl", "mirrorlist")
     RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
         "keepalive", "timeout", "http_caching", "retries", "throttle",
         "bandwidth", "metadata_expire", "proxy", "proxy_username",
         "proxy_password")
-    Variables = ("releasever", "arch", "basearch")
+    MultiLines = ("baseurl", "mirrorlist")
 
-    def __init__(self, verbose, releasever, arch, basearch, buildroot="",
-        filename="/etc/yum.conf", reposdirs=[]):
-        """releasever - version of release (e.g. 3 for Fedora Core 3)
-        arch - architecure (e.g. i686)
-        basearch - base architecture (e.g. i386)
-        buildroot - set a buildroot to add to all local config filenames
+    def __init__(self, verbose, buildroot="", filename="/etc/yum.conf",
+        reposdirs=[]):
+        """buildroot - set a buildroot to add to all local config filenames
         filename - the base config file
         reposdirs - additional dirs to read (glob *.repo)
         """
         self.verbose = verbose
         self.buildroot = buildroot
-        self.reposdirs = reposdirs
-        self.releasever = releasever
-        self.arch = arch
-        self.basearch = basearch
-        # Don't prefix the yum config file with the buildroot
         self.myfilename = filename
-
-        self.stanza_re = re.compile("^\s*\[(?P<stanza>[^\]]*)]\s*(?:;.*)?$",
-            re.I)
-        self.line = 0
-        self.lines = []
+        self.reposdirs = reposdirs
         self.vars = {}
         self.has_key = self.vars.has_key
         self.keys = self.vars.keys
         self.__getitem__ = self.vars.__getitem__
         self.read()
-
-    def nextline(self):
-        self.line = min([self.line + 1, len(self.lines)])
-
-    def findnextline(self, regexp):
-        while self.line < len(self.lines):
-            if hasattr(regexp, "search"):
-                if regexp.search(self.lines[self.line]):
-                    return 1
-            elif re.search(regexp, self.lines[self.line]):
-                return 1
-            self.line += 1
-        return 0
 
     def checkVar(self, stanza, varname):
         """check variablename, if allowed in the config file"""
@@ -4936,25 +4910,13 @@ class YumConf:
                 return 1
         return 0
 
-    def read2(self, filename, verbose):
-        if os.path.isfile(filename) and os.access(filename, os.R_OK):
-            if verbose > 2:
-                print "Reading in config file %s." % filename
-            self.lines = open(filename, "r").readlines()
-            # strip newlines
-            for index in xrange(len(self.lines)):
-                if self.lines[index][-1:] == "\n":
-                    self.lines[index] = self.lines[index][:-1]
-                if self.lines[index][-1:] == "\r":
-                    self.lines[index] = self.lines[index][:-1]
-        else:
-            self.lines = []
-
     def read(self):
         """read all config files"""
         self.filename = self.myfilename
-        self.read2(self.filename, self.verbose)
-        self.parseFile()
+        ret = self.read2(self.filename, self.verbose)
+        if ret != None:
+            raise ValueError, "could not read line %d in %s" % (ret,
+                self.filename)
         if self.vars.has_key("main") and self.vars["main"].has_key("reposdir"):
             k = self.buildroot + self.vars["main"]["reposdir"]
             if k not in self.reposdirs:
@@ -4963,102 +4925,53 @@ class YumConf:
             for filename in glob.glob(reposdir + "/*.repo"):
                 self.filename = filename
                 self.read2(filename, self.verbose)
-                self.parseFile()
+                if ret != None:
+                    raise ValueError, "could not read line %d in %s" % (ret,
+                        self.filename)
 
-    def parseFile(self):
-        """parse one config file with the help of Conf"""
-        self.line = 0
-        stanza = None
-        while 1:
-            stanza = self.nextStanza()
-            if not stanza:
-                break
-            stanzavars = {}
-            self.nextline()
-            prevname = None
-            while self.findnextcodeline():
-                v = self.nextEntry()
-                if not v:
-                    break
-                if not self.checkVar(stanza, v[0]):
-                    if not v[1] and prevname in YumConf.MultiLines:
-                        replacevars = getVars(self.__dict__["releasever"],
-                            self.__dict__["arch"], self.__dict__["basearch"])
-                        value = replaceVars(v[0], replacevars)
-                        stanzavars[prevname].append(value)
-                        self.nextline()
-                        continue
-                    sys.stderr.write("Bad variable %s in %s\n" % (v[0],
-                        self.filename))
-                    self.nextline()
-                    continue
-                name = v[0]
-                replacevars = getVars(self.__dict__["releasever"],
-                    self.__dict__["arch"], self.__dict__["basearch"])
-                value = replaceVars(v[1], replacevars)
-                if name in YumConf.MultiLines:
-                    stanzavars[name] = [value,]
+    def read2(self, filename, verbose):
+        lines = []
+        if os.path.isfile(filename) and os.access(filename, os.R_OK):
+            if verbose > 2:
+                print "Reading in config file %s." % filename
+            lines = open(filename, "r").readlines()
+        linenum = 0
+        stanza = "main"
+        prevcommand = None
+        while linenum < len(lines):
+            line = lines[linenum]
+            line = line.rstrip("\n\r")
+            if line[:1] == "[" and line.find("]") != -1:
+                stanza = line[1:line.find("]")]
+                prevcommand = None
+            elif prevcommand and line[:1] in " \t":
+                # continuation line
+                line = line.strip()
+                if line and line[:1] not in "#;":
+                    self.vars[stanza][prevcommand].append(line)
+            else:
+                line = line.strip()
+                if line[:1] in "#;" or not line:
+                    pass # comment line
+                elif line.find("=") != -1:
+                    (key, value) = line.split("=", 1)
+                    (key, value) = (key.strip(), value.strip())
+                    if not self.checkVar(stanza, key):
+                        return linenum + 1 # unknown key value
+                    self.vars.setdefault(stanza, {})
+                    prevcommand = None
+                    if key in YumConf.MultiLines:
+                        self.vars[stanza][key] = [value]
+                        prevcommand = key
+                    else:
+                        self.vars[stanza][key] = value
                 else:
-                    stanzavars[name] = value
-                prevname = name
-                self.nextline()
-            self.vars[stanza] = stanzavars
-        self.line = 0
-
-    def getEntry(self):
-        # returns list of fields split by "="
-        if self.line >= len(self.lines):
-            v = []
-        else:
-            v = self.lines[self.line].split("=", 1)
-        try:
-            v = [v[0], "=".join(v[1:len(v)])]
-        except(LookupError):
-            return None
-        if not v:
-            return None
-        return [v[0].strip(), v[1].strip()]
-
-    def nextEntry(self):
-        while self.findnextcodeline():
-            if self.isStanzaDecl():
-                return None
-            v = self.getEntry()
-            if v:
-                return v
-            self.nextline()
+                    return linenum + 1 # not parsable line
+            linenum += 1
         return None
 
-    def findnextcodeline(self):
-        return self.findnextline("^[\t ]*[\[0-9A-Za-z_]+.*")
 
-    def getline(self):
-        if self.line >= len(self.lines):
-            return ""
-        return self.lines[self.line]
-
-    def isStanzaDecl(self):
-        # return true if the current line is of the form [...]
-        if self.stanza_re.match(self.getline()):
-            return 1
-        return 0
-
-    def nextStanza(self):
-        # leave the current line at the first line of the stanza
-        # (the first line after the [stanza_name] entry)
-        while self.findnextline("^[\t ]*\[.*\]"):
-            m = self.stanza_re.match(self.getline())
-            if m:
-                stanza = m.group("stanza")
-                if stanza:
-                    return stanza
-            self.nextline()
-        self.line = 0
-        return 0
-
-
-def readMirrorlist(mirrorlist, releasever, arch, basearch, key, verbose):
-    replacevars = getVars(releasever, arch, basearch)
+def readMirrorlist(mirrorlist, replacevars, key, verbose):
     baseurls = {}
     for mlist in mirrorlist:
         mlist = replaceVars(mlist, replacevars)
@@ -5078,11 +4991,10 @@ def readMirrorlist(mirrorlist, releasever, arch, basearch, key, verbose):
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
     readsrc, reposdirs, verbose, readgroupfile=0, fast=1):
     # Read in /etc/yum.conf config files.
+    basearch = buildarchtranslate.get(arch, arch)
     repos = []
     for c in configfiles:
-        barch = buildarchtranslate.get(arch, arch)
-        conf = YumConf(verbose, releasever, arch, barch, buildroot, c,
-            reposdirs)
+        conf = YumConf(verbose, buildroot, c, reposdirs)
         #print conf.vars
         for key in conf.vars.iterkeys():
             if key == "main":
@@ -5094,12 +5006,18 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             if sec.get("enabled") == "0":
                 continue
             baseurls = sec.get("baseurl", [])
+            replacevars = getVars(releasever, arch, basearch)
+            for i in xrange(len(baseurls)):
+                baseurls[i] = replaceVars(baseurls[i], replacevars)
             excludes = sec.get("exclude", "")
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
             if sec.has_key("mirrorlist"):
-                baseurls.extend(readMirrorlist(sec["mirrorlist"], releasever,
-                    arch, barch, key, verbose))
+                mirrorlist = sec["mirrorlist"]
+                for i in xrange(len(mirrorlist)):
+                    mirrorlist[i] = replaceVars(mirrorlist[i], replacevars)
+                baseurls.extend(readMirrorlist(mirrorlist, replacevars, key,
+                    verbose))
             if not baseurls:
                 print "%s:" % key, "No url for this section in conf file."
                 return None
@@ -5159,8 +5077,8 @@ def testMirrors(verbose, args):
         ]
     for (mirrorlist, releasever, arch, basearch) in args:
         print "---------------------------------------"
-        m = readMirrorlist([mirrorlist], releasever, arch, basearch,
-            "testmirrors", verbose)
+        replacevars = getVars(releasever, arch, basearch)
+        m = readMirrorlist([mirrorlist], replacevars, "testmirrors", verbose)
         #print m
         if verbose > 2:
             for reponame in m:
@@ -5169,7 +5087,8 @@ def testMirrors(verbose, args):
                     print "failed"
                 else:
                     try:
-                        print time.strftime("%Y/%m/%d", time.gmtime(int(repo.repomd["primary"]["timestamp"])))
+                        print time.strftime("%Y/%m/%d", \
+                         time.gmtime(int(repo.repomd["primary"]["timestamp"])))
                     except:
                         print "FAILED"
 
