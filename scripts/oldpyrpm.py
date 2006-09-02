@@ -75,12 +75,8 @@
 # - i386 rpm extraction on ia64? (This is stored like relocated rpms in
 #   duplicated file tags.)
 # yum.conf/repos:
-# - Reading yum.conf we immediately replace 'releasever' instead of
-#   doing this in an extra pass. That's why it is then already too late
-#   to set distroverpkg within the config file at all.
 # - support reading some vars from yum.conf like distroverpkg
 # - distroverpkg should take the Provides: to search for the right rpms.
-# - yum.conf variables are case independent?
 # - For repos stop switching to another server once repomd.xml is read in.
 #   Currently also all rpms are associated/hardcoded with the first server.
 #   Rpms could be cached regardless of the mirror they come from. By sha1sum?
