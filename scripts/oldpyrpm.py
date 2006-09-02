@@ -4859,17 +4859,13 @@ def getVars(releasever, arch, basearch):
             replacevars[key] = value
     return replacevars
 
-def replaceVars(line, vars):
-    for (key, value) in vars.iteritems():
+def replaceVars(line, data):
+    for (key, value) in data.iteritems():
         line = line.replace(key, value)
     return line
 
 
-# XXX; This should be transformed into a function, not a class.
-class YumConf:
-    """Simple Yum config file parser."""
-
-    MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
+MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
         "logfile", "gpgcheck", "assumeyes", "alwaysprompt", "tolerant",
         "exclude", "exactarch",
         "installonlypkgs", "kernelpkgnames", "showdupesfromrepos", "obsoletes",
@@ -4878,88 +4874,68 @@ class YumConf:
         "timeout", "http_caching", "throttle", "bandwidth", "commands",
         "keepcache", "proxy", "proxy_username", "proxy_password", "pkgpolicy",
         "plugins", "pluginpath", "metadata_expire")
-    RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
+RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
         "keepalive", "timeout", "http_caching", "retries", "throttle",
         "bandwidth", "metadata_expire", "proxy", "proxy_username",
         "proxy_password")
-    MultiLines = ("baseurl", "mirrorlist")
 
-    def __init__(self, verbose, buildroot="", filename="/etc/yum.conf",
-        reposdirs=[]):
-        """buildroot - set a buildroot to add to all local config filenames
-        filename - the base config file
-        reposdirs - additional dirs to read (glob *.repo)
-        """
-        self.vars = {}
-        self.has_key = self.vars.has_key
-        self.keys = self.vars.keys
-        self.__getitem__ = self.vars.__getitem__
-        self.read(buildroot, filename, reposdirs, verbose)
+def YumConf(verbose, buildroot="", filename="/etc/yum.conf", reposdirs=[]):
+    data = {}
+    ret = YumConf2(filename, verbose, data)
+    if ret != None:
+        raise ValueError, "could not read line %d in %s" % (ret, filename)
+    reposdirs2 = reposdirs[:]
+    if data.has_key("main") and data["main"].has_key("reposdir"):
+        k = buildroot + data["main"]["reposdir"]
+        if k not in reposdirs2:
+            reposdirs2.append(k)
+    for reposdir in reposdirs2:
+        for filename in glob.glob(reposdir + "/*.repo"):
+            ret = YumConf2(filename, verbose, data)
+            if ret != None:
+                raise ValueError, "could not read line %d in %s" % (ret,
+                    filename)
+    return data
 
-    def checkVar(self, stanza, varname):
-        """check variablename, if allowed in the config file"""
-        if stanza == "main":
-            if varname in YumConf.MainVarnames:
-                return 1
+def YumConf2(filename, verbose, data):
+    lines = []
+    if os.path.isfile(filename) and os.access(filename, os.R_OK):
+        if verbose > 2:
+            print "Reading in config file %s." % filename
+        lines = open(filename, "r").readlines()
+    stanza = "main"
+    prevcommand = None
+    for linenum in xrange(len(lines)):
+        line = lines[linenum].rstrip("\n\r")
+        if line[:1] == "[" and line.find("]") != -1:
+            stanza = line[1:line.find("]")]
+            prevcommand = None
+        elif prevcommand and line[:1] in " \t":
+            # continuation line
+            line = line.strip()
+            if line and line[:1] not in "#;":
+                data[stanza][prevcommand].append(line)
         else:
-            if varname in YumConf.RepoVarnames:
-                return 1
-        return 0
-
-    def read(self, buildroot, filename, reposdirs, verbose):
-        """read all config files"""
-        ret = self.read2(filename, verbose)
-        if ret != None:
-            raise ValueError, "could not read line %d in %s" % (ret,
-                filename)
-        if self.vars.has_key("main") and self.vars["main"].has_key("reposdir"):
-            k = buildroot + self.vars["main"]["reposdir"]
-            if k not in reposdirs:
-                reposdirs.append(k)
-        for reposdir in reposdirs:
-            for filename in glob.glob(reposdir + "/*.repo"):
-                self.read2(filename, verbose)
-                if ret != None:
-                    raise ValueError, "could not read line %d in %s" % (ret,
-                        filename)
-
-    def read2(self, filename, verbose):
-        lines = []
-        if os.path.isfile(filename) and os.access(filename, os.R_OK):
-            if verbose > 2:
-                print "Reading in config file %s." % filename
-            lines = open(filename, "r").readlines()
-        stanza = "main"
-        prevcommand = None
-        for linenum in xrange(len(lines)):
-            line = lines[linenum].rstrip("\n\r")
-            if line[:1] == "[" and line.find("]") != -1:
-                stanza = line[1:line.find("]")]
-                prevcommand = None
-            elif prevcommand and line[:1] in " \t":
-                # continuation line
-                line = line.strip()
-                if line and line[:1] not in "#;":
-                    self.vars[stanza][prevcommand].append(line)
-            else:
-                line = line.strip()
-                if line[:1] in "#;" or not line:
-                    pass # comment line
-                elif line.find("=") != -1:
-                    (key, value) = line.split("=", 1)
-                    (key, value) = (key.strip(), value.strip())
-                    if not self.checkVar(stanza, key):
+            line = line.strip()
+            if line[:1] in "#;" or not line:
+                pass # comment line
+            elif line.find("=") != -1:
+                (key, value) = line.split("=", 1)
+                (key, value) = (key.strip(), value.strip())
+                if stanza == "main":
+                    if key not in MainVarnames:
                         return linenum + 1 # unknown key value
-                    prevcommand = None
-                    if key in YumConf.MultiLines:
-                        value = [value]
-                        prevcommand = key
-                    self.vars.setdefault(stanza, {})
-                    self.vars[stanza][key] = value
-                else:
-                    return linenum + 1 # not parsable line
-        return None
+                elif key not in RepoVarnames:
+                    return linenum + 1 # unknown key value
+                prevcommand = None
+                if key in ("baseurl", "mirrorlist"):
+                    value = [value]
+                    prevcommand = key
+                data.setdefault(stanza, {})[key] = value
+            else:
+                return linenum + 1 # not parsable line
+    return None
 
 
 def readMirrorlist(mirrorlist, replacevars, key, verbose):
@@ -4986,10 +4962,10 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
     repos = []
     for c in configfiles:
         conf = YumConf(verbose, buildroot, c, reposdirs)
-        #print conf.vars
-        for key in conf.vars.iterkeys():
+        #print conf
+        for key in conf.iterkeys():
             if key == "main":
-                #mainconf = conf.vars["main"]
+                #mainconf = conf["main"]
                 #if mainconf.has_key("distroverpkg"):
                 #    distroverpkg = [mainconf["distroverpkg"]]
                 continue
