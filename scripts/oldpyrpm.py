@@ -4865,6 +4865,7 @@ def replaceVars(line, vars):
     return line
 
 
+# XXX; This should be transformed into a function, not a class.
 class YumConf:
     """Simple Yum config file parser."""
 
@@ -4890,15 +4891,11 @@ class YumConf:
         filename - the base config file
         reposdirs - additional dirs to read (glob *.repo)
         """
-        self.verbose = verbose
-        self.buildroot = buildroot
-        self.myfilename = filename
-        self.reposdirs = reposdirs
         self.vars = {}
         self.has_key = self.vars.has_key
         self.keys = self.vars.keys
         self.__getitem__ = self.vars.__getitem__
-        self.read()
+        self.read(buildroot, filename, reposdirs, verbose)
 
     def checkVar(self, stanza, varname):
         """check variablename, if allowed in the config file"""
@@ -4910,24 +4907,22 @@ class YumConf:
                 return 1
         return 0
 
-    def read(self):
+    def read(self, buildroot, filename, reposdirs, verbose):
         """read all config files"""
-        self.filename = self.myfilename
-        ret = self.read2(self.filename, self.verbose)
+        ret = self.read2(filename, verbose)
         if ret != None:
             raise ValueError, "could not read line %d in %s" % (ret,
-                self.filename)
+                filename)
         if self.vars.has_key("main") and self.vars["main"].has_key("reposdir"):
-            k = self.buildroot + self.vars["main"]["reposdir"]
-            if k not in self.reposdirs:
-                self.reposdirs.append(k)
-        for reposdir in self.reposdirs:
+            k = buildroot + self.vars["main"]["reposdir"]
+            if k not in reposdirs:
+                reposdirs.append(k)
+        for reposdir in reposdirs:
             for filename in glob.glob(reposdir + "/*.repo"):
-                self.filename = filename
-                self.read2(filename, self.verbose)
+                self.read2(filename, verbose)
                 if ret != None:
                     raise ValueError, "could not read line %d in %s" % (ret,
-                        self.filename)
+                        filename)
 
     def read2(self, filename, verbose):
         lines = []
@@ -4935,12 +4930,10 @@ class YumConf:
             if verbose > 2:
                 print "Reading in config file %s." % filename
             lines = open(filename, "r").readlines()
-        linenum = 0
         stanza = "main"
         prevcommand = None
-        while linenum < len(lines):
-            line = lines[linenum]
-            line = line.rstrip("\n\r")
+        for linenum in xrange(len(lines)):
+            line = lines[linenum].rstrip("\n\r")
             if line[:1] == "[" and line.find("]") != -1:
                 stanza = line[1:line.find("]")]
                 prevcommand = None
@@ -4958,16 +4951,14 @@ class YumConf:
                     (key, value) = (key.strip(), value.strip())
                     if not self.checkVar(stanza, key):
                         return linenum + 1 # unknown key value
-                    self.vars.setdefault(stanza, {})
                     prevcommand = None
                     if key in YumConf.MultiLines:
-                        self.vars[stanza][key] = [value]
+                        value = [value]
                         prevcommand = key
-                    else:
-                        self.vars[stanza][key] = value
+                    self.vars.setdefault(stanza, {})
+                    self.vars[stanza][key] = value
                 else:
                     return linenum + 1 # not parsable line
-            linenum += 1
         return None
 
 
