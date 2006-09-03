@@ -519,7 +519,11 @@ class SqliteDB(repodb.RpmRepoDB):
                 'filetypes': ''.join(dir['types'])
             }
             self.insertHash('filelist', data, fcur)
-        self.insertHash('packages', {'pkgId' : pkgId, 'pkgKey' : pkgKey},fcur)
+        try:
+            self.insertHash('packages', {'pkgId' : pkgId, 'pkgKey' : pkgKey},
+                fcur)
+        except:
+            print "Ugly hack to allow duplicate packages in repo data."
 
     def importFilelist(self):
         # try mirror that just worked
@@ -856,3 +860,5 @@ class SqliteDB(repodb.RpmRepoDB):
 # fall back to RpmRepoDB if sqlite is not installed
 if sqlite is None:
     SqliteDB = repodb.RpmRepoDB
+
+# vim:ts=4:sw=4:showmatch:expandtab
