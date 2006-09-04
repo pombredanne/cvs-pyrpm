@@ -551,7 +551,61 @@ class GzipFile(gzip.GzipFile):
 
 cachedir = "/var/cache/pyrpm/"
 
-sockettimeout = 20.0
+
+def setProxyOptions(o):
+    import urlparse
+    proxies = {}
+    proxy_string = o.get("proxy", None)
+    if proxy_string not in (None, "", "_none_"):
+        proxy_username = o.get("proxy_username", None)
+        if proxy_username != None:
+            password = o.get("proxy_password", "")
+            if password:
+                password = ":" + password
+            parsed = urlparse.urlsplit(proxy_string, allow_fragments=0)
+            proxy_string = "%s://%s%s@%s%s" % (parsed[0], proxy_username,
+                password, parsed[1], parsed[2] + "?" + parsed[3])
+        proxies["http"] = proxy_string
+        proxies["https"] = proxy_string
+        proxies["ftp"] = proxy_string
+    o["proxies"] = proxies
+
+def setOptions(yumconf={}, repo=None):
+    # Default values:
+    o = {
+        "timeout": "20.0",
+        "keepalive": "1",
+        "retries": "3",
+        "http_caching": "all",
+        "proxy": None,
+        "proxy_username": None,
+        "proxy_password": None,
+        # Set the proxy settings from above into urlgrabber data:
+        "proxies": {},
+        "http_headers": None
+    }
+    # Override with "main" settings:
+    if yumconf.has_key("main"):
+        for (key, value) in yumconf["main"].iteritems():
+            o[key] = value
+    # Override with repo-specific settings:
+    if yumconf.has_key(repo):
+        for (key, value) in yumconf[repo].iteritems():
+            o[key] = value
+    # Set proxy items:
+    setProxyOptions(o)
+    # Set http headers:
+    cache = o["http_caching"] != "all"
+    headers = []
+    # If we should not cache and we don't already contain
+    # a Pragma header, then add it...
+    nocache = ("Pragma", "no-cache")
+    if not cache and nocache not in headers:
+        headers.append(nocache)
+    o["http_headers"] = headers
+    return o
+
+urloptions = setOptions()
 
 
 # rpm tag types
@@ -1501,13 +1555,16 @@ class ReadRpm:
         if not self.fd:
             if isUrl(self.filename):
                 import urlgrabber
+                hrange = None
+                if offset or headerend:
+                    hrange = (offset, headerend)
                 try:
-                    if offset or headerend:
-                        self.fd = urlgrabber.urlopen(self.filename,
-                            range=(offset, headerend), timeout=sockettimeout)
-                    else:
-                        self.fd = urlgrabber.urlopen(self.filename,
-                            timeout=sockettimeout)
+                    self.fd = urlgrabber.urlopen(self.filename, range=hrange,
+                        timeout=float(urloptions["timeout"]),
+                        retry=int(urloptions["retries"]),
+                        keepalive=int(urloptions["keepalive"]),
+                        proxies=urloptions["proxies"],
+                        http_headers=urloptions["http_headers"])
                 except urlgrabber.grabber.URLGrabError: #, e:
                     self.printErr("could not open file")
                     #print str(e)
@@ -3910,7 +3967,12 @@ def cacheLocal(urls, filename, subdir, verbose, checksum=None,
         if verbose > 4:
             print "cacheLocal: localfile:", localfile
         try:
-            f = urlgrabber.urlgrab(url, localfile, timeout=sockettimeout)
+            f = urlgrabber.urlgrab(url, localfile,
+                timeout=float(urloptions["timeout"]),
+                retry=int(urloptions["retries"]),
+                keepalive=int(urloptions["keepalive"]),
+                proxies=urloptions["proxies"],
+                http_headers=urloptions["http_headers"])
         except urlgrabber.grabber.URLGrabError, e:
             if verbose > 4:
                 print "cacheLocal: error: e:", e
@@ -4954,25 +5016,24 @@ def readMirrorlist(mirrorlist, replacevars, key, verbose):
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
     readsrc, reposdirs, verbose, readgroupfile=0, fast=1):
     # Read in /etc/yum.conf config files.
+    global urloptions
     basearch = buildarchtranslate.get(arch, arch)
     repos = []
     for c in configfiles:
-        conf = YumConf(verbose, buildroot, c, reposdirs)
-        #print conf
-        for key in conf.iterkeys():
+        yumconf = YumConf(verbose, buildroot, c, reposdirs)
+        for key in yumconf.iterkeys():
             if key == "main":
-                #mainconf = conf["main"]
-                #if mainconf.has_key("distroverpkg"):
-                #    distroverpkg = [mainconf["distroverpkg"]]
                 continue
-            sec = conf[key]
+            sec = yumconf[key]
             if sec.get("enabled") == "0":
                 continue
+            urloptions = setOptions(yumconf, key)
             baseurls = sec.get("baseurl", [])
             replacevars = getVars(releasever, arch, basearch)
             for i in xrange(len(baseurls)):
                 baseurls[i] = replaceVars(baseurls[i], replacevars)
-            excludes = sec.get("exclude", "")
+            excludes = yumconf.get("main", {}).get("exclude", "")
+            excludes = sec.get("exclude", excludes)
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
             if sec.has_key("mirrorlist"):
@@ -4983,22 +5044,24 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
                     verbose))
             if not baseurls:
                 print "%s:" % key, "No url for this section in conf file."
+                urloptions = setOptions()
                 return None
             repo = RpmRepo(baseurls, excludes, verbose, key, readsrc, fast)
             if repo.read(readgroupfile=readgroupfile) == 0:
                 print "Cannot read repo %s." % key
+                urloptions = setOptions()
                 return None
             if not readdebug:
                 repo.delDebuginfo()
             repos.append(repo)
+    urloptions = setOptions()
     return repos
 
 
 def testMirrors(verbose, args):
-    global sockettimeout
     # We are per default more verbose:
     verbose += 1
-    sockettimeout = 10.0
+    urloptions["timeout"] = "10.0"
     if args:
         # python-only
         args = [ (a, "5", "i686", "i386") for a in args ]
