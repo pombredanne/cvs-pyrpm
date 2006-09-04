@@ -148,7 +148,8 @@ class Repository:
             # mount nfs source
             if config.verbose:
                 print "Mounting '%s' on '%s'" % (source, self.dir)
-            mount(what, self.dir, fstype="nfs", options="ro")
+            mount(what, self.dir, fstype="nfs",
+                  options="ro,rsize=32768,wsize=32768,hard,nolock")
             source = "file://%s" % self.dir
         # else: source == url
 

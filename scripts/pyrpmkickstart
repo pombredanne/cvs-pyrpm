@@ -83,7 +83,7 @@ def main():
                                        "standalone", "wait", "xen", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
                                        "no-cache", "no-default-groups",
-                                       "drop-unresolved", "no-discinfo" ])
+                                       "drop-unresolved", "no-discinfo", ])
     except:
         usage()
         return
@@ -242,6 +242,47 @@ def main():
             print "ERROR: %s" % msg
             return 1
 
+    ############################## verify source ##############################
+
+    if source_release == "Red Hat Enterprise Linux":
+        short_release = "RHEL"
+        prefix = "RedHat"
+    elif source_release == "Fedora Core":
+        short_release = "FC"
+        prefix = "Fedora"
+    else:
+        print "ERROR: Unknown source release '%s'." % source_release
+        return 1
+
+    try:
+        installation = Installation(short_release, int(source_version),
+                                    source_arch)
+    except:
+        try:
+            installation = Installation(short_release, float(source_version),
+                                        source_arch)
+        except:
+            print "ERROR: The installation version '%s' is not valid." % \
+                  source_version
+            return 1
+
+    if (installation.release == "RHEL" and installation.version < 3) or \
+           (installation.release == "FC" and installation.version < 2):
+        print "ERROR: %s is not supported as installation source" % \
+              installation
+        return 1
+
+    print "Installation source: %s [%s]" % (installation, installation.arch)
+
+    if installation.arch not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
+        print "ERROR: Installation source is not compatible with system arch."
+        return 1
+
+    if user_arch and user_arch not in pyrpm.arch_compats[installation.arch]:
+        print "ERROR: User requested arch '%s' " % (user_arch) + \
+              "is not compatible with installation source."
+        return 1
+
     ############################## mount stage2  ##############################
 
     if not no_stage2:
@@ -381,46 +422,6 @@ def main():
 
     else: # no_stage2
         stage2_dir = ""
-
-    # verify source release and version
-    if source_release == "Red Hat Enterprise Linux":
-        short_release = "RHEL"
-        prefix = "RedHat"
-    elif source_release == "Fedora Core":
-        short_release = "FC"
-        prefix = "Fedora"
-    else:
-        print "ERROR: Unknown source release '%s'." % source_release
-        return 1
-
-    try:
-        installation = Installation(short_release, int(source_version),
-                                    source_arch)
-    except:
-        try:
-            installation = Installation(short_release, float(source_version),
-                                        source_arch)
-        except:
-            print "ERROR: The installation version '%s' is not valid." % \
-                  source_version
-            return 1
-
-    if (installation.release == "RHEL" and installation.version < 3) or \
-           (installation.release == "FC" and installation.version < 2):
-        print "ERROR: %s is not supported as installation source" % \
-              installation
-        return 1
-
-    print "Installation source: %s [%s]" % (installation, installation.arch)
-
-    if installation.arch not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
-        print "ERROR: Installation source is not compatible with system arch."
-        return 1
-
-    if user_arch and user_arch not in pyrpm.arch_compats[installation.arch]:
-        print "ERROR: User requested arch '%s' " % (user_arch) + \
-              "is not compatible with installation source."
-        return 1
 
     ####################### get used system ressources #######################
 
@@ -569,6 +570,18 @@ def main():
     else:
         # no upgrade checks
         pass
+
+    # check for existance of essential tags
+
+    if (installation.release == "RHEL" and installation.version < 5) or \
+           (installation.release == "FC" and installation.version < 6):
+        # langsupport is deprecated for RHEL>=5 and FC>=6, but required before
+        if not ks.has_key("langsupport"):
+            print "ERROR: langsupport is missing."
+            return 1
+    else:
+        print "WARNING: langsupport is deprecated, ignoring."
+
     if not keyboard_models.has_key(ks["keyboard"]):
         print "ERROR: Keyboard model '%s' is not defined, exiting." % \
               ks["keyboard"]
@@ -829,12 +842,13 @@ def main():
                        [ "ext2", "ext3", "xfs", "jfs", "reiserfs" ] and \
                        partition[part]["native_type"] == 0x83:
                     # TODO: check if partition is already mounted
-                    print "Trying '%s'" % onpart
+                    print "Trying '/dev/%s'" % onpart
                     info = get_installation_info(partition[part]["device"],
                                                  partition[part]["fstype"],
                                                  fstemp_dir)
                     if info:
                         installed[onpart] = info
+                        print "Found '%s'" % installed[onpart]["release"]
 
         # check volume groups and logical volumes
 #        print "volgroup=%s" % pprint.pformat(volgroup)
@@ -922,7 +936,7 @@ def main():
         if len(installed) > 1:
             print "Available installations:"
             for onpart in release:
-                print "%s: %s" % (onpart, installed[onpart]["release"])
+                print "/dev/%s: %s" % (onpart, installed[onpart]["release"])
 
         if upgrade:
             if upgrade[:6] == "LABEL=":
@@ -939,7 +953,7 @@ def main():
             print "ERROR: More than one installation found, exiting."
             return 1
 
-        print "About to upgrade installation on '%s'" % upgrade
+        print "About to upgrade installation on '/dev/%s'" % upgrade
         if not pyrpm.is_this_ok():
             return 0
 
@@ -1969,9 +1983,7 @@ def main():
 
     ############################ package selection ############################
 
-    # for langsupport
     languages = [ ]
-
     if ks.has_key("install"):
         groups = [ ]
         if ks["packages"].has_key("groups") and \
@@ -2182,21 +2194,24 @@ def main():
                         if not pkg in pkgs:
                             pkgs.append(pkg)
 
-            # get langsupport packages
-            if ks.has_key("langsupport"):
-                if ks["langsupport"].has_key("default"):
-                    languages.append(ks["langsupport"]["default"][:2])
-                    languages.append(ks["langsupport"]["default"][:5])
-                for lang in ks["langsupport"]["supported"]:
-                    languages.append(lang[:2])
-                    languages.append(lang[:5])
-                pyrpm.normalizeList(languages)
-            compsLangsupport(pkgs, source.comps, languages)
-            if repo_comps:
-                for repo in repos:
-                    if not repos[repo].comps:
-                        continue
-                    compsLangsupport(pkgs, repos[repo].comps, languages)
+            if (installation.release == "RHEL" and installation.version < 5) or \
+                   (installation.release == "FC" and installation.version < 6):
+                # langsupport is deprecated for RHEL>=5 and FC>=6
+                # get langsupport packages
+                if ks.has_key("langsupport"):
+                    if ks["langsupport"].has_key("default"):
+                        languages.append(ks["langsupport"]["default"][:2])
+                        languages.append(ks["langsupport"]["default"][:5])
+                    for lang in ks["langsupport"]["supported"]:
+                        languages.append(lang[:2])
+                        languages.append(lang[:5])
+                    pyrpm.normalizeList(languages)
+                compsLangsupport(pkgs, source.comps, languages)
+                if repo_comps:
+                    for repo in repos:
+                        if not repos[repo].comps:
+                            continue
+                        compsLangsupport(pkgs, repos[repo].comps, languages)
 
         pyrpm.normalizeList(pkgs)
 
@@ -2629,7 +2644,6 @@ def main():
         fd.write("baseurl=%s\n" % source.baseurl)
     if source.exclude:
         fd.write("exclude=%s\n" % string.join(source.exclude))
-
     # no repo.mirrorlist and repo.exclude for base
     fd.write("\n")
     # add repos
@@ -2877,20 +2891,26 @@ def main():
         create_file(target_chroot, "/etc/sysconfig/desktop",
                     [ 'DESKTOP="%s"\n' % desktop ])
 
-    # /etc/sysconfig/i18n
-    if ks.has_key("langsupport"):
-        print "Configuring languages"
-        content = [ ]
-        if ks["langsupport"].has_key("default"):
-            content.append('LANG="%s"\n' % ks["langsupport"]["default"])
-            if ks["langsupport"].has_key("supported") and \
-                   len(ks["langsupport"]["supported"]) > 0:
-                content.append('SUPPORTED="%s"\n' % \
+    if (installation.release == "RHEL" and installation.version < 5) or \
+           (installation.release == "FC" and installation.version < 6):
+        # langsupport is deprecated for RHEL>=5 and FC>=6
+        # /etc/sysconfig/i18n
+        if ks.has_key("langsupport"):
+            print "Configuring languages"
+            content = [ ]
+            if ks["langsupport"].has_key("default"):
+                content.append('LANG="%s"\n' % ks["langsupport"]["default"])
+                if ks["langsupport"].has_key("supported") and \
+                       len(ks["langsupport"]["supported"]) > 0:
+                    content.append('SUPPORTED="%s"\n' % \
+                                   string.join(ks["langsupport"]["supported"], ":"))
+            else:
+                content.append('LANG="%s"\n' % \
                                string.join(ks["langsupport"]["supported"], ":"))
-        else:
-            content.append('LANG="%s"\n' % \
-                           string.join(ks["langsupport"]["supported"], ":"))
-        create_file(target_chroot, "/etc/sysconfig/i18n", content)
+            create_file(target_chroot, "/etc/sysconfig/i18n", content)
+    else:
+        create_file(target_chroot, "/etc/sysconfig/i18n",
+                    [ "LANG=%s\n" % ks["lang"]])        
 
     # /etc/sysconfig/installinfo
     if ks.has_key("install"):
@@ -2959,11 +2979,11 @@ def main():
 
         prefix = "/boot"
         dir = "/"
-        have = "have"
+        have = "do not have"
         if mountmap.has_key("/boot"):
             dir = "/boot"
             prefix = ""
-            have = "do not have"
+            have = "have"
 
         append=""
         if ks["bootloader"].has_key("append"):
@@ -3044,7 +3064,7 @@ def main():
                 '#\n',
                 '# Note that you do not have to rerun grub after making changes to this file\n',
                 '# NOTICE:  You %s a /boot partition.  This means that\n' % have,
-                '#          all kernel and initrd paths are relative to %s/, eg.\n' % prefix,
+                '#          all kernel and initrd paths are relative to %s, eg.\n' % dir,
                 '#          root (%s)\n' % hd_boot,
                 '#          kernel %s/vmlinuz-version ro root=%s\n' % \
                 (prefix, root),
@@ -3326,7 +3346,6 @@ signals = pyrpm.blockSignals()
 
 # wait one second before going on
 time.sleep(1)
-os.system("/bin/sync")
 
 if wait:
     if stage2_chroot or target_chroot:

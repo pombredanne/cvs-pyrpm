@@ -43,7 +43,7 @@ import types, string
 
 class KickstartConfig(dict):
     REQUIRED_TAGS = [ "authconfig", "bootloader", "keyboard", "lang",
-                      "langsupport", "rootpw", "timezone" ]
+                      "rootpw", "timezone" ]
     # Currently unsupported tags:
     # driverdisk
 
@@ -499,8 +499,10 @@ class KickstartConfig(dict):
             source += 1
         if self.has_key("url"):
             source += 1
-        if source != 1:
+        if source > 1:
             raise ValueError, "Multiple installation sources defined."
+        elif source < 1:
+            raise ValueError, "No installation source defined."
 
         if self.has_key("harddrive"):
             if not self["harddrive"].has_key("partition"):

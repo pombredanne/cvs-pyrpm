@@ -640,7 +640,7 @@ def load_source_repo(ks, source_dir):
     if ks.has_key("cdrom"):
         url = "cdrom"
         if ks["cdrom"].has_key("exclude"):
-            exclude = ks["nfs"]["exclude"]
+            exclude = ks["cdrom"]["exclude"]
     elif ks.has_key("nfs"):
         url = "nfs://%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
         if ks["nfs"].has_key("exclude"):
@@ -653,6 +653,9 @@ def load_source_repo(ks, source_dir):
     print "Reading repodata from installation source ..."
     if not source.load(url, exclude=exclude):
         raise IOError, "Loading of source failed."
+
+    if not source.comps:
+        raise IOError, "There is no comps.xml in installation source."
 
     return source
 
@@ -723,13 +726,16 @@ def run_script(ks, type, chroot):
         interpreter = ks[type]["interpreter"]
     (status, rusage, msg) = pyrpm.runScript(interpreter, ks[type]["script"],
                                             chroot=chroot)
-    config.log(msg)
     if status != 0:
+        print msg
         if ks[type].has_key("erroronfail"):
             print "ERROR: Script failed, aborting."
             return 0
         else:
             print "WARNING: Script failed."
+    else:
+        config.log(msg)
+
     return 1
 
 # vim:ts=4:sw=4:showmatch:expandtab
