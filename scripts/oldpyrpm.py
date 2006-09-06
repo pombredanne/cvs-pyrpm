@@ -585,13 +585,11 @@ def setOptions(yumconf={}, repo=None):
         "http_headers": None
     }
     # Override with "main" settings:
-    if yumconf.has_key("main"):
-        for (key, value) in yumconf["main"].iteritems():
-            o[key] = value
+    for (key, value) in yumconf.get("main", {}).iteritems():
+        o[key] = value
     # Override with repo-specific settings:
-    if yumconf.has_key(repo):
-        for (key, value) in yumconf[repo].iteritems():
-            o[key] = value
+    for (key, value) in yumconf.get(repo, {}).iteritems():
+        o[key] = value
     # Set proxy items:
     setProxyOptions(o)
     # Set http headers:
@@ -4138,6 +4136,8 @@ class RpmRepo:
 
     def read(self, onlyrepomd=0, readgroupfile=0):
         for filename in self.filenames:
+            if not filename or filename[:1] == "#":
+                continue
             if self.verbose > 2:
                 print "Reading yum repository %s." % filename
             self.filename = filename
@@ -4944,8 +4944,9 @@ def YumConf(verbose, buildroot="", filename="/etc/yum.conf", reposdirs=[]):
     if ret != None:
         raise ValueError, "could not read line %d in %s" % (ret, filename)
     reposdirs2 = reposdirs[:]
-    if data.has_key("main") and data["main"].has_key("reposdir"):
-        k = buildroot + data["main"]["reposdir"]
+    k = data.get("main", {}).get("reposdir")
+    if k != None:
+        k = buildroot + k
         if k not in reposdirs2:
             reposdirs2.append(k)
     for reposdir in reposdirs2:
@@ -5009,8 +5010,6 @@ def readMirrorlist(mirrorlist, replacevars, key, verbose):
         for l in open(fname).readlines():
             l = l.strip()
             l = l.replace("$ARCH", "$basearch")
-            if l and l[0] != "#":
-                baseurls[replaceVars(l, replacevars)] = None
     return baseurls.keys()
 
 def readRepos(releasever, configfiles, arch, buildroot, readdebug,
@@ -5030,22 +5029,21 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             urloptions = setOptions(yumconf, key)
             baseurls = sec.get("baseurl", [])
             replacevars = getVars(releasever, arch, basearch)
-            for i in xrange(len(baseurls)):
-                baseurls[i] = replaceVars(baseurls[i], replacevars)
             excludes = yumconf.get("main", {}).get("exclude", "")
             excludes = sec.get("exclude", excludes)
+            excludes = replaceVars(excludes, replacevars)
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
             if sec.has_key("mirrorlist"):
                 mirrorlist = sec["mirrorlist"]
-                for i in xrange(len(mirrorlist)):
-                    mirrorlist[i] = replaceVars(mirrorlist[i], replacevars)
                 baseurls.extend(readMirrorlist(mirrorlist, replacevars, key,
                     verbose))
             if not baseurls:
                 print "%s:" % key, "No url for this section in conf file."
                 urloptions = setOptions()
                 return None
+            for i in xrange(len(baseurls)):
+                baseurls[i] = replaceVars(baseurls[i], replacevars)
             repo = RpmRepo(baseurls, excludes, verbose, key, readsrc, fast)
             if repo.read(readgroupfile=readgroupfile) == 0:
                 print "Cannot read repo %s." % key
