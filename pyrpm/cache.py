@@ -21,9 +21,9 @@ import os, os.path, md5, sha, shutil, sys
 from pyrpm.functions import _uriToFilename, updateDigestFromFile
 
 try:
-    from urlgrabber import urlgrab
+    from urlgrabber import urlgrab, urlopen
     from urlgrabber.grabber import URLGrabError
-except:
+except ImportError:
     print >> sys.stderr, "Error: Couldn't import urlgrabber python module for NetworkCache."
 
 
@@ -73,12 +73,12 @@ class NetworkCache:
             path = os.path.join(self.baseurl, uri)
             try:
                 return open(path)
-            except:
+            except IOError:
                 return None
         sourceurl = self.__createSourceURI(uri)
         try:
             return urlopen(sourceurl)
-        except:
+        except IOError:
             return None
 
     def cache(self, uri, force=0, copy_local=0):
@@ -96,7 +96,7 @@ class NetworkCache:
         if not os.path.isdir(os.path.dirname(destfile)):
             try:
                 os.makedirs(os.path.dirname(destfile))
-            except:
+            except OSError:
                 pass
         try:
             if force:
@@ -121,7 +121,7 @@ class NetworkCache:
             try:
                 shutil.rmtree(self.cachedir)
                 return 1
-            except:
+            except EnvironmentError:
                 return 0
         if self.isCached(uri):
             os.unlink(self.getCachedFilename(uri))
@@ -151,7 +151,7 @@ class NetworkCache:
             fd = open(fname)
             updateDigestFromFile(digest, fd)
             return (digest.hexdigest(), fname)
-        except:
+        except IOError:
             return (None, None)
 
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -22,7 +22,7 @@ import fcntl, os, sys, struct, zlib
 
 try:
     import urlgrabber
-except:
+except ImportError:
     print >> sys.stderr, "Error: Couldn't import urlgrabber python module. Only check scripts available."
 
 from base import *

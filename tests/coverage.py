@@ -244,7 +244,7 @@ class coverage:
             cache.close()
             if isinstance(cexecuted, types.DictType):
                 self.cexecuted = cexecuted
-        except:
+        except (IOError, EOFError, ValueError, TypeError):
             pass
 
     # canonical_filename(filename).  Return a canonical filename for the

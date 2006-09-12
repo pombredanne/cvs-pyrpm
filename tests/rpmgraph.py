@@ -116,7 +116,7 @@ if __name__ == '__main__':
         r = pyrpm.RpmPackage(pyrpm.rpmconfig, f)
         try:
             r.read(tags=tags)
-        except:
+        except IOError:
             print "Loading of %s failed, exiting." % f
             sys.exit(-1)
         r.close()

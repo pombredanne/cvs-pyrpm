@@ -500,6 +500,14 @@ class SqliteDB(repodb.RpmRepoDB):
             return
         pkgKey = op["pkgKey"]
         pkgId = op["pkgId"]
+
+        try:
+            self.insertHash('packages', {'pkgId' : pkgId, 'pkgKey' : pkgKey},
+                fcur)
+        except sqlite.DatabaseError:
+            # Files of package already in database: skipping
+            return 
+
         if self._pkgs.has_key(pkgKey) and self._pkgs[pkgKey] is not None:
             self._pkgs[pkgKey]['oldfilenames'] = filelist
 
@@ -519,11 +527,6 @@ class SqliteDB(repodb.RpmRepoDB):
                 'filetypes': ''.join(dir['types'])
             }
             self.insertHash('filelist', data, fcur)
-        try:
-            self.insertHash('packages', {'pkgId' : pkgId, 'pkgKey' : pkgKey},
-                fcur)
-        except:
-            print "Ugly hack to allow duplicate packages in repo data."
 
     def importFilelist(self):
         # try mirror that just worked
@@ -623,6 +626,12 @@ class SqliteDB(repodb.RpmRepoDB):
         data['rpm_header_end'] = pkg.range_header[0] + pkg.range_header[1]
         for k, v in pkg.sizes.iteritems():
             data['size_' + k] = v
+
+        # check if package already in db
+        cur.execute('select pkgKey from packages where pkgId="%s"' %
+                    data['pkgId'])
+        if cur.fetchone():
+            return
 
         pkgKey = self.insertHash('packages', data, cur)
         pkg.pkgKey = pkgKey

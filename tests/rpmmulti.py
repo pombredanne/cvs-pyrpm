@@ -121,7 +121,7 @@ if __name__ == '__main__':
             r = pyrpm.RpmPackage("file:/%s%s" % (installed_dir, f))
             try:
                 r.read(tags=tags)
-            except:
+            except IOError:
                 print "Loading of %s%s failed, ignoring." % (installed_dir, f)
                 continue
             installed.append(r)
@@ -138,7 +138,7 @@ if __name__ == '__main__':
         r = pyrpm.RpmPackage("file:/"+f)
         try:
             r.read(tags=tags)
-        except:
+        except IOError:
             print "Loading of %s failed, exiting." % f
             sys.exit(-1)
         rpms.append(r)

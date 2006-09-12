@@ -24,7 +24,7 @@ from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE,
 from bsddb import hashopen
 try:
     from tempfile import mkstemp, mkdtemp, _get_candidate_names, TMP_MAX
-except:
+except ImportError:
     print >> sys.stderr, "Error: Couldn't import tempfile python module. Only check scripts available."
 
 from io import *
@@ -167,11 +167,11 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
     if not os.path.exists(tdir):
         try:
             os.makedirs(os.path.dirname(tdir), mode=0755)
-        except:
+        except OSError:
             pass
         try:
             os.makedirs(tdir, mode=01777)
-        except:
+        except OSError:
             return (0, None, "")
     if isinstance(prog, TupleType):
         args = prog
@@ -486,7 +486,7 @@ def closeAllFDs():
         try:
             os.close(fd)
             sys.stderr.write("Closed fd=%d\n" % fd)
-        except:
+        except OSError:
             pass
 
 def readExact(fd, size):
@@ -621,7 +621,7 @@ def getFreeDiskspace(config, operations):
                 try:
                     dev = os.stat(devname).st_dev
                     break
-                except:
+                except OSError:
                     dirname = os.path.dirname(dirname)
                     devname = os.path.dirname(devname)
                     if dirhash.has_key(dirname):
@@ -707,7 +707,7 @@ def checksumCacheLocal(url, subdir, type):
         fd = open(fname)
         updateDigestFromFile(digest, fd)
         return (digest.hexdigest(), fname)
-    except:
+    except IOError:
         return (None, None)
 
 def parseBoolean(str):
@@ -1294,7 +1294,7 @@ def archCompat(parch, arch):
 
     try:
         return (arch == "noarch" or parch in arch_compats[arch])
-    except:
+    except KeyError:
         return False
 
 def archDuplicate(parch, arch):

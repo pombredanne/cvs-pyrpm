@@ -132,7 +132,7 @@ class RpmDB(db.RpmDatabase):
         return filter(None, result)
 
     def open(self):
-        self.__openDB4()
+        return self.__openDB4()
 
     def close(self):
         self.basenames_db      = None
@@ -154,7 +154,7 @@ class RpmDB(db.RpmDatabase):
 
     def read(self):
         """Read the database in memory."""
-        return self.OK
+        return self.open()
 
     def sync(self):
         """Bring database into an valid state after packages have been
@@ -309,11 +309,13 @@ class RpmDB(db.RpmDatabase):
     def _addPkg(self, pkg):
         signals = functions.blockSignals()
         try:
-            self.__openDB4()
+            if self.__openDB4() != self.OK:
+                functions.unblockSignals(signals)
+                return 0
 
             try:
                 maxid = unpack("I", self.packages_db[self.zero])[0]
-            except:
+            except (struct.error, KeyError):
                 maxid = 0
 
             pkgid = pack("I", maxid + 1)
@@ -339,6 +341,11 @@ class RpmDB(db.RpmDatabase):
             pkg["installcolor"] = [self.config.tscolor,]
             pkg["installtid"] = [self.config.tid,]
 
+            self.packages_db[self.zero] = pkgid
+
+            (headerindex, headerdata) = rpmio._generateHeader(pkg, 4)
+            self.packages_db[pkgid] = headerindex[8:]+headerdata
+
             self.__writeDB4(self.basenames_db, "basenames", pkgid, pkg)
             self.__writeDB4(self.conflictname_db, "conflictname", pkgid, pkg)
             self.__writeDB4(self.dirnames_db, "dirnames", pkgid, pkg)
@@ -348,8 +355,6 @@ class RpmDB(db.RpmDatabase):
             self.__writeDB4(self.installtid_db, "installtid", pkgid, pkg, True,
                             lambda x:pack("i", x))
             self.__writeDB4(self.name_db, "name", pkgid, pkg, False)
-            (headerindex, headerdata) = rpmio._generateHeader(pkg, 4)
-            self.packages_db[pkgid] = headerindex[8:]+headerdata
             self.__writeDB4(self.providename_db, "providename", pkgid, pkg)
             self.__writeDB4(self.provideversion_db, "provideversion", pkgid,
                             pkg)
@@ -360,9 +365,8 @@ class RpmDB(db.RpmDatabase):
                             pkg, False)
             self.__writeDB4(self.sigmd5_db, "install_md5", pkgid, pkg, False)
             self.__writeDB4(self.triggername_db, "triggername", pkgid, pkg)
-            self.packages_db[self.zero] = pkgid
         except bsddb.error:
-            functions.unblockSignals(signals)
+            functions.unblockSignals(signals)            
             return 0 # Due to the blocking, this is now virtually atomic
         functions.unblockSignals(signals)
         return 1
@@ -387,7 +391,8 @@ class RpmDB(db.RpmDatabase):
 
         signals = functions.blockSignals()
         try:
-            self.__openDB4()
+            if self.__openDB4() != self.OK:
+                return 0
 
             self.__removeId(self.basenames_db, "basenames", pkgid, pkg)
             self.__removeId(self.conflictname_db, "conflictname", pkgid, pkg)
@@ -425,7 +430,7 @@ class RpmDB(db.RpmDatabase):
             os.makedirs(dbpath)
 
         if self.dbopen:
-            return
+            return self.OK
 
         # We first need to remove the __db files, otherwise rpm will later
         # be really upset. :)
@@ -434,37 +439,41 @@ class RpmDB(db.RpmDatabase):
                 os.unlink(os.path.join(dbpath, "__db.00%d" % i))
             except OSError:
                 pass
-        self.basenames_db      = bsddb.hashopen(
-            os.path.join(dbpath, "Basenames"), "c")
-        self.conflictname_db   = bsddb.hashopen(
-            os.path.join(dbpath, "Conflictname"), "c")
-        self.dirnames_db       = bsddb.btopen(
-            os.path.join(dbpath, "Dirnames"), "c")
-        self.filemd5s_db       = bsddb.hashopen(
-            os.path.join(dbpath, "Filemd5s"), "c")
-        self.group_db          = bsddb.hashopen(
-            os.path.join(dbpath, "Group"), "c")
-        self.installtid_db     = bsddb.btopen(
-            os.path.join(dbpath, "Installtid"), "c")
-        self.name_db           = bsddb.hashopen(
-            os.path.join(dbpath, "Name"), "c")
-        self.packages_db       = bsddb.hashopen(
-            os.path.join(dbpath, "Packages"), "c")
-        self.providename_db    = bsddb.hashopen(
-            os.path.join(dbpath, "Providename"), "c")
-        self.provideversion_db = bsddb.btopen(
-            os.path.join(dbpath, "Provideversion"), "c")
-        self.requirename_db    = bsddb.hashopen(
-            os.path.join(dbpath, "Requirename"), "c")
-        self.requireversion_db = bsddb.btopen(
-            os.path.join(dbpath, "Requireversion"), "c")
-        self.sha1header_db     = bsddb.hashopen(
-            os.path.join(dbpath, "Sha1header"), "c")
-        self.sigmd5_db         = bsddb.hashopen(
-            os.path.join(dbpath, "Sigmd5"), "c")
-        self.triggername_db    = bsddb.hashopen(
-            os.path.join(dbpath, "Triggername"), "c")
-        self.dbopen = True
+        try:
+            self.basenames_db      = bsddb.hashopen(
+                os.path.join(dbpath, "Basenames"), "c")
+            self.conflictname_db   = bsddb.hashopen(
+                os.path.join(dbpath, "Conflictname"), "c")
+            self.dirnames_db       = bsddb.btopen(
+                os.path.join(dbpath, "Dirnames"), "c")
+            self.filemd5s_db       = bsddb.hashopen(
+                os.path.join(dbpath, "Filemd5s"), "c")
+            self.group_db          = bsddb.hashopen(
+                os.path.join(dbpath, "Group"), "c")
+            self.installtid_db     = bsddb.btopen(
+                os.path.join(dbpath, "Installtid"), "c")
+            self.name_db           = bsddb.hashopen(
+                os.path.join(dbpath, "Name"), "c")
+            self.packages_db       = bsddb.hashopen(
+                os.path.join(dbpath, "Packages"), "c")
+            self.providename_db    = bsddb.hashopen(
+                os.path.join(dbpath, "Providename"), "c")
+            self.provideversion_db = bsddb.btopen(
+                os.path.join(dbpath, "Provideversion"), "c")
+            self.requirename_db    = bsddb.hashopen(
+                os.path.join(dbpath, "Requirename"), "c")
+            self.requireversion_db = bsddb.btopen(
+                os.path.join(dbpath, "Requireversion"), "c")
+            self.sha1header_db     = bsddb.hashopen(
+                os.path.join(dbpath, "Sha1header"), "c")
+            self.sigmd5_db         = bsddb.hashopen(
+                os.path.join(dbpath, "Sigmd5"), "c")
+            self.triggername_db    = bsddb.hashopen(
+                os.path.join(dbpath, "Triggername"), "c")
+            self.dbopen = True
+        except bsddb.error:
+            return 
+        return self.OK
 
     def __removeId(self, db, tag, pkgid, pkg, useidx=True, func=str):
         """Remove index entries for tag of RpmPackage pkg (with id pkgid) from
@@ -586,7 +595,7 @@ class RpmDB(db.RpmDatabase):
         netpaths = []
         try:
             if self.buildroot:
-                fname = br + "/etc/rpm/macros"
+                fname = self.buildroot + "/etc/rpm/macros"
             else:
                 fname = "/etc/rpm/macros"
             lines = open(fname).readlines()
@@ -596,6 +605,8 @@ class RpmDB(db.RpmDatabase):
                 if not inpath and not l.startswith("%_netsharedpath"):
                     continue
                 l = l[:-1]
+                if not l:
+                    continue
                 if l.startswith("%_netsharedpath"):
                     inpath = 1
                     l = l.split(None, 1)[1]
@@ -604,7 +615,7 @@ class RpmDB(db.RpmDatabase):
                     break
                 liststr += l[:-1]
             return liststr.split(",")
-        except:
+        except IOError:
             return []
 
     def getPkgById(self, id):
@@ -659,8 +670,6 @@ class RpmDB(db.RpmDatabase):
             dirname += "/"
         if not self.basenames_cache.has_key(basename):
             data = self.basenames_db.get(basename, '')
-            #if len(data) > 80: # 8 byte/entry
-
             filedict = {}
             self.basenames_cache[basename] = filedict
 
@@ -676,9 +685,6 @@ class RpmDB(db.RpmDatabase):
         return [name for name in self.requirename_db if name[0]=='/']
 
     def getFileDuplicates(self):
-        import time
-        t1 = time.time()
-        print "getFileDuplicates"
         duplicates = {}
         for basename, data in self.basenames_db.iteritems():
             if len(data) <= 8: continue
@@ -690,7 +696,6 @@ class RpmDB(db.RpmDatabase):
         for filename, pkglist in duplicates.iteritems():
             if len(pkglist)<2:
                 del duplicates[filename]
-        print "done", time.time()-t1
         return duplicates
 
     def iterRequires(self):
