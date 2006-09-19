@@ -32,7 +32,7 @@ except ImportError:
 
 class JointDB(db.RpmDatabase):
 
-    def __init__(self, config, source, buildroot=None):
+    def __init__(self, config, source, buildroot=''):
         self.dbs = []
 
         self.config = config
@@ -47,6 +47,12 @@ class JointDB(db.RpmDatabase):
             if pkg in db:
                 return True
         return False
+
+    def isIdentitySave(self):
+        """return if package objects that are added are in the db afterwards 
+        (.__contains__() returns True and the object are return from searches)
+        """
+        return False # does not support .addPkg()
 
     # clear all structures
     def clear(self):

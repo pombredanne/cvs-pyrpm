@@ -144,7 +144,7 @@ def mkstemp_mknod(dirname, pre, mode, rdev):
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
 def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
-              tmpdir="/var/tmp", chroot=None, pkg=None):
+              tmpdir="/var/tmp", chroot='', pkg=None):
     """Run (script otherargs) with interpreter prog (which can be a list
     containing initial arguments).
 
@@ -155,15 +155,14 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
     of getrusage() data if !rusage.  Disable ldconfig optimization if force.
     Raise IOError, OSError."""
 
+    if chroot is None:
+        chroot = ''
     # FIXME? hardcodes config.rpmconfig usage
     if prog == None:
         prog = "/bin/sh"
     if prog == "/bin/sh" and script == None:
         return (0, None, "")
-    if chroot != None:
-        tdir = chroot+"/"+tmpdir
-    else:
-        tdir = tmpdir
+    tdir = chroot + tmpdir
     if not os.path.exists(tdir):
         try:
             os.makedirs(os.path.dirname(tdir), mode=0755)
@@ -194,10 +193,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
         os.write(fd, script)
         os.close(fd)
         fd = None
-        if chroot != None:
-            args.append(tmpfilename[len(chroot)+1:])
-        else:
-            args.append(tmpfilename)
+        args.append(tmpfilename[len(chroot):])
         args += otherargs
     (rfd, wfd) = os.pipe()
 
@@ -207,7 +203,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
     pid = os.fork()
     if pid == 0:
         try:
-            if chroot != None:
+            if chroot:
                 os.chroot(chroot)
             os.close(rfd)
             if not os.path.exists("/dev"):
@@ -602,7 +598,7 @@ def getFreeDiskspace(config, operations):
     for (op, pkg) in operations:
         if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
             try:
-                pkg.reread(config.resolvertags)
+                pkg.reread(config.diskspacetags)
             except Exception, e:
                 config.printError("Error rereading package: %s" % e)
                 return 0
@@ -666,6 +662,7 @@ def getFreeDiskspace(config, operations):
             if val[0] < 31457280:
                 config.printInfo(2, "%s: Less than 30MB of diskspace left on %s\n" % (pkg.getNEVRA(), mountpoint[dev]))
         pkg.close()
+        pkg.clear(ntags=config.nevratags)
     for (dev, val) in minfreehash.iteritems():
         if val[0] < 31457280:
             config.printInfo(0, "%sMB more diskspace required on %s for operation\n" % (30 - val[0]/1024/1024, mountpoint[dev]))

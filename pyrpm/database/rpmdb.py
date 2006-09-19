@@ -79,7 +79,7 @@ class RpmDB(db.RpmDatabase):
 
     zero = pack("I", 0)
 
-    def __init__(self, config, source, buildroot=None):
+    def __init__(self, config, source, buildroot=''):
         db.RpmDatabase.__init__(self, config, source, buildroot)
         # Correctly initialize the tscolor based on the current arch
         self.config.tscolor = self.__getInstallColor()
@@ -108,6 +108,12 @@ class RpmDB(db.RpmDatabase):
         return hasattr(pkg, "db") and pkg.db is self and \
                self.getPkgById(pkg.key) is pkg
 
+    def isIdentitySave(self):
+        """return if package objects that are added are in the db afterwards 
+        (.__contains__() returns True and the object are return from searches)
+        """
+        return False
+
     # clear all structures
     def clear(self):
         self.obsoletes_list = None
@@ -135,6 +141,24 @@ class RpmDB(db.RpmDatabase):
         return self.__openDB4()
 
     def close(self):
+        if not self.dbopen:
+            return
+        self.basenames_db.close()
+        self.conflictname_db.close()
+        self.dirnames_db.close()
+        self.filemd5s_db.close()
+        self.group_db.close()
+        self.installtid_db.close()
+        self.name_db.close()
+        self.packages_db.close()
+        self.providename_db.close()
+        self.provideversion_db.close()
+        self.requirename_db.close()
+        self.requireversion_db.close()
+        self.sha1header_db.close()
+        self.sigmd5_db.close()
+        self.triggername_db.close()
+
         self.basenames_db      = None
         self.conflictname_db   = None
         self.dirnames_db       = None
@@ -155,15 +179,6 @@ class RpmDB(db.RpmDatabase):
     def read(self):
         """Read the database in memory."""
         return self.open()
-
-    def sync(self):
-        """Bring database into an valid state after packages have been
-        added/removed with nowrite=True and with nowrite=False in a
-        parallel process"""
-        self.close()
-        self.clear()
-        self.open()
-        return self.OK
 
     def getMemoryCopy(self):
         from pyrpm.database.rpmshadowdb import RpmShadowDB
@@ -295,16 +310,13 @@ class RpmDB(db.RpmDatabase):
     def write(self):
         return 1
 
-    def addPkg(self, pkg, nowrite=None):
+    def addPkg(self, pkg):
         self.basenames_cache.clear()
-        if nowrite:
-            return 1
         result = self._addPkg(pkg)
-        if result:
-            self._pkgs[pkg.key] = pkg
-            if self.obsoletes_list:
-                self.obsoletes_list.addPkg(pkg)
-        return result
+        if result and pkg["obsoletes"] and self.obsoletes_list is not None:
+            p = self.getPkgById(result)
+            self.obsoletes_list.addPkg(p)
+        return bool(result)
 
     def _addPkg(self, pkg):
         signals = functions.blockSignals()
@@ -319,8 +331,6 @@ class RpmDB(db.RpmDatabase):
                 maxid = 0
 
             pkgid = pack("I", maxid + 1)
-            pkg.key = pkgid
-            pkg.db = self
 
             rpmio = io.RpmFileIO(self.config, "dummy")
             if pkg["signature"].has_key("size_in_sig"):
@@ -369,12 +379,10 @@ class RpmDB(db.RpmDatabase):
             functions.unblockSignals(signals)            
             return 0 # Due to the blocking, this is now virtually atomic
         functions.unblockSignals(signals)
-        return 1
+        return pkgid
 
-    def removePkg(self, pkg, nowrite=None):
+    def removePkg(self, pkg):
         self.basenames_cache.clear()
-        if nowrite:
-            return 1
         if (not hasattr(pkg, 'key') or
             not hasattr(pkg, 'db') or
             pkg.db is not self):
@@ -392,6 +400,7 @@ class RpmDB(db.RpmDatabase):
         signals = functions.blockSignals()
         try:
             if self.__openDB4() != self.OK:
+                functions.unblockSignals(signals)
                 return 0
 
             self.__removeId(self.basenames_db, "basenames", pkgid, pkg)
@@ -838,9 +847,6 @@ class RpmDB(db.RpmDatabase):
         else:
             tsource = self.source
 
-        if self.buildroot != None:
-            return self.buildroot + tsource
-        else:
-            return tsource
+        return self.buildroot + tsource
 
 # vim:ts=4:sw=4:showmatch:expandtab

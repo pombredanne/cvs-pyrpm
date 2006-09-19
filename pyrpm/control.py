@@ -123,38 +123,44 @@ class RpmController:
                 time1 = clock()
             ret = getFreeCachespace(self.config, operations)
             if self.config.timer:
-                self.config.printInfo(0, "getFreeCachespace took %s seconds\n" % \
-                             (clock() - time1))
+                self.config.printInfo(0, "getFreeCachespace took %s seconds\n"
+                                      % (clock() - time1))
             if not ret:
                 return None
-        if not self.config.ignoresize:
-            for (op, pkg) in operations:
-                if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
-                    pkg.reread(tags=self.config.resolvertags)
-                    pkg.close()
             if self.config.timer:
                 time1 = clock()
             ret = getFreeDiskspace(self.config, operations)
             if self.config.timer:
-                self.config.printInfo(0, "getFreeDiskspace took %s seconds\n" %\
-                            (clock() - time1))
+                self.config.printInfo(0, "getFreeDiskspace took %s seconds\n"
+                                      % (clock() - time1))
             if not ret:
                 return None
         return operations
 
+    opstrings = {
+        OP_INSTALL : "Install: ",
+        OP_UPDATE : "Update:  ",
+        OP_FRESHEN : "Update:  ",
+        OP_ERASE : "Erase:   ",
+        }
+    
     def runOperations(self, operations):
         """Perform (operation, RpmPackage) from list operation.
 
         Return 1 on success, 0 on error (after warning the user)."""
-
+        result = 1
         if operations == []:
             self.config.printError("No updates are necessary.")
             return 1
         # Cache the packages
         if not self.config.nocache:
             self.config.printInfo(1, "Caching network packages\n")
+        new_operations = []
         for (op, pkg) in operations:
-            if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
+            if op in (OP_UPDATE, OP_INSTALL, OP_FRESHEN):
+                source = pkg.source
+                nc = None
+                # cache remote pkgs to disk
                 if not self.config.nocache and \
                    (pkg.source.startswith("http://") or \
                     pkg.yumrepo != None):
@@ -168,7 +174,19 @@ class RpmController:
                         self.config.printError("Error downloading %s"
                                                % pkg.source)
                         return 0
-                    pkg.source = cached
+                    source = cached
+
+                # create BinaryRpm instance
+                p = package.RpmPackage(pkg.config, source,
+                                       pkg.verifySignature)
+                p.nc = nc
+                p.yumhref = pkg.yumhref
+                p.issrc = pkg.issrc
+                # copy NEVRA
+                for tag in self.config.nevratags:
+                    p[tag] = pkg[tag]
+                pkg = p
+                # check signature
                 if not self.config.nosignature:
                     try:
                         pkg.reread()
@@ -182,174 +200,121 @@ class RpmController:
                     else:
                         self.config.printInfo(2, "Signature of package %s correct\n" % pkg.getNEVRA())
                     pkg.close()
-                    pkg.clear(ntags=self.config.resolvertags)
+                    pkg.clear(ntags=self.config.nevratags)
+            new_operations.append((op, pkg))
+
+        operations = new_operations
         numops = len(operations)
         numops_chars = len("%d" % numops)
-        gc.collect()
-        pkgsperfork = 100
+        self.config.printInfo(2, "Collected %s objects" % gc.collect())
         setCloseOnExec()
         sys.stdout.flush()
-        for i in xrange(0, numops, pkgsperfork):
-            subop = operations[i:i+pkgsperfork]
-            for (op, pkg) in subop:
+        i = 0
+        operations.reverse()
+        while operations:
+            (op, pkg) = operations.pop()
+
+            # Progress
+            opstring = self.opstrings.get(op, "Cleanup: ")
+            i += 1
+            progress = "[%*d/%d] %s%s" % (numops_chars, i, numops, opstring, pkg.getNEVRA())
+            if self.config.printhash:
+                self.config.printInfo(0, progress)
+            else:
+                self.config.printInfo(1, progress)
+
+            # install
+            if op in (OP_INSTALL, OP_UPDATE, OP_FRESHEN):
+                # reread pkg
                 try:
                     pkg.close()
                     pkg.open()
                 except IOError, e:
                     self.config.printError("Error reopening %s: %s"
-                                       % (pkg.getNEVRA(), e))
-                    return 0
-            if self.config.buildroot:
+                                           % (pkg.getNEVRA(), e))
+                    result = 0
+                    break
+                nevra = pkg.getNEVRA()
+                pkg.clear()
+                # Disable verify, already done
+                pkg.verifySignature = None
                 try:
-                    pid = os.fork()
-                except OSError, e:
-                    self.config.printError("fork(): %s" % e)
-                    return 0
-            else:
-                pid = 0
-            # parent process needs to keep its database up2date
-            if pid != 0:
-                (rpid, status) = os.waitpid(pid, 0)
-                if status != 0:
-                    if os.WIFSIGNALED(status):
-                        self.config.printError("Child killed with signal %d"
-                                               % os.WTERMSIG(status))
-                    return 0
-                for (op, pkg) in subop:
-                    if op == OP_INSTALL or \
-                       op == OP_UPDATE or \
-                       op == OP_FRESHEN:
-                        try:
-                            pkg.reread(self.config.resolvertags)
-                        except Exception, e:
-                            self.config.printError("Error rereading package: %s" % e)
-                            return 0
-                        if not self.__addPkgToDB(pkg, nowrite=1):
-                            self.config.printError("Couldn't add package %s to parent database." % pkg.getNEVRA())
-                            return 0
-                        pkg.close()
-                    elif op == OP_ERASE:
-                        if not self.__erasePkgFromDB(pkg, nowrite=1):
-                            self.config.printError("Couldn't erase package %s from parent database." % pkg.getNEVRA())
-                            return 0
-                    try:
-                        pkg.close()
-                    except IOError:
-                        # Shouldn't really happen when pkg is open for reading,
-                        # anyway.
-                        pass
-                self.db.sync()
-                #self.db.close() # reopen database to get working connections
-                #self.db.open()
-            # really do the work
-            else:
-                if self.config.buildroot:
-                    del operations
-                    gc.collect()
-                    # Close database early: This is needed for RHEL-4, where
-                    # the path of the database file paths are used for
-                    # flushing and not the file descriptor.
-                    self.db.close()
-                    os.chroot(self.config.buildroot)
-                    # We're in a buildroot now, reset the buildroot in the db
-                    # object
-                    self.db.setBuildroot(None)
-                    # Now reopen database
-                    self.db.open()
-                while len(subop) > 0:
-                    (op, pkg) = subop.pop(0)
-                    nevra = pkg.getNEVRA()
-                    pkg.clear()
-                    # Disable verify in child/buildroot, can go wrong horribly.
-                    pkg.verifySignature = None
-                    try:
-                        pkg.read()
-                    except (IOError, ValueError), e:
-                        self.config.printError("Error rereading %s: %s"
-                                               % (nevra, e))
-                        sys.exit(1)
-                    if   op == OP_INSTALL:
-                        opstring = "Install: "
-                    elif op == OP_UPDATE or op == OP_FRESHEN:
-                        opstring = "Update:  "
+                    pkg.read()
+                except (IOError, ValueError), e:
+                    self.config.printError("Error rereading %s: %s"
+                                           % (nevra, e))
+                    result = 0
+                    break
+                # install on disk
+                try:
+                    if not self.config.justdb:
+                        pkg.install(self.db, buildroot=self.config.buildroot)
+                        self.__runTriggerIn(pkg, self.config.buildroot)
+                        # Ignore errors
                     else:
-                        if self.operation != OP_ERASE:
-                            opstring = "Cleanup: "
+                        if self.config.printhash:
+                            self.config.printInfo(0, "\n")
                         else:
-                            opstring = "Erase:   "
-                    i += 1
-                    progress = "[%*d/%d] %s%s" % (numops_chars, i, numops, opstring, pkg.getNEVRA())
-                    if self.config.printhash:
-                        self.config.printInfo(0, progress)
+                            self.config.printInfo(1, "\n")
+                except (IOError, OSError, ValueError), e:
+                    self.config.printError("Error installing %s: %s"
+                                           % (pkg.getNEVRA(), e))
+                    result = 0
+                    break
+                # update DB
+                if self.__addPkgToDB(pkg) == 0:
+                    self.config.printError("Couldn't add package %s "
+                                           "to database."
+                                           % pkg.getNEVRA())
+                    result = 0
+                    break
+                pkg.clear()
+                try:
+                    pkg.close()
+                except IOError:
+                    # Shouldn't really happen when pkg is open for reading,
+                    # anyway.
+                    pass
+                if not self.config.keepcache and \
+                       pkg.nc != None and pkg.yumhref != None:
+                    pkg.nc.clear(pkg.yumhref)
+            # erase
+            elif op == OP_ERASE:                
+                try:
+                    if not self.config.justdb:
+                        self.__runTriggerUn(pkg, self.config.buildroot)
+                        # Ignore errors
+                        pkg.erase(self.db, buildroot=self.config.buildroot)
+                        self.__runTriggerPostUn(pkg, self.config.buildroot)
+                        # Ignore errors
                     else:
-                        self.config.printInfo(1, progress)
-                    if   op == OP_INSTALL or \
-                         op == OP_UPDATE or \
-                         op == OP_FRESHEN:
-                        try:
-                            if not self.config.justdb:
-                                pkg.install(self.db)
-                                self.__runTriggerIn(pkg) # Ignore errors
-                            else:
-                                if self.config.printhash:
-                                    self.config.printInfo(0, "\n")
-                                else:
-                                    self.config.printInfo(1, "\n")
-                        except (IOError, OSError, ValueError), e:
-                            self.config.printError("Error installing %s: %s"
-                                                   % (pkg.getNEVRA(), e))
-                            sys.exit(1)
-                        if self.__addPkgToDB(pkg) == 0:
-                            self.config.printError("Couldn't add package %s "
-                                                   "to database."
-                                                   % pkg.getNEVRA())
-                            sys.exit(1)
-                    elif op == OP_ERASE:
-                        try:
-                            if not self.config.justdb:
-                                self.__runTriggerUn(pkg) # Ignore errors
-                                pkg.erase(self.db)
-                                self.__runTriggerPostUn(pkg) # Ignore errors
-                            else:
-                                if self.config.printhash:
-                                    self.config.printInfo(0, "\n")
-                                else:
-                                    self.config.printInfo(1, "\n")
-                        except (IOError, ValueError), e:
-                            self.config.printError("Error erasing %s: %s"
-                                                   % (pkg.getNEVRA(), e))
-                            sys.exit(1)
-                        if self.__erasePkgFromDB(pkg) == 0:
-                            self.config.printError("Couldn't erase package %s "
-                                                   "from database."
-                                                   % pkg.getNEVRA())
-                            sys.exit(1)
-                    try:
-                        pkg.close()
-                    except IOError:
-                        # Shouldn't really happen when pkg is open for reading,
-                        # anyway.
-                        pass
-                    del pkg
-                if self.config.delayldconfig:
-                    self.config.delayldconfig = 0
-                    try:
-                        runScript("/sbin/ldconfig", force=1)
-                    except (IOError, OSError), e:
-                        self.config.printWarning(0, "Error running "
-                                                 "/sbin/ldconfig: %s" % e)
-                self.config.printInfo(2, "number of /sbin/ldconfig calls optimized away: %d\n" % self.config.ldconfig)
-                if self.config.buildroot:
-                    self.db.close()
-                    sys.exit(0)
+                        if self.config.printhash:
+                            self.config.printInfo(0, "\n")
+                        else:
+                            self.config.printInfo(1, "\n")
+                except (IOError, ValueError), e:
+                    self.config.printError("Error erasing %s: %s"
+                                           % (pkg.getNEVRA(), e))
+                    result = 0
+                    break
+                # update DB
+                if self.__erasePkgFromDB(pkg) == 0:
+                    self.config.printError("Couldn't erase package %s "
+                                           "from database."
+                                           % pkg.getNEVRA())
+                    result = 0
+                    break
+
+        if self.config.delayldconfig:
+            self.config.delayldconfig = 0
+            try:
+                runScript("/sbin/ldconfig", force=1)
+            except (IOError, OSError), e:
+                self.config.printWarning(0, "Error running "
+                                         "/sbin/ldconfig: %s" % e)
+            self.config.printInfo(2, "number of /sbin/ldconfig calls optimized away: %d\n" % self.config.ldconfig)
         self.db.close()
-        if self.config.keepcache:
-            return 1
-        for (op, pkg) in operations:
-            if op == OP_UPDATE or op == OP_INSTALL or op == OP_FRESHEN:
-                if pkg.yumrepo != None and pkg.yumhref != None:
-                    pkg.yumrepo.getNetworkCache().clear(pkg.yumhref)
-        return 1
+        return result
 
     def appendUri(self, uri):
         """Append package from "URI" uri to self.rpms.
@@ -379,40 +344,39 @@ class RpmController:
         if not self.config.ignorearch:
             filterArchCompat(self.rpms, self.config.machine)
 
-    def __addPkgToDB(self, pkg, nowrite=None):
-        """Add RpmPackage pkg to self.db if necesary: to memory and
-        persistently if not nowrite."""
-
+    def __addPkgToDB(self, pkg):
+        """Add RpmPackage pkg to self.db"""
         if not pkg.isSourceRPM():
-            return self.db.addPkg(pkg, nowrite)
+            return self.db.addPkg(pkg)
         return 1
 
-    def __erasePkgFromDB(self, pkg, nowrite=None):
-        """Remove RpmPackage pkg from self.db if necesary: from memory and
-        persistently if not nowrite."""
-
+    def __erasePkgFromDB(self, pkg):
+        """Remove RpmPackage pkg from self.db."""
         if not pkg.isSourceRPM():
-            return self.db.removePkg(pkg, nowrite)
+            return self.db.removePkg(pkg)
         return 1
 
     # Triggers
 
-    def __runTriggerIn(self, pkg):
+    def __runTriggerIn(self, pkg, buildroot=''):
         """Run %triggerin scripts after installation of RpmPackage pkg.
         Return 1 on success, 0 on failure."""
-        return self.__runTrigger(pkg, RPMSENSE_TRIGGERIN, False, "in")
+        return self.__runTrigger(pkg, RPMSENSE_TRIGGERIN, False,
+                                 "in", buildroot)
 
-    def __runTriggerUn(self, pkg):
+    def __runTriggerUn(self, pkg, buildroot=''):
         """Run %triggerun scripts before removal of RpmPackage pkg.
         Return 1 on success, 0 on failure."""
-        return self.__runTrigger(pkg, RPMSENSE_TRIGGERUN, True, "un")
+        return self.__runTrigger(pkg, RPMSENSE_TRIGGERUN, True,
+                                 "un", buildroot)
 
-    def __runTriggerPostUn(self, pkg):
+    def __runTriggerPostUn(self, pkg, buildroot=''):
         """Run %triggerpostun scripts after removal of RpmPackage pkg.
         Return 1 on success, 0 on failure."""
-        return self.__runTrigger(pkg, RPMSENSE_TRIGGERPOSTUN, True, "postun")
+        return self.__runTrigger(pkg, RPMSENSE_TRIGGERPOSTUN, True,
+                                 "postun", buildroot)
 
-    def __runTrigger(self, pkg, flag, selffirst, triggername):
+    def __runTrigger(self, pkg, flag, selffirst, triggername, buildroot=''):
         """Run "flag" trigger scripts for RpmPackage pkg.
         Return 1 on success, 0 on failure."""
 
@@ -426,14 +390,18 @@ class RpmController:
         tnumPkgs = str(len(self.db.getPkgsByName(pkg["name"]))+1)
 
         if selffirst:
-            r1 = self.__executePkgTriggers(pkg, flag, triggername, tnumPkgs)
-            r2 = self.__executeTriggers(triggers, triggername, tnumPkgs)
+            r1 = self.__executePkgTriggers(pkg, flag, triggername,
+                                           tnumPkgs, buildroot)
+            r2 = self.__executeTriggers(triggers, triggername,
+                                        tnumPkgs, buildroot)
         else:
-            r2 = self.__executeTriggers(triggers, triggername, tnumPkgs)
-            r1 = self.__executePkgTriggers(pkg, flag, triggername, tnumPkgs)
+            r2 = self.__executeTriggers(triggers, triggername,
+                                        tnumPkgs, buildroot)
+            r1 = self.__executePkgTriggers(pkg, flag, triggername,
+                                           tnumPkgs, buildroot)
         return r1 and r2
 
-    def __executeTriggers(self, tlist, triggername, tnumPkgs):
+    def __executeTriggers(self, tlist, triggername, tnumPkgs, buildroot=''):
         """execute a list of given triggers
         Return 1 on success, 0 on failure."""
 
@@ -442,7 +410,8 @@ class RpmController:
             snumPkgs = str(len(self.db.getPkgsByName(spkg["name"])))
             for name, f, v, prog, script in l:
                 try:
-                    runScript(prog, script, [snumPkgs, tnumPkgs])
+                    runScript(prog, script, [snumPkgs, tnumPkgs],
+                              chroot=buildroot)
                 except (IOError, OSError), e:
                     self.config.printError(
                         "%s: Error running trigger %s script: %s" %
@@ -450,7 +419,8 @@ class RpmController:
                     result = 0
         return result
 
-    def __executePkgTriggers(self, pkg, flag, triggername, tnumPkgs):
+    def __executePkgTriggers(self, pkg, flag, triggername,
+                             tnumPkgs, buildroot=''):
         """Execute all triggers of matching "flag" of a package
         that are tiggered by the package itself
         Return 1 on success, 0 on failure."""
@@ -462,7 +432,8 @@ class RpmController:
                 (v == "" and functions.evrCompare(evr, flag, evr))):
                 # compare with package version for unversioned provides
                 try:
-                    runScript(prog, script, [tnumPkgs, tnumPkgs])
+                    runScript(prog, script, [tnumPkgs, tnumPkgs],
+                              chroot=buildroot)
                 except (IOError, OSError), e:
                     self.config.printError(
                         "%s: Error running trigger %s script: %s" %

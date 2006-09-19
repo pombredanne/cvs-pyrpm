@@ -48,7 +48,7 @@ class RpmConfig:
         self.verbose_handler = RpmMessageHandler(self, "", "")
         self.error_handler = RpmMessageHandler(self, "Error: ")
         self.printhash = 0
-        self.buildroot = None
+        self.buildroot = ''
         self.dbpath = "rpmdb://var/lib/rpm/"
         self.force = 0
         self.rusage = 0
@@ -70,15 +70,20 @@ class RpmConfig:
         self.exactarch = 0          # same base arch is not enough for updates
         self.tid = int(time.time()) # Install time id.
         self.tscolor = 0            # Transaction color, needed for rpmdb
-        self.resolvertags = ("name", "epoch", "version", "release", "arch",
-            "providename", "provideflags", "provideversion", "requirename",
+        self.nevratags = ("name", "epoch", "version", "release",
+                          "arch", "sourcerpm")
+        self.resolvertags = self.nevratags + \
+           ("providename", "provideflags", "provideversion", "requirename",
             "requireflags", "requireversion", "obsoletename", "obsoleteflags",
             "obsoleteversion", "conflictname", "conflictflags",
             "conflictversion", "filesizes", "filemodes", "filemd5s",
             "fileusername", "filegroupname", "filelinktos", "fileflags",
             "filecolors", "fileverifyflags", "dirindexes", "basenames",
-            "dirnames", "oldfilenames", "sourcerpm", "md5", "sha1header")
+            "dirnames", "oldfilenames", "md5", "sha1header")
             # Tags used by RpmResolver
+        self.diskspacetags = self.nevratags + \
+                             ("filesizes", "dirindexes", "basenames",
+                              "dirnames", "oldfilenames", "filemodes")
         self.timer = 0                   # Output timing information
         self.ldconfig = 0             # Number of ldconfig calls optimized away
         self.delayldconfig = 0           # A delayed ldconfig call is pending

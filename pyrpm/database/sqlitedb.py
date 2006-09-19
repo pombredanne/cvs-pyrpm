@@ -155,7 +155,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
     tags = 'pkgKey, name, arch, version, epoch, release, location_href'
 
-    def __init__(self, config, source, buildroot=None, yumconf=None,
+    def __init__(self, config, source, buildroot='', yumconf=None,
                  reponame="default"):
         db.RpmDatabase.__init__(self, config, source, buildroot)
         self.baseurl = None
@@ -193,8 +193,19 @@ class SqliteDB(repodb.RpmRepoDB):
         self._othersdb = None
         self._pkgs = { }
 
+    def isIdentitySave(self):
+        """return if package objects that are added are in the db afterwards 
+        (.__contains__() returns True and the object are return from searches)
+        """
+        return False
+
     def sync(self):
         return self.OK
+
+    def clearPkgs(self, tags=None, ntags=None):
+        for pkg in self._pkgs.itervalues():
+            if pkg:
+                pkg.clear(tags, ntags)
 
     def create(self, filename):
         """Create an initial database"""
@@ -607,7 +618,7 @@ class SqliteDB(repodb.RpmRepoDB):
                 for ob in cur.fetchall()]
 
     # add package
-    def addPkg(self, pkg, nowrite=None):
+    def addPkg(self, pkg):
         cur = self._primarydb.cursor()
         data = {}
         for tag in self.COLUMNS:
@@ -656,7 +667,7 @@ class SqliteDB(repodb.RpmRepoDB):
                 'files', {'name' : f, 'type' : t[0], 'pkgKey' : pkgKey}, cur)
 
     # remove package
-    def removePkg(self, pkg, nowrite=None):
+    def removePkg(self, pkg):
         raise NotImplementedError
 
     def getPkgByKey(self, pkgKey):

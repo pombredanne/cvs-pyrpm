@@ -120,7 +120,7 @@ class PyGZIP:
                 except struct.error:
                     raise IOError, "Unexpected EOF"
                 if crc32 != self.crcval:
-                    raise IOError, "CRC check failed."
+                    raise IOError, "CRC check failed"
                 if isize != self.length:
                     raise IOError, "Incorrect length of data produced"
                 break
@@ -218,7 +218,6 @@ class CPIOFile:
         """Skip current file data.
 
         Raise IOError."""
-
         size = self.lastfilesize - self.readsize
         data = "1"
         while size > 0 and data:

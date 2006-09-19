@@ -589,7 +589,7 @@ class RpmYum:
             self.config.printInfo(0, "runDepRes() took %s seconds\n" % (clock() - time1))
         return ret
 
-    def runCommand(self):
+    def runCommand(self, clearrepos=False):
         """Perform operations from self.opresolver.
 
         Return 1 on success, 0 on error (after warning the user)."""
@@ -601,6 +601,7 @@ class RpmYum:
         else:
             control = RpmController(self.config, OP_UPDATE, self.pydb)
         ops = control.getOperations(self.opresolver)
+
         if ops is None:
             return 0
         if len(ops) == 0:
@@ -636,6 +637,12 @@ class RpmYum:
         if self.config.test:
             self.config.printInfo(0, "Test run stopped\n")
         else:
+            if clearrepos:
+                for repo in self.repos:
+                    if not hasattr(repo, 'clearPkgs'):
+                        continue
+                    repo.clearPkgs(ntags=self.config.nevratags)
+            self.read_repos = False
             if control.runOperations(ops) == 0:
                 return 0
         self.pydb.close()

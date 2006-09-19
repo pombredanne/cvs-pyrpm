@@ -23,7 +23,7 @@ import memorydb, rpmdb
 class RpmMemoryDB(memorydb.RpmMemoryDB, rpmdb.RpmDB):
     """Standard RPM database storage in BSD db."""
 
-    def __init__(self, config, source, buildroot=None):
+    def __init__(self, config, source, buildroot=''):
         memorydb.RpmMemoryDB.__init__(self, config, source, buildroot)
         rpmdb.RpmDB.__init__(self, config, source, buildroot)
 
@@ -56,18 +56,14 @@ class RpmMemoryDB(memorydb.RpmMemoryDB, rpmdb.RpmDB):
                 memorydb.RpmMemoryDB.addPkg(self, pkg)
         return 1
 
-    def addPkg(self, pkg, nowrite=None):
-        result = 1
-        if not nowrite:
-            result = rpmdb.RpmDB._addPkg(self, pkg)
+    def addPkg(self, pkg):
+        result = rpmdb.RpmDB._addPkg(self, pkg)
         if result:
             memorydb.RpmMemoryDB.addPkg(self, pkg)
         return result
 
-    def removePkg(self, pkg, nowrite=None):
-        result = 1
-        if not nowrite:
-            result = rpmdb.RpmDB._removePkg(self, pkg)
+    def removePkg(self, pkg):
+        result = rpmdb.RpmDB._removePkg(self, pkg)
         if result:
             memorydb.RpmMemoryDB.removePkg(self, pkg)
         return result

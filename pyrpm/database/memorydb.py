@@ -24,7 +24,7 @@ import lists
 #
 class RpmMemoryDB(db.RpmDatabase):
 
-    def __init__(self, config, source, buildroot=None):
+    def __init__(self, config, source, buildroot=''):
         db.RpmDatabase.__init__(self, config, source, buildroot)
         self.pkgs = [ ]   # [pkg, ..]
         self.names = { }  # name: [pkg, ..]
@@ -59,6 +59,12 @@ class RpmMemoryDB(db.RpmDatabase):
             return True
         return None
 
+    def isIdentitySave(self):
+        """return if package objects that are added are in the db afterwards 
+        (.__contains__() returns True and the object are return from searches)
+        """
+        return True
+
     # clear all structures
     def clear(self):
         db.RpmDatabase.clear(self)
@@ -80,14 +86,8 @@ class RpmMemoryDB(db.RpmDatabase):
         """Read the database in memory."""
         return self.OK
 
-    def sync(self):
-        """Bring database into an valid state after packages have been
-        added/removed with nowrite=True and with nowrite=False in a
-        parallel process"""
-        return self.OK
-
     # add package
-    def addPkg(self, pkg, nowrite=None):
+    def addPkg(self, pkg):
         name = pkg["name"]
         if pkg in self.names.get(name, []):
             return self.ALREADY_INSTALLED
@@ -99,7 +99,7 @@ class RpmMemoryDB(db.RpmDatabase):
         return self.OK
 
     # remove package
-    def removePkg(self, pkg, nowrite=None):
+    def removePkg(self, pkg):
         name = pkg["name"]
         if not pkg in self.names.get(name, []):
             return self.NOT_INSTALLED
@@ -189,9 +189,6 @@ class RpmMemoryDB(db.RpmDatabase):
         else:
             tsource = self.source
 
-        if self.buildroot != None:
-            return self.buildroot + tsource
-        else:
-            return tsource
+        return self.buildroot + tsource
 
 # vim:ts=4:sw=4:showmatch:expandtab

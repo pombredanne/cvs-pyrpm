@@ -142,7 +142,7 @@ class RpmUserCache:
         rethash = {}
         try:
             fp = open(ugfile, "r")
-        except:
+        except IOError:
             return rethash
         lines = fp.readlines()
         fp.close()
@@ -155,17 +155,17 @@ class RpmUserCache:
         """Return UID for username, or 0 if unknown."""
 
         if not self.uid.has_key(username):
-            if os.path.isfile("/etc/passwd"):
-                if self.config.buildroot == None and \
+            if os.path.isfile(self.config.buildroot + "/etc/passwd"):
+                if not self.config.buildroot and \
                    os.path.isfile("/sbin/ldconfig"):
                     try:
                         pw = pwd.getpwnam(username)
                         self.uid[username] = pw[2]
-                    except:
+                    except KeyError:
                         # XXX: print warning
                         self.uid[username] = 0
                 else:
-                    r = self.__parseFile("/etc/passwd")
+                    r = self.__parseFile(self.config.buildroot + "/etc/passwd")
                     if r.has_key(username):
                         self.uid[username] = r[username]
                     else:
@@ -179,13 +179,13 @@ class RpmUserCache:
         """Return GID for groupname, or 0 if unknown."""
 
         if not self.gid.has_key(groupname):
-            if os.path.isfile("/etc/group"):
-                if self.config.buildroot == None and \
+            if os.path.isfile(self.config.buildroot + "/etc/group"):
+                if not self.config.buildroot and \
                    os.path.isfile("/sbin/ldconfig"):
                     try:
                         gr = grp.getgrnam(groupname)
                         self.gid[groupname] = gr[2]
-                    except:
+                    except KeyError:
                         # XXX: print warning
                         self.gid[groupname] = 0
                 else:
@@ -405,7 +405,7 @@ class RpmPackage(RpmData):
                 return r
         return 0
 
-    def install(self, db=None, tags=None, ntags=None):
+    def install(self, db=None, tags=None, ntags=None, buildroot=''):
         """Open package, read its header and install it.
 
         Use RpmDatabase db for getting information, don't modify it.  Run
@@ -420,7 +420,9 @@ class RpmPackage(RpmData):
             numPkgs = str(len(db.getPkgsByName(self["name"]))+1)
         if self["preinprog"] != None and not self.config.noscripts:
             try:
-                (status, rusage, log) = functions.runScript(self["preinprog"], self["prein"], [numPkgs], rusage = self.config.rusage, pkg = self)
+                (status, rusage, log) = functions.runScript(
+                    self["preinprog"], self["prein"], [numPkgs],
+                    rusage=self.config.rusage, pkg=self, chroot=buildroot)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running pre install script: %s" \
                     % (self.getNEVRA(), e))
@@ -431,7 +433,7 @@ class RpmPackage(RpmData):
                 if log or status != 0:
                     self.config.printError("Output running pre install script for package %s" % self.getNEVRA())
                     self.config.printError(log)
-        self.__extract(db)
+        self.__extract(db, pathPrefix=buildroot)
         if self.config.printhash:
             self.config.printInfo(0, "\n")
         else:
@@ -439,7 +441,9 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None and not self.config.noscripts:
             try:
-                (status, rusage, log) = functions.runScript(self["postinprog"], self["postin"], [numPkgs], rusage = self.config.rusage, pkg = self)
+                (status, rusage, log) = functions.runScript(
+                    self["postinprog"], self["postin"], [numPkgs],
+                    rusage=self.config.rusage, pkg=self, chroot=buildroot)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running post install script: %s" \
                     % (self.getNEVRA(), e))
@@ -450,7 +454,7 @@ class RpmPackage(RpmData):
                     self.config.printError("Output running post install script for package %s" % self.getNEVRA())
                     self.config.printError(log)
 
-    def erase(self, db=None):
+    def erase(self, db=None, buildroot=''):
         """Open package, read its header and remove it.
 
         Use RpmDatabase db for getting information, don't modify it.  Run
@@ -466,7 +470,9 @@ class RpmPackage(RpmData):
             numPkgs = str(len(db.getPkgsByName(self["name"]))-1)
         if self["preunprog"] != None and not self.config.noscripts:
             try:
-                (status, rusage, log) = functions.runScript(self["preunprog"], self["preun"], [numPkgs], rusage = self.config.rusage, pkg = self)
+                (status, rusage, log) = functions.runScript(
+                    self["preunprog"], self["preun"], [numPkgs],
+                    rusage=self.config.rusage, pkg=self, chroot=buildroot)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running pre uninstall script: %s" \
                     % (self.getNEVRA(), e))
@@ -498,6 +504,8 @@ class RpmPackage(RpmData):
             if not rfilist.has_key(f):
                 continue
             rfi = rfilist[f]
+            if buildroot:
+                f = buildroot + f                
             if stat.S_ISDIR(rfi.mode):
                 try:
                     os.rmdir(f)
@@ -506,7 +514,7 @@ class RpmPackage(RpmData):
             else:
                 # Check if we need to erase the file
                 if rfi.flags & RPMFILE_CONFIG:
-                    if not self.__verifyFileErase(rfi):
+                    if not self.__verifyFileErase(rfi, buildroot):
                         continue
                 try:
                     os.unlink(f)
@@ -529,9 +537,9 @@ class RpmPackage(RpmData):
                 dname = os.path.dirname(dname)
                 while len(dname) > 1:
                     if db.numFileDuplicates(dname) == 0 and \
-                       os.path.isdir(dname) and \
-                       len(os.listdir(dname)) == 0:
-                        os.rmdir(dname)
+                       os.path.isdir(buildroot + dname) and \
+                       len(os.listdir(buildroot + dname)) == 0:
+                        os.rmdir(buildroot + dname)
                     dname = os.path.dirname(dname)
         # Hack to prevent errors for glibc and bash postunscripts for our
         # pyrpmcheckinstall script
@@ -541,7 +549,9 @@ class RpmPackage(RpmData):
         # Don't fail if the post script fails, just print out an error
         if self["postunprog"] != None and not self.config.noscripts:
             try:
-                (status, rusage, log) = functions.runScript(self["postunprog"], self["postun"], [numPkgs], rusage = self.config.rusage, pkg = self)
+                (status, rusage, log) = functions.runScript(
+                    self["postunprog"], self["postun"], [numPkgs],
+                    rusage = self.config.rusage, pkg=self, chroot=buildroot)
             except (IOError, OSError), e:
                 self.config.printError("\n%s: Error running post uninstall script: %s" \
                     % (self.getNEVRA(), e))
@@ -644,10 +654,7 @@ class RpmPackage(RpmData):
 
         if rfi.flags & RPMFILE_GHOST:
             return
-        if self.config.buildroot is None:
-            real_file = filename
-        else:
-            real_file = self.config.buildroot + filename
+        real_file = self.config.buildroot + filename
         if db is not None and stat.S_ISREG(rfi.mode):
             plist = db.searchFilenames(rfi.filename)
             for pkg in plist:
@@ -849,7 +856,7 @@ class RpmPackage(RpmData):
         self.generateFileNames()
         self.header_read = 1
 
-    def __extract(self, db=None, pathPrefix=None, useAttrs=True):
+    def __extract(self, db=None, pathPrefix='', useAttrs=True):
         """Extract files from self.io (positioned at start of payload).
 
         Raise ValueError on invalid package data, IOError, OSError.  Ignore
@@ -882,7 +889,7 @@ class RpmPackage(RpmData):
                 filename = filename[1:]
             if rfilist.has_key(filename):
                 rfi = rfilist[filename]
-                if self.__verifyFileInstall(rfi, db):
+                if self.__verifyFileInstall(rfi, db, pathPrefix=pathPrefix):
                     if filesize == 0 and stat.S_ISREG(rfi.mode): # Only hardlink reg
                         self.__possibleHardLink(rfi)
                     else:
@@ -909,7 +916,7 @@ class RpmPackage(RpmData):
             self.config.printInfo(0, "#"*(30-int(30*n/nfiles)))
         self.__handleRemainingHardlinks(useAttrs, pathPrefix)
 
-    def __verifyFileInstall(self, rfi, db):
+    def __verifyFileInstall(self, rfi, db, pathPrefix=''):
         """Return 1 if file with RpmFileInfo rfi should be installed.
 
         Modify rfi.filename if necessary.  Raise OSError."""
@@ -939,15 +946,15 @@ class RpmPackage(RpmData):
             return 1
         try:
             (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime,
-                ctime) = os.stat(rfi.filename)
-        except:
+                ctime) = os.stat(pathPrefix + rfi.filename)
+        except OSError:
             # File should exist in filesystem but doesn't...
             self.config.printWarning(1, "%s: File doesn't exist" % rfi.filename)
             return 1
         # File on disc is not a regular file -> don't try to calc an md5sum
         if stat.S_ISREG(mode):
             try:
-                f = open(rfi.filename)
+                f = open(pathPrefix + rfi.filename)
                 m = md5.new()
                 functions.updateDigestFromFile(m, f)
                 f.close()
@@ -990,7 +997,8 @@ class RpmPackage(RpmData):
             else:
                 self.config.printWarning(0, "\n%s: config file found that changed between old and new rpms and has changed on disc, moving edited file to %s.rpmsave" %(self.getNEVRA(), rfi.filename))
                 try:
-                    os.rename(rfi.filename, rfi.filename+".rpmsave")
+                    os.rename(pathPrefix + rfi.filename,
+                              pathPrefix + rfi.filename + ".rpmsave")
                 except OSError, e:
                     self.config.printError("%s: Can't rename edited config "
                                            "file %s"
@@ -1003,7 +1011,7 @@ class RpmPackage(RpmData):
             break
         return do_write
 
-    def __verifyFileErase(self, rfi):
+    def __verifyFileErase(self, rfi, pathPrefix=''):
         """Return 1 if file with RpmFileInfo rfi should be erased.
 
         Modify rfi.filename if necessary.  Raise OSError."""
@@ -1011,8 +1019,8 @@ class RpmPackage(RpmData):
         if rfi.flags & RPMFILE_GHOST:
             return 0        # Don't remove if %ghost file
         try:
-            st = os.lstat(f)
-        except:
+            st = os.lstat(pathPrefix + rfi.filename)
+        except OSError:
             return 0
         (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime,
             ctime) = st
@@ -1020,7 +1028,7 @@ class RpmPackage(RpmData):
         md5sum = ''
         if stat.S_ISREG(st.st_mode):
             try:
-                f = open(rfi.filename)
+                f = open(pathPrefix + rfi.filename)
                 m = md5.new()
                 functions.updateDigestFromFile(m, f)
                 f.close()
@@ -1032,7 +1040,8 @@ class RpmPackage(RpmData):
             and rfi.filesize == filesize and rfi.md5sum == md5sum:
             return 1
         try:
-            os.rename(rfi.filename, rfi.filename+".rpmsave")
+            os.rename(pathPrefix + rfi.filename,
+                      pathPrefix + rfi.filename + ".rpmsave")
         except OSError, e:
             self.config.printError("%s: Can't rename edited config "
                                    "file %s"
@@ -1132,7 +1141,7 @@ class RpmPackage(RpmData):
         if i == None:
             try:
                 i = self.iterFilenames().index(filename)
-            except:
+            except ValueError:
                 return None
         rpminode = None
         rpmmode = None

@@ -30,12 +30,14 @@ class RpmDatabase:
     ALREADY_INSTALLED = -1
     NOT_INSTALLED = -3
 
-    def __init__(self, config, source, buildroot=None):
+    def __init__(self, config, source, buildroot=''):
         if self.__class__ is RpmDatabase:
             raise NotImplementedError, "Abstract class"
         self.config = config
         self.source = source
-        self.buildroot = buildroot
+        self.buildroot = buildroot or ''
+        if self.buildroot and self.buildroot[-1]!='/':
+            self.buildroot += '/'
         RpmDatabase.clear(self)
         self.keyring = openpgp.PGPKeyRing()
         self.is_read = 0                # 1 if the database was already read
@@ -49,7 +51,9 @@ class RpmDatabase:
 
     def setBuildroot(self, buildroot):
         """Set database chroot to buildroot."""
-        self.buildroot = buildroot
+        self.buildroot = buildroot or ''
+        if self.buildroot and self.buildroot[-1]!='/':
+            self.buildroot += '/'            
 
     ### not implemented functions ###
 
@@ -65,29 +69,29 @@ class RpmDatabase:
         """Read the database in memory."""
         raise NotImplementedError
 
-    def sync(self):
-        """Bring database into an valid state after packages have been
-        added/removed with nowrite=True and with nowrite=False in a
-        parallel process"""
-        raise NotImplementedError
-
     def getMemoryCopy(self):
         from pyrpm.database.memorydb import RpmMemoryDB
         db = RpmMemoryDB(self.config, self.source, self.buildroot)
         db.addPkgs(self.getPkgs())
         return db
 
+    def isIdentitySave(self):
+        """return if package objects that are added are in the db afterwards 
+        (.__contains__() returns True and the object are return from searches)
+        """
+        raise NotImplementedError
+
     # add package
-    def addPkg(self, pkg, nowrite=None):
+    def addPkg(self, pkg):
         raise NotImplementedError
 
     # add package list
-    def addPkgs(self, pkgs, nowrite=None):
+    def addPkgs(self, pkgs):
         for pkg in pkgs:
-            self.addPkg(pkg, nowrite)
+            self.addPkg(pkg)
 
     # remove package
-    def removePkg(self, pkg, nowrite=None):
+    def removePkg(self, pkg):
         raise NotImplementedError
 
     def getPkgs(self):

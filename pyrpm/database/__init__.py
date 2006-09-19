@@ -25,7 +25,7 @@ import sqlitedb
 import rpmshadowdb
 #import directorydb
 
-def getRpmDBFactory(config, source, root=None):
+def getRpmDBFactory(config, source, root=''):
     """Get a RpmDatabase implementation for database "URI" source under
     root.
 

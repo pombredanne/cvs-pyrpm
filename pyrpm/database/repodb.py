@@ -48,7 +48,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 RPMSENSE_EQUAL | RPMSENSE_LESS: "LE",
                 RPMSENSE_EQUAL | RPMSENSE_GREATER: "GE"}
 
-    def __init__(self, config, source, buildroot=None, yumconf=None,
+    def __init__(self, config, source, buildroot='', yumconf=None,
                  reponame="default"):
         """Exclude packages matching whitespace-separated excludes.  Use
         reponame for cache subdirectory name and pkg["yumreponame"].
@@ -98,6 +98,12 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     self.source.append(self.yumconf.extendValue(l))
                 nc.clear()
 
+    def isIdentitySave(self):
+        """return if package objects that are added are in the db afterwards 
+        (.__contains__() returns True and the object are return from searches)
+        """
+        return False
+
     def readRepoMD(self):
         # First we try and read the repomd file as a starting point.
         filename = self.nc.cache("repodata/repomd.xml", 1)
@@ -120,7 +126,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 filename = self.nc.cache("repodata/comps.xml", 1)
                 self.comps = RpmCompsXML(self.config, filename)
                 self.comps.read()
-            except:
+            except IOError:
                 pass
         return 1
 
@@ -195,8 +201,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
     def getNetworkCache(self):
         return self.nc
 
-    def addPkg(self, pkg, nowrite=None):
-        # Doesn't know how to write things out, so nowrite is ignored
+    def addPkg(self, pkg):
         if self._isExcluded(pkg):
             return 0
         return memorydb.RpmMemoryDB.addPkg(self, pkg)
