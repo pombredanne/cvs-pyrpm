@@ -151,7 +151,9 @@ def main():
     if rpmconfig.test:
         rpmconfig.printError("test run stopped")
     else:
-        return control.runOperations(ops)
+        result = control.runOperations(ops)
+        pydb.close()
+        return result
     return 1
 
 if __name__ == '__main__':

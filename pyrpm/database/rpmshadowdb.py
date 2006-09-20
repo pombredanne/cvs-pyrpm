@@ -41,8 +41,8 @@ class RpmDiskShadowDB(rpmdb.RpmDB):
         self.tags = rpmdb.tags
 
     def __contains__(self, pkg):
-        return hasattr(pkg, "db") and pkg.db is self.rpmdb and \
-               self.getPkgById(pkg.key) is pkg
+        return hasattr(pkg, "db") and (pkg.db is self.rpmdb) and \
+               hasattr(pkg, "key") and (self.getPkgById(pkg.key) is pkg)
 
     def getPkgById(self, id):
         pkg = self.rpmdb.getPkgById(id)
