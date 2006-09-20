@@ -59,6 +59,8 @@ class NetworkCache:
 
     def getCachedFilename(self, uri):
         """Returns the local cached filename of the given uri/file"""
+        if uri.startswith(self.baseurl):
+            uri = uri[len(self.baseurl):]
         if self.__isURI(uri):
             return os.path.join(self.external_cachepath, uri)
         if self.__isLocalURI(uri):

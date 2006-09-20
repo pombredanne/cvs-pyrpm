@@ -642,7 +642,7 @@ class RpmYum:
                     if not hasattr(repo, 'clearPkgs'):
                         continue
                     repo.clearPkgs(ntags=self.config.nevratags)
-            self.read_repos = False
+                self.read_repos = False
             if control.runOperations(ops) == 0:
                 return 0
         self.pydb.close()

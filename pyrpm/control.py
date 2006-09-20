@@ -115,6 +115,30 @@ class RpmController:
             self.config.printError("Errors found during package dependency "
                                    "checks and ordering.")
             return None
+
+        # replace repodb pkgs by binaryrpm instances
+        for idx, (op, pkg) in enumerate(operations):
+            if op in (OP_UPDATE, OP_INSTALL, OP_FRESHEN):
+                nc = None
+                if not self.config.nocache and \
+                       (pkg.source.startswith("http://") or \
+                        pkg.yumrepo != None):
+                    if pkg.yumrepo != None:
+                        nc = pkg.yumrepo.getNetworkCache()
+                    else:
+                        nc = NetworkCache("/", os.path.join(self.config.cachedir, "default"))
+                p = package.RpmPackage(pkg.config, pkg.source,
+                                       pkg.verifySignature)
+                if pkg.yumrepo:
+                    p.source = os.path.join(pkg.yumrepo.baseurl, p.source) 
+                p.nc = nc
+                p.yumhref = pkg.yumhref
+                p.issrc = pkg.issrc
+                # copy NEVRA
+                for tag in self.config.nevratags:
+                    p[tag] = pkg[tag]
+                operations[idx] = (op, p)
+
         if self.config.timer:
             self.config.printInfo(0, "orderer took %s seconds\n" % (clock() - time1))
         del orderer
@@ -159,33 +183,18 @@ class RpmController:
         for (op, pkg) in operations:
             if op in (OP_UPDATE, OP_INSTALL, OP_FRESHEN):
                 source = pkg.source
-                nc = None
                 # cache remote pkgs to disk
                 if not self.config.nocache and \
                    (pkg.source.startswith("http://") or \
                     pkg.yumrepo != None):
-                    if pkg.yumrepo != None:
-                        nc = pkg.yumrepo.getNetworkCache()
-                    else:
-                        nc = NetworkCache("/", os.path.join(self.config.cachedir, "default"))
                     self.config.printInfo(2, "Caching network package %s\n" % pkg.getNEVRA())
-                    cached = nc.cache(pkg.source)
-                    if cached is None:
+                    source = pkg.nc.cache(pkg.source)
+                    if source is None:
                         self.config.printError("Error downloading %s"
                                                % pkg.source)
                         return 0
-                    source = cached
+                pkg.source = source
 
-                # create BinaryRpm instance
-                p = package.RpmPackage(pkg.config, source,
-                                       pkg.verifySignature)
-                p.nc = nc
-                p.yumhref = pkg.yumhref
-                p.issrc = pkg.issrc
-                # copy NEVRA
-                for tag in self.config.nevratags:
-                    p[tag] = pkg[tag]
-                pkg = p
                 # check signature
                 if not self.config.nosignature:
                     try:

@@ -199,9 +199,6 @@ class SqliteDB(repodb.RpmRepoDB):
         """
         return False
 
-    def sync(self):
-        return self.OK
-
     def clearPkgs(self, tags=None, ntags=None):
         for pkg in self._pkgs.itervalues():
             if pkg:
