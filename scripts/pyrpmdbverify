@@ -436,6 +436,9 @@ def main():
     # No yum config file by default
     yumconf = []
 
+    # And disable caching by default
+    rpmconfig.nocache = 1
+
     # Argument parsing
     try:
       opts, args = getopt.getopt(sys.argv[1:], "?hc:v",
