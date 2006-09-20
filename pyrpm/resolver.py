@@ -60,6 +60,8 @@ class RpmResolver:
 
         if config.checkinstalled == 0:
             self.installed_unresolved_file_requires = self.getUnresolvedFileRequires()
+        else:
+            self.check_installs = self.database.getPkgs()
 
     # ----
 
@@ -77,6 +79,7 @@ class RpmResolver:
         # new RpmPackage =>
         # ["originally" installed RpmPackage obsoleted by update]
         self.obsoletes = { }
+        self.installed_unresolved_file_requires = []
     # ----
 
 
@@ -648,16 +651,12 @@ class RpmResolver:
         Return a HashList: RpmPackage =>
         [(name, RPMSENSE_* flags, EVR string)]."""
 
-        all_unresolved = HashList()
+        unresolved = HashList()
 
-        if self.config.checkinstalled == 0:
-            unresolved = self.iterUnresolvedDependencies()
-        else:
-            unresolved = self.iterAllUnresolvedDependencies()
+        for p, d in self.iterUnresolvedDependencies():
+            unresolved.setdefault(p, [ ]).append(d)
 
-        for p, d in unresolved:
-            all_unresolved.setdefault(p, [ ]).append(d)
-        return all_unresolved
+        return unresolved
 
     # ----
 
@@ -706,17 +705,6 @@ class RpmResolver:
                 yield pkg, u
             if ok and pkg in self.check_installs:
                 self.check_installs.remove(pkg)
-
-    def iterAllUnresolvedDependencies(self):
-        """check all dependencies,
-        also return the alredy installed unresolved"""
-        for pkg in self.database.getPkgs():
-            for u in pkg["requires"]:
-                if u[0][:7] == "rpmlib(": # drop rpmlib requirements
-                    continue
-                s = self.database.searchDependency(u[0], u[1], u[2])
-                if len(s) == 0: # not found
-                    yield pkg, u
 
     def getPkgConflicts(self, pkg, deps, dest):
         """Check for conflicts to pkg's deps, add results to dest[pkg].
