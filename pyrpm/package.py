@@ -505,7 +505,7 @@ class RpmPackage(RpmData):
                 continue
             rfi = rfilist[f]
             if buildroot:
-                f = buildroot + f                
+                f = buildroot + f
             if stat.S_ISDIR(rfi.mode):
                 try:
                     os.rmdir(f)

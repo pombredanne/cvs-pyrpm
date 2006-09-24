@@ -2910,7 +2910,7 @@ def main():
             create_file(target_chroot, "/etc/sysconfig/i18n", content)
     else:
         create_file(target_chroot, "/etc/sysconfig/i18n",
-                    [ "LANG=%s\n" % ks["lang"]])        
+                    [ "LANG=%s\n" % ks["lang"] ])
 
     # /etc/sysconfig/installinfo
     if ks.has_key("install"):

@@ -1144,47 +1144,62 @@ def stringCompare(str1, str2):
     Return an integer with the same sign as (str1 - str2).  Loop through each
     version segment (alpha or numeric) of str1 and str2 and compare them."""
 
-    if str1 == str2: return 0
+    if str1 == str2:
+        return 0
     lenstr1 = len(str1)
     lenstr2 = len(str2)
     i1 = 0
     i2 = 0
     while i1 < lenstr1 and i2 < lenstr2:
         # remove leading separators
-        while i1 < lenstr1 and not _xisalnum(str1[i1]): i1 += 1
-        while i2 < lenstr2 and not _xisalnum(str2[i2]): i2 += 1
+        while i1 < lenstr1 and not _xisalnum(str1[i1]):
+            i1 += 1
+        while i2 < lenstr2 and not _xisalnum(str2[i2]):
+            i2 += 1
         if i1 == lenstr1 or i2 == lenstr2: # bz 178798
             break
         # start of the comparison data, search digits or alpha chars
         j1 = i1
         j2 = i2
         if j1 < lenstr1 and _xisdigit(str1[j1]):
-            while j1 < lenstr1 and _xisdigit(str1[j1]): j1 += 1
-            while j2 < lenstr2 and _xisdigit(str2[j2]): j2 += 1
+            while j1 < lenstr1 and _xisdigit(str1[j1]):
+                j1 += 1
+            while j2 < lenstr2 and _xisdigit(str2[j2]):
+                j2 += 1
             isnum = 1
         else:
-            while j1 < lenstr1 and _xisalpha(str1[j1]): j1 += 1
-            while j2 < lenstr2 and _xisalpha(str2[j2]): j2 += 1
+            while j1 < lenstr1 and _xisalpha(str1[j1]):
+                j1 += 1
+            while j2 < lenstr2 and _xisalpha(str2[j2]):
+                j2 += 1
             isnum = 0
         # check if we already hit the end
-        if j1 == i1: return -1
+        if j1 == i1:
+            return -1
         if j2 == i2:
-            if isnum: return 1
+            if isnum:
+                return 1
             return -1
         if isnum:
             # ignore leading "0" for numbers (1 == 000001)
-            while i1 < j1 and str1[i1] == "0": i1 += 1
-            while i2 < j2 and str2[i2] == "0": i2 += 1
+            while i1 < j1 and str1[i1] == "0":
+                i1 += 1
+            while i2 < j2 and str2[i2] == "0":
+                i2 += 1
             # longer size of digits wins
-            if j1 - i1 > j2 - i2: return 1
-            if j2 - i2 > j1 - i1: return -1
+            if j1 - i1 > j2 - i2:
+                return 1
+            if j2 - i2 > j1 - i1:
+                return -1
         x = cmp(str1[i1:j1], str2[i2:j2])
-        if x: return x
+        if x:
+            return x
         # move to next comparison start
         i1 = j1
         i2 = j2
     if i1 == lenstr1:
-        if i2 == lenstr2: return 0
+        if i2 == lenstr2:
+            return 0
         return -1
     return 1
 

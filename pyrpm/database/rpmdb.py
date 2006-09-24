@@ -109,7 +109,7 @@ class RpmDB(db.RpmDatabase):
                self.getPkgById(pkg.key) is pkg
 
     def isIdentitySave(self):
-        """return if package objects that are added are in the db afterwards 
+        """return if package objects that are added are in the db afterwards
         (.__contains__() returns True and the object are return from searches)
         """
         return False
@@ -376,7 +376,7 @@ class RpmDB(db.RpmDatabase):
             self.__writeDB4(self.sigmd5_db, "install_md5", pkgid, pkg, False)
             self.__writeDB4(self.triggername_db, "triggername", pkgid, pkg)
         except bsddb.error:
-            functions.unblockSignals(signals)            
+            functions.unblockSignals(signals)
             return 0 # Due to the blocking, this is now virtually atomic
         functions.unblockSignals(signals)
         return pkgid
@@ -481,7 +481,7 @@ class RpmDB(db.RpmDatabase):
                 os.path.join(dbpath, "Triggername"), "c")
             self.dbopen = True
         except bsddb.error:
-            return 
+            return
         return self.OK
 
     def __removeId(self, db, tag, pkgid, pkg, useidx=True, func=str):

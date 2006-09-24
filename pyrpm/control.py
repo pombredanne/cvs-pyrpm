@@ -130,7 +130,7 @@ class RpmController:
                 p = package.RpmPackage(pkg.config, pkg.source,
                                        pkg.verifySignature)
                 if pkg.yumrepo:
-                    p.source = os.path.join(pkg.yumrepo.baseurl, p.source) 
+                    p.source = os.path.join(pkg.yumrepo.baseurl, p.source)
                 p.nc = nc
                 p.yumhref = pkg.yumhref
                 p.issrc = pkg.issrc
@@ -167,7 +167,7 @@ class RpmController:
         OP_FRESHEN : "Update:  ",
         OP_ERASE : "Erase:   ",
         }
-    
+
     def runOperations(self, operations):
         """Perform (operation, RpmPackage) from list operation.
 
@@ -288,7 +288,7 @@ class RpmController:
                        pkg.nc != None and pkg.yumhref != None:
                     pkg.nc.clear(pkg.yumhref)
             # erase
-            elif op == OP_ERASE:                
+            elif op == OP_ERASE:
                 try:
                     if not self.config.justdb:
                         self.__runTriggerUn(pkg, self.config.buildroot)

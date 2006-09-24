@@ -1232,7 +1232,8 @@ def _xisalnum(c):
 def stringCompare(str1, str2):
     """ Loop through each version segment (alpha or numeric) of
         str1 and str2 and compare them. """
-    if str1 == str2: return 0
+    if str1 == str2:
+        return 0
     lenstr1 = len(str1)
     lenstr2 = len(str2)
     i1 = 0
@@ -1261,9 +1262,11 @@ def stringCompare(str1, str2):
                 j2 += 1
             isnum = 0
         # check if we already hit the end
-        if j1 == i1: return -1
+        if j1 == i1:
+            return -1
         if j2 == i2:
-            if isnum: return 1
+            if isnum:
+                return 1
             return -1
         if isnum:
             # ignore leading "0" for numbers (1.01 == 1.000001)
@@ -1272,15 +1275,19 @@ def stringCompare(str1, str2):
             while i2 < j2 and str2[i2] == "0":
                 i2 += 1
             # longer size of digits wins
-            if j1 - i1 > j2 - i2: return 1
-            if j2 - i2 > j1 - i1: return -1
+            if j1 - i1 > j2 - i2:
+                return 1
+            if j2 - i2 > j1 - i1:
+                return -1
         x = cmp(str1[i1:j1], str2[i2:j2])
-        if x: return x
+        if x:
+            return x
         # move to next comparison start
         i1 = j1
         i2 = j2
     if i1 == lenstr1:
-        if i2 == lenstr2: return 0
+        if i2 == lenstr2:
+            return 0
         return -1
     return 1
 
@@ -3002,7 +3009,7 @@ class FilenamesList:
 
     def __init__(self, checkfileconflicts):
         self.checkfileconflicts = checkfileconflicts
-        self.path = {} # dirname => { basename => (RpmPackage, index) }
+        self.path = {} # dirname => {basename => (RpmPackage, index)}
 
     def addPkg(self, pkg):
         """Add all files from RpmPackage pkg to self."""
@@ -3277,7 +3284,7 @@ class RpmRelations:
         At last use the length of the dict as weight."""
         # Uncomment weight line in ConnectedComponent.__init__() to use this
         if self[pkg].weight == 0:
-            weight = { pkg : pkg }
+            weight = {pkg: pkg}
         else:
             weight = self[pkg].weight
 
@@ -4122,7 +4129,7 @@ class RpmRepo:
         readsrc=0, fast=1):
         self.filenames = filenames
         self.filename = None
-        self.excludes = excludes.split()
+        self.excludes = excludes.split(" \t,;")
         self.verbose = verbose
         self.reponame = reponame
         self.readsrc = readsrc
@@ -5030,7 +5037,7 @@ def readRepos(releasever, configfiles, arch, buildroot, readdebug,
             baseurls = sec.get("baseurl", [])
             replacevars = getVars(releasever, arch, basearch)
             excludes = yumconf.get("main", {}).get("exclude", "")
-            excludes = sec.get("exclude", excludes)
+            excludes += " " + sec.get("exclude", "")
             excludes = replaceVars(excludes, replacevars)
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
@@ -6304,7 +6311,7 @@ def main():
         elif opt == "--extract":
             extract = 1
         elif opt == "--excludes":
-            excludes = val
+            excludes += " " + val
         elif opt == "--checksrpms":
             checksrpms = 1
         elif opt == "--checkarch":

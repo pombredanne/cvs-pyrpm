@@ -194,7 +194,7 @@ class SqliteDB(repodb.RpmRepoDB):
         self._pkgs = { }
 
     def isIdentitySave(self):
-        """return if package objects that are added are in the db afterwards 
+        """return if package objects that are added are in the db afterwards
         (.__contains__() returns True and the object are return from searches)
         """
         return False
@@ -514,7 +514,7 @@ class SqliteDB(repodb.RpmRepoDB):
                 fcur)
         except sqlite.DatabaseError:
             # Files of package already in database: skipping
-            return 
+            return
 
         if self._pkgs.has_key(pkgKey) and self._pkgs[pkgKey] is not None:
             self._pkgs[pkgKey]['oldfilenames'] = filelist

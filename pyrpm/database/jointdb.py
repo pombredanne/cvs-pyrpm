@@ -49,7 +49,7 @@ class JointDB(db.RpmDatabase):
         return False
 
     def isIdentitySave(self):
-        """return if package objects that are added are in the db afterwards 
+        """return if package objects that are added are in the db afterwards
         (.__contains__() returns True and the object are return from searches)
         """
         return False # does not support .addPkg()

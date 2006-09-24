@@ -53,7 +53,7 @@ class RpmDatabase:
         """Set database chroot to buildroot."""
         self.buildroot = buildroot or ''
         if self.buildroot and self.buildroot[-1]!='/':
-            self.buildroot += '/'            
+            self.buildroot += '/'
 
     ### not implemented functions ###
 
@@ -76,7 +76,7 @@ class RpmDatabase:
         return db
 
     def isIdentitySave(self):
-        """return if package objects that are added are in the db afterwards 
+        """return if package objects that are added are in the db afterwards
         (.__contains__() returns True and the object are return from searches)
         """
         raise NotImplementedError
