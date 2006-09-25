@@ -121,7 +121,8 @@ class NetworkCache:
         # If no URI is give clears the whole cache. Use with caution. ;)
         if not uri:
             try:
-                shutil.rmtree(self.cachedir)
+                shutil.rmtree(self.main_cachepath)
+                shutil.rmtree(self.external_cachepath)
                 return 1
             except EnvironmentError:
                 return 0
