@@ -112,16 +112,16 @@ def main():
     yum.setCommand("update")
     while count > 0:
         if not yum.repos_read and len(frepo.getPkgs()) > 0:
-            yum.repos.append(frepo)
+            yum.repos.addDB(frepo)
         if yum.prepareTransaction() == 0:
             break
         resolver = yum.opresolver
         count -= 1
         if count % 2:
-            pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgs()
+            pkglist = yum.repos.getPkgs()
             pkg = pkglist[random.randrange(0, len(pkglist))]
             while pkg["name"].find("-debuginfo") >= 0:
-                pkglist = yum.repos[random.randrange(0, len(yum.repos))].getPkgs()
+                pkglist = yum.repos.getPkgs()
                 pkg = pkglist[random.randrange(0, len(pkglist))]
             yum.setCommand("update")
             rpmconfig.printInfo(1, "Updating package %s\n" % pkg.getNEVRA())

@@ -216,14 +216,13 @@ def main():
 
     # all packages from the cmd line
     install = {}
-    for repo in yum.repos:
-        addlist2dict(install, repo.getPkgs())
+    addlist2dict(install, yum.repos.getPkgs())
 
     # the packages that really got installed
     #  some arch trans compatible or broken pkgs might be missing
     installed = yum.opresolver.getDatabase().getPkgs()
 
-    yum.repos = []
+    yum.repos.removeAllDBs()
     db = database.memorydb.RpmMemoryDB("", None)
     db.addPkgs(installed)
     if yum.prepareTransaction(db) == 0:
@@ -236,8 +235,7 @@ def main():
         return 0
 
     update = {}
-    for repo in yum.repos:
-        addlist2dict(update, repo.getPkgs())
+    addlist2dict(update, yum.repos.getPkgs())
 
     updated = yum.opresolver.getDatabase().getPkgs()
 

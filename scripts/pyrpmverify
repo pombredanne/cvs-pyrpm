@@ -157,9 +157,8 @@ def main():
             rpmconfig.printError("Can't initialize yum backend")
             return 1
         pkgByNEVRA = {}
-        for repo in yum.repos:
-            for pkg in repo.getPkgs():
-                pkgByNEVRA[pkg.getNEVRA()] = pkg
+        for pkg in yum.repos.getPkgs():
+            pkgByNEVRA[pkg.getNEVRA()] = pkg
         for (nevra, files) in nevras_to_diff.iteritems():
             try:
                 pkg = pkgByNEVRA[nevra]

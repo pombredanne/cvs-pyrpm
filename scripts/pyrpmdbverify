@@ -354,12 +354,9 @@ def diffPkgs(pkg1, pkg2):
             if not pkg1[key][idx] == pkg2[key][idx]:
                 print "Error: Value for package %s differ for tag %s at index %s" % (nevra, key, idx)
 
-def checkRpmDB(pkglist):
+def checkRpmDB(repos):
     print "Checking RpmDB against list of packages."
-    sha1hash = {}
-    for pkg in pkglist:
-        if pkg["signature"].has_key("sha1header"):
-            sha1hash[pkg["signature"]["sha1header"]] = pkg
+
     rpmio = RpmFileIO(rpmconfig, "dummy")
     packages_db = hashopen(dbpath+"/Packages", "r")
     for id in packages.keys():
@@ -370,15 +367,20 @@ def checkRpmDB(pkglist):
             print "Skipping package %s, no sha1header." % pkg.getNEVRA()
             continue
         # Silently skip packages not found
-        if not sha1hash.has_key(pkg["signature"]["sha1header"]):
+        fname = None
+        if repos:
+            for p in repos.getPkgsByName(pkg["name"]):
+                # TODO: check for equal sha1 sums
+                if p.isEqual(pkg):
+                    if p.yumrepo:
+                        fname = os.path.join(p.yumrepo.baseurl, p.source)
+                    else:
+                        fname = p.source
+                
+        if not fname:
             if rpmconfig.verbose > 2:
                 print "Skipping package %s, not found in packagelist." % pkg.getNEVRA()
             continue
-        if sha1hash[pkg["signature"]["sha1header"]].yumrepo:
-            fname = sha1hash[pkg["signature"]["sha1header"]].yumrepo.baseurl
-        else:
-            fname = ""
-        fname += "/" + sha1hash[pkg["signature"]["sha1header"]].source
         opkg = readRpmPackage(rpmconfig, fname)
         # Fill in the package with own information and some additional things
         # we got from the rpmdb package and see if we can recreate the same
@@ -414,8 +416,18 @@ def checkRpmDB(pkglist):
         data2 = packages_db[pack("I", id)][8:]
         if data1 != data2:
             print "Error: Couldn't recreate rpmdb package header correctly for package %s" % opkg.getNEVRA()
+            print len(data1), len(data2)
             #print b2a_hex(data1)
             #print b2a_hex(data2)
+            if False:
+                d1 = b2a_hex(data1)
+                d2 = b2a_hex(data2)
+                idx = 0
+                size = 50
+                while idx*size < len(d1) and idx*size < len(d2):
+                    print idx, d1[idx*size:(idx+1)*size]
+                    print idx, d2[idx*size:(idx+1)*size]
+                    idx += 1
         diffPkgs(opkg, pkg)
         diffPkgs(pkg, opkg)
 
@@ -492,16 +504,8 @@ def main():
         for yc in yumconf:
             if os.path.isfile(yc):
                 yum.addRepo(yc)
-        for repo in yum.repos:
-            plist = repo.getPkgs()
-            for pkg in plist:
-                pkg.clear()
-                pkg.open()
-                pkg.read(tags=rtags)
-                pkg.close()
-                pkglist.append(pkg)
 
-    checkRpmDB(pkglist)
+    checkRpmDB(yum.repos)
 
     return 1
 

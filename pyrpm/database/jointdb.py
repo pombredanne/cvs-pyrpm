@@ -60,6 +60,9 @@ class JointDB(db.RpmDatabase):
     def removeDB(self, db):
         self.dbs.remove(db)
 
+    def removeAllDBs(self):
+        self.dbs[:] = []
+
     # clear all structures
     def clear(self):
         for db in self.dbs:
