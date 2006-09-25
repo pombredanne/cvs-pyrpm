@@ -985,7 +985,6 @@ for (opt, val) in opts:
         pyrpm.rpmconfig.debug = 0
         pyrpm.rpmconfig.warning = 0
         pyrpm.rpmconfig.verbose = 0
-        pyrpm.rpmconfig.printhash = 0
     elif opt == "--gzip":
         compression = (compression & 0xFF00) + 1
     elif opt == "--bzip2":

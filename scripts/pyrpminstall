@@ -98,7 +98,6 @@ def main():
             rpmconfig.debug = 0
             rpmconfig.warning = 0
             rpmconfig.verbose = 0
-            rpmconfig.printhash = 0
         elif opt == "--version":
             print "pyrpminstall", __version__
             return 1

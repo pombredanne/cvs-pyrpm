@@ -759,7 +759,6 @@ def parseYumOptions(argv, yum):
             rpmconfig.debug = 0
             rpmconfig.warning = 0
             rpmconfig.verbose = 0
-            rpmconfig.printhash = 0
         elif opt == "-R":
             # Basically we ignore this for now, just don't throw an error ;)
             pass
