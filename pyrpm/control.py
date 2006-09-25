@@ -63,7 +63,7 @@ class RpmController:
         if self.config.timer:
             self.config.printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
 
-    def getOperations(self, resolver=None):
+    def getOperations(self, resolver=None, installdb=None, erasedb=None):
         """Return an ordered list of (operation, RpmPackage).
 
         If resolver is None, use packages previously added to be acted upon;
@@ -108,7 +108,8 @@ class RpmController:
             time1 = clock()
         self.config.printInfo(1, "Ordering transaction...\n")
         orderer = RpmOrderer(self.config, resolver.installs, resolver.updates,
-                             resolver.obsoletes, resolver.erases)
+                             resolver.obsoletes, resolver.erases,
+                             installdb=installdb, erasedb=erasedb)
         del resolver
         operations = orderer.order()
         if operations is None: # Currently can't happen
@@ -128,7 +129,7 @@ class RpmController:
                     else:
                         nc = NetworkCache("/", os.path.join(self.config.cachedir, "default"))
                 p = package.RpmPackage(pkg.config, pkg.source,
-                                       pkg.verifySignature)
+                                       pkg.verifySignature, db=self.db)
                 if pkg.yumrepo:
                     p.source = os.path.join(pkg.yumrepo.baseurl, p.source)
                 p.nc = nc

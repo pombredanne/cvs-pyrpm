@@ -54,6 +54,12 @@ class JointDB(db.RpmDatabase):
         """
         return False # does not support .addPkg()
 
+    def addDB(self, db):
+        self.dbs.append(db)
+
+    def removeDB(self, db):
+        self.dbs.remove(db)
+
     # clear all structures
     def clear(self):
         for db in self.dbs:

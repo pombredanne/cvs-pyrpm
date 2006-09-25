@@ -668,6 +668,7 @@ class SqliteDB(repodb.RpmRepoDB):
         raise NotImplementedError
 
     def getPkgByKey(self, pkgKey):
+        pkgKey = int(pkgKey)
         if self._pkgs.has_key(pkgKey):
             return self._pkgs[pkgKey]
         pkg = self.readRpm(pkgKey)

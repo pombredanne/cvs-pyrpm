@@ -180,9 +180,9 @@ class RpmDB(db.RpmDatabase):
         """Read the database in memory."""
         return self.open()
 
-    def getMemoryCopy(self):
+    def getMemoryCopy(self, reposdb=None):
         from pyrpm.database.rpmshadowdb import RpmShadowDB
-        db = RpmShadowDB(self)
+        db = RpmShadowDB(self, reposdb)
         return db
 
     def _readObsoletes(self):

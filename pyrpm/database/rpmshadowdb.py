@@ -1,4 +1,4 @@
-import rpmdb, memorydb, jointdb
+import rpmdb, memorydb, jointdb, rpmexternalsearchdb
 
 NOT_DELETED = -5
 
@@ -81,11 +81,15 @@ class RpmDiskShadowDB(rpmdb.RpmDB):
 
 class RpmShadowDB(jointdb.JointDB):
 
-    def __init__(self, rpmdb):
+    def __init__(self, rpmdb, reposdb=None):
         jointdb.JointDB.__init__(self, rpmdb.config, rpmdb.source,
                                  rpmdb.buildroot)
-        self.memorydb = memorydb.RpmMemoryDB(rpmdb.config, rpmdb.source,
-                                             rpmdb.buildroot)
+        if reposdb:
+            self.memorydb = rpmexternalsearchdb.RpmExternalSearchDB(
+                reposdb, rpmdb.config, rpmdb.source, rpmdb.buildroot)
+        else:
+            self.memorydb = memorydb.RpmMemoryDB(rpmdb.config, rpmdb.source,
+                                                 rpmdb.buildroot)
         self.diskdb = RpmDiskShadowDB(rpmdb)
         self.dbs.append(self.memorydb)
         self.dbs.append(self.diskdb)

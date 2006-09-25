@@ -69,7 +69,7 @@ class RpmDatabase:
         """Read the database in memory."""
         raise NotImplementedError
 
-    def getMemoryCopy(self):
+    def getMemoryCopy(self, reposdb=None):
         from pyrpm.database.memorydb import RpmMemoryDB
         db = RpmMemoryDB(self.config, self.source, self.buildroot)
         db.addPkgs(self.getPkgs())

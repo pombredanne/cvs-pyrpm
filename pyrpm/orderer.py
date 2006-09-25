@@ -77,6 +77,7 @@ from hashlist import HashList
 from base import *
 from resolver import RpmResolver
 import database
+from database.rpmexternalsearchdb import RpmExternalSearchDB
 
 def operationFlag(flag, operation):
     """Return dependency flag for RPMSENSE_* flag during operation."""
@@ -103,15 +104,15 @@ class RpmRelation:
 class RpmRelations:
     """List of relations for each package (a dependency graph)."""
 
-    def __init__(self, config, rpms, operation):
+    def __init__(self, config, rpms, operation, externaldb=None):
         self.config = config
         self.list = HashList()          # RpmPackage => RpmRelation
         self.__len__ = self.list.__len__
         self.__getitem__ = self.list.__getitem__
         self.has_key = self.list.has_key
-        self.genRelations(rpms, operation)
+        self.genRelations(rpms, operation, externaldb)
 
-    def genRelations(self, rpms, operation):
+    def genRelations(self, rpms, operation, externaldb=None):
         # clear list to get to a sane state
         self.list.clear()
 
@@ -120,7 +121,10 @@ class RpmRelations:
             self.list[pkg] = RpmRelation()
 
         # Build a new resolver to list all dependencies between packages.
-        db = database.memorydb.RpmMemoryDB(self.config, None)
+        if externaldb:
+            db = RpmExternalSearchDB(externaldb, self.config, None)
+        else:
+            db = database.memorydb.RpmMemoryDB(self.config, None)
         db.addPkgs(rpms)
         resolver = RpmResolver(self.config, db, nocheck=1)
 
@@ -644,7 +648,8 @@ class ConnectedComponentsDetector:
 
 class RpmOrderer:
 
-    def __init__(self, config, installs, updates, obsoletes, erases):
+    def __init__(self, config, installs, updates, obsoletes, erases,
+                 installdb=None, erasedb=None):
         """Initialize.
 
         installs is a list of added RpmPackage's
@@ -671,6 +676,8 @@ class RpmOrderer:
                 for p in self.obsoletes[pkg]:
                     if p in self.erases:
                         self.erases.remove(p)
+        self.installdb = installdb
+        self.erasedb = erasedb
 
     # ----
 
@@ -724,7 +731,7 @@ class RpmOrderer:
             else:
                 # generate relations
                 relations = RpmRelations(self.config, self.installs,
-                                         OP_INSTALL)
+                                         OP_INSTALL, self.installdb)
 
                 # order package list
                 order2 = relations.genOrder()
@@ -738,7 +745,8 @@ class RpmOrderer:
                 order.extend(self.erases)
             else:
                 # generate relations
-                relations = RpmRelations(self.config, self.erases, OP_ERASE)
+                relations = RpmRelations(self.config, self.erases, OP_ERASE,
+                                         self.erasedb)
 
                 # order package list
                 order2 = relations.genOrder()

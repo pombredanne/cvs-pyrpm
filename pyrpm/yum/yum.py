@@ -25,7 +25,7 @@ from pyrpm.package import RpmPackage
 from pyrpm.functions import *
 from pyrpm.io import *
 import pyrpm.database as database, yumconfig
-
+from pyrpm.database.jointdb import JointDB
 
 class RpmYum:
     def __init__(self, config):
@@ -41,7 +41,7 @@ class RpmYum:
         # Default: No command
         self.command = None
         # List of RpmRepo's
-        self.repos = [ ]
+        self.repos = JointDB(config, "Yum repos")
         # List of languages we want to install for.
         self.langs = [ ]
         # Internal list of packages that are have to be erased
@@ -167,7 +167,7 @@ class RpmYum:
         if repo.read() == 0:
             self.config.printError("Error reading repository %s" % reponame)
             return 0
-        self.repos.append(repo)
+        self.repos.addDB(repo)
         return 1
 
     def prepareTransaction(self, localDb=None):
@@ -197,7 +197,7 @@ class RpmYum:
         if self.config.timer:
             time1 = clock()
 
-        db = self.pydb.getMemoryCopy()
+        db = self.pydb.getMemoryCopy(self.repos)
 
         for pkg in db.searchProvides("redhat-release", 0, ""):
             rpmconfig.relver = pkg["version"]
@@ -222,7 +222,7 @@ class RpmYum:
         group"""
 
         pkglist = []
-        for repo in self.repos:
+        for repo in self.repos.dbs:
             if repo.comps != None:
                 pkglist.extend(repo.comps.getPackageNames(name))
                 lang = repo.comps.getGroupLanguage(name)
@@ -242,14 +242,14 @@ class RpmYum:
         return ret
 
     def installByDep(self, dname, dflags, dversion):
-        pkglist = self.__findPkgsByDep(dname, dflags, dversion)
+        pkglist = self.repos.searchDependency(dname, dflags, dversion)
         return self.__handleBestPkg("install", pkglist)
 
     def update(self, name, exact=False, do_obsolete=True):
         # First find all matching packages. Remember, name can be a glob, too,
         # so we might get a list of packages with different names.
         if exact:
-            pkglist = self.__findPkgsByExactName(name)
+            pkglist = self.repos.getPkgsByName(name)
         else:
             pkglist = self.__findPkgs(name)
         # Next we generate two temporary hashes. One with just a list of
@@ -368,7 +368,7 @@ class RpmYum:
         return ret
 
     def updateByDep(self, dname, dflags, dversion):
-        pkglist = self.__findPkgsByDep(dname, dflags, dversion)
+        pkglist = self.repos.searchDependency(dname, dflags, dversion)
         return self.__handleBestPkg("update", pkglist)
 
     def remove(self, name):
@@ -399,30 +399,9 @@ class RpmYum:
 
     def __findPkgs(self, name):
         if name[0] != "/":
-            return self.__findPkgsByName(name)
+            return self.repos.getPkgsByName(name)
         else:
-            return self.__findPkgsByDep(name, 0, "")
-
-    def __findPkgsByName(self, name):
-        pkglist = []
-        for repo in self.repos:
-            pkglist.extend(repo.searchPkgs([name,]))
-        normalizeList(pkglist)
-        return pkglist
-
-    def __findPkgsByDep(self, dname, dflags, dversion):
-        pkglist = []
-        for repo in self.repos:
-            pkglist.extend(repo.searchDependency(dname, dflags, dversion))
-        return pkglist
-
-    def __findPkgsByExactName(self, name):
-        pkglist = []
-        for repo in self.repos:
-            pkglist.extend(repo.getPkgsByName(name))
-        normalizeList(pkglist)
-        return pkglist
-
+            return self.repos.searchFilenames(name)
 
     def __handleBestPkg(self, cmd, pkglist, arch=None, exactarch=False, is_filereq=0, do_obsolete=True):
         # Handle removes directly here, they don't need any special handling.
@@ -501,8 +480,8 @@ class RpmYum:
                 # obsoletes and language related packages
                 if upkg and r > 0:
                     l = []
-                    for repo in self.repos:
-                        if repo.comps:
+                    for repo in self.repos.dbs:
+                        if hasattr(repo, 'comps') and repo.comps:
                             for lang in self.langs:
                                 l.extend(repo.comps.getLangOnlyPackageNames(lang, upkg["name"]))
                     normalizeList(l)
@@ -564,7 +543,7 @@ class RpmYum:
             else:
                 new_args.append(name)
         # Append our new temporary repo to our internal repositories
-        self.repos.append(memory_repo)
+        self.repos.addDB(memory_repo)
         args = new_args
         # Loop over all args and call the appropriate handler function for each
         for name in new_args:
@@ -600,7 +579,7 @@ class RpmYum:
             control = RpmController(self.config, OP_ERASE, self.pydb)
         else:
             control = RpmController(self.config, OP_UPDATE, self.pydb)
-        ops = control.getOperations(self.opresolver)
+        ops = control.getOperations(self.opresolver, self.repos, self.pydb)
 
         if ops is None:
             return 0
@@ -638,7 +617,7 @@ class RpmYum:
             self.config.printInfo(0, "Test run stopped\n")
         else:
             if clearrepos:
-                for repo in self.repos:
+                for repo in self.repos.dbs: # XXX TODO: push to JointDB
                     if not hasattr(repo, 'clearPkgs'):
                         continue
                     repo.clearPkgs(ntags=self.config.nevratags)
@@ -654,9 +633,8 @@ class RpmYum:
 
         obsoletes = {}
         self.__obsoleteslist = [ ]
-        for repo in self.repos:
-            for entry in repo.iterObsoletes():
-                 obsoletes[entry[-1]] = None
+        for entry in self.repos.iterObsoletes():
+            obsoletes[entry[-1]] = None
         self.__obsoleteslist = obsoletes.keys()
         orderList(self.__obsoleteslist, self.config.machine)
         nhash = { }
@@ -767,15 +745,16 @@ class RpmYum:
         modified_repo = 0
         if dep[0][0] == "/" and not dep[0] in self.filereqs:
             self.filereqs.append(dep[0])
-            for i in xrange(len(self.repos)):
-                if self.repos[i].isFilelistImported():
+            for repo in self.repos.dbs:
+                if not hasattr(repo, 'isFilelistImported') or \
+                       repo.isFilelistImported():
                     continue
-                if not self.repos[i]._matchesFile(dep[0]):
-                    self.config.printWarning(1, "Importing filelist from repository %s for filereq %s" % (self.repos[i].reponame, dep[0]))
+                if not repo._matchesFile(dep[0]):
+                    self.config.printWarning(1, "Importing filelist from repository %s for filereq %s" % (repo.reponame, dep[0]))
                     if self.config.timer:
                         time1 = clock()
-                    self.repos[i].importFilelist()
-                    self.repos[i].reloadDependencies()
+                    repo.importFilelist()
+                    repo.reloadDependencies()
                     if self.config.timer:
                         self.config.printInfo(1, "Importing filelist took %s seconds\n" % (clock() - time1))
                     modified_repo = 1
@@ -787,11 +766,10 @@ class RpmYum:
         # that resolve the given dependency
         pkg_list = [ ]
         self.config.printInfo(2, "\t" + depString(dep) + "\n")
-        for repo in self.repos:
-            for upkg in repo.searchDependency(dep[0], dep[1], dep[2]):
-                if upkg in pkg_list:
-                    continue
-                pkg_list.append(upkg)
+        for upkg in self.repos.searchDependency(dep[0], dep[1], dep[2]):
+            if upkg in pkg_list:
+                continue
+            pkg_list.append(upkg)
         # Now add the first package that ist not in our erase list or
         # already in our opresolver to it and check afterwards if
         # there are any obsoletes for that package and handle them
