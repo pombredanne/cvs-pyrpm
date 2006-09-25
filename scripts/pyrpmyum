@@ -107,7 +107,7 @@ def main():
             return 0
         if not yum.runDepRes():
             return 0
-        if not yum.runCommand():
+        if not yum.runCommand(clearrepos=True):
             return 0
     finally:
         if lockfile:
