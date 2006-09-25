@@ -84,14 +84,14 @@ def main():
     memory_repo = database.repodb.RpmRepoDB(rpmconfig, [], rpmconfig.buildroot, None, "pyrpmcheckinstall-memory-repo")
     for pkg in pkglist:
         memory_repo.addPkg(pkg)
-    yum.repos.append(memory_repo)
+    yum.repos.addDB(memory_repo)
 
     yum.setCommand("update")
     if yum.prepareTransaction() == 0:
         return 0
-    for repo in yum.repos:
-        pkglist.extend(repo.getPkgs())
-
+    
+    pkglist = yum.repos.getPkgs()
+        
     i = 0
     for pkg in pkglist:
         i += 1
