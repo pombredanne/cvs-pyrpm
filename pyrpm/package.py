@@ -189,7 +189,7 @@ class RpmUserCache:
                         # XXX: print warning
                         self.gid[groupname] = 0
                 else:
-                    r = self.__parseFile("/etc/group")
+                    r = self.__parseFile(self.config.buildroot + "/etc/group")
                     if r.has_key(groupname):
                         self.gid[groupname] = r[groupname]
                     else:
@@ -948,8 +948,7 @@ class RpmPackage(RpmData):
             (mode, inode, dev, nlink, uid, gid, filesize, atime, mtime,
                 ctime) = os.stat(pathPrefix + rfi.filename)
         except OSError:
-            # File should exist in filesystem but doesn't...
-            self.config.printWarning(1, "%s: File doesn't exist" % rfi.filename)
+            # File does not exist in the filesystem
             return 1
         # File on disc is not a regular file -> don't try to calc an md5sum
         if stat.S_ISREG(mode):
