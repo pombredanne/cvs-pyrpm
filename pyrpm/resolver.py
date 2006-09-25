@@ -678,20 +678,6 @@ class RpmResolver:
             if ok and pkg in self.check_erases:
                 self.check_erases.remove(pkg)
 
-        if self.check_file_requires:
-            ok = True
-            # check if filenames are required and not provided by another
-            # package
-            unresolved = [f for f in self.getUnresolvedFileRequires()
-                          if f not in self.installed_unresolved_file_requires]
-            for f in unresolved:
-                sr = self.database.searchRequires(f, 0, "")
-                for p, r in sr.iteritems():
-                    for dep in r:
-                        ok = False
-                        yield p, dep
-            self.check_file_requires = not ok or bool(self.check_erases)
-
         # check new packages
         for pkg in self.check_installs[:]:
             ok = True
@@ -705,6 +691,20 @@ class RpmResolver:
                 yield pkg, u
             if ok and pkg in self.check_installs:
                 self.check_installs.remove(pkg)
+
+        if self.check_file_requires:
+            ok = True
+            # check if filenames are required and not provided by another
+            # package
+            unresolved = [f for f in self.getUnresolvedFileRequires()
+                          if f not in self.installed_unresolved_file_requires]
+            for f in unresolved:
+                sr = self.database.searchRequires(f, 0, "")
+                for p, r in sr.iteritems():
+                    for dep in r:
+                        ok = False
+                        yield p, dep
+            self.check_file_requires = not ok or bool(self.check_erases)
 
     def getPkgConflicts(self, pkg, deps, dest):
         """Check for conflicts to pkg's deps, add results to dest[pkg].
