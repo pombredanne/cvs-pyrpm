@@ -88,7 +88,7 @@ class KickstartConfig(dict):
             if opt == "%packages":
                 self.parseSimple(opt[1:], args[1:],
                                  [ "resolvedeps", "ignoredeps",
-                                   "ignoremissing" ])
+                                   "ignoremissing", "nobase" ])
                 in_packages = 1
                 in_post = 0
                 in_pre = 0

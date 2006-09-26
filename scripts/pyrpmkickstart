@@ -2038,6 +2038,8 @@ def main():
         else:
             # add default group "base" if it is not in groups and
             # no_default_groups is not set
+            if ks.has_key("packages") and ks["packages"].has_key("nobase"):
+                no_default_groups = 1
             if not no_default_groups:
                 if not "base" in groups:
                     groups.append("base")
