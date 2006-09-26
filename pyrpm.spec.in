@@ -26,6 +26,7 @@ make
 
 %install
 make DESTDIR=${RPM_BUILD_ROOT} install
+mkdir -p ${RPM_BUILD_ROOT}/var/cache/pyrpm
 
 %clean
 rm -rf ${RPM_BUILD_ROOT}
@@ -34,6 +35,7 @@ rm -rf ${RPM_BUILD_ROOT}
 %doc doc/*.html doc/*.txt
 %{_bindir}/*
 %{_datadir}/pyrpm/
+/var/cache/pyrpm
 
 %changelog
 * Wed Mar 09 2005 Phil Knirsch <pknirsch@redhat.com>
