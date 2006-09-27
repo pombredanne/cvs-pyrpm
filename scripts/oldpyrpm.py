@@ -1137,7 +1137,8 @@ possible_scripts = {
     "/usr/sbin/glibc_post_upgrade.s390": 1,
     "/usr/sbin/glibc_post_upgrade.s390x": 1,
     "/usr/sbin/glibc_post_upgrade.x86_64": 1,
-    "/usr/sbin/libgcc_post_upgrade": 1 }
+    "/usr/sbin/libgcc_post_upgrade": 1,
+    "/usr/bin/rebuild-gcj-db": 1 }
 
 
 def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
