@@ -719,22 +719,21 @@ def release_info(source):
 
     return (release, version, arch)
 
-def run_script(ks, type, chroot):
-    print "Running %s script" % type
+def run_script(dict, chroot):
     interpreter = "/bin/sh"
-    if ks[type].has_key("interpreter"):
-        interpreter = ks[type]["interpreter"]
-    (status, rusage, msg) = pyrpm.runScript(interpreter, ks[type]["script"],
+    if dict.has_key("interpreter"):
+        interpreter = dict["interpreter"]
+    (status, rusage, msg) = pyrpm.runScript(interpreter, dict["script"],
                                             chroot=chroot)
     if status != 0:
-        print msg
-        if ks[type].has_key("erroronfail"):
+        info(msg)
+        if dict.has_key("erroronfail"):
             print "ERROR: Script failed, aborting."
             return 0
         else:
             print "WARNING: Script failed."
     else:
-        config.log(msg)
+        log(msg)
 
     return 1
 
