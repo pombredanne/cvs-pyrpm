@@ -49,25 +49,28 @@ class KickstartConfig(dict):
 
     def __init__(self, filename):
         dict.__init__(self)
-        self.parse(filename)
+        self["filename"] = filename
+        self.parse(no_include=1)
+
+    def reload(self):
+        filename = self["filename"]
+        self.clear()
+        self["filename"] = filename
+        self.parse()
 
     def clear(self):
         for key in self.keys():
             del self[key]
 
-    def parse(self, filename):
-        self["filename"] = filename
-        try:
-            _fd = open(filename, "r")
-        except:
-            raise IOError, "Unable to open '%s'" % filename
+    def parse(self, no_include=0):
+        _fd = open(self["filename"], "r")
 
         swap_id = 0
         in_packages = 0
-        in_post = 0
+        in_post = -1
         in_pre = 0
         fd = [ _fd ]
-        open_files = [ filename ]
+        open_files = [ self["filename"] ]
         while 1:
             line = fd[0].readline()
 
@@ -90,29 +93,33 @@ class KickstartConfig(dict):
                                  [ "resolvedeps", "ignoredeps",
                                    "ignoremissing", "nobase" ])
                 in_packages = 1
-                in_post = 0
+                in_post = -1
                 in_pre = 0
                 continue
             elif opt == "%post":
-                self.parseSimple(opt[1:], args[1:],
-                                 [ "nochroot", "interpreter=",
-                                   "erroronfail" ])
+                # as much post scripts as you want to
+                dict = self.parseMultiple(opt[1:], args[1:],
+                                          [ "nochroot", "interpreter=",
+                                            "erroronfail" ])
                 in_packages = 0
-                in_post = 1
+                in_post = len(self["post"]) - 1
                 in_pre = 0
                 continue
             elif opt == "%pre":
+                # maximum one pre script
                 self.parseSimple(opt[1:], args[1:],
                                  [ "erroronfail", "interpreter=" ])
                 in_packages = 0
-                in_post = 0
+                in_post = -1
                 in_pre = 1
                 continue
             elif opt == "%include":
+                if no_include:
+                    continue
                 if len(args) == 2:
                     try:
                         _fd = open(args[1], "r")
-                    except:
+                    except Exception, msg:
                         print "Unable to open '%s', ignoring." % args[1]
                     else:
                         if args[1] in open_files:
@@ -124,7 +131,7 @@ class KickstartConfig(dict):
                     raise ValueError, "Error in line '%s'" % line
                 continue
 
-            if not in_packages and not in_post and not in_pre:
+            if not in_packages and in_post < 0 and not in_pre:
                 if len(args) == 1:
                     if opt in [ "autopart", "autostep", "cmdline",
                                 "halt", "install", "interactive", "poweroff",
@@ -132,7 +139,7 @@ class KickstartConfig(dict):
                                 "upgrade", "mouse", "zerombr" ]:
                         self[opt] = None
                     else:
-                        print "'%s' is unsupported" % line
+                        print "'%s' is unsupported." % line
                     continue
 
                 if opt in [ "keyboard", "lang", "zerombr" ]:
@@ -232,11 +239,11 @@ class KickstartConfig(dict):
                                 a = v.split(":")
                                 if len(a) != 2:
                                     raise ValueError, \
-                                          "ERROR: port '%s' invalid" % v
+                                          "port '%s' is invalid." % v
                                 self[opt]["ports"].append(a)
                         else:
-                            print "'%s': option '%s' not recognized" % (line,
-                                                                        _opt)
+                            print "'%s': option '%s' not recognized." % \
+                                  (line, _opt)
                     for arg in _args:
                         self[opt].setdefault("devices", [ ]).append(arg)
                 elif opt == "firstboot":
@@ -272,6 +279,10 @@ class KickstartConfig(dict):
                                            "percent" ])
                     self.convertLong(dict, "bytes-per-inode")
                     self.convertDouble(dict, "percent")
+                elif opt == "monitor":
+                    self.parseSimple(opt, args[1:],
+                                     [ "noprobe", "monitor:", "hsync:",
+                                       "vsync:" ])
                 elif opt == "network":
                     dict = self.parseMultiple(opt, args[1:],
                                               [ "bootproto:", "device:", "ip:",
@@ -365,7 +376,7 @@ class KickstartConfig(dict):
                     if self[opt].has_key("exclude"):
                         self[opt]["exclude"] = self[opt]["exclude"].split(",")
                 elif opt == "xconfig":
-                    self.parseSimple("xconfig", args[1:],
+                    self.parseSimple(opt, args[1:],
                                      [ "noprobe", "card:", "videoram:",
                                        "monitor:", "hsync:", "vsync:",
                                        "defaultdesktop:", "startxonboot",
@@ -386,7 +397,7 @@ class KickstartConfig(dict):
                         self[opt][_args[0]] = { }
                     self[opt][_args[0]] = _dict
                 else:
-                    print "'%s' is unsupported" % line
+                    print "'%s' is unsupported." % line
             elif in_packages:
                 if len(args) == 1:
                     # there was no space as delimiter
@@ -410,10 +421,11 @@ class KickstartConfig(dict):
                         self["packages"]["add"] = [ ]
                     if not line in self["packages"]["add"]:
                         self["packages"]["add"].append(opt)
-            elif in_post:
-                if not self["post"].has_key("script"):
-                    self["post"]["script"] = ""
-                self["post"]["script"] += line+"\n"
+            elif in_post >= 0:
+                dict = self["post"][in_post]
+                if not dict.has_key("script"):
+                    dict["script"] = ""
+                dict["script"] += line+"\n"
             elif in_pre:
                 if not self["pre"].has_key("script"):
                     self["pre"]["script"] = ""
@@ -425,15 +437,15 @@ class KickstartConfig(dict):
     def verify(self):
         for tag in self.REQUIRED_TAGS:
             if not self.has_key(tag):
-                raise ValueError, "ERROR: %s is required." % tag
+                raise ValueError, "%s is required." % tag
 
         if not self.has_key("install") and not self.has_key("upgrade"):
-            raise ValueError, "ERROR: No operation defined"
+            raise ValueError, "No operation defined"
 
         if self.has_key("install") and not self.has_key("partition") and \
                not self.has_key("autopart"):
             raise ValueError, \
-                  "ERROR: Partition has to be set for an installation."
+                  "Partition has to be set for an installation."
 
         if self["authconfig"].has_key("enablenis"):
             if not self["authconfig"].has_key("nisdomain"):
@@ -747,18 +759,14 @@ class KickstartConfig(dict):
     def convertLong(self, dict, key):
         if not dict.has_key(key):
             return
-        try:
-            dict[key] = long(dict[key])
-        except Exception, msg:
-            print "'%s'=%s is no valid long value." % (key, dict[key])
+        l = long(dict[key])
+        dict[key] = l
 
     def convertDouble(self, dict, key):
         if not dict.has_key(key):
             return
-        try:
-            dict[key] = double(dict[key])
-        except Exception, msg:
-            print "'%s'=%s is no valid double value." % (key, dict[key])
+        d = double(dict[key])
+        dict[key] = d
 
     ############################ static functions ############################
 
