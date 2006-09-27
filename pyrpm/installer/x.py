@@ -83,13 +83,17 @@ def x_config(ks, buildroot, installation):
     _hsync = None
     _vsync = None
     _dpms = 0
-    if ks["xconfig"].has_key("monitor"):
+    if ks["xconfig"].has_key("monitor") or \
+           (ks.has_key("monitor") and ks["monitor"].has_key("monitor")):
         try:
             monitors = hwdata.Monitors(buildroot)
         except Exception, msg:
             config.log("WARNING: %s\n" % msg)
         else:
-            dict = monitors.get(ks["xconfig"]["monitor"])
+            if ks["xconfig"].has_key("monitor"):
+                dict = monitors.get(ks["xconfig"]["monitor"])
+            else:
+                dict = monitors.get(ks["monitor"]["monitor"])
             if dict:
                 _monitor = ks["xconfig"]["monitor"]
                 _hsync = dict["hsync"]
@@ -107,8 +111,12 @@ def x_config(ks, buildroot, installation):
         dpms = _dpms
         if ks["xconfig"].has_key("hsync"): # overwrite with user supplied value
             hsync = ks["xconfig"]["hsync"]
+        elif ks.has_key("monitor") and ks["monitor"].has_key("hsync"):
+            hsync = ks["monitor"]["hsync"]
         if ks["xconfig"].has_key("vsync"):
             vsync = ks["xconfig"]["vsync"] # overwrite with user supplied value
+        elif ks.has_key("monitor") and ks["monitor"].has_key("vsync"):
+            vsync = ks["monitor"]["vsync"]
         if ks["xconfig"].has_key("resolution"):
             resolution = ks["xconfig"]["resolution"]
         if ks["xconfig"].has_key("depth"):
