@@ -538,14 +538,13 @@ def main():
     ########################## kickstart second pass ##########################
 
     # run pre script and reload kickstart file
-    if ks.has_key("install") and \
-           ks.has_key("pre") and ks["pre"].has_key("script") and \
-           len(ks["pre"]["script"]) > 0:
-        if not run_script(ks, "pre", stage2_chroot):
+    if ks.has_key("install") and ks.has_key("pre") and \
+           ks["pre"].has_key("script") and len(ks["pre"]["script"]) > 0:
+        print "Running pre script."
+        if not run_script(ks["pre"], stage2_chroot):
             return 1
         # parse file again
-        ks.clear()
-        ks.parse(ks_file)
+        ks.reload()
 
     # kickstart sanity checks
     if ks.has_key("install"):
@@ -572,7 +571,6 @@ def main():
         pass
 
     # check for existance of essential tags
-
     if (installation.release == "RHEL" and installation.version < 5) or \
            (installation.release == "FC" and installation.version < 6):
         # langsupport is deprecated for RHEL>=5 and FC>=6, but required before
@@ -582,6 +580,17 @@ def main():
     else:
         print "WARNING: langsupport is deprecated, ignoring."
 
+    # monitor and xconfig::monitor
+    if (installation.release == "RHEL" and installation.version < 5) or \
+           (installation.release == "FC" and installation.version < 6):
+        if ks.has_key("monitor"):
+            print "WARNING: Monitor tag is not supported for this " + \
+                  "distribution, using for compatibility mode."
+    elif ks.has_key("xconfig") and ks["xconfig"].has_key("monitor"):
+        print "WARNING: xconfig --monitor is deprecated, " + \
+                  "using for compatibility mode."
+
+    # keyboard
     if not keyboard_models.has_key(ks["keyboard"]):
         print "ERROR: Keyboard model '%s' is not defined, exiting." % \
               ks["keyboard"]
@@ -3195,16 +3204,22 @@ def main():
                 print "ERROR: Unable to remove cache file."
 
     # run post script
-    if ks.has_key("install") and \
-           ks.has_key("post") and ks["post"].has_key("script") and \
-           len(ks["post"]["script"]) > 0:
-        chroot = None
-        if not ks["post"].has_key("nochroot"):
-            chroot = target_chroot
-        elif stage2_chroot:
-            chroot = stage2_chroot
-        if not run_script(ks, "post", chroot):
-            return 1
+    if ks.has_key("install") and ks.has_key("post") and len(ks["post"]) > 0:
+        i = 0
+        for dict in ks["post"]:
+            if dict.has_key("script") and len(dict["script"]) > 0:
+                if len(ks["post"]) > 1:
+                    print "Running post script #%d." % i
+                else:
+                    print "Running post script."
+                chroot = None
+                if not dict.has_key("nochroot"):
+                    chroot = target_chroot
+                elif stage2_chroot:
+                    chroot = stage2_chroot
+                if not run_script(dict, chroot):
+                    return 1
+            i += 1
 
     if xen:
         print "Writing xen.conf"
