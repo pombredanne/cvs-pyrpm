@@ -726,14 +726,14 @@ def run_script(dict, chroot):
     (status, rusage, msg) = pyrpm.runScript(interpreter, dict["script"],
                                             chroot=chroot)
     if status != 0:
-        info(msg)
+        print msg
         if dict.has_key("erroronfail"):
             print "ERROR: Script failed, aborting."
             return 0
         else:
             print "WARNING: Script failed."
     else:
-        log(msg)
+        config.log(msg)
 
     return 1
 
