@@ -221,6 +221,9 @@ class RpmController:
         sys.stdout.flush()
         i = 0
         operations.reverse()
+        # TODO: Make sure this is always correct. Needed to save memory for
+        # now for RpmDB due to obsoletes caching.
+        self.db.obsoletes_list = None
         while operations:
             (op, pkg) = operations.pop()
 

@@ -68,6 +68,10 @@ class JointDB(db.RpmDatabase):
         for db in self.dbs:
             db.clear()
 
+    def clearPkgs(self, tags=None, ntags=None):
+        for db in self.dbs:
+            db.clearPkgs(tags, ntags)
+
     def setBuildroot(self, buildroot):
         """Set database chroot to buildroot."""
         self.buildroot = buildroot

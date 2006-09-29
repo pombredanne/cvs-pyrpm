@@ -49,6 +49,12 @@ class RpmDatabase:
     def clear(self):
         pass
 
+    # Clears the specified tags resp. keeps the ntags in all packages in repo.
+    # Make sure that this only gets implemented properly in databases where
+    # packages can dynamically reload single tags if necessary!
+    def clearPkgs(self, tags=None, ntags=None):
+        pass
+
     def setBuildroot(self, buildroot):
         """Set database chroot to buildroot."""
         self.buildroot = buildroot or ''

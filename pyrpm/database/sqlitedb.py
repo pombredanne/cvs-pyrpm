@@ -199,6 +199,10 @@ class SqliteDB(repodb.RpmRepoDB):
         """
         return False
 
+    def clear(self):
+        self.close()
+        self._pkgs.clear()
+
     def clearPkgs(self, tags=None, ntags=None):
         for pkg in self._pkgs.itervalues():
             if pkg:

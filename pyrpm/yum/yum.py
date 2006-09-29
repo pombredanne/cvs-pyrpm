@@ -580,6 +580,7 @@ class RpmYum:
         else:
             control = RpmController(self.config, OP_UPDATE, self.pydb)
         ops = control.getOperations(self.opresolver, self.repos, self.pydb)
+        self.repos.clearPkgs(ntags=self.config.nevratags)
 
         if ops is None:
             return 0
@@ -617,10 +618,7 @@ class RpmYum:
             self.config.printInfo(0, "Test run stopped\n")
         else:
             if clearrepos:
-                for repo in self.repos.dbs: # XXX TODO: push to JointDB
-                    if not hasattr(repo, 'clearPkgs'):
-                        continue
-                    repo.clearPkgs(ntags=self.config.nevratags)
+                self.repos.clear()
                 self.read_repos = False
             if control.runOperations(ops) == 0:
                 return 0
