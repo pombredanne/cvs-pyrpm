@@ -5271,7 +5271,6 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
     writeFile(pkgdir + "/Makefile", [
         "include ../pyrpm/Makefile.srpm\n",
         "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
-    # XXX: also checkin the data into a per-package repo
     os.environ["GIT_DIR"] = repodir
     os.system("cd %s/.. && { find %s -type f -print | xargs git-update-index -q --add --refresh; }" % (pkgdir, pkgname))
     os.system('cd %s/.. && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
