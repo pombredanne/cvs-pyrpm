@@ -55,6 +55,8 @@
 #   specify debug and output levels. (Maybe also "nodigest" can move in?)
 # - Whats the difference between "cookie" and "buildhost" + "buildtime".
 # rpm header:
+# - write tag 61 if no region tag exists
+# - --checkrpmdb --enablerepos: allow changed signatures in packages
 # - check against current upstream rpm development
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
@@ -956,7 +958,7 @@ headermatch = (
     ("size_in_sig", "install_size_in_sig"),
     ("badsha1_1", "install_badsha1_1"),
     ("badsha1_2", "install_badsha1_2"),
-    #("payloadsize", "archivesize"),
+    ("payloadsize", "archivesize"),
     # need to be generated for the rpmdb:
     #"installtime", "filestates", "instprefixes", "installcolor", "installtid"
 )
@@ -5631,6 +5633,56 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
             break
     return rethash
 
+def diffFmt(fmt1, fmt2, fmt3, fmt4):
+    print "diff between rpmdb header and new header:"
+    if fmt1 != fmt2:
+        print "fmt1/fmt2 differ"
+    if len(fmt1) != len(fmt2):
+        print "length: fmt1:", len(fmt1), "fmt2:", len(fmt2)
+    # XXX: So this does not output additional entries beyond min():
+    l = min(len(fmt1), len(fmt2))
+    for i in xrange(0, l, 16):
+        (tag1, ttype1, offset1, count1) = unpack("!4I", fmt1[i:i + 16])
+        (tag2, ttype2, offset2, count2) = unpack("!4I", fmt2[i:i + 16])
+        if tag1 != tag2 or ttype1 != ttype2 or count1 != count2:
+            print "tag:", tag1, tag2, i
+            if ttype1 != ttype2:
+                print "type:", ttype1, ttype2
+            if offset1 != offset2:
+                print "offset:", offset1, offset2
+            if count1 != count2:
+                print "count:", count1, count2
+    if fmt3 != fmt4:
+        print "fmt3/fmt4 differ"
+    if len(fmt3) != len(fmt4):
+        print "length: fmt3:", len(fmt3), "fmt4:", len(fmt4)
+
+def writeRpmdb(pkg):
+    rpmversion = pkg["rpmversion"]
+    if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
+        install_keys["archivesize"] = 1
+    region = "immutable"
+    if pkg["immutable1"] != None:
+        region = "immutable1"
+        install_keys["providename"] = 1
+        install_keys["provideflags"] = 1
+        install_keys["provideversion"] = 1
+        install_keys["dirindexes"] = 1
+        install_keys["dirnames"] = 1
+        install_keys["basenames"] = 1
+    (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
+        region, {}, 1, pkg.rpmgroup)
+    if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
+        del install_keys["archivesize"]
+    if pkg["immutable1"] != None:
+        del install_keys["providename"]
+        del install_keys["provideflags"]
+        del install_keys["provideversion"]
+        del install_keys["dirindexes"]
+        del install_keys["dirnames"]
+        del install_keys["basenames"]
+    return (indexNo, storeSize, fmt, fmt2)
+
 def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     arch, archlist, specifyarch, verbose, checkfileconflicts, reposdirs):
     from binascii import b2a_hex
@@ -5757,30 +5809,9 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     for (tid, pkg) in packages.iteritems():
         if pkg["name"] == "gpg-pubkey":
             continue
-        # Check if we could write the rpmdb data again.
-        region = "immutable"
         rpmversion = pkg["rpmversion"]
-        if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
-            install_keys["archivesize"] = 1
-        if pkg["immutable1"] != None:
-            region = "immutable1"
-            install_keys["providename"] = 1
-            install_keys["provideflags"] = 1
-            install_keys["provideversion"] = 1
-            install_keys["dirindexes"] = 1
-            install_keys["dirnames"] = 1
-            install_keys["basenames"] = 1
-        (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
-            region, {}, 1, pkg.rpmgroup)
-        if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
-            del install_keys["archivesize"]
-        if pkg["immutable1"] != None:
-            del install_keys["providename"]
-            del install_keys["provideflags"]
-            del install_keys["provideversion"]
-            del install_keys["dirindexes"]
-            del install_keys["dirnames"]
-            del install_keys["basenames"]
+        # Check if we could write the rpmdb data again.
+        (indexNo, storeSize, fmt, fmt2) = writeRpmdb(pkg)
         lead = pack("!2I", indexNo, storeSize)
         data = "".join([lead, fmt, fmt2])
         if len(data) % 4 != 0:
@@ -5788,21 +5819,8 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
         if data != pkgdata[tid]:
             print "writeHeader() would not write the same rpmdb data for", \
                 pkg["name"], "(rpm-%s)" % rpmversion
-            if verbose > 2:
-                # This should be some more generic diff routine for headers.
-                if fmt != pkg.hdrdata[3]:
-                    print "wrong fmt"
-                if fmt2 != pkg.hdrdata[4]:
-                    print "wrong fmt2", len(fmt2), len(pkg.hdrdata[4])
-                for i in xrange(0, indexNo * 16, 16):
-                    (tag1, ttype1, offset1, count1) = unpack("!4I",
-                        fmt[i:i + 16])
-                    (tag2, ttype2, offset2, count2) = unpack("!4I",
-                        pkg.hdrdata[3][i:i + 16])
-                    if tag1 != tag2 or ttype1 != ttype2 or count1 != count2:
-                        print "tag:", tag1, tag2, i
-                    if offset1 != offset2:
-                        print "offset:", offset1, offset2, "tag=", tag1
+            if verbose >= 3:
+                diffFmt(pkg.hdrdata[3], fmt, pkg.hdrdata[4], fmt2)
         # Try to just copy the immutable region to verify the sha1.
         immutable = pkg.getImmutableRegion()
         if immutable:
@@ -5815,6 +5833,9 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
                 pkg.sig["payloadsize"] = pkg["archivesize"]
                 if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
                     del pkg["archivesize"]
+            region = "immutable"
+            if pkg["immutable1"] != None:
+                region = "immutable1"
             (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash,
                 rpmdbtag, region, install_keys, 0, pkg.rpmgroup)
         found = 0
@@ -5842,15 +5863,13 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
                     if pkg[s] != None:
                         rpm[s] = pkg[s]
                 #rpm["installcolor"] = (getInstallColor(arch),)
-                region = "immutable"
-                if rpm["immutable1"]:
-                    region = "immutable1"
                 rpm.genRpmdbHeader()
-                (indexNoa, storeSizea, fmta, fmta2) = writeHeader(rpm.hdr.hash,
-                    rpmdbtag, region, install_keys, 0, rpm.rpmgroup)
-                if fmt != fmta or fmt2 != fmta2:
+                (indexNoa, storeSizea, fmta, fmta2) = writeRpmdb(rpm)
+                if pkg.hdrdata[3] != fmta or pkg.hdrdata[4] != fmta2:
                     print "Could not write a new rpmdb for %s." \
                         % repopkg.filename
+                    if verbose >= 4:
+                        diffFmt(pkg.hdrdata[3], fmta, pkg.hdrdata[4], fmta2)
                     continue
                 break
         if found == 0 and configfiles:
