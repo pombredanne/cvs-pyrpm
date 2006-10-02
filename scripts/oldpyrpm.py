@@ -1143,7 +1143,7 @@ possible_scripts = {
     "/usr/bin/rebuild-gcj-db": 1 }
 
 
-def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
+def writeHeader(pkg, tags, taghash, region, skip_tags, useinstall, rpmgroup):
     """Use the data "tags" and change it into a rpmtag header."""
     (offset, store, stags1, stags2, stags3) = (0, [], [], [], [])
     # Sort by number and also first normal tags, then install_keys tags
@@ -1159,6 +1159,29 @@ def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
         else:
             stags1.append((tagnum, tagname))
     stags1.sort()
+    newregion = None
+    genprovs = None
+    genindexes = None
+    if not stags3:
+        offset = -(len(stags1) * 16) - 16
+        tags["immutable1"] = pack("!2IiI", 61, RPM_BIN, offset, 16)
+        stags3.append((61, "immutable1"))
+        newregion = 1
+        if pkg and pkg["providename"] == None:
+            genprovs = 1
+            pkg["providename"] = (pkg["name"],)
+            pkg["provideflags"] = (RPMSENSE_EQUAL,)
+            pkg["provideversion"] = (pkg.getEVR(),)
+            stags2.append((1047, "providename"))
+            stags2.append((1112, "provideflags"))
+            stags2.append((1113, "provideversion"))
+        if pkg and pkg["dirindexes"] == None:
+            genindexes = 1
+            (pkg["basenames"], pkg["dirindexes"], pkg["dirnames"]) \
+                = genBasenames(pkg["oldfilenames"])
+            stags2.append((1116, "dirindexes"))
+            stags2.append((1117, "basenames"))
+            stags2.append((1118, "dirnames"))
     stags2.sort()
     stags1.extend(stags3)
     stags1.extend(stags2)
@@ -1216,6 +1239,16 @@ def writeHeader(tags, taghash, region, skip_tags, useinstall, rpmgroup):
             indexdata.insert(0, index)
         else:
             indexdata.append(index)
+    if newregion:
+        del tags["immutable1"]
+    if genprovs:
+        del pkg["providename"]
+        del pkg["provideflags"]
+        del pkg["provideversion"]
+    if genindexes:
+        del pkg["basenames"]
+        del pkg["dirindexes"]
+        del pkg["dirnames"]
     indexNo = len(stags1)
     store = "".join(store)
     indexdata = "".join(indexdata)
@@ -2173,7 +2206,7 @@ class ReadRpm:
             if len(n) != len(f) or len(f) != len(v):
                 self.printErr("wrong length of deps for %s" % name)
 
-    def __getDeps(self, name, flags, version):
+    def _getDeps(self, name, flags, version):
         n = self[name]
         if n == None:
             return []
@@ -2186,7 +2219,7 @@ class ReadRpm:
         return zip(n, f, v)
 
     def getProvides(self):
-        provs = self.__getDeps("providename", "provideflags", "provideversion")
+        provs = self._getDeps("providename", "provideflags", "provideversion")
         if not self.issrc:
             provs.append( (self["name"], RPMSENSE_EQUAL, self.getEVR()) )
         return provs
@@ -2200,26 +2233,26 @@ class ReadRpm:
             phash[name].remove((flag, version, self))
 
     def getRequires(self):
-        return self.__getDeps("requirename", "requireflags", "requireversion")
+        return self._getDeps("requirename", "requireflags", "requireversion")
 
     def getObsoletes(self):
-        return self.__getDeps("obsoletename", "obsoleteflags",
+        return self._getDeps("obsoletename", "obsoleteflags",
             "obsoleteversion")
 
     def getConflicts(self):
-        return self.__getDeps("conflictname", "conflictflags",
+        return self._getDeps("conflictname", "conflictflags",
             "conflictversion")
 
     def addDeps(self, name, flag, version, phash):
-        for (n, f, v) in self.__getDeps(name, flag, version):
+        for (n, f, v) in self._getDeps(name, flag, version):
             phash.setdefault((n, f, v), []).append(self)
 
     def removeDeps(self, name, flag, version, phash):
-        for (n, f, v) in self.__getDeps(name, flag, version):
+        for (n, f, v) in self._getDeps(name, flag, version):
             phash[(n, f, v)].remove(self)
 
     def getTriggers(self):
-        deps = self.__getDeps("triggername", "triggerflags", "triggerversion")
+        deps = self._getDeps("triggername", "triggerflags", "triggerversion")
         index = self["triggerindex"]
         scripts = self["triggerscripts"]
         progs = self["triggerscriptprog"]
@@ -2302,8 +2335,8 @@ class ReadRpm:
 
     def __verifyWriteHeader(self, hdrhash, taghash, region, hdrdata,
         useinstall, rpmgroup):
-        (indexNo, storeSize, fmt, fmt2) = writeHeader(hdrhash, taghash, region,
-            {}, useinstall, rpmgroup)
+        (indexNo, storeSize, fmt, fmt2) = writeHeader(None, hdrhash, taghash,
+            region, {}, useinstall, rpmgroup)
         if (indexNo, storeSize, fmt, fmt2) != (hdrdata[0], hdrdata[1],
             hdrdata[3], hdrdata[4]):
             self.printErr("(rpm-%s) writeHeader() would write a different " \
@@ -2486,7 +2519,7 @@ class ReadRpm:
             ("triggername", "triggerflags", "triggerversion")):
             self.__verifyDeps(n, f, v)
         if not self.issrc:
-            provs = self.__getDeps("providename", "provideflags",
+            provs = self._getDeps("providename", "provideflags",
                 "provideversion")
             mydep = (self["name"], RPMSENSE_EQUAL, self.getEVR())
             ver = self["rpmversion"]
@@ -5644,7 +5677,8 @@ def diffFmt(fmt1, fmt2, fmt3, fmt4):
     for i in xrange(0, l, 16):
         (tag1, ttype1, offset1, count1) = unpack("!4I", fmt1[i:i + 16])
         (tag2, ttype2, offset2, count2) = unpack("!4I", fmt2[i:i + 16])
-        if tag1 != tag2 or ttype1 != ttype2 or count1 != count2:
+        if tag1 != tag2 or ttype1 != ttype2 or offset1 != offset2 or \
+            count1 != count2:
             print "tag:", tag1, tag2, i
             if ttype1 != ttype2:
                 print "type:", ttype1, ttype2
@@ -5662,7 +5696,7 @@ def writeRpmdb(pkg):
     if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
         install_keys["archivesize"] = 1
     region = "immutable"
-    if pkg["immutable1"] != None:
+    if pkg["immutable"] == None:
         region = "immutable1"
         install_keys["providename"] = 1
         install_keys["provideflags"] = 1
@@ -5670,11 +5704,11 @@ def writeRpmdb(pkg):
         install_keys["dirindexes"] = 1
         install_keys["dirnames"] = 1
         install_keys["basenames"] = 1
-    (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash, rpmdbtag,
+    (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg, pkg.hdr.hash, rpmdbtag,
         region, {}, 1, pkg.rpmgroup)
     if rpmversion and rpmversion[:3] not in ("4.0", "3.0", "2.2"):
         del install_keys["archivesize"]
-    if pkg["immutable1"] != None:
+    if pkg["immutable"] == None:
         del install_keys["providename"]
         del install_keys["provideflags"]
         del install_keys["provideversion"]
@@ -5817,7 +5851,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
         if len(data) % 4 != 0:
             print "rpmdb header is not aligned to 4"
         if data != pkgdata[tid]:
-            print "writeHeader() would not write the same rpmdb data for", \
+            print "writeRpmdb() would not write the same rpmdb data for", \
                 pkg["name"], "(rpm-%s)" % rpmversion
             if verbose >= 3:
                 diffFmt(pkg.hdrdata[3], fmt, pkg.hdrdata[4], fmt2)
@@ -5836,7 +5870,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
             region = "immutable"
             if pkg["immutable1"] != None:
                 region = "immutable1"
-            (indexNo, storeSize, fmt, fmt2) = writeHeader(pkg.hdr.hash,
+            (indexNo, storeSize, fmt, fmt2) = writeHeader(None, pkg.hdr.hash,
                 rpmdbtag, region, install_keys, 0, pkg.rpmgroup)
         found = 0
         nevra = pkg.getNEVRA0()
