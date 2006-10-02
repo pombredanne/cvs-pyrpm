@@ -1163,8 +1163,8 @@ def writeHeader(pkg, tags, taghash, region, skip_tags, useinstall, rpmgroup):
     genprovs = None
     genindexes = None
     if not stags3:
-        offset = -(len(stags1) * 16) - 16
-        tags["immutable1"] = pack("!2IiI", 61, RPM_BIN, offset, 16)
+        noffset = -(len(stags1) * 16) - 16
+        tags["immutable1"] = pack("!2IiI", 61, RPM_BIN, noffset, 16)
         stags3.append((61, "immutable1"))
         newregion = 1
         if pkg and pkg["providename"] == None:
