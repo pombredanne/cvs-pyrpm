@@ -282,7 +282,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
         # Now check the database version
         if (info['dbversion'] not in supported_dbversions):
-            self.config.printInfo(2, "Cache file is version %s, we need %s, will regenerate", info['dbversion'], dbversion)
+            self.config.printInfo(2, "Cache file is version %s, we need %s, will regenerate.\n", info['dbversion'], dbversion)
             raise sqlite.DatabaseError, "Older version of yum sqlite: %s" % info['dbversion']
 
         # This appears to be a valid database, return checksum value and
@@ -460,7 +460,7 @@ class SqliteDB(repodb.RpmRepoDB):
                 return 0
 
         if filename:
-            self.config.printInfo(2, "Creating " + dbfilename)
+            self.config.printInfo(2, "Creating %s\n" % dbfilename)
             if USEYUM:
                 parser = yum.mdparser.MDParser(filename)
                 storage = yum.storagefactory.GetStorage()
