@@ -2434,10 +2434,17 @@ def main():
         else:
             print "WARNING: Unknown filesystem for '%s'" % onpart
             continue
-    fstab_content.extend([ "devpts\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n",
+    if (installation.release == "RHEL" and installation.version < 4) or \
+               (installation.release == "FC" and installation.version < 3):
+        fstab_content.extend([ "none\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n",
+                           "none\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n",
+                           "none\t\t/proc\t\tproc\tdefaults\t0 0\n" ])
+        mtab_content.append("none /proc proc defaults 0 0\n")
+    else:
+        fstab_content.extend([ "devpts\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n",
                            "tmpfs\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n",
                            "proc\t\t/proc\t\tproc\tdefaults\t0 0\n" ])
-    mtab_content.append("proc /proc proc defaults 0 0\n")
+        mtab_content.append("proc /proc proc defaults 0 0\n")
     if (installation.release == "RHEL" and installation.version >= 4) or \
            (installation.release == "FC" and installation.version >= 2):
         fstab_content.append("sysfs\t/sys\t\tsysfs\tdefaults\t0 0\n")
