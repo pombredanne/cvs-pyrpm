@@ -592,11 +592,9 @@ class RpmStreamIO(RpmIO):
         def __createRegionData(self):
             """Return region tag data for current index list."""
 
-            tag = self.region
-            type = RPM_BIN
             offset = -(len(self.indexlist) * 16) - 16
-            count = 16
-            return pack("!2IiI", tag, type, offset, count)
+            # tag, type, offset, count
+            return pack("!2IiI", self.region, RPM_BIN, offset, 16)
 
         def __generateTag(self, ttype, value):
             """Return (tag data, tag count for index header) for value of

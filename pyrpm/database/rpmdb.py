@@ -341,6 +341,10 @@ class RpmDB(db.RpmDatabase):
                 pkg["install_md5"] = pkg["signature"]["md5"]
             if pkg["signature"].has_key("sha1header"):
                 pkg["install_sha1header"] = pkg["signature"]["sha1header"]
+            if pkg["signature"].has_key("badsha1_1"):
+                pkg["install_badsha1_1"] = pkg["signature"]["badsha1_1"]
+            if pkg["signature"].has_key("badsha1_2"):
+                pkg["install_badsha1_2"] = pkg["signature"]["badsha1_2"]
             if pkg["signature"].has_key("dsaheader"):
                 pkg["install_dsaheader"] = pkg["signature"]["dsaheader"]
             if pkg["signature"].has_key("payloadsize"):
