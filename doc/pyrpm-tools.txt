@@ -266,6 +266,9 @@ to install onto the second IDE disk with:
 
         pyrpmkickstart --no-stage2 ks.cfg hda:/dev/hdb
 
+pyrpmkickstart first downloads all rpm packages before the installation
+begins. This can be changed with the option "--no-cache".
+
 
 pyrpmrandomizer
 ---------------
