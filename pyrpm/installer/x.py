@@ -61,7 +61,7 @@ def x_config(ks, buildroot, installation):
         if os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
         # There is no usable name in the videodrivers file, so fake it
             _driver = ks["xconfig"]["driver"]
-            _card = driver + ' (generic)'
+            _card = _driver + ' (generic)'
 
     if not _card or not _driver:
         if ks["xconfig"].has_key("card") and \
@@ -102,25 +102,25 @@ def x_config(ks, buildroot, installation):
             else:
                 print "ERROR: Monitor not found in hardware database."
 
-    if not _monitor or not _hsync or not _vsync:
-        print "Using default monitor X configuration."
-    else:
+    if _monitor and _hsync and _vsync:
         monitor = _monitor
         hsync = _hsync
         vsync = _vsync
         dpms = _dpms
-        if ks["xconfig"].has_key("hsync"): # overwrite with user supplied value
-            hsync = ks["xconfig"]["hsync"]
-        elif ks.has_key("monitor") and ks["monitor"].has_key("hsync"):
-            hsync = ks["monitor"]["hsync"]
-        if ks["xconfig"].has_key("vsync"):
-            vsync = ks["xconfig"]["vsync"] # overwrite with user supplied value
-        elif ks.has_key("monitor") and ks["monitor"].has_key("vsync"):
-            vsync = ks["monitor"]["vsync"]
-        if ks["xconfig"].has_key("resolution"):
-            resolution = ks["xconfig"]["resolution"]
-        if ks["xconfig"].has_key("depth"):
-            depth = ks["xconfig"]["depth"]
+
+    if ks["xconfig"].has_key("hsync"): # overwrite with user supplied value
+        hsync = ks["xconfig"]["hsync"]
+    elif ks.has_key("monitor") and ks["monitor"].has_key("hsync"):
+        hsync = ks["monitor"]["hsync"]
+    if ks["xconfig"].has_key("vsync"):
+        vsync = ks["xconfig"]["vsync"] # overwrite with user supplied value
+    elif ks.has_key("monitor") and ks["monitor"].has_key("vsync"):
+        vsync = ks["monitor"]["vsync"]
+            
+    if ks["xconfig"].has_key("resolution"):
+        resolution = ks["xconfig"]["resolution"]
+    if ks["xconfig"].has_key("depth"):
+        depth = ks["xconfig"]["depth"]
 
     if (installation.release == "RHEL" and installation.version < 4) or \
            (installation.release == "FC" and installation.version < 3.9):
