@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-__version__ = "0.60"
+__version__ = "0.61"
 __doc__ = """Read and manage RPM packages."""
 
 import os, locale, sys
