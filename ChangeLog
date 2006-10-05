@@ -1,4 +1,632 @@
+2006-10-05  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.59, pyrpm/__init__.py 1.62, scripts/oldpyrpm.py 1.278:
+	- release 0.61
+
+	* doc/pyrpm-tools.txt 1.18:
+	- add mini text about pyrpmkickstart --no-cache
+
+2006-10-05  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/x.py 1.9: [tw]
+	- fixed generic driver string
+	- using user hsync, vsync, resolution and depth all the time
+
+2006-10-05  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/database/rpmexternalsearchdb.py 1.2: - ws change
+
+2006-10-04  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmkickstart 1.103:
+	- write different fstab for older releases
+
+	* pyrpm/database/rpmdb.py 1.27, pyrpm/io.py 1.135:
+	- also write out older (broken) sha1 header into the rpmdb
+
+2006-10-03  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpmkickstart 1.102:
+	- adjust /etc/fstab to be more similar to FC-devel
+
+2006-10-02  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/database/sqlitedb.py 1.37: - add newline to info message
+
+	* scripts/oldpyrpm.py 1.277:
+	- offset -> noffset to not overwrite var with same name
+
+	* scripts/oldpyrpm.py 1.276:
+	- also write provides and dirindexes for very old rpm packages
+
+2006-10-01  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.275:
+	- more fixes to write a correct rpmdb header
+	- generic diff routine for a rpm header
+
+2006-09-29  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/control.py 1.109, pyrpm/database/db.py 1.19, pyrpm/database/jointdb.py 1.8, pyrpm/database/sqlitedb.py 1.36, pyrpm/yum/yum.py 1.32:
+	- Add new interface for databases to clear tags of all contained packages:
+	  clearPkgs()
+
+2006-09-29  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.274: - todo
+
+	* pyrpm/__init__.py 1.61, scripts/oldpyrpm.py 1.273, configure.in 1.58:
+	- release 0.60
+
+2006-09-28  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/functions.py 1.22: [tw]
+	- reverted to old logging
+
+2006-09-27  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/x.py 1.8: [tw]
+	- using new monitor tag for x configuration
+
+	* scripts/pyrpmkickstart 1.101: [tw]
+	[tw]
+	- using new run_script function
+	- added monitor tag checks
+
+	* pyrpm/installer/functions.py 1.21: [tw]
+	- changed run_script to be able to have to more than one post script
+
+	* pyrpm/installer/kickstart.py 1.15: [tw]
+	- supporting new monitor tag (introduced with fc-6 and RHEL-5)
+	- new reload function to reload kickstart file after pre-script run
+	- dropped not needed raises for file open and data type conversions
+	- allow more than one post script
+	- new option no_include for parse function (first pass)
+	  network and pre script tags have to be in the kickstart file itself
+
+2006-09-27  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.272: - add new java post app
+
+2006-09-26  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm.spec.in 1.19: - also add /var/cache/pyrpm into binary rpm
+
+	* pyrpm/installer/kickstart.py 1.14, scripts/pyrpmkickstart 1.100:
+	- pyrpmkickstart: add "%packages --nobase" support
+
+2006-09-25  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/jointdb.py 1.7, scripts/pyrpmcheckrepo 1.23, scripts/pyrpmdbverify 1.37, scripts/pyrpmrandomizer 1.20, scripts/pyrpmverify 1.6:
+	fixes for yum.repos moved from list to JointDB
+
+	* pyrpm/resolver.py 1.118: check file requires after normal requires
+
+2006-09-25  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/cache.py 1.16:
+	- Fixed bug in NetworkCache.clear() where a non-existant variable was used
+	  for clearing.
+
+2006-09-25  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpminstall 1.33, tests/delta.py 1.8, pyrpm/functions.py 1.200:
+	- printhash is per default off, so "-q" does not need to reset it
+
+2006-09-25  Florian Festi  <ffesti@redhat.com>
+
+	* scripts/pyrpmcheckinstall 1.6:  * fixes for new yum.repos (JointDB)
+
+	* scripts/pyrpmyum 1.57:  * enable clearrepos in pyrpmyum
+
+	* pyrpm/control.py 1.108, pyrpm/database/db.py 1.18, pyrpm/database/jointdb.py 1.6, pyrpm/database/rpmdb.py 1.26, pyrpm/database/rpmexternalsearchdb.py 1.1, pyrpm/database/rpmshadowdb.py 1.9, pyrpm/database/sqlitedb.py 1.35, pyrpm/orderer.py 1.74, pyrpm/yum/yum.py 1.31:
+	 * changed yum.repos from olist of DBs to JointDB
+	 * added RpmExternalSearchDB (used in control for resolving and in the orderer
+
+	* pyrpm/package.py 1.143:  * fixed bug in RpmUserCache.getGID()
+	 * removed erreous warning
+
+2006-09-24  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.57, pyrpm/__init__.py 1.60, scripts/oldpyrpm.py 1.271:
+	- release 0.59
+
+	* pyrpm/database/db.py 1.17, pyrpm/database/jointdb.py 1.5, pyrpm/database/memorydb.py 1.19, pyrpm/database/repodb.py 1.32, pyrpm/database/rpmdb.py 1.25, pyrpm/database/rpmshadowdb.py 1.8, pyrpm/database/sqlitedb.py 1.34, scripts/oldpyrpm.py 1.270, scripts/pyrpmkickstart 1.99, pyrpm/control.py 1.107, pyrpm/functions.py 1.199, pyrpm/package.py 1.142:
+	- whitespace changes
+	- oldpyrpm.py:
+	  - excludes can be specified with " \t,;" as delims
+	  - excludes per repo are additive to global excludes
+
+2006-09-20  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/rpmshadowdb.py 1.7, scripts/pyrpminstall 1.32:
+	 * rpmshadowdb: fix __contains__()
+	 * fix pyrpminstall to close the db to avoid data corruption
+
+2006-09-20  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmdbverify 1.36:
+	- Disable caching of rpms by default for pyrpmdbverify. Not needed as we only
+	  need and check the headers.
+
+2006-09-20  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/resolver.py 1.117:
+	fix for pyrpmyum --checkinstalled. Also use incremental resolving.
+
+	* pyrpm/database/sqlitedb.py 1.33, pyrpm/yum/yum.py 1.30, pyrpm/cache.py 1.15, pyrpm/control.py 1.106:
+	 * moved creation of binary rpm instances from runOperations to getOperations
+
+2006-09-19  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/config.py 1.62, pyrpm/control.py 1.105, pyrpm/database/__init__.py 1.8, pyrpm/database/db.py 1.16, pyrpm/database/jointdb.py 1.4, pyrpm/database/memorydb.py 1.18, pyrpm/database/repodb.py 1.31, pyrpm/database/rpmdb.py 1.24, pyrpm/database/rpmmemorydb.py 1.6, pyrpm/database/rpmshadowdb.py 1.6, pyrpm/database/sqlitedb.py 1.32, pyrpm/functions.py 1.198, pyrpm/io.py 1.134, pyrpm/package.py 1.141, pyrpm/yum/yum.py 1.29:
+	 * Do no longer fork for installing into buildroot
+	  * reimplemented .runOperations() (control.py)
+	   - create new "binary" Rpm instances from repodb Rpms
+	  * extended to work with buildroot:
+	   - .__runTrigger* in control.py
+	   - fixed functions.runScript()
+	   - package.RpmUserCache: don't assume being used in changeroot
+	   - RpmPackage: .install(), .erase(), .__extract(), .__verifyFileInstall()
+	       .__verifyFileErase(),
+	  * removed nowrite param from database methods .addPkg(), .addPkgs(),
+	      .removePkg()
+	  * removed .sync() method from databases
+	 * changed buildroot var/param to be an string (None no longer supported)
+	   at various places (dbs, runScript, ...)
+	 * added .isIdentitySave() method to databases
+	 * rpmdb: invoke close() on db4 objects on close()
+	 * added config.nevratags and config.diskspacetags
+	 * added optional clearrepos param at Yum.runCommand() (used in pyrpmyum)
+	 * added some Exception classes to empty except: blocks
+
+2006-09-12  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/rpmdb.py 1.23, pyrpm/database/sqlitedb.py 1.31, tests/coverage.py 1.2, tests/rpmgraph.py 1.6, tests/rpmmulti.py 1.4, pyrpm/cache.py 1.14, pyrpm/functions.py 1.197, pyrpm/io.py 1.133:
+	* give Exception classes for empty except: blocks
+	* rpmdb: better error handling
+
+2006-09-06  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.269: - also replcae vars for exclude list
+	- code reduction
+
+2006-09-04  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.268:
+	- support more options from yum.conf for urlgrabber configuration
+
+2006-09-04  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/functions.py 1.20, pyrpm/installer/installer.py 1.8, pyrpm/installer/kickstart.py 1.13, scripts/pyrpmkickstart 1.98:
+	[tw]
+	* scripts/pyrpmkickstart
+	- verify source early (before stage2)
+	- langsupport is deprecated for RHEL>=5 and FC>=6, but required before
+	- bwe more verbose for upgrade
+	- fixed grub.conf messages for boot partition
+	- dropped sync call before cleanup
+
+	* pyrpm/installer/functions.py
+	- fixed exclude for cdrom installs
+	- check for comps existance in source
+	- output script output on error
+
+	* pyrpm/installer/installer.py
+	- use better mount options for nfs trees
+
+	* pyrpm/installer/kickstart.py
+	- langsupport is deprecated for RHEL>=5 and FC>=6, but required before
+	- better source check, has to be exactly 1 source
+
+2006-09-03  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/__init__.py 1.59, scripts/oldpyrpm.py 1.267, configure.in 1.56:
+	- release 0.58
+
+	* pyrpm/database/sqlitedb.py 1.30:
+	- allow duplicate packages in repo data, ugly hack for now
+
+2006-09-02  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.266: - remove old todo lines
+
+	* scripts/oldpyrpm.py 1.265:
+	- change YumConf from a class into a function
+
+	* scripts/oldpyrpm.py 1.264:
+	- further reduce number of code lines, cleanup
+
+	* scripts/oldpyrpm.py 1.263:
+	- new code to parse yum.conf style files, much cleaner
+	  setup now
+
+	* pyrpm/yum/yum.py 1.28, scripts/pyrpmcreaterepo 1.12, pyrpm/control.py 1.104, pyrpm/database/db.py 1.15, pyrpm/database/memorydb.py 1.17, pyrpm/database/repodb.py 1.30, pyrpm/database/rpmdb.py 1.22, pyrpm/database/rpmshadowdb.py 1.5, pyrpm/database/sqlitedb.py 1.29, pyrpm/functions.py 1.196, pyrpm/installer/disk.py 1.4, pyrpm/installer/functions.py 1.19, pyrpm/package.py 1.140, pyrpm/specfile.py 1.6:
+	- ws changes
+
+2006-09-01  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/comps.py 1.4, pyrpm/yum/yum.py 1.27:
+	- Support lang-support via grounames/ids now as well (as the option got
+	  deprecated and prefered method is now to use groupinstall of fooo-support)
+
+2006-08-28  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/package.py 1.139, scripts/pyrpmrandomizer 1.19: * foo
+
+	* pyrpm/database/rpmdb.py 1.21:
+	* fixed ugly bug in rpmdb.numFileDuplicates()
+
+2006-08-28  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.262: - add Florian Festi as author
+	- update TODO
+	- getChecksum returns None if file does not exist
+	- pathsplit2(): minor optim
+	- cacheLocal() takes a checksum to verify if file is
+	  already downloaded and returns an error in case the
+	  downloaded file does not match
+	- cacheLocal(): do not use check_timestamp anymore
+	- allow reading comps.xml file if specified in repomd.xml
+	- allow specifying another groupfile besides "comps.xml"
+	  for the createrepo mode (--groupfile=)
+	- allow md5 in addition to sha checksum type
+	- merge class Conf into YumConf, delete lots of unused code
+	- remove unused class YumConfSubDict
+	- new func getVars() and replaceVars()
+
+	* doc/pyrpm-devel.txt 1.6, doc/pyrpm-tools.txt 1.17, doc/pyrpm.txt 1.15, README 1.10:
+	- update docu
+
+	* doc/pycheckrc 1.5: - update to newer limits
+
+	* scripts/pyrpmkickstart 1.97: - better alignment for fstab entries
+
+2006-08-24  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/sqlitedb.py 1.28:
+	* set filelist_imported in sqlitedb to prevent loading filelist multiple times
+
+	* pyrpm/database/sqlitedb.py 1.27:
+	* do not exclude pkgs while building the sqlite db
+	  (we not exclude from the (search) results)
+
+	* pyrpm/database/sqlitedb.py 1.26:
+	* use RpmRepoDB insted of SqliteDB if sqlite is not installed
+
+2006-08-23  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/installer/functions.py 1.18: [tw] - fixed usage of log function
+
+	* pyrpm/installer/disk.py 1.3, pyrpm/installer/functions.py 1.17, pyrpm/installer/installer.py 1.7, pyrpm/installer/kickstart.py 1.12, scripts/pyrpmkickstart 1.96:
+	[tw]
+	* pyrpmkickstart
+	- check if parted module is loaded before doing anything
+	- only use buildstamp info in verbose mode to compare with release info
+	  dropped --no-buildstamp option
+	- using load_source_repo and load_repos functions
+	- use disxinfo if release info is not complete
+	- simplified magic test for stage2 image
+	- using new function run_script for pre and post scripts
+	- fixed tune2fs message
+	- fixed usage of exclude lists in repos: only use for the repo, not globally
+
+	* pyrpm/installer/disk.py
+	- Disk an Partition classes are there even if import parted module failed
+	  init functions raise ImportError
+
+	* pyrpm/installer/functions.py
+	- import signal for fuser
+	- import installer.Repository for load_*repo functions
+	- fixed fuser to only kill applications in the given path, not in the whole
+	  filesystem
+	- new functions load_source_repo and load_repos for repo loading
+	- new function release_info: loads release info my release package first
+	- new function run_script for pre and post scripts
+
+	* pyrpm/installer/installer.py
+	- fixed init funciton in Installation class to not exchange version and release
+	- baseurl is no optional argument for Repository.load anymore
+	- create yumconf for SqliteDB
+	- using SqliteDB instead of RpmRepoDB - this will go into the db factory
+	- new close function in Repository, needed for cleanup
+
+	* pyrpm/installer/kickstart.py
+	- enabled exclude lists for cdrom installations
+
+	* scripts/pyrpmkickstart 1.95: [tw]
+	- kill repos before cleaning up, otherwise pyrpmkickstart could be killed
+	  by cleanup itself
+
+2006-08-23  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/sqlitedb.py 1.25: - fix for None in ._pkgs
+
+	* pyrpm/database/sqlitedb.py 1.24:
+	make shure excluded packages are really, really excluded
+
+	* pyrpm/database/__init__.py 1.7, pyrpm/database/db.py 1.14, pyrpm/database/rpmdb.py 1.20, pyrpm/yum/yum.py 1.26, pyrpm/control.py 1.103:
+	* new method Database.getMemoryCopy() to get a database for use in the resolver
+
+2006-08-22  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/db.py 1.13: [ffesti]
+	 - make abstract db class a bit more abstract
+
+2006-08-21  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/control.py 1.102, pyrpm/database/db.py 1.12, pyrpm/database/lists.py 1.27, pyrpm/database/memorydb.py 1.16, pyrpm/database/rpmdb.py 1.19, pyrpm/database/rpmshadowdb.py 1.4, pyrpm/database/sqlitedb.py 1.23, pyrpm/package.py 1.138, pyrpm/yum/yum.py 1.25, tests/test10 1.56:
+	[ffesti]
+	 * make rpmshadowdb use datastructures of an rpmdb instance
+	 * added .sync() to database interface to get database back to valid
+	   state after forking (control.py)
+	 * removed pkg["instal_id"], use pkg.key insted
+	 * changed rpmdb methods to use packed package id insted of the
+	   int representation
+	 * changed rpmdb.obsoletes_list to contain real packages (._readObsoletes())
+
+	* pyrpm/control.py 1.101: [ffesti]
+	- use a copy (memory db) in .getOperations() if no resolver is given
+	  and not the original db
+
+2006-08-16  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/jointdb.py 1.3, pyrpm/database/rpmdb.py 1.18: [ffesti]
+	* RpmDB: added basenames_cache to speed up deletion of packages (numFileDuplicates) like glibc-common
+
+2006-08-15  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/sqlitedb.py 1.22:
+	[ffesti] SqliteRpmPackage: moved pkgKey from dict to an attribute
+
+2006-08-15  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.261:
+	- a bit more robust for corrupted rpmdb cases
+
+2006-08-14  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-tools.txt 1.16:
+	- One more example in the docu for pyrpmcheckinstall.
+
+	* scripts/oldpyrpm.py 1.260:
+	- fixup the PrintHash class to work properly
+
+	* scripts/oldpyrpm.py 1.259:
+	- make sure we never get a division by zero
+
+2006-08-13  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.258: - start using .rstrip()
+	- extractRpm: actually add code to skip extraction
+
+	* scripts/oldpyrpm.py 1.257:
+	- remove using yield to still support python 2.2
+
+	* scripts/oldpyrpm.py 1.256: - add more sanity check for the hash
+
+	* pyrpm/package.py 1.137:
+	- file erase: work on rpmdb data instead of using os.stat()
+
+	* pyrpm/package.py 1.136:
+	- stat correct file and skip earlier if file does not exist
+
+	* pyrpm/package.py 1.135:
+	- try removing extra stat calls also for rpm removal (erase)
+
+	* scripts/oldpyrpm.py 1.255: - add print hash ticks for createrepo
+
+2006-08-12  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.254:
+	- minor speedup in labelCompare() from ffesti
+
+	* pyrpm/installer/config.py 1.3: - no need to use "global" here
+
+	* pyrpm/config.py 1.61, pyrpm/database/rpmdb.py 1.17, pyrpm/functions.py 1.195, scripts/pyrpmkickstart 1.94:
+	- save signal handlers in local vars
+
+	* scripts/oldpyrpm.py 1.253: - merge code to set signal handlers
+	- allow reading a rpmdb for extractRpm() (partial code only)
+	- class RpmDB, partial code
+	- checkrpmdb: fix not setting arch if rpmdbpath is not modified
+
+	* pyrpm/package.py 1.134:
+	- try to defer reading in the rpmdb if possible
+
+	* pyrpm/package.py 1.133: - remove one stat() call
+
+	* scripts/oldpyrpm.py 1.252: - new functions to split filenames
+
+2006-08-11  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/database/db.py 1.11, pyrpm/database/jointdb.py 1.2, pyrpm/database/memorydb.py 1.15, pyrpm/database/repodb.py 1.29, pyrpm/database/rpmdb.py 1.16, pyrpm/database/rpmmemorydb.py 1.5, pyrpm/database/rpmshadowdb.py 1.3, pyrpm/database/sqlitedb.py 1.21, pyrpm/yum/yum.py 1.24, scripts/pyrpmcheckrepo 1.22, scripts/pyrpmkickstart 1.93, scripts/pyrpmverify 1.5, pyrpm/control.py 1.100, pyrpm/orderer.py 1.73:
+	- whitespace
+
+2006-08-11  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/rpmdb.py 1.15:
+	- Fixed several bugs in the numFileDuplicates() method.
+
+2006-08-11  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/functions.py 1.194: [ffesti] minor optimization
+
+	* pyrpm/database/rpmmemorydb.py 1.4:
+	[ffesti] fix RpmMemoryDB: allow obsoletes_list to be auto created
+
+	* pyrpm/yum/yum.py 1.23: [ffesti] - yum.update(): filter older packages
+
+	* pyrpm/database/rpmdb.py 1.14:
+	[ffesti] fix rpmdb._search() for triggers
+
+2006-08-10  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/pyrpminstall 1.31: - do not prepend pyrpm
+
+2006-08-10  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/__init__.py 1.6, pyrpm/database/rpmshadowdb.py 1.2, pyrpm/yum/yum.py 1.22:
+	[ffesti] use RpmShadowDB in yum
+
+	* pyrpm/database/rpmdb.py 1.13:
+	[ffesti] rpmdb: fixes for running without memorydb
+
+	* pyrpm/database/sqlitedb.py 1.20:
+	[ffesti] reduce tags loaded in sqlitedb
+
+	* pyrpm/database/rpmshadowdb.py 1.1: [ffesti]
+	- new database merging an (empty) memorydb with a rpmdb to get a
+	  write-only-in-memory load-on-demand database
+
+	* pyrpm/database/jointdb.py 1.1: [ffesti]
+	- new database that merges several databases into one
+
+	* pyrpm/control.py 1.99: [ffesti] Do not execute triggers if --justdb
+
+	* pyrpm/database/rpmdb.py 1.12, pyrpm/database/rpmmemorydb.py 1.3, pyrpm/control.py 1.98:
+	[ffesti] fixes
+	- reopen database after fork
+	- rpmdb package .has_key()
+
+2006-08-09  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/yum/yum.py 1.21:
+	- Don't do unecessary obsolete handlings during full updates
+
+	* pyrpm/io.py 1.132, pyrpm/yum/yum.py 1.20:
+	- Removed commented out debug line ;)
+	- Filter package list during update() function to remove older packages from
+	  list.
+
+2006-08-09  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/rpmdb.py 1.11, pyrpm/database/sqlitedb.py 1.19:
+	[ffesti]
+
+	- fixed sqlitedb .importFilelist()
+	- fixed trigger handling/dynamic loading in rpmdb
+
+2006-08-09  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/sqlitedb.py 1.18, pyrpm/io.py 1.131:
+	- Fixed tiny typo in sqlitedb.getDbFile()
+
+2006-08-09  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/sqlitedb.py 1.17:
+	[ffesti] minor fix for building the filelist sqlitedb
+
+	* pyrpm/database/rpmdb.py 1.10: [ffesti] - always set epoch
+
+	* pyrpm/database/lists.py 1.26, pyrpm/database/rpmdb.py 1.9, pyrpm/database/rpmmemorydb.py 1.2, pyrpm/database/sqlitedb.py 1.16:
+	[ffesti]
+	* load tags on demand from rpmdb
+
+	* pyrpm/cache.py 1.13: [ffesti]
+	- fix network cache .checksum() to work well with .cache(copy_local=True)
+
+2006-08-08  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.251: - code cleanup
+
+2006-08-08  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/sqlitedb.py 1.15: [ffesti] - typo
+
+	* pyrpm/database/sqlitedb.py 1.14:
+	[ffesti] sqlite: hand add 'pkgKey' as non tag to the packages
+
+	* pyrpm/database/sqlitedb.py 1.13: [ffesti]
+	*fauch*
+
+	* pyrpm/database/sqlitedb.py 1.12: [ffesti]
+	* sqlitedb
+	 - fixed reloading of files, deppendencies
+	 - fixed typo
+
+	* pyrpm/database/sqlitedb.py 1.11:
+	[ffesti] minor fix for SqliteDB.getPkgs()
+
+	* pyrpm/database/sqlitedb.py 1.10: [ffesti]
+	- sqlitedb: implemented .getPkgs() and .hasName()
+
+	* pyrpm/database/sqlitedb.py 1.9, pyrpm/database/repodb.py 1.28:
+	[ffesti] minor fix: make privat function available to child class
+
+	* pyrpm/database/repodb.py 1.27, pyrpm/database/sqlitedb.py 1.8, pyrpm/yum/yum.py 1.19, pyrpm/database/__init__.py 1.5, pyrpm/package.py 1.132, pyrpm/functions.py 1.193:
+	[ffesti]
+	* functions.py
+	 - new evrSplitString() returns empyt string for unset epoch
+	 - new evrMerge()
+	* repodb.RpmRepoDb
+	 - splited read() into .readRepoMD(), .readComps(),
+	   .readPrimary(), readPGPKeys(), .readFilereq()
+	 - splited .addFilesToPkg() from .__parseFilelist()
+	* new SqliteRpmDB class
+	 - modified database.__init__ and yum/yum.py to use it
+
+2006-08-07  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/__init__.py 1.58, scripts/oldpyrpm.py 1.250, configure.in 1.55:
+	- release 0.57
+
+2006-08-07  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/rpmdb.py 1.8, pyrpm/io.py 1.130: [ffesti]
+	- load header data only if really needed (is a resolvertag) in rpmdb
+	- split io.StreamIO.getHeaderByIndex() to .getIndexData() and
+	  .getHeaderByIndexData()
+
+	* scripts/pyrpmcheckrepo 1.21: [ffesti] minor cleanup
+
+2006-08-03  Florian Festi  <ffesti@redhat.com>
+
+	* scripts/pyrpmyum 1.56:
+	[ffesti] removed stupid bug in the control flow to make shure the lock file gets deleted always.
+
+2006-08-01  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/rpmdb.py 1.7: [ffesti]
+	- fixed iterObsoletes
+	- minor fixes
+
+	* pyrpm/database/memorydb.py 1.14: [ffesti]
+	- removed searchDependency() (moved to super class db.RpmDatabase)
+
+	* pyrpm/cache.py 1.12: [ffesti]
+	- added copy_local parameter to NetworkCache.cache()
+
+	* pyrpm/yum/yum.py 1.18: [ffesti]
+	- handle yum updates correctly (search for exact pkg names only)
+	- use db.iterObsoletes()
+
+	* pyrpm/database/db.py 1.10: [ffesti]
+	- use the "real" db interface
+	- moved code of .searchDependency() in
+
+2006-08-01  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmcheckrepo 1.20:
+	- Fixed initializer of database after 1st install before update. Results are
+	  now identical to a manual install of first tree and a manual update to the
+	  2nd one.
+
+2006-07-31  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.249: - getTriggers():
+	  - move verify code into its own section
+	  - code was wrong if no index was used for triggers
+
+2006-07-31  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmcheckrepo 1.19:
+	- Extended the diff() function to allow "inverse" diffs
+	- Need inverse diff for leftover packages
+
 2006-07-30  Florian La Roche  <laroche@redhat.com>
+
+	* ChangeLog 1.20: - update ChangeLog
 
 	* pyrpm/__init__.py 1.57, scripts/oldpyrpm.py 1.248, configure.in 1.54:
 	- release 0.56
