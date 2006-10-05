@@ -39,7 +39,7 @@ class RpmExternalSearchDB(RpmMemoryDB):
         if not self.filecache.has_key(filename):
             self.filecache[filename] = self.externaldb.searchFilenames(
                 filename)
-        
+
         r =  self._filter(self.filecache[filename])
         return r
 
@@ -63,4 +63,4 @@ class RpmExternalSearchDB(RpmMemoryDB):
 #    def searchPkgs(self, names):
 #        return self._filterdict(self.externaldb.searchPkgs(
 #            name, flag, version))
-    
+
