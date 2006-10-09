@@ -14,7 +14,7 @@ link:http://people.redhat.com/berrange/notes/rpmrecovery.html[].
 yum is available from link:http://linux.duke.edu/projects/yum/[]
 with the development mailinglist at
 link:https://lists.linux.duke.edu/mailman/listinfo/yum-devel/[].
-link:http://yumex.python-hosting.com/[] is a GUI ontop of yum.
+link:http://www.yum-extender.org/[] is a GUI ontop of yum.
 
 The new metadata for yum repositories (also named repodata) is discussed at
 link:http://linux.duke.edu/projects/metadata/[].
