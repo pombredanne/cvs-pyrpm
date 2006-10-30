@@ -5900,8 +5900,9 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
                 rpm.genRpmdbHeader()
                 (indexNoa, storeSizea, fmta, fmta2) = writeRpmdb(rpm)
                 if pkg.hdrdata[3] != fmta or pkg.hdrdata[4] != fmta2:
-                    print "Could not write a new rpmdb for %s." \
-                        % repopkg.filename
+                    if verbose > 2:
+                        print "Could not write a new rpmdb for %s." \
+                            % repopkg.filename
                     if verbose >= 4:
                         diffFmt(pkg.hdrdata[3], fmta, pkg.hdrdata[4], fmta2)
                     continue
