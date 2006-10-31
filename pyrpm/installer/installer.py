@@ -16,8 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-from pyrpm.database import repodb
-from pyrpm.database import sqlitedb
+from pyrpm.database import repodb, sqlitedb
 from pyrpm.yum import Conf
 from disk import *
 import config
