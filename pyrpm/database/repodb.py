@@ -122,12 +122,22 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         # Try to read a comps.xml file if there is any before we parse the
         # primary.xml
         if self.repomd.has_key("group"):
+            if not self.repomd["group"].has_key("location"):
+                return 0
+            comps = self.repomd["group"]["location"]
+            (csum, destfile) = self.nc.checksum(comps, "sha")
+            if self.repomd["group"].has_key("checksum") and \
+                   csum == self.repomd["group"]["checksum"]:
+                filename = destfile
+            else:
+                filename = self.nc.cache(comps, 1)
+            if not filename:
+                return 0
             try:
-                filename = self.nc.cache("repodata/comps.xml", 1)
                 self.comps = RpmCompsXML(self.config, filename)
                 self.comps.read()
             except IOError:
-                pass
+                return 0
         return 1
 
     def readPrimary(self):
@@ -135,20 +145,23 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         # it is already local (nfs or local file system) we calculate it's
         # checksum and compare it with the one from repomd. If they are
         # the same we don't need to cache it again and can directly use it.
-        (csum, destfile) = self.nc.checksum("repodata/primary.xml.gz", "sha")
-        if self.repomd.has_key("primary") and \
-           self.repomd["primary"].has_key("checksum") and \
-           csum == self.repomd["primary"]["checksum"]:
-            filename = destfile
-        else:
-            filename = self.nc.cache("repodata/primary.xml.gz", 1)
-        if not filename:
-            return 0
-        try:
-            reader = libxml2.newTextReaderFilename(filename)
-        except libxml2.libxmlError:
-            return 0
-        self._parseNode(reader)
+        if self.repomd.has_key("primary"):
+            if not self.repomd["primary"].has_key("location"):
+                return 0
+            primary = self.repomd["primary"]["location"]
+            (csum, destfile) = self.nc.checksum(primary, "sha")
+            if self.repomd["primary"].has_key("checksum") and \
+                   csum == self.repomd["primary"]["checksum"]:
+                filename = destfile
+            else:
+                filename = self.nc.cache(primary, 1)
+            if not filename:
+                return 0
+            try:
+                reader = libxml2.newTextReaderFilename(filename)
+            except libxml2.libxmlError:
+                return 0
+            self._parseNode(reader)
         return 1
 
     def readPGPKeys(self):
@@ -223,23 +236,25 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         # Same as with primary.xml.gz: If we already have a local version and
         # it matches the checksum found in repomd then we don't need to
         # download it again.
-        (csum, destfile) = self.nc.checksum("repodata/filelists.xml.gz", "sha")
-        if self.repomd.has_key("filelists") and \
-           self.repomd["filelists"].has_key("checksum") and \
-           csum == self.repomd["filelists"]["checksum"]:
-            filename = destfile
-        else:
-            filename = self.nc.cache("repodata/filelists.xml.gz", 1)
-        if not filename:
-            return 0
-        try:
-            reader = libxml2.newTextReaderFilename(filename)
-        except libxml2.libxmlError:
-            return 0
-        self._parseNode(reader)
-        self.filelist_imported = 1
+        if self.repomd.has_key("filelists"):
+            if not self.repomd["filelists"].has_key("location"):
+                return 0
+            filelists = self.repomd["filelists"]["location"]
+            (csum, destfile) = self.nc.checksum(filelists, "sha")
+            if self.repomd["filelists"].has_key("checksum") and \
+                   csum == self.repomd["filelists"]["checksum"]:
+                filename = destfile
+            else:
+                filename = self.nc.cache(filelists, 1)
+            if not filename:
+                return 0
+            try:
+                reader = libxml2.newTextReaderFilename(filename)
+            except libxml2.libxmlError:
+                return 0
+            self._parseNode(reader)
+            self.filelist_imported = 1
         return 1
-
 
     def createRepo(self):
         """Create repodata metadata for self.source.
@@ -327,9 +342,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         rfd.write('  <data type="filelists">\n')
         rfd.write('    <location href="repodata/filelists.xml.gz"/>\n')
         rfd.write('  </data>\n')
-        rfd.write('  <data type="group">\n')
-        rfd.write('    <location href="repodata/comps.xml"/>\n')
-        rfd.write('  </data>\n')
+# how do we know that there is a comps file?
+#        rfd.write('  <data type="group">\n')
+#        rfd.write('    <location href="repodata/comps.xml"/>\n')
+#        rfd.write('  </data>\n')
         rfd.write('</repomd>\n')
         rfd.close()
         del self.filerequires
