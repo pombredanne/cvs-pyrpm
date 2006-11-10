@@ -319,7 +319,7 @@ class RpmYum:
                     for a in pkgnamearchhash[name].keys():
                         if a == arch:
                             continue
-                        pkgnamearchhash[name][arch].extend(pkgnamearchhash[name][a])
+                        pkgnamearchhash[name].setdefault(arch, []).extend(pkgnamearchhash[name][a])
                 # Now for exactarch we really need to find a perfect arch match.
                 elif self.config.exactarch:
                     arch = ipkg["arch"]
