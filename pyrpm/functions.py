@@ -1450,4 +1450,23 @@ def run_main(main):
     else:
         return main()
 
+def pathsplit(filename):
+    i = filename.rfind("/") + 1
+    return (filename[:i].rstrip("/") or "/", filename[i:])
+    #return os.path.split(filename)
+
+def pathdirname(filename):
+    j = filename.rfind("/") + 1
+    return filename[:j].rstrip("/") or "/"
+    #return pathsplit(filename)[0]
+    #return os.path.dirname(filename)
+
+def pathsplit2(filename):
+    i = filename.rfind("/") + 1
+    return (filename[:i], filename[i:])
+    #(dirname, basename) = os.path.split(filename)
+    #if dirname[-1:] != "/" and dirname != "":
+    #    dirname += "/"
+    #return (dirname, basename)
+
 # vim:ts=4:sw=4:showmatch:expandtab

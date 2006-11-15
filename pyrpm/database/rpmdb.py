@@ -678,9 +678,7 @@ class RpmDB(db.RpmDatabase):
         raise NotImplementedError
 
     def numFileDuplicates(self, filename):
-        (dirname, basename) = os.path.split(filename)
-        if len(dirname) > 0 and dirname[-1] != "/":
-            dirname += "/"
+        (dirname, basename) = functions.pathsplit2(filename)
         if not self.basenames_cache.has_key(basename):
             data = self.basenames_db.get(basename, '')
             filedict = {}
@@ -757,9 +755,9 @@ class RpmDB(db.RpmDatabase):
                             name, flag, version)
 
     def searchFilenames(self, filename):
-        dirname, basename = os.path.split(filename)
+        (dirname, basename) = functions.pathsplit2(filename)
         data1 = self.basenames_db.get(basename, "")
-        data2 = self.dirnames_db.get(dirname + '/', '')
+        data2 = self.dirnames_db.get(dirname, '')
         dirname_ids = {}
         for id in self.iterId(data2):
             dirname_ids[id] = None

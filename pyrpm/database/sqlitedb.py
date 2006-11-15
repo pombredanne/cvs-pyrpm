@@ -525,7 +525,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
         dirs = {}
         for filename, ftype in zip(filelist, filetypelist):
-            (dirname, filename) = os.path.split(filename)
+            (dirname, filename) = functions.pathsplit(filename)
             if not dirs.has_key(dirname):
                 dirs[dirname] = {'files' : [], 'types' : []}
             dirs[dirname]['files'].append(filename)
@@ -859,7 +859,7 @@ class SqliteDB(repodb.RpmRepoDB):
             return result
 
         cur = self._filelistsdb.cursor()
-        (dirname, filename) = os.path.split(name)
+        (dirname, filename) = functions.pathsplit(name)
         if name.find('%') == -1: # no %'s in the thing safe to LIKE
             cur.execute("SELECT * FROM filelist WHERE "
                         'dirname="%s" AND filenames LIKE "%%%s%%"' %

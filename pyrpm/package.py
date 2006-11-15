@@ -66,9 +66,7 @@ class _RpmFilenamesIterator:
         #else:
         #    raise ValueError
 
-        (dirname, basename) = os.path.split(name)
-        if dirname[-1:] != "/" and dirname != "":
-            dirname += "/"
+        (dirname, basename) = functions.pathsplit2(name)
         i = 0
         (basenames, dirnames, dirindexes) = (self.pkg["basenames"],
             self.pkg["dirnames"], self.pkg["dirindexes"])
@@ -534,13 +532,13 @@ class RpmPackage(RpmData):
         #  - Empty
         if self.has_key("dirnames"):
             for dname in self["dirnames"]:
-                dname = os.path.dirname(dname)
+                dname = functions.pathdirname(dname)
                 while len(dname) > 1:
                     if db.numFileDuplicates(dname) == 0 and \
                        os.path.isdir(buildroot + dname) and \
                        len(os.listdir(buildroot + dname)) == 0:
                         os.rmdir(buildroot + dname)
-                    dname = os.path.dirname(dname)
+                    dname = functions.pathdirname(dname)
         # Hack to prevent errors for glibc and bash postunscripts for our
         # pyrpmcheckinstall script
         if sys.argv[0].endswith("pyrpmcheckinstall") and \
@@ -1061,9 +1059,7 @@ class RpmPackage(RpmData):
 
         (basenames, dirnames, dirindexes) = ([], [], [])
         for filename in self["oldfilenames"]:
-            (dirname, basename) = os.path.split(filename)
-            if dirname[-1:] != "/" and dirname != "":
-                dirname += "/"
+            (dirname, basename) = functions.pathsplit2(filename)
             dirindex = functions.bsearch(dirname, dirnames)
             if dirindex < 0:
                 dirindex = len(dirnames)
