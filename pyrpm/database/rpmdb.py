@@ -757,7 +757,7 @@ class RpmDB(db.RpmDatabase):
                             name, flag, version)
 
     def searchFilenames(self, filename):
-        dirname, basename = filename.rsplit('/', 1)
+        dirname, basename = os.path.split(filename)
         data1 = self.basenames_db.get(basename, "")
         data2 = self.dirnames_db.get(dirname + '/', '')
         dirname_ids = {}

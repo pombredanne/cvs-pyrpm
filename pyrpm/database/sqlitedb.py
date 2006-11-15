@@ -585,7 +585,7 @@ class SqliteDB(repodb.RpmRepoDB):
         pkgKey = pkg.pkgKey
         if self._filelistsdb:
             cur = self._filelistsdb.cursor()
-            cur.execute("SELECT * FROM filelist WHERE pkgKey=%s" % pkgKey)
+            cur.execute('SELECT * FROM filelist WHERE pkgKey="%s"' % pkgKey)
             basenames = []
             dirnames = []
             dirindexes = []
