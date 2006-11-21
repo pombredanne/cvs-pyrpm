@@ -110,6 +110,7 @@ def main():
         if not yum.runCommand(clearrepos=True):
             return 0
     finally:
+        yum.pydb.close()
         if lockfile:
             try:
                 os.unlink(lockfile)

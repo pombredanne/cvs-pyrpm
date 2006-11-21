@@ -176,6 +176,25 @@ class RpmDB(db.RpmDatabase):
         self.triggername_db    = None
         self.dbopen = False
 
+    def _sync(self):
+        if not self.dbopen:
+            return
+        self.basenames_db.sync()
+        self.conflictname_db.sync()
+        self.dirnames_db.sync()
+        self.filemd5s_db.sync()
+        self.group_db.sync()
+        self.installtid_db.sync()
+        self.name_db.sync()
+        self.packages_db.sync()
+        self.providename_db.sync()
+        self.provideversion_db.sync()
+        self.requirename_db.sync()
+        self.requireversion_db.sync()
+        self.sha1header_db.sync()
+        self.sigmd5_db.sync()
+        self.triggername_db.sync()
+
     def read(self):
         """Read the database in memory."""
         return self.open()
@@ -379,6 +398,8 @@ class RpmDB(db.RpmDatabase):
                             pkg, False)
             self.__writeDB4(self.sigmd5_db, "install_md5", pkgid, pkg, False)
             self.__writeDB4(self.triggername_db, "triggername", pkgid, pkg)
+
+            self._sync()
         except bsddb.error:
             functions.unblockSignals(signals)
             return 0 # Due to the blocking, this is now virtually atomic
@@ -427,6 +448,7 @@ class RpmDB(db.RpmDatabase):
             self.__removeId(self.sigmd5_db, "install_md5", pkgid, pkg, False)
             self.__removeId(self.triggername_db, "triggername", pkgid, pkg)
             del self.packages_db[pkgid]
+            self._sync()
         except bsddb.error:
             functions.unblockSignals(signals)
             return 0 # FIXME: keep trying?
