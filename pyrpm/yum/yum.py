@@ -147,7 +147,7 @@ class RpmYum:
                     baseurls = []
                 if self.config.timer:
                     time1 = clock()
-                self.config.printInfo(1, "Reading repository %s\n" % key)
+                self.config.printInfo(1, "Reading repository '%s'\n" % key)
                 if self.__addSingleRepo(baseurls, conf, key) == 0:
                     return 0
                 if self.config.timer:
