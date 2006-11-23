@@ -391,7 +391,8 @@ class SqliteDB(repodb.RpmRepoDB):
 
     def getDbFile(self, dbtype):
 
-        self.config.printInfo(1, "Loading %s for %s...\n" %
+        if dbtype != "primary":
+            self.config.printInfo(1, "Loading %s for %s...\n" %
                               (dbtype, self.reponame))
 
         cachebase = os.path.join(self.config.cachedir, self.reponame)
