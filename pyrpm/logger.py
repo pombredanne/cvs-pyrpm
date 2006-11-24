@@ -27,6 +27,76 @@ import inspect
 import fnmatch
 import syslog
 
+# ---------------------------------------------------------------------------
+
+class _StdOutLog:
+    def __init__(self):
+        pass
+
+    def open(self):
+        pass
+
+    def write(self, data, level):
+        sys.stdout.write(data)
+
+    def close(self):
+        pass
+
+    def flush(self):
+        pass
+
+# ---------------------------------------------------------------------------
+
+class _StdErrLog:
+    def __init__(self):
+        pass
+
+    def open(self):
+        pass
+
+    def write(self, data, level):
+        sys.stderr.write(data)
+
+    def close(self):
+        pass
+
+    def flush(self):
+        pass
+
+# ---------------------------------------------------------------------------
+
+class _SyslogLog:
+    def __init__(self):
+        pass
+
+    def open(self):
+        pass
+
+    def write(self, data, level):
+        if level == Logger.FATAL:
+            priority = syslog.LOG_CRIT
+        elif level == Logger.ERROR:
+            priority = syslog.LOG_ERR
+        elif level == Logger.WARNING:
+            priority = syslog.LOG_WARNING
+        elif level == Logger.INFO:
+            priority = syslog.LOG_INFO
+        elif level >= Logger.DEBUG1:
+            priority = syslog.LOG_DEBUG
+        
+        if data.endswith("\n"):
+            data = data[:len(data)-1]
+        if len(data) > 0:
+            syslog.syslog(priority, data)
+
+    def close(self):
+        pass
+
+    def flush(self):
+        pass
+
+# ---------------------------------------------------------------------------
+
 class Logger:
     """
     Format string
@@ -49,6 +119,7 @@ class Logger:
                   "%(level)d %(message)s")
     log.setDateFormat("%Y-%m-%d %H:%M:%S")
     log.addLogging("*", FileLog("/tmp/log", "a"))
+    log.addLogging("*", FileLog("/tmp/log", "a"))
 
     log.debug3ln("debug3")
     log.debug2ln("debug2")
@@ -60,6 +131,7 @@ class Logger:
     log.logln(log.INFO, "raw info")
     
     """
+
     ALL     = None
     FATAL   = -3
     ERROR   = -2
@@ -76,22 +148,30 @@ class Logger:
     DEBUG9  =  9
     DEBUG10 = 10
 
+    stdout = _StdOutLog()
+    stderr = _StdErrLog()
+    syslog = _SyslogLog()
+
     def __init__(self):
-        self._level = 0
-        self._format = "%(date)s %(file)s:%(line)d [%(domain)s] " \
-                       "%(label)s%(message)s"
-        self._label = { Logger.FATAL   : "FATAL ERROR: ",
-                        Logger.ERROR   : "ERROR: ",
-                        Logger.WARNING : "WARNING: ",
-                        Logger.INFO    : ""}
-        self._date_format = "%d %b %Y %H:%M:%S"
-        self._logging = { Logger.FATAL   : [ ("*", sys.stderr, None), ],
-                          Logger.ERROR   : [ ("*", sys.stderr, None), ],
-                          Logger.WARNING : [ ("*", sys.stdout, None), ],
-                          Logger.INFO    : [ ("*", sys.stdout, None), ] }
-        for _level in xrange(Logger.DEBUG1, Logger.DEBUG10+1):
-            self._label[_level] = "DEBUG%d: " % _level
-            self._logging[_level] = [ ("*", sys.stdout, None), ]
+        self._level = -10
+        self._format = ""
+        self._date_format = ""
+        self._label = { }
+        self._logging = { } 
+
+        self.setLogLevel(self.INFO)
+        self.setLogLabel(self.FATAL, "FATAL ERROR: ")
+        self.setLogLabel(self.ERROR, "ERROR: ")
+        self.setLogLabel(self.WARNING, "WARNING: ")
+        self.setLogLabel(self.INFO, "")
+        for _level in xrange(self.DEBUG1, self.DEBUG10+1):
+            self.setLogLabel(_level, "DEBUG%d: ")
+        self.setFormat("%(date)s %(file)s:%(line)d [%(domain)s] " \
+                       "%(label)s%(message)s")
+        self.setDateFormat("%d %b %Y %H:%M:%S")
+        self.setLogging("*", self.stderr, [ self.FATAL, self.ERROR ])
+        self.setLogging("*", self.stdout,
+                        [ i for i in xrange(self.WARNING, self.DEBUG10+1) ])
 
     def _checkLogLevel(self, level, min=FATAL, max=DEBUG10):
         if level < min or level > max:
@@ -122,7 +202,7 @@ class Logger:
             for level in levels:
                 self._checkLogLevel(level)
         else:
-            levels = [ i for i in xrange(log.FATAL, log.DEBUG10+1) ]
+            levels = [ i for i in xrange(self.FATAL, self.DEBUG10+1) ]
         for level in levels:
             self._logging[level] = [ (domain, target, format) ]
 
@@ -136,7 +216,7 @@ class Logger:
             for level in levels:
                 self._checkLogLevel(level)
         else:
-            levels = [ i for i in xrange(log.FATAL, log.DEBUG10+1) ]
+            levels = [ i for i in xrange(self.FATAL, self.DEBUG10+1) ]
         for level in levels:
             self._logging.setdefault(level, [ ]).append((domain, target,
                                                          format))
@@ -151,7 +231,7 @@ class Logger:
             for level in levels:
                 self._checkLogLevel(level)
         else:
-            levels = [ i for i in xrange(log.FATAL, log.DEBUG10+1) ]
+            levels = [ i for i in xrange(self.FATAL, self.DEBUG10+1) ]
         for level in levels:
             if self._logging.has_key(level):
                 if (domain, target, format) in self._logging[level]:
@@ -336,11 +416,11 @@ class Logger:
                 if not _format:
                     _format = self._format
                 if raw:
-                    target.write(dict["message"])
+                    target.write(dict["message"], level)
                 else:
-                    target.write(_format % dict)
+                    target.write(_format % dict, level)
                 if newline:
-                    target.write("\n")
+                    target.write("\n", level)
 
 for _level in xrange(Logger.DEBUG1, Logger.DEBUG10+1):
     setattr(Logger, "debug%d" % (_level),
@@ -366,7 +446,7 @@ class FileLog:
             return
         self.fd = open(self.filename, self.mode)
 
-    def write(self, data):
+    def write(self, data, level):
         if not self.fd:
             self.open()
         self.fd.write(data)
@@ -384,27 +464,6 @@ class FileLog:
 
 # ---------------------------------------------------------------------------
 
-class SyslogLog:
-    def __init__(self):
-        pass
-
-    def open(self):
-        pass
-
-    def write(self, data):
-        if data.endswith("\n"):
-            data = data[:len(data)-1]
-        if len(data) > 0:
-            syslog.syslog(data)
-
-    def close(self):
-        pass
-
-    def flush(self):
-        pass
-
-# ---------------------------------------------------------------------------
-
 log = Logger()
 
 if __name__ == '__main__':
@@ -414,7 +473,7 @@ if __name__ == '__main__':
                   "%(message)s")
     log.setDateFormat("%Y-%m-%d %H:%M:%S")
     log.addLogging("*", FileLog("/tmp/log", "a"))
-#    log.addLogging("*", SyslogLog(), "%(label)s%(message)s")
+#    log.addLogging("*", Logger.syslog, format="%(label)s%(message)s")
 
     log.debug3ln("debug3")
     log.debug2ln("debug2")
