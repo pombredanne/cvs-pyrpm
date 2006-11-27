@@ -154,9 +154,9 @@ class Logger:
         self._logging = { } 
         self._domains = { }
 
-        if info_max < 2:
+        if info_max < 0:
             raise ValueError, "Logger: info_max %d is too low" % info_max
-        if debug_max < 2:
+        if debug_max < 0:
             raise ValueError, "Logger: debug_max %d is too low" % debug_max
 
         self.NO_INFO   = self.WARNING
@@ -217,15 +217,28 @@ class Logger:
             raise ValueError, "Level %d out of range, should be [%d..%d]." % \
                   (level, min, max)
 
+    def getLogLevel(self):
+        """ Get log level. """
+        return self._level = level
+
     def setLogLevel(self, level):
         """ Set log level [NOTHING .. INFO_MAX] """
-        self._checkLogLevel(level, min=self.FATAL, max=self.INFO_MAX)
+        if level < self.NO_LOG:
+            level = self.NO_LOG
+        if level > self.INFO_MAX:
+            level = self.INFO_MAX
         self._level = level
+
+    def getDebugLogLevel(self, level):
+        """ Get debug log level. """
+        return self._debug_level
 
     def setDebugLogLevel(self, level):
         """ Set debug log level [NO_DEBUG .. DEBUG_MAX] """
-        self._checkLogLevel(level-self.NO_DEBUG, min=0,
-                            max=self.DEBUG_MAX-self.NO_DEBUG)
+        if level < 0:
+            level = 0
+        if level > self.DEBUG_MAX - self.NO_DEBUG:
+            level = self.DEBUG_MAX - self.NO_DEBUG
         self._debug_level = level - self.NO_DEBUG
 
     def setFormat(self, format):
@@ -454,11 +467,15 @@ class Logger:
             i = domain.find("*")
             if i == 0:
                 continue
-            if _len >= len(domain):
-                if not module_name.startswith(domain):
+            elif i > 0:
+                d = domain[:i]
+            else:
+                d = domain
+            if _len >= len(d):
+                if not module_name.startswith(d):
                     return
             else:
-                if not domain.startswith(module_name):
+                if not d.startswith(module_name):
                     return
 
         # generate dict for format output
@@ -500,8 +517,11 @@ class Logger:
             dict["domain"] += dict["function"]
         point_domain = dict["domain"] + "."
 
+        used_targets = [ ]
         # log to target(s)
         for (domain, target, _format) in self._logging[level]:
+            if target in used_targets:
+                continue
             if domain == "":
                 domain = "*"
             if domain == "*" or point_domain.startswith(domain) \
@@ -514,6 +534,7 @@ class Logger:
                     target.write(_format % dict, level)
                 if newline:
                     target.write("\n", level)
+                used_targets.append(target)
 
 # ---------------------------------------------------------------------------
 
