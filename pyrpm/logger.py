@@ -219,12 +219,12 @@ class Logger:
 
     def getLogLevel(self):
         """ Get log level. """
-        return self._level = level
+        return self._level
 
     def setLogLevel(self, level):
         """ Set log level [NOTHING .. INFO_MAX] """
-        if level < self.NO_LOG:
-            level = self.NO_LOG
+        if level < self.NOTHING:
+            level = self.NOTHING
         if level > self.INFO_MAX:
             level = self.INFO_MAX
         self._level = level
@@ -517,7 +517,7 @@ class Logger:
             dict["domain"] += dict["function"]
         point_domain = dict["domain"] + "."
 
-        used_targets = [ ]
+        used_targets = [ ]
         # log to target(s)
         for (domain, target, _format) in self._logging[level]:
             if target in used_targets:
