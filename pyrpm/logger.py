@@ -451,15 +451,20 @@ class Logger:
             return
 
         f = inspect.currentframe()
-        # go outside of Log class
-        while f and self._getClass(f) == self.__class__:
+        # go outside of Logger class
+#        while f and self._getClass(f) == self.__class__:
+#            f = f.f_back
+
+        # go outside of logger module as long as there is a lower frame
+        while f and f.f_back and f.f_globals["__name__"] == self.__module__:
             f = f.f_back
+
         if not f:
             raise ValueError, "Frame information not available."
 
+        # get module name, code
+        module_name = f.f_globals["__name__"]
         co = f.f_code
-
-        module_name = inspect.getmodule(f).__name__
 
         # optimization: bail out early if domain can not match at all
         _len = len(module_name)
@@ -490,8 +495,11 @@ class Logger:
                  'domain': '',
                  'label' : level_str,
                  'level' : level,
-                 'date' : time.strftime(self._date_format, time.localtime()),
-                 'message': format % args }
+                 'date' : time.strftime(self._date_format, time.localtime()) }
+        if len(args) > 0:
+            dict['message'] = format % args
+        else:
+            dict['message'] = format
         if dict["function"] == "?":
             dict["function"] = ""
 
