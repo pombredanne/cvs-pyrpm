@@ -154,7 +154,8 @@ class Logger:
         self._logging = { } 
         self._domains = { }
 
-        if info_max < 0:
+        # INFO1 is required for standard log level
+        if info_max < 1:
             raise ValueError, "Logger: info_max %d is too low" % info_max
         if debug_max < 0:
             raise ValueError, "Logger: debug_max %d is too low" % debug_max
@@ -197,8 +198,7 @@ class Logger:
         # set initial log levels, formats and targets
         self.setLogLevel(self.INFO1)
         self.setDebugLogLevel(self.NO_DEBUG)
-        self.setFormat("%(date)s %(file)s:%(line)d [%(domain)s] " \
-                       "%(label)s%(message)s")
+        self.setFormat("%(label)s%(message)s")
         self.setDateFormat("%d %b %Y %H:%M:%S")
         self.setLogging("*", self.stderr, [ self.FATAL, self.ERROR ])
         self.setLogging("*", self.stdout,
@@ -320,6 +320,41 @@ class Logger:
                   (level, domain, target, format)
         self._genDomains()
 
+    def isLogging(self, level):
+        # log level higher than logging level?
+        if level > self.INFO_MAX:
+            if level-self.INFO_MAX > self._debug_level:
+                return False
+        else:
+            if level > self._level:
+                return False
+
+        # no logging for this level specified
+        if not self._logging.has_key(level):
+            return False
+
+        # no logging domains
+        if not self._domains.has_key(level) or len(self._domains[level]) < 1:
+            return False
+
+        return True
+
+    def isLoggingHere(self, level):
+        """ Is there currently any logging for this log level (and domain)? """
+        dict = self._genDict(level)
+        if not dict:
+            return False
+
+        point_domain = dict["domain"] + "."
+
+        # do we need to log?
+        for (domain, target, format) in self._logging[level]:
+            if domain == "" or domain == "*" \
+                   or point_domain.startswith(domain) \
+                   or fnmatch.fnmatchcase(dict["domain"], domain):
+                return True
+        return False
+        
     def log(self, level, data):
         """ Log data without and prefix. """
         self._checkLogLevel(level, min=self.FATAL, max=self.DEBUG_MAX)
@@ -433,22 +468,40 @@ class Logger:
 
     # internal log class
     def _log(self, level, newline, raw, format, *args):
-        """ Internal log function. """
-        # log level higher than logging level?
-        if level > self.INFO_MAX:
-            if level-self.INFO_MAX > self._debug_level:
-                return
+        dict = self._genDict(level)
+        if not dict:
+            return
+
+        if len(args) > 0:
+            dict['message'] = format % args
         else:
-            if level > self._level:
-                return
+            dict['message'] = format
 
-        # no logging for this level specified
-        if not self._logging.has_key(level):
-            return
+        point_domain = dict["domain"] + "."
 
-        # no logging domains
-        if not self._domains.has_key(level) or len(self._domains[level]) < 1:
-            return
+        used_targets = [ ]
+        # log to target(s)
+        for (domain, target, _format) in self._logging[level]:
+            if target in used_targets:
+                continue
+            if domain == "" or domain == "*" \
+                   or point_domain.startswith(domain) \
+                   or fnmatch.fnmatchcase(dict["domain"], domain):
+                if not _format:
+                    _format = self._format
+                if raw:
+                    target.write(dict["message"], level)
+                else:
+                    target.write(_format % dict, level)
+                if newline:
+                    target.write("\n", level)
+                used_targets.append(target)
+
+    # internal function to generate the dict, needed for logging
+    def _genDict(self, level):
+        """ Internal function. """
+        if not self.isLogging(level):
+            return None
 
         f = inspect.currentframe()
         # go outside of Logger class
@@ -478,10 +531,10 @@ class Logger:
                 d = domain
             if _len >= len(d):
                 if not module_name.startswith(d):
-                    return
+                    return None
             else:
                 if not d.startswith(module_name):
-                    return
+                    return None
 
         # generate dict for format output
         level_str = ""
@@ -496,53 +549,35 @@ class Logger:
                  'label' : level_str,
                  'level' : level,
                  'date' : time.strftime(self._date_format, time.localtime()) }
-        if len(args) > 0:
-            dict['message'] = format % args
-        else:
-            dict['message'] = format
         if dict["function"] == "?":
             dict["function"] = ""
 
+        # domain match needed?
+        domain_needed = False
+        for domain in self._domains[level]:
+            # standard domain, matches everything
+            if domain == "*" or domain == "":
+                continue
+            # domain is needed
+            domain_needed = True
+            break
+        
         # do we need to get the class object?
         if self._format.find("%(domain)") >= 0 \
                or self._format.find("%(class)") >= 0 \
-               or len(self._domains[level]) > 1 \
-               or self._domains[level][0] != "*":
+               or domain_needed:
             obj = self._getClass(f)
             if obj:
                 dict["class"] = obj.__name__
 
         # build domain string
-        if dict["module"] != "":
-            dict["domain"] = dict["module"]
+        dict["domain"] = "" + dict["module"]
         if dict["class"] != "":
-            if len(dict["domain"]) > 0:
-                dict["domain"] += "."
-            dict["domain"] += dict["class"]
+            dict["domain"] += "." + dict["class"]
         if dict["function"] != "":
-            if len(dict["domain"]) > 0:
-                dict["domain"] += "."
-            dict["domain"] += dict["function"]
-        point_domain = dict["domain"] + "."
+            dict["domain"] += "." + dict["function"]
 
-        used_targets = [ ]
-        # log to target(s)
-        for (domain, target, _format) in self._logging[level]:
-            if target in used_targets:
-                continue
-            if domain == "":
-                domain = "*"
-            if domain == "*" or point_domain.startswith(domain) \
-                   or fnmatch.fnmatch(dict["domain"], domain):
-                if not _format:
-                    _format = self._format
-                if raw:
-                    target.write(dict["message"], level)
-                else:
-                    target.write(_format % dict, level)
-                if newline:
-                    target.write("\n", level)
-                used_targets.append(target)
+        return dict
 
 # ---------------------------------------------------------------------------
 
