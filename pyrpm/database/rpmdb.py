@@ -28,6 +28,7 @@ import pyrpm.package as package
 import db
 import pyrpm.openpgp as openpgp
 import lists
+from pyrpm.logger import log
 
 class RpmDBPackage(package.RpmPackage):
 
@@ -221,7 +222,7 @@ class RpmDB(db.RpmDatabase):
         try:
             val = unpack("I", key)[0]
         except struct.error:
-            self.config.printError("Invalid key %s in rpmdb" % repr(key))
+            log.errorLn("Invalid key %s in rpmdb", repr(key))
             return None
 
         if val == 0:
@@ -230,13 +231,13 @@ class RpmDB(db.RpmDatabase):
         try:
             (indexNo, storeSize) = unpack("!2I", data[0:8])
         except struct.error:
-            self.config.printError("Value for key %s in rpmdb is too short"
-                                   % repr(key))
+            log.errorLn("Value for key %s in rpmdb is too short",
+                      repr(key))
             return None
 
         if len(data) < indexNo*16 + 8:
-            self.config.printError("Value for key %s in rpmdb is too short"
-                                   % repr(key))
+            log.errorLn("Value for key %s in rpmdb is too short",
+                      repr(key))
             return None
         indexdata = unpack("!%sI" % (indexNo*4), data[8:indexNo*16+8])
         indexes = zip(indexdata[0::4], indexdata[1::4],
@@ -263,8 +264,8 @@ class RpmDB(db.RpmDatabase):
             try:
                 keys = openpgp.parsePGPKeys(pkg["description"])
             except ValueError, e:
-                self.config.printError("Invalid key package %s: %s"
-                                       % (pkg["name"], e))
+                log.errorLn("Invalid key package %s: %s",
+                            pkg["name"], e)
                 return None
             for k in keys:
                 self.keyring.addKey(k)
@@ -295,8 +296,8 @@ class RpmDB(db.RpmDatabase):
             try:
                 tagval = rpmio.getHeaderByIndexData(index, storedata)
             except ValueError, e:
-                self.config.printError("Invalid header entry %s in %s: %s"
-                                       % (idx, key, e))
+                log.errorLn("Invalid header entry %s in %s: %s",
+                            idx, key, e)
                 return 0
 
             if tag == "archivesize":
@@ -321,8 +322,8 @@ class RpmDB(db.RpmDatabase):
             if "triggername" in tags:
                 pkg["triggers"] = pkg.getTriggers()
         except ValueError, e:
-            self.config.printError("Error in package %s: %s"
-                                   % pkg.getNEVRA(), e)
+            log.errorLn("Error in package %s: %s",
+                        pkg.getNEVRA(), e)
             return 0
         return 1
 
@@ -850,7 +851,6 @@ class RpmDB(db.RpmDatabase):
                                     result.append(pkg)
                                     break
             else:
-                print parts
                 for idx in xrange(1, len(parts)+1, 2):
                     pkgs = self.getPkgsByName(''.join(parts[:idx]))
                     for pkg in pkgs:

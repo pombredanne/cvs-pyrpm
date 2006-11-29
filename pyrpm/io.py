@@ -27,7 +27,7 @@ except ImportError:
 
 from base import *
 import functions
-
+from pyrpm.logger import log
 
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
 class PyGZIP:
@@ -446,7 +446,7 @@ class RpmStreamIO(RpmIO):
         # ignore duplicate entries as long as they are identical
         if self.hdr.has_key(tag):
             if self.hdr[tag] != self.__parseTag(index, storedata):
-                self.config.printError("%s: tag %d included twice" % (self.source, tag))
+                log.errorLn("%s: tag %d included twice", self.source, tag)
         else:
             self.hdr[tag] = self.__parseTag(index, storedata)
         return (tag, self.hdr[tag])
@@ -459,7 +459,7 @@ class RpmStreamIO(RpmIO):
         # ignore duplicate entries as long as they are identical
         if self.hdr.has_key(tag):
             if self.hdr[tag] != self.__parseTag(index, storedata):
-                self.config.printError("%s: tag %d included twice" % (self.source, tag))
+                log.errorLn("%s: tag %d included twice", self.source, tag)
         else:
             self.hdr[tag] = self.__parseTag(index, storedata)
         return self.hdr[tag]
@@ -830,9 +830,8 @@ class RpmFileIO(RpmStreamIO):
             unsignedTags.append(tag)
         if unsignedTags:
             # FIXME: only once per package
-            self.config.printWarning(0, "%s: Unsigned tags %s"
-                                     % (self.source,
-                                        [rpmtagname[i] for i in unsignedTags]))
+            log.warningLn("%s: Unsigned tags %s",
+                          self.source, [rpmtagname[i] for i in unsignedTags])
         # In practice region data starts at offset 0, but the original design
         # was proposing concatenated regions etc; where would the data region
         # start in that case? Lowest offset in region perhaps?

@@ -34,6 +34,7 @@ import package
 from config import rpmconfig
 from base import *
 from pyrpm import __version__
+from pyrpm.logger import log
 
 # Number of bytes to read from file at once when computing digests
 DIGEST_CHUNK = 65536
@@ -296,7 +297,7 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
         data2 = data2.rstrip("\x00")
         symlinkfile = data1
         if data1 != data2:
-            print >> sys.stderr, "Warning: Symlink information differs between rpm header and cpio for %s -> %s" % (rfi.filename, data1)
+            log.waringLn("Warning: Symlink information differs between rpm header and cpio for %s -> %s", rfi.filename, data1)
         if os.path.islink(filename) and os.readlink(filename) == symlinkfile:
             return
         makeDirs(filename)
@@ -567,7 +568,8 @@ def getFreeCachespace(config, operations):
         except KeyError:
             raise ValueError, "Missing signature:size_in sig in package"
     if freespace < 31457280:
-        config.printInfo(0, "Less than 30MB of diskspace left in %s for caching rpms\n" % cachedir)
+        log.info1Ln("Less than 30MB of diskspace left in %s for caching rpms",
+                    cachedir)
         return 0
     return 1
 
@@ -600,7 +602,7 @@ def getFreeDiskspace(config, operations):
             try:
                 pkg.reread(config.diskspacetags)
             except Exception, e:
-                config.printError("Error rereading package: %s" % e)
+                log.errorLn("Error rereading package: %s", e)
                 return 0
         dirnames = pkg["dirnames"]
         if dirnames == None:
@@ -660,12 +662,14 @@ def getFreeDiskspace(config, operations):
         for (dev, val) in minfreehash.iteritems():
             # Less than 30MB space left on device?
             if val[0] < 31457280:
-                config.printInfo(2, "%s: Less than 30MB of diskspace left on %s\n" % (pkg.getNEVRA(), mountpoint[dev]))
+                log.info2Ln("%s: Less than 30MB of diskspace left on %s",
+                            pkg.getNEVRA(), mountpoint[dev])
         pkg.close()
         pkg.clear(ntags=config.nevratags)
     for (dev, val) in minfreehash.iteritems():
         if val[0] < 31457280:
-            config.printInfo(0, "%sMB more diskspace required on %s for operation\n" % (30 - val[0]/1024/1024, mountpoint[dev]))
+            log.errorLn("%sMB more diskspace required on %s for operation",
+                        30 - val[0]/1024/1024, mountpoint[dev])
             ret = 0
     return ret
 
@@ -738,7 +742,7 @@ def parseYumOptions(argv, yum):
          "languages="])
     except getopt.error, e:
         # FIXME: all to stderr
-        print "Error parsing command-line arguments: %s" % e
+        log.errorLn("Error parsing command-line arguments: %s", e)
         return None
 
     # Argument handling
@@ -863,10 +867,10 @@ def parseYumOptions(argv, yum):
         if not rpmconfig.test and \
            not rpmconfig.justdb and \
            not rpmconfig.ignorearch:
-            rpmconfig.printError("Arch option can only be used for tests")
+            log.errorLn("Arch option can only be used for tests")
             sys.exit(1)
         if not buildarchtranslate.has_key(rpmconfig.arch):
-            rpmconfig.printError("Unknown arch %s" % rpmconfig.arch)
+            log.errorLn("Unknown arch %s", rpmconfig.arch)
             sys.exit(1)
         rpmconfig.machine = rpmconfig.arch
 
@@ -925,18 +929,18 @@ def readPackages(dbpath):
         try:
             val = struct.unpack("I", key)[0] # FIXME: native endian?
         except struct.error:
-            rpmconfig.printError("Invalid key %s in rpmdb" % repr(key))
+            log.warningLn("Invalid key %s in rpmdb", repr(key))
             continue
         if val != 0:
             try:
                 (indexNo, storeSize) = struct.unpack("!2I", data[0:8])
             except struct.error:
-                rpmconfig.printError("Value for key %s in rpmdb is too short"
-                                     % repr(key))
+                log.warningLn("Value for key %s in rpmdb is too short",
+                              repr(key))
                 continue
             if len(data) < indexNo*16 + 8:
-                rpmconfig.printError("Value for key %s in rpmdb is too short"
-                                     % repr(key))
+                log.warningLn("Value for key %s in rpmdb is too short",
+                              repr(key))
                 continue
             indexdata = data[8:indexNo*16+8]
             storedata = data[indexNo*16+8:]
@@ -946,8 +950,8 @@ def readPackages(dbpath):
                     (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
                                                            storedata)
                 except ValueError, e:
-                    rpmconfig.printError("Invalid header entry %s in %s: %s"
-                                         % (idx, repr(key), e))
+                    log.warningLn("Invalid header entry %s in %s: %s",
+                                  idx, repr(key), e)
                     continue
                 if   tag == 257:
                     pkg["signature"]["size_in_sig"] = tagval
@@ -973,8 +977,8 @@ def readPackages(dbpath):
 #                try:
 #                    keys = openpgp.parsePGPKeys(pkg["description"])
 #                except ValueError, e:
-#                    rpmconfig.printError("Invalid key package %s: %s"
-#                                         % (pkg["name"], e))
+#                    log.warningLn("Invalid key package %s: %s",
+#                                  pkg["name"], e)
 #                    continue
 #                for k in keys:
 #                    keyring.addKey(k)
@@ -995,38 +999,6 @@ def is_this_ok():
     if len(choice) == 0 or (choice[0] != "y" and choice[0] != "Y"):
         return 0
     return 1
-
-# Error handling functions
-
-# FIXME: not used
-def printDebug(level, msg):
-    if level <= rpmconfig.debug:
-        sys.stdout.write("Debug: %s\n" % msg)
-        sys.stdout.flush()
-    return 0
-
-# FIXME: not used
-def printInfo(level, msg):
-    if level <= rpmconfig.verbose:
-        sys.stdout.write(msg)
-        sys.stdout.flush()
-    return 0
-
-# FIXME: used
-def printWarning(level, msg):
-    if level <= rpmconfig.warning:
-        sys.stdout.write("Warning: %s\n" % msg)
-        sys.stdout.flush()
-    return 0
-
-# FIXME: used
-def printError(msg):
-    sys.stderr.write("Error: %s\n" % msg)
-    sys.stderr.flush()
-    return 0
-
-def raiseFatal(msg):
-    raise ValueError, "Fatal: %s\n" % msg
 
 # Exact reimplementation of glibc's bsearch algorithm. Used by rpm to
 # generate dirnames, dirindexes and basenames from oldfilenames (and we need
@@ -1325,8 +1297,8 @@ def filterArchCompat(list, arch):
         if archCompat(list[i]["arch"], arch):
             i += 1
         else:
-            printWarning(1, "%s: Architecture not compatible with %s" % \
-                         (list[i].source, arch))
+            log.warningLn("%s: Architecture not compatible with %s",
+                          list[i].source, arch)
             list.pop(i)
 
 def normalizeList(list):
@@ -1416,14 +1388,14 @@ def readDir(dir, list, rtags=None):
                 pkg.read(tags=rtags)
                 pkg.close()
             except (IOError, ValueError), e:
-                rpmconfig.printError("%s: %s\n" % (pkg, e))
+                log.warningLn("%s: %s\n", pkg, e)
                 continue
             if not rpmconfig.ignorearch and \
                not archCompat(pkg["arch"], rpmconfig.machine) and \
                not pkg.isSourceRPM():
-                rpmconfig.printWarning(1, "%s: Package excluded because of arch incompatibility" % pkg.getNEVRA())
-                continue
-            rpmconfig.printInfo(2, "Reading package %s.\n" % pkg.getNEVRA())
+               log.warningLn("%s: Package excluded because of arch incompatibility", pkg.getNEVRA())
+               continue
+            log.info3Ln("Reading package %s.", pkg.getNEVRA())
             list.append(pkg)
 
 def run_main(main):
@@ -1442,7 +1414,7 @@ def run_main(main):
         prof.runcall(main)
         prof.close()
         del prof
-        print "Starting profil statistics. This takes some time..."
+        log.info2Ln("Starting profil statistics. This takes some time...")
         s = hotshot.stats.load(htfilename)
         s.strip_dirs().sort_stats("time").print_stats(100)
         s.strip_dirs().sort_stats("cumulative").print_stats(100)

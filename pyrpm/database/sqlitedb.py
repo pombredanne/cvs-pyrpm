@@ -21,6 +21,7 @@ import libxml2
 
 from pyrpm import *
 import db, repodb
+from pyrpm.logger import log
 
 # This version refers to the internal structure of the sqlite cache files
 # increasing this number forces all caches of a lower version number
@@ -224,7 +225,7 @@ class SqliteDB(repodb.RpmRepoDB):
             f = open(filename,'w')
             return sqlite.connect(filename)
         except IOError:
-            self.config.printWarning(1, "Could not create sqlite cache file, using in memory cache instead")
+            log.warningLn("Could not create sqlite cache file, using in memory cache instead")
             return sqlite.connect(":memory:")
 
     def createDbInfo(self, cur):
@@ -282,7 +283,7 @@ class SqliteDB(repodb.RpmRepoDB):
 
         # Now check the database version
         if (info['dbversion'] not in supported_dbversions):
-            self.config.printInfo(2, "Cache file is version %s, we need %s, will regenerate.\n", info['dbversion'], dbversion)
+            log.info2Ln("Cache file is version %s, we need %s, will regenerate.\n", info['dbversion'], dbversion)
             raise sqlite.DatabaseError, "Older version of yum sqlite: %s" % info['dbversion']
 
         # This appears to be a valid database, return checksum value and
@@ -392,8 +393,7 @@ class SqliteDB(repodb.RpmRepoDB):
     def getDbFile(self, dbtype):
 
         if dbtype != "primary":
-            self.config.printInfo(1, "Loading %s for %s...\n" %
-                              (dbtype, self.reponame))
+            log.info2Ln("Loading %s for %s...", dbtype, self.reponame)
 
         cachebase = os.path.join(self.config.cachedir, self.reponame)
         cachepath = os.path.join(self.config.cachedir, self.reponame, "sqlite")
@@ -409,7 +409,7 @@ class SqliteDB(repodb.RpmRepoDB):
             try:
                 csum, db = self.loadCache(dbfilename)
             except sqlite.Error, e:
-                self.config.printError(e)
+                log.errorLn(e)
                 csum = None
             if self.repomd.has_key(dbtype) and \
                    self.repomd[dbtype].has_key("checksum") and \
@@ -461,7 +461,7 @@ class SqliteDB(repodb.RpmRepoDB):
                 return 0
 
         if filename:
-            self.config.printInfo(2, "Creating %s\n" % dbfilename)
+            log.info2Ln("Creating %s", dbfilename)
             if USEYUM:
                 parser = yum.mdparser.MDParser(filename)
                 storage = yum.storagefactory.GetStorage()

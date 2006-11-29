@@ -24,6 +24,7 @@ from stat import S_ISLNK, S_ISDIR
 from hashlist import HashList
 from functions import *
 import base
+from logger import log
 
 # ----------------------------------------------------------------------------
 
@@ -154,7 +155,7 @@ class RpmResolver:
                         msg = "%s: A newer package is already installed"
                     else:
                         msg = "%s: A newer package was already added"
-                    self.config.printWarning(1, msg % pkg.getNEVRA())
+                    log.info3Ln(msg, pkg.getNEVRA())
                     del self.pkg_updates
                     return self.OLD_PACKAGE
                 else:
@@ -188,8 +189,7 @@ class RpmResolver:
                         else:
                             msg = "%s: Ignoring due to already added %s"
                             ret = self.ALREADY_ADDED
-                        self.config.printWarning(1, msg % (pkg.getNEVRA(),
-                                               r.getNEVRA()))
+                        log.info3.Ln(msg, pkg.getNEVRA(), r.getNEVRA())
                         del self.pkg_updates
                         return ret
                     else:
@@ -202,11 +202,11 @@ class RpmResolver:
 
         for r in self.pkg_updates:
             if self.isInstalled(r):
-                self.config.printWarning(2, "%s was already installed, replacing with %s" \
-                                 % (r.getNEVRA(), pkg.getNEVRA()))
+                log.info3Ln("%s was already installed, replacing with %s",
+                            r.getNEVRA(), pkg.getNEVRA())
             else:
-                self.config.printWarning(1, "%s was already added, replacing with %s" \
-                                 % (r.getNEVRA(), pkg.getNEVRA()))
+                log.info3Ln("%s was already added, replacing with %s",
+                            r.getNEVRA(), pkg.getNEVRA())
             if self._pkgUpdate(pkg, r) != self.OK: # Currently can't fail
                 del self.pkg_updates
                 return self.UPDATE_FAILED
@@ -220,11 +220,7 @@ class RpmResolver:
                 fmt = "%s obsoletes installed %s, removing %s"
             else:
                 fmt = "%s obsoletes added %s, removing %s"
-            msg = fmt % (pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA())
-            if self.config.test:
-                self.config.printInfo(0, msg+"\n")
-            else:
-                self.config.printWarning(1, msg)
+            log.info3Ln(fmt, pkg.getNEVRA(), r.getNEVRA(), r.getNEVRA())
             if self._pkgObsolete(pkg, r) != self.OK:
                 del self.pkg_obsoletes
                 return self.OBSOLETE_FAILED
@@ -272,8 +268,8 @@ class RpmResolver:
         name = pkg["name"]
         if not self.database.hasName(name) or \
                pkg not in self.database.getPkgsByName(name):
-            self.config.printWarning(1, "Package %s (id %s) not found"
-                                     % (pkg.getNEVRA(), id(pkg)))
+            log.warningLn("Package %s (id %s) not found",
+                        pkg.getNEVRA(), id(pkg))
             return self.NOT_INSTALLED
 
         if self.isInstalled(pkg):
@@ -314,8 +310,8 @@ class RpmResolver:
                 fmt = "%s conflicts with already installed %s on %s, skipping"
             else:
                 fmt = "%s conflicts with already added %s on %s, skipping"
-            self.config.printWarning(1, fmt % (pkg.getNEVRA(), depString(c),
-                                               r.getNEVRA()))
+            log.warningLn(fmt, pkg.getNEVRA(), depString(c),
+                          r.getNEVRA())
             ret = 1
         return ret
     # ----
@@ -464,12 +460,12 @@ class RpmResolver:
 
         if r == pkg or r.isEqual(pkg):
             if self.isInstalled(r):
-                self.config.printWarning(2, "%s: %s is already installed" % \
-                             (pkg.getNEVRA(), r.getNEVRA()))
+                log.info3Ln("%s: %s is already installed",
+                            pkg.getNEVRA(), r.getNEVRA())
                 return self.ALREADY_INSTALLED
             else:
-                self.config.printWarning(1, "%s: %s was already added" % \
-                             (pkg.getNEVRA(), r.getNEVRA()))
+                log.info3Ln("%s: %s was already added",
+                            pkg.getNEVRA(), r.getNEVRA())
                 return self.ALREADY_ADDED
         return self.OK
     # ----
@@ -481,8 +477,8 @@ class RpmResolver:
         Warn the user before returning True."""
 
         if pkg["arch"] != r["arch"] and archDuplicate(pkg["arch"], r["arch"]):
-            self.config.printWarning(1, "%s does not match arch %s." % \
-                         (pkg.getNEVRA(), r["arch"]))
+            log.info3Ln("%s does not match arch %s.",
+                        pkg.getNEVRA(), r["arch"])
             return 1
         return 0
     # ----
@@ -596,9 +592,9 @@ class RpmResolver:
         if self.config.checkinstalled == 0:
             unresolved = self.getUnresolvedDependencies()
             for p in unresolved.keys():
-                self.config.printError("%s: unresolved dependencies:" % p.getNEVRA())
+                log.errorLn("%s: unresolved dependencies:", p.getNEVRA())
                 for u in unresolved[p]:
-                    self.config.printError("\t%s" % depString(u))
+                    log.erroLn("\t%s" % depString(u))
             if unresolved:
                 return 0
             return 1
@@ -610,20 +606,20 @@ class RpmResolver:
                     # do not check installed packages if no packages
                     # are getting removed (by erase, update or obsolete)
                     continue
-                self.config.printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
+                log.info2Ln("Checking dependencies for %s", r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(resolved) > 0 and self.config.debug > 1:
-                    self.config.printDebug(2, "%s: resolved dependencies:" % r.getNEVRA())
+                    log.info3Ln("%s: resolved dependencies:", r.getNEVRA())
                     for (u, s) in resolved:
                         s2 = ""
                         for r2 in s:
                             s2 += "%s " % r2.getNEVRA()
-                        self.config.printDebug(2, "\t%s: %s" % (depString(u), s2))
+                        log.info3Ln("\t%s: %s", depString(u), s2)
                 if len(unresolved) > 0:
                     no_unresolved = 0
-                    self.config.printError("%s: unresolved dependencies:" % r.getNEVRA())
+                    log.errorLn("%s: unresolved dependencies:", r.getNEVRA())
                     for u in unresolved:
-                        self.config.printError("\t%s" % depString(u))
+                        log.erroLn("\t%s", depString(u))
         return no_unresolved
     # ----
 
@@ -637,7 +633,7 @@ class RpmResolver:
         all_resolved = HashList()
         for name in self.database.getNames():
             for r in self.database.getPkgsByName(name):
-                self.config.printDebug(1, "Checking dependencies for %s" % r.getNEVRA())
+                log.info3Ln("Checking dependencies for %s", r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
                 if len(resolved) > 0:
                     all_resolved.setdefault(r, [ ]).extend(resolved)
@@ -737,14 +733,14 @@ class RpmResolver:
 
         if self.config.checkinstalled == 0:
             for r in self.installs:
-                self.config.printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
+                log.info3Ln("Checking for conflicts for %s", r.getNEVRA())
                 self.getPkgConflicts(r, r["conflicts"] + r["obsoletes"],
                                      conflicts)
             return conflicts
 
         for name in self.database.getNames():
             for r in self.database.getPkgsByName(name):
-                self.config.printDebug(1, "Checking for conflicts for %s" % r.getNEVRA())
+                log.info3Ln( "Checking for conflicts for %s", r.getNEVRA())
                 self.getPkgConflicts(r, r["conflicts"] + r["obsoletes"],
                                      conflicts)
         return conflicts
@@ -764,13 +760,13 @@ class RpmResolver:
             return obsoletes
         if self.config.checkinstalled == 0:
             for r in self.installs:
-                self.config.printDebug(1, "Checking for obsoletes for %s" % r.getNEVRA())
+                log.info3Ln("Checking for obsoletes for %s", r.getNEVRA())
                 self.getPkgConflicts(r, r["obsoletes"], obsoletes)
             return obsoletes
 
         for name in self.database.getNames():
             for r in self.database.getPkgsByName(name):
-                self.config.printDebug(1, "Checking for obsoletes for %s" % r.getNEVRA())
+                log.info3Ln(1, "Checking for obsoletes for %s" % r.getNEVRA())
                 self.getPkgConflicts(r, r["obsoletes"], obsoletes)
         return obsoletes
     # ----
@@ -792,10 +788,10 @@ class RpmResolver:
                 if not c in conf[r]:
                     conf[r].append(c)
             for r in conf.keys():
-                self.config.printError("%s conflicts with %s on:" % \
-                                       (pkg.getNEVRA(), r.getNEVRA()))
+                log.errorLn("%s conflicts with %s on:",
+                            pkg.getNEVRA(), r.getNEVRA())
                 for c in conf[r]:
-                    self.config.printError("\t%s" % depString(c))
+                    log.errorLn("\t%s", depString(c))
         return 0
     # ----
 
@@ -818,8 +814,7 @@ class RpmResolver:
                 for name in pkg.iterFilenames():
                     dups = db.searchFilenames(name)
                     if len(dups) == 1: continue
-                    self.config.printDebug(
-                        1, "Checking for file conflicts for '%s'" % name)
+                    log.info3Ln("Checking for file conflicts for '%s'", name)
                     for p in dups:
                         if p is pkg: continue
                         if self._hasFileConflict(pkg, p, name):
@@ -831,8 +826,7 @@ class RpmResolver:
         duplicates = self.database.getFileDuplicates()
         for name in duplicates:
             dups = duplicates[name]
-            self.config.printDebug(1, "Checking for file conflicts for '%s'" %\
-                                   name)
+            log.info3Ln("Checking for file conflicts for '%s'", name)
             for j in xrange(len(dups)):
                 for k in xrange(j+1, len(dups)):
                     if not self._hasFileConflict(dups[j], dups[k], name):
@@ -861,10 +855,10 @@ class RpmResolver:
                 if not f in conf[r]:
                     conf[r].append(f)
             for r in conf.keys():
-                self.config.printError("%s file conflicts with %s on:" % \
-                                       (pkg.getNEVRA(), r.getNEVRA()))
+                log.errorLn("%s file conflicts with %s on:",
+                            pkg.getNEVRA(), r.getNEVRA())
                 for f in conf[r]:
-                    self.config.printError("\t%s" % f)
+                    log.errorLn("\t%s", f)
         return 0
 
     # ----

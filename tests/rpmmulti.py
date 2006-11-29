@@ -11,6 +11,7 @@
 
 import sys, os
 import pyrpm
+from pyrpm.logger import log
 
 def usage():
     print """Usage: %s [-v[v]] {-i|-U|-r} [--installed <dir>]
@@ -163,19 +164,19 @@ if __name__ == '__main__':
         ret = instlist.append(r)
             
         if ret == pyrpm.RpmResolver.ALREADY_INSTALLED:
-            pyrpm.printError("Package %s is already installed" % r.getNEVRA())
+            log.errorLn("Package %s is already installed", r.getNEVRA())
             sys.exit(ret)
         elif ret == pyrpm.RpmResolver.OLD_PACKAGE:
-            pyrpm.printInfo(0, "%s: A newer package is already installed\n" % \
-                            r.getNEVRA())
+            log.info1Ln("%s: A newer package is already installed",
+                        r.getNEVRA()
         elif ret == pyrpm.RpmResolver.NOT_INSTALLED:
-            pyrpm.printError("Package %s is not installed" % r.getNEVRA())
+            log.errorLn("Package %s is not installed", r.getNEVRA())
             sys.exit(ret)
         elif ret == pyrpm.RpmResolver.UPDATE_FAILED:
-            pyrpm.printError("Update of %s failed" % r.getNEVRA())
+            log.errorLn("Update of %s failed", r.getNEVRA())
             sys.exit(ret)
         elif ret == pyrpm.RpmResolver.OBSOLETE_FAILED:
-            pyrpm.printError("%s: Uninstall of obsolete failed" % r.getNEVRA())
+            log.errorLn("%s: Uninstall of obsolete failed", r.getNEVRA())
             sys.exit(ret)
         # else: all ok
 

@@ -29,6 +29,7 @@ except ImportError:
     Util_number = None
 
 import config
+from pyrpm.logger import log
 
 # FIXME: "VERIFY" notes
 # FIXME: "BADFORMAT" notes
@@ -733,7 +734,7 @@ def _decodeArmor(data):
             raise ValueError, "Invalid armor header %s" % lines[0]
         if lines[0][:delim] not in ["Version", "Comment", "MessageID", "Hash",
                                     "Charset"]:
-            config.rpmconfig.printWarning(1, "Unknown armor header" % lines[0])
+            log.warningLn("Unknown armor header", lines[0])
         lines.pop(0)
     if not lines:
         raise ValueError, "Missing end of armor headers"

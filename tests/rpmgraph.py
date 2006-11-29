@@ -12,6 +12,7 @@ PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 import pyrpm
+from pyrpm.logger import log
 
 def usage():
     print """Usage: %s [-h] <rpm name/package>...
@@ -389,19 +390,19 @@ if __name__ == '__main__':
             if next != None:
                 order.append(next)
                 relations.remove(next)
-                pyrpm.rpmconfig.printDebug(2, "%d: %s" % (idx, next.getNEVRA()))
+                log.debug2Ln("%d: %s", idx, next.getNEVRA())
                 idx += 1
             else:
                 loops = orderer.getLoops(relations)
                 printLoops(relations, loops, "loop_%03d.dot" % loop_count)
                 loop_count += 1
                 if orderer.breakupLoops(relations, loops) != 1:
-                    pyrpm.rpmconfig.printError("Unable to breakup loop.")
+                    log.errorLn("Unable to breakup loop.")
                     return None
         
         if pyrpm.rpmconfig.debug > 1:
             for r in last:
-                pyrpm.rpmconfig.printDebug(2, "%d: %s" % (idx, r.getNEVRA()))
+                log.debug2Ln("%d: %s", idx, r.getNEVRA())
                 idx += 1
 
         return (order + last)

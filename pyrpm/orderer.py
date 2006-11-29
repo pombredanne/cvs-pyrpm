@@ -78,6 +78,7 @@ from base import *
 from resolver import RpmResolver
 import database
 from database.rpmexternalsearchdb import RpmExternalSearchDB
+from logger import log
 
 def operationFlag(flag, operation):
     """Return dependency flag for RPMSENSE_* flag during operation."""
@@ -130,8 +131,7 @@ class RpmRelations:
 
         # Add dependencies:
         for pkg in db.getPkgs():
-            self.config.printDebug(1, "Generating relations for %s" % \
-                                   pkg.getNEVRA())
+            log.info3Ln("Generating relations for %s", pkg.getNEVRA())
             resolved = resolver.getResolvedPkgDependencies(pkg)
             # ignore unresolved, we are only looking at the changes,
             # therefore not all symbols are resolvable in these changes
@@ -143,16 +143,18 @@ class RpmRelations:
                     if pkg2 != pkg:
                         self.addRelation(pkg, pkg2, f)
 
-        if self.config.debug >= 2:
-            self.printRel()
+        self.printRel()
 
     # ----
 
     def printRel(self):
         """Print relations."""
-        self.config.printDebug(2, "\t==== relations (%d) " % len(self) + \
-            "==== #pre-relations #post-relations " + \
-            "package pre-relation-packages, '*' marks prereq's")
+        if not log.isLoggingHere(log.DEBUG4):
+            return
+        log.debug4Ln("\t==== relations (%d) "
+                     "==== #pre-relations #post-relations "
+                     "package pre-relation-packages, '*' marks prereq's",
+                     len(self))
         for pkg in self:
             rel = self[pkg]
             pre = ""
@@ -164,9 +166,9 @@ class RpmRelations:
                     if rel.pre[p]:
                         pre += "*" # prereq
                     pre += p.getNEVRA()
-            self.config.printDebug(2, "\t%d %d %s%s" % \
-                (len(rel.pre), len(rel.post), pkg.getNEVRA(), pre))
-        self.config.printDebug(2, "\t==== relations ====")
+            log.debug4Ln("\t%d %d %s%s",
+                         len(rel.pre), len(rel.post), pkg.getNEVRA(), pre)
+        log.debug4Ln("\t==== relations ====")
 
     # ----
 
@@ -200,8 +202,8 @@ class RpmRelations:
             txt = "Removing"
             if self[node].pre[next]:
                 txt = "Zapping"
-            self.config.printDebug(1, "%s requires for %s from %s" % \
-                                   (txt, next.getNEVRA(), node.getNEVRA()))
+            log.debug4Ln("%s requires for %s from %s",
+                       txt, next.getNEVRA(), node.getNEVRA())
         del self[node].pre[next]
         del self[next].post[node]
 
@@ -319,7 +321,7 @@ class RpmRelations:
             leaf = leafs[max_post].pop()
             rels = self[leaf]
             self.collect(leaf, order)
-            self.config.printDebug(2, "%s" % (leaf.getNEVRA()))
+            log.debug4Ln("%s", leaf.getNEVRA())
             # check post nodes if they got a leaf now
             new_max = max_post
             for pkg in rels.post:
@@ -345,7 +347,7 @@ class RpmRelations:
 
         length = len(self)
 
-        self.config.printDebug(1, "Start ordering")
+        log.info2Ln("Start ordering")
 
         order = [ ]
 
@@ -353,12 +355,12 @@ class RpmRelations:
 
         if connected_components:
             # debug output the components
-            self.config.printDebug(1, "-- STRONGLY CONNECTED COMPONENTS --")
+            log.debug1Ln("-- STRONGLY CONNECTED COMPONENTS --")
             if self.config.debug > 1:
                 for i in xrange(len(connected_components)):
                     s = ", ".join([pkg.getNEVRA() for pkg in
                                    connected_components[i].pkgs])
-                    self.config.printDebug(2, "  %d: %s" % (i, s))
+                    log.debug1Ln("  %d: %s", i, s)
 
 #         weights = self.calculateWeights()
 #         weight_keys = weights.keys()
@@ -368,15 +370,15 @@ class RpmRelations:
 #         for key in weight_keys:
 #             if key == -1: continue
 #             for pkg in weights[key]:
-#                 self.config.printDebug(2, "%s %s" % (key, pkg.getNEVRA()))
+#                 log.debug2Ln("%s %s", key, pkg.getNEVRA())
 #                 self.collect(pkg, order)
 
         self.processLeafNodes(order)
 
         if len(order) != length:
-            self.config.printError("%d Packages of %d in order list! Number of connected components: %d " % (
+            log.errorLn("%d Packages of %d in order list! Number of connected components: %d ",
                 len(order), length,
-                len(connected_components)))
+                len(connected_components))
 
         return order
 
@@ -541,8 +543,8 @@ class ConnectedComponent:
                         weight = w
                         pkg1, pkg2 = p1, p2
         if self.relations[pkg1].pre[pkg2]:
-            self.config.printError("Breaking pre requirement for %s: %s" %
-                                   (pkg1.getNEVRA(), pkg2.getNEVRA()))
+            log.errorLn("Breaking pre requirement for %s: %s",
+                        pkg1.getNEVRA(), pkg2.getNEVRA())
 
         # remove this requirement
         self.relations.removeRelation(pkg1, pkg2)

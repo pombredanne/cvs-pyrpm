@@ -899,7 +899,7 @@ def openRPM(name):
                                    pyrpm.rpmconfig.buildroot)
         db.open()
         if not db.read():
-            raiseFatal("Couldn't read database")
+            raise IOError, "Couldn't read database"
         pkgs = pyrpm.findPkgByName(name, db.getPkgList())
         del db
         if len(pkgs) > 1:

@@ -19,7 +19,7 @@
 
 import libxml2
 import pyrpm.functions as functions
-
+from pyrpm.logger import log
 
 class RpmCompsXML:
     def __init__(self, config, source):
@@ -218,7 +218,7 @@ class RpmCompsXML:
                 if not ret:
                     return 0
             else:
-                self.config.printWarning(1, "Unknown entry in comps.xml: %s" % node.name)
+                log.warningLn("Unknown entry in comps.xml: %s", node.name)
                 return 0
             node = node.next
         return 1

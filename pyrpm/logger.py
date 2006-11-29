@@ -86,7 +86,7 @@ class Logger:
     %(date)s       Date using Logger.date_format, see time module
     %(domain)s     Full Domain: %(module)s.%(class)s.%(function)s
     %(file)s       Filename of the module
-    %(function)s   Funciton name, empty in __main__
+    %(function)s   Function name, empty in __main__
     %(label)s      Label according to log function call from Logger.label
     %(level)d      Internal logging level
     %(line)d       Line number in module

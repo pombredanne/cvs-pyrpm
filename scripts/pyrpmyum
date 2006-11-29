@@ -28,6 +28,7 @@ if not PYRPMDIR in sys.path:
 from pyrpm import __version__
 from pyrpm import *
 from pyrpm.yum import *
+from pyrpm.logger import log
 
 def usage():
     print """
@@ -78,6 +79,8 @@ def lockPyrpm():
 # Main program
 #
 def main():
+    log.setLogLevel(log.INFO2)
+    
     # Our yum worker object
     yum = RpmYum(rpmconfig)
 
@@ -110,7 +113,8 @@ def main():
         if not yum.runCommand(clearrepos=True):
             return 0
     finally:
-        yum.pydb.close()
+        if yum.pydb:
+            yum.pydb.close()
         if lockfile:
             try:
                 os.unlink(lockfile)

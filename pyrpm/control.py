@@ -22,6 +22,7 @@ from time import clock
 import package
 from resolver import *
 from orderer import *
+from logger import log
 
 class RpmController:
     """RPM state manager, handling package installation and deinstallation."""
@@ -50,18 +51,17 @@ class RpmController:
         if self.operation == OP_ERASE:
             for pkgname in args:
                 if self.erasePackage(pkgname) == 0:
-                    self.config.printError("No package matching %s found"
-                                           % pkgname)
+                    log.errorLn("No package matching %s found", pkgname)
         else:
             for uri in args:
                 try:
                     self.appendUri(uri)
                 except (IOError, ValueError), e:
-                    self.config.printError("%s: %s" % (uri, e))
+                    log.errorLn("%s: %s", uri, e)
         if len(self.rpms) == 0:
-            self.config.printInfo(2, "Nothing to do.\n")
+            log.info1Ln("Nothing to do.")
         if self.config.timer:
-            self.config.printInfo(0, "handleFiles() took %s seconds\n" % (clock() - time1))
+            log.info2Ln("handleFiles() took %s seconds", (clock() - time1))
 
     def getOperations(self, resolver=None, installdb=None, erasedb=None):
         """Return an ordered list of (operation, RpmPackage).
@@ -99,22 +99,22 @@ class RpmController:
                 elif self.operation == OP_ERASE:
                     resolver.erase(r)
                 else:
-                    self.config.printError("Unknown operation")
+                    log.errorLn("Unknown operation")
         del self.rpms
         if not self.config.nodeps and not nodeps and resolver.resolve() != 1:
             return None
         if self.config.timer:
-            self.config.printInfo(0, "resolver took %s seconds\n" % (clock() - time1))
+            log.info2Ln("resolver took %s seconds", (clock() - time1))
             time1 = clock()
-        self.config.printInfo(1, "Ordering transaction...\n")
+        log.info2Ln("Ordering transaction...")
         orderer = RpmOrderer(self.config, resolver.installs, resolver.updates,
                              resolver.obsoletes, resolver.erases,
                              installdb=installdb, erasedb=erasedb)
         del resolver
         operations = orderer.order()
         if operations is None: # Currently can't happen
-            self.config.printError("Errors found during package dependency "
-                                   "checks and ordering.")
+            log.errorLn("Errors found during package dependency "
+                        "checks and ordering.")
             return None
 
         # replace repodb pkgs by binaryrpm instances
@@ -141,23 +141,23 @@ class RpmController:
                 operations[idx] = (op, p)
 
         if self.config.timer:
-            self.config.printInfo(0, "orderer took %s seconds\n" % (clock() - time1))
+            log.info2Ln("orderer took %s seconds", (clock() - time1))
         del orderer
         if not self.config.ignoresize:
             if self.config.timer:
                 time1 = clock()
             ret = getFreeCachespace(self.config, operations)
             if self.config.timer:
-                self.config.printInfo(0, "getFreeCachespace took %s seconds\n"
-                                      % (clock() - time1))
+                log.info2Ln("getFreeCachespace took %s seconds",
+                            (clock() - time1))
             if not ret:
                 return None
             if self.config.timer:
                 time1 = clock()
             ret = getFreeDiskspace(self.config, operations)
             if self.config.timer:
-                self.config.printInfo(0, "getFreeDiskspace took %s seconds\n"
-                                      % (clock() - time1))
+                log.info2Ln("getFreeDiskspace took %s seconds",
+                            (clock() - time1))
             if not ret:
                 return None
         return operations
@@ -175,11 +175,11 @@ class RpmController:
         Return 1 on success, 0 on error (after warning the user)."""
         result = 1
         if operations == []:
-            self.config.printError("No updates are necessary.")
+            log.errorLn("No updates are necessary.")
             return 1
         # Cache the packages
         if not self.config.nocache:
-            self.config.printInfo(1, "Caching network packages\n")
+            log.info2Ln("Caching network packages")
         new_operations = []
         for (op, pkg) in operations:
             if op in (OP_UPDATE, OP_INSTALL, OP_FRESHEN):
@@ -188,11 +188,11 @@ class RpmController:
                 if not self.config.nocache and \
                    (pkg.source.startswith("http://") or \
                     pkg.yumrepo != None):
-                    self.config.printInfo(2, "Caching network package %s\n" % pkg.getNEVRA())
+                    log.info3Ln("Caching network package %s", pkg.getNEVRA())
                     source = pkg.nc.cache(pkg.source)
                     if source is None:
-                        self.config.printError("Error downloading %s"
-                                               % pkg.source)
+                        log.errorLn("Error downloading %s",
+                                    pkg.source)
                         return 0
                 pkg.source = source
 
@@ -201,14 +201,15 @@ class RpmController:
                     try:
                         pkg.reread()
                     except Exception, e:
-                        self.config.printError("Error rereading package: %s" % e)
+                        log.errorLn("Error rereading package: %s", e)
                         return 0
                     # Check packages if we have turned on signature checking
                     if pkg.verifyOneSignature() == -1:
-                        self.config.printError("Signature verification failed for package %s" % pkg.getNEVRA())
+                        log.errorLn("Signature verification failed for package %s", pkg.getNEVRA())
                         raise ValueError
                     else:
-                        self.config.printInfo(2, "Signature of package %s correct\n" % pkg.getNEVRA())
+                        log.info3Ln("Signature of package %s correct",
+                                    pkg.getNEVRA())
                     pkg.close()
                     pkg.clear(ntags=self.config.nevratags)
             new_operations.append((op, pkg))
@@ -216,7 +217,6 @@ class RpmController:
         operations = new_operations
         numops = len(operations)
         numops_chars = len("%d" % numops)
-        self.config.printInfo(2, "Collected %s objects" % gc.collect())
         setCloseOnExec()
         sys.stdout.flush()
         i = 0
@@ -230,11 +230,9 @@ class RpmController:
             # Progress
             opstring = self.opstrings.get(op, "Cleanup: ")
             i += 1
-            progress = "[%*d/%d] %s%s" % (numops_chars, i, numops, opstring, pkg.getNEVRA())
-            if self.config.printhash:
-                self.config.printInfo(0, progress)
-            else:
-                self.config.printInfo(1, progress)
+            progress = "[%*d/%d] %s%s"
+            log.info2(progress, numops_chars, i, numops,
+                      opstring, pkg.getNEVRA())
 
             # install
             if op in (OP_INSTALL, OP_UPDATE, OP_FRESHEN):
@@ -243,8 +241,8 @@ class RpmController:
                     pkg.close()
                     pkg.open()
                 except IOError, e:
-                    self.config.printError("Error reopening %s: %s"
-                                           % (pkg.getNEVRA(), e))
+                    log.errorLn("Error reopening %s: %s",
+                                pkg.getNEVRA(), e)
                     result = 0
                     break
                 nevra = pkg.getNEVRA()
@@ -254,8 +252,8 @@ class RpmController:
                 try:
                     pkg.read()
                 except (IOError, ValueError), e:
-                    self.config.printError("Error rereading %s: %s"
-                                           % (nevra, e))
+                    log.errorLn("Error rereading %s: %s",
+                              nevra, e)
                     result = 0
                     break
                 # install on disk
@@ -265,20 +263,16 @@ class RpmController:
                         self.__runTriggerIn(pkg, self.config.buildroot)
                         # Ignore errors
                     else:
-                        if self.config.printhash:
-                            self.config.printInfo(0, "\n")
-                        else:
-                            self.config.printInfo(1, "\n")
+                        log.log(log.INFO2, "\n") # newline may be after hashes
                 except (IOError, OSError, ValueError), e:
-                    self.config.printError("Error installing %s: %s"
-                                           % (pkg.getNEVRA(), e))
+                    log.errorLn("Error installing %s: %s",
+                                pkg.getNEVRA(), e)
                     result = 0
                     break
                 # update DB
                 if self.__addPkgToDB(pkg) == 0:
-                    self.config.printError("Couldn't add package %s "
-                                           "to database."
-                                           % pkg.getNEVRA())
+                    log.errorLn("Couldn't add package %s to database.",
+                                pkg.getNEVRA())
                     result = 0
                     break
                 pkg.clear()
@@ -301,20 +295,16 @@ class RpmController:
                         self.__runTriggerPostUn(pkg, self.config.buildroot)
                         # Ignore errors
                     else:
-                        if self.config.printhash:
-                            self.config.printInfo(0, "\n")
-                        else:
-                            self.config.printInfo(1, "\n")
+                        log.log(log.INFO2, "\n") # newline may be after hashes
                 except (IOError, ValueError), e:
-                    self.config.printError("Error erasing %s: %s"
-                                           % (pkg.getNEVRA(), e))
+                    log.errorLn("Error erasing %s: %s",
+                                pkg.getNEVRA(), e)
                     result = 0
                     break
                 # update DB
                 if self.__erasePkgFromDB(pkg) == 0:
-                    self.config.printError("Couldn't erase package %s "
-                                           "from database."
-                                           % pkg.getNEVRA())
+                    log.errorLn("Couldn't erase package %s from database.",
+                              pkg.getNEVRA())
                     result = 0
                     break
 
@@ -323,9 +313,9 @@ class RpmController:
             try:
                 runScript("/sbin/ldconfig", force=1)
             except (IOError, OSError), e:
-                self.config.printWarning(0, "Error running "
-                                         "/sbin/ldconfig: %s" % e)
-            self.config.printInfo(2, "number of /sbin/ldconfig calls optimized away: %d\n" % self.config.ldconfig)
+                log.warningLn("Error running /sbin/ldconfig: %s", e)
+            log.info2Ln("number of /sbin/ldconfig calls optimized away: %d",
+                        self.config.ldconfig)
         self.db.close()
         return result
 
@@ -426,9 +416,8 @@ class RpmController:
                     runScript(prog, script, [snumPkgs, tnumPkgs],
                               chroot=buildroot)
                 except (IOError, OSError), e:
-                    self.config.printError(
-                        "%s: Error running trigger %s script: %s" %
-                        (spkg.getNEVRA(), triggername, e))
+                    log.errorLn("%s: Error running trigger %s script: %s",
+                                spkg.getNEVRA(), triggername, e)
                     result = 0
         return result
 
@@ -448,9 +437,8 @@ class RpmController:
                     runScript(prog, script, [tnumPkgs, tnumPkgs],
                               chroot=buildroot)
                 except (IOError, OSError), e:
-                    self.config.printError(
-                        "%s: Error running trigger %s script: %s" %
-                        (pkg.getNEVRA(), triggername, e))
+                    log.errorLn("%s: Error running trigger %s script: %s",
+                              pkg.getNEVRA(), triggername, e)
                     result = 0
         return result
 
