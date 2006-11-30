@@ -6145,6 +6145,9 @@ def checkScripts(repo):
                     if (line.find("rpm --query --queryformat") != -1 or
                         line.find("rpm --eval") != -1):
                         continue
+                    # ignore "find -printf" (cyrus-imapd):
+                    if line.find("-printf") != -1:
+                        continue
                     # ignore `date +string`
                     if re.compile(".*date \'?\\+").match(line):
                         continue
