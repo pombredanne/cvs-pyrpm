@@ -455,7 +455,7 @@ class Logger:
 
     def _getClass2(self, obj, code):
         """ Internal function to get calling class. Returns class or None. """
-	for value in obj.__dict__.values():
+        for value in obj.__dict__.values():
             if type(value) == types.FunctionType:
                 if value.func_code == code:
                     return obj
@@ -649,3 +649,5 @@ if __name__ == '__main__':
     log.error("error\n")
     log.fatalLn("fatal")
     log.logLn(log.INFO1, "raw info")
+
+# vim:ts=4:sw=4:showmatch:expandtab
