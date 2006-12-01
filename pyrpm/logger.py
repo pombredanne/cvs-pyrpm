@@ -29,12 +29,31 @@ import syslog
 
 # ---------------------------------------------------------------------------
 
-# private class for stdout
-class _StdoutLog:
-    fd = sys.stdout
+# abstract class for logging targets
+class LogTarget:
+    """ Abstract class for logging targets. """
+    def __init__(self):
+        self.fd = None
 
-    def write(self, data, level):
-        # ignore level for stdout and stderr
+    def write(self, data, level, logger):
+        raise NotImplementedError, "LogTarget.write is an abstract method"
+
+    def flush(self):
+        raise NotImplementedError, "LogTarget.flush is an abstract method"
+
+    def close(self):
+        raise NotImplementedError, "LogTarget.close is an abstract method"
+
+# ---------------------------------------------------------------------------
+
+# private class for stdout
+class _StdoutLog(LogTarget):
+    def __init__(self):
+        LogTarget.__init__(self)
+        self.fd = sys.stdout
+
+    def write(self, data, level, logger):
+        # ignore level
         self.fd.write(data)
         self.flush()
 
@@ -48,7 +67,9 @@ class _StdoutLog:
 
 # private class for stderr
 class _StderrLog(_StdoutLog):
-    fd = sys.stderr
+    def __init__(self):
+        _StdoutLog.__init__(self)
+        self.fd = sys.stderr
 
 # ---------------------------------------------------------------------------
 
@@ -56,16 +77,16 @@ class _StderrLog(_StdoutLog):
 class _SyslogLog(_StdoutLog):
     fd = None
 
-    def write(self, data, level):
-        if level >= Logger.DEBUG1:
+    def write(self, data, level, logger):
+        if level > logger.NO_DEBUG:
             priority = syslog.LOG_DEBUG
-        elif level >= Logger.INFO1:
+        elif level >= logger.INFO1:
             priority = syslog.LOG_INFO
-        elif level == Logger.WARNING:
+        elif level == logger.WARNING:
             priority = syslog.LOG_WARNING
-        elif level == Logger.ERROR:
+        elif level == logger.ERROR:
             priority = syslog.LOG_ERR
-        elif level == Logger.FATAL:
+        elif level == logger.FATAL:
             priority = syslog.LOG_CRIT
         
         if data.endswith("\n"):
@@ -107,6 +128,12 @@ class Logger:
 
     x and y depend on info_max and debug_max from Logger class initialization.
     See __init__ function.
+
+    Default logging targets:
+
+    stdout        Logs to stdout
+    stderr        Logs to stderr
+    syslog        Logs to syslog
     
     Example:
 
@@ -146,8 +173,8 @@ class Logger:
 
     def __init__(self, info_max=5, debug_max=10):
         """ Logger class initialization """
-        self._level = 0
-        self._debug_level = 0
+        self._level = { }
+        self._debug_level = { }
         self._format = ""
         self._date_format = ""
         self._label = { }
@@ -217,29 +244,41 @@ class Logger:
             raise ValueError, "Level %d out of range, should be [%d..%d]." % \
                   (level, min, max)
 
-    def getLogLevel(self):
-        """ Get log level. """
-        return self._level
+    def _checkDomain(self, domain):
+        if not domain or domain == "":
+            raise ValueError, "Domain '%s' is not valid." % domain
 
-    def setLogLevel(self, level):
+    def getLogLevel(self, domain="*"):
+        """ Get log level. """
+        self._checkDomain(domain)
+        if self._level.has_key(domain):
+            return self._level[domain]
+        return self.NOTHING
+
+    def setLogLevel(self, level, domain="*"):
         """ Set log level [NOTHING .. INFO_MAX] """
+        self._checkDomain(domain)
         if level < self.NOTHING:
             level = self.NOTHING
         if level > self.INFO_MAX:
             level = self.INFO_MAX
-        self._level = level
+        self._level[domain] = level
 
-    def getDebugLogLevel(self, level):
+    def getDebugLogLevel(self, domain="*"):
         """ Get debug log level. """
-        return self._debug_level
+        self._checkDomain(domain)
+        if self._debug_level.has_key(domain):
+            return self._debug_level[domain] - self.NO_DEBUG
+        return self.NO_DEBUG
 
-    def setDebugLogLevel(self, level):
+    def setDebugLogLevel(self, level, domain="*"):
         """ Set debug log level [NO_DEBUG .. DEBUG_MAX] """
+        self._checkDomain(domain)
         if level < 0:
             level = 0
         if level > self.DEBUG_MAX - self.NO_DEBUG:
             level = self.DEBUG_MAX - self.NO_DEBUG
-        self._debug_level = level - self.NO_DEBUG
+        self._debug_level[domain] = level - self.NO_DEBUG
 
     def setFormat(self, format):
         self._format = format
@@ -261,6 +300,19 @@ class Logger:
             levels = [ i for i in xrange(self.FATAL, self.DEBUG_MAX+1) ]
         return levels
 
+    def _getTargets(self, target):
+        """ Generate target array. """
+        if isinstance(target, types.ListType) or \
+               isinstance(target, types.TupleType):
+            targets = target
+        else:
+            targets = [ target ]
+        for _target in targets:
+            if not issubclass(_target.__class__, LogTarget):
+                raise ValueError, "'%s' is no valid logging target." % \
+                      _target.__class__.__name__
+        return targets
+
     def setLogLabel(self, level, label):
         """ Set log label for level. Level can be a single level or an array
         of levels. """
@@ -278,8 +330,6 @@ class Logger:
             if not self._logging.has_key(level):
                 continue
             for (domain, target, _format) in self._logging[level]:
-                if domain == "":
-                    domain = "*"
                 if domain not in self._domains:
                     self._domains.setdefault(level, [ ]).append(domain)
 
@@ -287,57 +337,47 @@ class Logger:
         """ Set log target for domain and level. Level can be a single level
         or an array of levels. Use level ALL to set for all levels. 
         If no format is specified, the default format will be used. """
+        self._checkDomain(domain)
         levels = self._getLevels(level)
+        targets = self._getTargets(target)
         for level in levels:
-            self._logging[level] = [ (domain, target, format) ]
+            for target in targets:
+                self._logging[level] = [ (domain, target, format) ]
         self._genDomains()
 
     def addLogging(self, domain, target, level=ALL, format=None):
         """ Add log target for domain and level. Level can be a single level
         or an array of levels. Use level ALL to set for all levels.
         If no format is specified, the default format will be used. """
+        self._checkDomain(domain)
         levels = self._getLevels(level)
+        targets = self._getTargets(target)
         for level in levels:
-            self._logging.setdefault(level, [ ]).append((domain, target,
-                                                         format))
+            for target in targets:
+                self._logging.setdefault(level, [ ]).append((domain, target,
+                                                             format))
         self._genDomains()
 
     def delLogging(self, domain, target, level=ALL, format=None):
         """ Delete log target for domain and level. Level can be a single level
         or an array of levels. Use level ALL to set for all levels. 
         If no format is specified, the default format will be used. """
+        self._checkDomain(domain)
         levels = self._getLevels(level)
+        targets = self._getTargets(target)
         for level in levels:
-            if not self._logging.has_key(level):
-                continue
-            if (domain, target, format) in self._logging[level]:
-                self._logging[level].remove( (domain, target, format) )
-                if len(self._logging[level]) == 0:
-                    del self._logging[level]
-                    return
-            raise ValueError, "No mathing logging for " \
-                  "level %d, domain %s, target %s and format %s." % \
-                  (level, domain, target, format)
+            for target in targets:
+                if not self._logging.has_key(level):
+                    continue
+                if (domain, target, format) in self._logging[level]:
+                    self._logging[level].remove( (domain, target, format) )
+                    if len(self._logging[level]) == 0:
+                        del self._logging[level]
+                        return
+                raise ValueError, "No mathing logging for " \
+                      "level %d, domain %s, target %s and format %s." % \
+                      (level, domain, target.__class__.__name__, format)
         self._genDomains()
-
-    def isLogging(self, level):
-        # log level higher than logging level?
-        if level > self.INFO_MAX:
-            if level-self.INFO_MAX > self._debug_level:
-                return False
-        else:
-            if level > self._level:
-                return False
-
-        # no logging for this level specified
-        if not self._logging.has_key(level):
-            return False
-
-        # no logging domains
-        if not self._domains.has_key(level) or len(self._domains[level]) < 1:
-            return False
-
-        return True
 
     def isLoggingHere(self, level):
         """ Is there currently any logging for this log level (and domain)? """
@@ -349,9 +389,9 @@ class Logger:
 
         # do we need to log?
         for (domain, target, format) in self._logging[level]:
-            if domain == "" or domain == "*" \
-                   or point_domain.startswith(domain) \
-                   or fnmatch.fnmatchcase(dict["domain"], domain):
+            if domain == "*" or \
+                   point_domain.startswith(domain) or \
+                   fnmatch.fnmatchcase(dict["domain"], domain):
                 return True
         return False
         
@@ -369,16 +409,14 @@ class Logger:
         """ Debug log using debug level [1..debug_max].
         There are additional debugx functions according to debug_max
         from __init__"""
-        self._checkLogLevel(level, min=self.DEBUG1-self.NO_DEBUG,
-                            max=self.DEBUG_MAX-self.NO_DEBUG)
+        self._checkLogLevel(level, min=1, max=self.DEBUG_MAX-self.NO_DEBUG)
         self._log(level+self.NO_DEBUG, 0, 0, format, *args)
 
     def debugLn(self, level, format, *args):
         """ Debug log with newline using debug level [1..debug_max].
         There are additional debugxLn functions according to debug_max
         from __init__"""
-        self._checkLogLevel(level, min=self.DEBUG1-self.NO_DEBUG,
-                            max=self.DEBUG_MAX-self.NO_DEBUG)
+        self._checkLogLevel(level, min=1, max=self.DEBUG_MAX-self.NO_DEBUG)
         self._log(level+self.NO_DEBUG, 1, 0, format, *args)
 
     def info(self, level, format, *args):
@@ -484,23 +522,45 @@ class Logger:
         for (domain, target, _format) in self._logging[level]:
             if target in used_targets:
                 continue
-            if domain == "" or domain == "*" \
-                   or point_domain.startswith(domain) \
+            if domain == "*" \
+                   or point_domain.startswith(domain+".") \
                    or fnmatch.fnmatchcase(dict["domain"], domain):
                 if not _format:
                     _format = self._format
                 if raw:
-                    target.write(dict["message"], level)
+                    target.write(dict["message"], level, self)
                 else:
-                    target.write(_format % dict, level)
+                    target.write(_format % dict, level, self)
                 if newline:
-                    target.write("\n", level)
+                    target.write("\n", level, self)
                 used_targets.append(target)
 
     # internal function to generate the dict, needed for logging
     def _genDict(self, level):
         """ Internal function. """
-        if not self.isLogging(level):
+        check_domains = [ ]
+        simple_match = False
+
+        if level > self.INFO_MAX:
+            # debug
+            _dict = self._debug_level
+        else:
+            _dict = self._level
+            
+        # no debug
+        for domain in _dict:
+            if domain == "*":
+                if _dict[domain] >= level:
+                    # simple match
+                    simple_match = True
+                    if len(check_domains) > 0:
+                        check_domains = [ ]
+                    break
+            else:
+                if _dict[domain] >= level:
+                    check_domains.append(domain)
+
+        if not simple_match and len(check_domains) < 1:
             return None
 
         f = inspect.currentframe()
@@ -556,16 +616,17 @@ class Logger:
         domain_needed = False
         for domain in self._domains[level]:
             # standard domain, matches everything
-            if domain == "*" or domain == "":
+            if domain == "*":
                 continue
             # domain is needed
             domain_needed = True
             break
         
         # do we need to get the class object?
-        if self._format.find("%(domain)") >= 0 \
-               or self._format.find("%(class)") >= 0 \
-               or domain_needed:
+        if self._format.find("%(domain)") >= 0 or \
+               self._format.find("%(class)") >= 0 or \
+               domain_needed or \
+               len(check_domains) > 0:
             obj = self._getClass(f)
             if obj:
                 dict["class"] = obj.__name__
@@ -577,24 +638,33 @@ class Logger:
         if dict["function"] != "":
             dict["domain"] += "." + dict["function"]
 
-        return dict
+        if len(check_domains) < 1:
+            return dict
+
+        point_domain = dict["domain"] + "."
+        for domain in check_domains:
+            if point_domain.startswith(domain) or \
+                   fnmatch.fnmatchcase(dict["domain"], domain):
+                return dict
+
+        return None
 
 # ---------------------------------------------------------------------------
 
-class FileLog:
+class FileLog(LogTarget):
     """ FileLog class.
     File will be opened on the first write. """
     def __init__(self, filename, mode="w"):
+        LogTarget.__init__(self)
         self.filename = filename
         self.mode = mode
-        self.fd = None
 
     def open(self):
         if self.fd:
             return
         self.fd = open(self.filename, self.mode)
 
-    def write(self, data, level):
+    def write(self, data, level, logger):
         if not self.fd:
             self.open()
         self.fd.write(data)
