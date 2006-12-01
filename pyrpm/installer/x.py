@@ -20,7 +20,7 @@ import os.path
 from installer import keyboard_models
 from functions import create_file
 import hwdata
-import config
+from pyrpm.logger import log
 
 def x_config(ks, buildroot, installation):
     # default: VGA graphics card, Generic extended super VGA monitor
@@ -47,7 +47,8 @@ def x_config(ks, buildroot, installation):
         try:
             cards = hwdata.Cards(buildroot)
         except Exception, msg:
-            config.log("WARNING: %s\n" % msg)
+            log.warningLn("Loading of monitor databae failed.")
+            log.log(log.INFO1, msg)
         else:
             dict = cards.get(ks["xconfig"]["card"])
             if dict and dict.has_key("driver"):
@@ -56,7 +57,7 @@ def x_config(ks, buildroot, installation):
                 if dict.has_key("options"):
                     _options.extend(dict["options"])
             else:
-                print "ERROR: Card not found in hardware database."
+                log.errorLn("Card not found in hardware database.")
     if not _card and ks["xconfig"].has_key("driver"):
         if os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
         # There is no usable name in the videodrivers file, so fake it
@@ -66,12 +67,12 @@ def x_config(ks, buildroot, installation):
     if not _card or not _driver:
         if ks["xconfig"].has_key("card") and \
                not os.path.exists(buildroot+'/usr/share/hwdata/Cards'):
-            print "WARNING: Cards database not found in '/usr/share/hwdata'."
+            log.warningLn("Cards database not found in '/usr/share/hwdata'.")
         if ks["xconfig"].has_key("driver") and \
                not os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
-            print "WARNING: videodrivers database not found in " +\
-                  "'/usr/share/hwdata'."
-        print "Using default X driver configuration."
+            log.warningLn("videodrivers database not found in "
+                          "'/usr/share/hwdata'.")
+        log.info1Ln("Using default X driver configuration.")
     else:
         card = _card
         driver = _driver
@@ -88,7 +89,8 @@ def x_config(ks, buildroot, installation):
         try:
             monitors = hwdata.Monitors(buildroot)
         except Exception, msg:
-            config.log("WARNING: %s\n" % msg)
+            log.warningLn("Parsing of monitor database failed.")
+            log.log(log.INFO1, msg)
         else:
             if ks["xconfig"].has_key("monitor"):
                 dict = monitors.get(ks["xconfig"]["monitor"])
@@ -100,7 +102,7 @@ def x_config(ks, buildroot, installation):
                 _vsync = dict["vsync"]
                 _dpms = dict["dpms"]
             else:
-                print "ERROR: Monitor not found in hardware database."
+                log.errorLn("Monitor not found in hardware database.")
 
     if _monitor and _hsync and _vsync:
         monitor = _monitor

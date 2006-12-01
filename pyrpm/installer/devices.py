@@ -16,6 +16,8 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
+from pyrpm.logger import log
+
 class Devices:
     def __init__(self):
         self.devices = [ ]
@@ -24,14 +26,14 @@ class Devices:
 
     def add(self, device):
         if device in self.devices:
-            print "ERROR: Device '%' is already in use." % device
+            log.errorLn("Device '%' is already in use.", device)
             return 0
         self.devices.append(device)
         return 1
 
     def remove(self, device):
         if not device in self.devices:
-            print "WARNING: Device '%s' is not in use." % device
+            log.warningLn("Device '%s' is not in use.", device)
             return 1
         self.devices.remove(device)
         return 1

@@ -17,6 +17,7 @@
 #
 
 import os, fcntl, struct, stat, errno
+from pyrpm.logger import log
 
 # struct loop_info64 {
 #        unsigned long long      lo_device;
@@ -143,7 +144,9 @@ class LOOP:
             lo_fd = open(self.device, "r")
         except Exception, msg:
             return 0
+        # clear
         self.clear()
+        # set empty info
         try:
             self._setInfo(fd=lo_fd)
         except Exception, msg:
@@ -195,17 +198,14 @@ class LOOP:
     def _getInfo(self, fd=None):
         _fd = fd
         if not fd:
-            try:
-                _fd = open(self.device, "r")
-            except:
-                raise IOError, "ERROR: Could not open '%s'." % self.device
+            _fd = open(self.device, "r")
         info64 = self.__buildInfo64()
         try:
             info64 = fcntl.ioctl(_fd.fileno(), LOOP.LOOP_GET_STATUS64, info64)
         except Exception, (err, msg):
             if err == errno.ENXIO:
                 # No such device or address
-                raise IOError, "ERROR: Could not get status64 on '%s'" % _fd
+                raise IOError, "Could not get status64 on '%s'" % _fd
             raise ValueError, "%s: %s" % (self.device, msg)
         self.__unpackInfo64(info64)
         if not fd:
@@ -214,15 +214,12 @@ class LOOP:
     def _setInfo(self, fd=None):
         _fd = fd
         if not fd:
-            try:
-                _fd = open(self.device, "r+") # rw
-            except:
-                raise IOError, "ERROR: Could not open '%s'." % self.device
+            _fd = open(self.device, "r+") # rw
         info64 = self.__packInfo64()
         try:
             info64 = fcntl.ioctl(_fd.fileno(), LOOP.LOOP_SET_STATUS64, info64)
         except Exception, msg:
-            raise IOError, "ERROR: Could not set status64 on '%s'" % \
+            raise IOError, "Could not set status64 on '%s'" % \
                   self.device
         self.__unpackInfo64(info64)
         if not fd:
@@ -279,7 +276,7 @@ def lolist():
                 continue
             except ValueError, msg:
                 used += 1
-                print msg
+                log.info1Ln(msg)
                 continue
             used += 1
             line = "%s: [%04x]:%d (%s)" % (dev, l.lo_device, l.lo_inode,
@@ -290,8 +287,8 @@ def lolist():
                 line += ", sizelimit %d" % l.lo_sizelimit
             if l.lo_flags & 1:
                 line += ", readonly"
-            print line
-    print "%d/%d loop devices are in use." % (used, used+free)
+            log.info1Ln(line)
+    log.info1Ln("%d/%d loop devices are in use.", used, used+free)
 
 def lofree(device):
     loop = LOOP(device)

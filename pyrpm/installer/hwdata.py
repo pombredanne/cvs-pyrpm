@@ -16,15 +16,12 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
+from pyrpm.logger import log
+
 class Cards:
     def __init__(self, buildroot):
         self.cards = { }
-        try:
-            fd = open(buildroot+'/usr/share/hwdata/Cards')
-        except:
-            raise IOError, "Could not load '%s/usr/share/hwdata/Cards'." % \
-                  buildroot
-
+        fd = open(buildroot+'/usr/share/hwdata/Cards')
         dict = None
         card = None
         while 1:
@@ -61,7 +58,7 @@ class Cards:
             elif line == "END":
                 continue
             else:
-                print "Unknown entry '%s'"% line
+                log.errorLn("Unknown entry '%s'.", line)
         fd.close()
 
     def _get(self, card, dict, cards):
@@ -97,13 +94,7 @@ class Cards:
 class Monitors:
     def __init__(self, buildroot):
         self.monitors = { }
-        try:
-            fd = open(buildroot+'/usr/share/hwdata/MonitorsDB')
-        except:
-            raise IOError, \
-                  "Could not load '%s/usr/share/hwdata/MonitorsDB'." % \
-                  buildroot
-
+        fd = open(buildroot+'/usr/share/hwdata/MonitorsDB')
         while 1:
             line = fd.readline()
             if not line:

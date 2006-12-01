@@ -17,6 +17,7 @@
 #
 
 import types, string
+from pyrpm.logger import log
 
 ##############################################################################
 #
@@ -120,7 +121,7 @@ class KickstartConfig(dict):
                     try:
                         _fd = open(args[1], "r")
                     except Exception, msg:
-                        print "Unable to open '%s', ignoring." % args[1]
+                        log.info1Ln("Unable to open '%s', ignoring.", args[1])
                     else:
                         if args[1] in open_files:
                             raise ValueError, \
@@ -139,7 +140,8 @@ class KickstartConfig(dict):
                                 "upgrade", "mouse", "zerombr" ]:
                         self[opt] = None
                     else:
-                        print "'%s' is unsupported." % line
+                        log.info1Ln("'%s' is unsupported.", line)
+
                     continue
 
                 if opt in [ "keyboard", "lang", "zerombr" ]:
@@ -242,8 +244,9 @@ class KickstartConfig(dict):
                                           "port '%s' is invalid." % v
                                 self[opt]["ports"].append(a)
                         else:
-                            print "'%s': option '%s' not recognized." % \
-                                  (line, _opt)
+                            log.info1Ln("'%s': option '%s' not recognized.",
+                                        line, _opt)
+
                     for arg in _args:
                         self[opt].setdefault("devices", [ ]).append(arg)
                 elif opt == "firstboot":
@@ -397,7 +400,8 @@ class KickstartConfig(dict):
                         self[opt][_args[0]] = { }
                     self[opt][_args[0]] = _dict
                 else:
-                    print "'%s' is unsupported." % line
+                    log.info1Ln("'%s' is unsupported.", line)
+
             elif in_packages:
                 if len(args) == 1:
                     # there was no space as delimiter

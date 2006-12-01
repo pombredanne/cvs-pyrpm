@@ -17,10 +17,10 @@
 #
 
 import os, os.path, stat, signal
+import pyrpm
 import pyrpm.functions as functions
 import pyrpm.database as database
-import pyrpm.config
-import config
+from pyrpm.logger import log
 from filesystem import *
 from installer import Repository
 
@@ -38,9 +38,9 @@ def get_system_disks():
             continue
         splits = line.split() # major, minor, blocks, name
         if len(splits) < 4:
-            print "ERROR: '/proc/partitions' malformed."
+            log.errorLn("'/proc/partitions' malformed.")
             return
-        if int(splits[1], 16) % 16 == 0: # minor%16=0 for harddisk devices
+        if int(splits[1]) % 16 == 0: # minor%16=0 for harddisk devices
             hd = splits[3]
             if hd[0:4] == "loop":
                 continue
@@ -62,7 +62,7 @@ def get_system_md_devices():
             continue
         splits = line.split() # device : data
         if len(splits) < 3 or splits[1] != ":":
-            print "ERROR: '/proc/mdstat' malformed."
+            log.errorLn("'/proc/mdstat' malformed.")
             return
         map[splits[0]] = "/dev/%s" % splits[0]
     fd.close()
@@ -73,8 +73,8 @@ def mounted_devices():
     mounted = [ ]
     try:
         fd = open("/proc/mounts", "r")
-    except Exception:
-        print "ERROR: Unable to open '/proc/mounts' for reading."
+    except Exception, msg:
+        log.errorLn("Unable to open '/proc/mounts' for reading: %s", msg)
         return
     while 1:
         line = fd.readline()
@@ -161,14 +161,11 @@ def load_mdadm_conf(chroot=""):
 def get_installation_info(device, fstype, dir):
     # try to mount partition and search for release, fstab and
     # mdadm.conf
-    if config.verbose:
-        print "Mounting '%s' on '%s'" % (device, dir)
+    log.info2Ln("Mounting '%s' on '%s'", device, dir)
     try:
         mount(device, dir, fstype=fstype, options="ro")
     except Exception, msg:
-        if config.verbose:
-            print "Failed to mount '%s'." % device
-            return None
+        log.info2Ln("Failed to mount '%s'.", device)
     else:
         dict = { }
         # anaconda does not support updates where /etc is
@@ -176,8 +173,7 @@ def get_installation_info(device, fstype, dir):
         _release = load_release(dir)
         _fstab = load_fstab(dir)
         _mdadm = load_mdadm_conf(dir)
-        if config.verbose:
-            print "Umounting '%s' " % dir
+        log.info2Ln("Umounting '%s' ", dir)
         umount(dir)
         dict["release"] = "-- unknown --"
         if _release:
@@ -187,7 +183,7 @@ def get_installation_info(device, fstype, dir):
         if _fstab:
             dict["fstab"] = _fstab
             return dict
-        return None
+    return None
 
 def get_buildstamp_info(dir):
     release = version = arch = date = None
@@ -207,7 +203,7 @@ def get_buildstamp_info(dir):
             release = "Red Hat Enterprise Linux"
             version = "2.1"
         else:
-            print "ERROR: Buildstamp information in '%s' is malformed." % dir
+            log.errorLn("Buildstamp information in '%s' is malformed.", dir)
             return None
 
     date = string.strip(lines[0])
@@ -235,7 +231,7 @@ def get_discinfo(discinfo):
     fd.close()
 
     if len(lines) < 4:
-        print "ERROR: .discinfo in '%s' is malformed." % discinfo
+        log.errorLn("Discinfo in '%s' is malformed.", discinfo)
         return None
 
     date = string.strip(lines[0])
@@ -244,7 +240,7 @@ def get_discinfo(discinfo):
         lines[1] = "Fedora Core 5"
     i = string.rfind(string.strip(lines[1]), " ")
     if i == -1:
-        print "ERROR: .discinfo in '%s' is malformed." % discinfo
+        log.errorLn("Discinfo in '%s' is malformed.", discinfo)
         return None
     release = string.strip(lines[1][:i])
     version = string.strip(lines[1][i:])
@@ -315,7 +311,6 @@ def get_installed_kernels(chroot=None):
 
 def fuser(what):
     i = 0
-    log = ""
 
     sig = signal.SIGTERM
     while 1:
@@ -334,7 +329,7 @@ def fuser(what):
             os.kill(p, sig)
         i += 1
         if i == 20:
-            print "ERROR: Failed to kill processes:"
+            log.errorLn("Failed to kill processes:")
             os.system("/usr/sbin/lsof +D '%s'" % what)
             break
         if i > 15:
@@ -348,8 +343,8 @@ def umount_all(dir):
     fstype = { }
     try:
         fd = open("/proc/mounts", "r")
-    except Exception:
-        print "ERROR: Unable to open '/proc/mounts' for reading."
+    except Exception, msg:
+        log.errorLn("Unable to open '/proc/mounts' for reading: %s", msg)
         return
     while 1:
         line = fd.readline()
@@ -371,8 +366,7 @@ def umount_all(dir):
     failed = 0
     while len(mounted) > 0:
         dir = mounted[i]
-        if config.verbose:
-            print "Umounting '%s' " % dir
+        log.info2Ln("Umounting '%s' ", dir)
         failed = 0
         if fstype[dir] not in [ "sysfs", "proc" ]:
             fuser(dir)
@@ -402,10 +396,10 @@ def check_dir(buildroot, dir):
     try:
         check_exists(buildroot, dir)
     except:
-        print "ERROR: Directory '%s' does not exist." % dir
+        log.errorLn("Directory '%s' does not exist.", dir)
         return 0
     if not os.path.isdir(d):
-        print "ERROR: '%s' is no directory." % dir
+        log.errorLn("'%s' is no directory.", dir)
         return 0
     return 1
 
@@ -459,14 +453,14 @@ def create_file(buildroot, target, content=None, force=0, mode=None):
     try:
         fd = open("%s/%s" % (buildroot, target), "w")
     except Exception, msg:
-        print "ERROR: Unable to open '%s' for writing:" % target, msg
+        log.errorLn("Unable to open '%s' for writing: %s", target, msg)
         return 0
     if content:
         try:
             for line in content:
                 fd.write(line)
         except Exception, msg:
-            print "ERROR: Unable to write to '%s':" % target, msg
+            log.errorLn("Unable to write to '%s': %s", target, msg)
             fd.close()
             return 0
     fd.close()
@@ -543,12 +537,12 @@ def copy_file(source, target):
     try:
         source_fd = open(source, "r")
     except Exception, msg:
-        print "ERROR: Failed to open '%s':" % source, msg
+        log.errorLn("Failed to open '%s': %s", source, msg)
         return 1
     try:
         target_fd = open(target, "w")
     except Exception, msg:
-        print "ERROR: Failed to open '%s':" % target, msg
+        log.errorLn("Failed to open '%s': %s", target, msg)
         source_fd.close()
         return 1
     data = source_fd.read(65536)
@@ -584,7 +578,7 @@ def _compsLangsupport(pkgs, comps, languages, group):
     for name in comps.getPackageNames(group):
         if name in pkgs:
             continue
-        print "Adding package '%s' for langsupport" % name
+        log.info1Ln("Adding package '%s' for langsupport.", name)
         pkgs.append(name)
 
     # old style conditional
@@ -594,7 +588,7 @@ def _compsLangsupport(pkgs, comps, languages, group):
             continue
         for req in requires:
             if req in pkgs:
-                print "Adding package '%s' for langsupport" % name
+                log.info1Ln("Adding package '%s' for langsupport.", name)
                 pkgs.append(name)
                 break
 
@@ -605,7 +599,7 @@ def _compsLangsupport(pkgs, comps, languages, group):
             continue
         for req in requires:
             if req in pkgs:
-                print "Adding package '%s' for langsupport" % name
+                log.info1Ln("Adding package '%s' for langsupport.", name)
                 pkgs.append(name)
                 break
 
@@ -627,7 +621,8 @@ def addPkgByFileProvide(repo, name, pkgs, description):
                 break
         if not found:
             pkg = s[0]
-            print "Adding package '%s' for %s." % (pkg["name"], description)
+            log.info1Ln("Adding package '%s' for %s.", pkg["name"],
+                        description)
             pkgs.append(pkg["name"])
     else:
         raise ValueError, "Could not find package providing '%s'" % (name) + \
@@ -635,7 +630,6 @@ def addPkgByFileProvide(repo, name, pkgs, description):
 
 def load_source_repo(ks, source_dir):
     source = Repository(pyrpm.rpmconfig, source_dir, "base")
-
     exclude = None
     if ks.has_key("cdrom"):
         url = "cdrom"
@@ -650,7 +644,7 @@ def load_source_repo(ks, source_dir):
         if ks["url"].has_key("exclude"):
             exclude = ks["url"]["exclude"]
 
-    print "Reading repodata from installation source ..."
+    log.info1Ln("Reading repodata from installation source ...")
     if not source.load(url, exclude=exclude):
         raise IOError, "Loading of source failed."
 
@@ -668,7 +662,7 @@ def load_repos(ks, repos_dir):
     for repo in ks["repo"]:
         repos[repo] = Repository(pyrpm.rpmconfig,
                                  "%s/%s" % (repos_dir, repo), repo)
-        print "Reading repodata from repository '%s'" % repo
+        log.info1Ln("Reading repodata from repository '%s'", repo)
         baseurl = mirrorlist = exclude = None
         if ks["repo"][repo].has_key("baseurl"):
             baseurl = ks["repo"][repo]["baseurl"]
@@ -728,12 +722,12 @@ def run_script(dict, chroot):
     if status != 0:
         print msg
         if dict.has_key("erroronfail"):
-            print "ERROR: Script failed, aborting."
+            log.errorLn("Script failed, aborting.")
             return 0
         else:
-            print "WARNING: Script failed."
+            log.warningLn("Script failed.")
     else:
-        config.log(msg)
+        log.log(log.INFO1, msg)
 
     return 1
 

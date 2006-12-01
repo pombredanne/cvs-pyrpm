@@ -18,8 +18,8 @@
 
 from pyrpm.database import repodb, sqlitedb
 from pyrpm.yum import Conf
+from pyrpm.logger import log
 from disk import *
-import config
 from devices import *
 from filesystem import *
 
@@ -134,8 +134,7 @@ class Repository:
         if source == "cdrom":
             # mount cdrom
             what = "/dev/cdrom"
-            if config.verbose:
-                print "Mounting '%s' on '%s'" % (what, self.dir)
+            debug(1, "Mounting '%s' on '%s'" % (what, self.dir))
             mount(what, self.dir, fstype="auto", options="ro")
             source = "file://%s" % self.dir
         elif source[:6] == "nfs://":
@@ -145,15 +144,14 @@ class Repository:
                 what = ":/".join(splits)
             del splits
             # mount nfs source
-            if config.verbose:
-                print "Mounting '%s' on '%s'" % (source, self.dir)
+            debug(1, "Mounting '%s' on '%s'" % (source, self.dir))
             mount(what, self.dir, fstype="nfs",
                   options="ro,rsize=32768,wsize=32768,hard,nolock")
             source = "file://%s" % self.dir
         # else: source == url
 
         if exclude or mirrorlist:
-            yumconf = Conf()
+            yumconf = YumConf()
             if exclude:
                 yumconf["exclude"] = exclude
             if mirrorlist:
@@ -171,12 +169,12 @@ class Repository:
 #        self.repo = repodb.RpmRepoDB(self.config, [ source ], yumconf=yumconf,
 #                                     reponame=self.name)
         if not self.repo.read():
-            print "ERROR: Could not read repository '%s'." % self.name
+            log.errorLn("Could not read repository '%s'.", self.name)
             return 0
 
         self.cache = self.repo.getNetworkCache()
         if not self.cache:
-            print "ERROR: Could no get cache for repo '%s'." % self.name
+            log.errorLn("Could no get cache for repo '%s'.", self.name)
             return 0
 
         self.comps = self.repo.comps

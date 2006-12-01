@@ -18,6 +18,7 @@
 
 import os, stat, string, time, resource, struct
 import pyrpm.functions as functions
+from pyrpm.logger import log
 
 ################################## functions ##################################
 
@@ -45,26 +46,26 @@ def mount(what, where, fstype="ext3", options=None, arguments=None):
 def umount(what):
     stat = os.system("/bin/umount '%s' 2>/dev/null" % what)
     if stat != 0:
-        print "ERROR: Umount of '%s' failed" % what
+        log.errorLn("Umount of '%s' failed.", what)
         return 1
 
     return 0
 
 def swapon(device):
     swapon = "/sbin/swapon '%s'" % device
-    print "Enable swap on '%s'" % device
+    log.info1Ln("Enable swap on '%s'.", device)
     (status, rusage, log) = functions.runScript(script=swapon)
     if status != 0:
-        print "ERROR: swapon failed."
+        log.errorLn("swapon failed.")
         return 1
     return 0
 
 def swapoff(device):
     swapoff = "/sbin/swapoff '%s'" % device
-    print "Disable swap on '%s'" % device
+    log.info1Ln("Disable swap on '%s'.", device)
     (status, rusage, log) = functions.runScript(script=swapoff)
     if status != 0:
-        print "ERROR: swapoff failed."
+        log.errorLn("swapoff failed.")
         return 1
     return 0
 
@@ -75,13 +76,13 @@ def detectFstype(device):
     try:
         fd = open(device, "r")
     except Exception, msg:
-        print msg
+        log.debug2Ln(msg)
         return None
 
     # read pagesize bytes (at least needed for swap)
     try:
         buf = fd.read(pagesize)
-    except:
+    except: # ignore message
         fd.close()
         return None
     if len(buf) < pagesize:
@@ -115,7 +116,7 @@ def detectFstype(device):
     try:
         fd.seek(32768, 0)
         buf = fd.read(180)
-    except:
+    except: # ignore message
         fd.close()
         return None
     if len(buf) < 180:
@@ -130,13 +131,13 @@ def ext2Label(device):
     # open device
     try:
         fd = open(device, "r")
-    except:
+    except: # ignore message
         return None
     # read 1160 bytes
     try:
         fd.seek(1024, 0)
         buf = fd.read(136)
-    except:
+    except: # ignore message
         fd.close()
         return None
     fd.close()
@@ -153,12 +154,12 @@ def xfsLabel(device):
     # open device
     try:
         fd = open(device, "r")
-    except:
+    except: # ignore message
         return None
     # read 128 bytes
     try:
         buf = fd.read(128)
-    except:
+    except: # ignore message
         fd.close()
         return None
     fd.close()
@@ -172,13 +173,13 @@ def jfsLabel(device):
     # open device
     try:
         fd = open(device, "r")
-    except:
+    except: # ignore message
         return None
     # seek to 32768, read 180 bytes
     try:
         fd.seek(32768, 0)
         buf = fd.read(180)
-    except:
+    except: # ignore message
         fd.close()
         return None
     fd.close()
@@ -194,12 +195,12 @@ def swapLabel(device):
     # open device
     try:
         fd = open(device, "r")
-    except:
+    except: # ignore message
         return None
     # read pagesize bytes
     try:
         buf = fd.read(pagesize)
-    except:
+    except: # ignore message
         fd.close()
         return None
     fd.close()

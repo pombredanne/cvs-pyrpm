@@ -29,7 +29,8 @@ locale.setlocale(locale.LC_ALL, "")
 
 # not tested at all, just a guess
 if sys.version_info < (2, 3):
-    sys.exit("error: Python 2.3 or later required")
+    print "ERROR: Python 2.3 or later required"
+    sys.exit(1)
 
 for _i in _files:
     _cmd = "from %s import *" % _i

@@ -18,6 +18,7 @@
 
 import os.path
 from functions import create_file
+from pyrpm.logger import log
 
 def network_config(ks, buildroot):
     if not os.path.exists(buildroot+"/etc/sysconfig/network-scripts"):
@@ -26,7 +27,7 @@ def network_config(ks, buildroot):
     # generate loopback network configuration if it does not exist
     if not os.path.exists(buildroot+\
                           "/etc/sysconfig/network-scripts/ifcfg-lo"):
-        print "Adding missing /etc/sysconfig/network-scripts/ifcfg-lo."
+        info("Adding missing /etc/sysconfig/network-scripts/ifcfg-lo.")
         create_file(buildroot, "/etc/sysconfig/network-scripts/ifcfg-lo",
                     [ 'DEVICE=lo\n',
                       'IPADDR=127.0.0.1\n',
@@ -47,7 +48,7 @@ def network_config(ks, buildroot):
         for net in ks["network"]:
             if net.has_key("device"):
                 if net["device"] in network_devices:
-                    print "WARNING: '%s' is not unique." % net["device"]
+                    log.warningLn("'%s' is not unique.", net["device"])
                 else:
                     network_devices.append(net["device"])
         for net in ks["network"]:
@@ -89,7 +90,8 @@ def network_config(ks, buildroot):
                           "/etc/sysconfig/network-scripts/ifcfg-%s" % \
                           device, "w")
             except Exception, msg:
-                print "ERROR: Configuration of '/etc/sysconfig/network-scripts/ifcfg-%s' failed:" % device, msg
+                log.errorLn("Configuration of '/etc/sysconfig/network-scripts/"
+                            "ifcfg-%s' failed: %s", device, msg)
             else:
                 fd.write('DEVICE=%s\n' % device)
                 fd.write('BOOTPROTO=%s\n' % bootproto)
@@ -118,7 +120,8 @@ def network_config(ks, buildroot):
                               "/etc/sysconfig/network-scripts/keys-%s" % \
                               device, "w")
                 except Exception, msg:
-                    print "ERROR: Configuration of '/etc/sysconfig/network-scripts/keys-%s' failed:" % device, msg
+                    log.errorLn("Configuration of '/etc/sysconfig/network-"
+                                "scripts/keys-%s' failed: %s", device, msg)
                 else:
                     fd.write('KEY=%s\n' % net["wepkey"])
                 fd.close()

@@ -17,7 +17,7 @@
 #
 
 import pyrpm.functions as functions
-import config
+from pyrpm.logger import log
 
 class LVM_PHYSICAL_VOLUME:
     prog = "LANG=C /usr/sbin/lvm"
@@ -29,26 +29,24 @@ class LVM_PHYSICAL_VOLUME:
     def create(self):
         command = "%s pvcreate --zero y -ff -y -d %s" % \
                   (LVM_PHYSICAL_VOLUME.prog, self.device)
-        if config.verbose:
-            print command
+        log.debug2Ln(command)
         (status, rusage, msg) = functions.runScript(script=command,
                                                     chroot=self.chroot)
-        config.log(msg)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Creation of physical layer on '%s' failed." % \
-                  self.device
+            log.errorLn("Creation of physical layer on '%s' failed.",
+                        self.device)
             return 0
         return 1
 
     def scan(chroot=None):
         command = "%s pvscan 2>/dev/null" % LVM_PHYSICAL_VOLUME.prog
-        if config.verbose:
-            print command
+        log.debug2Ln(command)
         (status, rusage, msg) = functions.runScript(script=command,
                                                     chroot=chroot)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Failed to scan for physical volumes."
-            config.log(msg)
+            log.errorLn("Failed to scan for physical volumes.")
             return None
 
         dict = { }
@@ -68,7 +66,8 @@ class LVM_PHYSICAL_VOLUME:
         pvs = LVM_PHYSICAL_VOLUME.display(chroot=chroot)
         if not pvs.has_key(device) or \
                not pvs[device].has_key("vgname"):
-            print "ERROR: Unable to get physical volume information for '%s'." % device
+            log.errorLn("Unable to get physical volume information for '%s'.",
+                        device)
             return None
         return pvs[device]
     info = staticmethod(info)
@@ -76,13 +75,12 @@ class LVM_PHYSICAL_VOLUME:
     def display(chroot=None):
         command = "%s pvdisplay --units b 2>/dev/null" % \
                   LVM_PHYSICAL_VOLUME.prog
-        if config.verbose:
-            print command
+        log.debug2Ln(command)
         (status, rusage, msg) = functions.runScript(script=command,
                                                     chroot=chroot)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Failed to get general physical volume information."
-            config.log(msg)
+            log.errorLn("Failed to get general physical volume information.")
             return None
 
         dict = { }
@@ -103,7 +101,7 @@ class LVM_PHYSICAL_VOLUME:
                 elif line[:7] == "PV UUID":
                     d["pvuuid"] = line[7:].strip()
             except:
-                print "ERROR: pvdisplay output malformed."
+                log.errorLn("pvdisplay output malformed.")
                 return None
         return dict
     display = staticmethod(display)
@@ -125,14 +123,13 @@ class LVM_VOLGROUP:
         if extent > 0:
             vgcreate += " --physicalextentsize '%s'" % extent
         vgcreate += " %s %s" % (self.name, " ".join(devices))
-        if config.verbose:
-            print vgcreate
+        log.debug2Ln(vgcreate)
         (status, rusage, msg) = functions.runScript(script=vgcreate,
                                                     chroot=self.chroot)
-        config.log(msg)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Creation of volume group '%s' on '%s' failed." % \
-                  (self.name, devices)
+            log.errorLn("Creation of volume group '%s' on '%s' failed.",
+                        self.name, devices)
             return 0
         self.active = 1
 
@@ -149,10 +146,10 @@ class LVM_VOLGROUP:
         vgchange = "%s vgchange -a y '%s'" % (LVM_VOLGROUP.prog, self.name)
         (status, rusage, msg) = functions.runScript(script=vgchange,
                                                     chroot=self.chroot)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Activation of volume group '%s' failed." % \
-                  self.name
-            print msg
+            log.errorLn("Activation of volume group '%s' failed.",
+                        self.name)
             return 0
         self.active = True
         return 1
@@ -163,23 +160,21 @@ class LVM_VOLGROUP:
         vgchange = "%s vgchange -a n '%s'" % (LVM_VOLGROUP.prog, self.name)
         (status, rusage, msg) = functions.runScript(script=vgchange,
                                                     chroot=self.chroot)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Deactivation of volume group '%s' failed." % \
-                  self.name
-            print msg
+            log.errorLn("Deactivation of volume group '%s' failed.", self.name)
             return 0
         self.active = False
         return 1
 
     def scan(chroot=None):
         command = "%s vgscan --mknodes 2>/dev/null" % LVM_VOLGROUP.prog
-        if config.verbose:
-            print command
+        log.debug2Ln(command)
         (status, rusage, msg) = functions.runScript(script=command,
                                                     chroot=chroot)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Failed to scan for volume groups."
-            config.log(msg)
+            log.errorLn("Failed to scan for volume groups.")
             return 0
         return 1
     scan = staticmethod(scan)
@@ -190,21 +185,20 @@ class LVM_VOLGROUP:
                not vgs[name].has_key("format") or \
                not vgs[name].has_key("pesize") or \
                not vgs[name].has_key("vgsize"):
-            print "ERROR: Unable to get volume group information for '%s'." % \
-                  name
+            log.errorLn("Unable to get volume group information for '%s'.",
+                        name)
             return None
         return vgs[name]
     info = staticmethod(info)
 
     def display(chroot=None):
         command = "%s vgdisplay --units b 2>/dev/null" % LVM_VOLGROUP.prog
-        if config.verbose:
-            print command
+        log.debug2Ln(command)
         (status, rusage, msg) = functions.runScript(script=command,
                                                     chroot=chroot)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Failed to get volume group information."
-            config.log(msg)
+            log.errorLn("Failed to get volume group information.")
             return None
 
         dict = { }
@@ -231,7 +225,7 @@ class LVM_VOLGROUP:
                 elif line[:8] == "Total PE":
                     d["pe"] = long(line[8:].strip())
             except:
-                print "ERROR: vgdisplay output malformed."
+                log.errorLn("vgdisplay output malformed.")
                 return None
         return dict
     display = staticmethod(display)
@@ -249,27 +243,25 @@ class LVM_LOGICAL_VOLUME:
         command = "%s lvcreate -n '%s' --size %dk '%s'" % \
                   (LVM_LOGICAL_VOLUME.prog, self.name, (size / 1024),
                    self.volgroup)
-        if config.verbose:
-            print command
+        log.debug2Ln(command)
         (status, rusage, msg) = functions.runScript(script=command,
                                                     chroot=self.chroot)
-        config.log(msg)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Creation of logical volume '%s' on '%s' failed." % \
-                  (self.name, volgroup)
+            log.errorLn("Creation of logical volume '%s' on '%s' failed.",
+                        self.name, volgroup)
             return 0
         self.active = 1
         return 1
 
     def scan(chroot=None):
         command = "%s lvscan 2>/dev/null" % LVM_LOGICAL_VOLUME.prog
-        if config.verbose:
-            print command
+        log.debug2Ln(command)
         (status, rusage, msg) = functions.runScript(script=command,
                                                     chroot=chroot)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Failed to scan for logical volumes."
-            config.log(msg)
+            log.errorLn("Failed to scan for logical volumes.")
             return None
 
         dict = { }
@@ -293,7 +285,8 @@ class LVM_LOGICAL_VOLUME:
         if not lvs.has_key(name) or \
                not lvs[name].has_key("device") or \
                not lvs[name].has_key("lvsize"):
-            print "ERROR: Unable to get logical volume information for '%s'." % name
+            log.errorLn("Unable to get logical volume information for '%s'.",
+                        name)
             return None
         return lvs[name]
     info = staticmethod(info)
@@ -301,13 +294,12 @@ class LVM_LOGICAL_VOLUME:
     def display(chroot=None):
         command = "%s lvdisplay --units b 2>/dev/null" % \
                   LVM_LOGICAL_VOLUME.prog
-        if config.verbose:
-            print command
+        log.debug2Ln(command)
         (status, rusage, msg) = functions.runScript(script=command,
                                                     chroot=chroot)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Failed to get volume group information."
-            config.log(msg)
+            log.errorLn("Failed to get volume group information.")
             return None
 
         dict = { }
@@ -333,7 +325,7 @@ class LVM_LOGICAL_VOLUME:
                 elif line[:7] == "Block device":
                     d["device"] = line[12:].strip()
             except:
-                print "ERROR: lvdisplay output malformed."
+                log.errorLn("lvdisplay output malformed.")
                 return None
         return dict
     display = staticmethod(display)

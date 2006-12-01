@@ -17,7 +17,7 @@
 #
 
 import os.path
-import config
+from pyrpm.logger import log
 from installer import keyboard_models
 from pyrpm.functions import runScript
 from functions import create_file
@@ -70,9 +70,9 @@ def firewall_config(ks, buildroot, installation):
         if ks["firewall"].has_key("enabled"):
             (status, rusage, msg) = runScript(\
                 script="/sbin/chkconfig iptables on", chroot=buildroot)
-            config.log(msg)
+            log.log(log.INFO1, msg)
             if status != 0:
-                print "ERROR: Could not enable firewall."
+                log.errorLn("Could not enable firewall.")
     else:
         # use lokkit to configure firewall
         fwargs = [ ]
@@ -90,9 +90,9 @@ def firewall_config(ks, buildroot, installation):
         lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % \
                  " ".join(fwargs)
         (status, rusage, msg) = runScript(script=lokkit, chroot=buildroot)
-        config.log(msg)
+        log.log(log.INFO1, msg)
         if status != 0:
-            print "ERROR: Configuration of firewall failed"
+            log.errorLn("Configuration of firewall failed.")
 
         create_file(buildroot, "/etc/sysconfig/system-config-securitylevel",
                     [ '# Configuration file for system-config-securitylevel\n',
