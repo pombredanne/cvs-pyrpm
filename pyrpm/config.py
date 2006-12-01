@@ -67,7 +67,7 @@ class RpmConfig:
         self.excludedocs = 0
         self.excludeconfigs = 0
         self.checkinstalled = 0
-        self.exactarch = 0          # same base arch is not enough for updates
+        self.exactarch = 1          # same base arch is not enough for updates
         self.tid = int(time.time()) # Install time id.
         self.tscolor = 0            # Transaction color, needed for rpmdb
         self.nevratags = ("name", "epoch", "version", "release",

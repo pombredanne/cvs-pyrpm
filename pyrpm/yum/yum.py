@@ -293,12 +293,14 @@ class RpmYum:
                         is_multi = True
                         break
                     arch = buildarchtranslate[ipkg["arch"]]
+                    march = ipkg["arch"]
                 # If not and we're not exactarch then just find the best
                 # matching package again as we allow arch switches to 64bit
-                # for updates.
+                # for updates. The best match is as close as possible to the
+                # original arch of the installed package.
                 if not is_multi:
                     l = self._filterPkgVersion(max(dbpkgs), pkgnamehash[name])
-                    ret |= self.__handleBestPkg("update", l,
+                    ret |= self.__handleBestPkg("update", l, march
                                                 do_obsolete=do_obsolete)
                     continue
                 # OK, we have several archs for this package installed, we now
