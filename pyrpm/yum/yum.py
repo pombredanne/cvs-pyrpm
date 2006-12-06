@@ -300,7 +300,7 @@ class RpmYum:
                 # original arch of the installed package.
                 if not is_multi:
                     l = self._filterPkgVersion(max(dbpkgs), pkgnamehash[name])
-                    ret |= self.__handleBestPkg("update", l, march
+                    ret |= self.__handleBestPkg("update", l, march,
                                                 do_obsolete=do_obsolete)
                     continue
                 # OK, we have several archs for this package installed, we now
