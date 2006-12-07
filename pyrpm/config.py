@@ -23,10 +23,6 @@ class RpmConfig:
     def __init__(self):
         (self.sysname, self.nodename, self.release, self.version,
             self.machine) = os.uname()
-        self.debug = 0              # Maximum level of debug messages to output
-        self.warning = 0          # Maximum level of warning messages to output
-        self.verbose = 0             # Maximum level of info messages to output
-
         self.printhash = 0
         self.buildroot = ''
         self.dbpath = "rpmdb://var/lib/rpm/"

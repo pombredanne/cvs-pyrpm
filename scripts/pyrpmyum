@@ -44,7 +44,7 @@ INSTALLING, UPGRADING, AND REMOVING PACKAGES using REPOS:
 
 options:
     [-?, --help] [--version]
-    [--quiet] [-v, --verbose] [-y]
+    [--quiet] [-v, --verbose] [-q] [-y]
     [-c CONFIGFILE] [--dbpath DIRECTORY] [-r, --root DIRECTORY]
     [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]
     [--ignoresize] [--ignorearch] [--exactarch]

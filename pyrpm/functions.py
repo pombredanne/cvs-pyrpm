@@ -729,7 +729,7 @@ def parseYumOptions(argv, yum):
 
     # Argument parsing
     try:
-      opts, args = getopt.getopt(argv, "?hvc:r:yd:e:R:C",
+      opts, args = getopt.getopt(argv, "?hvqc:r:yd:e:R:C",
         ["help", "verbose",
          "hash", "version", "quiet", "dbpath=", "root=", "installroot=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
@@ -745,13 +745,18 @@ def parseYumOptions(argv, yum):
         log.errorLn("Error parsing command-line arguments: %s", e)
         return None
 
+    verbose = log.INFO2
+    quiet = False
+
     # Argument handling
     new_yumconf = 0
     for (opt, val) in opts:
         if   opt in ['-?', "--help"]:
             return None
         elif opt in ["-v", "--verbose"]:
-            rpmconfig.verbose += 1
+            verbose += 1
+        elif opt == "-q":
+            verbose -= 1
         elif opt in ["-r", "--root", "--installroot"]:
             rpmconfig.buildroot = val
         elif opt == "-c":
@@ -760,9 +765,7 @@ def parseYumOptions(argv, yum):
                 new_yumconf = 1
             rpmconfig.yumconf.append(val)
         elif opt == "--quiet":
-            rpmconfig.debug = 0
-            rpmconfig.warning = 0
-            rpmconfig.verbose = 0
+            quiet = True
         elif opt == "-R":
             # Basically we ignore this for now, just don't throw an error ;)
             pass
@@ -779,7 +782,7 @@ def parseYumOptions(argv, yum):
         elif opt == "-y":
             yum.setConfirm(0)
         elif opt == "-d":
-            rpmconfig.debug = int(val)
+            log.setDebugLogLevel(int(val))
         elif opt == "-e":
             rpmconfig.warning = int(val)
         elif opt == "--dbpath":
@@ -858,10 +861,12 @@ def parseYumOptions(argv, yum):
         elif opt == "--languages":
             yum.langs = val.split()
 
-    if rpmconfig.verbose > 1:
-        rpmconfig.warning = rpmconfig.verbose - 1
-    if rpmconfig.verbose > 2:
-        rpmconfig.debug = rpmconfig.verbose - 2
+
+    if quiet:
+        log.setLogLevel(log.WARNING)
+        log.setDebugLogLevel(0)
+    else:
+        log.setLogLevel(verbose)
 
     if rpmconfig.arch != None:
         if not rpmconfig.test and \
