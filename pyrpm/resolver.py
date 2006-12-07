@@ -608,7 +608,7 @@ class RpmResolver:
                     continue
                 log.info2Ln("Checking dependencies for %s", r.getNEVRA())
                 (unresolved, resolved) = self.getPkgDependencies(r)
-                if len(resolved) > 0 and self.config.debug > 1:
+                if len(resolved) > 0:
                     log.info3Ln("%s: resolved dependencies:", r.getNEVRA())
                     for (u, s) in resolved:
                         s2 = ""

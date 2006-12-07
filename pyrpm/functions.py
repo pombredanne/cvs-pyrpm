@@ -729,7 +729,7 @@ def parseYumOptions(argv, yum):
 
     # Argument parsing
     try:
-      opts, args = getopt.getopt(argv, "?hvqc:r:yd:e:R:C",
+      opts, args = getopt.getopt(argv, "?hvqc:r:yd:R:C",
         ["help", "verbose",
          "hash", "version", "quiet", "dbpath=", "root=", "installroot=",
          "force", "ignoresize", "ignorearch", "exactarch", "justdb", "test",
@@ -746,7 +746,6 @@ def parseYumOptions(argv, yum):
         return None
 
     verbose = log.INFO2
-    quiet = False
 
     # Argument handling
     new_yumconf = 0
@@ -755,7 +754,7 @@ def parseYumOptions(argv, yum):
             return None
         elif opt in ["-v", "--verbose"]:
             verbose += 1
-        elif opt == "-q":
+        elif opt in ["-q", "--quiet"]:
             verbose -= 1
         elif opt in ["-r", "--root", "--installroot"]:
             rpmconfig.buildroot = val
@@ -764,8 +763,6 @@ def parseYumOptions(argv, yum):
                 rpmconfig.yumconf = []
                 new_yumconf = 1
             rpmconfig.yumconf.append(val)
-        elif opt == "--quiet":
-            quiet = True
         elif opt == "-R":
             # Basically we ignore this for now, just don't throw an error ;)
             pass
@@ -782,9 +779,18 @@ def parseYumOptions(argv, yum):
         elif opt == "-y":
             yum.setConfirm(0)
         elif opt == "-d":
-            log.setDebugLogLevel(int(val))
-        elif opt == "-e":
-            rpmconfig.warning = int(val)
+            val = val.split(':', 1)
+            if len(val) == 1:
+                level = val[0]
+                domain = '*'                
+            else:
+                domain, level = val
+            try:
+                level = int(level)
+            except ValueError:
+                print "Invalid debug level"
+                return None
+            log.setDebugLogLevel(level, domain)
         elif opt == "--dbpath":
             rpmconfig.dbpath = val
         elif opt == "--installpkgs":
@@ -861,12 +867,7 @@ def parseYumOptions(argv, yum):
         elif opt == "--languages":
             yum.langs = val.split()
 
-
-    if quiet:
-        log.setLogLevel(log.WARNING)
-        log.setDebugLogLevel(0)
-    else:
-        log.setLogLevel(verbose)
+    log.setLogLevel(verbose)
 
     if rpmconfig.arch != None:
         if not rpmconfig.test and \

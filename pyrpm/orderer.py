@@ -158,7 +158,7 @@ class RpmRelations:
         for pkg in self:
             rel = self[pkg]
             pre = ""
-            if self.config.debug > 2 and len(rel.pre) > 0:
+            if len(rel.pre) > 0:
                 pre = ": "
                 for p in rel.pre:
                     if len(pre) > 2:
@@ -354,9 +354,9 @@ class RpmRelations:
         connected_components = ConnectedComponentsDetector(self).detect(self)
 
         if connected_components:
-            # debug output the components
-            log.debug1Ln("-- STRONGLY CONNECTED COMPONENTS --")
-            if self.config.debug > 1:
+            if log.isLoggingHere(log.DEBUG1):
+                # debug output the components
+                log.debug1Ln("-- STRONGLY CONNECTED COMPONENTS --")
                 for i in xrange(len(connected_components)):
                     s = ", ".join([pkg.getNEVRA() for pkg in
                                    connected_components[i].pkgs])
