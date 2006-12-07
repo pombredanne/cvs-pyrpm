@@ -251,7 +251,7 @@ class RpmPackage(RpmData):
             src = os.path.join(self.yumrepo.baseurl, self.source)
         else:
             src = self.source
-        self.io = getRpmIOFactory(self.config, src, self.hdronly)
+        self.io = getRpmIOFactory(src, self.hdronly)
         self.io.open(mode)
 
     def close(self):

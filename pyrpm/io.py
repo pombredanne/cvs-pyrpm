@@ -228,8 +228,7 @@ class CPIOFile:
 
 class RpmIO:
     """'Virtual' IO Class for RPM packages and data"""
-    def __init__(self, config, source):
-        self.config = config
+    def __init__(self, source):
         self.source = source
 
     def open(self, mode="r"):
@@ -290,8 +289,8 @@ class RpmIO:
         raise NotImplementedError
 
 class RpmStreamIO(RpmIO):
-    def __init__(self, config, source, hdronly=None):
-        RpmIO.__init__(self, config, source)
+    def __init__(self, source, hdronly=None):
+        RpmIO.__init__(self, source)
         self.fd = None
         self.cpio = None
         self.hdronly = hdronly # Don't return payload from read()
@@ -741,8 +740,8 @@ class RpmStreamIO(RpmIO):
 
 
 class RpmFileIO(RpmStreamIO):
-    def __init__(self, config, source, hdronly=None):
-        RpmStreamIO.__init__(self, config, source, hdronly)
+    def __init__(self, source, hdronly=None):
+        RpmStreamIO.__init__(self, source, hdronly)
 
     def __openFile(self, mode="r"):
         """Open self.source, mark it close-on-exec.
@@ -838,8 +837,8 @@ class RpmFileIO(RpmStreamIO):
         functions.updateDigestFromFile(digest, fd, offset + 16)
 
 class RpmFtpIO(RpmStreamIO):
-    def __init__(self, config, source, hdronly=None):
-        RpmStreamIO.__init__(self, config, source, hdronly)
+    def __init__(self, source, hdronly=None):
+        RpmStreamIO.__init__(self, source, hdronly)
 
     def open(self, unused_mode="r"):
         try:
@@ -854,8 +853,8 @@ class RpmFtpIO(RpmStreamIO):
 
 
 class RpmHttpIO(RpmStreamIO):
-    def __init__(self, config, source, hdronly=None):
-        RpmStreamIO.__init__(self, config, source, hdronly)
+    def __init__(self, source, hdronly=None):
+        RpmStreamIO.__init__(self, source, hdronly)
 
     def open(self, unused_mode="r"):
         try:
@@ -875,22 +874,22 @@ class RpmHttpIO(RpmStreamIO):
         return None
 
 
-def getRpmIOFactory(config, source, hdronly=None):
+def getRpmIOFactory(source, hdronly=None):
     """Get a RpmIO implementation for package "URI" source.
 
     Don't return payload from read() if hdronly.
     Default to file:/ if no scheme is provided."""
 
     if   source[:5] == 'ftp:/':
-        return RpmFtpIO(config, source, hdronly)
+        return RpmFtpIO(source, hdronly)
     elif source[:6] == 'file:/':
-        return RpmFileIO(config, source, hdronly)
+        return RpmFileIO(source, hdronly)
     elif source[:6] == 'http:/':
-        return RpmHttpIO(config, source, hdronly)
+        return RpmHttpIO(source, hdronly)
 #    elif source[:6] == 'pydb:/':
-#        return RpmFileIO(config, source[6:], hdronly)
+#        return RpmFileIO(source[6:], hdronly)
     else:
-        return RpmFileIO(config, source, hdronly)
+        return RpmFileIO(source, hdronly)
     return None
 
 

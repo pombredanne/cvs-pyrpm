@@ -281,7 +281,7 @@ class RpmDB(db.RpmDatabase):
 
 
     def readTags(self, pkg, tags, storedata=None):
-        rpmio = io.RpmFileIO(self.config, "dummy")
+        rpmio = io.RpmFileIO("dummy")
 
         if storedata is None:
             data = self.packages_db[pkg.key]
@@ -352,7 +352,7 @@ class RpmDB(db.RpmDatabase):
 
             pkgid = pack("I", maxid + 1)
 
-            rpmio = io.RpmFileIO(self.config, "dummy")
+            rpmio = io.RpmFileIO("dummy")
             if pkg["signature"].has_key("size_in_sig"):
                 pkg["install_size_in_sig"] = pkg["signature"]["size_in_sig"]
             if pkg["signature"].has_key("gpg"):

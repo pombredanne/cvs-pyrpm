@@ -201,7 +201,7 @@ class RpmPackage(dict):
         name = "%s/%s" % (os.getcwd(), self["filename"])
         pkg = pyrpm.RpmPackage(self.config, "file://%s" % self["hdr"])
         pkg.read()
-        apkg = pyrpm.getRpmIOFactory(self.config, name)
+        apkg = pyrpm.getRpmIOFactory(name)
         try:
             apkg.write(pkg)
             apkg.close()

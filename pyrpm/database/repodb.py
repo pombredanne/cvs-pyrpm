@@ -552,7 +552,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
 
         Raise IOError, NotImplementedError."""
 
-        io = getRpmIOFactory(self.config, pkg.source)
+        io = getRpmIOFactory(pkg.source)
         if self.config.checksum == "md5":
             s = md5.new()
         else:

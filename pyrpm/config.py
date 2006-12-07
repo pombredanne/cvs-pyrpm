@@ -19,23 +19,6 @@
 
 import os, copy, sys, time, signal
 
-
-class RpmMessageHandler:
-    """A closure for message output."""
-
-    def __init__(self, config, prefix="", suffix="\n"):
-        self.config = config            # FIXME: write-only
-        self.prefix = prefix
-        self.suffix = suffix
-
-    def handle(self, msg):
-        """Write msg to stdout, using the defined prefix and suffix."""
-        # FIXME: to stderr?
-
-        sys.stdout.write("%s%s%s" % (self.prefix, msg, self.suffix))
-        sys.stdout.flush()
-
-
 class RpmConfig:
     def __init__(self):
         (self.sysname, self.nodename, self.release, self.version,
@@ -43,10 +26,7 @@ class RpmConfig:
         self.debug = 0              # Maximum level of debug messages to output
         self.warning = 0          # Maximum level of warning messages to output
         self.verbose = 0             # Maximum level of info messages to output
-        self.debug_handler = RpmMessageHandler(self, "Debug: ")
-        self.warning_handler = RpmMessageHandler(self, "Warning: ")
-        self.verbose_handler = RpmMessageHandler(self, "", "")
-        self.error_handler = RpmMessageHandler(self, "Error: ")
+
         self.printhash = 0
         self.buildroot = ''
         self.dbpath = "rpmdb://var/lib/rpm/"
@@ -113,22 +93,6 @@ class RpmConfig:
 
     def readConfig(self, filename="/etc/pyrpm.conf"):
         return execfile(filename)
-
-    def printDebug(self, level, msg):
-        if self.debug_handler and level <= self.debug:
-            self.debug_handler.handle(msg)
-
-    def printWarning(self, level, msg):
-        if self.warning_handler and level <= self.warning:
-            self.warning_handler.handle(msg)
-
-    def printInfo(self, level, msg):
-        if self.verbose_handler and level <= self.verbose:
-            self.verbose_handler.handle(msg)
-
-    def printError(self, msg):
-        if self.error_handler:
-            self.error_handler.handle(msg)
 
     def copy(self):                     # FIXME: not used
         return copy.deepcopy(self)
