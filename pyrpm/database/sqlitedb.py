@@ -157,11 +157,17 @@ class SqliteDB(repodb.RpmRepoDB):
     tags = 'pkgKey, name, arch, version, epoch, release, location_href'
 
     def __init__(self, config, source, buildroot='', yumconf=None,
-                 reponame="default"):
+                 reponame="default", nc=None):
         db.RpmDatabase.__init__(self, config, source, buildroot)
         self.baseurl = None
         self.yumconf = yumconf
         self.reponame = reponame
+        if nc:
+            self.nc = nc
+        else:
+            self.nc = NetworkCache([], self.config.cachedir, self.reponame)
+            if len(source) > 0:
+                self.nc.addCache(source)
         if config:
             self.excludes = self.config.excludes[:]
         else:
@@ -186,7 +192,6 @@ class SqliteDB(repodb.RpmRepoDB):
         self._filerc = re.compile('^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$')
         self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
         self.filereqs = []      # Filereqs, if available
-        self.nc = None
         self.comps = None
 
         self._primarydb = None
@@ -399,9 +404,9 @@ class SqliteDB(repodb.RpmRepoDB):
         cachepath = os.path.join(self.config.cachedir, self.reponame, "sqlite")
 
         if not os.path.isdir(cachebase):
-            os.mkdir(cachebase)
+            os.makedirs(cachebase)
         if not os.path.isdir(cachepath):
-            os.mkdir(cachepath)
+            os.makedirs(cachepath)
 
         # check existing sqlite db
         dbfilename = os.path.join(cachepath, "%s.xml.gz.sqlite" % dbtype)
@@ -544,14 +549,6 @@ class SqliteDB(repodb.RpmRepoDB):
     def importFilelist(self):
         # try mirror that just worked
         if self.getDbFile("filelists"):
-            for pkg in self._pkgs.itervalues():
-                if pkg is not None:
-                    pkg.clearFilelist()
-            self.filelist_imported = True
-            return 1
-        for uri in self.source:
-            self.nc = NetworkCache(uri, os.path.join(self.config.cachedir, self.reponame))
-            if not self.getDbFile("filelists"): continue
             for pkg in self._pkgs.itervalues():
                 if pkg is not None:
                     pkg.clearFilelist()

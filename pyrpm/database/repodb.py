@@ -50,16 +50,21 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 RPMSENSE_EQUAL | RPMSENSE_GREATER: "GE"}
 
     def __init__(self, config, source, buildroot='', yumconf=None,
-                 reponame="default"):
+                 reponame="default", nc=None):
         """Exclude packages matching whitespace-separated excludes.  Use
         reponame for cache subdirectory name and pkg["yumreponame"].
 
         Load PGP keys from URLs in key_urls."""
 
         memorydb.RpmMemoryDB.__init__(self, config, source, buildroot)
-        self.baseurl = None
         self.yumconf = yumconf
         self.reponame = reponame
+        if nc:
+            self.nc = nc
+        else:
+            self.nc = NetworkCache([], self.config.cachedir, self.reponame)
+            if len(source) > 0:
+                self.nc.addCache(source)
         self.excludes = self.config.excludes[:]
         self.mirrorlist = None
         self.key_urls = []
@@ -81,14 +86,13 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self._filerc = re.compile('^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$')
         self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
         self.filereqs = []      # Filereqs, if available
-        self.nc = None
         self.comps = None
 
     def readMirrorList(self):
         if not self.is_read and self.mirrorlist and self.yumconf:
             for mlist in self.mirrorlist:
-                nc = NetworkCache(os.path.dirname(mlist), os.path.join(self.config.cachedir, self.reponame))
-                fname = nc.cache(os.path.basename(mlist), 1)
+                self.nc.addCache([os.path.dirname(mlist),])
+                fname = self.nc.cache(os.path.basename(mlist), 1)
                 if fname:
                     lines = open(fname).readlines()
                     os.unlink(fname)
@@ -96,8 +100,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     lines = []
                 for l in lines:
                     l = l.replace("$ARCH", "$BASEARCH")[:-1]
-                    self.source.append(self.yumconf.extendValue(l))
-                nc.clear()
+                    self.nc.addCache(self.yumconf.extendValue(l))
 
     def isIdentitySave(self):
         """return if package objects that are added are in the db afterwards
@@ -115,7 +118,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         except libxml2.libxmlError:
             return 0
         # Create our network cache object
-        self.baseurl = self.nc.baseurl
         self.repomd = self._parseNode(reader)
         return 1
 
@@ -201,14 +203,19 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
 
     def read(self):
         self.readMirrorList()
-        self.is_read = 1 # FIXME: write-only
-        for uri in self.source:
-            self.nc = NetworkCache(uri, os.path.join(self.config.cachedir, self.reponame))
-            if not self.readRepoMD(): continue
-            if not self.readComps(): continue
-            if not self.readPrimary(): continue
-            if not self.readPGPKeys(): continue
-            if not self.readFilereq(): continue
+        #self.is_read = 1 # FIXME: write-only
+        while True:
+            if not self.readRepoMD():
+                break
+            if not self.readComps():
+                break
+            if not self.readPrimary():
+                break
+            if not self.readPGPKeys():
+                break
+            if not self.readFilereq():
+                break
+            self.is_read = 1 # FIXME: write-only
             return 1
         return 0
 
@@ -230,7 +237,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
 
         # We need to have successfully read a repo from one source before we
         # can import it's filelist.
-        if not self.baseurl or not self.is_read:
+        if not self.is_read:
             return 0
         if self.filelist_imported:
             return 1
@@ -709,7 +716,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 if not props.has_key("href"):
                     raise ValueError, "Missing href= in <location>"
                 if self.config.nocache:
-                    pkg.source = os.path.join(self.baseurl, props["href"])
+                    pkg.source = os.path.join(self.nc.getBaseURL(self.reponame), props["href"])
                 else:
                     pkg.source = props["href"]
                 pkg.yumhref = props["href"]

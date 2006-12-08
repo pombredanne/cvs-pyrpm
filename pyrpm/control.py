@@ -131,7 +131,7 @@ class RpmController:
                 p = package.RpmPackage(pkg.config, pkg.source,
                                        pkg.verifySignature, db=self.db)
                 if pkg.yumrepo:
-                    p.source = os.path.join(pkg.yumrepo.baseurl, p.source)
+                    p.source = os.path.join(pkg.yumrepo.getNetworkCache().getBaseURL(), p.source)
                 p.nc = nc
                 p.yumhref = pkg.yumhref
                 p.issrc = pkg.issrc
