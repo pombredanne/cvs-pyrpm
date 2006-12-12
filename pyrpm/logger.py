@@ -550,8 +550,8 @@ class Logger:
         # no debug
         for domain in _dict:
             if domain == "*":
+                # '*' matches everything: simple match
                 if _dict[domain] >= level:
-                    # simple match
                     simple_match = True
                     if len(check_domains) > 0:
                         check_domains = [ ]
@@ -564,9 +564,6 @@ class Logger:
             return None
 
         f = inspect.currentframe()
-        # go outside of Logger class
-#        while f and self._getClass(f) == self.__class__:
-#            f = f.f_back
 
         # go outside of logger module as long as there is a lower frame
         while f and f.f_back and f.f_globals["__name__"] == self.__module__:
@@ -575,8 +572,18 @@ class Logger:
         if not f:
             raise ValueError, "Frame information not available."
 
-        # get module name, code
+        # get module name
         module_name = f.f_globals["__name__"]
+
+        # simple module match test for all entries of check_domain
+        point_module = module_name + "."
+        for domain in check_domains:
+            if point_module.startswith(domain):
+                # found domain in module name
+                check_domains = [ ]
+                break
+
+        # get code
         co = f.f_code
 
         # optimization: bail out early if domain can not match at all
