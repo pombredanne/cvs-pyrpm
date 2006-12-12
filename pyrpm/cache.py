@@ -288,7 +288,7 @@ class SubNetworkCache:
         return self.nc.getBaseURL(name) + "/" + self.prefix
 
     def getBaseURLs(self, name=None):
-        return ["%s/%s" (url, self.prefix) for url in self.nc.getBaseURLs(name)]
+        return ["%s/%s" % (url, self.prefix) for url in self.nc.getBaseURLs(name)]
 
     def isCached(self, uri, name=None):
         return self.nc.isCached(self.prefix + "/" + uri, name)
