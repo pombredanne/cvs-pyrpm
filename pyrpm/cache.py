@@ -114,6 +114,13 @@ class NetworkCache:
             name = self.default_name
         return self.baseurls[name][self.pos[name]]
 
+    def getBaseURLs(self, name=None):
+        """Return a list of baseurl for the given cache name."""
+
+        if name == None:
+            name = self.default_name
+        return self.baseurls[name]
+
     def isCached(self, uri, name=None):
         """Check if the given uri/file is already cached."""
 
@@ -261,5 +268,46 @@ class NetworkCache:
             return (digest.hexdigest(), fname)
         except IOError:
             return (None, None)
+
+
+class SubNetworkCache:
+    def __init__(self, nc, prefix):
+        self.nc = nc
+        self.prefix = prefix
+
+    def addCache(self, baseurls, name=None):
+        self.nc.addCache(baseurls, name)
+
+    def setCache(self, baseurls, name=None):
+        self.nc.setCache(baseurls, name)
+
+    def delCache(self, baseurls, name=None):
+        self.nc.delCache(baseurls, name)
+
+    def getBaseURL(self, name=None):
+        return self.nc.getBaseURL(name) + "/" + self.prefix
+
+    def getBaseURLs(self, name=None):
+        return ["%s/%s" (url, self.prefix) for url in self.nc.getBaseURLs(name)]
+
+    def isCached(self, uri, name=None):
+        return self.nc.isCached(self.prefix + "/" + uri, name)
+
+    def getCachedFilename(self, uri, name=None):
+        return self.nc.getCachedFilename(self.prefix + "/" + uri, name)
+
+    def open(self, uri, name=None):
+        return self.nc.open(self.prefix + "/" + uri, name)
+
+    def cache(self, uri, force=False, copy_local=False, size=-1, md5=0, async=False, name=None):
+        return self.nc.cache(self.prefix + "/" + uri, force=False, copy_local=False, size=-1, md5=0, async=False, name=None):
+
+    def clear(self, uri=None, name=None):
+        if uri == None:
+            uri == ''
+        return self.nc.clear(self.prefix + "/" + uri, name)
+
+    def checksum(self, uri, cstype, name=None):
+        return self.nc.checksum(self.prefix + "/" + uri, cstype, name=None)
 
 # vim:ts=4:sw=4:showmatch:expandtab
