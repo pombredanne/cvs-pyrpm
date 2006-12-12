@@ -300,7 +300,7 @@ class SubNetworkCache:
         return self.nc.open(self.prefix + "/" + uri, name)
 
     def cache(self, uri, force=False, copy_local=False, size=-1, md5=0, async=False, name=None):
-        return self.nc.cache(self.prefix + "/" + uri, force=False, copy_local=False, size=-1, md5=0, async=False, name=None):
+        return self.nc.cache(self.prefix + "/" + uri, force=False, copy_local=False, size=-1, md5=0, async=False, name=None)
 
     def clear(self, uri=None, name=None):
         if uri == None:
