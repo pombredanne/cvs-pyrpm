@@ -702,7 +702,7 @@ class SqliteDB(repodb.RpmRepoDB):
         return [ob.name for ob in cur.fetchall()]
 
     def hasName(self, name):
-        cur.self._primarydb.cursor()
+        cur = self._primarydb.cursor()
         cur.execute('SELECT name FROM packages WHERE name="%s"' % name)
         return bool(cur.fetchone())
 
