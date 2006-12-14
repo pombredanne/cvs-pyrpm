@@ -1019,10 +1019,9 @@ def main():
             # TODO: use SCSI disks
             # Not possible right now, because there is no hardware detection.
             # Therefore the SCSI driver is not in the initrd.
-            #if not diskmap.has_key(ondisk):
-            #    if diskmap.has_key("sda"):
-            #         ondisk = "sda"
             if not diskmap.has_key(ondisk):
+                if diskmap.has_key("sda"):
+                    ondisk = "sda"
                 if diskmap.has_key("dasda"):
                     ondisk = "dasda"
             if part.has_key("ondisk"):
