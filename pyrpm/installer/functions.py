@@ -297,8 +297,7 @@ def rpmdb_get(rpmdb, name):
 
 def get_installed_kernels(chroot=None):
     kernels = [ ]
-    rpmdb = database.getRpmDBFactory(pyrpm.config.rpmconfig, "/var/lib/rpm",
-                                     chroot)
+    rpmdb = database.getRpmDB(pyrpm.config.rpmconfig, "/var/lib/rpm", chroot)
     rpmdb.open()
     if not rpmdb.read():
         return kernels

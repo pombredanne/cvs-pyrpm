@@ -12,6 +12,7 @@ PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 import pyrpm
+import pyrpm.database.memorydb
 from pyrpm.logger import log
 
 def usage():

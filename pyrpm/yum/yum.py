@@ -25,6 +25,7 @@ from pyrpm.package import RpmPackage
 from pyrpm.functions import *
 from pyrpm.io import *
 import pyrpm.database as database, yumconfig
+from pyrpm.database.repodb import RpmRepoDB
 from pyrpm.database.jointdb import JointDB
 from pyrpm.logger import log
 
@@ -161,10 +162,8 @@ class RpmYum:
         Return 1 on success 0 on errror (after warning the user).  Exclude
         packages matching whitespace-separated excludes."""
 
-        #repo = database.repodb.RpmRepoDB(self.config, baseurls,
-        #                  self.config.buildroot, conf, reponame)
-        repo = database.sqlitedb.SqliteDB(self.config, baseurls,
-                   self.config.buildroot, conf, reponame)
+        repo = database.getRepoDB(self.config, baseurls,
+                                  self.config.buildroot, conf, reponame)
         if repo.read() == 0:
             log.errorLn("Error reading repository %s", reponame)
             return 0
@@ -186,9 +185,9 @@ class RpmYum:
                 time1 = clock()
             # Create and read db
             log.info2Ln("Reading local RPM database")
-            self.pydb = database.getRpmDBFactory(self.config,
-                                                 self.config.dbpath,
-                                                 self.config.buildroot)
+            self.pydb = database.getRpmDB(self.config,
+                                          self.config.dbpath,
+                                          self.config.buildroot)
             self.pydb.open()
             if not self.pydb.read():
                 log.errorLn("Error reading the RPM database")
@@ -530,7 +529,7 @@ class RpmYum:
         # First pass through our args to find any directories and/or binary
         # rpms and create a memory repository from them to avoid special
         # cases.
-        memory_repo = database.repodb.RpmRepoDB(self.config, [], self.config.buildroot, None, "pyrpmyum-memory-repo")
+        memory_repo = RpmRepoDB(self.config, [], self.config.buildroot, None, "pyrpmyum-memory-repo")
         new_args = []
         for name in args:
             if   os.path.isfile(name) and name.endswith(".rpm"):

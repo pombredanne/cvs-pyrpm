@@ -15,6 +15,7 @@ PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 import pyrpm
+import pyrpm.database.memorydb
 
 def usage():
     print """Usage: %s [-v[v]] {-i|-U|-r} [--installed <dir>]

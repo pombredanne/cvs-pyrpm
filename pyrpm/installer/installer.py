@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-from pyrpm.database import repodb, sqlitedb
+from pyrpm import database
 from pyrpm.yum import Conf
 from pyrpm.logger import log
 from disk import *
@@ -164,10 +164,9 @@ class Repository:
         self.mirrorlist = mirrorlist
         self.exclude = exclude
 
-        self.repo = sqlitedb.SqliteDB(self.config, [ source ], yumconf=yumconf,
-                                      reponame=self.name)
-#        self.repo = repodb.RpmRepoDB(self.config, [ source ], yumconf=yumconf,
-#                                     reponame=self.name)
+        self.repo = database.getRepoDB(self.config, [ source ],
+                                       yumconf=yumconf,
+                                       reponame=self.name)
         if not self.repo.read():
             log.errorLn("Could not read repository '%s'.", self.name)
             return 0

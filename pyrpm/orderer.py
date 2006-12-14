@@ -76,8 +76,9 @@ Possible weights are:
 from hashlist import HashList
 from base import *
 from resolver import RpmResolver
-import database
 from database.rpmexternalsearchdb import RpmExternalSearchDB
+from database.memorydb import RpmMemoryDB
+
 from logger import log
 
 def operationFlag(flag, operation):
@@ -125,7 +126,7 @@ class RpmRelations:
         if externaldb:
             db = RpmExternalSearchDB(externaldb, self.config, None)
         else:
-            db = database.memorydb.RpmMemoryDB(self.config, None)
+            db = RpmMemoryDB(self.config, None)
         db.addPkgs(rpms)
         resolver = RpmResolver(self.config, db, nocheck=1)
 

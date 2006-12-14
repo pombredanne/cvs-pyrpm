@@ -429,12 +429,16 @@ class SqliteDB(repodb.RpmRepoDB):
             if not filenamebz2:
                 break
 
-            f = bz2.BZ2File(filenamebz2)
-            o = open(dbfilename, "w")
+            try:
+                f = bz2.BZ2File(filenamebz2)
+                o = open(dbfilename, "w")
 
-            o.write(f.read())
-            o.close()
-            f.close()
+                o.write(f.read())
+                o.close()
+                f.close()
+            except (IOError, EOFError):
+                continue
+                
 
             try:
                 csum, db = self.loadCache(dbfilename)
