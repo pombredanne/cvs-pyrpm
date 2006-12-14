@@ -153,7 +153,7 @@ class RpmYum:
                 if self.__addSingleRepo(baseurls, conf, key) == 0:
                     return 0
                 if self.config.timer:
-                    log.info2Ln("Reading repository took %s seconds\n", (clock() - time1))
+                    log.info2Ln("Reading repository took %s seconds", (clock() - time1))
         return 1
 
     def __addSingleRepo(self, baseurls, conf, reponame):
@@ -213,7 +213,7 @@ class RpmYum:
         self.opresolver = RpmResolver(self.config, db)
         self.__generateObsoletesList()
         if self.config.timer:
-            log.info2Ln("Preparing transaction took %s seconds\n", (clock() - time1))
+            log.info2Ln("Preparing transaction took %s seconds", (clock() - time1))
 
         return 1
 

@@ -96,7 +96,7 @@ class SqliteRpmPackage(package.RpmPackage):
             if dict.has_key(self, tag):
                 del self[tag]
 
-class SqliteDB(repodb.RpmRepoDB):
+class SqliteRepoDB(repodb.RpmRepoDB):
     COLUMNS = (
             'pkgId',
             'name',
@@ -883,6 +883,6 @@ class SqliteDB(repodb.RpmRepoDB):
 
 # fall back to RpmRepoDB if sqlite is not installed
 if sqlite is None:
-    SqliteDB = repodb.RpmRepoDB
+    SqliteRepoDB = repodb.RpmRepoDB
 
 # vim:ts=4:sw=4:showmatch:expandtab

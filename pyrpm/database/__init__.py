@@ -28,7 +28,7 @@ def getRpmDB(config, source, root=''):
         return memorydb.RpmMemoryDB(config, source[5:], root)
     elif source[:6] == 'repo:/':
         import sqliterepodb
-        return sqliterepodb.SqliteDB(config, source[6:], root)
+        return sqliterepodb.SqliteRepoDB(config, source[6:], root)
     elif source[:7] == 'rpmdb:/':
         import rpmdb
         return rpmdb.RpmDB(config, source[7:], root)
@@ -39,9 +39,9 @@ def getRpmDB(config, source, root=''):
 
 def getRepoDB(config, source, buildroot='', yumconf=None,
               reponame="default", nc=None):
-    import sqlitedb
-    return sqlitedb.SqliteDB(config, source, buildroot, yumconf,
-                             reponame, nc)
+    import sqliterepodb
+    return sqliterepodb.SqliteRepoDB(config, source, buildroot, yumconf,
+                                     reponame, nc)
                   
 
 # vim:ts=4:sw=4:showmatch:expandtab
