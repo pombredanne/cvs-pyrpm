@@ -348,8 +348,6 @@ class RpmRelations:
 
         length = len(self)
 
-        log.info2Ln("Start ordering")
-
         order = [ ]
 
         connected_components = ConnectedComponentsDetector(self).detect(self)
@@ -769,6 +767,8 @@ class RpmOrderer:
         form (operation, RpmPackage). The operation is one of OP_INSTALL,
         OP_UPDATE or OP_ERASE per package.
         If an error occurs, return None."""
+
+        log.debug1Ln("Start ordering")
 
         order = self.genOrder()
         if order == None:

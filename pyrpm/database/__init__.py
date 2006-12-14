@@ -27,14 +27,11 @@ def getRpmDB(config, source, root=''):
         import memorydb
         return memorydb.RpmMemoryDB(config, source[5:], root)
     elif source[:6] == 'repo:/':
-        import sqlitedb
-        return sqlitedb.SqliteDB(config, source[6:], root)
+        import sqliterepodb
+        return sqliterepodb.SqliteDB(config, source[6:], root)
     elif source[:7] == 'rpmdb:/':
         import rpmdb
         return rpmdb.RpmDB(config, source[7:], root)
-    elif source[:10] == 'sqlitedb:/':
-        import sqlitedb
-        return sqlitedb.SqliteDB(config, source[10:], root)
     #elif source[:5] == 'dir:/':
     #    return directorydb.RpmDirectoryDB(config, source[4:], root)
     import rpmdb
