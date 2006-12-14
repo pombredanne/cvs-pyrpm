@@ -17,12 +17,11 @@
 #
 
 import os, os.path, stat, signal
-import pyrpm
-import pyrpm.functions as functions
-import pyrpm.database as database
 from pyrpm.logger import log
+from pyrpm.config import rpmconfig
+from pyrpm.functions import normalizeList, runScript, pkgCompare
+from pyrpm.database import getRpmDB
 from filesystem import *
-from installer import Repository
 
 def get_system_disks():
     disks = [ ]
@@ -287,7 +286,7 @@ def rpmdb_get(rpmdb, name):
         found = 0
         for j in xrange(len(_list)):
             pkg2 = _list[j]
-            if functions.pkgCompare(pkg, pkg2) > 0:
+            if pkgCompare(pkg, pkg2) > 0:
                 _list.insert(j, pkg)
                 found = 1
                 break
@@ -297,14 +296,14 @@ def rpmdb_get(rpmdb, name):
 
 def get_installed_kernels(chroot=None):
     kernels = [ ]
-    rpmdb = database.getRpmDB(pyrpm.config.rpmconfig, "/var/lib/rpm", chroot)
+    rpmdb = getRpmDB(pyrpm.config.rpmconfig, "/var/lib/rpm", chroot)
     rpmdb.open()
     if not rpmdb.read():
         return kernels
     list = rpmdb_get(rpmdb, "kernel-smp")
     list.extend(rpmdb_get(rpmdb, "kernel"))
     rpmdb.close()
-    functions.normalizeList(list)
+    normalizeList(list)
     kernels = [ "%s-%s" % (pkg["version"], pkg["release"]) for pkg in list ]
     return kernels
 
@@ -314,7 +313,7 @@ def fuser(what):
     sig = signal.SIGTERM
     while 1:
         lsof = "/usr/sbin/lsof -t +D '%s' 2>/dev/null" % what
-        (status, rusage, msg) = functions.runScript(script=lsof)
+        (status, rusage, msg) = runScript(script=lsof)
         if msg == "":
             break
         pids = msg.strip().split()
@@ -559,125 +558,26 @@ def chroot_device(device, chroot=None):
         return realpath(chroot, device)
     return device
 
-def _compsLangsupport(pkgs, comps, languages, group):
-    if not comps.grouphash.has_key(group):
-        return
+def mount_cdrom(dir):
+    what = "/dev/cdrom"
+    log.debug1Ln("Mounting '%s' on '%s'", what, dir)
+    mount(what, dir, fstype="auto", options="ro")
+    return "file://%s" % dir
 
-    if not comps.grouphash[group].has_key("langonly") or \
-           not comps.grouphash[group]["langonly"] in languages:
-        return
+def mount_nfs(url, dir):
+    if url[:6] != "nfs://":
+        raise ValueError, "'%s' is no valid nfs url." % url
 
-    # add grouplist
-    if comps.grouphash[group].has_key("grouplist"):
-        for _group in comps.grouphash[group]["grouplist"]["groupreqs"]:
-            _compsLangsupport(pkgs, comps, languages, _group)
-        for _group in comps.grouphash[group]["grouplist"]["metapkgs"]:
-            _compsLangsupport(pkgs, comps, languages, _group)
-
-    for name in comps.getPackageNames(group):
-        if name in pkgs:
-            continue
-        log.info1Ln("Adding package '%s' for langsupport.", name)
-        pkgs.append(name)
-
-    # old style conditional
-    optional_list = comps.getOptionalPackageNames(group)
-    for (name, requires) in optional_list:
-        if name in pkgs:
-            continue
-        for req in requires:
-            if req in pkgs:
-                log.info1Ln("Adding package '%s' for langsupport.", name)
-                pkgs.append(name)
-                break
-
-    # new style conditional
-    conditional_list = comps.getConditionalPackageNames(group)
-    for (name, requires) in conditional_list:
-        if name in pkgs:
-            continue
-        for req in requires:
-            if req in pkgs:
-                log.info1Ln("Adding package '%s' for langsupport.", name)
-                pkgs.append(name)
-                break
-
-def compsLangsupport(pkgs, comps, languages):
-    for group in comps.grouphash.keys():
-        _compsLangsupport(pkgs, comps, languages, group)
-
-def addPkgByFileProvide(repo, name, pkgs, description):
-    s = repo.searchFilenames(name)
-    if len(s) == 0:
-        if not repo._matchesFile(name):
-            repo.importFilelist()
-            s = repo.searchFilenames(name)
-    if len(s) > 0:
-        found = False
-        for pkg in s:
-            if pkg["name"] in pkgs:
-                found = True
-                break
-        if not found:
-            pkg = s[0]
-            log.info1Ln("Adding package '%s' for %s.", pkg["name"],
-                        description)
-            pkgs.append(pkg["name"])
-    else:
-        raise ValueError, "Could not find package providing '%s'" % (name) + \
-              "needed for %s." % (description)
-
-def load_source_repo(ks, source_dir):
-    source = Repository(pyrpm.rpmconfig, source_dir, "base")
-    exclude = None
-    if ks.has_key("cdrom"):
-        url = "cdrom"
-        if ks["cdrom"].has_key("exclude"):
-            exclude = ks["cdrom"]["exclude"]
-    elif ks.has_key("nfs"):
-        url = "nfs://%s:%s" % (ks["nfs"]["server"], ks["nfs"]["dir"])
-        if ks["nfs"].has_key("exclude"):
-            exclude = ks["nfs"]["exclude"]
-    else:
-        url = ks["url"]["url"]
-        if ks["url"].has_key("exclude"):
-            exclude = ks["url"]["exclude"]
-
-    log.info1Ln("Reading repodata from installation source ...")
-    if not source.load(url, exclude=exclude):
-        raise IOError, "Loading of source failed."
-
-    if not source.comps:
-        raise IOError, "There is no comps.xml in installation source."
-
-    return source
-
-def load_repos(ks, repos_dir):
-    if not ks.has_key("repo"):
-        return { }
-
-    repos = { }
-    failed = [ ]
-    for repo in ks["repo"]:
-        repos[repo] = Repository(pyrpm.rpmconfig,
-                                 "%s/%s" % (repos_dir, repo), repo)
-        log.info1Ln("Reading repodata from repository '%s'", repo)
-        baseurl = mirrorlist = exclude = None
-        if ks["repo"][repo].has_key("baseurl"):
-            baseurl = ks["repo"][repo]["baseurl"]
-        if ks["repo"][repo].has_key("mirrorlist"):
-            # TODO: as soon as RepoDB supports mirrorlist directly...
-            mirrorlist = ks["repo"][repo]["mirrorlist"]
-        if ks["repo"][repo].has_key("exclude"):
-            exclude = ks["repo"][repo]["exclude"]
-        if not repos[repo].load(baseurl, mirrorlist=mirrorlist,
-                                exclude=exclude):
-            failed.append(repo)
-
-    if len(failed) > 0:
-        raise IOError, "Loading of repo '%s' failed." % "', '".join(failed)
-
-    return repos
+    what = url[6:]
+    splits = what.split("/", 1)
+    if splits[0][-1] != ":":
+        what = ":/".join(splits)
+    del splits
+    # mount nfs source
+    log.debug1Ln("Mounting '%s' on '%s'", what, dir)
+    mount(what, dir, fstype="nfs",
+          options="ro,rsize=32768,wsize=32768,hard,nolock")
+    return "file://%s" % dir
 
 def release_info(source):
     # get source information via release package
@@ -716,8 +616,8 @@ def run_script(dict, chroot):
     interpreter = "/bin/sh"
     if dict.has_key("interpreter"):
         interpreter = dict["interpreter"]
-    (status, rusage, msg) = pyrpm.runScript(interpreter, dict["script"],
-                                            chroot=chroot)
+    (status, rusage, msg) = runScript(interpreter, dict["script"],
+                                      chroot=chroot)
     if status != 0:
         print msg
         if dict.has_key("erroronfail"):

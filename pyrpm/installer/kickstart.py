@@ -261,6 +261,8 @@ class KickstartConfig(dict):
                     if not self[opt].has_key("partition") or \
                        not self[opt].has_key("dir"):
                         raise ValueError, "Error in line '%s'" % line
+                elif opt == "key":
+                    self.parseSub(opt, args[1:], [ "skip" ])
                 elif opt == "langsupport":
                     (_dict, _args) = self.parseArgs(opt, args[1:],
                                                     [ "default:" ])

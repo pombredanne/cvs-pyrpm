@@ -18,13 +18,12 @@
 
 import os.path
 from pyrpm.logger import log
-from installer import keyboard_models
 from pyrpm.functions import runScript
 from functions import create_file
 
-def firewall_config(ks, buildroot, installation):
-    if (installation.release == "RHEL" and installation.version < 4) or \
-           (installation.release == "FC" and installation.version < 2) or \
+def firewall_config(ks, buildroot, source):
+    if (source.isRHEL() and source.cmpVersion("4") < 0) or \
+           (source.isFedora() and source.cmpVersion("2") < 0) or \
            not os.path.exists(buildroot+"/usr/sbin/lokkit"):
         # lokkit is not able to configure firewall for pre RHEL-4 and
         # pre FC-2

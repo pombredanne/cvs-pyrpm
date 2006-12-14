@@ -17,7 +17,7 @@
 #
 
 import os, stat, string, time, resource, struct
-import pyrpm.functions as functions
+from pyrpm.functions import runScript
 from pyrpm.logger import log
 
 ################################## functions ##################################
@@ -54,7 +54,7 @@ def umount(what):
 def swapon(device):
     swapon = "/sbin/swapon '%s'" % device
     log.info1Ln("Enable swap on '%s'.", device)
-    (status, rusage, log) = functions.runScript(script=swapon)
+    (status, rusage, log) = runScript(script=swapon)
     if status != 0:
         log.errorLn("swapon failed.")
         return 1
@@ -63,7 +63,7 @@ def swapon(device):
 def swapoff(device):
     swapoff = "/sbin/swapoff '%s'" % device
     log.info1Ln("Disable swap on '%s'.", device)
-    (status, rusage, log) = functions.runScript(script=swapoff)
+    (status, rusage, log) = runScript(script=swapoff)
     if status != 0:
         log.errorLn("swapoff failed.")
         return 1

@@ -101,7 +101,6 @@ def main():
             return
         elif opt in [ "-v", "--verbose" ]:
             verbose += 1
-            pyrpm.rpmconfig.verbose += 1
             log.setLogLevel(log.getLogLevel() + 1)
         elif opt in [ "-d", "--debug" ]:
             log.setDebugLogLevel(log.getDebugLogLevel() + 1)
@@ -219,72 +218,29 @@ def main():
         log.errorLn("Only installation with nfs or url is supported, exiting.")
         return 1
 
-    ### load source ###
+    ############################### load source ###############################
 
-    try:
-        source = load_source_repo(ks, source_dir)
-    except Exception, msg:
-        log.errorLn(msg)
+    source = Source()
+    if not source.load(ks, source_dir):
         return 1
 
-    ### get source information ###
-
-    source_release = source_version = source_arch = None
-    # get discinfo if available
-    if not no_discinfo and source.get(".discinfo"):
-        di = get_discinfo(source.get(".discinfo"))
-        if di:
-            (source_release, source_version, source_arch) = di
-    if not source_release or not source_version or not source_arch:
-        # get source information via release package
-        # will be overwritte later by .buildstamp or .discinfo if not disabled
-        try:
-            (source_release, source_version, source_arch) = \
-                             release_info(source)
-        except Exception, msg:
-            log.errorLn(msg)
-            return 1
-
-    ############################## verify source ##############################
-
-    if source_release == "Red Hat Enterprise Linux":
-        short_release = "RHEL"
-        prefix = "RedHat"
-    elif source_release == "Fedora Core":
-        short_release = "FC"
-        prefix = "Fedora"
-    else:
-        log.errorLn("Unknown source release '%s'." % source_release)
-        return 1
-
-    try:
-        installation = Installation(short_release, int(source_version),
-                                    source_arch)
-    except:
-        try:
-            installation = Installation(short_release, float(source_version),
-                                        source_arch)
-        except:
-            log.errorLn("The installation version '%s' is not valid." % \
-                        source_version)
-            return 1
-
-    if (installation.release == "RHEL" and installation.version < 3) or \
-           (installation.release == "FC" and installation.version < 2):
+    # verify source
+    if (source.isRHEL() and source.cmpVersion("3") < 0) or \
+           (source.isFedora() and source.cmpVersion("2") < 0):
         log.errorLn("%s is not supported as installation source" % \
-              installation)
+                    source.getRelease())
         return 1
 
-    log.info1Ln("Installation source: %s [%s]", installation,
-                installation.arch)
-
-    if installation.arch not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
-        log.errorLn("Installation source is not compatible with system arch.")
+    if source.getArch() not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
+        log.errorLn("Installation source arch '%s' is not compatible with "
+                    "system arch '%s'.", source.getArch(),
+                    pyrpm.rpmconfig.machine)
         return 1
 
-    if user_arch and user_arch not in pyrpm.arch_compats[installation.arch]:
-        log.errorLn("User requested arch '%s' " % (user_arch) + \
-                    "is not compatible with installation source.")
+    if user_arch and user_arch not in pyrpm.arch_compats[source.getArch()]:
+        log.errorLn("User requested arch '%s' is not compatible with "
+                    "installation source arch '%s'.", user_arch,
+                    source.getArch())
         return 1
 
     ############################## mount stage2  ##############################
@@ -293,16 +249,8 @@ def main():
         stage2_img_dir = tempdir+"/stage2_img"
         os.mkdir(stage2_img_dir)
 
-        stage2 = source.get("RedHat/base/stage2.img")
-        if not stage2:
-            stage2 = source.get("Fedora/base/stage2.img")
-        if not stage2:
-            stage2 = source.get("images/stage2.img")
-        if not stage2:
-            log.errorLn("Could not find stage2 image in installation source.\n"
-                        "Try to use option --no-stage2.")
-            return 1
-        if not os.path.exists(stage2):
+        stage2 = source.getStage2()
+        if not stage2 or not os.path.exists(stage2):
             log.errorLn("Could not get stage2 image from installation source."
                         "Try to use option --no-stage2.")
             return 1
@@ -331,11 +279,12 @@ def main():
         bs = get_buildstamp_info(stage2_img_dir)
         if not bs:
             log.warningLn("Failed to get buildstamp information from stage2.")
-        if bs[0] != source_release or bs[1] != source_version or \
-               bs[2] != source_arch:
+        if bs[0] != source.getName() or bs[1] != source.getVersion() or \
+               bs[2] != source.getArch():
             log.warningLn("Release info does not match buildstamp: \n"
                           "  %s-%s.%s <=> %s-%s.%s", bs[0], bs[1], bs[2],
-                          source_release, source_version, source_arch)
+                          source.getName(), source.getVersion(),
+                          source.getArch())
 
         ### create stage2 chroot ###
 
@@ -409,7 +358,7 @@ def main():
 
         stage2_chroot = stage2_dir
         # test if bash is usable in changeroot
-        log.info1Ln("Testing if /bin/bash is usable in stage2.")
+        log.info1("Testing if /bin/bash is usable in stage2 .. ")
         (status, rusage, msg) = pyrpm.runScript( \
             script="/bin/bash --version 2>&1 >/dev/null",
             chroot=stage2_chroot)
@@ -417,6 +366,7 @@ def main():
         if status != 0:
             log.errorLn("/bin/bash in stage2 is not usable, exiting.")
             return 1
+        log.info1Ln("OK")
 
     else: # no_stage2
         stage2_dir = ""
@@ -471,8 +421,8 @@ def main():
     # check for existance of essential tags
 
     # langsupport
-    if (installation.release == "RHEL" and installation.version < 5) or \
-           (installation.release == "FC" and installation.version < 6):
+    if (source.isRHEL() and source.cmpVersion("5") < 0) or \
+           (source.isFedora() and source.cmpVersion("6") < 0):
         # langsupport is deprecated for RHEL>=5 and FC>=6, but required before
         if not ks.has_key("langsupport"):
             log.errorLn("langsupport is not defined, exiting.")
@@ -481,8 +431,8 @@ def main():
         log.warningLn("langsupport is deprecated, ignoring.")
 
     # monitor and xconfig::monitor
-    if (installation.release == "RHEL" and installation.version < 5) or \
-           (installation.release == "FC" and installation.version < 6):
+    if (source.isRHEL() and source.cmpVersion("5") < 0) or \
+           (source.isFedora() and source.cmpVersion("6") < 0):
         if ks.has_key("monitor"):
             log.warningLn("Monitor tag is not supported for this "
                           "distribution, using for compatibility mode.")
@@ -502,10 +452,12 @@ def main():
     # get system disks
     system["disks"] = get_system_disks()
 
+    devices = Devices()
+
     # get system raidmap
     system["raidmap"] = get_system_md_devices()
     for dev in system["raidmap"]:
-        installation.devices.add(dev)
+        devices.add(dev)
 
     # get system logical volumes
     system["lvmap"] = LVM_VOLGROUP.display()
@@ -598,22 +550,11 @@ def main():
             diskmap[disk].print_info()
             diskmap[disk].print_partitions()
 
-    ############################### load repos ###############################
-
-    if ks.has_key("repo"):
-        for repo in ks["repo"]:
-            create_dir("", "%s/%s" % (repos_dir, repo))
-    try:
-        repos = load_repos(ks, repos_dir)
-    except Exception, msg:
-        log.errorLn(msg)
-        return 1
-
     ############## clear and generate partitions and disklabels ##############
 
     # initialize dmsetup
-    if (installation.release == "RHEL" and installation.version >= 5) or \
-           (installation.release == "FC" and installation.version >= 4):
+    if (source.isRHEL() and source.cmpVersion("5") >= 0) or \
+           (source.isFedora() and source.cmpVersion("4") >= 0):
         if os.path.exists(stage2_dir+"/sbin/dmsetup"):
             log.info1Ln("Initializing device mapper.")
             dmsetup = "/sbin/dmsetup info 2>/dev/ull"
@@ -926,11 +867,11 @@ def main():
                 devs.append(mdmap[dev]["devices"][d]["device"])
 
             raid = RAID(dev, devs)
-            device = installation.devices.getNextFree(dev)
+            device = devices.getNextFree(dev)
             if dev != device:
                 raid.mapTo(device)
             raid.assemble()
-            installation.devices.add(device)
+            devices.add(device)
             raidmap[dev] = raid
 
             device = "/dev/%s" % device
@@ -1363,6 +1304,7 @@ def main():
 #    print "volgroup=%s" % pprint.pformat(volgroup)
 #    print "to_create=%s" % pprint.pformat(to_create)
 
+
     if len(modified) > 0 and confirm == 1:
         if not pyrpm.is_this_ok():
             return 0
@@ -1754,7 +1696,7 @@ def main():
                 log.errorLn("Could not find %s/sbin/mkfs.%s in %s.", prefix,
                             fstype, location)
                 return
-    if "ext3" in needed_fstypes and installation != "RHEL-2.1":
+    if "ext3" in needed_fstypes and source.getRelease() != "RHEL-2.1":
         try:
             check_exists(dir, "%s/sbin/tune2fs" % prefix)
         except:
@@ -1804,7 +1746,7 @@ def main():
                     name = "mkfs.%s" % fstype
                     create_link(stage2_dir, "/usr/sbin/%s" % name,
                                 "/sbin/%s" % name)
-            if "ext3" in needed_fstypes and installation != "RHEL-2.1":
+            if "ext3" in needed_fstypes and source.getRelease() != "RHEL-2.1":
                 create_link(stage2_dir, "/usr/sbin/tune2fs", "/sbin/tune2fs")
 
             if has_raid:
@@ -1838,7 +1780,7 @@ def main():
                     devs.append(partitionmap[p]["device"])
 
                 raid = RAID(onpart, devs, chroot=stage2_chroot)
-                device = installation.devices.getNextFree(onpart)
+                device = devices.getNextFree(onpart)
                 if onpart != device:
                     raid.mapTo(device)
 
@@ -1857,7 +1799,7 @@ def main():
                     if not raid.create(partitions[name]["level"], spares):
                         return 1
                 raidmap[onpart] = raid
-                installation.devices.add(device)
+                devices.add(device)
                 partitionmap[onpart]["device"] = "/dev/%s" % device
                 partitionmap[onpart]["size"] = raid.size
 
@@ -1900,7 +1842,8 @@ def main():
                     log.errorLn("mkfs.%s failed.", part["fstype"])
                     return 1
 
-                if part["fstype"] == "ext3" and installation != "RHEL-2.1":
+                if part["fstype"] == "ext3" and \
+                       source.getRelease() != "RHEL-2.1":
                     # set ext options
                     tune2fs = "/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
                               partitionmap[onpart]["device"]
@@ -1918,8 +1861,8 @@ def main():
             elif name[:4] == "swap" or \
                      (part.has_key("fstype") and part["fstype"] == "swap"):
                 l = ""
-                if (installation.release == "RHEL" and installation.version >= 4) or \
-                       (installation.release == "FC" and installation.version > 2):
+                if (source.isRHEL() and source.cmpVersion("4") > 0) or \
+                       (source.isFedora() and source.cmpVersion("2") > 0):
                     # no swap labels for RHEL-2.1, RHEL-3, FC-1
                     l = "-L '%s'" % label
                 mkswap = "/sbin/mkswap %s '%s' >/dev/null" % \
@@ -1996,240 +1939,27 @@ def main():
     target_chroot = target_dir
     pyrpm.rpmconfig.buildroot = target_chroot
 
-    ############################ package selection ############################
+    ################################ languages ################################
 
     languages = [ ]
+    if (source.isRHEL() and source.cmpVersion("4.9") < 0) or \
+           (source.isFedora() and source.cmpVersion("6") < 0):
+        # langsupport is deprecated for RHEL>=5 and FC>=6
+        # get langsupport packages
+        if ks.has_key("langsupport"):
+            if ks["langsupport"].has_key("default"):
+                languages.append(ks["langsupport"]["default"][:2])
+                languages.append(ks["langsupport"]["default"][:5])
+            for lang in ks["langsupport"]["supported"]:
+                languages.append(lang[:2])
+                languages.append(lang[:5])
+            pyrpm.normalizeList(languages)
+
+    ############################ package selection ############################
+
     if ks.has_key("install"):
-        groups = [ ]
-        if ks["packages"].has_key("groups") and \
-               len(ks["packages"]["groups"]) > 0:
-            # only add group ids to group array
-            for group in ks["packages"]["groups"]:
-                found = False
-                group_id = source.comps.getGroup(group)
-                if group_id:
-                    groups.append(group_id)
-                    found = True
-                if repo_comps:
-                    for repo in repos:
-                        if not repos[repo].comps:
-                            continue
-                        group_id = repos[repo].comps.getGroup(group)
-                        if group_id:
-                            groups.append(group_id)
-                            found = True
-                if not found:
-                    log.warningLn("Could not find group '%s'.", group)
-
-        # load comps file for groups and default packages
-        if not source.comps:
-            log.errorLn("Could not find comps file, exiting.")
-            return 1
-
-        pkgs = [ ]
-        # everything install
-        if "everything" in groups:
-            for group in source.comps.getGroups():
-                pkgs.extend(source.comps.getPackageNames(group))
-                pkgs.extend(source.comps.getConditionalPackageNames(group))
-            if repo_comps:
-                for repo in repos:
-                    if not repos[repo].comps:
-                        continue
-                    comps = repos[repo].comps
-                    for group in comps.getGroups():
-                        pkgs.extend(comps.getPackageNames(group))
-                        pkgs.extend(comps.getConditionalPackageNames(group))
-            # add and remove packages from package list
-            if ks.has_key("packages"):
-                if ks["packages"].has_key("drop"):
-                    for pkg in ks["packages"]["drop"]:
-                        if pkg in pkgs:
-                            pkgs.remove(pkg)
-                if ks["packages"].has_key("add"):
-                    for pkg in ks["packages"]["add"]:
-                        if not pkg in pkgs:
-                            pkgs.append(pkg)
-        else:
-            # add default group "base" if it is not in groups and
-            # no_default_groups is not set
-            if ks.has_key("packages") and ks["packages"].has_key("nobase"):
-                no_default_groups = 1
-            if not no_default_groups:
-                if not "base" in groups:
-                    groups.append("base")
-                if not "core" in groups:
-                    groups.append("core")
-
-            pyrpm.normalizeList(groups)
-
-            # add default desktop
-            if ks.has_key("xconfig"):
-                if ks["xconfig"].has_key("startxonboot"):
-                    if not "base-x" in groups:
-                        groups.append("base-x")
-                    desktop = "GNOME"
-                    if ks["xconfig"].has_key("defaultdesktop"):
-                        desktop = ks["xconfig"]["defaultdesktop"]
-                    desktop = "%s-desktop" % desktop.lower()
-                    if not desktop in groups:
-                        log.info1Ln("Adding group '%s'.", desktop)
-                        groups.append(desktop)
-
-            # add package for selected groups
-            for group in groups:
-                if source.comps.hasGroup(group):
-                    pkgs.extend(source.comps.getPackageNames(group))
-                if repo_comps:
-                    for repo in repos:
-                        if not repos[repo].comps:
-                            continue
-                        comps = repos[repo].comps
-                        if comps.hasGroup(group):
-                            pkgs.extend(comps.getPackageNames(group))
-
-            # add xorg driver package for FC-5
-            if ks.has_key("xconfig"):
-                if installation.release == "FC" and installation.version > 4:
-                    if ks["xconfig"].has_key("driver"):
-                        pkgs.append("xorg-x11-drv-%s" % \
-                                    ks["xconfig"]["driver"])
-                    else:
-                        if not "xorg-x11-drivers" in pkgs:
-                            pkgs.append("xorg-x11-drivers")
-
-            # add packages for needed filesystem types
-            for fstype in needed_fstypes:
-                if fstype == "swap":
-                    continue
-                mkfs = "/sbin/mkfs.%s" % fstype
-                try:
-                    addPkgByFileProvide(source.repo, mkfs, pkgs,
-                                        "%s filesystem creation" % fstype)
-                except Exception, msg:
-                    log.errorLn(msg)
-                    return 1
-
-            # add comps package
-            if not "comps" in pkgs:
-                pkgs.append("comps")
-
-            # append mdadm
-            if has_raid:
-                try:
-                    addPkgByFileProvide(source.repo, "/sbin/mdadm", pkgs,
-                                        "raid configuration")
-                except Exception, msg:
-                    log.warningLn(msg)
-
-            # append authconfig
-            if ks.has_key("authconfig"):
-                try:
-                    addPkgByFileProvide(source.repo, "/usr/sbin/authconfig",
-                                        pkgs, "authentication configuration")
-                except Exception, msg:
-                    log.warningLn(msg)
-
-            # append iptables and config tool
-            if ks.has_key("firewall") and \
-                   not ks["firewall"].has_key("disabled") and \
-                   not "iptables" in pkgs:
-                log.info1Ln("Adding package 'iptables'.")
-                pkgs.append("iptables")
-
-                # no firewall config tool in RHEL-3
-                if (installation.release == "RHEL" and \
-                    installation.version >= 4) or \
-                   (installation.release == "FC" and \
-                    installation.version >= 3):
-                    try:
-                        addPkgByFileProvide(source.repo, "/usr/sbin/lokkit",
-                                            pkgs, "firewall configuration")
-                    except Exception, msg:
-                        log.warningLn(msg)
-
-            # append lokkit
-            if ks.has_key("selinux") and \
-                   (installation.release == "RHEL" and \
-                    installation.version >= 4) or \
-                   (installation.release == "FC" and \
-                    installation.version >= 3):
-                try:
-                    addPkgByFileProvide(source.repo, "/usr/sbin/lokkit", pkgs,
-                                        "selinux configuration")
-                except Exception, msg:
-                    log.warningLn(msg)
-
-            # append kernel
-            if not "kernel" in pkgs and not "kernel-smp" in pkgs:
-                log.info1Ln("Adding package 'kernel'.")
-                pkgs.append("kernel")
-
-            # append kernel-devel for FC-6 and RHEL-5
-            if "gcc" in pkgs and \
-                   ((installation.release == "RHEL" and \
-                     installation.version >= 5) or \
-                    (installation.release == "FC" and \
-                     installation.version >= 6)):
-                if "kernel" in pkgs:
-                    if not "kernel-devel" in pkgs:
-                        log.info1Ln("Adding package 'kernel-devel'.")
-                        pkgs.append("kernel-devel")
-                elif "kernel-smp" in pkgs:
-                    if not "kernel-smp-devel" in pkgs:
-                        log.info1Ln("Adding package 'kernel-smp-devel'.")
-                        pkgs.append("kernel-smp-devel")
-
-            # append firstboot
-            if ks.has_key("firstboot") and \
-                   not ks["firstboot"].has_key("disabled") and \
-                   not "firstboot" in pkgs:
-                log.info1Ln("Adding package 'firstboot'.")
-                pkgs.append("firstboot")
-
-            # append dhclient
-            if ks.has_key("bootloader") and not "grub" in pkgs:
-                log.info1Ln("Adding package 'grub'.")
-                pkgs.append("grub")
-
-            # append grub
-            if ks.has_key("network") and len(ks["network"]) > 0:
-                for net in ks["network"]:
-                    if net["bootproto"] == "dhcp" and \
-                           not "dhclient" in pkgs:
-                        log.info1Ln("Adding package 'dhclient'.")
-                        pkgs.append("dhclient")
-
-            # add and remove packages from package list
-            if ks.has_key("packages"):
-                if ks["packages"].has_key("drop"):
-                    for pkg in ks["packages"]["drop"]:
-                        if pkg in pkgs:
-                            pkgs.remove(pkg)
-                if ks["packages"].has_key("add"):
-                    for pkg in ks["packages"]["add"]:
-                        if not pkg in pkgs:
-                            pkgs.append(pkg)
-
-            if (installation.release == "RHEL" and installation.version < 5) or \
-                   (installation.release == "FC" and installation.version < 6):
-                # langsupport is deprecated for RHEL>=5 and FC>=6
-                # get langsupport packages
-                if ks.has_key("langsupport"):
-                    if ks["langsupport"].has_key("default"):
-                        languages.append(ks["langsupport"]["default"][:2])
-                        languages.append(ks["langsupport"]["default"][:5])
-                    for lang in ks["langsupport"]["supported"]:
-                        languages.append(lang[:2])
-                        languages.append(lang[:5])
-                    pyrpm.normalizeList(languages)
-                compsLangsupport(pkgs, source.comps, languages)
-                if repo_comps:
-                    for repo in repos:
-                        if not repos[repo].comps:
-                            continue
-                        compsLangsupport(pkgs, repos[repo].comps, languages)
-
+        pkgs = source.getPackages(ks, languages, no_default_groups,
+                                  repo_comps, has_raid, needed_fstypes)
         pyrpm.normalizeList(pkgs)
 
         # no packages?
@@ -2239,6 +1969,7 @@ def main():
 
     # else: upgrade
     # ignore package selection
+
 
     ############################## setup target ##############################
 
@@ -2251,8 +1982,8 @@ def main():
     create_dir(target_chroot, "/etc/sysconfig")
     create_dir(target_chroot, "/proc")
     create_dir(target_chroot, "/root")
-    if (installation.release == "RHEL" and installation.version >= 4) or \
-           (installation.release == "FC" and installation.version >= 2):
+    if (source.isRHEL() and source.cmpVersion("4") >= 0) or \
+           (source.isFedora() and source.cmpVersion("2") >= 0):
         create_dir(target_chroot, "/sys")
     create_dir(target_chroot, "/tmp", mode=1777)
     create_dir(target_chroot, "/var/log")
@@ -2272,8 +2003,8 @@ def main():
     except Exception, msg:
         log.errorLn("Unable to mount temporary /proc/.real_proc: %s", msg)
         return 1
-    if (installation.release == "RHEL" and installation.version >= 4) or \
-           (installation.release == "FC" and installation.version >= 2):
+    if (source.isRHEL() and source.cmpVersion("4") >= 0) or \
+           (source.isFedora() and source.cmpVersion("2") >= 0):
         # /sys
         log.info1Ln("Mounting temporary '/sys'.")
         try:
@@ -2316,8 +2047,8 @@ def main():
             copy_device(partitionmap[onpart]["device"], target_chroot,
                         source_dir=stage2_dir)
 
-    if (installation.release == "RHEL" and installation.version >= 4) or \
-           (installation.release == "FC" and installation.version >= 2):
+    if (source.isRHEL() and source.cmpVersion("4") >= 0) or \
+           (source.isFedora() and source.cmpVersion("2") >= 0):
         create_dir(target_chroot, "/sys/block")
         create_dir(target_chroot, "/sys/bus")
         create_dir(target_chroot, "/sys/class")
@@ -2440,8 +2171,8 @@ def main():
         else:
             log.warningLn("Unknown filesystem for '%s'.", onpart)
             continue
-    if (installation.release == "RHEL" and installation.version < 4) or \
-               (installation.release == "FC" and installation.version < 3):
+    if (source.isRHEL() and source.cmpVersion("4") < 0) or \
+           (source.isFedora() and source.cmpVersion("3") < 0):
         fstab_content.extend([ "none\t\t/dev/pts\t\tdevpts\tgid=5,mode=620\t0 0\n",
                            "none\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n",
                            "none\t\t/proc\t\tproc\tdefaults\t0 0\n" ])
@@ -2451,16 +2182,16 @@ def main():
                            "tmpfs\t\t/dev/shm\t\ttmpfs\tdefaults\t0 0\n",
                            "proc\t\t/proc\t\tproc\tdefaults\t0 0\n" ])
         mtab_content.append("proc /proc proc defaults 0 0\n")
-    if (installation.release == "RHEL" and installation.version >= 4) or \
-           (installation.release == "FC" and installation.version >= 2):
+    if (source.isRHEL() and source.cmpVersion("4") >= 0) or \
+           (source.isFedora() and source.cmpVersion("2") >= 0):
         fstab_content.append("sysfs\t/sys\t\tsysfs\tdefaults\t0 0\n")
         mtab_content.append("sysfs /sys sysfs defaults 0 0\n")
     for name in parts:
         if name[:4] != "swap":
             continue
         onpart = onparts[name]
-        if (installation.release == "RHEL" and installation.version < 4) or \
-               (installation.release == "FC" and installation.version <= 2) or \
+        if (source.isRHEL() and source.cmpVersion("4") < 0) or \
+               (source.isFedora() and source.cmpVersion("2") <= 0) or \
                not partitionmap[onpart]["label"]:
             # pre RHEL-4, pre FC-2 does not support swap labels
             if partitionmap[onpart].has_key("lvm"):
@@ -2567,8 +2298,8 @@ def main():
 
     # /etc/modprobe.conf and /etc/modules.conf
     if ks.has_key("install"):
-        if (installation.release == "RHEL" and installation.version < 4) or \
-               (installation.release == "FC" and installation.version < 2):
+        if (source.isRHEL() and source.cmpVersion("4") < 0) or \
+               (source.isFedora() and source.cmpVersion("2") < 0):
             # pre RHEL-4, pre FC-2 use modules.conf
             conf = "/etc/modules.conf"
         else:
@@ -2600,7 +2331,7 @@ def main():
     # install i586 rpms anymore: (TODO: re-enable this again)
 #    if ks.has_key("install") and not os.path.exists(target_chroot+"/etc/rpm/platform"):
 #    create_file(target_chroot, "/etc/rpm/platform",
-#                [ "%s-redhat-linux" % installation.arch ])
+#                [ "%s-redhat-linux" % source.getArch() ])
 
     # create /var/log/lastlog and /var/log/messages
     if ks.has_key("install"):
@@ -2657,29 +2388,11 @@ def main():
     fd.write("retries=20\n")
     fd.write("obsoletes=1\n")
     fd.write("reposdir=%s/yum.repos.d\n" % tempdir)
+    fd.write("\n")
     if ks.has_key("install") and \
            ks.has_key("packages") and ks["packages"].has_key("drop"):
         fd.write("exclude=%s\n" % string.join(ks["packages"]["drop"]))
-    fd.write("\n")
-    fd.write("[base]\n")
-    fd.write("name=dist %s\n" % installation)
-    if source.baseurl:
-        fd.write("baseurl=%s\n" % source.baseurl)
-    if source.exclude:
-        fd.write("exclude=%s\n" % string.join(source.exclude))
-    # no repo.mirrorlist and repo.exclude for base
-    fd.write("\n")
-    # add repos
-    for repo in repos:
-        fd.write("[%s]\n" % repo)
-        fd.write("name=%s\n" % repo)
-        if repos[repo].baseurl:
-            fd.write("baseurl=%s\n" % repos[repo].baseurl)
-        if repos[repo].mirrorlist:
-            fd.write("mirrorlist=%s\n" % repos[repo].mirrorlist)
-        if repos[repo].exclude:
-            fd.write("exclude=%s\n" % string.join(repos[repo].exclude))
-        fd.write("\n")
+    fd.write(source.getYumConf())
     fd.close()
 
 #    # TODO: use RpmYum class instead of external pyrpmyum call
@@ -2856,8 +2569,8 @@ def main():
 
     # /etc/sysconfig/selinux
     if ks.has_key("install") and ks.has_key("selinux") and \
-           ((installation.release == "RHEL" and installation.version > 3) or \
-            (installation.release == "FC" and installation.version > 2)):
+           ((source.isRHEL() and source.cmpVersion("3") > 0) or \
+            (source.isFedora() and source.cmpVersion("2") > 0)):
         log.info1Ln("Configuring selinux")
 
         try:
@@ -2913,8 +2626,8 @@ def main():
         create_file(target_chroot, "/etc/sysconfig/desktop",
                     [ 'DESKTOP="%s"\n' % desktop ])
 
-    if (installation.release == "RHEL" and installation.version < 5) or \
-           (installation.release == "FC" and installation.version < 6):
+    if (source.isRHEL() and source.cmpVersion("5") < 0) or \
+           (source.isFedora() and source.cmpVersion("6") < 0):
         # langsupport is deprecated for RHEL>=5 and FC>=6
         # /etc/sysconfig/i18n
         if ks.has_key("langsupport"):
@@ -2949,7 +2662,7 @@ def main():
     if ks.has_key("install") and \
            ks.has_key("firewall") and not ks["firewall"].has_key("disabled"):
         log.info1Ln("Configuring firewall")
-        firewall_config(ks, target_chroot, installation)
+        firewall_config(ks, target_chroot, source)
 
     # /etc/sysconfig/keyboard
     if ks.has_key("keyboard"):
@@ -2981,7 +2694,7 @@ def main():
     # /etc/X11/xorg.conf
     if ks.has_key("install") and ks.has_key("xconfig"):
         log.info1Ln("Configuring X")
-        x_config(ks, target_chroot, installation)
+        x_config(ks, target_chroot, source)
 
     # /etc/sysconfig/firstboot
     if ks.has_key("install") and ks.has_key("firstboot"):
@@ -3102,7 +2815,7 @@ def main():
             for kernel in kernels:
                 kernel = string.strip(kernel)
                 content.extend( \
-                    [ 'title %s (%s)\n' % (source_release, kernel),
+                    [ 'title %s (%s)\n' % (source.getName(), kernel),
                       '\troot (%s)\n' % hd_boot,
                       '\tkernel %s/vmlinuz-%s ro root=%s%s\n' % \
                       (prefix, kernel, root, append),
@@ -3114,7 +2827,7 @@ def main():
                 os.symlink("../boot/grub/grub.conf", target_chroot + "/etc/grub.conf")
 
             # copy all grub stage files
-            t = "/usr/share/grub/%s-redhat/" % installation.arch
+            t = "/usr/share/grub/%s-redhat/" % source.getArch()
             list = os.listdir(target_chroot+t)
             if len(list) == 0:
                 log.errorLn("grub stage files are missing in installation "

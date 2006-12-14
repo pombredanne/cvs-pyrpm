@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import pyrpm.functions as functions
+from pyrpm.functions import runScript
 from pyrpm.logger import log
 
 class RAID:
@@ -49,8 +49,7 @@ class RAID:
         command = "%s --assemble '%s'" % (RAID.prog, self.device) + \
                   " %s" % (" ".join(self.devices))
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=self.chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("mdadm failed on '%s' with error code %d",
@@ -78,8 +77,7 @@ class RAID:
                 " --level=%d" % (self.level) + \
                 " %s" % (" ".join(self.devices))
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=self.chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Failed to create raid '%s'.", self.name)
@@ -99,8 +97,7 @@ class RAID:
             return 1
         command = "%s --stop '%s'" % (RAID.prog, self.device)
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=self.chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Deactivation of raid '%s' failed: %s", self.name, msg)
@@ -117,8 +114,7 @@ class RAID:
     def info(device, chroot=None):
         command = "%s --detail '%s'" % (RAID.prog, device)
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Failed to get details for '%s'.", device)
@@ -173,8 +169,7 @@ class RAID:
     def examine(device, chroot=None):
         command = "%s -E '%s'" % (RAID.prog, device)
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Unable to get raid information for '%s'.", device)

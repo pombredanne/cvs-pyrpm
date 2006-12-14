@@ -17,12 +17,12 @@
 #
 
 import os.path
-from installer import keyboard_models
+from config import keyboard_models
 from functions import create_file
 import hwdata
 from pyrpm.logger import log
 
-def x_config(ks, buildroot, installation):
+def x_config(ks, buildroot, source):
     # default: VGA graphics card, Generic extended super VGA monitor
     card = "Unknown video card"
     driver = "vga"
@@ -124,8 +124,8 @@ def x_config(ks, buildroot, installation):
     if ks["xconfig"].has_key("depth"):
         depth = ks["xconfig"]["depth"]
 
-    if (installation.release == "RHEL" and installation.version < 4) or \
-           (installation.release == "FC" and installation.version < 3.9):
+    if (source.isRHEL() and source.cmpVersion("4") < 0) or \
+           (source.isFedora() and source.cmpVersion("3.9") < 0):
         conf = "/etc/X11/XF86Config"
     else:
         conf = "/etc/X11/xorg.conf"
@@ -136,8 +136,8 @@ def x_config(ks, buildroot, installation):
     if kbd_options and len(kbd_options) > 0:
         _kbdoptions = '        Option       "XkbOptions" "%s"\n' % kbd_options
 
-    if (installation.release == "RHEL" and installation.version < 4) or \
-           (installation.release == "FC" and installation.version < 2.9):
+    if (source.isRHEL() and source.cmpVersion("4") < 0) or \
+           (source.isFedora() and source.cmpVersion("2.9") < 0):
         mousedev = "/dev/mouse"
     else:
         mousedev = "/dev/input/mice"
@@ -216,8 +216,8 @@ def x_config(ks, buildroot, installation):
                 '                Modes    "%s"\n' % resolution,
                 '        EndSubSection\n',
                 'EndSection\n\n' ]
-    if (installation.release == "RHEL" and installation.version < 4) or \
-           (installation.release == "FC" and installation.version < 2.9):
+    if (source.isRHEL() and source.cmpVersion("4") < 0) or \
+           (source.isFedora() and source.cmpVersion("2.9") < 0):
         content.extend( ['Section "DRI"\n',
                          '        Group        0\n',
                          '        Mode         0666\n',

@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import pyrpm.functions as functions
+from pyrpm.functions import runScript
 from pyrpm.logger import log
 
 class LVM_PHYSICAL_VOLUME:
@@ -30,8 +30,7 @@ class LVM_PHYSICAL_VOLUME:
         command = "%s pvcreate --zero y -ff -y -d %s" % \
                   (LVM_PHYSICAL_VOLUME.prog, self.device)
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=self.chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Creation of physical layer on '%s' failed.",
@@ -42,8 +41,7 @@ class LVM_PHYSICAL_VOLUME:
     def scan(chroot=None):
         command = "%s pvscan 2>/dev/null" % LVM_PHYSICAL_VOLUME.prog
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Failed to scan for physical volumes.")
@@ -76,8 +74,7 @@ class LVM_PHYSICAL_VOLUME:
         command = "%s pvdisplay --units b 2>/dev/null" % \
                   LVM_PHYSICAL_VOLUME.prog
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Failed to get general physical volume information.")
@@ -124,8 +121,7 @@ class LVM_VOLGROUP:
             vgcreate += " --physicalextentsize '%s'" % extent
         vgcreate += " %s %s" % (self.name, " ".join(devices))
         log.debug2Ln(vgcreate)
-        (status, rusage, msg) = functions.runScript(script=vgcreate,
-                                                    chroot=self.chroot)
+        (status, rusage, msg) = runScript(script=vgcreate, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Creation of volume group '%s' on '%s' failed.",
@@ -144,8 +140,7 @@ class LVM_VOLGROUP:
 
     def start(self):
         vgchange = "%s vgchange -a y '%s'" % (LVM_VOLGROUP.prog, self.name)
-        (status, rusage, msg) = functions.runScript(script=vgchange,
-                                                    chroot=self.chroot)
+        (status, rusage, msg) = runScript(script=vgchange, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Activation of volume group '%s' failed.",
@@ -158,8 +153,7 @@ class LVM_VOLGROUP:
         if not self.active:
             return 1
         vgchange = "%s vgchange -a n '%s'" % (LVM_VOLGROUP.prog, self.name)
-        (status, rusage, msg) = functions.runScript(script=vgchange,
-                                                    chroot=self.chroot)
+        (status, rusage, msg) = runScript(script=vgchange, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Deactivation of volume group '%s' failed.", self.name)
@@ -170,8 +164,7 @@ class LVM_VOLGROUP:
     def scan(chroot=None):
         command = "%s vgscan --mknodes 2>/dev/null" % LVM_VOLGROUP.prog
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Failed to scan for volume groups.")
@@ -194,8 +187,7 @@ class LVM_VOLGROUP:
     def display(chroot=None):
         command = "%s vgdisplay --units b 2>/dev/null" % LVM_VOLGROUP.prog
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Failed to get volume group information.")
@@ -244,8 +236,7 @@ class LVM_LOGICAL_VOLUME:
                   (LVM_LOGICAL_VOLUME.prog, self.name, (size / 1024),
                    self.volgroup)
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=self.chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Creation of logical volume '%s' on '%s' failed.",
@@ -257,8 +248,7 @@ class LVM_LOGICAL_VOLUME:
     def scan(chroot=None):
         command = "%s lvscan 2>/dev/null" % LVM_LOGICAL_VOLUME.prog
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Failed to scan for logical volumes.")
@@ -295,8 +285,7 @@ class LVM_LOGICAL_VOLUME:
         command = "%s lvdisplay --units b 2>/dev/null" % \
                   LVM_LOGICAL_VOLUME.prog
         log.debug2Ln(command)
-        (status, rusage, msg) = functions.runScript(script=command,
-                                                    chroot=chroot)
+        (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
             log.errorLn("Failed to get volume group information.")

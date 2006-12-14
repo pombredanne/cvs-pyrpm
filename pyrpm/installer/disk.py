@@ -17,7 +17,6 @@
 #
 
 import os, stat, string, time, resource, struct
-import pyrpm.functions as functions
 import loop
 from pyrpm.logger import log
 
