@@ -355,7 +355,7 @@ else:
                 try:
                     self.ped_disk = parted.PedDisk.new(self.ped_device)
                 except Exception, msg:
-                    debug(1, msg)
+                    log.debug1Ln(msg)
                     pass
             if not self.ped_disk:
                 return
