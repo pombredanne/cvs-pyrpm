@@ -207,7 +207,10 @@ class Source:
         if self.isRHEL() and self.cmpVersion("4.9") >= 0:
             return self.cache.cache("images/stage2.img")
         else:
-            return self.cache.cache("%s/base/stage2.img" % self.prefix)
+            if self.cmpVersion("6") < 0:
+                return self.cache.cache("%s/base/stage2.img" % self.prefix)
+            else:
+                return self.cache.cache("images/stage2.img")
 
     def getPackages(self, ks, languages, no_default_groups, all_comps,
                     has_raid, fstypes):
