@@ -18,9 +18,10 @@ link:mailto:twoerner@redhat.com[Thomas Wörner] and
 link:mailto:ffesti@redhat.com[Florian Festi].
 
 The cvs source code repository is automatically converted to a
-link:http://kernel.org/git/[git] repository at
+link:http://git.or.cz/[git] repository at
 link:http://www.jur-linux.org/git/?p=cvs-pyrpm.git;a=summary[].
-(This is experimental only.)
+(This is experimental only, automatically converted from a
+cvs repository.)
 
 
 Overview
@@ -62,6 +63,12 @@ now.
 
 Using it to set up buildroots on the other hand should be very safe as this
 all happens in a very contained environment (sandbox principle).
+
+We do have run lots of installation tests into buildroots and then run update
+tests. We have also updated between releases like going from Fedora Core 1
+over to release 2, 3, 4, ... Same with enterprise releases. At least 32bit
+x86 and 64bit x86_64 should be extensively tested, most other archs should
+also be ok.
 
 Please let us know of any problems you encounter, if possible with some
 reproducible test cases so we can figure out what might have happened.
@@ -122,16 +129,12 @@ There are also optional dependencies like:
 - link:http://pysqlite.org/[python-sqlite] if you want to experiment with the
   optional sqlite database backend.
 
-For x86 (32bit) we often see that e.g. pyrpmyum needs up to 300MB of memory.
-For current Fedora Core releases, python on x86_64 (64bit) needs nearly twice
-as much of memory, so you probably should have 1GB for your x86_64 machine to
-work smoothly.
-
 PyRPM is currently spending most of its CPU and memory on the list of files
 that are stored within rpm packages. Those are needed for dependency
 resolution. Re-writing all in C could improve this again and also allow
 production usage of it. Another possibility would be to change the repodata
-to allow for reduced data sets and better algorithms.
+to allow for reduced data sets and better algorithms. Currently we move
+most data lookups to sqlite and try to remove unnecessary data lookups.
 
 
 Other PyRPM Project Pages
