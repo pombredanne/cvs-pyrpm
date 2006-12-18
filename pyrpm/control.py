@@ -130,7 +130,7 @@ class RpmController:
                         nc = NetworkCache("/", os.path.join(self.config.cachedir, "default"))
                 p = package.RpmPackage(pkg.config, pkg.source,
                                        pkg.verifySignature, db=self.db)
-                if pkg.yumrepo:
+                if pkg.yumrepo != None:
                     p.source = os.path.join(pkg.yumrepo.getNetworkCache().getBaseURL(), p.source)
                 p.nc = nc
                 p.yumhref = pkg.yumhref

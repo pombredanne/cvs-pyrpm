@@ -161,44 +161,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     tags = 'pkgKey, name, arch, version, epoch, release, location_href'
 
-    def __init__(self, config, source, buildroot='', yumconf=None,
-                 reponame="default", nc=None):
-        db.RpmDatabase.__init__(self, config, source, buildroot)
-        self.baseurl = None
-        self.yumconf = yumconf
-        self.reponame = reponame
-        if nc:
-            self.nc = nc
-        else:
-            self.nc = NetworkCache([], self.config.cachedir, self.reponame)
-            if len(source) > 0:
-                self.nc.addCache(source)
-        if config:
-            self.excludes = self.config.excludes[:]
-        else:
-            self.excludes = []
-        self.mirrorlist = None
-        self.key_urls = []
-        if yumconf:
-            if self.yumconf.has_key("main"):
-                sec = self.yumconf["main"]
-                if sec.has_key("exclude"):
-                    self.excludes.extend(sec["exclude"].split())
-            sec = self.yumconf[self.reponame]
-            if sec.has_key("exclude"):
-                self.excludes.extend(sec["exclude"].split())
-            if sec.has_key("gpgkey"):
-                self.key_urls = sec["gpgkey"]
-            if sec.has_key("mirrorlist"):
-                self.mirrorlist = sec["mirrorlist"]
-        self.repomd = None
-        self.filelist_imported  = 0
-        # Files included in primary.xml
-        self._filerc = re.compile('^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$')
-        self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
-        self.filereqs = []      # Filereqs, if available
-        self.comps = None
-
+    def __init__(self, config, source, buildroot='', reponame="default", nc=None):
+        repodb.RpmRepoDB.__init__(self, config, source, buildroot, reponame, nc)
         self._primarydb = None
         self._filelistsdb = None
         self._othersdb = None

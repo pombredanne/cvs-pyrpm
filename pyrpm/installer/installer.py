@@ -140,10 +140,11 @@ class Source:
                 # create yumconf
                 yumconf = YumConf(self.version, self.arch, self.arch)
                 yumconf.vars[repo_name] = { }
+                yumconf.vars[repo_name]["baseurl"] = \
+                                                [ "%s/%s" % (self.url, repo) ]
                 if self.exclude:
                     yumconf.vars[repo_name]["exclude"] = " ".join(self.exclude)
-                _repo = getRepoDB(rpmconfig, [ "%s/%s" % (self.url, repo) ],
-                                  yumconf=yumconf, reponame=repo_name)
+                _repo = getRepoDB(rpmconfig, yumconf, reponame=repo_name)
                 if not _repo.read():
                     log.errorLn("Could not load repository '%s'.", repo_name)
                     return 0
@@ -154,10 +155,10 @@ class Source:
             yumconf = YumConf(self.version, self.arch, self.arch)
             repo = self.release
             yumconf.vars[repo] = { }
+            yumconf.vars[repo]["baseurl"] = [ self.url ]
             if self.exclude:
                 yumconf.vars[repo]["exclude"] = self.exclude
-            _repo = getRepoDB(rpmconfig, [ self.url ], yumconf=yumconf,
-                              reponame=repo)
+            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
             if not _repo.read():
                 log.errorLn("Could not load repository '%s'.", repo)
                 return 0
@@ -193,9 +194,8 @@ class Source:
                 d = "%s/%s" % (dir, repo)
                 create_dir("", d)
                 url = mount_nfs(url, d)
-
-            _repo = getRepoDB(rpmconfig, [ url ], yumconf=yumconf,
-                              reponame=repo)
+            yumconf.vars[repo]["baseurl"] = [ url ]
+            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
             if not _repo.read():
                 log.errorLn("Could not load repository '%s'.", repo)
                 return 0

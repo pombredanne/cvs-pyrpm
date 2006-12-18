@@ -143,27 +143,22 @@ class RpmYum:
                 # Repo is not enabled: skip it.
                 if not enabled:
                     continue
-                if sec.has_key("baseurl"):
-                    baseurls = sec["baseurl"][:]
-                else:
-                    baseurls = []
                 if self.config.timer:
                     time1 = clock()
                 log.info2Ln("Reading repository '%s'", key)
-                if self.__addSingleRepo(baseurls, conf, key) == 0:
+                if self.__addSingleRepo(conf, key) == 0:
                     return 0
                 if self.config.timer:
                     log.info2Ln("Reading repository took %s seconds", (clock() - time1))
         return 1
 
-    def __addSingleRepo(self, baseurls, conf, reponame):
+    def __addSingleRepo(self, conf, reponame):
         """Add a repository at baseurl as reponame.
 
         Return 1 on success 0 on errror (after warning the user).  Exclude
         packages matching whitespace-separated excludes."""
 
-        repo = database.getRepoDB(self.config, baseurls,
-                                  self.config.buildroot, conf, reponame)
+        repo = database.getRepoDB(self.config, conf, self.config.buildroot, reponame)
         if repo.read() == 0:
             log.errorLn("Error reading repository %s", reponame)
             return 0
@@ -529,7 +524,7 @@ class RpmYum:
         # First pass through our args to find any directories and/or binary
         # rpms and create a memory repository from them to avoid special
         # cases.
-        memory_repo = RpmRepoDB(self.config, [], self.config.buildroot, None, "pyrpmyum-memory-repo")
+        memory_repo = RpmRepoDB(self.config, [], self.config.buildroot, "pyrpmyum-memory-repo")
         new_args = []
         for name in args:
             if   os.path.isfile(name) and name.endswith(".rpm"):

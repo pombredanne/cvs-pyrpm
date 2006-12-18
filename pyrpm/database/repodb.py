@@ -26,6 +26,7 @@ from comps import RpmCompsXML
 import pyrpm.functions as functions
 import pyrpm.package as package
 import pyrpm.openpgp as openpgp
+from pyrpm.yum import yumconfig
 import lists
 from pyrpm.logger import log
 
@@ -49,26 +50,26 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 RPMSENSE_EQUAL | RPMSENSE_LESS: "LE",
                 RPMSENSE_EQUAL | RPMSENSE_GREATER: "GE"}
 
-    def __init__(self, config, source, buildroot='', yumconf=None,
-                 reponame="default", nc=None):
+    def __init__(self, config, source, buildroot='', reponame="default", nc=None):
         """Exclude packages matching whitespace-separated excludes.  Use
         reponame for cache subdirectory name and pkg["yumreponame"].
 
         Load PGP keys from URLs in key_urls."""
 
         memorydb.RpmMemoryDB.__init__(self, config, source, buildroot)
-        self.yumconf = yumconf
         self.reponame = reponame
+        self.excludes = self.config.excludes[:]
+        self.mirrorlist = None
+        self.baseurls = None
+        self.yumconf = None
+        self.key_urls = []
         if nc:
             self.nc = nc
         else:
             self.nc = NetworkCache([], self.config.cachedir, self.reponame)
-            if len(source) > 0:
-                self.nc.addCache(source)
-        self.excludes = self.config.excludes[:]
-        self.mirrorlist = None
-        self.key_urls = []
-        if yumconf:
+        if isinstance(source, yumconfig.Conf):
+            found_urls = False
+            self.yumconf = source
             if self.yumconf.has_key("main"):
                 sec = self.yumconf["main"]
                 if sec.has_key("exclude"):
@@ -78,8 +79,17 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 self.excludes.extend(sec["exclude"].split())
             if sec.has_key("gpgkey"):
                 self.key_urls = sec["gpgkey"]
+            if sec.has_key("baseurl"):
+                self.nc.addCache(sec["baseurl"], self.reponame)
+                found_urls = True
             if sec.has_key("mirrorlist"):
                 self.mirrorlist = sec["mirrorlist"]
+                found_urls = True
+            if not found_urls:
+                raise ValueError, "yum.conf is missing mirrorlist or baseurl parameter"
+        else:
+            self.baseurls = source
+            self.nc.addCache(self.baseurls, self.reponame)
         self.repomd = None
         self.filelist_imported  = 0
         # Files included in primary.xml
