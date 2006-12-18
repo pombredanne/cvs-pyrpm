@@ -38,7 +38,12 @@ except ImportError:
     USEYUM = False
 
 try:
+    import sqlite3
+    sqlite = sqlite3
+except ImportError:
+    sqlite3 = None
     import sqlite
+    # XXX
 except ImportError:
     sqlite = None
 
@@ -228,10 +233,14 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # this fails
         try:
             f = open(filename,'w')
-            return sqlite.connect(filename)
+            db = sqlite.connect(filename)
         except IOError:
             log.warningLn("Could not create sqlite cache file, using in memory cache instead")
-            return sqlite.connect(":memory:")
+            db = sqlite.connect(":memory:")
+        if sqlite3:
+            db.row_factory = sqlite3.Row
+            db.text_factory = str
+        return db
 
     def createDbInfo(self, cur):
         # Create the db_info table, this contains sqlite cache metadata
@@ -277,6 +286,9 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         """Load cache from filename, check if it is valid and that dbversion
         matches the required dbversion"""
         db = sqlite.connect(filename)
+        if sqlite3:
+            db.row_factory = sqlite3.Row            
+            db.text_factory = str
         cur = db.cursor()
         cur.execute("SELECT * FROM db_info")
         info = cur.fetchone()
@@ -520,8 +532,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         if op is None:
             # package not found
             return
-        pkgKey = op["pkgKey"]
-        pkgId = op["pkgId"]
+        pkgId, pkgKey = op
 
         try:
             self.insertHash('packages', {'pkgId' : pkgId, 'pkgKey' : pkgKey},
@@ -571,7 +582,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
     def _buildRpm(self, data):
         pkg = SqliteRpmPackage(self.config, source='', db=self)
         pkg.yumrepo = self
-        for key in data.keys():
+        for key in ['pkgKey', 'name', 'arch', 'version',
+                    'epoch', 'release', 'location_href']:
             name = self.DB2PKG.get(key, key)
             val = data[key]
             if val is not None and name in base.rpmtag:
@@ -607,7 +619,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             cur = self._primarydb.cursor()
             cur.execute(
                 'SELECT * FROM files WHERE pkgKey="%s"' % pkgKey)
-            files = [ob.name for ob in cur.fetchall()]
+            files = [ob['name'] for ob in cur.fetchall()]
             if files:
                 pkg['oldfilenames'] = files
                 pkg.generateFileNames()
@@ -729,11 +741,12 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         cur = self._primarydb.cursor()
         cur.execute("SELECT * FROM %s" % tag)
         for res in cur:
-            pkg = self.getPkgByKey(res.pkgKey)
+            pkg = self.getPkgByKey(res['pkgKey'])
             if pkg is None:
                 continue
-            version = functions.evrMerge(res.epoch, res.version, res.release)
-            yield res.name, res.flags, version, pkg
+            version = functions.evrMerge(res['epoch'], res['version'],
+                                         res['release'])
+            yield res['name'], res['flags'], version, pkg
 
     def _iter2(self, tag):
         for pkg in self.getPkgs():
@@ -798,12 +811,13 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         cur.execute("SELECT * FROM %s WHERE name = %s" ,
                     (attr_table, name))
         for res in cur.fetchall():
-            pkg = self.getPkgByKey(res.pkgKey)
+            pkg = self.getPkgByKey(res['pkgKey'])
             if pkg is None:
                 continue
-            name_ = res.name
-            flag_ = self.flagmap[res.flags]
-            version_ = functions.evrMerge(res.epoch, res.version, res.release)
+            name_ = res['name']
+            flag_ = self.flagmap[res['flags']]
+            version_ = functions.evrMerge(res['epoch'], res['version'],
+                                          res['release'])
             if version == "":
                 result.setdefault(pkg, [ ]).append(
                     (name_, flag_, version_))
@@ -847,10 +861,10 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
         if matched:
             cur = self._primarydb.cursor()
-            cur.execute("SELECT * FROM files WHERE name = %s" , (name))
+            cur.execute('SELECT * FROM files WHERE name = "%s"' % name)
             files = cur.fetchall()
             for res in files:
-                pkg = self.getPkgByKey(res.pkgKey)
+                pkg = self.getPkgByKey(res['pkgKey'])
                 if pkg is None:
                     continue
                 result.append(pkg)
