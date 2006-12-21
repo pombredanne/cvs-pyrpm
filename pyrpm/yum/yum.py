@@ -227,7 +227,10 @@ class RpmYum:
 
     def install(self, name):
         pkglist = self.__findPkgs(name)
-        return self.__handleBestPkg("install", pkglist)
+        ret = self.__handleBestPkg("install", pkglist)
+        if not ret:
+            log.info1Ln("No Match for argument: %s", name)
+        return ret
 
     def groupInstall(self, name):
         args = self.getGroupPackages(name)
@@ -238,7 +241,10 @@ class RpmYum:
 
     def installByDep(self, dname, dflags, dversion):
         pkglist = self.repos.searchDependency(dname, dflags, dversion)
-        return self.__handleBestPkg("install", pkglist)
+        ret = self.__handleBestPkg("install", pkglist)
+        if not ret:
+            log.info1Ln("No Match for argument: %s", depstring(dname, dflags, dversion))
+        return ret
 
     def update(self, name, exact=False, do_obsolete=True):
         # First find all matching packages. Remember, name can be a glob, too,
@@ -348,6 +354,8 @@ class RpmYum:
                 # Trick to avoid multiple adds for same arch, after handling
                 # it once we clear the update package list.
                 pkgnamearchhash[name][arch] = []
+        if not ret:
+            log.info1Ln("No Match for argument: %s", name)
         return ret
 
     def _filterPkgVersion(self, pkg, pkglist):
@@ -366,19 +374,30 @@ class RpmYum:
 
     def updateByDep(self, dname, dflags, dversion):
         pkglist = self.repos.searchDependency(dname, dflags, dversion)
-        return self.__handleBestPkg("update", pkglist)
+        ret = self.__handleBestPkg("update", pkglist)
+        if not ret:
+            log.info1Ln("No Match for argument: %s", depstring(dname, dflags, dversion))
+        return ret
 
     def remove(self, name):
-        self.__handleBestPkg("remove", self.pydb.searchPkgs([name, ]))
+        ret = self.__handleBestPkg("remove", self.pydb.searchPkgs([name, ]))
+        if not ret:
+            log.info1Ln("No Match for argument: %s", name)
+        return ret
 
     def groupRemove(self, name):
         args = self.getGroupPackages(name)
+        ret = 0
         for pkgname in args:
-            self.remove(pkgname)
+            ret |= self.remove(pkgname)
+        return ret
 
     def removeByDep(self, dname, dflags, dversion, all=True):
         pkglist = self.pydb.searchDependency(dname, dflags, dversion)
-        return self.__handleBestPkg("remove", pkglist)
+        ret = self.__handleBestPkg("remove", pkglist)
+        if not ret:
+            log.info1Ln("No Match for argument: %s", depstring(dname, dflags, dversion))
+        return ret
 
     def __readPackage(self, name):
         try:
