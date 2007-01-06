@@ -28,7 +28,7 @@
 
 import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, \
        signal, types, shutil, traceback, popen2
-import pprint
+#import pprint
 
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
@@ -1217,7 +1217,7 @@ def main():
 
                     if end > match["end"]:
                         log.errorLn("Size calculation wrong for the "
-                                    "extended partition: Size is %d " 
+                                    "extended partition: Size is %d "
                                     "and should be %d.",
                                     end-start+1, match["end"]-start+1)
                         return 1
