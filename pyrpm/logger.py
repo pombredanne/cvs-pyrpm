@@ -88,7 +88,7 @@ class _SyslogLog(_StdoutLog):
             priority = syslog.LOG_ERR
         elif level == logger.FATAL:
             priority = syslog.LOG_CRIT
-        
+
         if data.endswith("\n"):
             data = data[:len(data)-1]
         if len(data) > 0:
@@ -102,7 +102,7 @@ class _SyslogLog(_StdoutLog):
 class Logger:
     r"""
     Format string:
-    
+
     %(class)s      Calling class the function belongs to, else empty
     %(date)s       Date using Logger.date_format, see time module
     %(domain)s     Full Domain: %(module)s.%(class)s.%(function)s
@@ -134,7 +134,7 @@ class Logger:
     stdout        Logs to stdout
     stderr        Logs to stderr
     syslog        Logs to syslog
-    
+
     Example:
 
     from logger import log
@@ -156,7 +156,7 @@ class Logger:
     log.error("error\n")
     log.fatalLn("fatal")
     log.logLn(log.INFO, "raw info")
-    
+
     """
 
     ALL       = -1
@@ -166,7 +166,7 @@ class Logger:
     WARNING   =  3
 
     # Additional levels are generated in class initilization
-    
+
     stdout = _StdoutLog()
     stderr = _StderrLog()
     syslog = _SyslogLog()
@@ -178,7 +178,7 @@ class Logger:
         self._format = ""
         self._date_format = ""
         self._label = { }
-        self._logging = { } 
+        self._logging = { }
         self._domains = { }
 
         # INFO1 is required for standard log level
@@ -321,7 +321,7 @@ class Logger:
             self._checkLogLevel(level, min=self.FATAL, max=self.DEBUG_MAX)
             self._label[level] = label
 
-    # private method for self._domains array creation, speeds up 
+    # private method for self._domains array creation, speeds up
     def _genDomains(self):
         """ Generate dict with domain by level. """
         if len(self._domains) > 0:
@@ -335,7 +335,7 @@ class Logger:
 
     def setLogging(self, domain, target, level=ALL, format=None):
         """ Set log target for domain and level. Level can be a single level
-        or an array of levels. Use level ALL to set for all levels. 
+        or an array of levels. Use level ALL to set for all levels.
         If no format is specified, the default format will be used. """
         self._checkDomain(domain)
         levels = self._getLevels(level)
@@ -360,7 +360,7 @@ class Logger:
 
     def delLogging(self, domain, target, level=ALL, format=None):
         """ Delete log target for domain and level. Level can be a single level
-        or an array of levels. Use level ALL to set for all levels. 
+        or an array of levels. Use level ALL to set for all levels.
         If no format is specified, the default format will be used. """
         self._checkDomain(domain)
         levels = self._getLevels(level)
@@ -394,7 +394,7 @@ class Logger:
                    fnmatch.fnmatchcase(dict["domain"], domain):
                 return True
         return False
-        
+
     def log(self, level, data):
         """ Log data without and prefix. """
         self._checkLogLevel(level, min=self.FATAL, max=self.DEBUG_MAX)
@@ -497,7 +497,7 @@ class Logger:
             if type(value) == types.FunctionType:
                 if value.func_code == code:
                     return obj
-                
+
         for base in obj.__bases__:
             _obj = self._getClass2(base, code)
             if _obj:
@@ -546,7 +546,7 @@ class Logger:
             _dict = self._debug_level
         else:
             _dict = self._level
-            
+
         # no debug
         for domain in _dict:
             if domain == "*":
@@ -628,7 +628,7 @@ class Logger:
             # domain is needed
             domain_needed = True
             break
-        
+
         # do we need to get the class object?
         if self._format.find("%(domain)") >= 0 or \
                self._format.find("%(class)") >= 0 or \

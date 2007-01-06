@@ -89,9 +89,9 @@ def main():
     yum.setCommand("update")
     if yum.prepareTransaction() == 0:
         return 0
-    
+
     pkglist = yum.repos.getPkgs()
-        
+
     i = 0
     for pkg in pkglist:
         i += 1

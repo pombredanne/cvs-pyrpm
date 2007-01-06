@@ -251,7 +251,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         matches the required dbversion"""
         db = sqlite.connect(filename)
         if sqlite3:
-            db.row_factory = sqlite3.Row            
+            db.row_factory = sqlite3.Row
             db.text_factory = str
         cur = db.cursor()
         cur.execute("SELECT * FROM db_info")
@@ -414,7 +414,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 f.close()
             except (IOError, EOFError):
                 continue
-                
+
 
             try:
                 csum, db = self.loadCache(dbfilename)

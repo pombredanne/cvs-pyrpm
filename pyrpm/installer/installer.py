@@ -94,7 +94,7 @@ class Source:
             log.errorLn("Unknown source release '%s'.", self.release)
             return 0
 
-        self.release = "%s-%s" % (self.id, self.version)        
+        self.release = "%s-%s" % (self.id, self.version)
 
         log.info1Ln("Installation source: %s %s [%s]", self.name, self.version,
                     self.arch)
@@ -171,7 +171,7 @@ class Source:
 
         if not ks.has_key("repo"):
             return 1
-            
+
         for repo in ks["repo"]:
             if repo in self.repos:
                 log.errorLn("Repository '%s' already defined.", repo)
@@ -441,7 +441,7 @@ class Source:
                     continue
                 if pkg["name"] in pkgs:
                     # package is already in list
-                    return 
+                    return
             pkg = s[0] # take first package, which provides ...
             if description != "":
                 log.info1Ln("Adding package '%s' for %s.", pkg["name"],

@@ -80,7 +80,7 @@ def lockPyrpm():
 #
 def main():
     log.setLogLevel(log.INFO2)
-    
+
     # Our yum worker object
     yum = RpmYum(rpmconfig)
 

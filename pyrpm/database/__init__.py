@@ -40,6 +40,5 @@ def getRpmDB(config, source, root=''):
 def getRepoDB(config, source, buildroot='', reponame="default", nc=None):
     import sqliterepodb
     return sqliterepodb.SqliteRepoDB(config, source, buildroot, reponame, nc)
-                  
 
 # vim:ts=4:sw=4:showmatch:expandtab

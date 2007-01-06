@@ -376,7 +376,7 @@ def checkRpmDB(repos):
                         fname = os.path.join(p.yumrepo.baseurl, p.source)
                     else:
                         fname = p.source
-                
+
         if not fname:
             if rpmconfig.verbose > 2:
                 print "Skipping package %s, not found in packagelist." % pkg.getNEVRA()

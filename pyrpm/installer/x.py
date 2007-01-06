@@ -118,7 +118,7 @@ def x_config(ks, buildroot, source):
         vsync = ks["xconfig"]["vsync"] # overwrite with user supplied value
     elif ks.has_key("monitor") and ks["monitor"].has_key("vsync"):
         vsync = ks["monitor"]["vsync"]
-            
+
     if ks["xconfig"].has_key("resolution"):
         resolution = ks["xconfig"]["resolution"]
     if ks["xconfig"].has_key("depth"):

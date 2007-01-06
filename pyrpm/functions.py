@@ -782,7 +782,7 @@ def parseYumOptions(argv, yum):
             val = val.split(':', 1)
             if len(val) == 1:
                 level = val[0]
-                domain = '*'                
+                domain = '*'
             else:
                 domain, level = val
             try:
