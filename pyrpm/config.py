@@ -65,7 +65,7 @@ class RpmConfig:
         self.delayldconfig = 0           # A delayed ldconfig call is pending
         self.service = 0                 # Install /sbin/service with "exit 0"
         self.yumconf = ['/etc/yum.conf'] # Yum config files
-        self.relver  = '3'               # Release version, needed by YumConfig
+        self.relver  = 'none'            # Release version, needed by YumConfig
         self.arch = None                 # If explicitly selected, for --test
         self.archlist = None             # Specific list of supported archs
         self.tmpdir = None
