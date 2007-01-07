@@ -976,16 +976,17 @@ headermatch = (
 )
 
 # Names of all possible kernel packages:
-kernelpkgs = ["kernel", "kernel-smp", "kernel-bigmem", "kernel-enterprise",
-    "kernel-xen0", "kernel-xenU", "kernel-xen", "kernel-PAE", "kernel-kdump",
-    "kernel-BOOT", "kernel-hugemem", "kernel-largesmp", "kernel-summit"]
+kernelpkgs = ["kernel", "kernel-PAE", "kernel-bigmem", "kernel-enterprise",
+    "kernel-hugemem", "kernel-summit", "kernel-smp", "kernel-largesmp",
+    "kernel-xen", "kernel-xen0", "kernel-xenU", "kernel-kdump", "kernel-BOOT"]
 # Packages which are always installed and not updated:
 installonlypkgs = kernelpkgs[:]
-installonlypkgs.extend( ["gpg-pubkey", "kernel-debug", "kernel-devel",
-    "kernel-unsupported", "kernel-modules", "kernel-PAE-devel",
-    "kernel-kdump-devel", "kernel-source", "kernel-xen0-devel",
-    "kernel-xenU-devel", "kernel-xen-devel", "kernel-smp-devel",
-    "kernel-hugemem-devel", "kernel-largesmp-devel"] )
+installonlypkgs.extend( ["gpg-pubkey",
+    "kernel-debug", "kernel-devel", "kernel-debug-devel", "kernel-PAE-debug",
+    "kernel-PAE-debug-devel", "kernel-PAE-devel", "kernel-hugemem-devel",
+    "kernel-smp-devel", "kernel-largesmp-devel", "kernel-xen-devel",
+    "kernel-xen0-devel", "kernel-xenU-devel", "kernel-kdump-devel",
+    "kernel-source", "kernel-unsupported", "kernel-modules"] )
 
 # This is RPMCANONCOLOR in /bin/rpm source, values change over time.
 def getInstallColor(arch):
