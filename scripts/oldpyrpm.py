@@ -12,7 +12,7 @@
 # You should have received a copy of the GNU Library General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# Copyright 2004, 2005 Red Hat, Inc.
+# Copyright 2004, 2005, 2006, 2007 Red Hat, Inc.
 #
 # Author: Paul Nasrat, Florian La Roche, Phil Knirsch, Thomas Woerner,
 #         Florian Festi
@@ -25,7 +25,7 @@
 # This python script depends on libxml2 and urlgrabber for some functionality.
 #
 # Tested with all rpm packages from RHL5.2, 6.x, 7.x, 8.0, 9,
-# Fedora Core 1/2/3/4/5/development, Fedora Extras, livna, freshrpms,
+# Fedora Core 1/2/3/4/5/6/development, Fedora Extras, livna, freshrpms,
 # Mandriva 10.2, Open SuSE 10RC1 and other distributions.
 # No output should be generated if rpm packages are verified via this python
 # implementation, so all possible quirks in the binary packages are taken
@@ -46,6 +46,8 @@
 # - Optionally import the full tree for the initial import (e.g. FC releases).
 # - Optionally also sort by time for e.g. FC updates dirs.
 # general:
+# - Separate out the parts which are distro-specific and support more
+#   distro variants.
 # - Should we get rid of doRead()?
 # - How todo save shell escapes for os.system()
 # - Better error handling in PyGZIP.
@@ -54,6 +56,8 @@
 # - Change "strict" and "verify" into "debug/verbose" and have one integer
 #   specify debug and output levels. (Maybe also "nodigest" can move in?)
 # - Whats the difference between "cookie" and "buildhost" + "buildtime".
+# - Locking done for read/write rpmdb access. Check /bin/rpm and yum.
+# - Should we delete the __db* cache files? What about db4 config settings?
 # rpm header:
 # - write tag 61 if no region tag exists
 # - --checkrpmdb --enablerepos: allow changed signatures in packages
@@ -61,6 +65,7 @@
 # - Can doVerify() be called on rpmdb data or if the sig header is
 #   missing?
 # - allow a --rebuilddb into a new directory and a diff between two rpmdb
+# - rpmdb cleanup to remove duplicate rpm entries (yum-utils has this already)
 # - check OpenGPG signatures
 #   - allow src.rpm selection based on OpenGPG signature. Prefer GPG signed.
 # - add a new writeHeader2() that copies the existing rpm header and then
@@ -77,8 +82,6 @@
 # - i386 rpm extraction on ia64? (This is stored like relocated rpms in
 #   duplicated file tags.)
 # yum.conf/repos:
-# - support reading some vars from yum.conf like distroverpkg
-# - distroverpkg should take the Provides: to search for the right rpms.
 # - For repos stop switching to another server once repomd.xml is read in.
 #   Currently also all rpms are associated/hardcoded with the first server.
 #   Rpms could be cached regardless of the mirror they come from. By sha1sum?
@@ -107,10 +110,16 @@
 __version__ = "0.62"
 __doc__ = """Manage everything around Linux RPM packages."""
 
+
+# Look at "pylint --list-msgs" to find these out:
+# pylint: disable-msg=C0103,C0111
+# pylint: disable-msg=R0902,R0903,R0911,R0912,R0913,R0914,R0915
+# pylint: disable-msg=W0142,W0201,W0511,W0704
+
 import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
-import os, os.path, pwd, grp, zlib, gzip, errno, re, fnmatch, glob, time
+import os, os.path, zlib, gzip, errno, re, time
 import md5, sha, signal
 from types import IntType, ListType
 from struct import pack, unpack
@@ -118,13 +127,13 @@ try:
     import libxml2
     TYPE_ELEMENT = libxml2.XML_READER_TYPE_ELEMENT
     TYPE_END_ELEMENT = libxml2.XML_READER_TYPE_END_ELEMENT
-except:
+except ImportError:
     print "libxml2 is not imported, do not try to use repodata."
 
 # python-only
 if sys.version_info < (2, 3):
     from types import StringType
-    basestring = StringType
+    basestring = StringType # pylint: disable-msg=W0622
 
     TMP_MAX = 10000
     from random import Random
@@ -156,7 +165,7 @@ if sys.version_info < (2, 3):
 
     def _get_candidate_names():
         """Common setup sequence for all user-callable interfaces."""
-        global _name_sequence
+        global _name_sequence # pylint: disable-msg=W0603
         if _name_sequence == None:
             _name_sequence = _RandomNameSequence()
         return _name_sequence
@@ -218,9 +227,9 @@ tmpdir = os.environ.get("TMPDIR", "/tmp")
 
 openflags = os.O_RDWR | os.O_CREAT | os.O_EXCL
 if hasattr(os, "O_NOINHERIT"):
-    openflags |= os.O_NOINHERIT
+    openflags |= os.O_NOINHERIT # pylint: disable-msg=E1101
 if hasattr(os, "O_NOFOLLOW"):
-    openflags |= os.O_NOFOLLOW
+    openflags |= os.O_NOFOLLOW  # pylint: disable-msg=E1101
 
 def mkstemp_file(dirname, pre=tmpprefix, special=0):
     names = _get_candidate_names()
@@ -347,7 +356,7 @@ def getChecksum(fd, digest="md5"):
     if isinstance(fd, basestring):
         try:
             fd = open(fd, "rb")
-        except:
+        except IOError:
             return None
     if digest == "md5":
         ctx = md5.new()
@@ -374,13 +383,16 @@ def setSignals(handler, supported_signals2):
     return signals
 
 def blockSignals():
-    #global supported_signals
     return setSignals(signal.SIG_IGN, supported_signals)
 
 def resetSignals(signals):
     for (key, value) in signals.iteritems():
         signal.signal(key, value)
 
+
+def _doprint(msg):
+    sys.stdout.write(msg)
+    sys.stdout.flush()
 
 class PrintHash:
     """'numobjects' indicates how often we will call.nectObject()
@@ -396,11 +408,7 @@ class PrintHash:
         self.num = 0
         # Immediately output something to indicate a first start:
         self.hashpos = 1
-        self._doprint("#")
-
-    def _doprint(self, msg):
-        sys.stdout.write(msg)
-        sys.stdout.flush()
+        _doprint("#")
 
     def nextObject(self, finish=None):
         if finish:
@@ -419,7 +427,7 @@ class PrintHash:
         if finish:
             msg += "\n"
         if msg:
-            self._doprint(msg)
+            _doprint(msg)
 
 
 # Optimized routines that use zlib to extract data, since
@@ -572,11 +580,11 @@ def setProxyOptions(o):
         proxies["ftp"] = proxy_string
     o["proxies"] = proxies
 
-def setOptions(yumconf={}, repo=None):
+def setOptions(yumconf={}, repo=None): # pylint: disable-msg=W0102
     # Default values:
     o = {
         "timeout": "20.0",
-        "keepalive": "1",
+        "keepalive": "0",
         "retries": "3",
         "http_caching": "all",
         "proxy": None,
@@ -595,12 +603,11 @@ def setOptions(yumconf={}, repo=None):
     # Set proxy items:
     setProxyOptions(o)
     # Set http headers:
-    cache = o["http_caching"] != "all"
     headers = []
     # If we should not cache and we don't already contain
     # a Pragma header, then add it...
     nocache = ("Pragma", "no-cache")
-    if not cache and nocache not in headers:
+    if o["http_caching"] != "all" and nocache not in headers:
         headers.append(nocache)
     o["http_headers"] = headers
     return o
@@ -846,13 +853,13 @@ rpmtag = {
     "archivesize": [1046, RPM_INT32, 1, 1]
 }
 # Add a reverse mapping for all tags plus the name again.
-for v in rpmtag.keys():
-    rpmtag[v].append(v)
-for v in rpmtag.values():
-    rpmtag[v[0]] = v
-    if len(v) != 5:
+for _v in rpmtag.keys():
+    rpmtag[_v].append(_v)
+for _v in rpmtag.values():
+    rpmtag[_v[0]] = _v
+    if len(_v) != 5:
         raise ValueError, "rpmtag has wrong entries"
-del v
+del _v
 
 # Additional tags which can be in the rpmdb /var/lib/rpm/Packages.
 # Some of these have the data copied over from the signature
@@ -880,16 +887,16 @@ rpmdbtag = {
 }
 # List of special rpmdb tags, like also visible above.
 install_keys = {}
-for v in rpmdbtag.keys():
-    install_keys[v] = 1
-    rpmdbtag[v].append(v)
-for v in rpmdbtag.values():
-    rpmdbtag[v[0]] = v
-    if len(v) != 5:
+for _v in rpmdbtag.keys():
+    install_keys[_v] = 1
+    rpmdbtag[_v].append(_v)
+for _v in rpmdbtag.values():
+    rpmdbtag[_v[0]] = _v
+    if len(_v) != 5:
         raise ValueError, "rpmdbtag has wrong entries"
-for v in rpmtag.keys():
-    rpmdbtag[v] = rpmtag[v]
-del v
+for _v in rpmtag.keys():
+    rpmdbtag[_v] = rpmtag[_v]
+del _v
 # These entries have the same ID as entries already in the list
 # to store duplicate tags that get written to the rpmdb for
 # relocated packages or ia64 compat packages (i386 on ia64).
@@ -916,12 +923,17 @@ importanttags = {"name":1, "epoch":1, "version":1, "release":1, "arch":1,
     "filemtimes":1, "filedevices":1, "fileinodes":1, "filesizes":1,
     "filemd5s":1, "filerdevs":1, "filelinktos":1, "fileflags":1,
     "filecolors":1, "archivesize":1}
-for v in importanttags.keys():
-    value = rpmtag[v]
-    importanttags[v] = value
-    importanttags[value[0]] = value
-del value
-del v
+for _v in importanttags.keys():
+    _value = rpmtag[_v]
+    importanttags[_v] = _value
+    importanttags[_value[0]] = _value
+versiontag = {"version":1}
+for _v in versiontag.keys():
+    _value = rpmtag[_v]
+    versiontag[_v] = _value
+    versiontag[_value[0]] = _value
+del _value
+del _v
 
 
 # Info within the sig header.
@@ -940,13 +952,13 @@ rpmsigtag = {
     "badsha1_2": [265, RPM_STRING, None, 1] # size added in reversed order
 }
 # Add a reverse mapping for all tags plus the name again.
-for v in rpmsigtag.keys():
-    rpmsigtag[v].append(v)
-for v in rpmsigtag.values():
-    rpmsigtag[v[0]] = v
-    if len(v) != 5:
+for _v in rpmsigtag.keys():
+    rpmsigtag[_v].append(_v)
+for _v in rpmsigtag.values():
+    rpmsigtag[_v[0]] = _v
+    if len(_v) != 5:
         raise ValueError, "rpmsigtag has wrong entries"
-del v
+del _v
 
 # How to sync signature and normal header for rpmdb.
 # "pgp" should also have a matching entry.
@@ -1444,8 +1456,9 @@ class Uid(UGid):
                 self.ugid[uid] = 0
             else:
                 try:
+                    import pwd
                     self.ugid[uid] = pwd.getpwnam(uid)[2]
-                except:
+                except KeyError:
                     print "Warning: user %s not found, using uid 0." % uid
                     self.ugid[uid] = 0
 
@@ -1474,8 +1487,9 @@ class Gid(UGid):
                 self.ugid[gid] = 0
             else:
                 try:
+                    import grp
                     self.ugid[gid] = grp.getgrnam(gid)[2]
-                except:
+                except KeyError:
                     print "Warning: group %s not found, using gid 0." % gid
                     self.ugid[gid] = 0
 
@@ -1557,7 +1571,7 @@ class HdrIndex:
             return value[0]
         return value
 
-class ReadRpm:
+class ReadRpm: # pylint: disable-msg=R0904
     """Read (Linux) rpm packages."""
 
     def __init__(self, filename, verify=None, fd=None, strict=None,
@@ -1613,7 +1627,7 @@ class ReadRpm:
             else:
                 try:
                     self.fd = open(self.filename, "rb")
-                except:
+                except IOError:
                     self.printErr("could not open file")
                     return 1
                 if offset:
@@ -1636,7 +1650,7 @@ class ReadRpm:
         return filename
 
     def __verifyLead(self, leaddata):
-        (magic, major, minor, rpmtype, arch, name, osnum, sigtype) = \
+        (_, major, minor, rpmtype, arch, name, osnum, sigtype) = \
             unpack("!4s2B2H66s2H16x", leaddata)
         failed = None
         if (major not in (3, 4) or minor != 0 or
@@ -1853,7 +1867,16 @@ class ReadRpm:
         #    self[i] = y
         return None
 
-    def verifyCpio(self, filedata, read_data, filenamehash, devinode, _, db):
+    def setOwner(self, owner):
+        self.owner = owner
+        if owner:
+            self.uid = Uid(self["fileusername"])
+            self.uid.transform(self.buildroot)
+            self.gid = Gid(self["filegroupname"])
+            self.gid.transform(self.buildroot)
+
+    def verifyCpio(self, filedata, read_data, filenamehash, devinode, _, dummy):
+        # pylint: disable-msg=W0612,W0613
         # Overall result is that apart from the filename information
         # we should not depend on any data from the cpio header.
         # Data is also stored in rpm tags and the cpio header has
@@ -1938,6 +1961,7 @@ class ReadRpm:
 
     def extractCpio(self, filename, datasize, read_data, filenamehash,
             devinode, filenames, db):
+        # pylint: disable-msg=W0612
         data = ""
         if datasize:
             data = read_data(datasize)
@@ -1974,7 +1998,7 @@ class ReadRpm:
                 else:
                     pass # XXX higher arch and our package not noarch
                     #doextract = 0
-            except:
+            except OSError:
                 pass
         if not doextract:
             return
@@ -2050,6 +2074,7 @@ class ReadRpm:
 
     def readPayload(self, func, filenames=None, extract=None, db=None):
         self.__openFd(96 + self.sigdatasize + self.hdrdatasize)
+        # pylint: disable-msg=W0612
         devinode = {}     # this will contain possibly hardlinked files
         filenamehash = {} # full filename of all files
         if filenames == None:
@@ -2394,7 +2419,7 @@ class ReadRpm:
                 for j in self[i]:
                     try:
                         j.decode("utf-8")
-                    except:
+                    except UnicodeDecodeError:
                         self.printErr("not utf-8 in %s" % i)
                         #self.printErr("text: %s" % j)
                         break
@@ -2663,9 +2688,40 @@ class ReadRpm:
         return 0
 
 
+def unlinkRpmdbCache(dbpath):
+    for i in xrange(9):
+        try:
+            os.unlink(dbpath + "__db.00%d" % i)
+        except OSError:
+            pass
+
+def readReleaseVer(distroverpkg, buildroot="", rpmdbpath="/var/lib/rpm/"):
+    """Search for distroverpkg within the Provides: of the rpmdb.
+    Return with the very first entry found."""
+    import bsddb, cStringIO
+    dbpath = buildroot + rpmdbpath
+    unlinkRpmdbCache(dbpath) # XXX needed for read-only access???
+    providename_db = None # XXX Create a class to access/cache access?
+    packages_db = None
+    for rpmname in distroverpkg:
+        if providename_db == None:
+            providename_db = bsddb.hashopen(dbpath + "Providename", "r")
+        data = providename_db.get(rpmname, "")     # pylint: disable-msg=E1101
+        for i in xrange(0, len(data), 8):
+            if packages_db == None:
+                packages_db = bsddb.hashopen(dbpath + "Packages", "r")
+            data1 = packages_db.get(data[i:i + 4]) # pylint: disable-msg=E1101
+            if data1:
+                fd = cStringIO.StringIO(data1)
+                pkg = ReadRpm("rpmdb", fd=fd)
+                pkg.readHeader(None, versiontag, rpmdb=1)
+                return pkg["version"]
+    return None
+
+
 class RpmDB:
 
-    zero = pack("I", 0)
+    #zero = pack("I", 0)
 
     def __init__(self, buildroot="", rpmdbpath="/var/lib/rpm/"):
         self.buildroot = buildroot
@@ -2677,11 +2733,7 @@ class RpmDB:
         import bsddb
         dbpath = self.buildroot + self.rpmdbpath
         makeDirs(dbpath)
-        for i in xrange(9):
-            try:
-                os.unlink(dbpath + "__db.00%d" % i)
-            except OSError:
-                pass
+        unlinkRpmdbCache(dbpath)
         flag = "c"
         self.basenames_db = bsddb.hashopen(dbpath + "Basenames", flag)
         self.conflictname_db = bsddb.hashopen(dbpath + "Conflictname", flag)
@@ -2699,20 +2751,20 @@ class RpmDB:
         self.sigmd5_db = bsddb.hashopen(dbpath + "Sigmd5", flag)
         self.triggername_db = bsddb.hashopen(dbpath + "Triggername", flag)
 
-    def getPkgById(self, id):
-        if self._pkgs.has_key(id):
-            return self._pkgs[id]
-        else:
-            #pkg = self.readRpm(id, self.packages_db, self.tags)
-            #if pkg is not None:
-            #    self._pkgs[id] = pkg
-            #return pkg
-            return None
+    #def getPkgById(self, id2):
+    #    if self._pkgs.has_key(id2):
+    #        return self._pkgs[id2]
+    #    else:
+    #        #pkg = self.readRpm(id2, self.packages_db, self.tags)
+    #        #if pkg is not None:
+    #        #    self._pkgs[id2] = pkg
+    #        #return pkg
+    #        return None
 
     def searchFilenames(self, filename):
         (dirname, basename) = pathsplit2(filename)
-        data1 = self.basenames_db.get(basename, "")
-        data2 = self.dirnames_db.get(dirname, "")
+        data1 = self.basenames_db.get(basename, "") # pylint: disable-msg=E1101
+        data2 = self.dirnames_db.get(dirname, "")   # pylint: disable-msg=E1101
         dirname_ids = {}
         for i in xrange(0, len(data2), 8):
             id_ = data2[i:i + 4]
@@ -2769,12 +2821,7 @@ def extractRpm(filename, buildroot, owner=None, db=None):
     else:
         buildroot = buildroot.rstrip("/")
     rpm.buildroot = buildroot
-    rpm.owner = owner
-    if owner:
-        rpm.uid = Uid(rpm["fileusername"])
-        rpm.uid.transform(buildroot)
-        rpm.gid = Gid(rpm["filegroupname"])
-        rpm.gid.transform(buildroot)
+    rpm.setOwner(owner)
     rpm.readPayload(rpm.extractCpio, extract=1, db=db)
 
 def sameSrcRpm(a, b):
@@ -2982,12 +3029,12 @@ class HashList:
 # Exact reimplementation of glibc's bsearch algorithm. Used by /bin/rpm to
 # generate dirnames, dirindexes and basenames from oldfilenames (and we want
 # to do it the same way).
-def bsearch(key, list):
+def bsearch(key, list2):
     l = 0
-    u = len(list)
+    u = len(list2)
     while l < u:
         idx = (l + u) / 2
-        r = cmp(key, list[idx])
+        r = cmp(key, list2[idx])
         if r < 0:
             u = idx
         elif r > 0:
@@ -3273,14 +3320,8 @@ class RpmRelations:
             del self.list[r].pre[pkg]
         del self.list[pkg]
 
-    def removeRelation(self, node, next, quiet=0):
+    def removeRelation(self, node, next):
         """Drop the "RpmPackage node requires RpmPackage next" arc."""
-        #if not quiet:
-        #    txt = "Removing"
-        #    if self[node].pre[next]:
-        #        txt = "Zapping"
-        #    print "%s requires for %s from %s" % \
-        #                           (txt, next.getNEVRA(), node.getNEVRA()))
         del self[node].pre[next]
         del self[next].post[node]
 
@@ -3293,9 +3334,9 @@ class RpmRelations:
             order.append(pkg)
         self.remove(pkg)
 
-    def separatePostLeafNodes(self, list):
+    def separatePostLeafNodes(self, list2):
         """Move topologically sorted "trailing" packages from
-        orderer.RpmRelations relations to start of list.
+        orderer.RpmRelations relations to start of list2.
 
         Stop when each remaining package has successor (implies a dependency
         loop)."""
@@ -3304,7 +3345,7 @@ class RpmRelations:
         while len(self) > 0:
             pkg = self[i]
             if len(self[pkg].post) == 0:
-                list.append(pkg)
+                list2.append(pkg)
                 self.remove(pkg)
                 found = 1
             else:
@@ -3416,8 +3457,9 @@ class RpmRelations:
         #            self.config.printDebug(2, "  %d: %s" % (i, s))
         self.processLeafNodes(order)
         if len(order) != length:
-            print "%d Packages of %d in order list! Number of connected components: %d " % (
-                len(order), length, len(connected_components))
+            print "%d Packages of %d in order list! Number of connected " \
+                "components: %d " % (len(order), length,
+                len(connected_components))
             raise
         return order
 
@@ -3454,7 +3496,7 @@ class ConnectedComponent:
                     to_remove.append(pre)
             for p in to_remove:
                 flag = relations[pkg].pre[p]
-                relations.removeRelation(pkg, p, quiet=1)
+                relations.removeRelation(pkg, p)
                 relations.addRel(self, p, flag)
 
 
@@ -3464,7 +3506,7 @@ class ConnectedComponent:
                     to_remove.append(post)
             for p in to_remove:
                 flag = relations[pkg].post[p]
-                relations.removeRelation(p, pkg, quiet=1)
+                relations.removeRelation(p, pkg)
                 relations.addRel(p, self, flag)
 
         relations[self].weight = len(self.pkgs)
@@ -3543,13 +3585,13 @@ class ConnectedComponent:
             weight = -1
             for (p, w) in weights.iteritems():
                 if w > weight:
-                    weight, pkg2 = w, p
+                    (weight, pkg2) = (w, p)
             # get the predesessor with largest minimal distance
             weight = -1
             for p in self.relations[pkg2].post:
                 w = weights[p]
                 if w > weight:
-                    weight, pkg1 = w, p
+                    (weight, pkg1) = (w, p)
         else:
             # search the relation that will most likely set a pkg free:
             # relations that are the last post (pre) of the start (end) pkg
@@ -3573,14 +3615,15 @@ class ConnectedComponent:
                         # python handles comparison of tuples from left to
                         #  right (like strings)
                         weight = w
-                        pkg1, pkg2 = p1, p2
+                        (pkg1, pkg2) = (p1, p2)
         if self.relations[pkg1].pre[pkg2]:
             print "Breaking pre requirement for %s: %s" % (pkg1.getNEVRA(),
                 pkg2.getNEVRA())
         # remove this requirement
         self.relations.removeRelation(pkg1, pkg2)
         # rebuild components
-        components = ConnectedComponentsDetector(self.relations).detect(self.pkgs)
+        components = ConnectedComponentsDetector(self.relations
+            ).detect(self.pkgs)
         for component in components:
             self.removeSubComponent(component)
             self.pkgs[component] = component
@@ -3708,12 +3751,12 @@ class RpmOrderer:
                         self.erases.remove(p)
         self.resolver = resolver
 
-    def _genEraseOps(self, list):
+    def _genEraseOps(self, list2):
         """Return a list of (operation, RpmPackage) for erasing RpmPackage's
-        in list."""
-        if len(list) == 1:
-            return [(OP_ERASE, list[0])]
-        return RpmOrderer({}, {}, {}, list, self.resolver).order()
+        in list2."""
+        if len(list2) == 1:
+            return [(OP_ERASE, list2[0])]
+        return RpmOrderer({}, {}, {}, list2, self.resolver).order()
 
     def genRelations(self, rpms, operation):
         """Return orderer.Relations between RpmPackage's in list rpms for
@@ -3788,18 +3831,20 @@ def selectNewestRpm(rpms, arch_hash, verbose):
             newest = rpm
             newestarch = rpmarch
         else:
-            if verbose > 5:
+            if verbose > 4:
                 print "select", newest.getFilename(), "over", \
                     rpm.getFilename()
     return newest
 
-def getPkgsNewest(rpms, arch=None, arch_hash={}, verbose=0,
-    exactarch=1, nosrc=0):
+def getPkgsNewest(rpms, arch=None, arch_hash={}, # pylint: disable-msg=W0102
+    verbose=0, exactarch=1, nosrc=0):
     # Add all rpms by name,arch into a hash.
     h = {}
     for rpm in rpms:
         if rpm.issrc:
             if nosrc:
+                if verbose > 5:
+                    print "Removed .src.rpm:", rpm.getFilename()
                 continue
             rarch = "src"
         else:
@@ -3816,6 +3861,8 @@ def getPkgsNewest(rpms, arch=None, arch_hash={}, verbose=0,
         h = {}
         for rpm in pkgs:
             if rpm.issrc:
+                if verbose > 5:
+                    print "Removed .src.rpm:", rpm.getFilename()
                 continue
             # Remove all rpms not suitable for this arch.
             if arch_hash.get(rpm["arch"]) == None:
@@ -3828,22 +3875,27 @@ def getPkgsNewest(rpms, arch=None, arch_hash={}, verbose=0,
         # rpm is the newest (and all others are deleted) or if an
         # arch-dependent rpm is newest (and all noarchs are removed).
         for rpms in h.itervalues():
-            newest = selectNewestRpm(rpms, arch_hash, verbose)
+            # set verbose to 0 as this is actually not selecting rpms:
+            newest = selectNewestRpm(rpms, arch_hash, 0)
             if newest["arch"] == "noarch":
                 for r in rpms:
                     if r != newest:
                         pkgs.remove(r)
+                        if verbose > 4:
+                            print "Removed older rpm:", r.getFilename()
             else:
                 for r in rpms:
                     if r["arch"] == "noarch":
                         pkgs.remove(r)
+                        if verbose > 4:
+                            print "Removed older rpm:", r.getFilename()
     return pkgs
 
-def findRpms(dir, uselstat=None, verbose=0):
+def findRpms(dirname, uselstat=None, verbose=0):
     s = os.stat
     if uselstat:
         s = os.lstat
-    dirs = [dir]
+    dirs = [dirname]
     files = []
     while dirs:
         d = dirs.pop()
@@ -4020,7 +4072,8 @@ def cacheLocal(urls, filename, subdir, verbose, checksum=None,
             # urlgrab fails with invalid range for already completely transfered
             # files, pretty strange to me to be honest... :)
             if e[0] == 9:
-                if checksum and getChecksum(localfile, checksumtype) != checksum:
+                if checksum and getChecksum(localfile, checksumtype) \
+                    != checksum:
                     continue
                 return localfile
             continue
@@ -4049,33 +4102,23 @@ def buildPkgRefDict(pkgs):
     return pkgdict
 
 __fnmatchre__ = re.compile(".*[\*\[\]\{\}\?].*")
-def parsePackages(pkgs, requests, casematch=1):
+def parsePackages(pkgs, requests):
     """Matches up the user request versus a pkg list. For installs/updates
        available pkgs should be the 'others list' for removes it should be
-       the installed list of pkgs. Takes an optional casematch option to
-       determine if case should be matched exactly."""
+       the installed list of pkgs."""
+    matched = []
     if requests:
         pkgdict = buildPkgRefDict(pkgs)
-    (exactmatch, matched, unmatched) = ([], [], [])
-    for request in requests:
-        if pkgdict.has_key(request):
-            exactmatch.extend(pkgdict[request])
-        elif __fnmatchre__.match(request):
-            restring = fnmatch.translate(request)
-            if casematch:
-                regex = re.compile(restring)
-            else:
-                regex = re.compile(restring, flags=re.I)
-            foundit = 0
-            for item in pkgdict.iterkeys():
-                if regex.match(item):
-                    matched.extend(pkgdict[item])
-                    foundit = 1
-            if not foundit:
-                unmatched.append(request)
-        else:
-            unmatched.append(request)
-    return (exactmatch, matched, unmatched)
+        for request in requests:
+            if pkgdict.has_key(request):
+                matched.extend(pkgdict[request])
+            elif __fnmatchre__.match(request):
+                import fnmatch
+                regex = re.compile(fnmatch.translate(request))
+                for item in pkgdict.iterkeys():
+                    if regex.match(item):
+                        matched.extend(pkgdict[item])
+    return matched
 
 def escape(s):
     """Return escaped string converted to UTF-8. Return None if the string is
@@ -4416,7 +4459,8 @@ class RpmRepo:
                 props = getProps(reader)
                 ptype = props.get("type")
                 if ptype not in ("sha", "md5"):
-                    print "Unsupported checksum type %s in repomd.xml for file %s" % (ptype, fname)
+                    print "Unsupported checksum type %s in repomd.xml for" \
+                        " file %s" % (ptype, fname)
                     continue
                 tmphash[name + "_type"] = ptype
                 if Readf() != 1:
@@ -4450,16 +4494,13 @@ class RpmRepo:
                 del self.pkglist[nevra]
 
     def __removeExcluded(self):
-        (exactmatch, matched, unmatched) = parsePackages(self.pkglist.values(),
-            self.excludes)
-        for pkg in exactmatch + matched:
+        for pkg in parsePackages(self.pkglist.values(), self.excludes):
             nevra = pkg.getNEVRA0()
             if self.pkglist.has_key(nevra):
                 del self.pkglist[nevra]
 
     def __isExcluded(self, pkg):
-        (exactmatch, matched, unmatched) = parsePackages([pkg,], self.excludes)
-        return (len(exactmatch) + len(matched)) != 0
+        return len(parsePackages([pkg, ], self.excludes)) != 0
 
     def __writeVersion(self, pkg_node, pkg):
         tnode = pkg_node.newChild(None, "version", None)
@@ -4539,7 +4580,7 @@ class RpmRepo:
         pkg.sig = HdrIndex()
         pkg.hdr = HdrIndex()
         pkg.setHdr()
-        pkg.sig["size_in_sig"] = [0,]
+        pkg.sig["size_in_sig"] = [0, ]
         while Readf() == 1:
             ntype = NodeTypef()
             if ntype == TYPE_END_ELEMENT:
@@ -4563,7 +4604,7 @@ class RpmRepo:
                 props = getProps(reader)
                 pkg["version"] = props["ver"]
                 pkg["release"] = props["rel"]
-                pkg["epoch"] = [int(props["epoch"]),]
+                pkg["epoch"] = [int(props["epoch"]), ]
             elif name == "location":
                 props = getProps(reader)
                 pkg.filename = self.filename + "/" + props["href"]
@@ -4672,7 +4713,7 @@ class RpmRepo:
                 if (dep[1] & RPMSENSE_PREREQ) != 0:
                     enode.newProp("pre", "1")
 
-    def __generateFilelist(self, node, pkg, filter=1):
+    def __generateFilelist(self, node, pkg, filter2=1):
         files = pkg.getFilenames()
         fileflags = pkg["fileflags"]
         filemodes = pkg["filemodes"]
@@ -4681,9 +4722,9 @@ class RpmRepo:
         (writefile, writedir, writeghost) = ([], [], [])
         for (fname, mode, flag) in zip(files, filemodes, fileflags):
             if S_ISDIR(mode):
-                if not filter or dirrc.match(fname):
+                if not filter2 or dirrc.match(fname):
                     writedir.append(fname)
-            elif not filter or filerc.match(fname):
+            elif not filter2 or filerc.match(fname):
                 if flag & RPMFILE_GHOST:
                     writeghost.append(fname)
                 else:
@@ -4820,9 +4861,11 @@ class RpmCompsXML:
                 if not ret:
                     return 0
             elif node.name == "grouphierarchy":
-                ret = self.__parseGroupHierarchy(node.children)
-                if not ret:
-                    return 0
+                # We don't need grouphierarchies, so don't parse them ;)
+                #ret = self.__parseGroupHierarchy(node.children)
+                #if not ret:
+                #    return 0
+                ret = 1
             else:
                 self.printErr("Unknown entry in comps.xml: %s" % node.name)
                 return 0
@@ -4938,10 +4981,6 @@ class RpmCompsXML:
             node = node.next
         return glist
 
-    def __parseGroupHierarchy(self, node):
-        # We don't need grouphierarchies, so don't parse them ;)
-        return 1
-
 
 
 def getVars(releasever, arch, basearch):
@@ -4955,7 +4994,7 @@ def getVars(releasever, arch, basearch):
     for i in xrange(10):
         key = "YUM%d" % i
         value = os.environ.get(key)
-        if value:
+        if value != None:
             replacevars[key.lower()] = value
             replacevars[key] = value
     return replacevars
@@ -4966,22 +5005,25 @@ def replaceVars(line, data):
     return line
 
 
-MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
-        "logfile", "gpgcheck", "assumeyes", "alwaysprompt", "tolerant",
-        "exclude", "exactarch",
-        "installonlypkgs", "kernelpkgnames", "showdupesfromrepos", "obsoletes",
-        "overwrite_groups", "installroot", "rss-filename", "distroverpkg",
+MainVarnames = ("cachedir", "keepcache", "reposdir", "debuglevel",
+        "errorlevel", "logfile", "gpgcheck", "assumeyes", "alwaysprompt",
+        "tolerant", "exclude", "exactarch", "installonlypkgs",
+        "kernelpkgnames", "showdupesfromrepos", "obsoletes",
+        "overwrite_groups", "enable_group_conditionals", "installroot",
+        "rss-filename", "distroverpkg",
         "diskspacecheck", "tsflags", "recent", "retries", "keepalive",
         "timeout", "http_caching", "throttle", "bandwidth", "commands",
-        "keepcache", "proxy", "proxy_username", "proxy_password", "pkgpolicy",
-        "plugins", "pluginpath", "metadata_expire")
+        "proxy", "proxy_username", "proxy_password", "pkgpolicy",
+        "plugins", "pluginpath", "pluginconfpath", "metadata_expire")
 RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
         "keepalive", "timeout", "http_caching", "retries", "throttle",
         "bandwidth", "metadata_expire", "proxy", "proxy_username",
         "proxy_password")
 
-def YumConf(verbose, buildroot="", filename="/etc/yum.conf", reposdirs=[]):
+def YumConf(verbose, buildroot="", filename="/etc/yum.conf",
+    reposdirs=[]): # pylint: disable-msg=W0102
+    import glob
     data = {}
     ret = YumConf2(filename, verbose, data)
     if ret != None:
@@ -5039,6 +5081,18 @@ def YumConf2(filename, verbose, data):
                 return linenum + 1 # not parsable line
     return None
 
+def readYumConf(configfiles, reposdirs, verbose, buildroot, rpmdbpath,
+    distroverpkg, releasever):
+    yumconfs = []
+    for c in configfiles:
+        yumconfs.append(YumConf(verbose, buildroot, c, reposdirs))
+    if yumconfs and yumconfs[0].get("main", {}).get("distroverpkg") != None:
+        distroverpkg = yumconfs[0].get("main", {}).get("distroverpkg")
+        distroverpkg = distroverpkg.split(",")
+    if yumconfs and not releasever:
+        releasever = readReleaseVer(distroverpkg, buildroot, rpmdbpath)
+    return (yumconfs, distroverpkg, releasever)
+
 
 def readMirrorlist(mirrorlist, replacevars, key, verbose):
     baseurls = {}
@@ -5055,14 +5109,12 @@ def readMirrorlist(mirrorlist, replacevars, key, verbose):
             l = l.replace("$ARCH", "$basearch")
     return baseurls.keys()
 
-def readRepos(releasever, configfiles, arch, buildroot, readdebug,
-    readsrc, reposdirs, verbose, readgroupfile=0, fast=1):
-    # Read in /etc/yum.conf config files.
-    global urloptions
+def readRepos(yumconfs, releasever, arch, readdebug,
+    readsrc, verbose, readgroupfile=0, fast=1):
+    global urloptions # pylint: disable-msg=W0603
     basearch = buildarchtranslate.get(arch, arch)
     repos = []
-    for c in configfiles:
-        yumconf = YumConf(verbose, buildroot, c, reposdirs)
+    for yumconf in yumconfs:
         for key in yumconf.iterkeys():
             if key == "main":
                 continue
@@ -5180,26 +5232,26 @@ rhelupdates = mirror + "updates-rhel/"
 srpm_repos = [
     # Fedora Core
     #("Fedora Core development", "FC-development",
-    # [fedora + "development/SRPMS"], None, 30),
+    # [fedora + "development/SRPMS"], None),
     #("Fedora Core 4", "FC4",
     # [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
-    #  fedora + "updates/testing/4/SRPMS"], None, 30),
+    #  fedora + "updates/testing/4/SRPMS"], None),
     #("Fedora Core 3", "FC3",
     # [fedora + "3/SRPMS", fedora + "updates/3/SRPMS",
-    #  fedora + "updates/testing/3/SRPMS"], None, 30),
+    #  fedora + "updates/testing/3/SRPMS"], None),
     #("Fedora Core 2", "FC2",
     # [fedora + "2/SRPMS", fedora + "updates/2/SRPMS",
-    #  fedora + "updates/testing/2/SRPMS"], None, 30),
+    #  fedora + "updates/testing/2/SRPMS"], None),
     #("fedora Core 1", "FC1",
     # [fedora + "1/SRPMS", fedora + "updates/1/SRPMS",
-    #  fedora + "updates/testing/1/SRPMS"], None, 30),
+    #  fedora + "updates/testing/1/SRPMS"], None),
     # Red Hat Enterprise Linux
     ("Red Hat Enterprise Linux 4", "RHEL4",
-     [mirror + "rhel/4/en/os/i386/SRPMS", rhelupdates + "4"], None, 30),
+     [mirror + "rhel/4/en/os/i386/SRPMS", rhelupdates + "4"], None),
     ("Red Hat Enterprise Linux 3", "RHEL3",
-     [mirror + "rhel/3/en/os/i386/SRPMS", rhelupdates + "3"], None, 30),
+     [mirror + "rhel/3/en/os/i386/SRPMS", rhelupdates + "3"], None),
     ("Red Hat Enterprise Linux 2.1", "RHEL2.1",
-     [mirror + "rhel/2.1AS/en/os/i386/SRPMS", rhelupdates + "2.1"], None, 30),
+     [mirror + "rhel/2.1AS/en/os/i386/SRPMS", rhelupdates + "2.1"], None),
 ]
 
 def getChangeLogFromRpm(pkg, oldpkg):
@@ -5261,7 +5313,8 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
         if f not in files and f not in ("Makefile", "sources"):
             fsrc = pkgdir + "/" + f
             os.unlink(fsrc)
-            os.system("cd %s/.. && GIT_DIR=%s git-update-index --remove %s/%s" % (pkgdir, repodir, pkgname, f))
+            os.system("cd %s/.. && GIT_DIR=%s git-update-index "
+                "--remove %s/%s" % (pkgdir, repodir, pkgname, f))
     if "sources" in files or "Makefile" in files:
         raise ValueError, \
             "src.rpm contains sources/Makefile: %s" % pkg.filename
@@ -5307,8 +5360,10 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
         "include ../pyrpm/Makefile.srpm\n",
         "NAME:=%s\nSPECFILE:=%s\n" % (pkg["name"], specfile)])
     os.environ["GIT_DIR"] = repodir
-    os.system("cd %s/.. && { find %s -type f -print | xargs git-update-index -q --add --refresh; }" % (pkgdir, pkgname))
-    os.system('cd %s/.. && { for file in $(git-ls-files); do [ ! -f "$file" ] &&  git-update-index --remove "$file"; done; }' % pkgdir)
+    os.system("cd %s/.. && { find %s -type f -print | xargs git-update-index "
+        "-q --add --refresh; }" % (pkgdir, pkgname))
+    os.system('cd %s/.. && { for file in $(git-ls-files); do [ ! -f "$file" ]'
+        ' &&  git-update-index --remove "$file"; done; }' % pkgdir)
     del os.environ["GIT_DIR"]
     # Add changelog text:
     (fd, tmpfile) = mkstemp_file(tmpdir, special=1)
@@ -5355,7 +5410,7 @@ def createMercurial(verbose):
             + " " + hgfiles
         return
     # Create and initialize repos if still missing.
-    for (repodescr, reponame, dirs, filecache, maxchanges) in srpm_repos:
+    for (repodescr, reponame, dirs, filecache) in srpm_repos:
         repodir = grepodir + "/" + reponame + ".git"
         unpackdir = srepodir + "/" + reponame
         if not dirs or not os.path.isdir(dirs[0]):
@@ -5388,7 +5443,8 @@ def createMercurial(verbose):
             pkgdir = unpackdir + "/" + pkgname
             extractSrpm(pkg, pkgdir, filecache, repodir, oldpkgs.get(pkgname))
             oldpkgs[pkgname] = pkg
-        os.system("cd %s && { GIT_DIR=%s git repack -d; GIT_DIR=%s git prune-packed; }" % (unpackdir, repodir, repodir))
+        os.system("cd %s && { GIT_DIR=%s git repack -d; GIT_DIR=%s git "
+            "prune-packed; }" % (unpackdir, repodir, repodir))
 
 
 def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
@@ -5448,11 +5504,11 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
         dirnames = resolver.filenames_list.path.keys()
         dirnames.sort()
         for dirname in dirnames:
-            pathdirname = resolver.filenames_list.path[dirname]
-            basenames = pathdirname.keys()
+            pathdirname2 = resolver.filenames_list.path[dirname]
+            basenames = pathdirname2.keys()
             basenames.sort()
             for basename in basenames:
-                s = pathdirname[basename]
+                s = pathdirname2[basename]
                 if len(s) < 2:
                     continue
                 # We could also only check with the next entry and then
@@ -5519,7 +5575,7 @@ def verifyStructure(verbose, packages, phash, tag, useidx=1):
             if useidx:
                 try:
                     val = pkgtag[idx]
-                except:
+                except IndexError:
                     print "Error %s: index %s is not in package" % (tag, idx)
                     if verbose > 2:
                         print mytagidx
@@ -5580,7 +5636,7 @@ def verifyStructure(verbose, packages, phash, tag, useidx=1):
             try:
                 if phashtid[idx] != key:
                     print "wrong data"
-            except:
+            except IndexError:
                 print "Error %s: index %s is not in package %s" % (tag,
                     idx, tid)
                 if verbose > 2:
@@ -5672,7 +5728,7 @@ def diffFmt(fmt1, fmt2, fmt3, fmt4):
         print "fmt1/fmt2 differ"
     if len(fmt1) != len(fmt2):
         print "length: fmt1:", len(fmt1), "fmt2:", len(fmt2)
-    # XXX: So this does not output additional entries beyond min():
+    # So this does not output additional entries beyond min():
     l = min(len(fmt1), len(fmt2))
     for i in xrange(0, l, 16):
         (tag1, ttype1, offset1, count1) = unpack("!4I", fmt1[i:i + 16])
@@ -5720,6 +5776,9 @@ def writeRpmdb(pkg):
 def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     arch, archlist, specifyarch, verbose, checkfileconflicts, reposdirs):
     from binascii import b2a_hex
+    (yumconfs, distroverpkg, releasever) = readYumConf(configfiles, reposdirs,
+        verbose, buildroot, rpmdbpath, distroverpkg, releasever)
+    # Read rpmdb:
     if verbose:
         print "Reading rpmdb, this can take some time..."
         print "Reading %sPackages..." % rpmdbpath
@@ -5735,6 +5794,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
         print "Reading the other files in %s..." % rpmdbpath
         if verbose > 2:
             time1 = time.clock()
+    # Read other rpmdb files:
     if verbose and sys.version_info < (2, 3):
         print "If you use python-2.2 you can get the harmless output:", \
             "'Python bsddb: close errno 13 in dealloc'."
@@ -5792,7 +5852,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     arch_hash = setMachineDistance(arch, archlist)
     checkdupes = {}
     checkevr = {}
-    # Find out "arch", "releasever" and set "checkdupes".
+    # Find out "arch" and set "checkdupes".
     for pkg in packages.itervalues():
         if (not specifyarch and rpmdbpath != "/var/lib/rpm/" and
             pkg["name"] in kernelpkgs):
@@ -5803,8 +5863,11 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
                 arch = pkg["arch"]
                 arch_hash = setMachineDistance(arch)
                 print "Change 'arch' setting to be:", arch
-        if not releasever and pkg["name"] in distroverpkg:
-            releasever = pkg["version"]
+        # XXX This only checks the name, not the "Provides:":
+        if (yumconfs and pkg["name"] in distroverpkg and
+            pkg["version"] != releasever):
+            print "releasever could also be", pkg["version"], "instead of", \
+                releasever
         if not pkg.isInstallonly():
             checkdupes.setdefault("%s.%s" % (pkg["name"], pkg["arch"]),
                 []).append(pkg)
@@ -5834,8 +5897,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
     # Read in repositories to compare packages:
     if verbose > 2 and configfiles:
         time3 = time.clock()
-    repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0,
-        reposdirs, verbose)
+    repos = readRepos(yumconfs, releasever, arch, 1, 0, verbose)
     if repos == None:
         return 1
     if verbose > 2 and configfiles:
@@ -5898,7 +5960,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
                         rpm[s] = pkg[s]
                 #rpm["installcolor"] = (getInstallColor(arch),)
                 rpm.genRpmdbHeader()
-                (indexNoa, storeSizea, fmta, fmta2) = writeRpmdb(rpm)
+                (_, _, fmta, fmta2) = writeRpmdb(rpm)
                 if pkg.hdrdata[3] != fmta or pkg.hdrdata[4] != fmta2:
                     if verbose > 2:
                         print "Could not write a new rpmdb for %s." \
@@ -5998,7 +6060,7 @@ def checkArch(path, ignoresymlinks):
     rpmnames = h.keys()
     rpmnames.sort()
     for r in rpmnames:
-        h[r] = [selectNewestRpm(h[r], {}, 1)]
+        h[r] = [selectNewestRpm(h[r], {}, 0)]
     # Print table of archs to look at.
     for i in xrange(len(arch) + 2):
         s = ""
@@ -6241,11 +6303,11 @@ def usage():
 
 def main():
     import getopt
-    global cachedir
+    global cachedir # pylint: disable-msg=W0603
     if len(sys.argv) <= 1:
         usage()
         return 0
-    (_, hostname, kernelversion, _, arch) = os.uname()
+    (_, _, kernelversion, _, arch) = os.uname()
     archlist = None
     owner = None
     if os.geteuid() == 0:
@@ -6292,7 +6354,7 @@ def main():
     pyrex = 0
     releasever = ""
     updaterpms = 0
-    exactarch = 1   # XXX: should be set via yum.conf
+    exactarch = 1
     testmirrors = 0
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "c:hqvy?",
@@ -6491,7 +6553,18 @@ def main():
     elif testmirrors:
         testMirrors(verbose, args)
     elif updaterpms:
-        arch_hash = setMachineDistance(arch, archlist)
+        # If no config file specified, default to /etc/yum.conf and also
+        # the default directories for additional yum repos.
+        if not configfiles:
+            configfiles.append("/etc/yum.conf")
+        if not reposdirs:
+            reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
+        (yumconfs, distroverpkg, releasever) = readYumConf(configfiles,
+            reposdirs, verbose, buildroot, rpmdbpath, distroverpkg,
+            releasever)
+        if yumconfs and yumconfs[0].get("main", {}).get("exactarch") != None:
+            exactarch = int(yumconfs[0].get("main", {}).get("exactarch"))
+
         # Read all packages in rpmdb.
         if verbose > 2:
             time1 = time.clock()
@@ -6499,32 +6572,15 @@ def main():
             print "Reading the rpmdb in %s." % rpmdbpath
         (packages, keyring, maxtid, pkgdata, swapendian) = \
             readPackages(buildroot, rpmdbpath, verbose, 0, importanttags)
-        # Set releasever based on all rpmdb packages.
-        # XXX: This should be:
-        # for pkgname in distroverpkg:
-        #    if packages.has_key(pkgname):
-        #        releasever = packages[pkgname]["version"]
-        for pkg in packages.itervalues():
-            if pkg["name"] in distroverpkg:
-                releasever = pkg["version"]
-                break
         if verbose > 2:
             time2 = time.clock()
             print "Needed", time2 - time1, "seconds to read the rpmdb", \
                 "(%d rpm packages)." % len(packages.keys())
 
-        # If no config file specified, default to /etc/yum.conf and also
-        # the default directories for additional yum repos.
-        if not configfiles:
-            configfiles.append("/etc/yum.conf")
-        if not reposdirs:
-            reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
-
         # Read all repositories.
         if verbose > 2:
             time1 = time.clock()
-        repos = readRepos(releasever, configfiles, arch, buildroot, 1, 0,
-            reposdirs, verbose, fast=0)
+        repos = readRepos(yumconfs, releasever, arch, 1, 0, verbose, fast=0)
         if repos == None:
             return 1
         if verbose > 2:
@@ -6550,7 +6606,8 @@ def main():
         pkglist = []
         for r in repos:
             pkglist.extend(r.pkglist.values())
-        pkglist = getPkgsNewest(pkglist, arch, arch_hash, verbose, exactarch)
+        arch_hash = setMachineDistance(arch, archlist)
+        pkglist = getPkgsNewest(pkglist, arch, arch_hash, verbose, 1)
         if verbose > 2:
             time2 = time.clock()
             print "Needed", time2 - time1, "seconds to sort the repos."
@@ -6562,7 +6619,8 @@ def main():
             time1 = time.clock()
         h = {}
         # Read all packages from rpmdb, then add all newer packages
-        # from the repositories.
+        # from the repositories. This oder makes sure rpmdb packages
+        # are selected over their same versions in the repos.
         for rpm in packages.itervalues():
             if rpm["name"] == "gpg-pubkey":
                 continue
@@ -6621,8 +6679,10 @@ def main():
                 hdrtags = importanttags
         if configfiles and verbose > 2:
             time1 = time.clock()
-        repos = readRepos(releasever, configfiles, arch, buildroot, 0, 1,
-            reposdirs, verbose)
+        (yumconfs, distroverpkg, releasever) = readYumConf(configfiles,
+            reposdirs, verbose, buildroot, rpmdbpath, distroverpkg,
+            releasever)
+        repos = readRepos(yumconfs, releasever, arch, 0, 1, verbose)
         if configfiles and verbose > 2:
             time2 = time.clock()
             print "Needed", time2 - time1, "seconds to read the repos."
@@ -6671,7 +6731,7 @@ def main():
             checkScripts(repo)
         if strict or checkdeps:
             if specifyarch:
-                checkarchs = [arch,]
+                checkarchs = [arch, ]
             if checkarchs:
                 for arch in checkarchs:
                     time1 = time.clock()
@@ -6694,7 +6754,7 @@ def main():
         time.sleep(30)
     return 0
 
-def run_main(main):
+def run_main(mymain):
     dohotshot = 0
     if len(sys.argv) >= 2 and sys.argv[1] == "--hotshot":
         dohotshot = 1
@@ -6703,7 +6763,7 @@ def run_main(main):
         import hotshot, hotshot.stats
         htfilename = mkstemp_file(tmpdir)[1]
         prof = hotshot.Profile(htfilename)
-        prof.runcall(main)
+        prof.runcall(mymain)
         prof.close()
         # python-only
         del prof
@@ -6716,7 +6776,7 @@ def run_main(main):
         s.sort_stats("calls").print_stats(100)
         os.unlink(htfilename)
     else:
-        ret = main()
+        ret = mymain()
         if ret != None:
             sys.exit(ret)
 
