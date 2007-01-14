@@ -5557,6 +5557,8 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
 
 
 def checkRepo(rpms, verbose):
+    """Check if all src.rpms are included and does each -devel rpm have
+    a corresponding normal rpm of the same arch."""
     h = {}
     srcrpms = {}
     for rpm in rpms:
