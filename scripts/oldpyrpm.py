@@ -5556,6 +5556,23 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
         #print operations
 
 
+def checkRepo(rpms, verbose):
+    h = {}
+    srcrpms = {}
+    for rpm in rpms:
+        h[(rpm["name"], rpm.getArch())] = 1
+        if rpm.issrc:
+            srcrpms[rpm.getFilename()] = 1
+    for rpm in rpms:
+        if rpm.issrc:
+            continue
+        if rpm["name"].endswith("-devel"):
+            if not h.get((rpm["name"][:-6], rpm.getArch())):
+                print rpm.getFilename(), "only has a -devel subrpm"
+        if not srcrpms.get(rpm["sourcerpm"]):
+            print rpm.getFilename(), "does not have a src.rpm", rpm["sourcerpm"]
+
+
 def verifyStructure(verbose, packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
     for (tid, mytag) in phash.iteritems():
@@ -6348,6 +6365,7 @@ def main():
     checkoldkernel = 0
     numkeepkernels = 3
     checkdeps = 0
+    completerepo = 0
     baseurl = None
     createrepo = 0
     groupfile = "comps.xml"
@@ -6367,9 +6385,9 @@ def main():
             "updaterpms", "reposdir=", "disablereposdir", "enablerepos",
             "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "withdb",
             "cachedir=", "checkrpmdb", "checkoldkernel", "numkeepkernels=",
-            "checkdeps", "buildroot=", "installroot=", "root=", "version",
-            "baseurl=", "createrepo", "groupfile=", "mercurial", "pyrex",
-            "testmirrors"])
+            "checkdeps", "completerepo", "buildroot=", "installroot=",
+            "root=", "version", "baseurl=", "createrepo", "groupfile=",
+            "mercurial", "pyrex", "testmirrors"])
     except getopt.GetoptError, msg:
         print "Error:", msg
         return 1
@@ -6454,6 +6472,8 @@ def main():
             numkeepkernels = int(val)
         elif opt == "--checkdeps":
             checkdeps = 1
+        elif opt == "--completerepo":
+            completerepo = 1
         elif opt in ("--buildroot", "--installroot", "--root"):
             #if val[:1] != "/":
             #    print "buildroot should start with a /"
@@ -6712,7 +6732,7 @@ def main():
                 #if f:
                 #    print rpm.getFilename()
                 #    print f
-                if checkdeps or strict or wait:
+                if checkdeps or completerepo or strict or wait:
                     if (rpm["name"] in kernelpkgs and not rpm.issrc and
                         rpm["arch"] not in checkarchs):
                         checkarchs.append(rpm["arch"])
@@ -6749,6 +6769,8 @@ def main():
                     print "Needed", time2 - time1, "sec to check this tree."
             else:
                 print "No arch defined to check, are kernels missing?"
+        if completerepo:
+            checkRepo(repo, verbose)
 
     if wait:
         print "Ready."
