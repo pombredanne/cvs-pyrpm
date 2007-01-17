@@ -73,10 +73,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if self.yumconf.has_key("main"):
                 sec = self.yumconf["main"]
                 if sec.has_key("exclude"):
-                    self.excludes.extend(sec["exclude"].split())
+                    self.excludes.extend(sec["exclude"])
             sec = self.yumconf[self.reponame]
             if sec.has_key("exclude"):
-                self.excludes.extend(sec["exclude"].split())
+                self.excludes.extend(sec["exclude"])
             if sec.has_key("gpgkey"):
                 self.key_urls = sec["gpgkey"]
             if sec.has_key("baseurl"):
@@ -111,6 +111,12 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 for l in lines:
                     l = l.replace("$ARCH", "$BASEARCH")[:-1]
                     self.nc.addCache(self.yumconf.extendValue(l))
+
+    def getExcludes(self):
+        return self.excludes
+
+    def getMirrorList(self):
+        return self.mirrorlist
 
     def isIdentitySave(self):
         """return if package objects that are added are in the db afterwards

@@ -143,7 +143,7 @@ class Source:
                 yumconf.vars[repo_name]["baseurl"] = \
                                                 [ "%s/%s" % (self.url, repo) ]
                 if self.exclude:
-                    yumconf.vars[repo_name]["exclude"] = " ".join(self.exclude)
+                    yumconf.vars[repo_name]["exclude"] = self.exclude
                 _repo = getRepoDB(rpmconfig, yumconf, reponame=repo_name)
                 if not _repo.read():
                     log.errorLn("Could not load repository '%s'.", repo_name)

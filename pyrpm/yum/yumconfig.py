@@ -359,7 +359,7 @@ class YumConf(Conf):
                 name = v[0]
                 value = self.extendValue(v[1])
 
-                if name in YumConf.MultiLines:
+                if name in YumConf.MultiLines or name == "exclude":
                     stanzavars[name] = value.split()
                 else:
                     stanzavars[name] = value

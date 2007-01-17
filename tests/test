@@ -42,6 +42,6 @@ for i in sys.argv[1:]:
 #    print "dirnames = ", rpm["dirnames"]
 #    print "dirindexes = ", rpm["dirindexes"]
 #    print "basenames = ", rpm["basenames"]
-#    for f in rpm.iterFilenames():
-#	rfi = rpm.getRpmFileInfo(f)
-#	print rfi.filename, rfi.filecolor
+    for f in rpm.iterFilenames():
+	rfi = rpm.getRpmFileInfo(f)
+	print rfi.filename, rfi.filecolor
