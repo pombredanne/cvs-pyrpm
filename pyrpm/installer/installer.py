@@ -457,7 +457,7 @@ class Source:
         else:
             raise ValueError, "Could not find package providing '%s'" % (name)
 
-    def _compsLangsupport(pkgs, comps, languages, group):
+    def _compsLangsupport(self, pkgs, comps, languages, group):
         if not comps.grouphash.has_key(group):
             return
 
