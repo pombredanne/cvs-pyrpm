@@ -39,7 +39,8 @@ import pyrpm
 import pyrpm.database
 from pyrpm.installer import *
 
-log = pyrpm.log
+log = pyrpm.installer.log
+flog = pyrpm.installer.flog
 
 if not PARTED_MODULE_LOADED:
     log.errorLn("Import of parted module failed. Please install the pyparted "
@@ -102,8 +103,10 @@ def main():
         elif opt in [ "-v", "--verbose" ]:
             verbose += 1
             log.setLogLevel(log.getLogLevel() + 1)
+            flog.setLogLevel(flog.getLogLevel() + 1)
         elif opt in [ "-d", "--debug" ]:
             log.setDebugLogLevel(log.getDebugLogLevel() + 1)
+            flog.setDebugLogLevel(flog.getDebugLogLevel() + 1)
         elif opt in [ "-y", "--yes" ]:
             confirm = 0
         elif opt == "--xen":
@@ -206,10 +209,12 @@ def main():
 
     # global logging
     create_dir(tempdir, "/tmp")
-    log_file = tempdir+"/tmp/pyrpmkickstart.log"
-    log.info1Ln("Logging to '%s'." % log_file)
-    log.addLogging("*", pyrpm.logger.FileLog(log_file),
-                   format="%(date)s %(label)s%(message)s")
+    log_filename = tempdir+"/tmp/pyrpmkickstart.log"
+    log_file = pyrpm.logger.FileLog(log_filename)
+    log.info1Ln("Logging to '%s'." % log_filename)
+    log.addLogging("*", log_file, format="%(date)s %(label)s%(message)s")
+    # set extra file logging
+    flog.setLogging("*", log_file)
 
     # installation methods
 
@@ -358,15 +363,11 @@ def main():
 
         stage2_chroot = stage2_dir
         # test if bash is usable in changeroot
-        log.info1("Testing if /bin/bash is usable in stage2 .. ")
-        (status, rusage, msg) = pyrpm.runScript( \
-            script="/bin/bash --version 2>&1 >/dev/null",
-            chroot=stage2_chroot)
-        log.log(log.INFO1, msg)
-        if status != 0:
+        log.info1Ln("Testing if /bin/bash is usable in stage2")
+        if run_script("/bin/bash --version 2>/dev/null",
+                      stage2_chroot) != 0:
             log.errorLn("/bin/bash in stage2 is not usable, exiting.")
             return 1
-        log.info1Ln("OK")
 
     else: # no_stage2
         stage2_dir = ""
@@ -390,7 +391,7 @@ def main():
     if ks.has_key("install") and ks.has_key("pre") and \
            ks["pre"].has_key("script") and len(ks["pre"]["script"]) > 0:
         log.info1Ln("Running pre script.")
-        if not run_script(ks["pre"], stage2_chroot):
+        if not run_ks_script(ks["pre"], stage2_chroot):
             return 1
         # parse file again
         ks.reload()
@@ -558,10 +559,7 @@ def main():
         if os.path.exists(stage2_dir+"/sbin/dmsetup"):
             log.info1Ln("Initializing device mapper.")
             dmsetup = "/sbin/dmsetup info 2>/dev/ull"
-            (status, rusage, msg) = pyrpm.runScript(script=dmsetup,
-                                                    chroot=stage2_chroot)
-            log.log(log.INFO1, msg)
-            if status != 0:
+            if run_script(dmsetup, stage2_chroot) != 0:
                 log.errorLn("dmsetup failed.")
                 return 1
         else:
@@ -1014,22 +1012,33 @@ def main():
                 to_create.setdefault(part["vgname"], [ ]).append(name)
                 continue
             # create partition
-            # default disk is hda
-            ondisk = "hda"
-            # TODO: use SCSI disks
-            # Not possible right now, because there is no hardware detection.
-            # Therefore the SCSI driver is not in the initrd.
-            if not diskmap.has_key(ondisk):
-                if diskmap.has_key("sda"):
-                    ondisk = "sda"
-                if diskmap.has_key("dasda"):
-                    ondisk = "dasda"
             if part.has_key("ondisk"):
                 ondisk = part["ondisk"]
                 # drop leading '/dev/' to be compatible with old kickstart
                 # versions
                 if ondisk[:5] == "/dev/":
                     ondisk = ondisk[5:]
+            else:
+                # No hardware detection: the SCSI driver is not in the initrd,
+                # the user has to use the driver tag in the kickstart file
+                if diskmap.has_key("hda"):
+                    ondisk = "hda"
+                elif diskmap.has_key("dasda"):
+                    ondisk = "dasda"
+                elif diskmap.has_key("sda"):
+                    ondisk = "sda"
+                else:
+                    disks = diskmap.keys()
+                    if len(disks) < 1:
+                        log.errorLn("No disk found.")
+                        return 1
+                    if len(disks) > 1:
+                        disks.sort()
+                        log.info1Ln("Using first entry in sorted disk list.")
+                    ondisk = disks[0]
+            # TODO: allow to switch disks later if not user specified and
+            # if there are multiple disks
+
             if not part.has_key("size"):
                 log.errorLn("No size given for partition '%s'.", name)
                 return 1
@@ -1832,12 +1841,7 @@ def main():
                 mkfs += " '%s'" % partitionmap[onpart]["device"]
 
                 log.info1Ln("Formatting '%s': '%s'", name, onpart)
-                log.log(log.INFO2, mkfs)
-
-                (status, rusage, msg) = pyrpm.runScript(script=mkfs,
-                                                        chroot=stage2_chroot)
-                log.log(log.INFO1, msg)
-                if status != 0:
+                if run_script(mkfs, stage2_chroot) != 0:
                     log.errorLn("mkfs.%s failed.", part["fstype"])
                     return 1
 
@@ -1848,12 +1852,9 @@ def main():
                               partitionmap[onpart]["device"]
 
                     log.info1Ln("Tuning filesystem '%s'", name)
-                    log.log(log.INFO2, tune2fs)
+                    flog.log(log.INFO2, tune2fs)
 
-                    (status, rusage, msg) = pyrpm.runScript( \
-                        script=tune2fs, chroot=stage2_chroot)
-                    log.log(log.INFO1, msg)
-                    if status != 0:
+                    if run_script(tune2fs, stage2_chroot) != 0:
                         log.errorLn("tune2fs failed.")
                         return 1
 
@@ -1870,12 +1871,9 @@ def main():
                     log.info1Ln("Formatting '%s': '%s'", label, onpart)
                 else:
                     log.info1Ln("Formatting '%s': '%s'", name[:4], onpart)
-                log.log(log.INFO2, mkswap)
+                flog.log(log.INFO2, mkswap)
 
-                (status, rusage, msg) = pyrpm.runScript(script=mkswap,
-                                                        chroot=stage2_chroot)
-                log.log(log.INFO1, msg)
-                if status != 0:
+                if run_script(mkswap, stage2_chroot) != 0:
                     log.errorLn("mkswap failed.")
                     return 1
             elif name[:5] == "raid.":
@@ -2378,7 +2376,7 @@ def main():
         return 1
     fd.write("[main]\n")
     fd.write("cachedir=%s/yum.cache\n" % tempdir)
-    fd.write("debuglevel=0\n")
+    fd.write("debuglevel=1\n")
     fd.write("errorlevel=0\n")
     fd.write("pkgpolicy=newest\n")
     fd.write("distroverpkg=redhat-release\n")
@@ -2386,6 +2384,7 @@ def main():
     fd.write("exactarch=1\n")
     fd.write("retries=20\n")
     fd.write("obsoletes=1\n")
+    fd.write("plugins=1\n")
     fd.write("reposdir=%s/yum.repos.d\n" % tempdir)
     fd.write("\n")
     if ks.has_key("install") and \
@@ -2452,29 +2451,23 @@ def main():
             yum += " --autoerase "
         yum += " update "
     #print yum
-    pid = os.fork()
-    if pid != 0:
-        (rpid, status) = os.waitpid(pid, 0)
-        if status != 0:
-            if ks.has_key("install"):
-                log.errorLn("Installation failed, aborting.")
-            else:
-                log.errorLn("Upgrade failed, aborting.")
-            return 1
-    else:
-        status = 255
-        try:
-            p = popen2.Popen4(yum)
+
+    # install / upgrade
+    try:
+        p = popen2.Popen4(yum)
+        ch = p.fromchild.read(1)
+        while ch:
+            log.log(log.INFO1, ch)
             ch = p.fromchild.read(1)
-            while ch:
-                log.log(log.INFO1, ch)
-                ch = p.fromchild.read(1)
-            status = p.poll()
-        except:
-            os._exit(255)
+        status = p.poll()
         if status != 0:
-            os._exit(255)
-        os._exit(0)
+            raise RuntimeError, "failed"
+    except:
+        if ks.has_key("install"):
+            log.errorLn("\nInstallation failed, aborting.")
+        else:
+            log.errorLn("\nUpgrade failed, aborting.")
+        return 1
 
     ##########################################################################
     ############################## configuration #############################
@@ -2505,10 +2498,7 @@ def main():
                     authconfig += " --%s=%s" % (tag, ks["authconfig"][tag])
                 else:
                     authconfig += " --%s" % tag
-            (status, rusage, msg) = pyrpm.runScript(script=authconfig,
-                                                    chroot=target_chroot)
-            log.log(log.INFO1, msg)
-            if status != 0:
+            if run_script(authconfig, target_chroot) != 0:
                 log.errorLn("authconfig failed.")
 
     # setting root password
@@ -2530,11 +2520,8 @@ def main():
                 for i in range(salt_len):
                     salt += random.choice(string.letters+string.digits+"./")
                 password = crypt.crypt(password, salt)
-            (status, rusage, msg) = pyrpm.runScript( \
-                    script="/usr/sbin/usermod -p '%s' root" % password,
-                    chroot=target_chroot)
-            log.log(log.INFO1, msg)
-            if status != 0:
+            if run_script("/usr/sbin/usermod -p '%s' root" % password,
+                          target_chroot) != 0:
                 log.errorLn("Setting root password failed.")
 
     # /etc/inittab
@@ -2579,10 +2566,7 @@ def main():
         else:
             lokkit = "/usr/sbin/lokkit --quiet --nostart --selinux='%s'" % \
                      ks["selinux"].keys()[0]
-            (status, rusage, msg) = pyrpm.runScript(script=lokkit,
-                                                    chroot=target_chroot)
-            log.log(log.INFO1, msg)
-            if status != 0:
+            if run_script(lokkit, target_chroot) != 0:
                 log.errorLn("Configuring selinux failed.")
 
     # /etc/sysconfig/clock
@@ -2678,11 +2662,8 @@ def main():
         except:
             log.errorLn("/usr/sbin/mouseconfig does not exist, skipping.")
         else:
-            (status, rusage, msg) = pyrpm.runScript( \
-                    script="/usr/sbin/mouseconfig --noui genericwheelps/2",
-                    chroot=target_chroot)
-            log.log(log.INFO1, msg)
-            if status != 0:
+            if run_script("/usr/sbin/mouseconfig --noui genericwheelps/2",
+                          target_chroot) != 0:
                 log.errorLn("mouseconfig failed.")
 
     # setup networking
@@ -2911,10 +2892,8 @@ def main():
                 except:
                     log.errorLn("/sbin/grub does not exist, skipping.")
                 else:
-                    (status, rusage, msg) = pyrpm.runScript( \
-                        script="/bin/sh /tmp/grub-setup", chroot=target_chroot)
-                    log.log(log.INFO1, msg)
-                    if status != 0:
+                    if run_script("/bin/sh /tmp/grub-setup",
+                                  target_chroot) != 0:
                         log.errorLn("grub setup failed.")
 
     # sanitize lvm - remove cache file
@@ -2941,7 +2920,7 @@ def main():
                     chroot = target_chroot
                 elif stage2_chroot:
                     chroot = stage2_chroot
-                if not run_script(dict, chroot):
+                if not run_ks_script(dict, chroot):
                     return 1
             i += 1
 
@@ -2971,7 +2950,7 @@ def main():
 
     # copy log file into target_chroot+/root/
     log.close()
-    fd = open(log_file, "r")
+    fd = open(log_filename, "r")
     target = "/root/pyrpmkickstart.log"
     try:
         target_fd = open(target_chroot+target, "w")
@@ -2994,7 +2973,7 @@ def main():
 ##################################### usage ###################################
 
 def usage():
-    print """
+    log.info1Ln("""
 Usage: pyrpmkickstart <options> <kickstartfile>
                       [[<disk name>:]<disk image>|<disk device>]*
 
@@ -3030,7 +3009,7 @@ OPTIONS
   --xen                    Write a simple xen config file.
   --yum                    Use yum instead of pyrpmyum.
 
-"""
+""")
 # TODO:
 #  --standalone     Start in standalone mode: start network before running
 #                   pre script, swapon swap partitions
