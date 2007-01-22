@@ -16,12 +16,13 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-from pyrpm.logger import log
+from config import log
 
 class Cards:
     def __init__(self, buildroot):
         self.cards = { }
-        fd = open(buildroot+'/usr/share/hwdata/Cards')
+        name = '/usr/share/hwdata/Cards'
+        fd = open(buildroot+name)
         dict = None
         card = None
         while 1:
@@ -58,7 +59,7 @@ class Cards:
             elif line == "END":
                 continue
             else:
-                log.errorLn("Unknown entry '%s'.", line)
+                log.errorLn("'%s': Error in line '%s'.", name, line)
         fd.close()
 
     def _get(self, card, dict, cards):

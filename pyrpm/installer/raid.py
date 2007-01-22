@@ -16,8 +16,8 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-from pyrpm.functions import runScript
-from pyrpm.logger import log
+from pyrpm.installer.functions import run_script
+from config import log, flog
 
 class RAID:
     prog = "LANG=C /sbin/mdadm"
@@ -48,10 +48,7 @@ class RAID:
     def assemble(self):
         command = "%s --assemble '%s'" % (RAID.prog, self.device) + \
                   " %s" % (" ".join(self.devices))
-        log.debug2Ln(command)
-        (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
-        log.log(log.INFO1, msg)
-        if status != 0:
+        if run_script(command, self.chroot) != 0:
             log.errorLn("mdadm failed on '%s' with error code %d",
                         self.name, status)
             return 1
@@ -76,10 +73,7 @@ class RAID:
                 " --spare-devices=%d" % (self.spares) + \
                 " --level=%d" % (self.level) + \
                 " %s" % (" ".join(self.devices))
-        log.debug2Ln(command)
-        (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
-        log.log(log.INFO1, msg)
-        if status != 0:
+        if run_script(command, self.chroot) != 0:
             log.errorLn("Failed to create raid '%s'.", self.name)
             return 0
         self.active = True
@@ -96,10 +90,7 @@ class RAID:
         if not self.active:
             return 1
         command = "%s --stop '%s'" % (RAID.prog, self.device)
-        log.debug2Ln(command)
-        (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
-        log.log(log.INFO1, msg)
-        if status != 0:
+        if run_script(command, self.chroot) != 0:
             log.errorLn("Deactivation of raid '%s' failed: %s", self.name, msg)
             return 0
         self.active = False
@@ -113,10 +104,7 @@ class RAID:
     # get size of raid device
     def info(device, chroot=None):
         command = "%s --detail '%s'" % (RAID.prog, device)
-        log.debug2Ln(command)
-        (status, rusage, msg) = runScript(script=command, chroot=chroot)
-        log.log(log.INFO1, msg)
-        if status != 0:
+        if run_script(command, chroot) != 0:
             log.errorLn("Failed to get details for '%s'.", device)
             return None
 
@@ -168,10 +156,7 @@ class RAID:
     # static function to get raid information for a raid partition
     def examine(device, chroot=None):
         command = "%s -E '%s'" % (RAID.prog, device)
-        log.debug2Ln(command)
-        (status, rusage, msg) = runScript(script=command, chroot=chroot)
-        log.log(log.INFO1, msg)
-        if status != 0:
+        if run_script(command, chroot) != 0:
             log.errorLn("Unable to get raid information for '%s'.", device)
             return None
 

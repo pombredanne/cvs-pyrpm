@@ -17,9 +17,8 @@
 #
 
 import os.path
-from pyrpm.logger import log
-from pyrpm.functions import runScript
-from functions import create_file
+from functions import run_script, create_file
+from config import log, flog
 
 def firewall_config(ks, buildroot, source):
     if (source.isRHEL() and source.cmpVersion("4") < 0) or \
@@ -67,10 +66,7 @@ def firewall_config(ks, buildroot, source):
 
         # enable firewall
         if ks["firewall"].has_key("enabled"):
-            (status, rusage, msg) = runScript(\
-                script="/sbin/chkconfig iptables on", chroot=buildroot)
-            log.log(log.INFO1, msg)
-            if status != 0:
+            if run_script("/sbin/chkconfig iptables on", buildroot) != 0:
                 log.errorLn("Could not enable firewall.")
     else:
         # use lokkit to configure firewall
@@ -88,9 +84,7 @@ def firewall_config(ks, buildroot, source):
 
         lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % \
                  " ".join(fwargs)
-        (status, rusage, msg) = runScript(script=lokkit, chroot=buildroot)
-        log.log(log.INFO1, msg)
-        if status != 0:
+        if run_script(lokkit, buildroot) != 0:
             log.errorLn("Configuration of firewall failed.")
 
         create_file(buildroot, "/etc/sysconfig/system-config-securitylevel",

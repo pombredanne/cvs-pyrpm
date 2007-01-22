@@ -16,8 +16,6 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-from pyrpm.logger import log
-from pyrpm.config import rpmconfig
 from pyrpm.cache import NetworkCache
 from pyrpm.functions import stringCompare, normalizeList
 from pyrpm.database import getRepoDB
@@ -26,10 +24,14 @@ from devices import *
 from functions import *
 from pyrpm import database
 from disk import *
+from config import log, rpmconfig
 
 ################################### classes ###################################
 
 class Source:
+    """ Load Source repo and extra repos according to kickstart configuration.
+    """
+    
     def __init__(self):
         self.repos = { }
         self.base_repo_names = [ ]
@@ -285,26 +287,27 @@ class Source:
         for group in repo_groups:
             for repo in repo_groups[group]:
                 comps = self.repos[repo].comps
-                pkgs.extend(comps.getPackageNames(group))
+                for pkg in comps.getPackageNames(group):
+                    if len(self.repos[repo].searchPkgs([pkg])) > 0:
+                        pkgs.append(pkg)
                 if everything:
                     # add all packages in this group
-                    pkgs.extend(comps.getConditionalPackageNames(group))
+                    for pkg in comps.getConditionalPackageNames(group):
+                        if len(self.repos[repo].searchPkgs([pkg])) > 0:
+                            pkgs.append(pkg)
         del repo_groups
 
         # add packages
         if ks["packages"].has_key("add"):
-            for pkg in ks["packages"]["add"]:
+            for name in ks["packages"]["add"]:
                 found = False
                 exclude = [ ]
                 for repo in self.repos.keys():
-                    if self.repos[repo].hasName(pkg):
-                        if pkg in self.repos[repo].excludes:
-                            log.info2Ln("Excluding '%s' for repo '%s'", pkg,
-                                        repo)
-                            continue
+                    _pkgs = self.repos[repo].searchPkgs([name])
+                    if len(_pkgs) > 0:
                         # silently add package
-                        if not pkg in pkgs:
-                            pkgs.append(pkg)
+                        if not name in pkgs:
+                            pkgs.append(name)
                         found = True
                         break
                 if not found:
@@ -336,7 +339,11 @@ class Source:
 
         # add comps package
         if not "comps" in pkgs:
-            pkgs.append("comps")
+            try:
+                self._addPkg("comps", pkgs)
+            except:
+                # ignore missing comps package
+                pass
 
         # append mdadm
         if has_raid:
@@ -386,6 +393,14 @@ class Source:
         # append dhclient
         if ks.has_key("bootloader"):
             self._addPkg("grub", pkgs)
+#            if self.getArch() == "ia64":
+#                self._addPkg("elilo", pkgs)
+#            elif self.getArch in [ "s390", "s390x" ]:
+#                self._addPkg("s390utils", pkgs)
+#            elif self.getArch() in [ "ppc", "ppc64" ]:
+#                self._addPkg("yaboot", pkgs)
+#            else:
+#                self._addPkg("grub", pkgs)
 
         # append grub
         if ks.has_key("network") and len(ks["network"]) > 0:
@@ -406,10 +421,8 @@ class Source:
 
     def _addPkg(self, name, pkgs, description=""):
         for repo in self.repos:
-            if self.repos[repo].hasName(name):
-                if name in self.repos[repo].excludes:
-                    log.info2Ln("Excluding '%s' for repo '%s'", name, repo)
-                    continue
+            _pkgs = self.repos[repo].searchPkgs([name])
+            if len(_pkgs) > 0:
                 if not name in pkgs:
                     if description != "":
                         log.info1Ln("Adding package '%s' for %s.", name,
@@ -436,9 +449,6 @@ class Source:
                 if len(s) < 1:
                     continue
             for pkg in s:
-                if pkg["name"] in self.repos[repo].excludes:
-                    log.info2Ln("Excluding '%s' for repo '%s'", pkg, repo)
-                    continue
                 if pkg["name"] in pkgs:
                     # package is already in list
                     return
@@ -543,8 +553,5 @@ class Source:
 
     def getRelease(self):
         return self.release
-
-    def get(self, filename):
-        return self.cache.cache(filename)
 
 # vim:ts=4:sw=4:showmatch:expandtab

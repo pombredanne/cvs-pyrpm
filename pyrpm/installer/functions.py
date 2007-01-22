@@ -16,12 +16,12 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import os, os.path, stat, signal
-from pyrpm.logger import log
-from pyrpm.config import rpmconfig
+import os, os.path, stat, signal, string, time, resource, struct
 from pyrpm.functions import normalizeList, runScript, pkgCompare
 from pyrpm.database import getRpmDB
-from filesystem import *
+from config import log, flog, rpmconfig
+
+################################## functions ##################################
 
 def get_system_disks():
     disks = [ ]
@@ -612,22 +612,228 @@ def release_info(source):
 
     return (release, version, arch)
 
-def run_script(dict, chroot):
+def run_script(command, chroot=''):
+    if chroot != '':
+        flog.logLn(log.DEBUG1, "'%s' in '%s'" % (command, chroot))
+    else:
+        flog.logLn(log.DEBUG1, command)
+    (status, rusage, msg) = runScript(script=command, chroot=chroot)
+    flog.log(log.INFO1, msg)
+    return status
+
+def run_ks_script(dict, chroot):
     interpreter = "/bin/sh"
     if dict.has_key("interpreter"):
         interpreter = dict["interpreter"]
     (status, rusage, msg) = runScript(interpreter, dict["script"],
                                       chroot=chroot)
+    flog.log(log.INFO1, msg)
     if status != 0:
-        print msg
         if dict.has_key("erroronfail"):
             log.errorLn("Script failed, aborting.")
             return 0
         else:
             log.warningLn("Script failed.")
-    else:
-        log.log(log.INFO1, msg)
 
     return 1
+
+############################ filesystem functions ############################
+
+# TODO: add chroot support to all functions
+
+def mount(what, where, fstype="ext3", options=None, arguments=None):
+    opts = ""
+    if options:
+        opts = "-o '%s'" % options
+    args = ""
+    if arguments:
+        args = string.join(arguments)
+    if fstype:
+        _fstype = "-t '%s'" % fstype
+    else:
+        _fstype = ""
+    mount = "/bin/mount %s %s %s '%s' '%s' 2>/dev/null" % (args, opts,
+                                                           _fstype, what,
+                                                           where)
+    stat = os.system(mount)
+    if stat != 0:
+        raise IOError, "mount of '%s' on '%s' failed" % (what , where)
+
+
+def umount(what):
+    stat = os.system("/bin/umount '%s' 2>/dev/null" % what)
+    if stat != 0:
+        log.errorLn("Umount of '%s' failed.", what)
+        return 1
+
+    return 0
+
+def swapon(device):
+    swapon = "/sbin/swapon '%s'" % device
+    log.info1Ln("Enable swap on '%s'.", device)
+    if run_script(swapon) != 0:
+        log.errorLn("swapon failed.")
+        return 1
+    return 0
+
+def swapoff(device):
+    swapoff = "/sbin/swapoff '%s'" % device
+    log.info1Ln("Disable swap on '%s'.", device)
+    if run_script(swapoff) != 0:
+        log.errorLn("swapoff failed.")
+        return 1
+    return 0
+
+def detectFstype(device):
+    pagesize = resource.getpagesize()
+
+    # open device
+    try:
+        fd = open(device, "r")
+    except Exception, msg:
+        log.debug2Ln(msg)
+        return None
+
+    # read pagesize bytes (at least needed for swap)
+    try:
+        buf = fd.read(pagesize)
+    except: # ignore message
+        fd.close()
+        return None
+    if len(buf) < pagesize:
+        fd.close()
+        return None
+
+    ext2magic = ext2_journal = ext2_has_journal = 0
+    try:
+        (ext2magic,) = struct.unpack("H", buf[1024+56:1024+56+2])
+        (ext2_journal,) = struct.unpack("I", buf[1024+96:1024+96+4])
+        (ext2_has_journal,) = struct.unpack("I", buf[1024+92:1024+92+4])
+    except Exception, msg:
+        fd.close()
+        raise Exception, msg
+
+    if ext2magic == 0xEF53:
+        if ext2_journal & 0x0008 == 0x0008 or \
+               ext2_has_journal & 0x0004 == 0x0004:
+            return "ext3"
+        return "ext2"
+
+    elif buf[pagesize - 10:] == "SWAP_SPACE" or \
+           buf[pagesize - 10:] == "SWAPSPACE2":
+        fd.close()
+        return "swap"
+    elif buf[0:4] == "XFSB":
+        fd.close()
+        return "xfs"
+
+    # check for jfs
+    try:
+        fd.seek(32768, 0)
+        buf = fd.read(180)
+    except: # ignore message
+        fd.close()
+        return None
+    if len(buf) < 180:
+        fd.close()
+        return None
+    if buf[0:4] == "JFS1":
+        return "jfs"
+
+    return None
+
+def ext2Label(device):
+    # open device
+    try:
+        fd = open(device, "r")
+    except: # ignore message
+        return None
+    # read 1160 bytes
+    try:
+        fd.seek(1024, 0)
+        buf = fd.read(136)
+    except: # ignore message
+        fd.close()
+        return None
+    fd.close()
+
+    label =None
+    if len(buf) == 136:
+        (ext2magic,) = struct.unpack("H", buf[56:56+2])
+        if ext2magic == 0xEF53:
+            label = string.rstrip(buf[120:120+16],"\0x00")
+    return label
+
+
+def xfsLabel(device):
+    # open device
+    try:
+        fd = open(device, "r")
+    except: # ignore message
+        return None
+    # read 128 bytes
+    try:
+        buf = fd.read(128)
+    except: # ignore message
+        fd.close()
+        return None
+    fd.close()
+
+    label =None
+    if len(buf) == 128 and buf[0:4] == "XFSB":
+        label = string.rstrip(buf[108:120],"\0x00")
+    return label
+
+def jfsLabel(device):
+    # open device
+    try:
+        fd = open(device, "r")
+    except: # ignore message
+        return None
+    # seek to 32768, read 180 bytes
+    try:
+        fd.seek(32768, 0)
+        buf = fd.read(180)
+    except: # ignore message
+        fd.close()
+        return None
+    fd.close()
+
+    label =None
+    if len(buf) == 180 and buf[0:4] == "JFS1":
+        label = string.rstrip(buf[152:168],"\0x00")
+    return label
+
+def swapLabel(device):
+    pagesize = resource.getpagesize()
+
+    # open device
+    try:
+        fd = open(device, "r")
+    except: # ignore message
+        return None
+    # read pagesize bytes
+    try:
+        buf = fd.read(pagesize)
+    except: # ignore message
+        fd.close()
+        return None
+    fd.close()
+
+    label = None
+    if len(buf) == pagesize and (buf[pagesize - 10:] == "SWAP_SPACE" or \
+                                 buf[pagesize - 10:] == "SWAPSPACE2"):
+        label = string.rstrip(buf[1052:1068], "\0x00")
+    return label
+
+def getLabel(device):
+    label = ext2Label(device)
+    if not label:
+        label = swapLabel(device)
+    if not label:
+        label = xfsLabel(device)
+    if not label:
+        label = jfsLabel(device)
+    return label
 
 # vim:ts=4:sw=4:showmatch:expandtab

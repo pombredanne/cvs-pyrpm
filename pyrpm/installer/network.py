@@ -18,7 +18,7 @@
 
 import os.path
 from functions import create_file
-from pyrpm.logger import log
+from config import log
 
 def network_config(ks, buildroot):
     if not os.path.exists(buildroot+"/etc/sysconfig/network-scripts"):

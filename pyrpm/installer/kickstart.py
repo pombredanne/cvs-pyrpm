@@ -17,7 +17,7 @@
 #
 
 import types, string
-from pyrpm.logger import log
+from config import log
 
 ##############################################################################
 #
@@ -375,11 +375,16 @@ class KickstartConfig(dict):
                 elif opt == "timezone":
                     self.parseSub(opt, args[1:], [ "utc" ])
                 elif opt == "url":
-                    self.parseSimple(opt, args[1:], [ "url:", "exclude:" ])
-                    if not self[opt].has_key("url"):
+                    self.parseSimple(opt, args[1:], [ "url:", "exclude:",
+                                                      "mirrorlist:"])
+                    if not self[opt].has_key("url") and \
+                           not self[opt].has_key("mirrorlist"):
                         raise ValueError, "Error in line '%s'" % line
                     if self[opt].has_key("exclude"):
                         self[opt]["exclude"] = self[opt]["exclude"].split(",")
+                    if self[opt].has_key("mirrorlist"):
+                        self[opt]["mirrorlist"] = \
+                            self[opt]["mirrorlist"].split(",")
                 elif opt == "xconfig":
                     self.parseSimple(opt, args[1:],
                                      [ "noprobe", "card:", "videoram:",

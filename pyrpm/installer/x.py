@@ -17,10 +17,10 @@
 #
 
 import os.path
-from config import keyboard_models
+import keyboard
 from functions import create_file
 import hwdata
-from pyrpm.logger import log
+from config import log, flog
 
 def x_config(ks, buildroot, source):
     # default: VGA graphics card, Generic extended super VGA monitor
@@ -38,7 +38,7 @@ def x_config(ks, buildroot, source):
 
     # keyboard
     (kbd_layout, kbd_model, kbd_variant, kbd_options) = \
-                 keyboard_models[ks["keyboard"]]
+                 keyboard.keyboard_models[ks["keyboard"]]
 
     _card = None
     _driver = None
@@ -48,7 +48,7 @@ def x_config(ks, buildroot, source):
             cards = hwdata.Cards(buildroot)
         except Exception, msg:
             log.warningLn("Loading of monitor databae failed.")
-            log.log(log.INFO1, msg)
+            flog.log(log.INFO1, msg)
         else:
             dict = cards.get(ks["xconfig"]["card"])
             if dict and dict.has_key("driver"):
@@ -90,7 +90,7 @@ def x_config(ks, buildroot, source):
             monitors = hwdata.Monitors(buildroot)
         except Exception, msg:
             log.warningLn("Parsing of monitor database failed.")
-            log.log(log.INFO1, msg)
+            flog.log(log.INFO1, msg)
         else:
             if ks["xconfig"].has_key("monitor"):
                 dict = monitors.get(ks["xconfig"]["monitor"])

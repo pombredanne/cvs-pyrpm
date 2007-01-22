@@ -17,7 +17,7 @@
 #
 
 from pyrpm.functions import runScript
-from pyrpm.logger import log
+from config import log
 
 class LVM_PHYSICAL_VOLUME:
     prog = "LANG=C /usr/sbin/lvm"
@@ -29,7 +29,7 @@ class LVM_PHYSICAL_VOLUME:
     def create(self):
         command = "%s pvcreate --zero y -ff -y -d %s" % \
                   (LVM_PHYSICAL_VOLUME.prog, self.device)
-        log.debug2Ln(command)
+        log.debug1Ln(command)
         (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
@@ -40,7 +40,7 @@ class LVM_PHYSICAL_VOLUME:
 
     def scan(chroot=None):
         command = "%s pvscan 2>/dev/null" % LVM_PHYSICAL_VOLUME.prog
-        log.debug2Ln(command)
+        log.debug1Ln(command)
         (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
@@ -73,7 +73,7 @@ class LVM_PHYSICAL_VOLUME:
     def display(chroot=None):
         command = "%s pvdisplay --units b 2>/dev/null" % \
                   LVM_PHYSICAL_VOLUME.prog
-        log.debug2Ln(command)
+        log.debug1Ln(command)
         (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
@@ -120,7 +120,7 @@ class LVM_VOLGROUP:
         if extent > 0:
             vgcreate += " --physicalextentsize '%s'" % extent
         vgcreate += " %s %s" % (self.name, " ".join(devices))
-        log.debug2Ln(vgcreate)
+        log.debug1Ln(vgcreate)
         (status, rusage, msg) = runScript(script=vgcreate, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
@@ -163,7 +163,7 @@ class LVM_VOLGROUP:
 
     def scan(chroot=None):
         command = "%s vgscan --mknodes 2>/dev/null" % LVM_VOLGROUP.prog
-        log.debug2Ln(command)
+        log.debug1Ln(command)
         (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
@@ -186,7 +186,7 @@ class LVM_VOLGROUP:
 
     def display(chroot=None):
         command = "%s vgdisplay --units b 2>/dev/null" % LVM_VOLGROUP.prog
-        log.debug2Ln(command)
+        log.debug1Ln(command)
         (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
@@ -235,7 +235,7 @@ class LVM_LOGICAL_VOLUME:
         command = "%s lvcreate -n '%s' --size %dk '%s'" % \
                   (LVM_LOGICAL_VOLUME.prog, self.name, (size / 1024),
                    self.volgroup)
-        log.debug2Ln(command)
+        log.debug1Ln(command)
         (status, rusage, msg) = runScript(script=command, chroot=self.chroot)
         log.log(log.INFO1, msg)
         if status != 0:
@@ -247,7 +247,7 @@ class LVM_LOGICAL_VOLUME:
 
     def scan(chroot=None):
         command = "%s lvscan 2>/dev/null" % LVM_LOGICAL_VOLUME.prog
-        log.debug2Ln(command)
+        log.debug1Ln(command)
         (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:
@@ -284,7 +284,7 @@ class LVM_LOGICAL_VOLUME:
     def display(chroot=None):
         command = "%s lvdisplay --units b 2>/dev/null" % \
                   LVM_LOGICAL_VOLUME.prog
-        log.debug2Ln(command)
+        log.debug1Ln(command)
         (status, rusage, msg) = runScript(script=command, chroot=chroot)
         log.log(log.INFO1, msg)
         if status != 0:

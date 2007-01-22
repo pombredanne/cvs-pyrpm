@@ -18,7 +18,7 @@
 
 import os, stat, string, time, resource, struct
 import loop
-from pyrpm.logger import log
+from config import log
 
 try:
     import parted

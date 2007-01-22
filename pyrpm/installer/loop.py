@@ -17,7 +17,7 @@
 #
 
 import os, fcntl, struct, stat, errno
-from pyrpm.logger import log
+from config import log
 
 # struct loop_info64 {
 #        unsigned long long      lo_device;
