@@ -365,18 +365,19 @@ class Logger:
         self._checkDomain(domain)
         levels = self._getLevels(level)
         targets = self._getTargets(target)
-        for level in levels:
+        for _level in levels:
             for target in targets:
-                if not self._logging.has_key(level):
+                if not self._logging.has_key(_level):
                     continue
-                if (domain, target, format) in self._logging[level]:
-                    self._logging[level].remove( (domain, target, format) )
-                    if len(self._logging[level]) == 0:
-                        del self._logging[level]
-                        return
-                raise ValueError, "No mathing logging for " \
-                      "level %d, domain %s, target %s and format %s." % \
-                      (level, domain, target.__class__.__name__, format)
+                if (domain, target, format) in self._logging[_level]:
+                    self._logging[_level].remove( (domain, target, format) )
+                    if len(self._logging[_level]) == 0:
+                        del self._logging[_level]
+                        continue
+                if level != self.ALL:
+                    raise ValueError, "No mathing logging for " \
+                          "level %d, domain %s, target %s and format %s." % \
+                          (_level, domain, target.__class__.__name__, format)
         self._genDomains()
 
     def isLoggingHere(self, level):
