@@ -132,7 +132,7 @@ class RpmRelations:
 
         # Add dependencies:
         for pkg in db.getPkgs():
-            log.info3Ln("Generating relations for %s", pkg.getNEVRA())
+            log.debug1Ln("Generating relations for %s", pkg.getNEVRA())
             resolved = resolver.getResolvedPkgDependencies(pkg)
             # ignore unresolved, we are only looking at the changes,
             # therefore not all symbols are resolvable in these changes

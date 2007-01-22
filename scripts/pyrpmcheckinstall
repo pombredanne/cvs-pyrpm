@@ -76,12 +76,12 @@ def main():
                     pkg.read(tags=rpmconfig.resolvertags)
                     pkg.close()
                 except (IOError, ValueError), e:
-                    rpmconfig.printError("%s: %s\n" % (pkg, e))
+                    log.error("%s: %s\n" % (pkg, e))
                     continue
                 pkglist.append(pkg)
 
     # Create fake repository
-    memory_repo = database.repodb.RpmRepoDB(rpmconfig, [], rpmconfig.buildroot, None, "pyrpmcheckinstall-memory-repo")
+    memory_repo = database.repodb.RpmRepoDB(rpmconfig, [], rpmconfig.buildroot, "pyrpmcheckinstall-memory-repo")
     for pkg in pkglist:
         memory_repo.addPkg(pkg)
     yum.repos.addDB(memory_repo)
@@ -99,7 +99,7 @@ def main():
         if yum.prepareTransaction() == 0:
             break
         resolver = yum.opresolver
-        rpmconfig.printInfo(0, "Updating package [%d/%d]: %s\n" % (i, len(pkglist), pkg.getNEVRA()))
+        log.info1("Updating package [%d/%d]: %s\n" % (i, len(pkglist), pkg.getNEVRA()))
         resolver.update(pkg)
         if not yum.runDepRes():
             continue
