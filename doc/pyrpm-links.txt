@@ -40,6 +40,10 @@ up2date and rhnlib are the client software for
 link:http://rhn.redhat.com/[Red Hat Network] and can be downloaded from
 link:http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/[].
 
+link:http://www.pardus.org.tr/eng/projects/pisi/index.html[PiSi]
+is an update tool written in python for the
+link:http://www.pardus.org.tr/eng/index.html[pardus] Linux distribution.
+
 Anaconda is the Red Hat installation tool and can be downloaded at
 link:http://elvis.redhat.com/anaconda/[],
 link:http://fedora.redhat.com/projects/anaconda-installer/[] and
