@@ -762,14 +762,13 @@ def main():
                     inf["onpart"] = onpart
                     if mdmap.has_key(dev):
                         dict = mdmap[dev]
-# TODO: do something
-#                        for tag in [ "uuid", "magic", "level",
-#                                     "raid-devices" ]:
-#                            if dict[tag] != inf[tag]:
-#                                log.warningLn("Ignoring partition '%s', "
-#                                              "because of uuid mismatch.",
-#                                              onpart)
-#                                continue
+                        for tag in [ "uuid", "magic", "level",
+                                     "raid-devices" ]:
+                            if dict[tag] != inf[tag]:
+                                log.warningLn("Ignoring partition '%s', "
+                                              "because of uuid mismatch.",
+                                              onpart)
+                                continue
                     else:
                         mdmap[dev] = { }
                         dict = mdmap[dev]
@@ -1982,6 +1981,9 @@ def main():
     if (source.isRHEL() and source.cmpVersion("4") >= 0) or \
            (source.isFedora() and source.cmpVersion("2") >= 0):
         create_dir(target_chroot, "/sys")
+    if (source.isRHEL() and source.cmpVersion("5") >= 0) or \
+           (source.isFedora() and source.cmpVersion("4") >= 0):
+        create_dir(target_chroot, "/selinux")        
     create_dir(target_chroot, "/tmp", mode=1777)
     create_dir(target_chroot, "/var/log")
     create_dir(target_chroot, "/var/tmp", mode=1777)
@@ -2009,6 +2011,7 @@ def main():
         except Exception, msg:
             log.errorLn("Unable to mount temporary /sys: %s", msg)
             return 1
+
 #    # /tmp
 #    log.info1Ln("Mounting temporary '/tmp'.")
 #    try:
@@ -2660,7 +2663,8 @@ def main():
         try:
             check_exists(target_chroot, "/usr/sbin/mouseconfig")
         except:
-            log.errorLn("/usr/sbin/mouseconfig does not exist, skipping.")
+            # this is no error or warning anymore
+            pass
         else:
             if run_script("/usr/sbin/mouseconfig --noui genericwheelps/2",
                           target_chroot) != 0:
