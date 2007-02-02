@@ -59,11 +59,6 @@ class Source:
         # create network cache
         self.cache = NetworkCache([ self.url ], cachedir=rpmconfig.cachedir)
 
-        # check source
-        if not self.cache.cache("."):
-            log.errorLn("Failed to access '%s'.", self.url)
-            return 0
-
         # get source version, release and architecture
         if no_discinfo:
             # get source information via release package
@@ -216,21 +211,19 @@ class Source:
 
     def getPackages(self, ks, languages, no_default_groups, all_comps,
                     has_raid, fstypes):
-        if not ks.has_key("packages"):
-            return [ ]
-
         groups = [ ]
         pkgs = [ ]
         everything = False
-        if ks["packages"].has_key("groups") and \
+        if ks.has_key("packages") and \
+               ks["packages"].has_key("groups") and \
                len(ks["packages"]["groups"]) > 0:
             groups = ks["packages"]["groups"]
 
         # add default group "base" and "core if it is not in groups and
         # no_default_groups is not set
-        if not (ks.has_key("packages") and \
-                ks["packages"].has_key("nobase")) or \
-                not no_default_groups:
+        if not ks.has_key("packages") or \
+               (not ks["packages"].has_key("nobase") and \
+                not no_default_groups):
             if not "base" in groups:
                 groups.append("base")
             if not "core" in groups:
@@ -298,7 +291,7 @@ class Source:
         del repo_groups
 
         # add packages
-        if ks["packages"].has_key("add"):
+        if ks.has_key("packages") and ks["packages"].has_key("add"):
             for name in ks["packages"]["add"]:
                 found = False
                 exclude = [ ]
@@ -313,7 +306,7 @@ class Source:
                 if not found:
                     log.warningLn("Package '%s' is not available.", pkg)
         # remove packages
-        if ks["packages"].has_key("drop"):
+        if ks.has_key("packages") and ks["packages"].has_key("drop"):
             for pkg in ks["packages"]["drop"]:
                 if pkg in pkgs:
                     log.info1Ln("Removing package '%s'.", pkg)
