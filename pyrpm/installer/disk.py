@@ -312,11 +312,11 @@ else:
             diskType[type.name] = type
             type = parted.disk_type_get_next(type)
 
-        def __init__(self, name, alloc_loop=0, as_image=0):
+        def __init__(self, filename, alloc_loop=0, as_image=0):
             self.ped_disk = None
             self.__clear_partitions()
             self.alloc_loop = alloc_loop
-            self.open(name, as_image)
+            self.open(filename, as_image)
 
         def __clear_partitions(self):
             self.partition = { }
@@ -327,8 +327,8 @@ else:
             self.freespace_primary = [ ]
             self.freespace_logical = [ ]
 
-        def open(self, name, as_image=0):
-            device = name
+        def open(self, filename, as_image=0):
+            device = filename
             mode = os.stat(device).st_mode
 
             if stat.S_ISBLK(mode) and not as_image:
