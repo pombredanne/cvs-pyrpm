@@ -37,7 +37,7 @@ for i in sys.argv[1:]:
                 continue
             print rpm.getNEVRA(), rpm["requirename"][i]
     print len(rpm["dirnames"])
-    print rpm["requires"]
+    print rpm["summary"]
 
 #    print "dirnames = ", rpm["dirnames"]
 #    print "dirindexes = ", rpm["dirindexes"]

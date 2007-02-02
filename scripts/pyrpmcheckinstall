@@ -18,7 +18,7 @@
 # Author: Phil Knirsch
 #
 
-import sys, os, random
+import sys, getopt
 
 PYRPMDIR = ".."
 if not PYRPMDIR in sys.path:
@@ -31,21 +31,61 @@ from pyrpm.database.memorydb import *
 def usage():
     print """
     Yum install and remove interative test of all packages in the repositories
-    pyrpmcheckinstall [options] [DIRS... | PACKAGES...]
+    pyrpmcheckinstall [options] [numcpu=VAL] [logfile=VAL] [DIRS... | PACKAGES...]
 
 options:
     [-?, --help] [--version]
-    [--quiet] [-v, --verbose] [-y]
-    [-c CONFIGFILE] [--dbpath DIRECTORY] [-r, --root DIRECTORY]
+    [--quiet] [-v, --verbose] [-q] [-y] 
+    [-c CONFIGFILE] [--dbpath DIRECTORY]
+    [-r, --root DIRECTORY, --installroot DIRECTORY]
     [-h, --hash] [--force] [--oldpackage] [--justdb] [--test]
     [--ignoresize] [--ignorearch] [--exactarch]
     [--noconflicts] [--fileconflicts]
     [--nodeps] [--signature]
     [--noorder] [--noscripts] [--notriggers]
     [--autoerase] [--installpkgs="pkg1 pkg2 pkg2 ..."]
+    [--enablerepo repoid|repoglob] [--disablerepo repoid|repoglob]
+    [--exclude pkgname/pkgglob]
+    [--nocache] [--cachedir DIRECTORY]
+    [--obsoletes] [--noplugins]
 
 DIRS:     Directories with packages for possible installation
-PACKAGES: Same for rpm binary packages"""
+PACKAGES: Same for rpm binary packages
+"""
+
+#
+# Function to loop over a pkglist to test
+#
+def testPkglist(yum, numcpu, j):
+    if yum.prepareTransaction() == 0:
+        return 0
+    pkglist = yum.repos.getPkgs()
+    plen = len(pkglist)
+    pkglist = pkglist[j*plen/numcpu:(j+1)*plen/numcpu]
+    i = j*plen/numcpu
+    for pkg in pkglist:
+        i += 1
+        yum.setCommand("update")
+        if yum.prepareTransaction() == 0:
+            break
+        resolver = yum.opresolver
+        log.info1("Updating package [%d/%d]: %s\n" % (i, plen, pkg.getNEVRA()))
+        resolver.update(pkg)
+        if not yum.runDepRes():
+            continue
+        if yum.runCommand() == 0:
+            break
+
+        yum.setCommand("remove")
+        if yum.prepareTransaction() == 0:
+            break
+        resolver = yum.opresolver
+        for rpkg in resolver.getDatabase().getPkgs()[:]:
+            resolver.erase(rpkg)
+        if not yum.runDepRes():
+            continue
+        if yum.runCommand() == 0:
+            break
 
 
 #
@@ -61,8 +101,21 @@ def main():
     # Default is to be a little verbose.
     rpmconfig.verbose = 1
 
+    # Default number of cpus we're running on
+    numcpu = 1
+
+    # Default logfile. Output to stdout if None
+    logfile = None
+
     # Argument parsing
     args = parseYumOptions(sys.argv[1:], yum)
+
+    if args[0].startswith("numcpu="):
+        numcpu = int(args[0][7:])
+        args = args[1:]
+    if args[0].startswith("logfile="):
+        logfile = args[0][8:]
+        args = args[1:]
 
     # Read additional dirs/packages
     pkglist = []
@@ -86,36 +139,20 @@ def main():
         memory_repo.addPkg(pkg)
     yum.repos.addDB(memory_repo)
 
-    yum.setCommand("update")
-    if yum.prepareTransaction() == 0:
-        return 0
-
-    pkglist = yum.repos.getPkgs()
-
-    i = 0
-    for pkg in pkglist:
-        i += 1
-        yum.setCommand("update")
-        if yum.prepareTransaction() == 0:
-            break
-        resolver = yum.opresolver
-        log.info1("Updating package [%d/%d]: %s\n" % (i, len(pkglist), pkg.getNEVRA()))
-        resolver.update(pkg)
-        if not yum.runDepRes():
-            continue
-        if yum.runCommand() == 0:
-            break
-
-        yum.setCommand("remove")
-        if yum.prepareTransaction() == 0:
-            break
-        resolver = yum.opresolver
-        for rpkg in resolver.getDatabase().getPkgs()[:]:
-            resolver.erase(rpkg)
-        if not yum.runDepRes():
-            continue
-        if yum.runCommand() == 0:
-            break
+    mainbr = rpmconfig.buildroot[:]
+    for j in xrange(numcpu):
+        if numcpu != 1:
+            rpmconfig.buildroot = mainbr+"."+str(j)
+        pid = os.fork()
+        if pid == 0:
+            if logfile != None:
+                fname = logfile[:]
+                if numcpu != 1:
+                    fname += "."+str(j)
+                log.setLogging("*", FileLog(fname))
+            testPkglist(yum, numcpu, j)
+            return 1
+    os.waitpid(-1, 0)
     return 1
 
 if __name__ == '__main__':
