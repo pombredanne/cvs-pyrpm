@@ -602,7 +602,7 @@ def getFreeDiskspace(config, operations):
             try:
                 pkg.reread(config.diskspacetags)
             except Exception, e:
-                log.errorLn("Error rereading package: %s", e)
+                log.errorLn("Error rereading package: %s: %s", pkg.source, e)
                 return 0
         dirnames = pkg["dirnames"]
         if dirnames == None:
