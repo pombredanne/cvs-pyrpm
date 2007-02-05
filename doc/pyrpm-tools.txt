@@ -55,7 +55,7 @@ for d in dev dev/shm dev/pts proc sys ; do
 done
 mkdir -p $DEST/etc
 touch $DEST/etc/fstab
-pyrpmcheckinstall -y -c /dev/null -r /mnt/build/test /mirror/fedora/development/i386/os/Fedora/RPMS &> /tmp/installtest
+pyrpmcheckinstall -y -c /dev/null -r $DEST /mirror/fedora/development/i386/os/Fedora/RPMS &> /tmp/installtest
 # grep for "Error" in the logs
 -----------------------
 
