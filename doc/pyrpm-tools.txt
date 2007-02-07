@@ -59,6 +59,43 @@ pyrpmcheckinstall -y -c /dev/null -r $DEST /mirror/fedora/development/i386/os/Fe
 # grep for "Error" in the logs
 -----------------------
 
+If you have a multiple CPUs and a lot of ram you can run the whole test in a
+tmpfs and store the restults in logfiles like this:
+
+-----------------------
+TOP=/mnt/build/tmpfs
+NAME=fc-extras-devel-i386
+DEST=$TOP/$NAME
+NUMCPU=8
+MEM=7G
+mkdir -p $TOP
+mount -t tmpfs -o size=$MEM none $TOP/
+for i in `seq 0 $NUMCPU`; do
+  D=$DEST.$i
+  for d in dev dev/shm dev/pts proc sys ; do
+    mkdir -p $D/$d
+    mount --bind /$d $D/$d
+  done
+
+  mkdir -p $D/etc
+  touch $D/etc/fstab
+done
+pyrpmcheckinstall --ignoresize -y -v -c /root/$NAME.conf -r $DEST numcpu=$NUMCPU logfile=/var/tmp/$NAME.log
+for i in `seq 0 $NUMCPU`; do
+  killall pyrpmcheckinstall
+  sleep 1
+done
+for i in `seq 0 $NUMCPU`; do
+  D=$DEST.$i
+  for d in sys proc dev/pts dev/shm dev ; do
+    umount $D/$d
+  done
+done
+umount $TOP
+
+# grep for "Error" in the logs
+-----------------------
+
 
 pyrpmcheckrepo
 --------------
