@@ -124,6 +124,26 @@ import md5, sha, signal
 from types import IntType, ListType
 from struct import pack, unpack
 try:
+    from cStringIO import StringIO
+except ImportError:
+    from StringIO import StringIO
+uselibxml = 0
+try:
+    # python-2.5 layout:
+    from xml.etree.cElementTree import iterparse
+except ImportError:
+    try:
+        # often older python versions add this to site-packages:
+        from cElementTree import iterparse
+    except ImportError:
+        try:
+            # maybe the python-only version is available?
+            from ElementTree import iterparse
+        except:
+            # ok, we give up and use libxml then:
+            uselibxml = 1
+#if uselibxml:
+try:
     import libxml2
     TYPE_ELEMENT = libxml2.XML_READER_TYPE_ELEMENT
     TYPE_END_ELEMENT = libxml2.XML_READER_TYPE_END_ELEMENT
@@ -2127,12 +2147,12 @@ class ReadRpm: # pylint: disable-msg=R0904
             fd = PyGZIP(self.filename, self.fd, cpiosize, size_in_sig)
             #fd = gzip.GzipFile(fileobj=self.fd)
         elif self["payloadcompressor"] == "bzip2":
-            import bz2, cStringIO
+            import bz2
             if size_in_sig != None:
                 payload = self.fd.read(size_in_sig)
             else:
                 payload = self.fd.read()
-            fd = cStringIO.StringIO(bz2.decompress(payload))
+            fd = StringIO(bz2.decompress(payload))
         else:
             self.printErr("unknown payload compression")
             return
@@ -2699,7 +2719,7 @@ def unlinkRpmdbCache(dbpath):
 def readReleaseVer(distroverpkg, buildroot="", rpmdbpath="/var/lib/rpm/"):
     """Search for distroverpkg within the Provides: of the rpmdb.
     Return with the very first entry found."""
-    import bsddb, cStringIO
+    import bsddb
     dbpath = buildroot + rpmdbpath
     unlinkRpmdbCache(dbpath) # XXX needed for read-only access???
     providename_db = None # XXX Create a class to access/cache access?
@@ -2713,7 +2733,7 @@ def readReleaseVer(distroverpkg, buildroot="", rpmdbpath="/var/lib/rpm/"):
                 packages_db = bsddb.hashopen(dbpath + "Packages", "r")
             data1 = packages_db.get(data[i:i + 4]) # pylint: disable-msg=E1101
             if data1:
-                fd = cStringIO.StringIO(data1)
+                fd = StringIO(data1)
                 pkg = ReadRpm("rpmdb", fd=fd)
                 pkg.readHeader(None, versiontag, rpmdb=1)
                 return pkg["version"]
@@ -3174,9 +3194,9 @@ class FilenamesList:
 def evrSplit(evr):
     epoch = "0"
     i = evr.find(":")
-    if i != -1:
+    if i != -1 and evr[:i].isdigit():
         epoch = evr[:i]
-    j = evr.find("-", i + 1)
+    j = evr.rfind("-", i + 1)
     if j != -1:
         return (epoch, evr[i + 1:j], evr[j + 1:])
     return (epoch, evr[i + 1:], "")
@@ -5663,7 +5683,7 @@ def verifyStructure(verbose, packages, phash, tag, useidx=1):
                     print key, phashtid
 
 def readPackages(buildroot, rpmdbpath, verbose, keepdata=1, hdrtags=None):
-    import bsddb, cStringIO
+    import bsddb
     if hdrtags == None:
         hdrtags = rpmdbtag
     packages = {}
@@ -5697,7 +5717,7 @@ def readPackages(buildroot, rpmdbpath, verbose, keepdata=1, hdrtags=None):
         if tid == 0:
             maxtid = unpack("%sI" % swapendian, data)[0]
         else:
-            fd = cStringIO.StringIO(data)
+            fd = StringIO(data)
             pkg = ReadRpm("rpmdb", fd=fd)
             pkg.readHeader(None, hdrtags, keepdata, 1)
             if pkg["name"] == "gpg-pubkey":
