@@ -2444,7 +2444,8 @@ class ReadRpm: # pylint: disable-msg=R0904
                         self.printErr("not utf-8 in %s" % i)
                         #self.printErr("text: %s" % j)
                         break
-        if (self.strict and self["name"][:6] == "kernel" and
+        if not self.issrc and (self.strict and
+            self["name"][:6] == "kernel" and
             self["name"] not in ("kernel-utils", "kernel-doc",
             "kernel-pcmcia-cs", "kernel-debuginfo", "kernel-ib",
             "kernel-headers") and not self.isInstallonly()):
