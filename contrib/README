@@ -1,0 +1,7 @@
+Contents:
+---------
+The tools, scripts and applications found in the contrib directory don't use
+the pyrpm framework themselves but are rather use cases or tools for further
+analysis/processing of the real pyrpm based applications.
+
+

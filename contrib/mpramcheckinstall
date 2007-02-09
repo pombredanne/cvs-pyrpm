@@ -1,0 +1,68 @@
+#!/bin/sh
+#
+# Copyright (C) 2007 Red Hat, Inc.
+#
+# Author: Phil Knirsch
+#
+# Shell script to speed up the pyrpmcheckinstall run by using multiple
+# CPUs and doing it all in a tmpfs filesystem.
+#
+# WARNING: Use with caution. You also need at least 4GB or more memory for it
+# to be remotely usable due to the heavy RAM usage during the parallel installs.
+#
+# Usage: Modify the 5 variables at the start of the script to represent your
+# environment. All of them should be self explanatory.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2004, 2005 Red Hat, Inc.
+#
+#
+
+TOP=/mnt/build/tmpfs
+NAME=fc-extras-devel-i386
+CONFIG=/root/$NAME.conf
+DEST=$TOP/$NAME
+NUMCPU=4
+
+mkdir -p $TOP
+mount -t tmpfs none $TOP/
+for i in `seq 0 $NUMCPU`; do
+  D=$DEST.$i
+  for d in dev dev/shm dev/pts proc sys ; do
+    mkdir -p $D/$d
+    mount --bind /$d $D/$d
+  done
+
+  mkdir -p $D/etc
+  touch $D/etc/fstab
+done
+
+pyrpmcheckinstall --ignoresize -y -v -c $CONFIG -r $DEST numcpu=$NUMCPU logfile=/var/tmp/$NAME.log
+
+fuser -k -signal SIGTERM $TOP 2>/dev/null
+fuser -k -signal SIGTERM $TOP 2>/dev/null
+fuser -k -signal SIGTERM $TOP 2>/dev/null
+sleep 3
+fuser -k  $TOP 2>/dev/null
+fuser -k  $TOP 2>/dev/null
+fuser -k  $TOP 2>/dev/null
+sleep 3
+
+for i in `seq 0 $NUMCPU`; do
+  D=$DEST.$i
+  for d in sys proc dev/pts dev/shm dev ; do
+    umount $D/$d
+  done
+done
+umount $TOP
