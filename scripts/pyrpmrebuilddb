@@ -5,12 +5,12 @@
 #
 
 
-import sys, os, getopt, errno
+import sys, os.path, getopt, errno
 from bsddb import hashopen, btopen
 from binascii import a2b_hex
 from struct import unpack
 
-PYRPMDIR = ".."
+PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import __version__

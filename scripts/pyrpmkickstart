@@ -26,11 +26,11 @@
 #
 
 
-import os, sys, getopt, md5, stat, tempfile, string, time, random, crypt, \
-       signal, types, shutil, traceback, popen2
+import os.path, sys, getopt, md5, stat, tempfile, string, time, random, \
+       crypt, signal, types, shutil, traceback, popen2
 #import pprint
 
-PYRPMDIR = ".."
+PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 PYBINDIR = os.path.dirname(sys.argv[0])

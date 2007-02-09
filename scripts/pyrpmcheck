@@ -17,8 +17,9 @@
 # Author: Phil Knirsch
 #
 
-import sys, os, getopt, errno
-PYRPMDIR = ".."
+import sys, os.path, getopt, errno
+
+PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import __version__

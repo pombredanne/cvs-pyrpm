@@ -21,7 +21,7 @@ oldpyrpm2.so: oldpyrpm2.o
 
 install-exec-local:
 	@for i in $(scripts); do \
-	    sed -i -e 's#^PYRPMDIR\s*=\s*".*".*#PYRPMDIR = "$(pkgdatadir)"#g' \
+	    sed -i -e 's#^PYRPMDIR\s*=.*$#PYRPMDIR = "$(pkgdatadir)"#g' \
 		$(DESTDIR)$(bindir)/$$i;\
 	done
 

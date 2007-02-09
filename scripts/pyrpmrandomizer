@@ -17,9 +17,9 @@
 # Author: Phil Knirsch
 #
 
-import sys, os, random
+import sys, os.path, random
 
-PYRPMDIR = ".."
+PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm.yum.yum import RpmYum

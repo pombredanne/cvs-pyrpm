@@ -22,8 +22,9 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import re, fnmatch, getopt, gzip, md5, os, sha, sys, libxml2
-PYRPMDIR = ".."
+import re, fnmatch, getopt, gzip, md5, os.path, sha, sys, libxml2
+
+PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 import pyrpm

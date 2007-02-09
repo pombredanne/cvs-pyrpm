@@ -22,9 +22,9 @@
 # Author: Phil Knirsch
 #
 
-import sys, os, getopt, errno, libxml2
+import sys, os.path, getopt, errno, libxml2
 
-PYRPMDIR = ".."
+PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import __version__

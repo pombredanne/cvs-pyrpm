@@ -7,12 +7,12 @@
 #
 
 
-import sys, os, getopt
+import sys, os.path, getopt
 from bsddb import hashopen, btopen
 from binascii import b2a_hex, a2b_hex
 from struct import unpack
 
-PYRPMDIR = ".."
+PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import __version__

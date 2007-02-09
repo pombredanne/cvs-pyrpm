@@ -26,9 +26,9 @@ Usage: rpmspecfile.py [-v --verbose] [-l --sections] [-s --section=sectionname] 
 
 __author__ = "Harald Hoyer <harald@redhat.com>"
 
-import sys, string
+import sys, string, os.path
 
-PYRPMDIR = ".."
+PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm.specfile import RpmSpecFile
