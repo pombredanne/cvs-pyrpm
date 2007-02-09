@@ -276,8 +276,8 @@ class Logger:
         self._checkDomain(domain)
         if level < 0:
             level = 0
-        if level > self.DEBUG_MAX - self.NO_DEBUG:
-            level = self.DEBUG_MAX - self.NO_DEBUG
+        if level > self.DEBUG_MAX:
+            level = self.DEBUG_MAX
         self._debug_level[domain] = level - self.NO_DEBUG
 
     def setFormat(self, format):
@@ -545,20 +545,22 @@ class Logger:
         if level > self.INFO_MAX:
             # debug
             _dict = self._debug_level
+            _level = level - self.NO_DEBUG
         else:
             _dict = self._level
+            _level = level
 
         # no debug
         for domain in _dict:
             if domain == "*":
                 # '*' matches everything: simple match
-                if _dict[domain] >= level:
+                if _dict[domain] >= _level:
                     simple_match = True
                     if len(check_domains) > 0:
                         check_domains = [ ]
                     break
             else:
-                if _dict[domain] >= level:
+                if _dict[domain] >= _1level:
                     check_domains.append(domain)
 
         if not simple_match and len(check_domains) < 1:
