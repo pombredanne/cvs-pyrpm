@@ -560,7 +560,7 @@ class Logger:
                         check_domains = [ ]
                     break
             else:
-                if _dict[domain] >= _1level:
+                if _dict[domain] >= _level:
                     check_domains.append(domain)
 
         if not simple_match and len(check_domains) < 1:
