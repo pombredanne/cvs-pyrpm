@@ -5178,7 +5178,7 @@ def readRepos(yumconfs, releasever, arch, readdebug,
 def testMirrors(verbose, args):
     # We are per default more verbose:
     verbose += 1
-    urloptions["timeout"] = "10.0"
+    urloptions["timeout"] = "20.0"
     if args:
         # python-only
         args = [ (a, "5", "i686", "i386") for a in args ]
@@ -5197,26 +5197,38 @@ def testMirrors(verbose, args):
             (ml + "fedora-core-$releasever", "5", "i686", "i386"),
             (ml + "fedora-core-debug-$releasever", "5", "i686", "i386"),
             (ml + "fedora-core-source-$releasever", "5", "i686", "i386"),
+            (ml + "fedora-core-$releasever", "6", "i686", "i386"),
+            (ml + "fedora-core-debug-$releasever", "6", "i686", "i386"),
+            (ml + "fedora-core-source-$releasever", "6", "i686", "i386"),
             # FC-development
-            (ml + "fedora-core-rawhide", "6", "i686", "i386"),
-            (ml + "fedora-core-rawhide-debug", "6", "i686", "i386"),
-            (ml + "fedora-core-rawhide-source", "6", "i686", "i386"),
+            (ml + "fedora-core-rawhide", "7", "i686", "i386"),
+            (ml + "fedora-core-rawhide-debug", "7", "i686", "i386"),
+            (ml + "fedora-core-rawhide-source", "7", "i686", "i386"),
             # FC-updates
             (ml + "updates-released-fc$releasever", "4", "i686", "i386"),
             (ml + "updates-released-fc$releasever", "5", "i686", "i386"),
             (ml + "updates-released-debug-fc$releasever", "5", "i686", "i386"),
             (ml + "updates-released-source-fc$releasever", "5", "i686","i386"),
+            (ml + "updates-released-fc$releasever", "6", "i686", "i386"),
+            (ml + "updates-released-debug-fc$releasever", "6", "i686", "i386"),
+            (ml + "updates-released-source-fc$releasever", "6", "i686","i386"),
             # FC-updates-testing
             (ml + "updates-testing-fc$releasever", "4", "i686", "i386"),
             (ml + "updates-testing-fc$releasever", "5", "i686", "i386"),
             (ml + "updates-testing-debug-fc$releasever", "5", "i686", "i386"),
             (ml + "updates-testing-source-fc$releasever", "5", "i686", "i386"),
+            (ml + "updates-testing-fc$releasever", "6", "i686", "i386"),
+            (ml + "updates-testing-debug-fc$releasever", "6", "i686", "i386"),
+            (ml + "updates-testing-source-fc$releasever", "6", "i686", "i386"),
             # Fedora Extras
             (ml + "fedora-extras-$releasever", "4", "i686", "i386"),
             (ml + "fedora-extras-$releasever", "5", "i686", "i386"),
             (ml + "fedora-extras-debug-$releasever", "5", "i686", "i386"),
             (ml + "fedora-extras-source-$releasever", "5", "i686", "i386"),
-            (ml + "fedora-extras-devel", "6", "i686", "i386"),
+            (ml + "fedora-extras-$releasever", "6", "i686", "i386"),
+            (ml + "fedora-extras-debug-$releasever", "6", "i686", "i386"),
+            (ml + "fedora-extras-source-$releasever", "6", "i686", "i386"),
+            (ml + "fedora-extras-devel", "7", "i686", "i386"),
         ]
     for (mirrorlist, releasever, arch, basearch) in args:
         print "---------------------------------------"
@@ -5225,6 +5237,7 @@ def testMirrors(verbose, args):
         #print m
         if verbose > 2:
             for reponame in m:
+                reponame = replaceVars(reponame, replacevars)
                 repo = RpmRepo([reponame], "", verbose, "testmirrors", 1, 1)
                 if repo.read(1) == 0:
                     print "failed"
