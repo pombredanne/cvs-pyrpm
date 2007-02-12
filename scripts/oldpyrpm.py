@@ -5200,7 +5200,6 @@ def testMirrors(verbose, args):
             (ml + "fedora-core-$releasever", "6", "i686", "i386"),
             (ml + "fedora-core-debug-$releasever", "6", "i686", "i386"),
             (ml + "fedora-core-source-$releasever", "6", "i686", "i386"),
-            # FC-development
             (ml + "fedora-core-rawhide", "7", "i686", "i386"),
             (ml + "fedora-core-rawhide-debug", "7", "i686", "i386"),
             (ml + "fedora-core-rawhide-source", "7", "i686", "i386"),
