@@ -5129,6 +5129,8 @@ def readMirrorlist(mirrorlist, replacevars, key, verbose):
         for l in open(fname).readlines():
             l = l.strip()
             l = l.replace("$ARCH", "$basearch")
+            if l and l[0] != "#":
+                baseurls[replaceVars(l, replacevars)] = None
     return baseurls.keys()
 
 def readRepos(yumconfs, releasever, arch, readdebug,
