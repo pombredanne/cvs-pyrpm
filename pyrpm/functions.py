@@ -790,7 +790,7 @@ def parseYumOptions(argv, yum):
             except ValueError:
                 print "Invalid debug level"
                 return None
-            log.setDebugLogLevel(level, domain)
+            log.setDebugLogLevel(log.NO_DEBUG+level, domain)
         elif opt == "--dbpath":
             rpmconfig.dbpath = val
         elif opt == "--installpkgs":

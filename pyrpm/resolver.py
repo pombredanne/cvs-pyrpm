@@ -594,7 +594,7 @@ class RpmResolver:
             for p in unresolved.keys():
                 log.errorLn("%s: unresolved dependencies:", p.getNEVRA())
                 for u in unresolved[p]:
-                    log.erroLn("\t%s" % depString(u))
+                    log.errorLn("\t%s" % depString(u))
             if unresolved:
                 return 0
             return 1

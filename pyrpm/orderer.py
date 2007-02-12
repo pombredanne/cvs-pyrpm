@@ -321,8 +321,8 @@ class RpmRelations:
             # remove leaf node
             leaf = leafs[max_post].pop()
             rels = self[leaf]
-            self.collect(leaf, order)
             log.debug4Ln("%s", leaf.getNEVRA())
+            self.collect(leaf, order)
             # check post nodes if they got a leaf now
             new_max = max_post
             for pkg in rels.post:
@@ -483,7 +483,7 @@ class ConnectedComponent:
             for p, req in self.relations[pkg].pre.iteritems():
                 if req:
                     hard_requirements.append((pkg, p))
-
+        log.debug7Ln("\t%i pre reqs" % len(hard_requirements))
         # pick requirement to delete
         weights = { }
         # calculate minimal distance to a pre req
