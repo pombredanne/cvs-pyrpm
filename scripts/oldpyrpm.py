@@ -5117,7 +5117,7 @@ def readYumConf(configfiles, reposdirs, verbose, buildroot, rpmdbpath,
 
 
 def readMirrorlist(mirrorlist, replacevars, key, verbose):
-    baseurls = {}
+    baseurls = []
     for mlist in mirrorlist:
         mlist = replaceVars(mlist, replacevars)
         if verbose > 2:
@@ -5130,8 +5130,8 @@ def readMirrorlist(mirrorlist, replacevars, key, verbose):
             l = l.strip()
             l = l.replace("$ARCH", "$basearch")
             if l and l[0] != "#":
-                baseurls[replaceVars(l, replacevars)] = None
-    return baseurls.keys()
+                baseurls.append(l)
+    return baseurls
 
 def readRepos(yumconfs, releasever, arch, readdebug,
     readsrc, verbose, readgroupfile=0, fast=1):
