@@ -27,7 +27,7 @@ def network_config(ks, buildroot):
     # generate loopback network configuration if it does not exist
     if not os.path.exists(buildroot+\
                           "/etc/sysconfig/network-scripts/ifcfg-lo"):
-        info("Adding missing /etc/sysconfig/network-scripts/ifcfg-lo.")
+        log.info1("Adding missing /etc/sysconfig/network-scripts/ifcfg-lo.")
         create_file(buildroot, "/etc/sysconfig/network-scripts/ifcfg-lo",
                     [ 'DEVICE=lo\n',
                       'IPADDR=127.0.0.1\n',
