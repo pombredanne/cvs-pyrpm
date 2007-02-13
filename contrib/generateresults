@@ -44,13 +44,15 @@ resultfile = open(resultdir+"/index.html", "w")
 print >>resultfile,"""
 <html>
 <body>
-<H3>
+<H2>
 Results for """+logfiles[0]+"""<br>
 Date: """+time.ctime()+"""<br>
 Complete logfile: <a href="full.log">logfile</a><br>
-Unique error log: <a href="error.log">errorlog</a><br></H3>
+Unique error log: <a href="error.log">errorlog</a><br></H2>
+<H3><a name="owner">Results ordered by owner</a></H3>
+<H4><a href="#package">Goto results ordered by package</a></H4>
 <table border=1>
-<tr><th>Package</th><th>Owner</th><th>Status</th></tr>
+<tr><th>Owner</th><th>Package</th><th>Status</th></tr>
 """
 
 resnamehash = {}
@@ -70,17 +72,38 @@ for lfile in logfiles:
                 except:
                     owner = "unknown"
                 resnamehash[nevra] = (founderr, owner)
+                resownerhash.setdefault(owner, []).append((founderr, nevra))
                 RES.close()
             nevra = l[l.index(":")+2:]
             pkgname = nevra[nevra.index("/")+1:-1]
             nevra = nevra[:nevra.index("/")]
             RES = open(resultdir+"/"+nevra, "w")
             founderr = False
+            print >>RES, l[:-1]
         else:
             if RES != None:
                 if l.find("ERROR") >= 0:
                     founderr = True
                 print >>RES, l[:-1]
+
+owners = resownerhash.keys()
+owners.sort()
+for owner in owners:
+    for (founderr, nevra) in resownerhash[owner]:
+        print >>resultfile, "<tr><td>"+owner+"</td><td>"+nevra+"</td>"
+        pname = nevra.replace(":", "%3A")
+        if founderr == True:
+            print >>resultfile, "<td bgcolor=\"red\"><a href=\""+pname+"\">Failed</a></td>"
+        else:
+            print >>resultfile, "<td bgcolor=\"lime\"><a href=\""+pname+"\">Success</a></td>"
+
+print >>resultfile,"""
+</table>
+<H3><a name="package">Results ordered by package</a></H3>
+<H4><a href="#owner">Goto results ordered by owner</a></H4>
+<table border=1>
+<tr><th>Package</th><th>Owner</th><th>Status</th></tr>
+"""
 
 nevras = resnamehash.keys()
 nevras.sort()
