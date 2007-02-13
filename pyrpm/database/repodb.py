@@ -17,7 +17,7 @@
 #
 
 
-import libxml2, re, os, os.path
+import libxml2, re, os, os.path, stat
 from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
 import memorydb
 from pyrpm.base import *
@@ -295,6 +295,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         Return 1 on success, 0 on failure.  Assumes self.source is a local file
         system path without schema prefix."""
 
+        import gzip
         self.filerequires = []
         log.info1("Pass 1: Parsing package headers for file requires.")
         self.__readDir(self.source, "")
@@ -462,7 +463,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
 
         if s == None:
             return ''
-        s = string.replace(s, "&", "&amp;")
+        s = s.replace("&", "&amp;")
         if isinstance(s, unicode):
             return s
         try:
@@ -584,10 +585,13 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
 
         Raise IOError, NotImplementedError."""
 
+        from pyrpm.io import getRpmIOFactory
         io = getRpmIOFactory(pkg.source)
         if self.config.checksum == "md5":
+            import md5
             s = md5.new()
         else:
+            import sha
             s = sha.new()
         io.updateDigestFromRange(s, 0, None)
         return s.hexdigest()
@@ -1027,7 +1031,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         Readf = reader.Read
         NodeTypef = reader.NodeType
         Namef = reader.Name
-        Valuef = reader.Value
         plist = [[], [], []]
         while Readf() == 1:
             ntype = NodeTypef()

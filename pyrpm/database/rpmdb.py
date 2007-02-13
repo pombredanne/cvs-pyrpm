@@ -43,8 +43,8 @@ class RpmDBPackage(package.RpmPackage):
         package.RpmPackage.__init__(self, config, source, verify, hdronly, db)
 
     def has_key(self, key):
-        if self.indexdata.has_key(key): return True
-        if dict.has_key(self, key): return True
+        if self.indexdata.has_key(key) or dict.has_key(self, key):
+            return True
         return key in ('requires','provides','conflicts',
                        'obsoletes', 'triggers')
 
@@ -293,7 +293,7 @@ class RpmDB(db.RpmDatabase):
             try:
                 tagval = rpmio.getHeaderByIndexData(index, storedata)
             except ValueError, e:
-                log.error("Invalid header entry %s in %s: %s", idx, key, e)
+                log.error("Invalid header entry %s in %s: %s", tag, index, e)
                 return 0
 
             if tag == "archivesize":
@@ -676,7 +676,7 @@ class RpmDB(db.RpmDatabase):
     def getPkgsByName(self, name):
         return self.searchName(name)
 
-    def _iter(self, tag, db=None):
+    def _iter(self, tag):
         for pkg in self.getPkgs():
             l = pkg[tag]
             for name, flag, version in l:
@@ -685,7 +685,7 @@ class RpmDB(db.RpmDatabase):
     def _iter2(self, tag, db):
         for name, data in db:
             for id, idx in self.iterIdIdx(data):
-                pkg = self.getPkg(id)
+                pkg = self.getPkgById(id)
                 if pkg:
                     yield pkg["tag"][idx] + (pkg,)
 
@@ -716,10 +716,12 @@ class RpmDB(db.RpmDatabase):
     def getFileDuplicates(self):
         duplicates = {}
         for basename, data in self.basenames_db.iteritems():
-            if len(data) <= 8: continue
+            if len(data) <= 8:
+                continue
             for id, idx in self.iterIdIdx(data):
                 pkg = self.getPkgById(id)
-                if not pkg: continue
+                if not pkg:
+                    continue
                 file = pkg.iterFilenames()[idx]
                 duplicates.setdefault(file, [ ]).append(pkg)
         for filename, pkglist in duplicates.iteritems():
@@ -731,7 +733,9 @@ class RpmDB(db.RpmDatabase):
         return self._iter("requires")
 
     def iterConflicts(self):
-        return self._iter("conflicts", self.conflictname_db)
+        # XXX: does not work this way:
+        #return self._iter("conflicts", self.conflictname_db)
+        return self._iter("conflicts")
 
     def iterObsoletes(self):
         if self.obsoletes_list is None:
@@ -754,7 +758,8 @@ class RpmDB(db.RpmDatabase):
         evr = functions.evrSplit(version)
         for id, idx in self.iterIdIdx(data):
             pkg = self.getPkgById(id)
-            if not pkg: continue
+            if not pkg:
+                continue
             dep = pkg[attr][idx]
             name_, flag_, version_ = dep[:3]
             if version == "":

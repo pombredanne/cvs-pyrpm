@@ -375,7 +375,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
     def close(self):
         """If the database keeps a connection, close it."""
         for db in (self._primarydb, self._filelistsdb, self._othersdb):
-            if db is not None: db.close()
+            if db is not None:
+                db.close()
         self._primarydb = None
         self._filelistsdb = None
         self._othersdb = None

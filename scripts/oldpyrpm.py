@@ -5591,7 +5591,7 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
         #print operations
 
 
-def checkRepo(rpms, verbose):
+def checkRepo(rpms):
     """Check if all src.rpms are included and does each -devel rpm have
     a corresponding normal rpm of the same arch."""
     h = {}
@@ -6807,7 +6807,7 @@ def main():
             else:
                 print "No arch defined to check, are kernels missing?"
         if completerepo:
-            checkRepo(repo, verbose)
+            checkRepo(repo)
 
     if wait:
         print "Ready."
