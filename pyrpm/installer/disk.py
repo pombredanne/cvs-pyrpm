@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import os, stat, string, time, resource, struct
+import os, stat
 import loop
 from config import log
 
@@ -659,14 +659,14 @@ else:
                     boot = "*"
                 else:
                     boot = " "
-                type = "---"
+                ttype = "---"
                 try:
-                    type = Partition.nativeType[partition["native_type"]]
+                    ttype = Partition.nativeType[partition["native_type"]]
                 except:
                     pass
                 log.info1("%*s   %s  %10d  %10d  %11s  %2x  %s",
                           l, device, boot, partition["unit-start"],
                           partition["unit-end"], block_str,
-                          partition["native_type"], type)
+                          partition["native_type"], ttype)
 
 # vim:ts=4:sw=4:showmatch:expandtab
