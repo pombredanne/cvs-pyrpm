@@ -19,7 +19,7 @@
 from pyrpm.cache import NetworkCache
 from pyrpm.functions import stringCompare, normalizeList
 from pyrpm.database import getRepoDB
-from pyrpm.yum import YumConf
+from pyrpm.yum import YumConf, getVars
 from devices import *
 from functions import *
 from pyrpm import database
@@ -98,8 +98,8 @@ class Source:
 
         # load repos
         repos = [ ]
-        replacevars = getVars(self.config.relver, self.config.machine,
-            buildarchtranslate[self.config.machine])
+        replacevars = getVars(self.version, self.arch,
+            buildarchtranslate[self.arch])
         if self.isRHEL() and self.cmpVersion("4.9") >= 0:
             # RHEL-5
 
