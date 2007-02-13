@@ -98,6 +98,8 @@ class Source:
 
         # load repos
         repos = [ ]
+        replacevars = getVars(self.config.relver, self.config.machine,
+            buildarchtranslate[self.config.machine])
         if self.isRHEL() and self.cmpVersion("4.9") >= 0:
             # RHEL-5
 
@@ -140,7 +142,8 @@ class Source:
                 yumconf[repo_name]["baseurl"] = [ "%s/%s" % (self.url, repo) ]
                 if self.exclude:
                     yumconf[repo_name]["exclude"] = self.exclude
-                _repo = getRepoDB(rpmconfig, yumconf, reponame=repo_name)
+                _repo = getRepoDB(rpmconfig, yumconf, reponame=repo_name,
+                    replacevars=replacevars)
                 if not _repo.read():
                     log.error("Could not load repository '%s'.", repo_name)
                     return 0
@@ -154,7 +157,7 @@ class Source:
             yumconf[repo]["baseurl"] = [ self.url ]
             if self.exclude:
                 yumconf[repo]["exclude"] = self.exclude
-            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
+            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo, replacevars=replacevars)
             if not _repo.read():
                 log.error("Could not load repository '%s'.", repo)
                 return 0
@@ -177,7 +180,7 @@ class Source:
 
             url = ks["repo"][repo]["baseurl"]
 
-            yumconf = YumConf(self.version, self.arch, self.arch)
+            yumconf = { }
             yumconf[repo] = { }
 
             if ks["repo"][repo].has_key("mirrorlist"):
@@ -190,7 +193,7 @@ class Source:
                 create_dir("", d)
                 url = mount_nfs(url, d)
             yumconf[repo]["baseurl"] = [ url ]
-            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
+            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo, replacevars=replacevars)
             if not _repo.read():
                 log.error("Could not load repository '%s'.", repo)
                 return 0
