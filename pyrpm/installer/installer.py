@@ -295,7 +295,6 @@ class Source:
         if ks.has_key("packages") and ks["packages"].has_key("add"):
             for name in ks["packages"]["add"]:
                 found = False
-                exclude = [ ]
                 for repo in self.repos.keys():
                     _pkgs = self.repos[repo].searchPkgs([name])
                     if len(_pkgs) > 0:
