@@ -57,7 +57,7 @@ class NetworkCache:
 
     def __createSourceURI(self, uri, name=None):
         if name == None:
-            name == self.default_name
+            name = self.default_name
         if self.__isURI(uri):
             sourceurl = uri
         else:
@@ -66,13 +66,13 @@ class NetworkCache:
 
     def __getCachedir(self, name=None):
         if name == None:
-            name == self.default_name
+            name = self.default_name
         cdir = os.path.join(self.cachedir, name)
         return os.path.join(cdir, "cache")
 
     def __getExternalCachedir(self, name=None):
         if name == None:
-            name == self.default_name
+            name = self.default_name
         cdir = os.path.join(self.cachedir, name)
         return os.path.join(cdir, "external")
 
@@ -151,7 +151,7 @@ class NetworkCache:
         if name == None:
             name = self.default_name
         if self.is_local[name] and not self.__isURI(uri):
-            path = os.path.join(self.baseurl, self.__makeRel(uri))
+            path = os.path.join(self.baseurls[name], self.__makeRel(uri))
             try:
                 return open(path)
             except IOError:
@@ -232,6 +232,7 @@ class NetworkCache:
         if not uri:
             try:
                 shutil.rmtree(self.cachedir[name])
+                # XXX self.__getExternalCname) ???
                 shutil.rmtree(self.external_cachedir[name])
                 return 1
             except EnvironmentError:
