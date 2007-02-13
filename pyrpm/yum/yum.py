@@ -25,7 +25,8 @@ from pyrpm.package import RpmPackage
 from pyrpm.functions import *
 from pyrpm.io import *
 import pyrpm.database as database, yumconfig
-from pyrpm.database.repodb import RpmRepoDB
+import pyrpm.database.repodb
+# from pyrpm.database.repodb import RpmRepoDB
 from pyrpm.database.jointdb import JointDB
 from pyrpm.logger import log
 
@@ -550,7 +551,7 @@ class RpmYum:
         # First pass through our args to find any directories and/or binary
         # rpms and create a memory repository from them to avoid special
         # cases.
-        memory_repo = RpmRepoDB(self.config, [], self.config.buildroot, "pyrpmyum-memory-repo")
+        memory_repo = pyrpm.database.repodb.RpmRepoDB(self.config, [], self.config.buildroot, "pyrpmyum-memory-repo")
         new_args = []
         for name in args:
             if   os.path.isfile(name) and name.endswith(".rpm"):
