@@ -80,7 +80,9 @@ class SqliteRpmPackage(package.RpmPackage):
             self.filesloaded = True
             self.yumrepo.getFiles(self)
             return self.get(name, None)
-
+        # don't cache other tags
+        return self.yumrepo.getPkgTag(self, name)
+        
     def get(self, key, value=None):
         if self.has_key(key):
             return self[key]
@@ -133,6 +135,10 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             'checksum_type', # 'sha' or 'md5'
             'checksum_value',#
             )
+
+    COLUMNS_LOOKUP = {}
+    for col in COLUMNS:
+        COLUMNS_LOOKUP[col] = None
 
     DB2PKG = {
         # 'time_file' : '' # -> pkg.time_file
@@ -563,6 +569,15 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         pkg.issrc = 0
         pkg["triggers"] = []
         return pkg
+
+    def getPkgTag(self, pkg, tag):
+        tag = self.PKG2DB.get(tag, tag)
+        if tag not in self.COLUMNS_LOOKUP:
+            return None
+        cur = self._primarydb.cursor()
+        cur.execute('SELECT %s FROM packages WHERE pkgKey="%s"' %
+                    (tag, pkg.pkgKey))
+        return cur.fetchone()[0]
 
     def getFiles(self, pkg):
         pkgKey = pkg.pkgKey
