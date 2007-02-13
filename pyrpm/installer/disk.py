@@ -275,11 +275,11 @@ else:
 
         def set_type(self, type):
 #            if not type in Partition.nativeType.keys():
-#                log.errorLn("Unknown partition type '%s'." % type)
+#                log.error("Unknown partition type '%s'." % type)
             try:
                 fst = parted.file_system_type_get(type)
             except Exception, msg:
-                log.errorLn(msg)
+                log.error(msg)
                 return
             return self.ped_partition.set_system(fst)
 
@@ -341,7 +341,7 @@ else:
                           self["image"]
                 self["device"] = device
             else:
-                log.errorLn("Unsupported device type for '%s'.", device)
+                log.error("Unsupported device type for '%s'.", device)
                 return
 
             self.ped_device = parted.PedDevice.get(self["device"])
@@ -355,7 +355,7 @@ else:
                 try:
                     self.ped_disk = parted.PedDisk.new(self.ped_device)
                 except Exception, msg:
-                    log.debug1Ln(msg)
+                    log.debug1(msg)
                     pass
             if not self.ped_disk:
                 return
@@ -594,7 +594,7 @@ else:
 
         def new_disklabel(self, label):
             if not label in Disk.diskType:
-                log.errorLn("Disk label '%s' is not supported.", label)
+                log.error("Disk label '%s' is not supported.", label)
                 return
             self.ped_disk = self.ped_device.disk_new_fresh(Disk.diskType[label])
             self.reload()
@@ -603,8 +603,8 @@ else:
             partition = self["partition"]
             if i in partition.keys():
                 if partition[i].ped_partition.type & parted.PARTITION_EXTENDED:
-                    log.warningLn("Partition %d is an extended partition, "
-                                  "unable to set boot flag.", i)
+                    log.warning("Partition %d is an extended partition, "
+                                "unable to set boot flag.", i)
                     return 0
                 return partition[i].ped_partition.set_flag(\
                        parted.PARTITION_BOOT, 1)
@@ -616,22 +616,22 @@ else:
         def print_info(self):
             if not self.has_disklabel():
                 return
-            log.info1Ln("")
+            log.info1("")
             device = self["device"]
             if self.has_key("image"):
                 device = self["image"]
-            log.info1Ln("Disk %s: %.1f GB, %d bytes", device,
-                        self["length"]/(1000*1000*1000), self["length"])
-            log.info1Ln("%d heads, %d sectors/track, %d cylinders",
-                        self["heads"], self["sectors"], self["cylinders"])
+            log.info1("Disk %s: %.1f GB, %d bytes", device,
+                      self["length"]/(1000*1000*1000), self["length"])
+            log.info1("%d heads, %d sectors/track, %d cylinders",
+                      self["heads"], self["sectors"], self["cylinders"])
             units = self["units"]
-            log.info1Ln("Units = cylinders of %d * %d = %d bytes", units,
-                        self["sector_size"], units*self["sector_size"])
+            log.info1("Units = cylinders of %d * %d = %d bytes", units,
+                      self["sector_size"], units*self["sector_size"])
 
         def print_partitions(self):
             if not self.has_disklabel():
                 return
-            log.info1Ln("")
+            log.info1("")
             l = len("Device")
             for part in self["partition"]:
                 partition = self["partition"][part]
@@ -641,8 +641,8 @@ else:
                     device = partition["device"]
                 if l < len(device):
                     l = len(device)
-            log.info1Ln("%*s Boot      Start         End      Blocks   Id  "
-                        "System", l, "Device")
+            log.info1("%*s Boot      Start         End      Blocks   Id  "
+                      "System", l, "Device")
             for part in self["partition"]:
                 partition = self["partition"][part]
                 blocks = partition["length"] * self["sector_size"]
@@ -664,9 +664,9 @@ else:
                     type = Partition.nativeType[partition["native_type"]]
                 except:
                     pass
-                log.info1Ln("%*s   %s  %10d  %10d  %11s  %2x  %s",
-                            l, device, boot, partition["unit-start"],
-                            partition["unit-end"], block_str,
-                            partition["native_type"], type)
+                log.info1("%*s   %s  %10d  %10d  %11s  %2x  %s",
+                          l, device, boot, partition["unit-start"],
+                          partition["unit-end"], block_str,
+                          partition["native_type"], type)
 
 # vim:ts=4:sw=4:showmatch:expandtab

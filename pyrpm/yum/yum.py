@@ -90,7 +90,7 @@ class RpmYum:
 
         self.command = command.lower()
         if self.command not in self.command_list:
-            log.errorLn("Invalid command")
+            log.error("Invalid command")
             return 0
         #if self.command == "upgrade" or self.command == "groupupgrade":
         #    self.always_install = [ ]
@@ -106,7 +106,7 @@ class RpmYum:
                                      buildarchtranslate[self.config.machine],
                                      self.config.buildroot, file)
         except IOError, e:
-            log.errorLn("Error reading configuration: %s", e)
+            log.error("Error reading configuration: %s", e)
             return 0
         erepo = []
         for ritem in self.config.enablerepo:
@@ -145,11 +145,12 @@ class RpmYum:
                     continue
                 if self.config.timer:
                     time1 = clock()
-                log.info2Ln("Reading repository '%s'", key)
+                log.info2("Reading repository '%s'", key)
                 if self.__addSingleRepo(conf, key) == 0:
                     return 0
                 if self.config.timer:
-                    log.info2Ln("Reading repository took %s seconds", (clock() - time1))
+                    log.info2("Reading repository took %s seconds",
+                              (clock() - time1))
         return 1
 
     def __addSingleRepo(self, conf, reponame):
@@ -160,7 +161,7 @@ class RpmYum:
 
         repo = database.getRepoDB(self.config, conf, self.config.buildroot, reponame)
         if repo.read() == 0:
-            log.errorLn("Error reading repository %s", reponame)
+            log.error("Error reading repository %s", reponame)
             return 0
         self.repos.addDB(repo)
         return 1
@@ -179,16 +180,17 @@ class RpmYum:
             if self.config.timer:
                 time1 = clock()
             # Create and read db
-            log.info2Ln("Reading local RPM database")
+            log.info2("Reading local RPM database")
             self.pydb = database.getRpmDB(self.config,
                                           self.config.dbpath,
                                           self.config.buildroot)
             self.pydb.open()
             if not self.pydb.read():
-                log.errorLn("Error reading the RPM database")
+                log.error("Error reading the RPM database")
                 return 0
             if self.config.timer:
-                log.info2Ln("Reading local RPM database took %s seconds", (clock() - time1))
+                log.info2("Reading local RPM database took %s seconds",
+                          (clock() - time1))
         if self.config.timer:
             time1 = clock()
 
@@ -203,12 +205,14 @@ class RpmYum:
                     if not self.addRepo(yumconf):
                         return 0
             else:
-                log.warningLn("Couldn't find given yum config file, skipping read of repo %s", yumconf)
+                log.warning("Couldn't find given yum config file, skipping "
+                            "read of repo %s", yumconf)
         self.repos_read = 1
         self.opresolver = RpmResolver(self.config, db)
         self.__generateObsoletesList()
         if self.config.timer:
-            log.info2Ln("Preparing transaction took %s seconds", (clock() - time1))
+            log.info2("Preparing transaction took %s seconds",
+                      (clock() - time1))
 
         return 1
 
@@ -229,7 +233,7 @@ class RpmYum:
         pkglist = self.__findPkgs(name)
         ret = self.__handleBestPkg("install", pkglist)
         if not ret:
-            log.info1Ln("No Match for argument: %s", name)
+            log.info1("No Match for argument: %s", name)
         return ret
 
     def groupInstall(self, name):
@@ -243,7 +247,8 @@ class RpmYum:
         pkglist = self.repos.searchDependency(dname, dflags, dversion)
         ret = self.__handleBestPkg("install", pkglist)
         if not ret:
-            log.info1Ln("No Match for argument: %s", depstring(dname, dflags, dversion))
+            log.info1("No Match for argument: %s",
+                      depstring(dname, dflags, dversion))
         return ret
 
     def update(self, name, exact=False, do_obsolete=True):
@@ -337,7 +342,8 @@ class RpmYum:
                     # Add all noarch packages for arch -> noarch transitions
                     pkgnamearchhash[name].setdefault(arch, []).extend(pkgnamearchhash[name].setdefault("noarch", {}))
                 if not pkgnamearchhash[name].has_key(arch):
-                    log.errorLn("Can't find update package with matching arch for package %s", ipkg.getNEVRA())
+                    log.error("Can't find update package with matching arch "
+                              "for package %s", ipkg.getNEVRA())
                     return 0
 
                 # Filter packages with lower versions from our final list
@@ -355,7 +361,7 @@ class RpmYum:
                 # it once we clear the update package list.
                 pkgnamearchhash[name][arch] = []
         if not ret:
-            log.info1Ln("No Match for argument: %s", name)
+            log.info1("No Match for argument: %s", name)
         return ret
 
     def _filterPkgVersion(self, pkg, pkglist):
@@ -376,13 +382,14 @@ class RpmYum:
         pkglist = self.repos.searchDependency(dname, dflags, dversion)
         ret = self.__handleBestPkg("update", pkglist)
         if not ret:
-            log.info1Ln("No Match for argument: %s", depstring(dname, dflags, dversion))
+            log.info1("No Match for argument: %s",
+                      depstring(dname, dflags, dversion))
         return ret
 
     def remove(self, name):
         ret = self.__handleBestPkg("remove", self.pydb.searchPkgs([name, ]))
         if not ret:
-            log.info1Ln("No Match for argument: %s", name)
+            log.info1("No Match for argument: %s", name)
         return ret
 
     def groupRemove(self, name):
@@ -396,7 +403,8 @@ class RpmYum:
         pkglist = self.pydb.searchDependency(dname, dflags, dversion)
         ret = self.__handleBestPkg("remove", pkglist)
         if not ret:
-            log.info1Ln("No Match for argument: %s", depstring(dname, dflags, dversion))
+            log.info1("No Match for argument: %s",
+                      depstring(dname, dflags, dversion))
         return ret
 
     def __readPackage(self, name):
@@ -404,14 +412,13 @@ class RpmYum:
             pkg = readRpmPackage(self.config, name, db=self.pydb,
                                  tags=self.config.resolvertags)
         except (IOError, ValueError), e:
-            log.errorLn("%s: %s", name, e)
+            log.error("%s: %s", name, e)
             return None
         if self.config.ignorearch or \
            pkg.isSourceRPM() or \
            archCompat(pkg["arch"], self.config.machine):
             return pkg
-        log.info3Ln("%s: Package excluded because of arch incompatibility",
-                    name)
+        log.info3("%s: Package excluded because of arch incompatibility", name)
         return None
 
     def __findPkgs(self, name):
@@ -517,7 +524,7 @@ class RpmYum:
 
         if self.config.timer:
             time1 = clock()
-        log.info2Ln("Selecting packages for operation")
+        log.info2("Selecting packages for operation")
         # We unfortunatly still need to special case the argless remove
         if len(args) == 0:
             if self.command == "update" or self.command == "upgrade":
@@ -568,7 +575,7 @@ class RpmYum:
             # details for each specific case.
             op_func(name)
         if self.config.timer:
-            log.info2Ln("runArgs() took %s seconds", (clock() - time1))
+            log.info2("runArgs() took %s seconds", (clock() - time1))
         return 1
 
     def runDepRes(self):
@@ -582,7 +589,7 @@ class RpmYum:
         if not self.config.nodeps:
             ret = self.__runDepResolution()
         if self.config.timer:
-            log.info2Ln("runDepRes() took %s seconds", (clock() - time1))
+            log.info2("runDepRes() took %s seconds", (clock() - time1))
         return ret
 
     def runCommand(self, clearrepos=False):
@@ -602,9 +609,9 @@ class RpmYum:
         if ops is None:
             return 0
         if len(ops) == 0:
-            log.info1Ln("Nothing to do.")
+            log.info1("Nothing to do.")
             return 1
-        log.info1Ln("The following operations will now be run:")
+        log.info1("The following operations will now be run:")
         ipkgs = 0
         upkgs = 0
         epkgs = 0
@@ -615,24 +622,25 @@ class RpmYum:
                 upkgs += 1
             elif op == OP_ERASE:
                 epkgs += 1
-            log.info1Ln("\t%s %s", op, pkg.getNEVRA())
+            log.info1("\t%s %s", op, pkg.getNEVRA())
 
         self.erase_list = [pkg for pkg in self.erase_list
                            if pkg in self.pydb]
 
         if len(self.erase_list) > 0:
-            log.info1Ln("Warning: Following packages will be automatically removed from your system:")
+            log.info1("Warning: Following packages will be automatically "
+                      "removed from your system:")
             for pkg in self.erase_list:
-                log.info1Ln("\t%s\n", pkg.getNEVRA())
+                log.info1("\t%s\n", pkg.getNEVRA())
         if self.confirm:
             print "Installing %d packages, updating %d packages, erasing %d packages" % (ipkgs, upkgs, epkgs)
         if self.confirm and not self.config.test:
             if not is_this_ok():
                 return 1
         if self.config.timer:
-            log.info2Ln("runCommand() took %s seconds", (clock() - time1))
+            log.info2("runCommand() took %s seconds", (clock() - time1))
         if self.config.test:
-            log.info1Ln("Test run stopped")
+            log.info1("Test run stopped")
         else:
             if clearrepos:
                 self.repos.clear()
@@ -666,7 +674,7 @@ class RpmYum:
 
         Return 1 after reaching a steady state."""
 
-        log.info2Ln("Resolving dependencies...")
+        log.info2("Resolving dependencies...")
         # List of filereqs we already checked
         self.filereqs = []
         self.iteration = 1
@@ -689,18 +697,17 @@ class RpmYum:
         unresolved = self.opresolver.getUnresolvedDependencies()
         conflicts = self.opresolver.getConflicts()
         if len(unresolved) > 0:
-            log.errorLn("Unresolvable dependencies:")
+            log.error("Unresolvable dependencies:")
             for pkg in unresolved.keys():
-                log.errorLn("Unresolved dependencies for %s",
-                            pkg.getNEVRA())
+                log.error("Unresolved dependencies for %s", pkg.getNEVRA())
                 for dep in unresolved[pkg]:
-                    log.errorLn("\t%s", depString(dep))
+                    log.error("\t%s", depString(dep))
         if len(conflicts) > 0:
-            log.errorLn("Unresolvable conflicts:")
+            log.error("Unresolvable conflicts:")
             for pkg in conflicts.keys():
-                log.errorLn("Unresolved conflicts for %s", pkg.getNEVRA())
+                log.error("Unresolved conflicts for %s", pkg.getNEVRA())
                 for (dep, r) in conflicts[pkg]:
-                    log.errorLn("\t%s", depString(dep))
+                    log.error("\t%s", depString(dep))
         if len(unresolved) == 0 and len(conflicts) == 0:
             return 1
         return 0
@@ -723,9 +730,9 @@ class RpmYum:
                 # Have we already tried to resolve this dep? If yes, skip it
                 if dep in unresolvable:
                     continue
-                log.info3Ln("Dependency iteration %s", str(self.iteration))
+                log.info3("Dependency iteration %s", str(self.iteration))
                 self.iteration += 1
-                log.info3Ln("Resolving dependency for %s", pkg.getNEVRA())
+                log.info3("Resolving dependency for %s", pkg.getNEVRA())
                 # If we were able to resolve this dep in any way we reget the
                 # deps and do the next internal iteration
                 if self.__resolveDep(pkg, dep):
@@ -762,13 +769,15 @@ class RpmYum:
                        repo.isFilelistImported():
                     continue
                 if not repo._matchesFile(dep[0]):
-                    log.info2Ln("Importing filelist from repository %s for filereq %s", repo.reponame, dep[0])
+                    log.info2("Importing filelist from repository %s for "
+                              "filereq %s", repo.reponame, dep[0])
                     if self.config.timer:
                         time1 = clock()
                     repo.importFilelist()
                     repo.reloadDependencies()
                     if self.config.timer:
-                        log.info2Ln("Importing filelist took %s seconds", (clock() - time1))
+                        log.info2("Importing filelist took %s seconds",
+                                  (clock() - time1))
                     modified_repo = 1
             if modified_repo:
                 self.opresolver.getDatabase().reloadDependencies()
@@ -777,7 +786,7 @@ class RpmYum:
         # Now for all other cases we need to find packages in our repos
         # that resolve the given dependency
         pkg_list = [ ]
-        log.info3Ln("\t%s", depString(dep))
+        log.info3("\t%s", depString(dep))
         for upkg in self.repos.searchDependency(dep[0], dep[1], dep[2]):
             if upkg in pkg_list:
                 continue
@@ -803,8 +812,8 @@ class RpmYum:
         #   - Scrap it as we can't update the system without unresolved deps
         #   - Erase the packages that had unresolved deps (autoerase option)
         if self.autoerase:
-            log.info3Ln("Autoerasing package %s due to unresolved symbols.",
-                        pkg.getNEVRA())
+            log.info3("Autoerasing package %s due to unresolved symbols.",
+                      pkg.getNEVRA())
             if not self.__doAutoerase(pkg):
                 return 0
             return 1
@@ -937,8 +946,8 @@ class RpmYum:
             if reex.match(pkg["name"]) and \
              len(self.opresolver.getDatabase().getPkgsByName(pkg["name"])) == 1:
                 self.erase_list.append(pkg)
-                log.Info3Ln("No autoerase of package %s due to exclude list.",
-                            pkg.getNEVRA())
+                log.Info3("No autoerase of package %s due to exclude list.",
+                          pkg.getNEVRA())
                 return 0
         if self.opresolver.updates.has_key(pkg):
             updates = self.opresolver.updates[pkg]
@@ -987,8 +996,8 @@ class RpmYum:
         Return 1 if one package was successfully removed, 0 otherwise."""
 
         ret = 0
-        log.info3Ln("Resolving conflicts for %s:%s",
-                    pkg1.getNEVRA(), pkg2.getNEVRA())
+        log.info3("Resolving conflicts for %s:%s", pkg1.getNEVRA(),
+                  pkg2.getNEVRA())
         if   pkg1 in self.erase_list:
             pkg = pkg2
         elif pkg2 in self.erase_list:
@@ -1026,8 +1035,8 @@ class RpmYum:
             pkg = pkg1
         # Returns 0 if pkg was already erased - but warns the user
         if self.__doAutoerase(pkg):
-            log.info2Ln("Autoerasing package %s due to conflicts",
-                        pkg.getNEVRA())
+            log.info2("Autoerasing package %s due to conflicts",
+                      pkg.getNEVRA())
             ret = 1
         return ret
 

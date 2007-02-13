@@ -67,7 +67,7 @@ def firewall_config(ks, buildroot, source):
         # enable firewall
         if ks["firewall"].has_key("enabled"):
             if run_script("/sbin/chkconfig iptables on", buildroot) != 0:
-                log.errorLn("Could not enable firewall.")
+                log.error("Could not enable firewall.")
     else:
         # use lokkit to configure firewall
         fwargs = [ ]
@@ -85,7 +85,7 @@ def firewall_config(ks, buildroot, source):
         lokkit = "/usr/sbin/lokkit --quiet --nostart -f %s" % \
                  " ".join(fwargs)
         if run_script(lokkit, buildroot) != 0:
-            log.errorLn("Configuration of firewall failed.")
+            log.error("Configuration of firewall failed.")
 
         create_file(buildroot, "/etc/sysconfig/system-config-securitylevel",
                     [ '# Configuration file for system-config-securitylevel\n',

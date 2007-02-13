@@ -47,8 +47,8 @@ def x_config(ks, buildroot, source):
         try:
             cards = hwdata.Cards(buildroot)
         except Exception, msg:
-            log.warningLn("Loading of monitor databae failed.")
-            flog.log(log.INFO1, msg)
+            log.warning("Loading of monitor databae failed.")
+            flog.info1(msg, nofmt=1)
         else:
             dict = cards.get(ks["xconfig"]["card"])
             if dict and dict.has_key("driver"):
@@ -57,7 +57,7 @@ def x_config(ks, buildroot, source):
                 if dict.has_key("options"):
                     _options.extend(dict["options"])
             else:
-                log.errorLn("Card not found in hardware database.")
+                log.error("Card not found in hardware database.")
     if not _card and ks["xconfig"].has_key("driver"):
         if os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
         # There is no usable name in the videodrivers file, so fake it
@@ -67,12 +67,12 @@ def x_config(ks, buildroot, source):
     if not _card or not _driver:
         if ks["xconfig"].has_key("card") and \
                not os.path.exists(buildroot+'/usr/share/hwdata/Cards'):
-            log.warningLn("Cards database not found in '/usr/share/hwdata'.")
+            log.warning("Cards database not found in '/usr/share/hwdata'.")
         if ks["xconfig"].has_key("driver") and \
                not os.path.exists(buildroot+'/usr/share/hwdata/videodrivers'):
-            log.warningLn("videodrivers database not found in "
-                          "'/usr/share/hwdata'.")
-        log.info1Ln("Using default X driver configuration.")
+            log.warning("videodrivers database not found in "
+                        "'/usr/share/hwdata'.")
+        log.info1("Using default X driver configuration.")
     else:
         card = _card
         driver = _driver
@@ -89,8 +89,8 @@ def x_config(ks, buildroot, source):
         try:
             monitors = hwdata.Monitors(buildroot)
         except Exception, msg:
-            log.warningLn("Parsing of monitor database failed.")
-            flog.log(log.INFO1, msg)
+            log.warning("Parsing of monitor database failed.")
+            flog.info1(msg, nofmt=1)
         else:
             if ks["xconfig"].has_key("monitor"):
                 dict = monitors.get(ks["xconfig"]["monitor"])
@@ -102,7 +102,7 @@ def x_config(ks, buildroot, source):
                 _vsync = dict["vsync"]
                 _dpms = dict["dpms"]
             else:
-                log.errorLn("Monitor not found in hardware database.")
+                log.error("Monitor not found in hardware database.")
 
     if _monitor and _hsync and _vsync:
         monitor = _monitor

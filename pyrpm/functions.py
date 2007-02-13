@@ -297,7 +297,8 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
         data2 = data2.rstrip("\x00")
         symlinkfile = data1
         if data1 != data2:
-            log.waringLn("Warning: Symlink information differs between rpm header and cpio for %s -> %s", rfi.filename, data1)
+            log.waring("Warning: Symlink information differs between rpm "
+                       "header and cpio for %s -> %s", rfi.filename, data1)
         if os.path.islink(filename) and os.readlink(filename) == symlinkfile:
             return
         makeDirs(filename)
@@ -568,8 +569,8 @@ def getFreeCachespace(config, operations):
         except KeyError:
             raise ValueError, "Missing signature:size_in sig in package"
     if freespace < 31457280:
-        log.info1Ln("Less than 30MB of diskspace left in %s for caching rpms",
-                    cachedir)
+        log.info1("Less than 30MB of diskspace left in %s for caching rpms",
+                  cachedir)
         return 0
     return 1
 
@@ -602,7 +603,7 @@ def getFreeDiskspace(config, operations):
             try:
                 pkg.reread(config.diskspacetags)
             except Exception, e:
-                log.errorLn("Error rereading package: %s: %s", pkg.source, e)
+                log.error("Error rereading package: %s: %s", pkg.source, e)
                 return 0
         dirnames = pkg["dirnames"]
         if dirnames == None:
@@ -662,14 +663,14 @@ def getFreeDiskspace(config, operations):
         for (dev, val) in minfreehash.iteritems():
             # Less than 30MB space left on device?
             if val[0] < 31457280:
-                log.info2Ln("%s: Less than 30MB of diskspace left on %s",
-                            pkg.getNEVRA(), mountpoint[dev])
+                log.info2("%s: Less than 30MB of diskspace left on %s",
+                          pkg.getNEVRA(), mountpoint[dev])
         pkg.close()
         pkg.clear(ntags=config.nevratags)
     for (dev, val) in minfreehash.iteritems():
         if val[0] < 31457280:
-            log.errorLn("%sMB more diskspace required on %s for operation",
-                        30 - val[0]/1024/1024, mountpoint[dev])
+            log.error("%sMB more diskspace required on %s for operation",
+                      30 - val[0]/1024/1024, mountpoint[dev])
             ret = 0
     return ret
 
@@ -742,7 +743,7 @@ def parseYumOptions(argv, yum):
          "languages="])
     except getopt.error, e:
         # FIXME: all to stderr
-        log.errorLn("Error parsing command-line arguments: %s", e)
+        log.error("Error parsing command-line arguments: %s", e)
         return None
 
     verbose = log.INFO2
@@ -790,7 +791,7 @@ def parseYumOptions(argv, yum):
             except ValueError:
                 print "Invalid debug level"
                 return None
-            log.setDebugLogLevel(log.NO_DEBUG+level, domain)
+            log.setDebugLogLevel(level, domain)
         elif opt == "--dbpath":
             rpmconfig.dbpath = val
         elif opt == "--installpkgs":
@@ -867,16 +868,16 @@ def parseYumOptions(argv, yum):
         elif opt == "--languages":
             yum.langs = val.split()
 
-    log.setLogLevel(verbose)
+    log.setInfoLogLevel(verbose)
 
     if rpmconfig.arch != None:
         if not rpmconfig.test and \
            not rpmconfig.justdb and \
            not rpmconfig.ignorearch:
-            log.errorLn("Arch option can only be used for tests")
+            log.error("Arch option can only be used for tests")
             sys.exit(1)
         if not buildarchtranslate.has_key(rpmconfig.arch):
-            log.errorLn("Unknown arch %s", rpmconfig.arch)
+            log.error("Unknown arch %s", rpmconfig.arch)
             sys.exit(1)
         rpmconfig.machine = rpmconfig.arch
 
@@ -935,18 +936,18 @@ def readPackages(dbpath):
         try:
             val = struct.unpack("I", key)[0] # FIXME: native endian?
         except struct.error:
-            log.warningLn("Invalid key %s in rpmdb", repr(key))
+            log.warning("Invalid key %s in rpmdb", repr(key))
             continue
         if val != 0:
             try:
                 (indexNo, storeSize) = struct.unpack("!2I", data[0:8])
             except struct.error:
-                log.warningLn("Value for key %s in rpmdb is too short",
+                log.warning("Value for key %s in rpmdb is too short",
                               repr(key))
                 continue
             if len(data) < indexNo*16 + 8:
-                log.warningLn("Value for key %s in rpmdb is too short",
-                              repr(key))
+                log.warning("Value for key %s in rpmdb is too short",
+                            repr(key))
                 continue
             indexdata = data[8:indexNo*16+8]
             storedata = data[indexNo*16+8:]
@@ -956,8 +957,8 @@ def readPackages(dbpath):
                     (tag, tagval) = rpmio.getHeaderByIndex(idx, indexdata,
                                                            storedata)
                 except ValueError, e:
-                    log.warningLn("Invalid header entry %s in %s: %s",
-                                  idx, repr(key), e)
+                    log.warning("Invalid header entry %s in %s: %s",
+                                idx, repr(key), e)
                     continue
                 if   tag == 257:
                     pkg["signature"]["size_in_sig"] = tagval
@@ -983,8 +984,7 @@ def readPackages(dbpath):
 #                try:
 #                    keys = openpgp.parsePGPKeys(pkg["description"])
 #                except ValueError, e:
-#                    log.warningLn("Invalid key package %s: %s",
-#                                  pkg["name"], e)
+#                    log.warning("Invalid key package %s: %s", pkg["name"], e)
 #                    continue
 #                for k in keys:
 #                    keyring.addKey(k)
@@ -1303,8 +1303,8 @@ def filterArchCompat(list, arch):
         if archCompat(list[i]["arch"], arch):
             i += 1
         else:
-            log.warningLn("%s: Architecture not compatible with %s",
-                          list[i].source, arch)
+            log.warning("%s: Architecture not compatible with %s",
+                        list[i].source, arch)
             list.pop(i)
 
 def normalizeList(list):
@@ -1394,14 +1394,15 @@ def readDir(dir, list, rtags=None):
                 pkg.read(tags=rtags)
                 pkg.close()
             except (IOError, ValueError), e:
-                log.warningLn("%s: %s\n", pkg, e)
+                log.warning("%s: %s\n", pkg, e)
                 continue
             if not rpmconfig.ignorearch and \
                not archCompat(pkg["arch"], rpmconfig.machine) and \
                not pkg.isSourceRPM():
-               log.warningLn("%s: Package excluded because of arch incompatibility", pkg.getNEVRA())
+               log.warning("%s: Package excluded because of arch "
+                           "incompatibility", pkg.getNEVRA())
                continue
-            log.info3Ln("Reading package %s.", pkg.getNEVRA())
+            log.info3("Reading package %s.", pkg.getNEVRA())
             list.append(pkg)
 
 def run_main(main):
@@ -1420,7 +1421,7 @@ def run_main(main):
         prof.runcall(main)
         prof.close()
         del prof
-        log.info2Ln("Starting profil statistics. This takes some time...")
+        log.info2("Starting profil statistics. This takes some time...")
         s = hotshot.stats.load(htfilename)
         s.strip_dirs().sort_stats("time").print_stats(100)
         s.strip_dirs().sort_stats("cumulative").print_stats(100)

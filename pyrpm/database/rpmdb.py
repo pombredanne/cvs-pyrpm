@@ -222,7 +222,7 @@ class RpmDB(db.RpmDatabase):
         try:
             val = unpack("I", key)[0]
         except struct.error:
-            log.errorLn("Invalid key %s in rpmdb", repr(key))
+            log.error("Invalid key %s in rpmdb", repr(key))
             return None
 
         if val == 0:
@@ -231,13 +231,11 @@ class RpmDB(db.RpmDatabase):
         try:
             (indexNo, storeSize) = unpack("!2I", data[0:8])
         except struct.error:
-            log.errorLn("Value for key %s in rpmdb is too short",
-                      repr(key))
+            log.error("Value for key %s in rpmdb is too short", repr(key))
             return None
 
         if len(data) < indexNo*16 + 8:
-            log.errorLn("Value for key %s in rpmdb is too short",
-                      repr(key))
+            log.error("Value for key %s in rpmdb is too short", repr(key))
             return None
         indexdata = unpack("!%sI" % (indexNo*4), data[8:indexNo*16+8])
         indexes = zip(indexdata[0::4], indexdata[1::4],
@@ -264,8 +262,7 @@ class RpmDB(db.RpmDatabase):
             try:
                 keys = openpgp.parsePGPKeys(pkg["description"])
             except ValueError, e:
-                log.errorLn("Invalid key package %s: %s",
-                            pkg["name"], e)
+                log.error("Invalid key package %s: %s", pkg["name"], e)
                 return None
             for k in keys:
                 self.keyring.addKey(k)
@@ -296,8 +293,7 @@ class RpmDB(db.RpmDatabase):
             try:
                 tagval = rpmio.getHeaderByIndexData(index, storedata)
             except ValueError, e:
-                log.errorLn("Invalid header entry %s in %s: %s",
-                            idx, key, e)
+                log.error("Invalid header entry %s in %s: %s", idx, key, e)
                 return 0
 
             if tag == "archivesize":
@@ -322,8 +318,7 @@ class RpmDB(db.RpmDatabase):
             if "triggername" in tags:
                 pkg["triggers"] = pkg.getTriggers()
         except ValueError, e:
-            log.errorLn("Error in package %s: %s",
-                        pkg.getNEVRA(), e)
+            log.error("Error in package %s: %s", pkg.getNEVRA(), e)
             return 0
         return 1
 

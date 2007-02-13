@@ -202,7 +202,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             f = open(filename,'w')
             db = sqlite.connect(filename)
         except IOError:
-            log.warningLn("Could not create sqlite cache file, using in memory cache instead")
+            log.warning("Could not create sqlite cache file, using in memory "
+                        "cache instead")
             db = sqlite.connect(":memory:")
         if sqlite3:
             db.row_factory = sqlite3.Row
@@ -267,7 +268,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
         # Now check the database version
         if (info['dbversion'] not in supported_dbversions):
-            log.info2Ln("Cache file is version %s, we need %s, will regenerate.\n", info['dbversion'], dbversion)
+            log.info2("Cache file is version %s, we need %s, will "
+                      "regenerate.\n", info['dbversion'], dbversion)
             raise sqlite.DatabaseError, "Older version of yum sqlite: %s" % info['dbversion']
 
         # This appears to be a valid database, return checksum value and
@@ -377,7 +379,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
     def getDbFile(self, dbtype):
 
         if dbtype != "primary":
-            log.info2Ln("Loading %s for %s...", dbtype, self.reponame)
+            log.info2("Loading %s for %s...", dbtype, self.reponame)
 
         cachebase = os.path.join(self.config.cachedir, self.reponame)
         cachepath = os.path.join(self.config.cachedir, self.reponame, "sqlite")
@@ -393,7 +395,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             try:
                 csum, db = self.loadCache(dbfilename)
             except sqlite.Error, e:
-                log.errorLn(e)
+                log.error(e)
                 csum = None
             if self.repomd.has_key(dbtype) and \
                    self.repomd[dbtype].has_key("checksum") and \
@@ -449,7 +451,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 return 0
 
         if filename:
-            log.info2Ln("Creating %s", dbfilename)
+            log.info2("Creating %s", dbfilename)
             if USEYUM:
                 parser = yum.mdparser.MDParser(filename)
                 storage = yum.storagefactory.GetStorage()

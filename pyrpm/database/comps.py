@@ -218,7 +218,7 @@ class RpmCompsXML:
                 if not ret:
                     return 0
             else:
-                log.warningLn("Unknown entry in comps.xml: %s", node.name)
+                log.warning("Unknown entry in comps.xml: %s", node.name)
                 return 0
             node = node.next
         return 1

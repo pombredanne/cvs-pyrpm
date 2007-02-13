@@ -39,8 +39,8 @@ class RAID:
 
     def mapTo(self, mapto):
         if self.active:
-            log.errorLn("Unable to remap '%s', because it is already "
-                        "active.", self.name)
+            log.error("Unable to remap '%s', because it is already active.",
+                      self.name)
             return 0
         self.device = "/dev/" % mapto
         return 1
@@ -49,8 +49,8 @@ class RAID:
         command = "%s --assemble '%s'" % (RAID.prog, self.device) + \
                   " %s" % (" ".join(self.devices))
         if run_script(command, self.chroot) != 0:
-            log.errorLn("mdadm failed on '%s' with error code %d",
-                        self.name, status)
+            log.error("mdadm failed on '%s' with error code %d", self.name,
+                      status)
             return 1
         self.active = True
 
@@ -74,7 +74,7 @@ class RAID:
                 " --level=%d" % (self.level) + \
                 " %s" % (" ".join(self.devices))
         if run_script(command, self.chroot) != 0:
-            log.errorLn("Failed to create raid '%s'.", self.name)
+            log.error("Failed to create raid '%s'.", self.name)
             return 0
         self.active = True
 
@@ -91,21 +91,21 @@ class RAID:
             return 1
         command = "%s --stop '%s'" % (RAID.prog, self.device)
         if run_script(command, self.chroot) != 0:
-            log.errorLn("Deactivation of raid '%s' failed: %s", self.name, msg)
+            log.error("Deactivation of raid '%s' failed: %s", self.name, msg)
             return 0
         self.active = False
         return 1
 
     def writeConfig(self, filename):
-        log.errorLn("TODO: RAID.writeConfig(%s) "
-                    "#####################################", filename)
+        log.error("TODO: RAID.writeConfig(%s) "
+                  "#####################################", filename)
         return 0
 
     # get size of raid device
     def info(device, chroot=None):
         command = "%s --detail '%s'" % (RAID.prog, device)
         if run_script(command, chroot) != 0:
-            log.errorLn("Failed to get details for '%s'.", device)
+            log.error("Failed to get details for '%s'.", device)
             return None
 
         dict = { }
@@ -147,7 +147,7 @@ class RAID:
                 # uuid is not usable, because it changes with device names
                 # /dev/loopX is not good to get an uuid
             except:
-                log.errorLn("mdadm output malformed.")
+                log.error("mdadm output malformed.")
                 return None
         dict["device"] = device
         return dict
@@ -157,7 +157,7 @@ class RAID:
     def examine(device, chroot=None):
         command = "%s -E '%s'" % (RAID.prog, device)
         if run_script(command, chroot) != 0:
-            log.errorLn("Unable to get raid information for '%s'.", device)
+            log.error("Unable to get raid information for '%s'.", device)
             return None
 
         dict = { }
@@ -197,7 +197,7 @@ class RAID:
                     elif key == "Chunk Size":
                         dict["chunk-size"] = value
                 except:
-                    log.errorLn("mdadm output malformed.")
+                    log.error("mdadm output malformed.")
                     return None
             else:
                 splits = line.split()
@@ -205,15 +205,15 @@ class RAID:
                     if splits[0] == "this":
                         dict["device-number"] = long(splits[1])
                 except:
-                    log.errorLn("mdadm output malformed.")
+                    log.error("mdadm output malformed.")
                     return None
 
         for key in [ "magic", "uuid", "level", "raid-devices", "total-devices",
                      "preferred-minor", "state", "active-devices",
                      "failed-devices", "device-number" ]:
             if not dict.has_key(key):
-                log.warningLn("Raid information for '%s' is incomplete: %s",
-                              device, key)
+                log.warning("Raid information for '%s' is incomplete: %s",
+                            device, key)
                 return None
         dict["device"] = device
         return dict

@@ -190,11 +190,11 @@ class RpmDistributionCollection:
         files = self.getArchFilepaths(arch)
         pkgs = []
         for f in files:
-            log.debug2Ln("%04d: reading %s", len(pkgs), f)
+            log.debug2("%04d: reading %s", len(pkgs), f)
             try:
                 pkg = readRpmPackage(rpmconfig, 'file:/'+f, tags = tags)
             except (ValueError, IOError), e:
-                log.errorLn("%s: %s", f, e)
+                log.error("%s: %s", f, e)
                 continue
             pkgs.append(pkg)
         return pkgs

@@ -64,18 +64,18 @@ class Source:
             # get source information via release package
             ri = release_info(source)
             if not ri:
-                log.errorLn("Getting release info for '%s' failed.", url)
+                log.error("Getting release info for '%s' failed.", url)
                 return 0
             else:
                 (self.name, self.version, self.arch) = ri
         else:
             # get source information via .discinfo file
             if not self.cache.cache(".discinfo"):
-                log.errorLn("No .discinfo for '%s'", self.url)
+                log.error("No .discinfo for '%s'", self.url)
                 return 0
             di = get_discinfo(self.cache.cache(".discinfo"))
             if not di:
-                log.errorLn("Getting .discinfo for '%s' failed.", url)
+                log.error("Getting .discinfo for '%s' failed.", url)
                 return 0
             (self.name, self.version, self.arch) = di
 
@@ -88,13 +88,13 @@ class Source:
             self.id = "FC"
             self.prefix = "Fedora"
         else:
-            log.errorLn("Unknown source release '%s'.", self.release)
+            log.error("Unknown source release '%s'.", self.release)
             return 0
 
         self.release = "%s-%s" % (self.id, self.version)
 
-        log.info1Ln("Installation source: %s %s [%s]", self.name, self.version,
-                    self.arch)
+        log.info1("Installation source: %s %s [%s]", self.name, self.version,
+                  self.arch)
 
         # load repos
         repos = [ ]
@@ -129,10 +129,10 @@ class Source:
             for repo in repos:
                 repo_name = "%s-%s" % (self.release, repo)
                 if repo in self.repos:
-                    log.errorLn("Repository '%s' already defined.", repo_name)
+                    log.error("Repository '%s' already defined.", repo_name)
                     return 0
 
-                log.info1Ln("Loading repo '%s'", repo_name)
+                log.info1("Loading repo '%s'", repo_name)
 
                 # create yumconf
                 yumconf = YumConf(self.version, self.arch, self.arch)
@@ -143,7 +143,7 @@ class Source:
                     yumconf.vars[repo_name]["exclude"] = self.exclude
                 _repo = getRepoDB(rpmconfig, yumconf, reponame=repo_name)
                 if not _repo.read():
-                    log.errorLn("Could not load repository '%s'.", repo_name)
+                    log.error("Could not load repository '%s'.", repo_name)
                     return 0
                 self.repos[repo_name] = _repo
         else:
@@ -157,10 +157,10 @@ class Source:
                 yumconf.vars[repo]["exclude"] = self.exclude
             _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
             if not _repo.read():
-                log.errorLn("Could not load repository '%s'.", repo)
+                log.error("Could not load repository '%s'.", repo)
                 return 0
             if not _repo.comps: # every source repo has to have a comps
-                log.errorLn("Missing comps file for '%s'.", repo)
+                log.error("Missing comps file for '%s'.", repo)
                 return 0
             self.repos[repo] = _repo
 
@@ -171,10 +171,10 @@ class Source:
 
         for repo in ks["repo"]:
             if repo in self.repos:
-                log.errorLn("Repository '%s' already defined.", repo)
+                log.error("Repository '%s' already defined.", repo)
                 return 0
 
-            log.info1Ln("Loading extra repo '%s'", repo)
+            log.info1("Loading extra repo '%s'", repo)
 
             url = ks["repo"][repo]["baseurl"]
 
@@ -194,7 +194,7 @@ class Source:
             yumconf.vars[repo]["baseurl"] = [ url ]
             _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
             if not _repo.read():
-                log.errorLn("Could not load repository '%s'.", repo)
+                log.error("Could not load repository '%s'.", repo)
                 return 0
             self.repos[repo] = _repo
 
@@ -246,14 +246,14 @@ class Source:
         if ks.has_key("xconfig"):
             if ks["xconfig"].has_key("startxonboot"):
                 if not "base-x" in groups:
-                    log.info1Ln("Adding group 'base-x'.")
+                    log.info1("Adding group 'base-x'.")
                     groups.append("base-x")
                 desktop = "GNOME"
                 if ks["xconfig"].has_key("defaultdesktop"):
                     desktop = ks["xconfig"]["defaultdesktop"]
                 desktop = "%s-desktop" % desktop.lower()
                 if not desktop in groups:
-                    log.info1Ln("Adding group '%s'.", desktop)
+                    log.info1("Adding group '%s'.", desktop)
                     groups.append(desktop)
 
         normalizeList(groups)
@@ -273,7 +273,7 @@ class Source:
                        not repo in repo_groups[_group]:
                     repo_groups.setdefault(_group, [ ]).append(repo)
             if not found:
-                log.warningLn("Group '%s' does not exist.", group)
+                log.warning("Group '%s' does not exist.", group)
         del groups
 
         # add packages for groups
@@ -304,12 +304,12 @@ class Source:
                         found = True
                         break
                 if not found:
-                    log.warningLn("Package '%s' is not available.", pkg)
+                    log.warning("Package '%s' is not available.", pkg)
         # remove packages
         if ks.has_key("packages") and ks["packages"].has_key("drop"):
             for pkg in ks["packages"]["drop"]:
                 if pkg in pkgs:
-                    log.info1Ln("Removing package '%s'.", pkg)
+                    log.info1("Removing package '%s'.", pkg)
                     pkgs.remove(pkg)
 
         # add xorg driver package for past FC-5, RHEL-4
@@ -418,10 +418,10 @@ class Source:
             if len(_pkgs) > 0:
                 if not name in pkgs:
                     if description != "":
-                        log.info1Ln("Adding package '%s' for %s.", name,
-                                    description)
+                        log.info1("Adding package '%s' for %s.", name,
+                                  description)
                     else:
-                        log.info1Ln("Adding package '%s'.", name)
+                        log.info1("Adding package '%s'.", name)
                     pkgs.append(name)
                 return
         if description != "":
@@ -447,10 +447,10 @@ class Source:
                     return
             pkg = s[0] # take first package, which provides ...
             if description != "":
-                log.info1Ln("Adding package '%s' for %s.", pkg["name"],
-                            description)
+                log.info1("Adding package '%s' for %s.", pkg["name"],
+                          description)
             else:
-                log.info1Ln("Adding package '%s'.", pkg["name"])
+                log.info1("Adding package '%s'.", pkg["name"])
             pkgs.append(pkg["name"])
             return
 
@@ -485,7 +485,7 @@ class Source:
                 continue
             for req in requires:
                 if req in pkgs:
-                    log.info1Ln("Adding package '%s' for langsupport.", name)
+                    log.info1("Adding package '%s' for langsupport.", name)
                     pkgs.append(name)
                     break
 
@@ -496,7 +496,7 @@ class Source:
                 continue
             for req in requires:
                 if req in pkgs:
-                    log.info1Ln("Adding package '%s' for langsupport.", name)
+                    log.info1("Adding package '%s' for langsupport.", name)
                     pkgs.append(name)
                     break
 

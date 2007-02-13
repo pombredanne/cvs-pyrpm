@@ -191,14 +191,13 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 key_data = f.read()
                 f.close()
             except Exception, e:
-                log.errorLn("Error reading GPG key %s: %s",
-                            filename, e)
+                log.error("Error reading GPG key %s: %s", filename, e)
                 continue
             try:
                 key_data = openpgp.isolateASCIIArmor(key_data)
                 keys = openpgp.parsePGPKeys(key_data)
             except Exception, e:
-                log.errorLn("Invalid GPG key %s: %s", url, e)
+                log.error("Invalid GPG key %s: %s", url, e)
                 continue
             for k in keys:
                 self.keyring.addKey(k)
@@ -287,7 +286,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         system path without schema prefix."""
 
         self.filerequires = []
-        log.info1Ln("Pass 1: Parsing package headers for file requires.")
+        log.info1("Pass 1: Parsing package headers for file requires.")
         self.__readDir(self.source, "")
         filename = functions._uriToFilename(self.source)
         datapath = os.path.join(filename, "repodata")
@@ -295,8 +294,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             try:
                 os.makedirs(datapath)
             except OSError, e:
-                log.errorLn("%s: Couldn't create repodata: %s",
-                            filename, e)
+                log.error("%s: Couldn't create repodata: %s", filename, e)
                 return 0
         try:
             pfd = gzip.GzipFile(os.path.join(datapath, "primary.xml.gz"), "wb")
@@ -321,20 +319,20 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         froot = fdoc.newChild(None, "filelists", None)
         #odoc = libxml2.newDoc("1.0")
         #oroot = odoc.newChild(None, "filelists", None)
-        log.info1Ln("Pass 2: Writing repodata information.")
+        log.info1("Pass 2: Writing repodata information.")
         pfd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         pfd.write('<metadata xmlns="http://linux.duke.edu/metadata/common" xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="%d">\n' % len(self.getPkgs()))
         ffd.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         ffd.write('<filelists xmlns:rpm="http://linux.duke.edu/filelists" packages="%d">\n' % len(self.getPkgs()))
         for pkg in self.getPkgs():
-            log.info2Ln("Processing complete data of package %s.",
-                        pkg.getNEVRA())
+            log.info2("Processing complete data of package %s.",
+                      pkg.getNEVRA())
             pkg.header_read = 0
             try:
                 pkg.open()
                 pkg.read()
             except (IOError, ValueError), e:
-                log.warningLn("%s: %s", pkg.getNEVRA(), e)
+                log.warning("%s: %s", pkg.getNEVRA(), e)
                 continue
             # If it is a source rpm change the arch to "src". Only valid
             # for createRepo, never do this anywhere else. ;)
@@ -343,7 +341,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             try:
                 checksum = self.__getChecksum(pkg)
             except (IOError, NotImplementedError), e:
-                log.warningLn("%s: %s", pkg.getNEVRA(), e)
+                log.warning("%s: %s", pkg.getNEVRA(), e)
                 continue
             pkg["yumchecksum"] = checksum
             self.__writePrimary(pfd, proot, pkg)
@@ -408,7 +406,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 try:
                     pkg = self.__parsePackage(reader)
                 except ValueError, e:
-                    log.warningLn("%s: %s", pkg.getNEVRA(), e)
+                    log.warning("%s: %s", pkg.getNEVRA(), e)
                     continue
                 # pkg can be None if it is excluded
                 if pkg == None:
@@ -426,8 +424,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 try:
                     arch = props["arch"]
                 except KeyError:
-                    log.warningLn("%s: missing arch= in <package>",
-                                  pkg.getNEVRA())
+                    log.warning("%s: missing arch= in <package>",
+                                pkg.getNEVRA())
                     continue
                 self.__parseFilelist(reader, props["name"], arch)
 
@@ -440,7 +438,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
            (not functions.archCompat(pkg["arch"], self.config.machine) or \
             (self.config.archlist != None and not pkg["arch"] in self.config.archlist)) and \
            not pkg.isSourceRPM():
-                log.warningLn("%s: Package excluded because of arch incompatibility", pkg.getNEVRA())
+                log.warning("%s: Package excluded because of arch "
+                            "incompatibility", pkg.getNEVRA())
                 return 1
 
         index = lists.NevraList()
@@ -503,7 +502,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if pkg.isSourceRPM():
                 pkg["arch"] = "src"
             nevra = pkg.getNEVRA()
-            log.info2Ln("Adding %s to repo and checking file requires.", nevra)
+            log.info2("Adding %s to repo and checking file requires.", nevra)
             pkg["yumlocation"] = location+pkg.source[len(dir):]
             self.addPkg(pkg)
 
@@ -634,7 +633,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 props = self.__getProps(reader)
                 type = props.get("type")
                 if type != "sha":
-                    log.warningLn("Unsupported checksum type %s in repomd.xml for file %s", type, fname)
+                    log.warning("Unsupported checksum type %s in repomd.xml "
+                                "for file %s", type, fname)
                     continue
                 if Readf() != 1:
                     break
@@ -647,7 +647,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 props = self.__getProps(reader)
                 type = props.get("type")
                 if type != "sha":
-                    log.warningLn("Unsupported open-checksum type %s in repomd.xml for file %s", type, fname)
+                    log.warning("Unsupported open-checksum type %s in "
+                                "repomd.xml for file %s", type, fname)
                     continue
                 if Readf() != 1:
                     break

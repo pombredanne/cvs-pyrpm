@@ -48,7 +48,7 @@ def network_config(ks, buildroot):
         for net in ks["network"]:
             if net.has_key("device"):
                 if net["device"] in network_devices:
-                    log.warningLn("'%s' is not unique.", net["device"])
+                    log.warning("'%s' is not unique.", net["device"])
                 else:
                     network_devices.append(net["device"])
         for net in ks["network"]:
@@ -90,8 +90,8 @@ def network_config(ks, buildroot):
                           "/etc/sysconfig/network-scripts/ifcfg-%s" % \
                           device, "w")
             except Exception, msg:
-                log.errorLn("Configuration of '/etc/sysconfig/network-scripts/"
-                            "ifcfg-%s' failed: %s", device, msg)
+                log.error("Configuration of '/etc/sysconfig/network-scripts/"
+                          "ifcfg-%s' failed: %s", device, msg)
             else:
                 fd.write('DEVICE=%s\n' % device)
                 fd.write('BOOTPROTO=%s\n' % bootproto)
@@ -120,8 +120,8 @@ def network_config(ks, buildroot):
                               "/etc/sysconfig/network-scripts/keys-%s" % \
                               device, "w")
                 except Exception, msg:
-                    log.errorLn("Configuration of '/etc/sysconfig/network-"
-                                "scripts/keys-%s' failed: %s", device, msg)
+                    log.error("Configuration of '/etc/sysconfig/network-"
+                              "scripts/keys-%s' failed: %s", device, msg)
                 else:
                     fd.write('KEY=%s\n' % net["wepkey"])
                 fd.close()

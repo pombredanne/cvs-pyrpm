@@ -21,7 +21,9 @@ from pyrpm.config import rpmconfig
 
 # file logging object
 flog = Logger()
-flog.delLogging("*", flog.stderr)
-flog.delLogging("*", flog.stdout)
+flog.delInfoLogging("*", flog.stderr)
+flog.delDebugLogging("*", flog.stderr)
+flog.delInfoLogging("*", flog.stdout)
+flog.delDebugLogging("*", flog.stdout)
 
 # vim:ts=4:sw=4:showmatch:expandtab

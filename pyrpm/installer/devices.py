@@ -27,14 +27,14 @@ class Devices:
 
     def add(self, device):
         if device in self.devices:
-            log.errorLn("Device '%' is already in use.", device)
+            log.error("Device '%' is already in use.", device)
             return 0
         self.devices.append(device)
         return 1
 
     def remove(self, device):
         if not device in self.devices:
-            log.warningLn("Device '%s' is not in use.", device)
+            log.warning("Device '%s' is not in use.", device)
             return 1
         self.devices.remove(device)
         return 1

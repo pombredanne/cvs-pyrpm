@@ -59,7 +59,7 @@ class Cards:
             elif line == "END":
                 continue
             else:
-                log.errorLn("'%s': Error in line '%s'.", name, line)
+                log.error("'%s': Error in line '%s'.", name, line)
         fd.close()
 
     def _get(self, card, dict, cards):

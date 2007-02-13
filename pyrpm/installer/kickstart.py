@@ -121,7 +121,7 @@ class KickstartConfig(dict):
                     try:
                         _fd = open(args[1], "r")
                     except Exception, msg:
-                        log.info1Ln("Unable to open '%s', ignoring.", args[1])
+                        log.info1("Unable to open '%s', ignoring.", args[1])
                     else:
                         if args[1] in open_files:
                             raise ValueError, \
@@ -140,7 +140,7 @@ class KickstartConfig(dict):
                                 "upgrade", "mouse", "zerombr" ]:
                         self[opt] = None
                     else:
-                        log.info1Ln("'%s' is unsupported.", line)
+                        log.info1("'%s' is unsupported.", line)
 
                     continue
 
@@ -244,8 +244,8 @@ class KickstartConfig(dict):
                                           "port '%s' is invalid." % v
                                 self[opt]["ports"].append(a)
                         else:
-                            log.info1Ln("'%s': option '%s' not recognized.",
-                                        line, _opt)
+                            log.info1("'%s': option '%s' not recognized.",
+                                      line, _opt)
 
                     for arg in _args:
                         self[opt].setdefault("devices", [ ]).append(arg)
@@ -407,7 +407,7 @@ class KickstartConfig(dict):
                         self[opt][_args[0]] = { }
                     self[opt][_args[0]] = _dict
                 else:
-                    log.info1Ln("'%s' is unsupported.", line)
+                    log.info1("'%s' is unsupported.", line)
 
             elif in_packages:
                 if len(args) == 1:

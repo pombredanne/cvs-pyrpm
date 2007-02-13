@@ -43,8 +43,8 @@ log = pyrpm.installer.log
 flog = pyrpm.installer.flog
 
 if not PARTED_MODULE_LOADED:
-    log.errorLn("Import of parted module failed. Please install the pyparted "
-                "package if it is\nnot installed already.")
+    log.error("Import of parted module failed. Please install the pyparted "
+              "package if it is\nnot installed already.")
     sys.exit(1)
 
 # do not use first 4 loop devices
@@ -79,7 +79,7 @@ def main():
     no_discinfo = 0
     has_raid = False
 
-    log.setLogLevel(log.INFO1)
+    log.setInfoLogLevel(log.INFO1)
     log.setDebugLogLevel(log.NO_DEBUG)
     log.setFormat("%(label)s%(message)s")
     log.setDateFormat("%Y-%m-%d %H:%M:%S")
@@ -102,8 +102,8 @@ def main():
             return
         elif opt in [ "-v", "--verbose" ]:
             verbose += 1
-            log.setLogLevel(log.getLogLevel() + 1)
-            flog.setLogLevel(flog.getLogLevel() + 1)
+            log.setInfoLogLevel(log.getInfoLogLevel() + 1)
+            flog.setInfoLogLevel(flog.getInfoLogLevel() + 1)
         elif opt in [ "-d", "--debug" ]:
             log.setDebugLogLevel(log.getDebugLogLevel() + 1)
             flog.setDebugLogLevel(flog.getDebugLogLevel() + 1)
@@ -151,17 +151,17 @@ def main():
 
     if user_arch:
         if user_arch not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
-            log.errorLn("User requested arch is not compatible with " \
-                        "host system arch.")
+            log.error("User requested arch is not compatible with "
+                      "host system arch.")
             return 1
         if user_arch == "noarch":
-            log.errorLn("Noarch is now allowed as installation arch.")
+            log.error("Noarch is now allowed as installation arch.")
             return 1
 
     # kickstart file
     ks_file = args[0]
     if not os.path.exists(ks_file):
-        log.errorLn("'%s' does not exist." % ks_file)
+        log.error("'%s' does not exist.", ks_file)
         return 1
 
     ######################## kickstart first pass ###########################
@@ -179,18 +179,18 @@ def main():
         try:
             tempdir = tempfile.mkdtemp(prefix="pyrpmkickstart_")
         except Exception, msg:
-            log.errorLn("Unable to create temporary directory: %s" % msg)
+            log.error("Unable to create temporary directory: %s", msg)
             return 1
         stage2_dir = tempdir+"/stage2"
         os.mkdir(stage2_dir)
 
     if not no_stage2:
         # mount ramfs for stage2
-        log.info2Ln("Mounting ramfs on '%s'.", stage2_dir)
+        log.info2("Mounting ramfs on '%s'.", stage2_dir)
         try:
             mount("None", stage2_dir, fstype="ramfs")
         except Exception, msg:
-            log.errorLn("Unable to create stage2 ramfs: %s" % msg)
+            log.error("Unable to create stage2 ramfs: %s", msg)
             return 1
 
     source_dir = stage2_dir+"/mnt/source"
@@ -211,16 +211,18 @@ def main():
     create_dir(tempdir, "/tmp")
     log_filename = tempdir+"/tmp/pyrpmkickstart.log"
     log_file = pyrpm.logger.FileLog(log_filename)
-    log.info1Ln("Logging to '%s'." % log_filename)
-    log.addLogging("*", log_file, format="%(date)s %(label)s%(message)s")
+    log.info1("Logging to '%s'.", log_filename)
+    log.addInfoLogging("*", log_file, fmt="%(date)s %(label)s%(message)s")
+    log.addDebugLogging("*", log_file, fmt="%(date)s %(label)s%(message)s")
     # set extra file logging
-    flog.setLogging("*", log_file)
+    flog.setInfoLogging("*", log_file)
+    flog.setDebugLogging("*", log_file)
 
     # installation methods
 
     if not ks.has_key("nfs") and not ks.has_key("url") and \
            not ks.has_key("cdrom"):
-        log.errorLn("Only installation with nfs or url is supported, exiting.")
+        log.error("Only installation with nfs or url is supported, exiting.")
         return 1
 
     ############################### load source ###############################
@@ -232,20 +234,20 @@ def main():
     # verify source
     if (source.isRHEL() and source.cmpVersion("3") < 0) or \
            (source.isFedora() and source.cmpVersion("2") < 0):
-        log.errorLn("%s is not supported as installation source" % \
-                    source.getRelease())
+        log.error("%s is not supported as installation source",
+                  source.getRelease())
         return 1
 
     if source.getArch() not in pyrpm.arch_compats[pyrpm.rpmconfig.machine]:
-        log.errorLn("Installation source arch '%s' is not compatible with "
-                    "system arch '%s'.", source.getArch(),
-                    pyrpm.rpmconfig.machine)
+        log.error("Installation source arch '%s' is not compatible with "
+                  "system arch '%s'.", source.getArch(),
+                  pyrpm.rpmconfig.machine)
         return 1
 
     if user_arch and user_arch not in pyrpm.arch_compats[source.getArch()]:
-        log.errorLn("User requested arch '%s' is not compatible with "
-                    "installation source arch '%s'.", user_arch,
-                    source.getArch())
+        log.error("User requested arch '%s' is not compatible with "
+                  "installation source arch '%s'.", user_arch,
+                  source.getArch())
         return 1
 
     ############################## mount stage2  ##############################
@@ -256,8 +258,8 @@ def main():
 
         stage2 = source.getStage2()
         if not stage2 or not os.path.exists(stage2):
-            log.errorLn("Could not get stage2 image from installation source."
-                        "Try to use option --no-stage2.")
+            log.error("Could not get stage2 image from installation source."
+                      "Try to use option --no-stage2.")
             return 1
 
         fstype = None # no fstype needed for compressed rom fs
@@ -269,31 +271,31 @@ def main():
         if len(magic) == 4 and (magic == "hsqs" or magic == "sqsh"):
             fstype = "squashfs"
 
-        log.info2Ln("Mounting '%s' on '%s'.", stage2, stage2_img_dir)
+        log.info2("Mounting '%s' on '%s'.", stage2, stage2_img_dir)
         try:
             mount(stage2, stage2_img_dir, fstype, options="loop,defaults,ro")
         except Exception, msg:
-            log.errorLn("Unable to mount stage2 image.\n"
-                        "You could try to disable the use of the stage2 "
-                        "image with the\noption --no-stage2.")
+            log.error("Unable to mount stage2 image.\n"
+                      "You could try to disable the use of the stage2 "
+                      "image with the\noption --no-stage2.")
             return 1
 
         ### analyze stage2 ###
         if not os.path.exists("%s/.buildstamp" % stage2_img_dir):
-            log.warningLn("Buildstamp information is missing in stage2.")
+            log.warning("Buildstamp information is missing in stage2.")
         bs = get_buildstamp_info(stage2_img_dir)
         if not bs:
-            log.warningLn("Failed to get buildstamp information from stage2.")
+            log.warning("Failed to get buildstamp information from stage2.")
         if bs[0] != source.getName() or bs[1] != source.getVersion() or \
                bs[2] != source.getArch():
-            log.warningLn("Release info does not match buildstamp: \n"
-                          "  %s-%s.%s <=> %s-%s.%s", bs[0], bs[1], bs[2],
-                          source.getName(), source.getVersion(),
-                          source.getArch())
+            log.warning("Release info does not match buildstamp: \n"
+                        "  %s-%s.%s <=> %s-%s.%s", bs[0], bs[1], bs[2],
+                        source.getName(), source.getVersion(),
+                        source.getArch())
 
         ### create stage2 chroot ###
 
-        log.info1Ln("Preparing stage2 changeroot ...")
+        log.info1("Preparing stage2 changeroot ...")
 
         # check if ther is a bash
         check_exists(stage2_img_dir, "/usr/bin/bash")
@@ -309,7 +311,7 @@ def main():
                 shutil.copy2(s, d)
         pyrpm.unblockSignals(signals)
 
-        log.info2Ln("Umounting '%s'.", stage2_img_dir)
+        log.info2("Umounting '%s'.", stage2_img_dir)
         umount(stage2_img_dir)
         stage2_img_dir = None
 
@@ -363,10 +365,10 @@ def main():
 
         stage2_chroot = stage2_dir
         # test if bash is usable in changeroot
-        log.info1Ln("Testing if /bin/bash is usable in stage2")
+        log.info1("Testing if /bin/bash is usable in stage2")
         if run_script("/bin/bash --version 2>/dev/null",
                       stage2_chroot) != 0:
-            log.errorLn("/bin/bash in stage2 is not usable, exiting.")
+            log.error("/bin/bash in stage2 is not usable, exiting.")
             return 1
 
     else: # no_stage2
@@ -382,7 +384,7 @@ def main():
         # TODO:
         # 1) write network config
         # 2) (re)start networking
-        log.errorLn("TODO: start network")
+        log.error("TODO: start network")
         return 1
 
     ########################## kickstart second pass ##########################
@@ -390,7 +392,7 @@ def main():
     # run pre script and reload kickstart file
     if ks.has_key("install") and ks.has_key("pre") and \
            ks["pre"].has_key("script") and len(ks["pre"]["script"]) > 0:
-        log.info1Ln("Running pre script.")
+        log.info1("Running pre script.")
         if not run_ks_script(ks["pre"], stage2_chroot):
             return 1
         # parse file again
@@ -406,14 +408,14 @@ def main():
                       ks["raid"].has_key("/")) and \
                  not (ks.has_key("logvol") and \
                       ks["logvol"].has_key("/")))):
-            log.errorLn("root partition not defined.")
+            log.error("root partition not defined.")
             return 1
 
         # check if volgroups already exists
         if ks.has_key("volgroup") and len(ks["volgroup"]) > 0:
             for group in ks["volgroup"]:
                 if system["lvmap"].has_key(group):
-                    log.errorLn("Volume group '%s' already exists.", group)
+                    log.error("Volume group '%s' already exists.", group)
                     return 1
     else:
         # no upgrade checks
@@ -426,25 +428,25 @@ def main():
            (source.isFedora() and source.cmpVersion("6") < 0):
         # langsupport is deprecated for RHEL>=5 and FC>=6, but required before
         if not ks.has_key("langsupport"):
-            log.errorLn("langsupport is not defined, exiting.")
+            log.error("langsupport is not defined, exiting.")
             return 1
     else:
-        log.warningLn("langsupport is deprecated, ignoring.")
+        log.warning("langsupport is deprecated, ignoring.")
 
     # monitor and xconfig::monitor
     if (source.isRHEL() and source.cmpVersion("5") < 0) or \
            (source.isFedora() and source.cmpVersion("6") < 0):
         if ks.has_key("monitor"):
-            log.warningLn("Monitor tag is not supported for this "
-                          "distribution, using for compatibility mode.")
+            log.warning("Monitor tag is not supported for this "
+                        "distribution, using for compatibility mode.")
     elif ks.has_key("xconfig") and ks["xconfig"].has_key("monitor"):
-        log.warningLn("xconfig --monitor is deprecated, "
-                      "using for compatibility mode.")
+        log.warning("xconfig --monitor is deprecated, "
+                    "using for compatibility mode.")
 
     # keyboard
     if not keyboard_models.has_key(ks["keyboard"]):
-        log.errorLn("Keyboard model '%s' is not defined, exiting.",
-                    ks["keyboard"])
+        log.error("Keyboard model '%s' is not defined, exiting.",
+                  ks["keyboard"])
         return 1
 
     ####################### get used system ressources #######################
@@ -486,7 +488,7 @@ def main():
                 key = string.strip(splits[0])
                 val = string.strip(splits[1])
             if not os.path.exists(val):
-                log.errorLn("'%s' does not exist.", val)
+                log.error("'%s' does not exist.", val)
                 return 1
             mode = os.stat(val).st_mode
             if stat.S_ISBLK(mode):
@@ -504,29 +506,29 @@ def main():
                             key = _key
                             break;
                 if not key:
-                    log.errorLn("Unable to find an unused disk name for '%s'",
-                                val)
+                    log.error("Unable to find an unused disk name for '%s'",
+                              val)
                     return 1
             if not key:
-                log.errorLn("Unsupported type of '%s'.", val)
+                log.error("Unsupported type of '%s'.", val)
                 return 1
             disk_image = 0
             if not val in system["disks"] and not stat.S_ISBLK(mode):
-                log.info1Ln("Using '%s' as disk '%s'.", val, key)
+                log.info1("Using '%s' as disk '%s'.", val, key)
                 disk_image = 1
             if diskmap.has_key(key):
-                log.errorLn("'%s' is already defined.", key)
+                log.error("'%s' is already defined.", key)
                 return 1
 
             try:
                 diskmap[key] = Disk(val, alloc_loop=1, as_image=disk_image)
             except Exception, msg:
-                log.errorLn(msg)
+                log.error(msg)
                 return 1
 
     # use system disks?
     if len(diskmap) == 0:
-        log.warningLn("No device maps defined, using system harddisks!")
+        log.warning("No device maps defined, using system harddisks!")
         if confirm:
             if not pyrpm.is_this_ok():
                 return 0
@@ -537,7 +539,7 @@ def main():
 
     # are there any disks at all?
     if len(diskmap) == 0:
-        log.errorLn("No harddisks specified or found.")
+        log.error("No harddisks specified or found.")
         return 1
 
     # print disks
@@ -546,7 +548,7 @@ def main():
         diskmap_keys.sort()
         for disk in diskmap_keys:
             if not diskmap[disk].has_disklabel():
-                log.info2Ln("No disklabel for '%s'.", disk)
+                log.info2("No disklabel for '%s'.", disk)
                 continue
             diskmap[disk].print_info()
             diskmap[disk].print_partitions()
@@ -557,13 +559,13 @@ def main():
     if (source.isRHEL() and source.cmpVersion("5") >= 0) or \
            (source.isFedora() and source.cmpVersion("4") >= 0):
         if os.path.exists(stage2_dir+"/sbin/dmsetup"):
-            log.info1Ln("Initializing device mapper.")
+            log.info1("Initializing device mapper.")
             dmsetup = "/sbin/dmsetup info 2>/dev/ull"
             if run_script(dmsetup, stage2_chroot) != 0:
-                log.errorLn("dmsetup failed.")
+                log.error("dmsetup failed.")
                 return 1
         else:
-            log.warningLn("dmsetup is missing.")
+            log.warning("dmsetup is missing.")
 
     # clearpart, initialize disks
     modified = [ ]
@@ -574,13 +576,13 @@ def main():
             for disk in diskmap.keys():
                 if not diskmap[disk].has_disklabel() or \
                        diskmap[disk]["disklabel"] not in usable_disklabels:
-                    log.info1Ln("Initializing disk '%s' to '%s' type.",
-                                disk, usable_disklabels[0])
+                    log.info1("Initializing disk '%s' to '%s' type.",
+                              disk, usable_disklabels[0])
                     diskmap[disk].new_disklabel(usable_disklabels[0])
                     if not disk in modified:
                         modified.append(disk)
                 else:
-                    log.info1Ln("Clearing MBR on disk '%s'.", disk)
+                    log.info1("Clearing MBR on disk '%s'.", disk)
                     zero_mbr.append(disk)
 
         if ks.has_key("clearpart"):
@@ -591,20 +593,20 @@ def main():
                 normalizeList(drives)
                 for disk in drives:
                     if not diskmap.has_key(disk):
-                        log.errorLn("clearpart --drives: " + \
-                                    "disk %s is not available", disk)
+                        log.error("clearpart --drives: " + \
+                                  "disk %s is not available", disk)
                         return 1
             for disk in drives:
                 if ks["clearpart"].has_key("initlabel") and \
                        disk not in modified:
                     # disk has to be initialized and disk is not modified
-                    log.info1Ln("Initializing disk '%s' to '%s' type.",
-                                disk, usable_disklabels[0])
+                    log.info1("Initializing disk '%s' to '%s' type.",
+                              disk, usable_disklabels[0])
                     diskmap[disk].new_disklabel(usable_disklabels[0])
                     if not disk in modified:
                         modified.append(disk)
                 elif ks["clearpart"].has_key("all"):
-                    log.info1Ln("Removing all partitions on disk '%s'.", disk)
+                    log.info1("Removing all partitions on disk '%s'.", disk)
                     diskmap[disk].delete_all_partitions()
                     if not disk in modified:
                         modified.append(disk)
@@ -614,8 +616,7 @@ def main():
                     for i in partition:
                         partition = diskmap[disk]["partition"][i]
                         if partition["native_type"] in linuxtypes:
-                            log.info1Ln("Removing partition %d on %s.", i,
-                                        disk)
+                            log.info1("Removing partition %d on %s.", i, disk)
                             diskmap[disk].delete_partition(i)
                             if not disk in modified:
                                 modified.append(disk)
@@ -640,7 +641,7 @@ def main():
             has_raid = True
             for name in ks["raid"]:
                 if partitions.has_key(name):
-                    log.errorLn("Multiple definitions of %s", onpart)
+                    log.error("Multiple definitions of %s", onpart)
                     return
                 partitions[name] = { }
                 partitions[name]["raid"] = 1
@@ -648,7 +649,7 @@ def main():
                 # sanity checks
                 for part in ks["raid"][name]["partitions"]:
                     if not part in partitions:
-                        log.errorLn("Partition '%s' is not defined.", part)
+                        log.error("Partition '%s' is not defined.", part)
                         return
                 if ks["raid"][name].has_key("fstype"):
                     partitions[name]["fstype"] = ks["raid"][name]["fstype"]
@@ -676,8 +677,8 @@ def main():
                         except:
                             err = True
                     if err:
-                        log.errorLn("Extent size '%s' of '%s' is not valid.",
-                                    (pesize, group))
+                        log.error("Extent size '%s' of '%s' is not valid.",
+                                  (pesize, group))
                         return 1
                 s = get_size_in_byte(pesize)
                 volgroup[group]["pesize"] = pesize
@@ -685,7 +686,7 @@ def main():
                 volgroup[group]["partitions"] = vg["partitions"]
                 for onpart in vg["partitions"]:
                     if not partitions.has_key(onpart):
-                        log.errorLn("Partition '%s' is not defined.", onpart)
+                        log.error("Partition '%s' is not defined.", onpart)
                         return 1
                     partitions[onpart]["physical-volume"] = 1
                     partitions[onpart]["volgroup"] = group
@@ -696,8 +697,8 @@ def main():
         if ks.has_key("logvol") and len(ks["logvol"]) > 0:
             for name in ks["logvol"]:
                 if partitions.has_key(name):
-                    log.errorLn("Multiple definitions of logical " + \
-                                "volume '%s'.", onpart)
+                    log.error("Multiple definitions of logical volume '%s'.",
+                              onpart)
                     return
                 vgname = ks["logvol"][name]["vgname"]
                 partitions[name] = {}
@@ -722,7 +723,7 @@ def main():
         # search for installations and load fstab file
         # generate partitions according to fstab entries as onpart and noformat
 
-        log.info1Ln("Searching for installations ...")
+        log.info1("Searching for installations ...")
 
         fstemp_dir = tempdir+"/fstemp"
         os.mkdir(fstemp_dir)
@@ -744,7 +745,7 @@ def main():
                     label = getLabel(partition[part]["device"])
                     if label and label != "":
                         if label in labelmap:
-                            log.errorLn("Label %s is not unique.", label)
+                            log.error("Label %s is not unique.", label)
                             return
                         labelmap[label] = onpart
 
@@ -756,8 +757,8 @@ def main():
                     dev = "md%d" % inf["preferred-minor"]
                     if inf["failed-devices"] != 0:
                         # ignore faulty raid arrays
-                        log.warningLn("Ignoring partition '%s' from faulty "
-                                      "raid array '%s'.", onpart, dev)
+                        log.warning("Ignoring partition '%s' from faulty "
+                                    "raid array '%s'.", onpart, dev)
                         continue
                     inf["onpart"] = onpart
                     if mdmap.has_key(dev):
@@ -765,9 +766,9 @@ def main():
                         for tag in [ "uuid", "magic", "level",
                                      "raid-devices" ]:
                             if dict[tag] != inf[tag]:
-                                log.warningLn("Ignoring partition '%s', "
-                                              "because of uuid mismatch.",
-                                              onpart)
+                                log.warning("Ignoring partition '%s', "
+                                            "because of uuid mismatch.",
+                                            onpart)
                                 continue
                     else:
                         mdmap[dev] = { }
@@ -783,10 +784,10 @@ def main():
                     d["device"] = inf["device"]
 
                 elif partition[part]["fstype"] == "lvm":
-                    log.info1Ln("%s: partition['%s']['fstype']='%s' "
-                                "device='%s'", disk, part,
-                                partition[part]["fstype"],
-                                partition[part]["device"])
+                    log.info1("%s: partition['%s']['fstype']='%s' "
+                              "device='%s'", disk, part,
+                              partition[part]["fstype"],
+                              partition[part]["device"])
 
                     dict = LVM_PHYSICAL_VOLUME.info(partition[part]["device"],
                                                     chroot=stage2_chroot)
@@ -797,14 +798,13 @@ def main():
                        [ "ext2", "ext3", "xfs", "jfs", "reiserfs" ] and \
                        partition[part]["native_type"] == 0x83:
                     # TODO: check if partition is already mounted
-                    log.info1Ln("Trying '/dev/%s'", onpart)
+                    log.info1("Trying '/dev/%s'", onpart)
                     inf = get_installation_info(partition[part]["device"],
                                                 partition[part]["fstype"],
                                                 fstemp_dir)
                     if inf:
                         installed[onpart] = inf
-                        log.info1Ln("Found '%s'.",
-                                    installed[onpart]["release"])
+                        log.info1("Found '%s'.", installed[onpart]["release"])
 
         # check volume groups and logical volumes
 #        print "volgroup=%s" % pprint.pformat(volgroup)
@@ -837,19 +837,18 @@ def main():
         to_delete = [ ]
         for dev in mdmap:
             if mdmap[dev]["raid-devices"] != len(mdmap[dev]["devices"]):
-                log.warningLn("'%s': Number of devices does not match.", dev)
+                log.warning("'%s': Number of devices does not match.", dev)
                 to_delete.append(dev)
                 continue
             devs = [ ]
             for d in mdmap[dev]["devices"]:
                 if d < 0 or d >= len(mdmap[dev]["devices"]):
-                    log.warningLn("'%s': Partition %d is out of range.", dev,
-                                  d)
+                    log.warning("'%s': Partition %d is out of range.", dev, d)
                     to_delete.append(dev)
                     break
                 if d in devs:
-                    log.warningLn("'%s': Partition %d is defined more than "
-                                  "once.", dev, d)
+                    log.warning("'%s': Partition %d is defined more than "
+                                "once.", dev, d)
                     to_delete.append(dev)
                     break
                 devs.append(d)
@@ -886,31 +885,31 @@ def main():
 #        c = sys.stdin.read(1)
 
         if len(installed) < 1:
-            log.errorLn("Could not find any installations.")
+            log.error("Could not find any installations.")
             return 1
 
         if len(installed) > 1:
-            log.info1Ln("Available installations:")
+            log.info1("Available installations:")
             for onpart in release:
-                log.info1Ln("  /dev/%s: %s", onpart,
-                            installed[onpart]["release"])
+                log.info1("  /dev/%s: %s", onpart,
+                          installed[onpart]["release"])
 
         if upgrade:
             if upgrade[:6] == "LABEL=":
                 if upgrade[6:] in labelmap:
                     upgrade = labelmap[upgrade[6:]]
                 else:
-                    log.errorLn("Could not find %s.", upgrade)
+                    log.error("Could not find %s.", upgrade)
             elif not upgrade in installed.keys():
-                log.errorLn("Could not find %s.", upgrade)
+                log.error("Could not find %s.", upgrade)
                 return 1
         elif len(installed) == 1:
             upgrade = installed.keys()[0]
         elif len(installed) > 1:
-            log.errorLn("More than one installation found, exiting.")
+            log.error("More than one installation found, exiting.")
             return 1
 
-        log.info1Ln("About to upgrade installation on '/dev/%s'", upgrade)
+        log.info1("About to upgrade installation on '/dev/%s'", upgrade)
         if not pyrpm.is_this_ok():
             return 0
 
@@ -925,15 +924,15 @@ def main():
                         if label in labelmap:
                             onpart = labelmap[label]
                         if not onpart:
-                            log.errorLn("Could not find partition for"
-                                        "label '%s'.", label)
+                            log.error("Could not find partition for"
+                                      "label '%s'.", label)
                             return 1
                     else:
                         onpart = splits[0]
                     if onpart[:7] == "/dev/md":
                         md = onpart[5:]
                         if md not in mdmap:
-                            log.errorLn("Could not find '%s' in mdmap.", md)
+                            log.error("Could not find '%s' in mdmap.", md)
                             return 1
                         minor = getId(md)
                         for id in mdmap[md]["devices"]:
@@ -981,18 +980,18 @@ def main():
                 disk = getName(onpart)
                 i = getId(onpart)
             except:
-                log.errorLn("'%s' is not a valid partition name.", onpart)
+                log.error("'%s' is not a valid partition name.", onpart)
                 return 1
             if onpart in partitionmap:
-                log.errorLn("'%s' is used more than once.", part["onpart"])
+                log.error("'%s' is used more than once.", part["onpart"])
                 return 1
             partitionmap[onpart] = { }
             partitionmap[onpart]["name"] = name
             partitionmap[onpart]["disk"] = disk
             partitionmap[onpart]["id"] = i
             if partitionmap[onpart]["id"] < 1:
-                log.errorLn("Partition id '%d' is not valid.",
-                            partitionmap[onpart]["id"])
+                log.error("Partition id '%d' is not valid.",
+                          partitionmap[onpart]["id"])
                 return 1
         else:
             if part.has_key("raid"):
@@ -1029,26 +1028,26 @@ def main():
                 else:
                     disks = diskmap.keys()
                     if len(disks) < 1:
-                        log.errorLn("No disk found.")
+                        log.error("No disk found.")
                         return 1
                     if len(disks) > 1:
                         disks.sort()
-                        log.info1Ln("Using first entry in sorted disk list.")
+                        log.info1("Using first entry in sorted disk list.")
                     ondisk = disks[0]
             # TODO: allow to switch disks later if not user specified and
             # if there are multiple disks
 
             if not part.has_key("size"):
-                log.errorLn("No size given for partition '%s'.", name)
+                log.error("No size given for partition '%s'.", name)
                 return 1
             if not diskmap.has_key(ondisk):
-                log.errorLn("'%s' is not defined.", ondisk)
+                log.error("'%s' is not defined.", ondisk)
                 return 1
             if not diskmap[ondisk].has_disklabel():
-                log.errorLn("Disk '%s' is not initialized.", ondisk)
+                log.error("Disk '%s' is not initialized.", ondisk)
                 return 1
             if not diskmap[disk]["disklabel"] in usable_disklabels:
-                log.errorLn("Disk '%s' has no usable disklabel.", ondisk)
+                log.error("Disk '%s' has no usable disklabel.", ondisk)
                 return 1
             to_create.setdefault(ondisk, [ ]).append(name)
 
@@ -1067,7 +1066,7 @@ def main():
     # create primary and logical lists
     for disk in sorted_create_keys:
         if not (disk in diskmap or (volgroup and disk in volgroup)):
-            log.errorLn("'%s' is not a disk and no lvm volgroup.")
+            log.error("'%s' is not a disk and no lvm volgroup.", disk)
             return 1
 
         # check to have only one grow partition per disk
@@ -1087,7 +1086,7 @@ def main():
                     # size is given
                     part_size[name] = long(autopart[name]["size"])
             if not part_size.has_key(name):
-                log.errorLn("Partition '%s' has no size.", name)
+                log.error("Partition '%s' has no size.", name)
                 return 1
 
             if disk in diskmap:
@@ -1122,7 +1121,7 @@ def main():
             # TODO: allow disks with partitions
             if len(diskmap[disk]["primary"]) + \
                    len(diskmap[disk]["extended"]) > 0:
-                log.errorLn("Disk '%s' has already partitions.", disk)
+                log.error("Disk '%s' has already partitions.", disk)
                 return 1
         else:
             # lvm volgroup (sizes in physical extents)
@@ -1134,7 +1133,7 @@ def main():
             freespace = [ { "unit-length": size } ]
 
         if len(freespace) == 0 or size_needed > freespace[0]["unit-length"]:
-            log.errorLn("Not enough free blocks on '%s'.", disk)
+            log.error("Not enough free blocks on '%s'.", disk)
             return 1
 
         for name in to_create[disk]:
@@ -1152,8 +1151,8 @@ def main():
         if not disk in diskmap:
             for name in to_create[disk]:
                 part = partitions[name]
-                log.info1Ln("Creating new partition '%s' on volgroup '%s'.",
-                            name, disk)
+                log.info1("Creating new partition '%s' on volgroup '%s'.",
+                          name, disk)
                 onpart = part["name"]
                 # size in byte
                 partitionmap[onpart]["size"] = part_size[name] * \
@@ -1216,28 +1215,28 @@ def main():
                             match = free
                             break
                     if not match:
-                        log.errorLn("Extended partition does not fit " + \
-                                    "onto %s.", disk)
+                        log.error("Extended partition does not fit onto %s.",
+                                  disk)
                         return 1
 
                     start = long(match["start"])
                     end = start + (size_logical) * diskmap[disk]["units"] - 1
 
                     if end > match["end"]:
-                        log.errorLn("Size calculation wrong for the "
-                                    "extended partition: Size is %d "
-                                    "and should be %d.",
-                                    end-start+1, match["end"]-start+1)
+                        log.error("Size calculation wrong for the "
+                                  "extended partition: Size is %d "
+                                  "and should be %d.",
+                                  end-start+1, match["end"]-start+1)
                         return 1
 
-                    log.info1Ln("Creating extended partition on disk %s", disk)
+                    log.info1("Creating extended partition on disk %s", disk)
                     try:
                         diskmap[disk].add_partition(0, start, end,
                                                     Partition.PARTITION_EXTENDED,
                                                     None)
                     except Exception, msg:
-                        log.errorLn("Failed to create extended partition: %s",
-                                    msg)
+                        log.error("Failed to create extended partition: %s",
+                                  msg)
                         return 1
 
                 freespace = diskmap[disk]["freespace_logical"]
@@ -1253,7 +1252,7 @@ def main():
                     match = free
                     break
             if not match:
-                log.errorLn("Partition %s does not fit onto %s.", name, disk)
+                log.error("Partition %s does not fit onto %s.", name, disk)
                 return 1
 
             if match["type"] & Partition.PARTITION_LOGICAL:
@@ -1275,21 +1274,21 @@ def main():
             end = start + part_size[name] * diskmap[disk]["units"] - 1
 
             if end > match["end"]:
-                log.errorLn("Partition %s does not fit onto %s.", name, disk)
+                log.error("Partition %s does not fit onto %s.", name, disk)
                 return 1
 
             if part.has_key("volgroup"):
-                log.info1Ln("Creating new partition '%s' on disk '%s' "
-                            "as lvm volume group '%s'.", name, disk,
-                            part["volgroup"])
+                log.info1("Creating new partition '%s' on disk '%s' "
+                          "as lvm volume group '%s'.", name, disk,
+                          part["volgroup"])
             else:
-                log.info1Ln("Creating new partition '%s' on disk '%s'.",
-                            name, disk)
+                log.info1("Creating new partition '%s' on disk '%s'.",
+                          name, disk)
             num = diskmap[disk].add_partition(0, start, end, type, fstype)
 #            try:
 #                num = diskmap[disk].add_partition(0, start, end, type, fstype)
 #            except Exception, msg:
-#                log.errorLn("Failed to create partition '%s': %s", name, msg)
+#                log.error("Failed to create partition '%s': %s", name, msg)
 #                return 1
 
             onpart = "%s%d" % (disk, num)
@@ -1321,9 +1320,8 @@ def main():
         if diskmap[disk]["disklabel"] == "msdos":
             zero_device(diskmap[disk]["device"], 446)
         else:
-            log.errorLn("Do not know how to clear mbr on '%s' "
-                        "with disklabel '%s'.", disk,
-                        diskmap[disk]["disklabel"])
+            log.error("Do not know how to clear mbr on '%s' with disklabel "
+                      "'%s'.", disk, diskmap[disk]["disklabel"])
             return 1
 
     # commit changes
@@ -1332,13 +1330,15 @@ def main():
             diskmap[disk].commit()
         except Exception, msg:
             if not diskmap[disk].has_key("image"):
-                log.errorLn(msg)
+                log.error(msg)
                 return 1
         diskmap[disk].reload()
+        # wait one second before going on
+        time.sleep(1)
 
     # sanity check
     if len(partitionmap) == 0:
-        log.errorLn("Partitionmap is empty.")
+        log.error("Partitionmap is empty.")
         return 1
 
     # check partitionmap with diskmap
@@ -1352,13 +1352,13 @@ def main():
         name = partitionmap[onpart]["name"]
         disk = partitionmap[onpart]["disk"]
         if not diskmap.has_key(disk):
-            log.errorLn("Disk '%s' is not defined.", disk)
+            log.error("Disk '%s' is not defined.", disk)
             err = 1
         if err:
             continue
         id = partitionmap[onpart]["id"]
         if not id in diskmap[disk]["partition"]:
-            log.errorLn("Partition '%s' does not exist.", onpart)
+            log.error("Partition '%s' does not exist.", onpart)
             err = 1
         if err:
             continue
@@ -1412,7 +1412,7 @@ def main():
             pv = LVM_PHYSICAL_VOLUME.info(partitionmap[onpart]["device"],
                                           chroot=stage2_chroot)
             if not pv:
-                log.errorLn("'%s' is no pysical volume.", onpart)
+                log.error("'%s' is no pysical volume.", onpart)
                 return 1
         else:
             pv = LVM_PHYSICAL_VOLUME(partitionmap[onpart]["device"],
@@ -1428,7 +1428,7 @@ def main():
             for p in volgroup[group]["partitions"]:
                 onpart = partitions[p]["onpart"]
                 if not partitions[p].has_key("volgroup"):
-                    log.errorLn("Partition '%s' is no volume group.", onpart)
+                    log.error("Partition '%s' is no volume group.", onpart)
                     return 1
                 devs.append(partitionmap[onpart]["device"])
 
@@ -1439,9 +1439,9 @@ def main():
             create_dir(stage2_chroot, "/dev/%s" % group)
 
             if vgmap[group].extent != volgroup[group]["pebytes"]:
-                log.errorLn("Logical volume '%s': Physical entent size '%s'"
-                            " does not match '%s'.", group,
-                            vgmap[group].extent, volgroup[group]["pesize"])
+                log.error("Logical volume '%s': Physical entent size '%s'"
+                          " does not match '%s'.", group,
+                          vgmap[group].extent, volgroup[group]["pesize"])
                 return 1
 
 #            # create lvm volume devices
@@ -1468,8 +1468,8 @@ def main():
         try:
             check_exists(stage2_chroot, partitionmap[onpart]["device"])
         except:
-            log.errorLn("Device '%s' has not been created.",
-                        partitionmap[onpart]["device"])
+            log.error("Device '%s' has not been created.",
+                      partitionmap[onpart]["device"])
             return 1
 
     # partition matches filesystem?
@@ -1490,11 +1490,11 @@ def main():
         # check partition types
         if diskmap[disk]["disklabel"] == "msdos":
             if not p["native_type"]:
-                log.errorLn("Partition '%s' has no type.", onpart)
+                log.error("Partition '%s' has no type.", onpart)
                 err = 1
             elif p["native_type"] < 1:
-                log.errorLn("Partition '%s' has illegal type %d.",
-                            onpart, p["native_type"])
+                log.error("Partition '%s' has illegal type %d.",
+                          onpart, p["native_type"])
                 err = 1
             elif p["fstype"] == None:
                 # no filesystem type, nothing to do
@@ -1511,20 +1511,20 @@ def main():
                 elif p["native_type"] == 0x8e: # lvm
                     continue
                 else:
-                    log.errorLn("Filesystem '%s' with code 0x%x on"
-                                " '%s' is not supported", p["fstype"],
-                                p["native_type"], onpart)
+                    log.error("Filesystem '%s' with code 0x%x on"
+                              " '%s' is not supported", p["fstype"],
+                              p["native_type"], onpart)
                     err = 1
                     continue
-                log.errorLn("Partition '%s' does not match filesystem '%s'"
-                            " for '%s'", onpart, part["fstype"], name)
+                log.error("Partition '%s' does not match filesystem '%s'"
+                          " for '%s'", onpart, part["fstype"], name)
                 err = 1
         elif diskmap[disk]["disklabel"] == "gpt":
             # TODO: partition checks for gpt
             continue
         else:
-            log.errorLn("Unsupported disklabel '%s'.",
-                        diskmap[disk]["disklabel"])
+            log.error("Unsupported disklabel '%s'.",
+                      diskmap[disk]["disklabel"])
             return 1
 
     if err:
@@ -1553,13 +1553,13 @@ def main():
     for onpart in partitionmap:
         name = partitionmap[onpart]["name"]
         if partitionmap[onpart].has_key("raid"):
-            log.info1Ln("Disabling mount by label for raid partition '%s'.",
-                        onpart)
+            log.info1("Disabling mount by label for raid partition '%s'.",
+                      onpart)
             partitionmap[onpart]["label"] = None
             continue
         if partitionmap[onpart].has_key("lvm"):
-            log.info1Ln("Disabling mount by label for logical volume '%s'.",
-                        onpart)
+            log.info1("Disabling mount by label for logical volume '%s'.",
+                      onpart)
             partitionmap[onpart]["label"] = None
             continue
         label = label_prefix
@@ -1580,13 +1580,13 @@ def main():
         elif name[:3] == "pv.":
             pass
         else:
-            log.errorLn("Could not determine filesystem type of '%s'", onpart)
+            log.error("Could not determine filesystem type of '%s'", onpart)
             err = 1
         if part.has_key("label"):
             label = part["label"]
         if len(label) > 16:
-            log.warningLn("Label '%s' for '%s' is too long, tuncating to 16 "
-                          "chars.", label, onpart)
+            log.warning("Label '%s' for '%s' is too long, tuncating to 16 "
+                        "chars.", label, onpart)
             label = label[:16]
 
         # add or increase label id as long as label in labels
@@ -1599,7 +1599,7 @@ def main():
                 try:
                     l_name = getName(label)
                 except:
-                    log.errorLn("'%s' is no valid label name.", label)
+                    log.error("'%s' is no valid label name.", label)
                     return 1
                 label = "%s%d" % (l_name, (id+1))
 
@@ -1610,17 +1610,17 @@ def main():
     err = 0
     for disk in diskmap:
         if not os.path.exists(diskmap[disk]["device"]):
-            log.errorLn("Disk %s: %s is no valid device.", disk,
-                        diskmap[disk]["device"])
+            log.error("Disk %s: %s is no valid device.", disk,
+                      diskmap[disk]["device"])
             err = 1
     for onpart in partitionmap:
         if partitionmap[onpart].has_key("raid"):
             continue
         if partitionmap[onpart].has_key("volgroup"):
             continue
-        if not os.path.exists(partitionmap[onpart]["device"]):
-            log.errorLn("Partition %s: %s is no valid device.", onpart,
-                        partitionmap[onpart]["device"])
+        if not os.path.exists(partitionmap[onpart]["device"]):                
+            log.error("Partition %s: %s is no valid device.", onpart,
+                      partitionmap[onpart]["device"])
             err = 1
     if err:
         return 1
@@ -1664,7 +1664,7 @@ def main():
     mounted = 0
     for onpart in to_format:
         if partitionmap[onpart]["device"] in mounted_devs:
-            log.errorLn("'%s' is currently mounted.", onpart)
+            log.error("'%s' is currently mounted.", onpart)
             mounted += 1
     if mounted > 0:
         return 1
@@ -1680,12 +1680,12 @@ def main():
         location = "stage2 image"
     if has_raid:
         if not os.path.exists(dir+prefix+"/sbin/mdadm"):
-            log.errorLn("Could not find %s/sbin/mdadm in %s.", prefix,
-                        location)
+            log.error("Could not find %s/sbin/mdadm in %s.", prefix,
+                      location)
             return 1
     if volgroup:
         if not os.path.exists(dir+"/usr/sbin/lvm"):
-            log.errorLn("Could not find /usr/sbin/lvm in %s.", location)
+            log.error("Could not find /usr/sbin/lvm in %s.", location)
             return 1
     # TODO: check needed_fstypes early (before paritioning and format)
     for fstype in needed_fstypes:
@@ -1693,40 +1693,40 @@ def main():
             try:
                 check_exists(dir, "%s/sbin/mkswap" % prefix)
             except:
-                log.errorLn("Could not find %s/sbin/mkswap in %s.", prefix,
-                            location)
+                log.error("Could not find %s/sbin/mkswap in %s.", prefix,
+                          location)
                 return
         else:
             try:
                 check_exists(dir, "%s/sbin/mkfs.%s" % (prefix, fstype))
             except:
-                log.errorLn("Could not find %s/sbin/mkfs.%s in %s.", prefix,
-                            fstype, location)
+                log.error("Could not find %s/sbin/mkfs.%s in %s.", prefix,
+                          fstype, location)
                 return
     if "ext3" in needed_fstypes and source.getRelease() != "RHEL-2.1":
         try:
             check_exists(dir, "%s/sbin/tune2fs" % prefix)
         except:
-            log.errorLn("Could not find %s/sbin/tune2fs in %s.", prefix,
-                        location)
+            log.error("Could not find %s/sbin/tune2fs in %s.", prefix,
+                      location)
     del prefix
     del dir
     del location
 
     # print confirm message
     if confirm == 1 and len(to_format) > 0:
-        log.info1Ln("About to format these partitions:")
+        log.info1("About to format these partitions:")
         for onpart in to_format:
             name = partitionmap[onpart]["name"]
             if name[:4] == "swap":
                 name = "swap"
             if partitionmap[onpart].has_key("raid"):
-                log.info1Ln("  '%s': raid '%s' [ %s ]", name, onpart,
-                            ", ".join(partitions[name]["partitions"]))
+                log.info1("  '%s': raid '%s' [ %s ]", name, onpart,
+                          ", ".join(partitions[name]["partitions"]))
             elif partitionmap[onpart].has_key("volgroup"):
-                log.info1Ln("  '%s': lvm logical volume '%s' on '%s'",
-                            name, partitionmap[onpart]["lvname"],
-                            partitionmap[onpart]["volgroup"])
+                log.info1("  '%s': lvm logical volume '%s' on '%s'",
+                          name, partitionmap[onpart]["lvname"],
+                          partitionmap[onpart]["volgroup"])
             else:
                 if diskmap[partitionmap[onpart]["disk"]].has_key("image"):
                     disk = "%s:%s" % \
@@ -1734,7 +1734,7 @@ def main():
                             diskmap[partitionmap[onpart]["disk"]]["image"])
                 else:
                     disk = partitionmap[onpart]["disk"]
-                log.info1Ln("  '%s': '%s' on '%s'", name, onpart, disk)
+                log.info1("  '%s': '%s' on '%s'", name, onpart, disk)
         if not pyrpm.is_this_ok():
             return 0
 
@@ -1774,8 +1774,8 @@ def main():
                     if not partitions[name].has_key("useexisting") and \
                            not partitions[name].has_key("noformat"):
                         # zero raid header (superblock)
-                        log.info2Ln("Clearing raid header of partition '%s'.",
-                                    part)
+                        log.info2("Clearing raid header of partition '%s'.",
+                                  part)
                         # get chunk blocks / 1024
                         # leaves space at the end of the drive for the RAID
                         # superblock
@@ -1795,11 +1795,11 @@ def main():
                 # it is missing
                 if partitions[name].has_key("useexisting") or \
                        partitions[name].has_key("noformat"):
-                    log.info1Ln("Assembling raid '%s'.", onpart)
+                    log.info1("Assembling raid '%s'.", onpart)
                     if not raid.assemble():
                         return 1
                 else:
-                    log.info1Ln("Creating raid '%s'.", onpart)
+                    log.info1("Creating raid '%s'.", onpart)
                     spares = 0
                     if partitions[name].has_key("spares"):
                         spares = partitions[name]["spares"]
@@ -1839,9 +1839,11 @@ def main():
 
                 mkfs += " '%s'" % partitionmap[onpart]["device"]
 
-                log.info1Ln("Formatting '%s': '%s'", name, onpart)
+                log.info1("Formatting '%s': '%s'", name, onpart)
+                flog.info2(mkfs, nofmt=1)
+
                 if run_script(mkfs, stage2_chroot) != 0:
-                    log.errorLn("mkfs.%s failed.", part["fstype"])
+                    log.error("mkfs.%s failed.", part["fstype"])
                     return 1
 
                 if part["fstype"] == "ext3" and \
@@ -1850,11 +1852,11 @@ def main():
                     tune2fs = "/sbin/tune2fs -c 0 -i 0 -O dir_index '%s'" % \
                               partitionmap[onpart]["device"]
 
-                    log.info1Ln("Tuning filesystem '%s'", name)
-                    flog.log(log.INFO2, tune2fs)
+                    log.info1("Tuning filesystem '%s'", name)
+                    flog.info2(tune2fs, nofmt=1)
 
                     if run_script(tune2fs, stage2_chroot) != 0:
-                        log.errorLn("tune2fs failed.")
+                        log.error("tune2fs failed.")
                         return 1
 
             elif name[:4] == "swap" or \
@@ -1867,20 +1869,20 @@ def main():
                 mkswap = "/sbin/mkswap %s '%s' >/dev/null" % \
                          (l, partitionmap[onpart]["device"])
                 if label:
-                    log.info1Ln("Formatting '%s': '%s'", label, onpart)
+                    log.info1("Formatting '%s': '%s'", label, onpart)
                 else:
-                    log.info1Ln("Formatting '%s': '%s'", name[:4], onpart)
-                flog.log(log.INFO2, mkswap)
+                    log.info1("Formatting '%s': '%s'", name[:4], onpart)
+                flog.info2(mkswap, nofmt=1)
 
                 if run_script(mkswap, stage2_chroot) != 0:
-                    log.errorLn("mkswap failed.")
+                    log.error("mkswap failed.")
                     return 1
             elif name[:5] == "raid.":
                 pass
             elif name[:3] == "pv.":
                 pass
             else:
-                log.errorLn("Unknown filesystem for '%s' (%s)", onpart, name)
+                log.error("Unknown filesystem for '%s' (%s)", onpart, name)
                 return 1
 
         del to_format
@@ -1918,7 +1920,7 @@ def main():
                     try:
                         os.mkdir(dir)
                     except Exception, msg:
-                        log.errorLn("Could not create '%s': %s", dir, msg)
+                        log.error("Could not create '%s': %s", dir, msg)
                         return 1
 
             part = partitions[mntpnt]
@@ -1928,8 +1930,8 @@ def main():
             opts = "defaults"
             if part.has_key("fsoptions"):
                 opts = part["fsoptions"]
-            log.info1Ln("Mounting '%s'", mntpnt)
-            log.info2Ln("  '%s' on '%s'", d, dir)
+            log.info1("Mounting '%s'", mntpnt)
+            log.info2("  '%s' on '%s'", d, dir)
             mount(d, dir, fstype=part["fstype"], options=opts)
 
     target_chroot = target_dir
@@ -1960,7 +1962,7 @@ def main():
 
         # no packages?
         if len(pkgs) < 1:
-            log.info1Ln("Nothing to do.")
+            log.info1("Nothing to do.")
             return 0
 
     # else: upgrade
@@ -1990,34 +1992,34 @@ def main():
 
     # mount temporary filesystems for /proc, /tmp
     # /proc
-    log.info1Ln("Mounting temporary '/proc'.")
+    log.info1("Mounting temporary '/proc'.")
     try:
         mount("None", target_dir+"/proc", fstype="ramfs")
     except Exception, msg:
-        log.errorLn("Unable to mount temporary /proc: %s", msg)
+        log.error("Unable to mount temporary /proc: %s", msg)
         return 1
     create_dir(target_chroot, "/proc/.real_proc")
     try:
         mount("None", target_dir+"/proc/.real_proc", fstype="proc")
     except Exception, msg:
-        log.errorLn("Unable to mount temporary /proc/.real_proc: %s", msg)
+        log.error("Unable to mount temporary /proc/.real_proc: %s", msg)
         return 1
     if (source.isRHEL() and source.cmpVersion("4") >= 0) or \
            (source.isFedora() and source.cmpVersion("2") >= 0):
         # /sys
-        log.info1Ln("Mounting temporary '/sys'.")
+        log.info1("Mounting temporary '/sys'.")
         try:
             mount("None", target_dir+"/sys", fstype="ramfs")
         except Exception, msg:
-            log.errorLn("Unable to mount temporary /sys: %s", msg)
+            log.error("Unable to mount temporary /sys: %s", msg)
             return 1
 
 #    # /tmp
-#    log.info1Ln("Mounting temporary '/tmp'.")
+#    log.info1("Mounting temporary '/tmp'.")
 #    try:
 #        mount("None", target_dir+"/tmp", fstype="ramfs")
 #    except Exception, msg:
-#        log.errorLn("Unable to mount temporary /tmp: %s", msg)
+#        log.error("Unable to mount temporary /tmp: %s", msg)
 #        return 1
 
     # create essential devices
@@ -2093,7 +2095,7 @@ def main():
     # /proc/mdstat
     if ks.has_key("install") and raidmap and \
            not os.path.exists(target_chroot+"/proc/mdstat"):
-        log.info1Ln("Writing '/proc/mdstat'.")
+        log.info1("Writing '/proc/mdstat'.")
         content = [ ]
         for raid in raidmap:
             content.append("%s : active raid%d \n" % \
@@ -2104,7 +2106,7 @@ def main():
     if ks.has_key("install") and volgroup:
         create_dir(target_chroot, "/proc/lvm")
         if not os.path.exists(target_chroot+"/proc/lvm/global"):
-            log.info1Ln("Writing '/proc/lvm/global'.")
+            log.info1("Writing '/proc/lvm/global'.")
             content = [ ]
             for group in volgroup:
                 content.append("VG:  %s\n" % group)
@@ -2169,7 +2171,7 @@ def main():
         elif name[:4] == "swap":
             continue
         else:
-            log.warningLn("Unknown filesystem for '%s'.", onpart)
+            log.warning("Unknown filesystem for '%s'.", onpart)
             continue
     if (source.isRHEL() and source.cmpVersion("4") < 0) or \
            (source.isFedora() and source.cmpVersion("3") < 0):
@@ -2204,13 +2206,13 @@ def main():
 
     if ks.has_key("install") and \
            not os.path.exists(target_chroot+"/etc/fstab"):
-        log.info1Ln("Writing '/etc/fstab'.")
+        log.info1("Writing '/etc/fstab'.")
         create_file(target_chroot, "/etc/fstab", fstab_content)
 
-    log.info1Ln("Writing temporary '/etc/mtab'.")
+    log.info1("Writing temporary '/etc/mtab'.")
     create_file(target_chroot, "/etc/mtab", mtab_content)
 
-    log.info1Ln("Writing temporary '/proc/mounts'.")
+    log.info1("Writing temporary '/proc/mounts'.")
     create_file(target_chroot, "/proc/mounts", mtab_content)
 
     partitions_content = [ "major minor  #blocks  name\n", "\n" ]
@@ -2228,13 +2230,13 @@ def main():
                                        os.minor(stats.st_rdev),
                                        partition[part]["length"],
                                        "%s%d" % (disk, part)))
-    log.info1Ln("Writing temporary '/proc/partitions'.")
+    log.info1("Writing temporary '/proc/partitions'.")
     create_file(target_chroot, "/proc/partitions", partitions_content)
 
     # /etc/mdadm.conf
     if ks.has_key("install") and has_raid and \
            not os.path.exists(target_chroot+"/etc/mdadm.conf"):
-        log.info1Ln("Writing '/etc/mdadm.conf'.")
+        log.info1("Writing '/etc/mdadm.conf'.")
         content = [ "# mdadm.conf written by pyrpmkickstart\n",
                     "DEVICE partitions\n",
                     "MAILADDR root\n" ]
@@ -2256,7 +2258,7 @@ def main():
     # /etc/hosts
     if ks.has_key("install") and \
            not os.path.exists(target_chroot+"/etc/hosts"):
-        log.info1Ln("Writing '/etc/hosts'.")
+        log.info1("Writing '/etc/hosts'.")
 
         hostname = ""
         hosts = ""
@@ -2304,7 +2306,7 @@ def main():
             conf = "/etc/modules.conf"
         else:
             conf = "/etc/modprobe.conf"
-        log.info1Ln("Writing '%s'." % conf)
+        log.info1("Writing '%s'.", conf)
 
         content = [ ]
         adapter = 0
@@ -2352,8 +2354,8 @@ def main():
                 lines = fd.readlines()
                 fd.close()
                 if lines:
-                    log.info1Ln("Detected '%s' installation.",
-                                string.strip(string.join(lines)))
+                    log.info1("Detected '%s' installation.",
+                              string.strip(string.join(lines)))
 
 #    choice = raw_input("Continue with installation? [y/N]: ")
 #    if len(choice) == 0 or choice[0] != "y" and choice[0] != "Y":
@@ -2364,9 +2366,9 @@ def main():
     ##########################################################################
 
     if ks.has_key("install"):
-        log.info1Ln("Preparing installation...")
+        log.info1("Preparing installation...")
     else:
-        log.info1Ln("Preparing upgrade...")
+        log.info1("Preparing upgrade...")
 
     # configure yum
     os.mkdir("%s/yum.cache" % tempdir)
@@ -2375,7 +2377,7 @@ def main():
     try:
         fd = open(yum_conf, "w")
     except Exception, msg:
-        log.errorLn("Configuration of yum failed: %s", msg)
+        log.error("Configuration of yum failed: %s", msg)
         return 1
     fd.write("[main]\n")
     fd.write("cachedir=%s/yum.cache\n" % tempdir)
@@ -2407,7 +2409,7 @@ def main():
 #
 #    lockfile = lockPyrpm()
 #    if lockfile == None:
-#        log.errorLn("couldn't lock pyrpmyum")
+#        log.error("couldn't lock pyrpmyum")
 #        return 0
 #    if not yum.setCommand(args[0]):
 #        return 0
@@ -2460,16 +2462,16 @@ def main():
         p = popen2.Popen4(yum)
         ch = p.fromchild.read(1)
         while ch:
-            log.log(log.INFO1, ch)
+            log.info1(ch, nl=0, nofmt=1)
             ch = p.fromchild.read(1)
         status = p.poll()
         if status != 0:
             raise RuntimeError, "failed"
     except:
         if ks.has_key("install"):
-            log.errorLn("\nInstallation failed, aborting.")
+            log.error("\nInstallation failed, aborting.")
         else:
-            log.errorLn("\nUpgrade failed, aborting.")
+            log.error("\nUpgrade failed, aborting.")
         return 1
 
     ##########################################################################
@@ -2479,12 +2481,12 @@ def main():
     # check system dirs
     if not check_dir(target_chroot, "/etc") or \
            not check_dir(target_chroot, "/etc/sysconfig"):
-        log.info1Ln("'/etc' and '/etc/sysconfig' is missing, aborting.")
+        log.info1("'/etc' and '/etc/sysconfig' is missing, aborting.")
         return 1
 
     # run authconfig if set
     if ks.has_key("install") and ks.has_key("authconfig"):
-        log.info1Ln("Configuring authentication")
+        log.info1("Configuring authentication")
 
         # Create /etc/samba for authconfig
         if not os.path.exists(target_chroot+"/etc/samba"):
@@ -2493,7 +2495,7 @@ def main():
         try:
             check_exists(target_chroot, "/usr/sbin/authconfig")
         except:
-            log.errorLn("/usr/sbin/authconfig does not exist, skipping.")
+            log.error("/usr/sbin/authconfig does not exist, skipping.")
         else:
             authconfig = "/usr/sbin/authconfig --kickstart --nostart"
             for tag in ks["authconfig"]:
@@ -2502,16 +2504,16 @@ def main():
                 else:
                     authconfig += " --%s" % tag
             if run_script(authconfig, target_chroot) != 0:
-                log.errorLn("authconfig failed.")
+                log.error("authconfig failed.")
 
     # setting root password
     if ks.has_key("install") and ks.has_key("rootpw"):
-        log.info1Ln("Setting root password")
+        log.info1("Setting root password")
 
         try:
             check_exists(target_chroot, "/usr/sbin/usermod")
         except:
-            log.errorLn("/usr/sbin/usermod does not exist, skipping.")
+            log.error("/usr/sbin/usermod does not exist, skipping.")
         else:
             password = ks["rootpw"].keys()[0]
             if not ks["rootpw"][password].has_key("iscrypted"):
@@ -2525,18 +2527,18 @@ def main():
                 password = crypt.crypt(password, salt)
             if run_script("/usr/sbin/usermod -p '%s' root" % password,
                           target_chroot) != 0:
-                log.errorLn("Setting root password failed.")
+                log.error("Setting root password failed.")
 
     # /etc/inittab
     if ks.has_key("install") and \
            ks.has_key("xconfig") and ks["xconfig"].has_key("startxonboot"):
-        log.info1Ln("Configuring runlevel")
+        log.info1("Configuring runlevel")
 
         try:
             fd_in = open(target_chroot+"/etc/inittab", "r")
             fd_out = open(target_chroot+"/etc/inittab.pyrpmkickstart", "w")
         except Exception, msg:
-            log.errorLn("Configuration of '/etc/inittab' failed: %s", msg)
+            log.error("Configuration of '/etc/inittab' failed: %s", msg)
         else:
             while 1:
                 line = fd_in.readline()
@@ -2548,7 +2550,7 @@ def main():
                         id[1] = "5"
                         line = string.join(id, ":")
                     else:
-                        log.errorLn("Malformed '/etc/inittab'")
+                        log.error("Malformed '/etc/inittab'")
                 fd_out.write(line)
             fd_in.close()
             fd_out.close()
@@ -2560,21 +2562,21 @@ def main():
     if ks.has_key("install") and ks.has_key("selinux") and \
            ((source.isRHEL() and source.cmpVersion("3") > 0) or \
             (source.isFedora() and source.cmpVersion("2") > 0)):
-        log.info1Ln("Configuring selinux")
+        log.info1("Configuring selinux")
 
         try:
             check_exists(target_chroot, "/usr/sbin/lokkit")
         except:
-            log.errorLn("/usr/sbin/lokkit does not exist, skipping.")
+            log.error("/usr/sbin/lokkit does not exist, skipping.")
         else:
             lokkit = "/usr/sbin/lokkit --quiet --nostart --selinux='%s'" % \
                      ks["selinux"].keys()[0]
             if run_script(lokkit, target_chroot) != 0:
-                log.errorLn("Configuring selinux failed.")
+                log.error("Configuring selinux failed.")
 
     # /etc/sysconfig/clock
     if ks.has_key("install") and ks.has_key("timezone"):
-        log.info1Ln("Configuring timezone")
+        log.info1("Configuring timezone")
         zone = ks["timezone"].keys()[0]
         if ks["timezone"][zone].has_key("utc"):
             _utc = 'UTC=true\n'
@@ -2587,7 +2589,7 @@ def main():
         try:
             check_exists(target_chroot, tzfile)
         except:
-            log.errorLn("%s does not exist, skipping.", tzfile)
+            log.error("%s does not exist, skipping.", tzfile)
         else:
             # Create /etc/localtime
             # do not hardlink /etc/localtime, has to be copy for
@@ -2601,14 +2603,14 @@ def main():
             try:
                 buildroot_copy(target_chroot, tzfile, "/etc/localtime")
             except:
-                log.errorLn("Could not create /etc/localtime.")
+                log.error("Could not create /etc/localtime.")
 
     if ks.has_key("install"):
         # /etc/sysconfig/desktop
         desktop = "GNOME"
         if ks.has_key("xconfig") and ks["xconfig"].has_key("defaultdesktop"):
             desktop = ks["xconfig"]["defaultdesktop"]
-        log.info1Ln("Setting default desktop to '%s'.", desktop)
+        log.info1("Setting default desktop to '%s'.", desktop)
         create_file(target_chroot, "/etc/sysconfig/desktop",
                     [ 'DESKTOP="%s"\n' % desktop ])
 
@@ -2617,7 +2619,7 @@ def main():
         # langsupport is deprecated for RHEL>=5 and FC>=6
         # /etc/sysconfig/i18n
         if ks.has_key("langsupport"):
-            log.info1Ln("Configuring languages")
+            log.info1("Configuring languages")
             content = [ ]
             if ks["langsupport"].has_key("default"):
                 content.append('LANG="%s"\n' % ks["langsupport"]["default"])
@@ -2635,7 +2637,7 @@ def main():
 
     # /etc/sysconfig/installinfo
     if ks.has_key("install"):
-        log.info1Ln("Configuring installinfo")
+        log.info1("Configuring installinfo")
         method = ""
         for key in [ "cdrom", "harddrive", "nfs", "url" ]:
             if ks.has_key(key):
@@ -2647,19 +2649,19 @@ def main():
     # /etc/sysconfig/iptables
     if ks.has_key("install") and \
            ks.has_key("firewall") and not ks["firewall"].has_key("disabled"):
-        log.info1Ln("Configuring firewall")
+        log.info1("Configuring firewall")
         firewall_config(ks, target_chroot, source)
 
     # /etc/sysconfig/keyboard
     if ks.has_key("keyboard"):
-        log.info1Ln("Configuring keyboard")
+        log.info1("Configuring keyboard")
         create_file(target_chroot, "/etc/sysconfig/keyboard",
                     [ 'KEYBOARDTYPE="pc"\n', 'KEYTABLE="%s"\n' % \
                       ks["keyboard"] ])
 
     # /etc/sysconfig/mouse
     if ks.has_key("install"):
-        log.info1Ln("Configuring generic IMPS/2 mouse")
+        log.info1("Configuring generic IMPS/2 mouse")
         try:
             check_exists(target_chroot, "/usr/sbin/mouseconfig")
         except:
@@ -2668,21 +2670,21 @@ def main():
         else:
             if run_script("/usr/sbin/mouseconfig --noui genericwheelps/2",
                           target_chroot) != 0:
-                log.errorLn("mouseconfig failed.")
+                log.error("mouseconfig failed.")
 
     # setup networking
     if ks.has_key("install"):
-        log.info1Ln("Configuring network")
+        log.info1("Configuring network")
         network_config(ks, target_chroot)
 
     # /etc/X11/xorg.conf
     if ks.has_key("install") and ks.has_key("xconfig"):
-        log.info1Ln("Configuring X")
+        log.info1("Configuring X")
         x_config(ks, target_chroot, source)
 
     # /etc/sysconfig/firstboot
     if ks.has_key("install") and ks.has_key("firstboot"):
-        log.info1Ln("Configuring firstboot")
+        log.info1("Configuring firstboot")
         if ks["firstboot"].has_key("reconfig"):
             create_file(target_chroot, "/etc/reconfigSys")
         if ks["firstboot"].has_key("disabled"):
@@ -2723,11 +2725,11 @@ def main():
             hdmap[hd] = "hd%d" % id
             id += 1
 
-        log.info1Ln("Searching for installed kernels")
+        log.info1("Searching for installed kernels")
         kernels = get_installed_kernels(target_chroot)
 
         if len(kernels) < 1:
-            log.errorLn("No kernels are installed.")
+            log.error("No kernels are installed.")
             return 1
 
         if not os.path.exists(target_chroot+"/boot/grub/grub.conf") or \
@@ -2735,7 +2737,7 @@ def main():
 #TODO:           ks["bootloader"].has_key("upgrade"):
 # do not update grub entries for old kernels
 # delete erased and add installed
-            log.info1Ln("Configuring grub")
+            log.info1("Configuring grub")
 
             location = "mbr"
             if ks["bootloader"].has_key("location"):
@@ -2814,13 +2816,12 @@ def main():
             t = "/usr/share/grub/%s-redhat/" % source.getArch()
             list = os.listdir(target_chroot+t)
             if len(list) == 0:
-                log.errorLn("grub stage files are missing in installation "
-                            "tree.")
+                log.error("grub stage files are missing in installation tree.")
                 return 1
             for f in [ "stage1", "stage2" ]:
                 if not f in list:
-                    log.errorLn("grub stage file '%s' is missing in "
-                                "installation tree.", f)
+                    log.error("grub stage file '%s' is missing in "
+                              "installation tree.", f)
                     return 1
             for entry in list:
                 buildroot_copy(target_chroot, t + entry, "/boot/grub/" + entry)
@@ -2881,7 +2882,7 @@ def main():
                         hd_name = getName(location)
                         id = getId(location)
                     except:
-                        log.errorLn("Failed to get id for '%s'.", location)
+                        log.error("Failed to get id for '%s'.", location)
                     hd = "%s,%d" % (hdmap[hd_name], (id-1))
                 content.append('root (%s)\n' % hd_boot)
                 content.append('setup (%s)\n' % hd)
@@ -2889,26 +2890,26 @@ def main():
             content.append('EOF\n')
             if not create_file(target_chroot, "/tmp/grub-setup", content,
                                mode=0600):
-                log.errorLn("grub setup failed.")
+                log.error("grub setup failed.")
             else:
                 try:
                     check_exists(target_chroot, "/sbin/grub")
                 except:
-                    log.errorLn("/sbin/grub does not exist, skipping.")
+                    log.error("/sbin/grub does not exist, skipping.")
                 else:
                     if run_script("/bin/sh /tmp/grub-setup",
                                   target_chroot) != 0:
-                        log.errorLn("grub setup failed.")
+                        log.error("grub setup failed.")
 
     # sanitize lvm - remove cache file
     if ks.has_key("install"):
         lvm_cache = "%s/etc/lvm/.cache" % target_chroot
         if os.path.exists(lvm_cache):
-            log.info1Ln("Sanitizing lvm: Removing cache file.")
+            log.info1("Sanitizing lvm: Removing cache file.")
             try:
                 os.unlink(lvm_cache)
             except:
-                log.errorLn("Unable to remove cache file.")
+                log.error("Unable to remove cache file.")
 
     # run post script
     if ks.has_key("install") and ks.has_key("post") and len(ks["post"]) > 0:
@@ -2916,9 +2917,9 @@ def main():
         for dict in ks["post"]:
             if dict.has_key("script") and len(dict["script"]) > 0:
                 if len(ks["post"]) > 1:
-                    log.info1Ln("Running post script #%d.", i)
+                    log.info1("Running post script #%d.", i)
                 else:
-                    log.info1Ln("Running post script.")
+                    log.info1("Running post script.")
                 chroot = None
                 if not dict.has_key("nochroot"):
                     chroot = target_chroot
@@ -2929,11 +2930,11 @@ def main():
             i += 1
 
     if xen:
-        log.info1Ln("Writing xen.conf")
+        log.info1("Writing xen.conf")
         try:
             fd = open("xen.conf", "w")
         except Exception, msg:
-            log.errorLn("Configuration of 'xen.conf' failed: %s", msg)
+            log.error("Configuration of 'xen.conf' failed: %s", msg)
         else:
             fd.write('kernel = "/boot/vmlinuz-VERSION"\n')
             fd.write('ramdisk = "/boot/initrd-VERSION.img"\n')
@@ -2977,7 +2978,7 @@ def main():
 ##################################### usage ###################################
 
 def usage():
-    log.info1Ln("""
+    log.info1("""
 Usage: pyrpmkickstart <options> <kickstartfile>
                       [[<disk name>:]<disk image>|<disk device>]*
 
@@ -3048,7 +3049,7 @@ repos = { }
 
 # abort if user is not root
 if os.geteuid() != 0:
-    log.errorLn("You have to be root to perform an installation.")
+    log.error("You have to be root to perform an installation.")
     sys.exit(1)
 
 pyrpm.rpmconfig.supported_signals.extend([signal.SIGSEGV, signal.SIGBUS,
@@ -3058,7 +3059,11 @@ signals = pyrpm.setSignals(exitHandler)
 try:
     status = main()
 except Exception:
-    log.logLn(log.ERROR, "\n\n"+traceback.format_exc())
+    log.error("\n---------------------------------------"
+              "---------------------------------------\n"
+              + traceback.format_exc() +
+              "---------------------------------------"
+              "---------------------------------------")
     status = 1
 
 ################################### cleanup ###################################
@@ -3081,7 +3086,7 @@ if wait:
     sys.stdout.flush()
     c = sys.stdin.read(1)
 
-log.info1Ln("Cleaning up, please wait...")
+log.info1("Cleaning up, please wait...")
 
 if source:
     source.close()
@@ -3094,8 +3099,8 @@ if devmap:
     # remove temporary devices
     for dev in devmap:
         if not os.path.exists(target_chroot+devmap[dev]):
-            log.warning1Ln("'%s' does not exist in '%s'.", devmap[dev],
-                           target_chroot)
+            log.warning1("'%s' does not exist in '%s'.", devmap[dev],
+                         target_chroot)
             continue
         os.unlink(target_chroot+devmap[dev])
     devmap = None

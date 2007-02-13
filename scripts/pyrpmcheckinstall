@@ -129,7 +129,7 @@ def main():
                     pkg.read(tags=rpmconfig.resolvertags)
                     pkg.close()
                 except (IOError, ValueError), e:
-                    log.error("%s: %s\n" % (pkg, e))
+                    log.error("%s: %s", pkg, e)
                     continue
                 pkglist.append(pkg)
 
@@ -149,7 +149,8 @@ def main():
                 fname = logfile[:]
                 if numcpu != 1:
                     fname += "."+str(j)
-                log.setLogging("*", FileLog(fname))
+                log.setInfoLogging("*", FileLog(fname))
+                log.setDebugLogging("*", FileLog(fname))
             testPkglist(yum, numcpu, j)
             return 1
     os.waitpid(-1, 0)

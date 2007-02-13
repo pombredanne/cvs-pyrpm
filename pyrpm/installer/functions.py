@@ -37,7 +37,7 @@ def get_system_disks():
             continue
         splits = line.split() # major, minor, blocks, name
         if len(splits) < 4:
-            log.errorLn("'/proc/partitions' malformed.")
+            log.error("'/proc/partitions' malformed.")
             return
         if int(splits[1]) % 16 == 0: # minor%16=0 for harddisk devices
             hd = splits[3]
@@ -61,7 +61,7 @@ def get_system_md_devices():
             continue
         splits = line.split() # device : data
         if len(splits) < 3 or splits[1] != ":":
-            log.errorLn("'/proc/mdstat' malformed.")
+            log.error("'/proc/mdstat' malformed.")
             return
         map[splits[0]] = "/dev/%s" % splits[0]
     fd.close()
@@ -73,7 +73,7 @@ def mounted_devices():
     try:
         fd = open("/proc/mounts", "r")
     except Exception, msg:
-        log.errorLn("Unable to open '/proc/mounts' for reading: %s", msg)
+        log.error("Unable to open '/proc/mounts' for reading: %s", msg)
         return
     while 1:
         line = fd.readline()
@@ -99,6 +99,10 @@ def load_release(chroot=""):
 def load_fstab(chroot=""):
     f = "%s/etc/fstab" % chroot
     if not (os.path.exists(f) and os.path.isfile(f)):
+# TODO: allow etc to be a partition
+#        f = "%s/fstab" % chroot
+#        if not (os.path.exists(f) and os.path.isfile(f)):
+#            return None
         return None
     try:
         fd = open(f, "r")
@@ -160,11 +164,11 @@ def load_mdadm_conf(chroot=""):
 def get_installation_info(device, fstype, dir):
     # try to mount partition and search for release, fstab and
     # mdadm.conf
-    log.info2Ln("Mounting '%s' on '%s'", device, dir)
+    log.info2("Mounting '%s' on '%s'", device, dir)
     try:
         mount(device, dir, fstype=fstype, options="ro")
     except Exception, msg:
-        log.info2Ln("Failed to mount '%s'.", device)
+        log.info2("Failed to mount '%s'.", device)
     else:
         dict = { }
         # anaconda does not support updates where /etc is
@@ -172,7 +176,7 @@ def get_installation_info(device, fstype, dir):
         _release = load_release(dir)
         _fstab = load_fstab(dir)
         _mdadm = load_mdadm_conf(dir)
-        log.info2Ln("Umounting '%s' ", dir)
+        log.info2("Umounting '%s' ", dir)
         umount(dir)
         dict["release"] = "-- unknown --"
         if _release:
@@ -202,7 +206,7 @@ def get_buildstamp_info(dir):
             release = "Red Hat Enterprise Linux"
             version = "2.1"
         else:
-            log.errorLn("Buildstamp information in '%s' is malformed.", dir)
+            log.error("Buildstamp information in '%s' is malformed.", dir)
             return None
 
     date = string.strip(lines[0])
@@ -230,7 +234,7 @@ def get_discinfo(discinfo):
     fd.close()
 
     if len(lines) < 4:
-        log.errorLn("Discinfo in '%s' is malformed.", discinfo)
+        log.error("Discinfo in '%s' is malformed.", discinfo)
         return None
 
     date = string.strip(lines[0])
@@ -239,7 +243,7 @@ def get_discinfo(discinfo):
         lines[1] = "Fedora Core 5"
     i = string.rfind(string.strip(lines[1]), " ")
     if i == -1:
-        log.errorLn("Discinfo in '%s' is malformed.", discinfo)
+        log.error("Discinfo in '%s' is malformed.", discinfo)
         return None
     release = string.strip(lines[1][:i])
     version = string.strip(lines[1][i:])
@@ -327,7 +331,7 @@ def fuser(what):
             os.kill(p, sig)
         i += 1
         if i == 20:
-            log.errorLn("Failed to kill processes:")
+            log.error("Failed to kill processes:")
             os.system("/usr/sbin/lsof +D '%s'" % what)
             break
         if i > 15:
@@ -342,7 +346,7 @@ def umount_all(dir):
     try:
         fd = open("/proc/mounts", "r")
     except Exception, msg:
-        log.errorLn("Unable to open '/proc/mounts' for reading: %s", msg)
+        log.error("Unable to open '/proc/mounts' for reading: %s", msg)
         return
     while 1:
         line = fd.readline()
@@ -364,7 +368,7 @@ def umount_all(dir):
     failed = 0
     while len(mounted) > 0:
         dir = mounted[i]
-        log.info2Ln("Umounting '%s' ", dir)
+        log.info2("Umounting '%s' ", dir)
         failed = 0
         if fstype[dir] not in [ "sysfs", "proc" ]:
             fuser(dir)
@@ -394,10 +398,10 @@ def check_dir(buildroot, dir):
     try:
         check_exists(buildroot, dir)
     except:
-        log.errorLn("Directory '%s' does not exist.", dir)
+        log.error("Directory '%s' does not exist.", dir)
         return 0
     if not os.path.isdir(d):
-        log.errorLn("'%s' is no directory.", dir)
+        log.error("'%s' is no directory.", dir)
         return 0
     return 1
 
@@ -451,14 +455,14 @@ def create_file(buildroot, target, content=None, force=0, mode=None):
     try:
         fd = open("%s/%s" % (buildroot, target), "w")
     except Exception, msg:
-        log.errorLn("Unable to open '%s' for writing: %s", target, msg)
+        log.error("Unable to open '%s' for writing: %s", target, msg)
         return 0
     if content:
         try:
             for line in content:
                 fd.write(line)
         except Exception, msg:
-            log.errorLn("Unable to write to '%s': %s", target, msg)
+            log.error("Unable to write to '%s': %s", target, msg)
             fd.close()
             return 0
     fd.close()
@@ -535,12 +539,12 @@ def copy_file(source, target):
     try:
         source_fd = open(source, "r")
     except Exception, msg:
-        log.errorLn("Failed to open '%s': %s", source, msg)
+        log.error("Failed to open '%s': %s", source, msg)
         return 1
     try:
         target_fd = open(target, "w")
     except Exception, msg:
-        log.errorLn("Failed to open '%s': %s", target, msg)
+        log.error("Failed to open '%s': %s", target, msg)
         source_fd.close()
         return 1
     data = source_fd.read(65536)
@@ -560,7 +564,7 @@ def chroot_device(device, chroot=None):
 
 def mount_cdrom(dir):
     what = "/dev/cdrom"
-    log.debug1Ln("Mounting '%s' on '%s'", what, dir)
+    log.debug1("Mounting '%s' on '%s'", what, dir)
     mount(what, dir, fstype="auto", options="ro")
     return "file://%s" % dir
 
@@ -574,7 +578,7 @@ def mount_nfs(url, dir):
         what = ":/".join(splits)
     del splits
     # mount nfs source
-    log.debug1Ln("Mounting '%s' on '%s'", what, dir)
+    log.debug1("Mounting '%s' on '%s'", what, dir)
     mount(what, dir, fstype="nfs",
           options="ro,rsize=32768,wsize=32768,hard,nolock")
     return "file://%s" % dir
@@ -614,11 +618,11 @@ def release_info(source):
 
 def run_script(command, chroot=''):
     if chroot != '':
-        flog.logLn(log.DEBUG1, "'%s' in '%s'" % (command, chroot))
+        flog.debug1("'%s' in '%s'", command, chroot, nofmt=1)
     else:
-        flog.logLn(log.DEBUG1, command)
+        flog.debug1(command, nofmt=1)
     (status, rusage, msg) = runScript(script=command, chroot=chroot)
-    flog.log(log.INFO1, msg)
+    flog.info1(msg, nofmt=1)
     return status
 
 def run_ks_script(dict, chroot):
@@ -627,13 +631,13 @@ def run_ks_script(dict, chroot):
         interpreter = dict["interpreter"]
     (status, rusage, msg) = runScript(interpreter, dict["script"],
                                       chroot=chroot)
-    flog.log(log.INFO1, msg)
+    flog.info1(msg, nofmt=1)
     if status != 0:
         if dict.has_key("erroronfail"):
-            log.errorLn("Script failed, aborting.")
+            log.error("Script failed, aborting.")
             return 0
         else:
-            log.warningLn("Script failed.")
+            log.warning("Script failed.")
 
     return 1
 
@@ -663,24 +667,24 @@ def mount(what, where, fstype="ext3", options=None, arguments=None):
 def umount(what):
     stat = os.system("/bin/umount '%s' 2>/dev/null" % what)
     if stat != 0:
-        log.errorLn("Umount of '%s' failed.", what)
+        log.error("Umount of '%s' failed.", what)
         return 1
 
     return 0
 
 def swapon(device):
     swapon = "/sbin/swapon '%s'" % device
-    log.info1Ln("Enable swap on '%s'.", device)
+    log.info1("Enable swap on '%s'.", device)
     if run_script(swapon) != 0:
-        log.errorLn("swapon failed.")
+        log.error("swapon failed.")
         return 1
     return 0
 
 def swapoff(device):
     swapoff = "/sbin/swapoff '%s'" % device
-    log.info1Ln("Disable swap on '%s'.", device)
+    log.info1("Disable swap on '%s'.", device)
     if run_script(swapoff) != 0:
-        log.errorLn("swapoff failed.")
+        log.error("swapoff failed.")
         return 1
     return 0
 
@@ -691,7 +695,7 @@ def detectFstype(device):
     try:
         fd = open(device, "r")
     except Exception, msg:
-        log.debug2Ln(msg)
+        log.debug2(msg)
         return None
 
     # read pagesize bytes (at least needed for swap)

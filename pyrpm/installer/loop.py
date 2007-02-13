@@ -276,7 +276,7 @@ def lolist():
                 continue
             except ValueError, msg:
                 used += 1
-                log.info1Ln(msg)
+                log.info1(msg)
                 continue
             used += 1
             line = "%s: [%04x]:%d (%s)" % (dev, l.lo_device, l.lo_inode,
@@ -287,8 +287,8 @@ def lolist():
                 line += ", sizelimit %d" % l.lo_sizelimit
             if l.lo_flags & 1:
                 line += ", readonly"
-            log.info1Ln(line)
-    log.info1Ln("%d/%d loop devices are in use.", used, used+free)
+            log.info1(line)
+    log.info1("%d/%d loop devices are in use.", used, used+free)
 
 def lofree(device):
     loop = LOOP(device)

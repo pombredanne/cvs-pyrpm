@@ -734,7 +734,7 @@ def _decodeArmor(data):
             raise ValueError, "Invalid armor header %s" % lines[0]
         if lines[0][:delim] not in ["Version", "Comment", "MessageID", "Hash",
                                     "Charset"]:
-            log.warningLn("Unknown armor header", lines[0])
+            log.warning("Unknown armor header", lines[0])
         lines.pop(0)
     if not lines:
         raise ValueError, "Missing end of armor headers"

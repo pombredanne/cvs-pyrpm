@@ -132,7 +132,7 @@ class RpmRelations:
 
         # Add dependencies:
         for pkg in db.getPkgs():
-            log.debug1Ln("Generating relations for %s", pkg.getNEVRA())
+            log.debug1("Generating relations for %s", pkg.getNEVRA())
             resolved = resolver.getResolvedPkgDependencies(pkg)
             # ignore unresolved, we are only looking at the changes,
             # therefore not all symbols are resolvable in these changes
@@ -150,12 +150,12 @@ class RpmRelations:
 
     def printRel(self):
         """Print relations."""
-        if not log.isLoggingHere(log.DEBUG4):
+        if not log.isDebugLoggingHere(log.DEBUG4):
             return
-        log.debug4Ln("\t==== relations (%d) "
-                     "==== #pre-relations #post-relations "
-                     "package pre-relation-packages, '*' marks prereq's",
-                     len(self))
+        log.debug4("\t==== relations (%d) "
+                   "==== #pre-relations #post-relations "
+                   "package pre-relation-packages, '*' marks prereq's",
+                   len(self))
         for pkg in self:
             rel = self[pkg]
             pre = ""
@@ -167,9 +167,9 @@ class RpmRelations:
                     if rel.pre[p]:
                         pre += "*" # prereq
                     pre += p.getNEVRA()
-            log.debug4Ln("\t%d %d %s%s",
-                         len(rel.pre), len(rel.post), pkg.getNEVRA(), pre)
-        log.debug4Ln("\t==== relations ====")
+            log.debug4("\t%d %d %s%s",
+                       len(rel.pre), len(rel.post), pkg.getNEVRA(), pre)
+        log.debug4("\t==== relations ====")
 
     # ----
 
@@ -203,7 +203,7 @@ class RpmRelations:
             txt = "Removing"
             if self[node].pre[next]:
                 txt = "Zapping"
-            log.debug4Ln("%s requires for %s from %s",
+            log.debug4("%s requires for %s from %s",
                        txt, next.getNEVRA(), node.getNEVRA())
         del self[node].pre[next]
         del self[next].post[node]
@@ -321,7 +321,7 @@ class RpmRelations:
             # remove leaf node
             leaf = leafs[max_post].pop()
             rels = self[leaf]
-            log.debug4Ln("%s", leaf.getNEVRA())
+            log.debug4("%s", leaf.getNEVRA())
             self.collect(leaf, order)
             # check post nodes if they got a leaf now
             new_max = max_post
@@ -353,13 +353,13 @@ class RpmRelations:
         connected_components = ConnectedComponentsDetector(self).detect(self)
 
         if connected_components:
-            if log.isLoggingHere(log.DEBUG1):
+            if log.isDebugLoggingHere(log.DEBUG1):
                 # debug output the components
-                log.debug1Ln("-- STRONGLY CONNECTED COMPONENTS --")
+                log.debug1("-- STRONGLY CONNECTED COMPONENTS --")
                 for i in xrange(len(connected_components)):
                     s = ", ".join([pkg.getNEVRA() for pkg in
                                    connected_components[i].pkgs])
-                    log.debug1Ln("  %d: %s", i, s)
+                    log.debug1("  %d: %s", i, s)
 
 #         weights = self.calculateWeights()
 #         weight_keys = weights.keys()
@@ -369,15 +369,16 @@ class RpmRelations:
 #         for key in weight_keys:
 #             if key == -1: continue
 #             for pkg in weights[key]:
-#                 log.debug2Ln("%s %s", key, pkg.getNEVRA())
+#                 log.debug2("%s %s", key, pkg.getNEVRA())
 #                 self.collect(pkg, order)
 
         self.processLeafNodes(order)
 
         if len(order) != length:
-            log.errorLn("%d Packages of %d in order list! Number of connected components: %d ",
-                len(order), length,
-                len(connected_components))
+            log.error("%d Packages of %d in order list! Number of connected "
+                      "components: %d ",
+                      len(order), length,
+                      len(connected_components))
 
         return order
 
@@ -483,7 +484,7 @@ class ConnectedComponent:
             for p, req in self.relations[pkg].pre.iteritems():
                 if req:
                     hard_requirements.append((pkg, p))
-        log.debug7Ln("\t%i pre reqs" % len(hard_requirements))
+        log.debug7("\t%i pre reqs", len(hard_requirements))
         # pick requirement to delete
         weights = { }
         # calculate minimal distance to a pre req
@@ -542,8 +543,8 @@ class ConnectedComponent:
                         weight = w
                         pkg1, pkg2 = p1, p2
         if self.relations[pkg1].pre[pkg2]:
-            log.errorLn("Breaking pre requirement for %s: %s",
-                        pkg1.getNEVRA(), pkg2.getNEVRA())
+            log.error("Breaking pre requirement for %s: %s",
+                      pkg1.getNEVRA(), pkg2.getNEVRA())
 
         # remove this requirement
         self.relations.removeRelation(pkg1, pkg2)
@@ -768,7 +769,7 @@ class RpmOrderer:
         OP_UPDATE or OP_ERASE per package.
         If an error occurs, return None."""
 
-        log.debug1Ln("Start ordering")
+        log.debug1("Start ordering")
 
         order = self.genOrder()
         if order == None:
