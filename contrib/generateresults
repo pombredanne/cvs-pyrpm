@@ -63,7 +63,7 @@ for lfile in logfiles:
         print >>fulllog, l[:-1]
         if l.startswith("Updating package "):
             if RES != None:
-                pkgname = envraSplit(pkgname)[0]
+                pkgname = envraSplit(pkgname)[1]
                 try:
                     owner = popen2.popen2("whoowns dist-fc7 "+pkgname)[0].read()
                     owner = owner[owner.rindex(" "):-1]
@@ -71,7 +71,7 @@ for lfile in logfiles:
                     owner = "unknown"
                 resnamehash[nevra] = (founderr, owner)
                 RES.close()
-            nevra = l[l.index(":")+2]
+            nevra = l[l.index(":")+2:]
             pkgname = nevra[nevra.index("/")+1:-1]
             nevra = nevra[:nevra.index("/")]
             RES = open(resultdir+"/"+nevra, "w")
