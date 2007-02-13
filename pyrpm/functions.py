@@ -433,8 +433,8 @@ def doLock(filename):
             os.write(fd, str(os.getpid()))
         finally:
             os.close(fd)
-    except OSError, msg:
-        if not msg.errno == errno.EEXIST:
+    except OSError, e:
+        if e.errno != errno.EEXIST:
             raise
         return 0
     return 1

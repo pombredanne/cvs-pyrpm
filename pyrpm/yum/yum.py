@@ -257,7 +257,7 @@ class RpmYum:
         ret = self.__handleBestPkg("install", pkglist)
         if not ret:
             log.info1("No Match for argument: %s",
-                      depstring(dname, dflags, dversion))
+                      depString((dname, dflags, dversion)))
         return ret
 
     def update(self, name, exact=False, do_obsolete=True):
@@ -392,7 +392,7 @@ class RpmYum:
         ret = self.__handleBestPkg("update", pkglist)
         if not ret:
             log.info1("No Match for argument: %s",
-                      depstring(dname, dflags, dversion))
+                      depString((dname, dflags, dversion)))
         return ret
 
     def remove(self, name):
@@ -413,7 +413,7 @@ class RpmYum:
         ret = self.__handleBestPkg("remove", pkglist)
         if not ret:
             log.info1("No Match for argument: %s",
-                      depstring(dname, dflags, dversion))
+                      depString((dname, dflags, dversion)))
         return ret
 
     def __readPackage(self, name):

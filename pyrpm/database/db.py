@@ -149,7 +149,7 @@ class RpmDatabase:
     def searchProvides(self, name, flag, version):
         raise NotImplementedError
 
-    def searchFilenames(self, name, flag, version):
+    def searchFilenames(self, filename):
         raise NotImplementedError
 
     def searchRequires(self, name, flag, version):

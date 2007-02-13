@@ -23,6 +23,8 @@ import package
 from resolver import *
 from orderer import *
 from logger import log
+from pyrpm.cache import NetworkCache
+from pyrpm import functions
 
 class RpmController:
     """RPM state manager, handling package installation and deinstallation."""

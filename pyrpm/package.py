@@ -18,7 +18,8 @@
 #
 
 
-import os.path, stat, sys, pwd, grp, md5, sha, bisect
+import os.path, stat, sys, pwd, grp, md5, sha
+# import bisect
 from io import getRpmIOFactory
 from base import *
 import elf

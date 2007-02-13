@@ -28,7 +28,6 @@ except ImportError:
     DSA, RSA = None, None
     Util_number = None
 
-import config
 from pyrpm.logger import log
 
 # FIXME: "VERIFY" notes

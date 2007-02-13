@@ -442,7 +442,6 @@ class RpmResolver:
         Note that having the same NEVRA is not enough, the package should
         be from self.names."""
 
-        name = pkg["name"]
         if pkg in self.erases:
             return True
         if pkg in self.installs:
