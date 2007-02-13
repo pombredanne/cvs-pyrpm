@@ -52,7 +52,7 @@ class Devices:
     def mapTo(self, device, mapto):
         if device in self.map:
             raise ValueError, "Device '%s' already in use." % device
-        if self.mapto in self.reverse_map:
+        if mapto in self.reverse_map:
             raise ValueError, "Mapto '%s' already in use." % mapto
         self.map[device] = mapto
         self.reverse_map[mapto] = device
