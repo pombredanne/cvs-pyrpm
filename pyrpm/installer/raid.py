@@ -48,7 +48,8 @@ class RAID:
     def assemble(self):
         command = "%s --assemble '%s'" % (RAID.prog, self.device) + \
                   " %s" % (" ".join(self.devices))
-        if run_script(command, self.chroot) != 0:
+        status = run_script(command, self.chroot)
+        if status != 0:
             log.error("mdadm failed on '%s' with error code %d", self.name,
                       status)
             return 1
