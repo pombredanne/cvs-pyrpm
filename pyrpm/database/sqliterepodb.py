@@ -20,6 +20,7 @@ import sys, os, re, bz2, shutil
 import libxml2
 
 from pyrpm import *
+import pyrpm.base
 import db, repodb
 from pyrpm.logger import log
 
@@ -36,6 +37,8 @@ try:
     USEYUM = yum.sqlitecache.dbversion == dbversion
 except ImportError:
     USEYUM = False
+USEYUM = False # disable yum metadata parser for now
+               # as it messes up pre requirements
 
 try:
     import sqlite3
@@ -588,11 +591,16 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 pkg['oldfilenames'] = files
                 pkg.generateFileNames()
 
+    def _getDBFlags(self, ob):
+        if ob.get('pre', 'false').lower() == 'true':
+            return self.flagmap[ob['flags']] | pyrpm.base.RPMSENSE_PREREQ
+        return self.flagmap[ob['flags']]
+
     def getDependencies(self, tag, pkgKey):
         cur = self._primarydb.cursor()
         cur.execute(
             'SELECT * FROM %s WHERE pkgKey="%s"' % (tag, pkgKey))
-        return [(ob['name'], self.flagmap[ob['flags']], functions.evrMerge(
+        return [(ob['name'], self._getDBFlags(ob), functions.evrMerge(
             ob['epoch'], ob['version'], ob['release']))
                 for ob in cur.fetchall()]
 
@@ -779,7 +787,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             if pkg is None:
                 continue
             name_ = res['name']
-            flag_ = self.flagmap[res['flags']]
+            flag_ = self._getDBFlags(res)
             version_ = functions.evrMerge(res['epoch'], res['version'],
                                           res['release'])
             if version == "":
