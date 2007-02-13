@@ -776,7 +776,7 @@ class KickstartConfig(dict):
     def convertDouble(self, dict, key):
         if not dict.has_key(key):
             return
-        d = double(dict[key])
+        d = float(dict[key])
         dict[key] = d
 
     ############################ static functions ############################
