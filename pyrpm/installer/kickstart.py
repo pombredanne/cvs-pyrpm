@@ -865,8 +865,6 @@ class KickstartConfig(dict):
     def noquote_split(s, delimiter=None):
         delimiters = [ " ", "\t", "\r", "\n", "\f", "\v" ]
         tokens = [ ]
-        single_quote = 0
-        double_quote = 0
         if delimiter:
             if isinstance(delimiter, types.ListType):
                 delimiters = delimiter
