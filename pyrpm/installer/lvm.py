@@ -239,7 +239,7 @@ class LVM_LOGICAL_VOLUME:
         log.info1(msg, nofmt=1)
         if status != 0:
             log.error("Creation of logical volume '%s' on '%s' failed.",
-                      self.name, volgroup)
+                      self.name, self.volgroup)
             return 0
         self.active = 1
         return 1
