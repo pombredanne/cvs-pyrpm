@@ -814,11 +814,12 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                                         flag_, functions.evrSplit(version_)):
                 result.setdefault(pkg, [ ]).append((name_, flag_, version_))
             elif version_ == "":
+                result.setdefault(pkg, [ ]).append((name_, flag_, version_))
                 # compare with package version for unversioned provides
-                evr2 = (pkg.getEpoch(), pkg["version"], pkg["release"])
-                if functions.evrCompare(evr2, flag, evr):
-                    result.setdefault(pkg, [ ]).append(
-                        (name_, flag_, version_))
+                #evr2 = (pkg.getEpoch(), pkg["version"], pkg["release"])
+                #if functions.evrCompare(evr2, flag, evr):
+                #    result.setdefault(pkg, [ ]).append(
+                #        (name_, flag_, version_))
         return result
 
     def searchProvides(self, name, flag, version):

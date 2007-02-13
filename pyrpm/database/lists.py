@@ -158,10 +158,13 @@ class ProvidesList:
             if functions.rangeCompare(flag, evr, f, functions.evrSplit(v)):
                 ret.setdefault(rpm, [ ]).append((name, f, v))
                 continue
-            if v == "": # compare with package version for unversioned provides
-                evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
-                if functions.evrCompare(evr2, flag, evr):
-                    ret.setdefault(rpm, [ ]).append((name, f, v))
+            if v == "":
+                ret.setdefault(rpm, [ ]).append((name, f, v))
+                # The following check is stricter, but not correct:
+                # Compare with package version for unversioned provides.
+                #evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
+                #if functions.evrCompare(evr2, flag, evr):
+                #    ret.setdefault(rpm, [ ]).append((name, f, v))
 
         return ret
 

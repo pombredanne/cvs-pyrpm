@@ -427,8 +427,8 @@ class RpmController:
         evr = (pkg.getEpoch(), pkg["version"], pkg["release"])
         for name, f, v, prog, script in pkg["triggers"]:
             if (functions.rangeCompare(flag, evr, f, functions.evrSplit(v)) or
-                (v == "" and functions.evrCompare(evr, flag, evr))):
-                # compare with package version for unversioned provides
+                v == ""):
+                # (v == "" and functions.evrCompare(evr, flag, evr))):
                 try:
                     runScript(prog, script, [tnumPkgs, tnumPkgs],
                               chroot=buildroot)
