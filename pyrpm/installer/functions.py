@@ -189,7 +189,7 @@ def get_installation_info(device, fstype, dir):
     return None
 
 def get_buildstamp_info(dir):
-    release = version = arch = date = None
+    release = version = arch = None
 
     buildstamp = "%s/.buildstamp" % dir
     try:
@@ -222,7 +222,7 @@ def get_buildstamp_info(dir):
     return (release, version, arch)
 
 def get_discinfo(discinfo):
-    release = version = arch = date = None
+    release = version = arch = None
 
     # This should be using the cache to also work for http/ftp.
     try:
@@ -237,7 +237,7 @@ def get_discinfo(discinfo):
         log.error("Discinfo in '%s' is malformed.", discinfo)
         return None
 
-    date = string.strip(lines[0])
+    #date = string.strip(lines[0])
     # fix bad fedora core 5 entry
     if string.strip(lines[1]) == "Fedora Core":
         lines[1] = "Fedora Core 5"
@@ -583,13 +583,13 @@ def mount_nfs(url, dir):
           options="ro,rsize=32768,wsize=32768,hard,nolock")
     return "file://%s" % dir
 
-def release_info(source):
+def release_info(repo):
     # get source information via release package
     release = "Red Hat Enterprise Linux"
-    pkgs = source.repo.getPkgsByName("redhat-release")
+    pkgs = repo.getPkgsByName("redhat-release")
     if len(pkgs) == 0:
         release = "Fedora Core"
-        pkgs = source.repo.getPkgsByName("fedora-release")
+        pkgs = repo.getPkgsByName("fedora-release")
     if len(pkgs) == 0:
         raise ValueError, "Could not find release package in source."
     if len(pkgs) > 1:
@@ -607,9 +607,9 @@ def release_info(source):
 
     if arch == "noarch":
         # get installation arch
-        pkgs = source.repo.getPkgsByName("filesystem")
+        pkgs = repo.getPkgsByName("filesystem")
         if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
-            pkgs = source.repo.getPkgsByName("coreutils")
+            pkgs = repo.getPkgsByName("coreutils")
         if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
             raise ValueError, "Could not determine installation architecture."
         arch = pkgs[0]["arch"]

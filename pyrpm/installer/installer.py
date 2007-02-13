@@ -20,9 +20,9 @@ from pyrpm.cache import NetworkCache
 from pyrpm.functions import stringCompare, normalizeList
 from pyrpm.database import getRepoDB
 from pyrpm.yum import YumConf, getVars
+from pyrpm.base import buildarchtranslate
 from devices import *
 from functions import *
-from pyrpm import database
 from disk import *
 from config import log, rpmconfig
 
@@ -62,9 +62,10 @@ class Source:
         # get source version, release and architecture
         if no_discinfo:
             # get source information via release package
-            ri = release_info(source)
+            #ri = release_info(self.repos) # source is global, does self.repos work?
+            ri = release_info(source.repo)
             if not ri:
-                log.error("Getting release info for '%s' failed.", url)
+                log.error("Getting release info for '%s' failed.", self.url)
                 return 0
             else:
                 (self.name, self.version, self.arch) = ri
@@ -75,7 +76,7 @@ class Source:
                 return 0
             di = get_discinfo(self.cache.cache(".discinfo"))
             if not di:
-                log.error("Getting .discinfo for '%s' failed.", url)
+                log.error("Getting .discinfo for '%s' failed.", self.url)
                 return 0
             (self.name, self.version, self.arch) = di
 
@@ -238,8 +239,8 @@ class Source:
         if "everything" in groups:
             for repo in repos:
                 for group in self.repos[repo].comps.getGroups():
-                    if not _group in groups:
-                        groups.append(_group)
+                    if not group in groups:
+                        groups.append(group)
             groups.remove("everything")
             everything = 1
 
