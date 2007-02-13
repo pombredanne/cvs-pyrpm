@@ -24,7 +24,14 @@
 #
 #
 
-import sys, time
+
+import sys, time, os, popen2
+
+PYRPMDIR = os.path.dirname(__file__) + "/.."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+
+from pyrpm.functions import envraSplit
 
 if len(sys.argv) < 3:
     print "Usage: "+sys.argv[0]+" LOGFILE [LOGFILE..] RESULTDIR"
@@ -32,51 +39,58 @@ if len(sys.argv) < 3:
 
 resultdir = sys.argv[-1]
 logfiles = sys.argv[1:-1]
+fulllog = open(resultdir+"/full.log", "w")
 resultfile = open(resultdir+"/index.html", "w")
 print >>resultfile,"""
 <html>
 <body>
 <H3>
 Results for """+logfiles[0]+"""<br>
-Date: """+time.ctime()+"""</H3>
+Date: """+time.ctime()+"""<br>
+Complete logfile: <a href="full.log">logfile</a><br>
+Unique error log: <a href="error.log">errorlog</a><br></H3>
 <table border=1>
-<tr><th>Package</th><th>Status</th><th>Logfile</th></tr>
+<tr><th>Package</th><th>Owner</th><th>Status</th></tr>
 """
 
-pkgnames = []
+resnamehash = {}
+resownerhash = {}
 for lfile in logfiles:
     lines = open(lfile).readlines()
     RES = None
     founderr = False
     for l in lines:
+        print >>fulllog, l[:-1]
         if l.startswith("Updating package "):
             if RES != None:
-                if founderr:
-                    print >>resultfile, "<td bgcolor=\"red\">Failed</td>"
-                else:
-                    print >>resultfile, "<td bgcolor=\"lime\">Success</td>"
-                pkgname = pkgname.replace(":", "%3A")
-                print >>resultfile, "<td><a href=\""+pkgname+"\">Log</a></td></tr>"
+                pkgname = envraSplit(pkgname)[0]
+                try:
+                    owner = popen2.popen2("whoowns dist-fc7 "+pkgname)[0].read()
+                    owner = owner[owner.rindex(" "):-1]
+                except:
+                    owner = "unknown"
+                resnamehash[nevra] = (founderr, owner)
                 RES.close()
-            pkgname = l[l.index(":")+2:-1]
-            pkgnames.append(pkgname)
-            RES = open(resultdir+"/"+pkgname, "w")
+            nevra = l[l.index(":")+2]
+            pkgname = nevra[nevra.index("/")+1:-1]
+            nevra = nevra[:nevra.index("/")]
+            RES = open(resultdir+"/"+nevra, "w")
             founderr = False
-            print >>resultfile, "<tr><td>"+pkgname+"</td>"
         else:
             if RES != None:
                 if l.find("ERROR") >= 0:
                     founderr = True
                 print >>RES, l[:-1]
 
-    if RES != None:
-        if founderr:
-            print >>resultfile, "<td bgcolor=\"red\">Failed</td>"
-        else:
-            print >>resultfile, "<td bgcolor=\"lime\">Success</td>"
-        pkgname = pkgname.replace(":", "%3A")
-        print >>resultfile, "<td><a href=\""+pkgname+"\">Log</a></td></tr>"
-        RES.close()
+nevras = resnamehash.keys()
+nevras.sort()
+for nevra in nevras:
+    print >>resultfile, "<tr><td>"+nevra+"</td><td>"+resnamehash[nevra][1]+"</td>"
+    pname = nevra.replace(":", "%3A")
+    if resnamehash[nevra][0] == True:
+        print >>resultfile, "<td bgcolor=\"red\"><a href=\""+pname+"\">Failed</a></td>"
+    else:
+        print >>resultfile, "<td bgcolor=\"lime\"><a href=\""+pname+"\">Success</a></td>"
 
 print >>resultfile,"""
 </table>
@@ -85,5 +99,8 @@ print >>resultfile,"""
 """
 
 resultfile.close()
+fulllog.close()
+
+os.system("grep ERROR "+resultdir+"/full.log | sort -u >"+resultdir+"/error.log")
 
 # vim:ts=4:sw=4:showmatch:expandtab

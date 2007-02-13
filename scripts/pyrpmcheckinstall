@@ -69,7 +69,7 @@ def testPkglist(yum, numcpu, j):
         if yum.prepareTransaction() == 0:
             break
         resolver = yum.opresolver
-        log.info1("Updating package [%d/%d]: %s\n" % (i, plen, pkg.getNEVRA()))
+        log.info1("Updating package [%d/%d]: %s/%s\n" % (i, plen, pkg.getNEVRA(), pkg["sourcerpm"]))
         resolver.update(pkg)
         if not yum.runDepRes():
             continue
