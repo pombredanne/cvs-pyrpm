@@ -17,6 +17,7 @@
 #
 
 from config import log
+from pyrpm.installer.functions import getId, getName
 
 
 class Devices:
