@@ -27,7 +27,7 @@ import pyrpm.functions as functions
 import pyrpm.package as package
 import pyrpm.openpgp as openpgp
 from pyrpm.yum import yumconfig
-import lists
+import lists, types
 from pyrpm.logger import log
 
 class RpmRepoDB(memorydb.RpmMemoryDB):
@@ -50,7 +50,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 RPMSENSE_EQUAL | RPMSENSE_LESS: "LE",
                 RPMSENSE_EQUAL | RPMSENSE_GREATER: "GE"}
 
-    def __init__(self, config, source, buildroot='', reponame="default", nc=None):
+    def __init__(self, config, source, buildroot='', reponame="default", nc=None, replacevars=None):
         """Exclude packages matching whitespace-separated excludes.  Use
         reponame for cache subdirectory name and pkg["yumreponame"].
 
@@ -67,20 +67,25 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             self.nc = nc
         else:
             self.nc = NetworkCache([], self.config.cachedir, self.reponame)
-        if isinstance(source, yumconfig.Conf):
+        if isinstance(source, types.DictType):
             found_urls = False
             self.yumconf = source
             if self.yumconf.has_key("main"):
                 sec = self.yumconf["main"]
                 if sec.has_key("exclude"):
-                    self.excludes.extend(sec["exclude"])
+                    kk = functions.replaceVars(sec["exclude"], replacevars)
+                    self.excludes.extend(kk.split(" \t,;"))
             sec = self.yumconf[self.reponame]
             if sec.has_key("exclude"):
-                self.excludes.extend(sec["exclude"])
+                kk = functions.replaceVars(sec["exclude"], replacevars)
+                self.excludes.extend(kk.split(" \t,;"))
             if sec.has_key("gpgkey"):
                 self.key_urls = sec["gpgkey"]
             if sec.has_key("baseurl"):
-                self.nc.addCache(sec["baseurl"], self.reponame)
+                kk = sec["baseurl"]
+                for k in xrange(len(kk)):
+                    kk[k] = functions.replaceVars(kk[k], replacevars)
+                self.nc.addCache(kk, self.reponame)
                 found_urls = True
             if sec.has_key("mirrorlist"):
                 self.mirrorlist = sec["mirrorlist"]
@@ -98,9 +103,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self.filereqs = []      # Filereqs, if available
         self.comps = None
 
-    def readMirrorList(self):
+    def readMirrorList(self, replacevars):
         if not self.is_read and self.mirrorlist and self.yumconf:
             for mlist in self.mirrorlist:
+                mlist = functions.replaceVars(mlist, replacevars)
                 self.nc.addCache([os.path.dirname(mlist),])
                 fname = self.nc.cache(os.path.basename(mlist), 1)
                 if fname:
@@ -109,8 +115,12 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 else:
                     lines = []
                 for l in lines:
-                    l = l.replace("$ARCH", "$BASEARCH")[:-1]
-                    self.nc.addCache(self.yumconf.extendValue(l))
+                    l = l.strip()
+                    l = l.replace("$ARCH", "$basearch")
+                    l = functions.replaceVars(l, replacevars)
+                    if l and l[0] != "#":
+                        self.nc.addCache(l)
+
 
     def getExcludes(self):
         return self.excludes
@@ -216,8 +226,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             return 1
         self._parseNode(reader)
 
-    def read(self):
-        self.readMirrorList()
+    def read(self, replacevars):
+        self.readMirrorList(replacevars)
         #self.is_read = 1 # FIXME: write-only
         while True:
             if not self.readRepoMD():

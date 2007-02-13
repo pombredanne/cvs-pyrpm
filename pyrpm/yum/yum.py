@@ -30,6 +30,24 @@ import pyrpm.database.repodb
 from pyrpm.database.jointdb import JointDB
 from pyrpm.logger import log
 
+
+def getVars(releasever, arch, basearch):
+    replacevars = {}
+    replacevars["$releasever"] = releasever
+    replacevars["$RELEASEVER"] = releasever
+    replacevars["$arch"] = arch
+    replacevars["$ARCH"] = arch
+    replacevars["$basearch"] = basearch
+    replacevars["$BASEARCH"] = basearch
+    for i in xrange(10):
+        key = "YUM%d" % i
+        value = os.environ.get(key)
+        if value:
+            replacevars[key.lower()] = value
+            replacevars[key] = value
+    return replacevars
+
+
 class RpmYum:
     def __init__(self, config):
         self.config = config
@@ -102,10 +120,10 @@ class RpmYum:
 
         sys.exit() on error."""
 
+        replacevars = getVars(self.config.relver, self.config.machine,
+            buildarchtranslate[self.config.machine])
         try:
-            conf = yumconfig.YumConf(self.config.relver, self.config.machine,
-                                     buildarchtranslate[self.config.machine],
-                                     self.config.buildroot, file)
+            conf = yumconfig.YumConf(self.config.buildroot, file)
         except IOError, e:
             log.error("Error reading configuration: %s", e)
             return 0
@@ -147,24 +165,14 @@ class RpmYum:
                 if self.config.timer:
                     time1 = clock()
                 log.info2("Reading repository '%s'", key)
-                if self.__addSingleRepo(conf, key) == 0:
+                repo = database.getRepoDB(self.config, conf, self.config.buildroot, key, replacevars=replacevars)
+                if repo.read(replacevars) == 0:
+                    log.errorLn("Error reading repository %s", key)
                     return 0
+                self.repos.addDB(repo)
                 if self.config.timer:
                     log.info2("Reading repository took %s seconds",
-                              (clock() - time1))
-        return 1
-
-    def __addSingleRepo(self, conf, reponame):
-        """Add a repository at baseurl as reponame.
-
-        Return 1 on success 0 on errror (after warning the user).  Exclude
-        packages matching whitespace-separated excludes."""
-
-        repo = database.getRepoDB(self.config, conf, self.config.buildroot, reponame)
-        if repo.read() == 0:
-            log.error("Error reading repository %s", reponame)
-            return 0
-        self.repos.addDB(repo)
+                        (clock() - time1))
         return 1
 
     def prepareTransaction(self, localDb=None):

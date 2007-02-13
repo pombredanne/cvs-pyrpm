@@ -170,8 +170,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     tags = 'pkgKey, name, arch, version, epoch, release, location_href'
 
-    def __init__(self, config, source, buildroot='', reponame="default", nc=None):
-        repodb.RpmRepoDB.__init__(self, config, source, buildroot, reponame, nc)
+    def __init__(self, config, source, buildroot='', reponame="default", nc=None, replacevars=None):
+        repodb.RpmRepoDB.__init__(self, config, source, buildroot, reponame, nc, replacevars)
         self._primarydb = None
         self._filelistsdb = None
         self._othersdb = None
