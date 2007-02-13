@@ -167,8 +167,8 @@ if __name__ == '__main__':
             log.errorLn("Package %s is already installed", r.getNEVRA())
             sys.exit(ret)
         elif ret == pyrpm.RpmResolver.OLD_PACKAGE:
-            log.info1Ln("%s: A newer package is already installed",
-                        r.getNEVRA()
+            log.info1("%s: A newer package is already installed",
+                        r.getNEVRA())
         elif ret == pyrpm.RpmResolver.NOT_INSTALLED:
             log.errorLn("Package %s is not installed", r.getNEVRA())
             sys.exit(ret)

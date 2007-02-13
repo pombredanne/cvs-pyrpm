@@ -60,7 +60,7 @@ def YumConf(buildroot="", filename="/etc/yum.conf", reposdirs=[]):
 def YumConf2(filename, data):
     lines = []
     if os.path.isfile(filename) and os.access(filename, os.R_OK):
-        log.info1Ln("Reading in config file %s.", filename)
+        log.info1("Reading in config file %s.", filename)
         lines = open(filename, "r").readlines()
     stanza = "main"
     prevcommand = None
