@@ -391,7 +391,7 @@ if __name__ == '__main__':
             if next != None:
                 order.append(next)
                 relations.remove(next)
-                log.debug2Ln("%d: %s", idx, next.getNEVRA())
+                log.debug2("%d: %s", idx, next.getNEVRA())
                 idx += 1
             else:
                 loops = orderer.getLoops(relations)
@@ -403,7 +403,7 @@ if __name__ == '__main__':
         
         if pyrpm.rpmconfig.debug > 1:
             for r in last:
-                log.debug2Ln("%d: %s", idx, r.getNEVRA())
+                log.debug2("%d: %s", idx, r.getNEVRA())
                 idx += 1
 
         return (order + last)

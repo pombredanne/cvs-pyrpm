@@ -164,19 +164,19 @@ if __name__ == '__main__':
         ret = instlist.append(r)
             
         if ret == pyrpm.RpmResolver.ALREADY_INSTALLED:
-            log.errorLn("Package %s is already installed", r.getNEVRA())
+            log.error("Package %s is already installed", r.getNEVRA())
             sys.exit(ret)
         elif ret == pyrpm.RpmResolver.OLD_PACKAGE:
             log.info1("%s: A newer package is already installed",
                         r.getNEVRA())
         elif ret == pyrpm.RpmResolver.NOT_INSTALLED:
-            log.errorLn("Package %s is not installed", r.getNEVRA())
+            log.error("Package %s is not installed", r.getNEVRA())
             sys.exit(ret)
         elif ret == pyrpm.RpmResolver.UPDATE_FAILED:
-            log.errorLn("Update of %s failed", r.getNEVRA())
+            log.error("Update of %s failed", r.getNEVRA())
             sys.exit(ret)
         elif ret == pyrpm.RpmResolver.OBSOLETE_FAILED:
-            log.errorLn("%s: Uninstall of obsolete failed", r.getNEVRA())
+            log.error("%s: Uninstall of obsolete failed", r.getNEVRA())
             sys.exit(ret)
         # else: all ok
 

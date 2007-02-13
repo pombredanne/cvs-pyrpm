@@ -167,7 +167,7 @@ class RpmYum:
                 log.info2("Reading repository '%s'", key)
                 repo = database.getRepoDB(self.config, conf, self.config.buildroot, key, replacevars=replacevars)
                 if repo.read(replacevars) == 0:
-                    log.errorLn("Error reading repository %s", key)
+                    log.error("Error reading repository %s", key)
                     return 0
                 self.repos.addDB(repo)
                 if self.config.timer:
