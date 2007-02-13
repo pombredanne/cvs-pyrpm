@@ -33,7 +33,6 @@ def x_config(ks, buildroot, source):
     dpms = 0
     resolution = "800x600"
     depth = 8
-    user_hsync = user_vsync = None
     options = [ ]
 
     # keyboard
