@@ -134,7 +134,7 @@ class Source:
                     yumconf[repo_name]["exclude"] = self.exclude
                 _repo = getRepoDB(rpmconfig, yumconf, reponame=repo_name,
                     replacevars=replacevars)
-                if not _repo.read():
+                if not _repo.read(replacevars):
                     log.error("Could not load repository '%s'.", repo_name)
                     return 0
                 self.repos[repo_name] = _repo
@@ -148,7 +148,7 @@ class Source:
             if self.exclude:
                 yumconf[repo]["exclude"] = self.exclude
             _repo = getRepoDB(rpmconfig, yumconf, reponame=repo, replacevars=replacevars)
-            if not _repo.read():
+            if not _repo.read(replacevars):
                 log.error("Could not load repository '%s'.", repo)
                 return 0
             if not _repo.comps: # every source repo has to have a comps
@@ -184,7 +184,7 @@ class Source:
                 url = mount_nfs(url, d)
             yumconf[repo]["baseurl"] = [ url ]
             _repo = getRepoDB(rpmconfig, yumconf, reponame=repo, replacevars=replacevars)
-            if not _repo.read():
+            if not _repo.read(replacevars):
                 log.error("Could not load repository '%s'.", repo)
                 return 0
             self.repos[repo] = _repo
