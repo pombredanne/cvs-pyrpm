@@ -80,6 +80,8 @@ class RpmYum:
         self.command_list = ["install", "update", "upgrade", "remove", \
                              "groupinstall", "groupupdate", "groupupgrade", \
                              "groupremove"]
+        # Flag if we have been called with arguments or not
+        self.has_args = True
 
     def setAutoerase(self, flag):
         """Enable or disable erasing packages with unresolved dependencies
@@ -241,8 +243,8 @@ class RpmYum:
     def install(self, name):
         pkglist = self.__findPkgs(name)
         ret = self.__handleBestPkg("install", pkglist)
-        if not ret:
-            log.info1("No Match for argument: %s", name)
+        if self.has_args and not ret:
+            log.info1("No match for argument: %s", name)
         return ret
 
     def groupInstall(self, name):
@@ -255,8 +257,8 @@ class RpmYum:
     def installByDep(self, dname, dflags, dversion):
         pkglist = self.repos.searchDependency(dname, dflags, dversion)
         ret = self.__handleBestPkg("install", pkglist)
-        if not ret:
-            log.info1("No Match for argument: %s",
+        if self.has_args and not ret:
+            log.info1("No match for argument: %s",
                       depString((dname, dflags, dversion)))
         return ret
 
@@ -369,8 +371,8 @@ class RpmYum:
                 # Trick to avoid multiple adds for same arch, after handling
                 # it once we clear the update package list.
                 pkgnamearchhash[name][arch] = []
-        if not ret:
-            log.info1("No Match for argument: %s", name)
+        if self.has_args and not ret:
+            log.info1("No match for argument: %s", name)
         return ret
 
     def _filterPkgVersion(self, pkg, pkglist):
@@ -390,15 +392,15 @@ class RpmYum:
     def updateByDep(self, dname, dflags, dversion):
         pkglist = self.repos.searchDependency(dname, dflags, dversion)
         ret = self.__handleBestPkg("update", pkglist)
-        if not ret:
-            log.info1("No Match for argument: %s",
+        if self.has_args and not ret:
+            log.info1("No match for argument: %s",
                       depString((dname, dflags, dversion)))
         return ret
 
     def remove(self, name):
         ret = self.__handleBestPkg("remove", self.pydb.searchPkgs([name, ]))
-        if not ret:
-            log.info1("No Match for argument: %s", name)
+        if self.has_args and not ret:
+            log.info1("No match for argument: %s", name)
         return ret
 
     def groupRemove(self, name):
@@ -411,8 +413,8 @@ class RpmYum:
     def removeByDep(self, dname, dflags, dversion, all=True):
         pkglist = self.pydb.searchDependency(dname, dflags, dversion)
         ret = self.__handleBestPkg("remove", pkglist)
-        if not ret:
-            log.info1("No Match for argument: %s",
+        if self.has_args and not ret:
+            log.info1("No match for argument: %s",
                       depString((dname, dflags, dversion)))
         return ret
 
@@ -535,7 +537,9 @@ class RpmYum:
             time1 = clock()
         log.info2("Selecting packages for operation")
         # We unfortunatly still need to special case the argless remove
+        self.has_args = True
         if len(args) == 0:
+            self.has_args = False
             if self.command == "update" or self.command == "upgrade":
                 # For complete updates we need to do a full obsoletes run, not
                 # on a specific package.
