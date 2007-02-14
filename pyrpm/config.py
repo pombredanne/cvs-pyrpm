@@ -17,7 +17,7 @@
 #
 
 
-import os, copy, sys, time, signal
+import os, copy, time, signal
 
 class RpmConfig:
     def __init__(self):

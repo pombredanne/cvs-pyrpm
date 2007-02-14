@@ -17,7 +17,7 @@
 #
 
 
-import os, gc
+import os
 from time import clock
 import package
 from resolver import *

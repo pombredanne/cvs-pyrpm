@@ -17,8 +17,8 @@
 #
 
 
-import fcntl, os, os.path, struct, sys, resource, re, getopt, errno, signal
-import shutil, fnmatch, sha, md5
+import fcntl, os, os.path, struct, sys, resource, getopt, errno, signal
+import shutil, sha, md5
 from types import TupleType, ListType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 from bsddb import hashopen
