@@ -20,7 +20,7 @@
 
 import os.path, stat, sys, pwd, grp, md5, sha
 # import bisect
-from io import getRpmIOFactory
+from pyrpm.io import getRpmIOFactory
 from base import *
 import elf
 import functions

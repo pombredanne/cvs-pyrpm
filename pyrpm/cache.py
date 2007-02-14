@@ -301,14 +301,14 @@ class SubNetworkCache:
         return self.nc.open(self.prefix + "/" + uri, name)
 
     def cache(self, uri, force=False, copy_local=False, size=-1, md5=0, async=False, name=None):
-        return self.nc.cache(self.prefix + "/" + uri, force=False, copy_local=False, size=-1, md5=0, async=False, name=None)
+        return self.nc.cache(self.prefix + "/" + uri, force, copy_local, size, md5, async, name)
 
     def clear(self, uri=None, name=None):
         if uri == None:
-            uri == ''
+            uri = ''
         return self.nc.clear(self.prefix + "/" + uri, name)
 
     def checksum(self, uri, cstype, name=None):
-        return self.nc.checksum(self.prefix + "/" + uri, cstype, name=None)
+        return self.nc.checksum(self.prefix + "/" + uri, cstype, name)
 
 # vim:ts=4:sw=4:showmatch:expandtab

@@ -27,7 +27,6 @@ try:
 except ImportError:
     print >> sys.stderr, "Error: Couldn't import tempfile python module. Only check scripts available."
 
-from io import *
 import openpgp
 import package
 
@@ -930,6 +929,7 @@ def readPackages(dbpath):
     keyring = openpgp.PGPKeyRing()
     db = hashopen(os.path.join(dbpath, "Packages"), "r")
     for key in db.keys():
+        from io import RpmFileIO
         rpmio = RpmFileIO("dummy")
         pkg = package.RpmPackage(rpmconfig, "dummy")
         data = db[key]
