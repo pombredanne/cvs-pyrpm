@@ -1615,7 +1615,7 @@ def main():
             continue
         if partitionmap[onpart].has_key("volgroup"):
             continue
-        if not os.path.exists(partitionmap[onpart]["device"]):                
+        if not os.path.exists(partitionmap[onpart]["device"]):
             log.error("Partition %s: %s is no valid device.", onpart,
                       partitionmap[onpart]["device"])
             err = 1
@@ -1982,7 +1982,7 @@ def main():
         create_dir(target_chroot, "/sys")
     if (source.isRHEL() and source.cmpVersion("5") >= 0) or \
            (source.isFedora() and source.cmpVersion("4") >= 0):
-        create_dir(target_chroot, "/selinux")        
+        create_dir(target_chroot, "/selinux")
     create_dir(target_chroot, "/tmp", mode=1777)
     create_dir(target_chroot, "/var/log")
     create_dir(target_chroot, "/var/tmp", mode=1777)

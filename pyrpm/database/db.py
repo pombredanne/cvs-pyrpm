@@ -35,7 +35,7 @@ class RpmDatabase:
         self.config = config
         self.source = source
         self.buildroot = buildroot or ''
-        if self.buildroot and self.buildroot[-1]!='/':
+        if self.buildroot and self.buildroot[-1] != '/':
             self.buildroot += '/'
         RpmDatabase.clear(self)
         self.keyring = openpgp.PGPKeyRing()
@@ -57,7 +57,7 @@ class RpmDatabase:
     def setBuildroot(self, buildroot):
         """Set database chroot to buildroot."""
         self.buildroot = buildroot or ''
-        if self.buildroot and self.buildroot[-1]!='/':
+        if self.buildroot and self.buildroot[-1] != '/':
             self.buildroot += '/'
 
     ### not implemented functions ###

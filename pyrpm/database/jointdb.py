@@ -79,21 +79,24 @@ class JointDB(db.RpmDatabase):
         """If the database keeps a connection, prepare it."""
         for db in self.dbs:
             result = db.open()
-            if result != self.OK: return result
+            if result != self.OK:
+                return result
         return self.OK
 
     def close(self):
         """If the database keeps a connection, close it."""
         for db in self.dbs:
             result = db.close()
-            if result != self.OK: return result
+            if result != self.OK:
+                return result
         return self.OK
 
     def read(self):
         """Read the database in memory."""
         for db in self.dbs:
             result = db.read()
-            if result != self.OK: return result
+            if result != self.OK:
+                return result
         return self.OK
 
     def _merge_search_results(self, dicts):

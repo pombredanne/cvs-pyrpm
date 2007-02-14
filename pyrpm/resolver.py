@@ -571,8 +571,8 @@ class RpmResolver:
         db = self.database
         filereqs = db.getFileRequires()
         result = []
-        for file in filereqs:
-            if not db.searchDependency(file, 0, ""):
+        for myfile in filereqs:
+            if not db.searchDependency(myfile, 0, ""):
                 result.append(file)
         return result
 
