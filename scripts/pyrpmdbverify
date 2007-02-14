@@ -18,6 +18,7 @@ if not PYRPMDIR in sys.path:
 from pyrpm import __version__
 from pyrpm import *
 from pyrpm.yum import *
+from pyrpm.database.rpmdb import *
 
 
 def usage():
@@ -124,7 +125,7 @@ def readTriggername():
     triggername = readDB4hash(dbpath+"/Triggername")
 
 def readRpmDB():
-    global packages, keyring
+    global packages
     print "Reading rpm database. This might take some time..."
     readBasenames()
     readConflictname()
@@ -139,7 +140,12 @@ def readRpmDB():
     readGroup()
     readInstalltid()
     readName()
-    (packages, keyring) = readPackages(dbpath) # FIXME: bsddb.error
+    db = RpmDB(rpmconfig, dbpath)
+    db.read()
+    pkgs = db.getPkgs()
+    packages = {}
+    for pkg in pkgs:
+        packages[unpack("I", pkg.key)[0]] = pkg
     for pkg in packages.values():
         if pkg["signature"].has_key("md5"):
             pkg["install_md5"] = pkg["signature"]["md5"]
@@ -262,7 +268,7 @@ def verifyPackages():
         # Don't try to verify that structure of gpg-pubkey packages yet.
         if packages[id]["name"] == "gpg-pubkey":
             continue
-        packages[id]["archivesize"] = packages[id]["signature"]["payloadsize"]
+        #packages[id]["archivesize"] = packages[id]["signature"]["payloadsize"]
         (headerindex, headerdata) = rpmio._generateHeader(packages[id], 4)
         data1 = headerindex[16:]+headerdata
         data2 = packages_db[pack("I", id)][8:]

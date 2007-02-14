@@ -253,8 +253,10 @@ class RpmDB(db.RpmDatabase):
         ok = self.readTags(pkg, tags, storedata)
         if not ok:
             return None
-        if not pkg.has_key("epoch"):
-            pkg["epoch"] = [ 0 ]
+
+        # DON'T add epoch tag, we use pkg.getEpoch() to make it work properly
+        #if not pkg.has_key("epoch"):
+        #    pkg["epoch"] = [ 0 ]
 
 
         if pkg["name"] == "gpg-pubkey":
@@ -296,13 +298,12 @@ class RpmDB(db.RpmDatabase):
                 log.error("Invalid header entry %s in %s: %s", tag, index, e)
                 return 0
 
-            if tag == "archivesize":
-                pkg["signature"]["payloadsize"] = tagval
-            else:
-                pkg[tag] = tagval
             if tag.startswith("install_"):
                 pkg["signature"][tag[8:]] = tagval
 
+            if tag == "archivesize":
+                pkg["signature"]["payloadsize"] = tagval
+            pkg[tag] = tagval
 
         try:
             if "basenames" in tags and pkg.has_key("oldfilenames"):

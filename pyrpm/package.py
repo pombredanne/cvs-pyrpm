@@ -783,15 +783,7 @@ class RpmPackage(RpmData):
            self["arch"]    != pkg["arch"]:
             return 0
 
-        if not self["epoch"] or len(self["epoch"]) == 0:
-            e1 = 0
-        else:
-            e1 = self["epoch"][0]
-        if not pkg["epoch"] or len(pkg["epoch"]) == 0:
-            e2 = 0
-        else:
-            e2 = pkg["epoch"][0]
-        return e1 == e2
+        return self.getEpoch() == pkg.getEpoch()
 
     def isIdentical(self, pkg):
         """Return true if self and pkg have the same checksum.
