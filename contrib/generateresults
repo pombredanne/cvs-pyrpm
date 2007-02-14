@@ -48,7 +48,7 @@ print >>resultfile,"""
 <H2>
 Results for """+logfiles[0]+"""<br>
 Date: """+time.ctime()+"""<br>
-Complete logfile: <a href="full.log">logfile</a><br>
+Complete logfile: <a href="full.log">logfile</a> WARNING! Very large file, better use "Save as" from your browers.<br>
 Unique error log: <a href="error.log">errorlog</a><br></H2>
 <H3><a name="owner">Results ordered by owner</a></H3>
 <H4><a href="#package">Goto results ordered by package</a></H4>

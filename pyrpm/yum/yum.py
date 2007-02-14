@@ -208,7 +208,7 @@ class RpmYum:
         db = self.pydb.getMemoryCopy(self.repos)
 
         for pkg in db.searchProvides("redhat-release", 0, ""):
-            rpmconfig.relver = pkg["version"]
+            self.config.relver = pkg["version"]
 
         for yumconf in self.config.yumconf:
             if os.path.isfile(yumconf):
