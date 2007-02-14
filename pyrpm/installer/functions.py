@@ -190,7 +190,6 @@ def get_installation_info(device, fstype, dir):
 
 def get_buildstamp_info(dir):
     release = version = arch = None
-
     buildstamp = "%s/.buildstamp" % dir
     try:
         fd = open(buildstamp, "r")
@@ -582,39 +581,6 @@ def mount_nfs(url, dir):
     mount(what, dir, fstype="nfs",
           options="ro,rsize=32768,wsize=32768,hard,nolock")
     return "file://%s" % dir
-
-def release_info(repo):
-    # get source information via release package
-    release = "Red Hat Enterprise Linux"
-    pkgs = repo.getPkgsByName("redhat-release")
-    if len(pkgs) == 0:
-        release = "Fedora Core"
-        pkgs = repo.getPkgsByName("fedora-release")
-    if len(pkgs) == 0:
-        raise ValueError, "Could not find release package in source."
-    if len(pkgs) > 1:
-        raise ValueError, "Found more than one release package, exiting."
-    version = pkgs[0]["version"]
-    arch = pkgs[0]["arch"]
-    # drop all letters from version
-    version = version.strip(string.letters)
-    if len(version) == 0:
-        raise ValueError, "No valid version of installation source"
-    i = string.find(pkgs[0]["release"], "rawhide")
-    if i != -1 and string.find(version, ".") == -1:
-        version += ".90" # bad fix for rawhide
-    del i
-
-    if arch == "noarch":
-        # get installation arch
-        pkgs = repo.getPkgsByName("filesystem")
-        if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
-            pkgs = repo.getPkgsByName("coreutils")
-        if len(pkgs) != 1 or pkgs[0]["arch"] == "noarch":
-            raise ValueError, "Could not determine installation architecture."
-        arch = pkgs[0]["arch"]
-
-    return (release, version, arch)
 
 def run_script(command, chroot=''):
     if chroot != '':

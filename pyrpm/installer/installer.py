@@ -59,26 +59,15 @@ class Source:
         # create network cache
         self.cache = NetworkCache([ self.url ], cachedir=rpmconfig.cachedir)
 
-        # get source version, release and architecture
-        if no_discinfo:
-            # get source information via release package
-            #ri = release_info(self.repos) # source is global, does self.repos work?
-            ri = release_info(source.repo)
-            if not ri:
-                log.error("Getting release info for '%s' failed.", self.url)
-                return 0
-            else:
-                (self.name, self.version, self.arch) = ri
-        else:
-            # get source information via .discinfo file
-            if not self.cache.cache(".discinfo"):
-                log.error("No .discinfo for '%s'", self.url)
-                return 0
-            di = get_discinfo(self.cache.cache(".discinfo"))
-            if not di:
-                log.error("Getting .discinfo for '%s' failed.", self.url)
-                return 0
-            (self.name, self.version, self.arch) = di
+        # get source information via .discinfo file
+        if not self.cache.cache(".discinfo"):
+            log.error("No .discinfo for '%s'", self.url)
+            return 0
+        di = get_discinfo(self.cache.cache(".discinfo"))
+        if not di:
+            log.error("Getting .discinfo for '%s' failed.", self.url)
+            return 0
+        (self.name, self.version, self.arch) = di
 
         if self.name.startswith("Red Hat Enterprise Linux"):
             self.variant = self.name[24:].strip()

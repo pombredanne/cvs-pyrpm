@@ -76,7 +76,6 @@ def main():
     user_arch = None
     no_default_groups = 0
     autoerase = 0
-    no_discinfo = 0
     has_raid = False
 
     log.setInfoLogLevel(log.INFO1)
@@ -91,7 +90,7 @@ def main():
                                        "standalone", "wait", "xen", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
                                        "no-cache", "no-default-groups",
-                                       "drop-unresolved", "no-discinfo", ])
+                                       "drop-unresolved", ])
     except:
         usage()
         return
@@ -138,8 +137,6 @@ def main():
             no_default_groups = 1
         elif opt == "--drop-unresolved":
             autoerase = 1
-        elif opt == "--no-discinfo":
-            no_discinfo = 1
         else:
             log.error("Unknown option '%s'.", opt)
             usage()
@@ -3003,8 +3000,6 @@ OPTIONS
   --no-cleanup             Do not cleanup temporary directory and files.
   --no-default-groups      Do not use base and core as default groups. This is
                            useful for minimal installations.
-  --no-discinfo            Do not use .discinfo information. Only usable with
-                           --no-stage2 option.
   --repo-comps             Load comps file in repos and use them for package
                            and group selection.
   --upgrade=<part>         Upgrade installation in partition <part>. This is
@@ -3059,11 +3054,12 @@ signals = pyrpm.setSignals(exitHandler)
 try:
     status = main()
 except Exception:
-    log.error("\n---------------------------------------"
-              "---------------------------------------\n"
-              + traceback.format_exc() +
-              "---------------------------------------"
-              "---------------------------------------")
+    log.error("\n"
+              "- - - - - - - - - - - - - - - - - - - -"
+              " - - - - - - - - - - - - - - - - - - - -"
+              "\n" + traceback.format_exc() +
+              "- - - - - - - - - - - - - - - - - - - -"
+              " - - - - - - - - - - - - - - - - - - - -", nofmt=1)
     status = 1
 
 ################################### cleanup ###################################
