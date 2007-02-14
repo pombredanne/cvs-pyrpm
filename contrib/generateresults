@@ -8,6 +8,7 @@
 # splits up the logfiles in per package logfiles and generates a nice overview
 # html page from it.
 #
+# Typical usage: cd /var/tmp; ./generateresults fc-extras-devel-i386.log.* /var/tmp/results/
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Library General Public License as published by
 # the Free Software Foundation; version 2 only
