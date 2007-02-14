@@ -623,7 +623,6 @@ class RpmDB(db.RpmDatabase):
         return states
 
     def __getNetSharedPath(self):
-        netpaths = []
         try:
             if self.buildroot:
                 fname = self.buildroot + "/etc/rpm/macros"

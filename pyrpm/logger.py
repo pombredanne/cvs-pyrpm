@@ -19,7 +19,6 @@
 # AUTHOR: Thomas Woerner <twoerner@redhat.com>
 #
 
-import os
 import sys
 import types
 import time

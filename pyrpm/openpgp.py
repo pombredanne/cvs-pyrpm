@@ -493,7 +493,7 @@ class _SignaturePacket(_PGPPacket):
             return 1
         return -1
 
-    def __verifyDigestWithKey(self, key, key_id, digest, flags):
+    def __verifyDigestWithKey(self, key, key_id, digest):
         """Verify the signature of digest of data against a key, using
         the specified key_id if it is not None.
 
@@ -539,7 +539,7 @@ class _SignaturePacket(_PGPPacket):
                 result = 0
         return result
 
-    def verifyDigest(self, keyring, digest, flags=FL_CAN_SIGN):
+    def verifyDigest(self, keyring, digest): #, flags=FL_CAN_SIGN):
         """Verify the signature of digest of data against a matching key
         in a keyring, if any, with given key usage flags.
 
@@ -567,7 +567,7 @@ class _SignaturePacket(_PGPPacket):
             else:
                 keys = keyring.keys.values()
             for key in keys:
-                r = self.__verifyDigestWithKey(key, key_id, digest, flags)
+                r = self.__verifyDigestWithKey(key, key_id, digest)
                 if r == 1:
                     return (1, key)
                 if r == 0:
