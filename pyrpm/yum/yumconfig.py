@@ -38,19 +38,19 @@ RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "bandwidth", "metadata_expire", "proxy", "proxy_username",
         "proxy_password")
 
-def YumConf(buildroot="", filename="/etc/yum.conf", reposdirs=[]):
+def YumConf(buildroot="", filename="/etc/yum.conf",
+    reposdirs=None):
+    if reposdirs == None:
+        reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
     data = {}
     ret = YumConf2(filename, data)
     if ret != None:
         raise ValueError, "could not read line %d in %s" % (ret, filename)
-    reposdirs2 = reposdirs[:]
     k = data.get("main", {}).get("reposdir")
     if k != None:
-        k = buildroot + k
-        if k not in reposdirs2:
-            reposdirs2.append(k)
-    for reposdir in reposdirs2:
-        for filename in glob.glob(reposdir + "/*.repo"):
+        reposdirs = k.split(" \t,;")
+    for reposdir in reposdirs:
+        for filename in glob.glob(buildroot + reposdir + "/*.repo"):
             ret = YumConf2(filename, data)
             if ret != None:
                 raise ValueError, "could not read line %d in %s" % (ret,
