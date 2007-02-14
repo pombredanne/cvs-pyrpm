@@ -424,7 +424,7 @@ class RpmStreamIO(RpmIO):
         IOError."""
 
         self.hdr = {}
-        self.hdrdata = self.__readIndex(8, 1)
+        self.hdrdata = self.__readIndex(8)
 
     def __readHdr(self):
         """Read main header.
@@ -463,7 +463,7 @@ class RpmStreamIO(RpmIO):
             self.hdr[tag] = self.__parseTag(index, storedata)
         return self.hdr[tag]
 
-    def __readIndex(self, pad, issig=None):
+    def __readIndex(self, pad):
         """Read and verify header index and data.
 
         self.fd should already be open.  Return (number of tags, tag data size,
