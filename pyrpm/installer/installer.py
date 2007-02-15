@@ -361,7 +361,9 @@ class Source:
 
         # append kernel-devel for FC-6 and RHEL-5
         if "gcc" in pkgs and \
-               ((self.isRHEL() and self.cmpVersion("4.9") >= 0) or \
+               ((self.isRHEL() and self.cmpVersion("5") >= 0 and \
+                 (self.getVariant() != "Client" or \
+                  "%s-Workstation" % (self.release) in self.repos.keys())) or \
                 (self.isFedora() and self.cmpVersion("6") >= 0)):
             if "kernel" in pkgs:
                 self._addPkg("kernel-devel", pkgs)
@@ -536,5 +538,8 @@ class Source:
 
     def getRelease(self):
         return self.release
+
+    def getVariant(self):
+        return self.variant
 
 # vim:ts=4:sw=4:showmatch:expandtab
