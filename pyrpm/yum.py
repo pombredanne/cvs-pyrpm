@@ -58,12 +58,13 @@ MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
         "diskspacecheck", "tsflags", "recent", "retries", "keepalive",
         "timeout", "http_caching", "throttle", "bandwidth", "commands",
         "keepcache", "proxy", "proxy_username", "proxy_password", "pkgpolicy",
-        "plugins", "pluginpath", "metadata_expire")
+        "plugins", "pluginpath", "pluginconfpath", "metadata_expire")
 RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
         "keepalive", "timeout", "http_caching", "retries", "throttle",
         "bandwidth", "metadata_expire", "proxy", "proxy_username",
         "proxy_password")
+MultilineVarnames = ("exclude", "installonlypkgs", "kernelpkgnames", "commands", "pluginpath", "pluginconfpath", "baseurl", "gpgkey", "includepkgs")
 
 def YumConf(buildroot="", filename="/etc/yum.conf",
     reposdirs=None):
@@ -100,7 +101,11 @@ def YumConf2(filename, data):
             # continuation line
             line = line.strip()
             if line and line[:1] not in "#;":
-                data[stanza][prevcommand].append(line)
+                if prevcommand in MultilineVarnames:
+                    line = line.split()
+                else:
+                    line = [line]
+                data[stanza][prevcommand].extend(line)
         else:
             line = line.strip()
             if line[:1] in "#;" or not line:
@@ -114,8 +119,8 @@ def YumConf2(filename, data):
                 elif key not in RepoVarnames:
                     return linenum + 1 # unknown key value
                 prevcommand = None
-                if key in ("baseurl", "mirrorlist"):
-                    value = [value]
+                if key in MultilineVarnames:
+                    value = value.split()
                     prevcommand = key
                 data.setdefault(stanza, {})[key] = value
             else:

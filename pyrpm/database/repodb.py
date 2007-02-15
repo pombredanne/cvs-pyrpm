@@ -72,12 +72,14 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if self.yumconf.has_key("main"):
                 sec = self.yumconf["main"]
                 if sec.has_key("exclude"):
-                    kk = functions.replaceVars(sec["exclude"], replacevars)
-                    self.excludes.extend(kk.split(" \t,;"))
+                    for ex in sec["exclude"]:
+                        ex = functions.replaceVars(ex, replacevars)
+                        self.excludes.append(ex)
             sec = self.yumconf[self.reponame]
             if sec.has_key("exclude"):
-                kk = functions.replaceVars(sec["exclude"], replacevars)
-                self.excludes.extend(kk.split(" \t,;"))
+                for ex in sec["exclude"]:
+                    ex = functions.replaceVars(ex, replacevars)
+                    self.excludes.append(ex)
             if sec.has_key("gpgkey"):
                 self.key_urls = sec["gpgkey"]
             if sec.has_key("baseurl"):
@@ -104,22 +106,20 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
 
     def readMirrorList(self, replacevars):
         if not self.is_read and self.mirrorlist and self.yumconf:
-            for mlist in self.mirrorlist:
-                mlist = functions.replaceVars(mlist, replacevars)
-                self.nc.addCache([os.path.dirname(mlist),])
-                fname = self.nc.cache(os.path.basename(mlist), 1)
-                if fname:
-                    lines = open(fname).readlines()
-                    os.unlink(fname)
-                else:
-                    lines = []
-                for l in lines:
-                    l = l.strip()
-                    l = l.replace("$ARCH", "$basearch")
-                    l = functions.replaceVars(l, replacevars)
-                    if l and l[0] != "#":
-                        self.nc.addCache(l)
-
+            mlist = self.mirrorlist[:]
+            mlist = functions.replaceVars(mlist, replacevars)
+            fname = self.nc.cache(mlist, 1)
+            if fname:
+                lines = open(fname).readlines()
+                os.unlink(fname)
+            else:
+                lines = []
+            for l in lines:
+                l = l.strip()
+                l = l.replace("$ARCH", "$basearch")
+                l = functions.replaceVars(l, replacevars)
+                if l and l[0] != "#":
+                    self.nc.addCache([l,])
 
     def getExcludes(self):
         return self.excludes
@@ -137,10 +137,12 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         # First we try and read the repomd file as a starting point.
         filename = self.nc.cache("repodata/repomd.xml", 1)
         if not filename:
+            log.error("Couldn't open repomd.xml")
             return 0
         try:
             reader = libxml2.newTextReaderFilename(filename)
         except libxml2.libxmlError:
+            log.error("Couldn't parse repomd.xml")
             return 0
         # Create our network cache object
         self.repomd = self._parseNode(reader)
@@ -151,6 +153,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         # primary.xml
         if self.repomd.has_key("group"):
             if not self.repomd["group"].has_key("location"):
+                log.error("Couldn't find proper location for comps.xml in repomd")
                 return 0
             comps = self.repomd["group"]["location"]
             (csum, destfile) = self.nc.checksum(comps, "sha")
@@ -213,6 +216,9 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         return 1
 
     def readFilereq(self):
+        # XXX: Disable filereq.xml support for now, ftp mirrors in mirrorlist
+        # break things really badly currently.
+        return 1
         # Last but not least if we can find the filereq.xml.gz file use it
         # and import the files from there into our packages.
         filename = self.nc.cache("filereq.xml.gz", 1)
@@ -224,6 +230,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         except libxml2.libxmlError:
             return 1
         self._parseNode(reader)
+        return 1
 
     def read(self, replacevars):
         self.readMirrorList(replacevars)
