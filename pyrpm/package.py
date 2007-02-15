@@ -19,7 +19,6 @@
 
 
 import os.path, stat, sys, pwd, grp, md5, sha
-# import bisect
 from pyrpm.io import getRpmIOFactory
 from base import *
 import elf
@@ -61,12 +60,6 @@ class _RpmFilenamesIterator:
     def index(self, name):
         if self.has_oldfilenames:
             return self.pkg["oldfilenames"].index(name)
-
-        #idx = bisect.bisect_left(self, name)
-        #if self[idx] == name:
-        #    return idx
-        #else:
-        #    raise ValueError
 
         (dirname, basename) = functions.pathsplit2(name)
         i = 0
