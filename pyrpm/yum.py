@@ -1,5 +1,7 @@
 #
-# Copyright 2004, 2005 Red Hat, Inc.
+# Copyright 2004, 2005, 2006, 2007 Red Hat, Inc.
+# Copyright (C) 2005 Harald Hoyer <harald@redhat.com>
+# Copyright (C) 2006, 2007 Florian La Roche <laroche@redhat.com>
 # Author: Phil Knirsch
 #
 # This program is free software; you can redistribute it and/or modify
@@ -17,14 +19,14 @@
 #
 
 
-import fnmatch, re
+import os, os.path, glob, re, fnmatch
 from time import clock
 from pyrpm.resolver import RpmResolver
 from pyrpm.control import RpmController
 from pyrpm.package import RpmPackage
 from pyrpm.functions import *
 from pyrpm.io import *
-import pyrpm.database as database, yumconfig
+import pyrpm.database as database
 import pyrpm.database.repodb
 # from pyrpm.database.repodb import RpmRepoDB
 from pyrpm.database.jointdb import JointDB
@@ -46,6 +48,79 @@ def getVars(releasever, arch, basearch):
             replacevars[key.lower()] = value
             replacevars[key] = value
     return replacevars
+
+
+MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
+        "logfile", "gpgcheck", "assumeyes", "alwaysprompt", "tolerant",
+        "exclude", "exactarch",
+        "installonlypkgs", "kernelpkgnames", "showdupesfromrepos", "obsoletes",
+        "overwrite_groups", "installroot", "rss-filename", "distroverpkg",
+        "diskspacecheck", "tsflags", "recent", "retries", "keepalive",
+        "timeout", "http_caching", "throttle", "bandwidth", "commands",
+        "keepcache", "proxy", "proxy_username", "proxy_password", "pkgpolicy",
+        "plugins", "pluginpath", "metadata_expire")
+RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
+        "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
+        "keepalive", "timeout", "http_caching", "retries", "throttle",
+        "bandwidth", "metadata_expire", "proxy", "proxy_username",
+        "proxy_password")
+
+def YumConf(buildroot="", filename="/etc/yum.conf",
+    reposdirs=None):
+    if reposdirs == None:
+        reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
+    data = {}
+    ret = YumConf2(filename, data)
+    if ret != None:
+        raise ValueError, "could not read line %d in %s" % (ret, filename)
+    k = data.get("main", {}).get("reposdir")
+    if k != None:
+        reposdirs = k.split(" \t,;")
+    for reposdir in reposdirs:
+        for filename in glob.glob(buildroot + reposdir + "/*.repo"):
+            ret = YumConf2(filename, data)
+            if ret != None:
+                raise ValueError, "could not read line %d in %s" % (ret,
+                    filename)
+    return data
+
+def YumConf2(filename, data):
+    lines = []
+    if os.path.isfile(filename) and os.access(filename, os.R_OK):
+        log.info1("Reading in config file %s.", filename)
+        lines = open(filename, "r").readlines()
+    stanza = "main"
+    prevcommand = None
+    for linenum in xrange(len(lines)):
+        line = lines[linenum].rstrip("\n\r")
+        if line[:1] == "[" and line.find("]") != -1:
+            stanza = line[1:line.find("]")]
+            prevcommand = None
+        elif prevcommand and line[:1] in " \t":
+            # continuation line
+            line = line.strip()
+            if line and line[:1] not in "#;":
+                data[stanza][prevcommand].append(line)
+        else:
+            line = line.strip()
+            if line[:1] in "#;" or not line:
+                pass # comment line
+            elif line.find("=") != -1:
+                (key, value) = line.split("=", 1)
+                (key, value) = (key.strip(), value.strip())
+                if stanza == "main":
+                    if key not in MainVarnames:
+                        return linenum + 1 # unknown key value
+                elif key not in RepoVarnames:
+                    return linenum + 1 # unknown key value
+                prevcommand = None
+                if key in ("baseurl", "mirrorlist"):
+                    value = [value]
+                    prevcommand = key
+                data.setdefault(stanza, {})[key] = value
+            else:
+                return linenum + 1 # not parsable line
+    return None
 
 
 class RpmYum:
@@ -125,7 +200,7 @@ class RpmYum:
         replacevars = getVars(self.config.relver, self.config.machine,
             buildarchtranslate[self.config.machine])
         try:
-            conf = yumconfig.YumConf(self.config.buildroot, file)
+            conf = YumConf(self.config.buildroot, file)
         except IOError, e:
             log.error("Error reading configuration: %s", e)
             return 0

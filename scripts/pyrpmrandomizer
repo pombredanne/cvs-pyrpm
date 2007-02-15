@@ -22,7 +22,7 @@ import sys, os.path, random
 PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
-from pyrpm.yum.yum import RpmYum
+from pyrpm.yum import RpmYum
 from pyrpm import __version__
 from pyrpm import *
 

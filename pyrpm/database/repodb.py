@@ -26,7 +26,6 @@ from comps import RpmCompsXML
 import pyrpm.functions as functions
 import pyrpm.package as package
 import pyrpm.openpgp as openpgp
-from pyrpm.yum import yumconfig
 import lists, types
 from pyrpm.logger import log
 

@@ -1,4 +1,4 @@
-SUBDIRS = database installer yum
+SUBDIRS = database installer
 
 PYTHON_FILES := $(notdir $(wildcard *.py))
 

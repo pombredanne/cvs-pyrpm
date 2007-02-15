@@ -23,7 +23,7 @@ PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import *
-from pyrpm.yum.yum import RpmYum
+from pyrpm.yum import RpmYum
 
 _flag_chars = [
     (RPMVERIFY_FILESIZE, 'S'), (RPMVERIFY_MODE, 'M'), (RPMVERIFY_MD5, '5'),

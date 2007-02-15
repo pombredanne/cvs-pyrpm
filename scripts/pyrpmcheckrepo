@@ -24,7 +24,7 @@ if not PYRPMDIR in sys.path:
     sys.path.append(PYRPMDIR)
 from pyrpm import __version__
 from pyrpm import *
-from pyrpm.yum.yum  import RpmYum
+from pyrpm.yum import RpmYum
 
 def usage():
     print """
