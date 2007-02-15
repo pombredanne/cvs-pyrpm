@@ -19,7 +19,7 @@
 from pyrpm.cache import NetworkCache
 from pyrpm.functions import stringCompare, normalizeList
 from pyrpm.database import getRepoDB
-from pyrpm.yum import YumConf, getVars
+from pyrpm.yum import getVars
 from pyrpm.base import buildarchtranslate
 from devices import *
 from functions import *
@@ -37,7 +37,7 @@ class Source:
         self.base_repo_names = [ ]
         self.mounts = { }
 
-    def load(self, ks, dir, no_discinfo=0):
+    def load(self, ks, dir):
         self.dir = dir
         self.exclude = None
 
