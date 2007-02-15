@@ -4079,7 +4079,7 @@ def cacheLocal(urls, filename, subdir, verbose, checksum=None,
         localfile = "%s/%s" % (localdir, basename)
         if checksum and getChecksum(localfile, checksumtype) == checksum:
             return localfile
-        if verbose > 4:
+        if verbose > 5:
             print "cacheLocal: localfile:", localfile
         try:
             f = urlgrabber.urlgrab(url, localfile,
@@ -4099,7 +4099,7 @@ def cacheLocal(urls, filename, subdir, verbose, checksum=None,
                     continue
                 return localfile
             continue
-        if verbose > 4:
+        if verbose > 5:
             print "cacheLocal: return:", f
         if checksum and getChecksum(f, checksumtype) != checksum:
             continue
@@ -5174,7 +5174,7 @@ def readRepos(yumconfs, releasever, arch, readdebug,
 
 def testMirrors(verbose, args):
     # We are per default more verbose:
-    verbose += 1
+    verbose += 3
     urloptions["timeout"] = "20.0"
     if args:
         # python-only
