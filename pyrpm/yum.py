@@ -66,7 +66,7 @@ RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "proxy_password")
 MultilineVarnames = ("exclude", "installonlypkgs", "kernelpkgnames", "commands", "pluginpath", "pluginconfpath", "baseurl", "gpgkey", "includepkgs")
 
-def YumConf(buildroot="", filename="/etc/yum.conf",
+def YumConf(filename="/etc/yum.conf",
     reposdirs=None):
     if reposdirs == None:
         reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
@@ -78,7 +78,7 @@ def YumConf(buildroot="", filename="/etc/yum.conf",
     if k != None:
         reposdirs = k.split(" \t,;")
     for reposdir in reposdirs:
-        for filename in glob.glob(buildroot + reposdir + "/*.repo"):
+        for filename in glob.glob(reposdir + "/*.repo"):
             ret = YumConf2(filename, data)
             if ret != None:
                 raise ValueError, "could not read line %d in %s" % (ret,
@@ -212,7 +212,7 @@ class RpmYum:
         replacevars = getVars(self.config.relver, self.config.machine,
             buildarchtranslate[self.config.machine])
         try:
-            conf = YumConf(self.config.buildroot, file)
+            conf = YumConf(file)
         except IOError, e:
             log.error("Error reading configuration: %s", e)
             return 0
