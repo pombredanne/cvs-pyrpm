@@ -147,10 +147,17 @@ class RpmYum:
         # Flag wether we already read all the repos
         self.repos_read = 0
         # Our list of package names that get installed instead of updated
-        self.always_install = ["kernel", "kernel-devel", "kernel-smp",
-            "kernel-smp-devel", "kernel-bigmem", "kernel-bigmem-devel",
-            "kernel-enterprise", "kernel-enterprise-devel", "kernel-debug",
-            "kernel-unsupported"]
+        self.always_install = [
+            "kernel", "kernel-PAE", "kernel-bigmem", "kernel-enterprise",
+            "kernel-hugemem", "kernel-summit", "kernel-smp", "kernel-largesmp",
+            "kernel-xen", "kernel-xen0", "kernel-xenU", "kernel-kdump",
+            "kernel-BOOT", "kernel-debug", "kernel-devel",
+            "kernel-debug-devel", "kernel-PAE-debug", "kernel-PAE-debug-devel",
+            "kernel-PAE-devel", "kernel-hugemem-devel", "kernel-smp-devel",
+            "kernel-largesmp-devel", "kernel-xen-devel", "kernel-xen0-devel",
+            "kernel-xenU-devel", "kernel-kdump-devel", "kernel-source",
+            "kernel-unsupported", "kernel-modules"
+        ]
         # List of valid commands
         self.command_list = ["install", "update", "upgrade", "remove", \
                              "groupinstall", "groupupdate", "groupupgrade", \
