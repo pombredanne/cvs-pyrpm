@@ -101,7 +101,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         # Files included in primary.xml
         self._filerc = re.compile('^(.*bin/.*|/etc/.*|/usr/lib/sendmail)$')
         self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
-        self.filereqs = []      # Filereqs, if available
         self.comps = None
 
     def readMirrorList(self, replacevars):
@@ -215,23 +214,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 self.keyring.addKey(k)
         return 1
 
-    def readFilereq(self):
-        # XXX: Disable filereq.xml support for now, ftp mirrors in mirrorlist
-        # break things really badly currently.
-        return 1
-        # Last but not least if we can find the filereq.xml.gz file use it
-        # and import the files from there into our packages.
-        filename = self.nc.cache("filereq.xml.gz", 1)
-        # If we can't find the filereq.xml.gz file it doesn't matter
-        if not filename:
-            return 1
-        try:
-            reader = libxml2.newTextReaderFilename(filename)
-        except libxml2.libxmlError:
-            return 1
-        self._parseNode(reader)
-        return 1
-
     def read(self, replacevars):
         self.readMirrorList(replacevars)
         #self.is_read = 1 # FIXME: write-only
@@ -243,8 +225,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if not self.readPrimary():
                 break
             if not self.readPGPKeys():
-                break
-            if not self.readFilereq():
                 break
             self.is_read = 1 # FIXME: write-only
             return 1
@@ -302,7 +282,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         system path without schema prefix."""
 
         import gzip
-        self.filerequires = []
         log.info1("Pass 1: Parsing package headers for file requires.")
         self.__readDir(self.source, "")
         filename = functions._uriToFilename(self.source)
@@ -388,12 +367,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
 #        rfd.write('  </data>\n')
         rfd.write('</repomd>\n')
         rfd.close()
-        del self.filerequires
         return 1
 
     def _matchesFile(self, fname):
-        return fname in self.filereqs or \
-               self._filerc.match(fname) or \
+        return self._filerc.match(fname) or \
                self._dirrc.match(fname)
 
     def _parseNode(self, reader):
@@ -409,12 +386,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if ntype != XML_READER_TYPE_ELEMENT:
                 continue
             name = Namef()
-            if name != "package" and name != "filereq" and name != "repomd":
-                continue
-            if name == "filereq":
-                if Readf() != 1:
-                    break
-                self.filereqs.append(Valuef())
+            if name != "package" and name != "repomd":
                 continue
             if name == "repomd":
                 return self.__parseRepomd(reader)
@@ -498,8 +470,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self.pkglist.
 
         dir must be a local file system path.  The remote location prefix
-        corresponding to dir is location.  Collect file requires of added
-        packages in self.filerequires.  Set pkg["yumlocation"] to the remote
+        corresponding to dir is location. Set pkg["yumlocation"] to the remote
         relative path to the package."""
 
         tmplist = []
@@ -510,9 +481,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         for pkg in tmplist:
             if self._isExcluded(pkg):
                 continue
-            for reqname in pkg["requirename"]:
-                if reqname[0] == "/":
-                    self.filerequires.append(reqname)
             # FIXME: this is done in createRepo too
             # If it is a source rpm change the arch to "src". Only valid
             # for createRepo, never do this anywhere else. ;)
@@ -936,12 +904,10 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         for (fname, mode, flag) in zip(files, filemodes, fileflags):
             if stat.S_ISDIR(mode):
                 if not filter or \
-                   self._dirrc.match(fname) or \
-                   fname in self.filerequires:
+                   self._dirrc.match(fname):
                     writedir.append(fname)
             elif not filter or \
-                 self._filerc.match(fname) or \
-                 fname in self.filerequires:
+                 self._filerc.match(fname):
                 if flag & RPMFILE_GHOST:
                     writeghost.append(fname)
                 else:

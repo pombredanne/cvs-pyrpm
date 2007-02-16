@@ -427,7 +427,7 @@ def doLock(filename):
     Return 1 on success, 0 if the file already exists.  Raise OSError."""
 
     try:
-        fd = os.open(filename, os.O_EXCL|os.O_CREAT|os.O_WRONLY, 0666)
+        fd = os.open(filename, os.O_EXCL|os.O_CREAT|os.O_WRONLY, 0644)
         try:
             os.write(fd, str(os.getpid()))
         finally:

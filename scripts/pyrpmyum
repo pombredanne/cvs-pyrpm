@@ -63,9 +63,9 @@ def lockPyrpm():
     if os.getuid() != 0 or rpmconfig.test:
         return ""
     if rpmconfig.buildroot != None:
-        lockfile = rpmconfig.buildroot + "/var/run/pyrpmyum.pid"
+        lockfile = rpmconfig.buildroot + "/var/run/yum.pid"
     else:
-        lockfile = "/var/run/pyrpmyum.pid"
+        lockfile = "/var/run/yum.pid"
     try:
         makeDirs(lockfile)
     except OSError:
