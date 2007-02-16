@@ -22,7 +22,6 @@ from pyrpm.functions import _uriToFilename, updateDigestFromFile
 
 try:
     from urlgrabber import urlgrab, urlopen
-    from urlgrabber.grabber import URLGrabError
 except ImportError:
     print >> sys.stderr, "Error: Couldn't import urlgrabber python module for NetworkCache."
 

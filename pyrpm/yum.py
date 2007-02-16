@@ -23,7 +23,6 @@ import os, os.path, glob, re, fnmatch
 from time import clock
 from pyrpm.resolver import RpmResolver
 from pyrpm.control import RpmController
-from pyrpm.package import RpmPackage
 from pyrpm.functions import *
 from pyrpm.io import *
 import pyrpm.database as database

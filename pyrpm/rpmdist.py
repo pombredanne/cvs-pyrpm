@@ -36,7 +36,7 @@
 #   ... like 'base'..
 #
 
-import os, ConfigParser
+import ConfigParser
 from package import *
 from functions import *
 

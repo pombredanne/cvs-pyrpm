@@ -16,12 +16,12 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import sys, os, re, bz2, shutil
+import os, re, bz2, shutil
 import libxml2
 
 from pyrpm import *
 import pyrpm.base
-import db, repodb
+import repodb
 from pyrpm.logger import log
 
 # This version refers to the internal structure of the sqlite cache files

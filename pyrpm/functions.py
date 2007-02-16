@@ -17,17 +17,15 @@
 #
 
 
-import fcntl, os, os.path, struct, sys, resource, getopt, errno, signal
+import fcntl, os, os.path, sys, resource, getopt, errno, signal
 import shutil, sha, md5
-from types import TupleType, ListType
+from types import TupleType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
-from bsddb import hashopen
 try:
     from tempfile import mkstemp, mkdtemp, _get_candidate_names, TMP_MAX
 except ImportError:
     print >> sys.stderr, "Error: Couldn't import tempfile python module. Only check scripts available."
 
-import openpgp
 import package
 
 from config import rpmconfig

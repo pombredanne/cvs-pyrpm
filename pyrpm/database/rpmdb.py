@@ -18,9 +18,9 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import sys, time, struct, os, bsddb, re, fnmatch
+import time, struct, os, bsddb, re, fnmatch
 (pack, unpack) = (struct.pack, struct.unpack)
-from binascii import b2a_hex, a2b_hex
+from binascii import a2b_hex
 from pyrpm.base import *
 import pyrpm.io as io
 import pyrpm.functions as functions
