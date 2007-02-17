@@ -687,7 +687,7 @@ class RpmDB(db.RpmDatabase):
             for id, idx in self.iterIdIdx(data):
                 pkg = self.getPkgById(id)
                 if pkg:
-                    yield pkg["tag"][idx] + (pkg,)
+                    yield pkg[tag][idx] + (pkg,)
 
     def iterProvides(self):
         return self._iter("provides")

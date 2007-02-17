@@ -1288,7 +1288,7 @@ def machineDistance(arch1, arch2):
     else:
         return 999   # incompatible archs, distance is very high ;)
 
-def readRpmPackage(config, source, verify=None, strict=None, hdronly=None,
+def readRpmPackage(config, source, verify=None, hdronly=None,
                    db=None, tags=None):
     """Read RPM package from source and close it.
 

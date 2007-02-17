@@ -228,9 +228,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         data = {'dbversion' : dbversion,
                 'checksum' : checksum
                 }
-        val = self.insertHash("db_info", data, cur)
+        self.insertHash("db_info", data, cur)
         db.commit()
-
 
     def insertHash(self, table, hash, cursor):
         """Insert the key value pairs in hash into a database table"""
@@ -689,7 +688,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     def getPkgById(self, pkgId):
         cur = self._primarydb.cursor()
-        cur.execute('SELECT pkgKey FROM packages WHERE pkgId="%s"')
+        cur.execute('SELECT pkgKey FROM packages WHERE pkgId="%s"' % pkgId)
         ob = cur.fetchone()
         if ob:
             return self.getPkgByKey(ob["pkgKey"])
@@ -877,10 +876,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         files = cur.fetchall()
 
         for res in files:
-            quicklookup = {}
             if filename and not filename in res['filenames'].split('/'):
                 continue
-
             pkg = self.getPkgByKey(res['pkgKey'])
             if pkg:
                 result.append(pkg)

@@ -380,7 +380,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         Readf = reader.Read
         NodeTypef = reader.NodeType
         Namef = reader.Name
-        Valuef = reader.Value
         while Readf() == 1:
             ntype = NodeTypef()
             if ntype != XML_READER_TYPE_ELEMENT:

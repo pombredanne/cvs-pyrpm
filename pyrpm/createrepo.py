@@ -122,7 +122,7 @@ def metadataReadPackage(filename):
     IOError."""
 
     return functions.readRpmPackage(config.rpmconfig, filename,
-                                    verify = None, hdronly = True)
+                                    verify=None, hdronly=True)
 
 
 def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):
