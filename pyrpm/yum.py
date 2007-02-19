@@ -31,24 +31,6 @@ import pyrpm.database.repodb
 from pyrpm.database.jointdb import JointDB
 from pyrpm.logger import log
 
-
-def getVars(releasever, arch, basearch):
-    replacevars = {}
-    replacevars["$releasever"] = releasever
-    replacevars["$RELEASEVER"] = releasever
-    replacevars["$arch"] = arch
-    replacevars["$ARCH"] = arch
-    replacevars["$basearch"] = basearch
-    replacevars["$BASEARCH"] = basearch
-    for i in xrange(10):
-        key = "YUM%d" % i
-        value = os.environ.get(key)
-        if value:
-            replacevars[key.lower()] = value
-            replacevars[key] = value
-    return replacevars
-
-
 MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
         "logfile", "gpgcheck", "assumeyes", "alwaysprompt", "tolerant",
         "exclude", "exactarch",
@@ -65,66 +47,84 @@ RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "proxy_password")
 MultilineVarnames = ("exclude", "installonlypkgs", "kernelpkgnames", "commands", "pluginpath", "pluginconfpath", "baseurl", "gpgkey", "includepkgs")
 
-def YumConf(filename="/etc/yum.conf",
-    reposdirs=None):
-    if reposdirs == None:
-        reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
-    data = {}
-    ret = YumConf2(filename, data)
-    if ret != None:
-        raise ValueError, "could not read line %d in %s" % (ret, filename)
-    k = data.get("main", {}).get("reposdir")
-    if k != None:
-        reposdirs = k.split(" \t,;")
-    for reposdir in reposdirs:
-        for filename in glob.glob(reposdir + "/*.repo"):
-            ret = YumConf2(filename, data)
-            if ret != None:
-                raise ValueError, "could not read line %d in %s" % (ret,
-                    filename)
-    return data
+class YumConf(dict):
+    def __init__(self, releasever, arch, basearch,
+                 filename="/etc/yum.conf", reposdirs=None):
 
-def YumConf2(filename, data):
-    lines = []
-    if os.path.isfile(filename) and os.access(filename, os.R_OK):
-        log.info2("Reading in config file %s.", filename)
-        lines = open(filename, "r").readlines()
-    stanza = "main"
-    prevcommand = None
-    for linenum in xrange(len(lines)):
-        line = lines[linenum].rstrip("\n\r")
-        if line[:1] == "[" and line.find("]") != -1:
-            stanza = line[1:line.find("]")]
-            prevcommand = None
-        elif prevcommand and line[:1] in " \t":
-            # continuation line
-            line = line.strip()
-            if line and line[:1] not in "#;":
-                if prevcommand in MultilineVarnames:
-                    line = line.split()
-                else:
-                    line = [line]
-                data[stanza][prevcommand].extend(line)
-        else:
-            line = line.strip()
-            if line[:1] in "#;" or not line:
-                pass # comment line
-            elif line.find("=") != -1:
-                (key, value) = line.split("=", 1)
-                (key, value) = (key.strip(), value.strip())
-                if stanza == "main":
-                    if key not in MainVarnames:
-                        return linenum + 1 # unknown key value
-                elif key not in RepoVarnames:
-                    return linenum + 1 # unknown key value
+        self._buildReplaceVars(releasever, arch, basearch)
+        
+        if reposdirs == None:
+            reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
+        self.parseFile(filename)
+        k = self.get("main", {}).get("reposdir")
+        if k != None:
+            reposdirs = k.split(" \t,;")
+        for reposdir in reposdirs:
+            for filename in glob.glob(reposdir + "/*.repo"):
+                self.parseFile(filename)
+
+    def _buildReplaceVars(self, releasever, arch, basearch):
+        replacevars = {}
+        for name, value in (("$RELEASEVER", releasever),
+                            ("$ARCH", arch),
+                            ("$BASEARCH", basearch)):
+            replacevars[name] = value
+            replacevars[name.lower()] = value
+        for i in xrange(10):
+            key = "YUM%d" % i
+            value = os.environ.get(key)
+            if value:
+                replacevars[key.lower()] = value
+                replacevars[key] = value
+        self._replacevars = replacevars
+
+    def parseFile(self, filename):
+        lines = []
+        if os.path.isfile(filename) and os.access(filename, os.R_OK):
+            log.info2("Reading in config file %s.", filename)
+            lines = open(filename, "r").readlines()
+        stanza = "main"
+        prevcommand = None
+        for linenum in xrange(len(lines)):
+            line = lines[linenum].rstrip("\n\r")
+            if line[:1] == "[" and line.find("]") != -1:
+                stanza = line[1:line.find("]")]
                 prevcommand = None
-                if key in MultilineVarnames:
-                    value = value.split()
-                    prevcommand = key
-                data.setdefault(stanza, {})[key] = value
+            elif prevcommand and line[:1] in " \t":
+                # continuation line
+                line = line.strip()
+                if line and line[:1] not in "#;":
+                    if prevcommand in MultilineVarnames:
+                        line = line.split()
+                    else:
+                        line = [line]
+                    self[stanza][prevcommand].extend(line)
             else:
-                return linenum + 1 # not parsable line
-    return None
+                line = line.strip()
+                if line[:1] in "#;" or not line:
+                    pass # comment line
+                elif line.find("=") != -1:
+                    (key, value) = line.split("=", 1)
+                    (key, value) = (key.strip(), value.strip())
+                    if stanza == "main":
+                        if key not in MainVarnames:
+                            raise ValueError, "could not read line %d in %s" % (linenum + 1, filename)
+                    elif key not in RepoVarnames:
+                        raise ValueError, "could not read line %d in %s" % (linenum + 1, filename)
+                    prevcommand = None
+                    value = self.replaceVars(value)
+                    if key in MultilineVarnames:
+                        value = value.split()
+                        prevcommand = key
+                    self.setdefault(stanza, {})[key] = value
+                else:
+                    raise ValueError, "could not read line %d in %s" % (linenum + 1, filename)
+        return None
+
+    def replaceVars(self, line):
+        for (key, value) in self._replacevars.iteritems():
+            line = line.replace(key, value)
+        return line
 
 
 class RpmYum:
@@ -208,10 +208,9 @@ class RpmYum:
 
         sys.exit() on error."""
 
-        replacevars = getVars(self.config.relver, self.config.machine,
-            buildarchtranslate[self.config.machine])
         try:
-            conf = YumConf(file)
+            conf = YumConf(self.config.relver, self.config.machine,
+                           buildarchtranslate[self.config.machine], file)
         except IOError, e:
             log.error("Error reading configuration: %s", e)
             return 0
@@ -253,8 +252,8 @@ class RpmYum:
                 if self.config.timer:
                     time1 = clock()
                 log.info2("Reading repository '%s'", key)
-                repo = database.getRepoDB(self.config, conf, self.config.buildroot, key, replacevars=replacevars)
-                if repo.read(replacevars) == 0:
+                repo = database.getRepoDB(self.config, conf, self.config.buildroot, key)
+                if repo.read() == 0:
                     log.error("Error reading repository %s", key)
                     return 0
                 self.repos.addDB(repo)

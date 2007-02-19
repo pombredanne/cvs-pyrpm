@@ -1370,9 +1370,4 @@ def pathsplit2(filename):
     #    dirname += "/"
     #return (dirname, basename)
 
-def replaceVars(line, data):
-    for (key, value) in data.iteritems():
-        line = line.replace(key, value)
-    return line
-
 # vim:ts=4:sw=4:showmatch:expandtab

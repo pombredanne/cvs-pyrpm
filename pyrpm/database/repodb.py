@@ -49,7 +49,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 RPMSENSE_EQUAL | RPMSENSE_LESS: "LE",
                 RPMSENSE_EQUAL | RPMSENSE_GREATER: "GE"}
 
-    def __init__(self, config, source, buildroot='', reponame="default", nc=None, replacevars=None):
+    def __init__(self, config, source, buildroot='', reponame="default", nc=None):
         """Exclude packages matching whitespace-separated excludes.  Use
         reponame for cache subdirectory name and pkg["yumreponame"].
 
@@ -72,21 +72,14 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if self.yumconf.has_key("main"):
                 sec = self.yumconf["main"]
                 if sec.has_key("exclude"):
-                    for ex in sec["exclude"]:
-                        ex = functions.replaceVars(ex, replacevars)
-                        self.excludes.append(ex)
+                    self.excludes.extend(sec["exclude"])
             sec = self.yumconf[self.reponame]
             if sec.has_key("exclude"):
-                for ex in sec["exclude"]:
-                    ex = functions.replaceVars(ex, replacevars)
-                    self.excludes.append(ex)
+                self.excludes.extend(sec["exclude"])
             if sec.has_key("gpgkey"):
                 self.key_urls = sec["gpgkey"]
             if sec.has_key("baseurl"):
-                kk = sec["baseurl"]
-                for k in xrange(len(kk)):
-                    kk[k] = functions.replaceVars(kk[k], replacevars)
-                self.nc.addCache(kk, self.reponame)
+                self.nc.addCache(sec["baseurl"], self.reponame)
                 found_urls = True
             if sec.has_key("mirrorlist"):
                 self.mirrorlist = sec["mirrorlist"]
@@ -103,11 +96,9 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self._dirrc = re.compile('^(.*bin/.*|/etc/.*)$')
         self.comps = None
 
-    def readMirrorList(self, replacevars):
+    def readMirrorList(self):
         if not self.is_read and self.mirrorlist and self.yumconf:
-            mlist = self.mirrorlist[:]
-            mlist = functions.replaceVars(mlist, replacevars)
-            fname = self.nc.cache(mlist, 1)
+            fname = self.nc.cache(self.mirrorlist, 1)
             if fname:
                 lines = open(fname).readlines()
                 os.unlink(fname)
@@ -116,7 +107,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             for l in lines:
                 l = l.strip()
                 l = l.replace("$ARCH", "$basearch")
-                l = functions.replaceVars(l, replacevars)
+                l = self.yumconf.replaceVars(l)
                 if l and l[0] != "#":
                     self.nc.addCache([l,])
 
@@ -214,8 +205,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 self.keyring.addKey(k)
         return 1
 
-    def read(self, replacevars):
-        self.readMirrorList(replacevars)
+    def read(self):
+        self.readMirrorList()
         #self.is_read = 1 # FIXME: write-only
         while True:
             if not self.readRepoMD():
