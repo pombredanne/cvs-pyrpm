@@ -339,14 +339,6 @@ class RpmYum:
             ret |= self.install(pkgname)
         return ret
 
-    def installByDep(self, dname, dflags, dversion):
-        pkglist = self.repos.searchDependency(dname, dflags, dversion)
-        ret = self.__handleBestPkg("install", pkglist)
-        if self.has_args and not ret:
-            log.info1("No match for argument: %s",
-                      depString((dname, dflags, dversion)))
-        return ret
-
     def update(self, name, exact=False, do_obsolete=True):
         # First find all matching packages. Remember, name can be a glob, too,
         # so we might get a list of packages with different names.
@@ -474,14 +466,6 @@ class RpmYum:
             ret |= self.update(pkgname)
         return ret
 
-    def updateByDep(self, dname, dflags, dversion):
-        pkglist = self.repos.searchDependency(dname, dflags, dversion)
-        ret = self.__handleBestPkg("update", pkglist)
-        if self.has_args and not ret:
-            log.info1("No match for argument: %s",
-                      depString((dname, dflags, dversion)))
-        return ret
-
     def remove(self, name):
         ret = self.__handleBestPkg("remove", self.pydb.searchPkgs([name, ]))
         if self.has_args and not ret:
@@ -493,14 +477,6 @@ class RpmYum:
         ret = 0
         for pkgname in args:
             ret |= self.remove(pkgname)
-        return ret
-
-    def removeByDep(self, dname, dflags, dversion, all=True):
-        pkglist = self.pydb.searchDependency(dname, dflags, dversion)
-        ret = self.__handleBestPkg("remove", pkglist)
-        if self.has_args and not ret:
-            log.info1("No match for argument: %s",
-                      depString((dname, dflags, dversion)))
         return ret
 
     def __readPackage(self, name):
