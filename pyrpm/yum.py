@@ -853,6 +853,9 @@ class RpmYum:
                         log.info2("Importing filelist took %s seconds",
                                   (clock() - time1))
                     modified_repo = 1
+            # In case we have modified at least one repository we now check if
+            # by loading the filelist we already fullfilled the dependency in
+            # case the package was already added to the transaction.
             if modified_repo:
                 self.opresolver.getDatabase().reloadDependencies()
                 if len(self.opresolver.getDatabase().searchDependency(dep[0], dep[1], dep[2])) > 0:
