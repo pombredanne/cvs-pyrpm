@@ -205,7 +205,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # Try to create the databse in filename, or use in memory when
         # this fails
         try:
-            f = open(filename,'w')
+            f = open(filename, 'w')
             db = sqlite.connect(filename)
         except IOError:
             log.warning("Could not create sqlite cache file, using in memory "
@@ -268,11 +268,11 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # If info is not in there this is an incompelete cache file
         # (this could happen when the user hits ctrl-c or kills yum
         # when the cache is being generated or updated)
-        if (not info):
+        if not info:
             raise sqlite.DatabaseError, "Incomplete database cache file"
 
         # Now check the database version
-        if (info['dbversion'] not in supported_dbversions):
+        if info['dbversion'] not in supported_dbversions:
             log.info2("Cache file is version %s, we need %s, will "
                       "regenerate.\n", info['dbversion'], dbversion)
             raise sqlite.DatabaseError, "Older version of yum sqlite: %s" % info['dbversion']
@@ -321,24 +321,19 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         cur.execute("CREATE INDEX pkgId ON packages (pkgId)")
         self._othersdb.commit()
 
-
-
     def createPrimaryTables(self):
         """Create the required tables for primary metadata in the sqlite
            database"""
-
         cur = self._primarydb.cursor()
         self.createDbInfo(cur)
         # The packages table contains most of the information in primary.xml.gz
 
         q = 'CREATE TABLE packages(\n' \
             'pkgKey INTEGER PRIMARY KEY,\n'
-
         cols = []
         for col in self.COLUMNS:
             cols.append('%s TEXT' % col)
         q += ',\n'.join(cols) + ')'
-
         cur.execute(q)
 
         # Create requires, provides, conflicts and obsoletes tables
@@ -380,7 +375,6 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         self._filelistsdb = None
         self._othersdb = None
         return 1
-
 
     def getDbFile(self, dbtype):
 
@@ -520,14 +514,14 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             self._pkgs[pkgKey]['oldfilenames'] = filelist
 
         dirs = {}
-        for filename, ftype in zip(filelist, filetypelist):
+        for (filename, ftype) in zip(filelist, filetypelist):
             (dirname, filename) = functions.pathsplit(filename)
             if not dirs.has_key(dirname):
                 dirs[dirname] = {'files' : [], 'types' : []}
             dirs[dirname]['files'].append(filename)
             dirs[dirname]['types'].append(ftype[0])
 
-        for (dirname,dir) in dirs.items():
+        for (dirname, dir) in dirs.items():
             data = {
                 'pkgKey': pkgKey,
                 'dirname': dirname,
@@ -651,8 +645,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         pkgKey = self.insertHash('packages', data, cur)
         pkg.pkgKey = pkgKey
 
-        for tag in ('requires','provides','conflicts','obsoletes'):
-            for  n, f, v in pkg[tag]:
+        for tag in ('requires', 'provides', 'conflicts', 'obsoletes'):
+            for (n, f, v) in pkg[tag]:
                 epoch, version, release = functions.evrSplitString(v)
                 data = {
                     'name' : n,
