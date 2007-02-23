@@ -580,6 +580,7 @@ class GzipFile(gzip.GzipFile):
 
 
 cachedir = "/var/cache/pyrpm/"
+opensuse = 0
 
 
 def setProxyOptions(o):
@@ -769,7 +770,7 @@ rpmtag = {
     "conflictname": [1054, RPM_STRING_ARRAY, None, 0],
     "conflictflags": [1053, RPM_INT32, None, 0],
     "conflictversion": [1055, RPM_STRING_ARRAY, None, 0],
-    # triggers
+    # triggers:
     "triggername": [1066, RPM_STRING_ARRAY, None, 4],
     "triggerflags": [1068, RPM_INT32, None, 4],
     "triggerversion": [1067, RPM_STRING_ARRAY, None, 4],
@@ -870,7 +871,16 @@ rpmtag = {
     "triggerin": [1100, RPM_STRING, None, 5],
     "triggerun": [1101, RPM_STRING, None, 5],
     "triggerpostun": [1102, RPM_STRING, None, 5],
-    "archivesize": [1046, RPM_INT32, 1, 1]
+    "archivesize": [1046, RPM_INT32, 1, 1],
+    # tags used in openSuSE:
+    "suggestsname": [1156, RPM_STRING_ARRAY, None, 5],
+    "suggestsversion": [1157, RPM_STRING_ARRAY, None, 5],
+    "suggestsflags": [1158, RPM_INT32, None, 5],
+    "enhancesname": [1159, RPM_STRING_ARRAY, None, 5],
+    "enhancesversion": [1160, RPM_STRING_ARRAY, None, 5],
+    "enhancesflags": [1161, RPM_INT32, None, 5],
+    "posttrans": [1152, RPM_STRING, None, 5],
+    "posttransprog": [1154, RPM_STRING, None, 5],
 }
 # Add a reverse mapping for all tags plus the name again.
 for _v in rpmtag.keys():
@@ -2433,7 +2443,7 @@ class ReadRpm: # pylint: disable-msg=R0904
             self.__verifyWriteHeader(self.sig.hash, rpmsigtag,
                 "header_signatures", self.sigdata, 0, None)
         # disable the utf-8 test per default, should check against self.verbose:
-        if self.strict:
+        if self.strict and not opensuse:
             for i in ("summary", "description", "changelogtext"):
                 if self[i] == None:
                     continue
@@ -2492,9 +2502,14 @@ class ReadRpm: # pylint: disable-msg=R0904
         if self["payloadformat"] not in [None, "cpio", "drpm"]:
             self.printErr("wrong payload format %s" % self["payloadformat"])
         if self.strict:
-            if self["payloadcompressor"] not in [None, "gzip"]:
-                self.printErr("no gzip compressor: %s" % \
-                    self["payloadcompressor"])
+            if opensuse:
+                if self["payloadcompressor"] not in [None, "gzip", "bzip2"]:
+                    self.printErr("no gzip/bzip2 compressor: %s" % \
+                        self["payloadcompressor"])
+            else:
+                if self["payloadcompressor"] not in [None, "gzip"]:
+                    self.printErr("no gzip compressor: %s" % \
+                        self["payloadcompressor"])
         else:
             if self["payloadcompressor"] not in [None, "gzip", "bzip2"]:
                 self.printErr("no gzip/bzip2 compressor: %s" % \
@@ -2506,27 +2521,40 @@ class ReadRpm: # pylint: disable-msg=R0904
         elif self["os"] not in ["Linux", "linux", "darwin"]:
             self.printErr("bad os: %s" % self["os"])
         if self.strict:
-            if self["packager"] not in (None,
-                "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>",
-                "Fedora Project <http://bugzilla.redhat.com/bugzilla>",
-                "Matthias Saou <matthias@rpmforge.net>"):
-                self.printErr("unknown packager: %s" % self["packager"])
-            if self["vendor"] not in (None, "Red Hat, Inc.", "Fedora Project",
-                "Livna.org RPMS", "Freshrpms.net"):
-                self.printErr("unknown vendor: %s" % self["vendor"])
-            if self["distribution"] not in (None, "Red Hat", "Red Hat Linux",
-                "Red Hat FC-3", "Red Hat (FC-3)", "Red Hat (FC-4)",
-                "Red Hat (FC-5)", "Red Hat (FC-6)", "Red Hat (FC-7)",
-                "Fedora Extras", "Red Hat (scratch)", "Red Hat (RHEL-3)",
-                "Red Hat (RHEL-4)", "Red Hat (RHEL-5)"):
-                self.printErr("unknown distribution: %s" % self["distribution"])
+            if opensuse:
+                if self["packager"] not in ("http://bugs.opensuse.org",):
+                    self.printErr("unknown packager: %s" % self["packager"])
+                if self["vendor"] not in (
+                    "SUSE LINUX Products GmbH, Nuernberg, Germany",):
+                    self.printErr("unknown vendor: %s" % self["vendor"])
+            else:
+                if self["packager"] not in (None,
+                    "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>",
+                    "Fedora Project <http://bugzilla.redhat.com/bugzilla>",
+                    "Matthias Saou <matthias@rpmforge.net>"):
+                    self.printErr("unknown packager: %s" % self["packager"])
+                if self["vendor"] not in (None, "Red Hat, Inc.",
+                    "Fedora Project", "Livna.org RPMS", "Freshrpms.net"):
+                    self.printErr("unknown vendor: %s" % self["vendor"])
+                if self["distribution"] not in (None, "Red Hat",
+                    "Red Hat Linux", "Red Hat FC-3", "Red Hat (FC-3)",
+                    "Red Hat (FC-4)", "Red Hat (FC-5)", "Red Hat (FC-6)",
+                    "Red Hat (FC-7)", "Fedora Extras", "Red Hat (scratch)",
+                    "Red Hat (RHEL-3)", "Red Hat (RHEL-4)",
+                    "Red Hat (RHEL-5)"):
+                    self.printErr("unknown distribution: %s" % \
+                        self["distribution"])
         arch = self["arch"]
         if self["rhnplatform"] not in (None, arch):
             self.printErr("unknown arch for rhnplatform")
         if self.strict:
             if os.path.basename(self.filename) != self.getFilename():
                 self.printErr("bad filename: %s" % self.filename)
-            if self["platform"] not in (None, "", arch + "-redhat-linux-gnu",
+            if opensuse:
+                if self["platform"] not in (None, "",
+                  arch + "-suse-linux", "noarch-suse-linux"):
+                    self.printErr("unknown arch %s" % self["platform"])
+            elif self["platform"] not in (None, "", arch + "-redhat-linux-gnu",
                 arch + "-redhat-linux", "--target=${target_platform}",
                 arch + "-unknown-linux",
                 "--target=${TARGET_PLATFORM}", "--target=$TARGET_PLATFORM"):
@@ -2554,7 +2582,7 @@ class ReadRpm: # pylint: disable-msg=R0904
                 if ((not isinstance(prog, basestring) and prog != None) or
                      not possible_scripts.has_key(prog)):
                     self.printErr("unknown prog: %s" % prog)
-                if script == None and prog == "/bin/sh":
+                if script == None and prog == "/bin/sh" and not opensuse:
                     self.printErr("empty script: %s" % s)
                 if script != None and isCommentOnly(script):
                     self.printErr("empty(2) script: %s" % s)
@@ -2645,7 +2673,9 @@ class ReadRpm: # pylint: disable-msg=R0904
                 if t[2] != None and t[2] != count:
                     self.printErr("tag %d has wrong count %d" % (tag, count))
                 if self.strict and (t[3] & 1):
-                    self.printErr("tag %d is old" % tag)
+                    if not opensuse or tag not in (1012, 1013, 1123, 1152,
+                        1154, 1156, 1157, 1158, 1159, 1160, 1161):
+                        self.printErr("tag %d is old" % tag)
                 if self.issrc:
                     if (t[3] & 4):
                         self.printErr("tag %d should be for binary rpms" % tag)
@@ -6197,7 +6227,7 @@ def checkDirs(repo):
             continue
         for f in rpm.filenames:
             # check if startup scripts are in wrong directory
-            if f.startswith("/etc/init.d/"):
+            if f.startswith("/etc/init.d/") and not opensuse:
                 print "init.d:", rpm.filename, f
             # output any package having debug stuff included
             if (not rpm["name"].endswith("-debuginfo") and
@@ -6355,7 +6385,7 @@ def usage():
 
 def main():
     import getopt
-    global cachedir # pylint: disable-msg=W0603
+    global cachedir, opensuse # pylint: disable-msg=W0603
     if len(sys.argv) <= 1:
         usage()
         return 0
@@ -6421,7 +6451,7 @@ def main():
             "cachedir=", "checkrpmdb", "checkoldkernel", "numkeepkernels=",
             "checkdeps", "completerepo", "buildroot=", "installroot=",
             "root=", "version", "baseurl=", "createrepo", "groupfile=",
-            "mercurial", "pyrex", "testmirrors"])
+            "mercurial", "pyrex", "testmirrors", "opensuse"])
     except getopt.GetoptError, msg:
         print "Error:", msg
         return 1
@@ -6536,6 +6566,8 @@ def main():
             pyrex = 1
         elif opt == "--testmirrors":
             testmirrors = 1
+        elif opt == "--opensuse":
+            opensuse = 1
     # Select of what we want todo here:
     if diff:
         diff = diffTwoSrpms(args[0], args[1], explode)
@@ -6782,7 +6814,8 @@ def main():
             for rpm in repo:
                 rpm.filenames = rpm.getFilenames()
             checkDirs(repo)
-            checkSymlinks(repo)
+            if not opensuse:
+                checkSymlinks(repo)
             checkScripts(repo)
         if strict or checkdeps:
             if specifyarch:
