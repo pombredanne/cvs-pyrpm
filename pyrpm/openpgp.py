@@ -28,7 +28,7 @@ except ImportError:
     DSA, RSA = None, None
     Util_number = None
 
-from pyrpm.logger import log
+from logger import log
 
 # FIXME: "VERIFY" notes
 # FIXME: "BADFORMAT" notes
@@ -750,7 +750,7 @@ def _decodeArmor(data):
     data = [c for c in data
             if c in ("ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                      "abcdefghijklmnopqrstuvwxyz0123456789+/=")]
-    data = string.join(data, '')
+    data = string.join(data, "")
     # The '=' padding character is never at the start of a 4-character group
     # in base64; the checksum is after the last group.
     if len(data) >= 4 + 1 + 4 and len(data) % 4 == 1 and data[-5] == '=':
