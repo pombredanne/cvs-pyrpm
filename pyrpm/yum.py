@@ -495,7 +495,7 @@ class RpmYum:
 
     def __findPkgs(self, name):
         if name[0] != "/":
-            return self.repos.getPkgsByName(name)
+            return self.repos.searchPkgs([name])
         else:
             return self.repos.searchFilenames(name)
 
@@ -650,6 +650,29 @@ class RpmYum:
             op_func(name)
         if self.config.timer:
             log.info2("runArgs() took %s seconds", (clock() - time1))
+        resolver = self.opresolver
+        # Remember the current state of the transaction before we do depsolving
+        # so we know what operations were requested directly via commandline
+        self.__iinstalls = resolver.installs[:]
+        self.__ierases = resolver.erases[:]
+        self.__iupdates = { }
+        self.__iobsoletes = { }
+        for p in resolver.updates:
+            self.__iupdates[p] = [ ]
+            if p in self.__iinstalls:
+                self.__iinstalls.remove(p)
+            for p2 in resolver.updates[p]:
+                if p2 in self.__ierases:
+                    self.__ierases.remove(p2)
+                self.__iupdates[p].append(p2)
+        for p in resolver.obsoletes:
+            self.__iobsoletes[p] = [ ]
+            if p in self.__iinstalls:
+                self.__iinstalls.remove(p)
+            for p2 in resolver.obsoletes[p]:
+                if p2 in self.__ierases:
+                    self.__ierases.remove(p2)
+                self.__iobsoletes[p].append(p2)
         return 1
 
     def runDepRes(self):
@@ -671,6 +694,135 @@ class RpmYum:
 
         Return 1 on success, 0 on error (after warning the user)."""
 
+        # Get the current operations of the final transaction and generate
+        # the difference to the pre-depsolver operations. That way we know
+        # which operations were required because of dependencies.
+        resolver = self.opresolver
+        installs = resolver.installs[:]
+        erases = resolver.erases[:]
+        updates = { }
+        obsoletes = { }
+        totsize = ipkgs = epkgs = opkgs = upkgs = 0
+        fmtstr = " %-22.22s  %-9.9s  %-15.15s  %-16.16s  %5.5s"
+        for p in resolver.updates:
+            updates[p] = [ ]
+            if p in installs:
+                installs.remove(p)
+            for p2 in resolver.updates[p]:
+                if p2 in erases:
+                    erases.remove(p2)
+                updates[p].append(p2)
+        for p in resolver.obsoletes:
+            obsoletes[p] = [ ]
+            if p in installs:
+                installs.remove(p)
+            for p2 in resolver.obsoletes[p]:
+                if p2 in erases:
+                    erases.remove(p2)
+                obsoletes[p].append(p2)
+
+        # Output the whole transaction in a very yummy format. ;)
+        log.info1("\n=============================================================================")
+        log.info1(" Package                 Arch       Version          Repository        Size ")
+        log.info1("=============================================================================")
+
+        if len(self.__iinstalls) > 0:
+            log.info1("\nInstalling:")
+            self.__iinstalls.sort(lambda x,y:cmp(x["name"], y["name"]))
+            for p in self.__iinstalls:
+                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
+                ipkgs += 1
+                if p in installs:
+                    installs.remove(p)
+        if len(self.__iupdates) > 0:
+            log.info1("\nUpdating:")
+            pl = self.__iupdates.keys()
+            pl.sort(lambda x,y:cmp(x["name"], y["name"]))
+            for p in pl:
+                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
+                upkgs += 1
+                l = self.__iupdates[p]
+                for p2 in l:
+                    if p in updates.keys() and p2 in updates[p]:
+                        updates[p].remove(p2)
+                if p in updates.keys() and len(updates[p]) == 0:
+                    del updates[p]
+        if len(self.__iobsoletes) > 0:
+            log.info1("\nObsoleting:")
+            pl = self.__iobsoletes.keys()
+            pl.sort(lambda x,y:cmp(x["name"], y["name"]))
+            for p in pl:
+                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
+                opkgs += 1
+                l = self.__iobsoletes[p]
+                for p2 in l:
+                    if p in obsoletes.keys() and p2 in obsoletes[p]:
+                        obsoletes[p].remove(p2)
+                if p in obsoletes.keys() and len(obsoletes[p]) == 0:
+                    del obsoletes[p]
+        if len(self.__ierases) > 0:
+            log.info1("\nErasing:")
+            self.__ierases.sort(lambda x,y:cmp(x["name"], y["name"]))
+            for p in self.__ierases:
+                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), "rpmdb", "0")
+                epkgs += 1
+                if p in erases:
+                    erases.remove(p)
+
+        # Dependency fooshizzle output
+        if len(installs) > 0:
+            log.info1("\nInstalling for dependencies:")
+            installs.sort(lambda x,y:cmp(x["name"], y["name"]))
+            for p in installs:
+                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
+                ipkgs += 1
+        if len(updates) > 0:
+            log.info1("\nUpdating for dependencies:")
+            pl = updates.keys()
+            pl.sort(lambda x,y:cmp(x["name"], y["name"]))
+            for p in pl:
+                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
+                upkgs += 1
+        if len(obsoletes) > 0:
+            log.info1("\nObsoleting due to dependencies:")
+            pl = obsoletes.keys()
+            pl.sort(lambda x,y:cmp(x["name"], y["name"]))
+            for p in pl:
+                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
+                opkgs += 1
+        if len(erases) > 0:
+            log.info1("\nErasing due to dependencies:")
+            erases.sort(lambda x,y:cmp(x["name"], y["name"]))
+            for p in erases:
+                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), "rpmdb", "0")
+                epkgs += 1
+
+        self.erase_list = [pkg for pkg in self.erase_list
+                           if pkg in self.pydb]
+
+        if len(self.erase_list) > 0:
+            log.info1("\nWarning: Following packages will be automatically "
+                      "removed from your system:")
+            for p in self.erase_list:
+                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), "rpmdb", "0")
+
+        if self.confirm:
+            log.info1("\nTransaction Summary")
+            log.info1("=============================================================================")
+            if ipkgs > 0:
+                log.info1("Install      %5d package(s)" % ipkgs)
+            if upkgs > 0:
+                log.info1("Update       %5d package(s)" % upkgs)
+            if opkgs > 0:
+                log.info1("Obsolete     %5d package(s)" % opkgs)
+            if epkgs > 0:
+                log.info1("Erase        %5d package(s)" % epkgs)
+
+        log.info1("\nTotal download size: %d" % totsize)
+        if self.confirm and not self.config.test:
+            if not is_this_ok():
+                return 1
+
         if self.config.timer:
             time1 = clock()
         if self.command.endswith("remove"):
@@ -689,28 +841,7 @@ class RpmYum:
         ipkgs = 0
         upkgs = 0
         epkgs = 0
-        for (op, pkg) in ops:
-            if   op == OP_INSTALL:
-                ipkgs += 1
-            elif op == OP_UPDATE:
-                upkgs += 1
-            elif op == OP_ERASE:
-                epkgs += 1
-            log.info1("\t%s %s", op, pkg.getNEVRA())
 
-        self.erase_list = [pkg for pkg in self.erase_list
-                           if pkg in self.pydb]
-
-        if len(self.erase_list) > 0:
-            log.info1("Warning: Following packages will be automatically "
-                      "removed from your system:")
-            for pkg in self.erase_list:
-                log.info1("\t%s\n", pkg.getNEVRA())
-        if self.confirm:
-            print "Installing %d packages, updating %d packages, erasing %d packages" % (ipkgs, upkgs, epkgs)
-        if self.confirm and not self.config.test:
-            if not is_this_ok():
-                return 1
         if self.config.timer:
             log.info2("runCommand() took %s seconds", (clock() - time1))
         if self.config.test:

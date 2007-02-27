@@ -74,6 +74,17 @@ Please let us know of any problems you encounter, if possible with some
 reproducible test cases so we can figure out what might have happened.
 
 
+Warning about Locking
+---------------------
+
+An additional warning about locks when using the pyrpm tools: When using
+pyrpmyum you will get the yum lock, but unfortunately due to the nature of
+how rpm locks the rpmdb we can't do those locks from within python. So while
+using yum and pyrpmyum concurrently works nicely, don't ever use rpm while
+running pyrpmyum, it's basically guaranteed to break your rpmdb and/or your
+system.
+
+
 Features/Highlights
 -------------------
 
