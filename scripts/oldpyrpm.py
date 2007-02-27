@@ -4245,6 +4245,111 @@ def utf8String(string):
             newstring += char
     return newstring
 
+
+def open_fh(filename):
+    if filename[-3:] == ".gz":
+        #return gzip.open(filename, "r")
+        return PyGZIP(filename, None, None, None)
+    return open(filename, "r")
+
+def read_repodata(elem):
+    p = {}
+    p["type"] = elem.attrib.get("type")
+    for child in elem:
+        if child.tag == "{http://linux.duke.edu/metadata/repo}location":
+            p["location"] = child.attrib.get("href")
+            p["base"] = child.attrib.get("base")
+        elif child.tag == "{http://linux.duke.edu/metadata/repo}checksum":
+            p["checksum"] = child.text
+            p["checksum_type"] = child.attrib.get("type")
+        elif child.tag == "{http://linux.duke.edu/metadata/repo}open-checksum":
+            p["openchecksum"] = child.text
+            p["openchecksum_type"] = child.attrib.get("type")
+        elif child.tag == "{http://linux.duke.edu/metadata/repo}timestamp":
+            p["timestamp"] = child.text
+    return p
+
+def read_repomd(filename):
+    fh = open(filename, "r")
+    if not fh:
+        return None
+    o = {}
+    for (_, elem) in iterparse(fh).__iter__():
+        if elem.tag == "{http://linux.duke.edu/metadata/repo}data":
+            p = read_repodata(elem)
+            o[p["type"]] = p
+            elem.clear()
+    return o
+
+def _bn(qn):
+    return qn[qn.find("}") + 1:]
+
+def _prefixprops(elem, prefix):
+    prefix += "_"
+    ret = {}
+    for (key, value) in elem.attrib.iteritems():
+        ret[prefix + _bn(key)] = value
+    return ret
+
+def read_primary(filename, verbose=5):
+    fh = open_fh(filename)
+    if not fh:
+        return None
+    ret = {}
+    p = {}
+    files = {}
+    prco = {}
+    for (_, elem) in iterparse(fh).__iter__():
+        name = _bn(elem.tag)
+        if name in ("name", "arch", "summary", "description", "url",
+                "packager"):
+            p[name] = elem.text
+        elif name == "version": # epoch, ver, rel
+            p.update(elem.attrib)
+        elif name in ("time", "size"):
+            # time: file, build.  size: package, installed, archive.
+            p.update(_prefixprops(elem, name))
+        elif name in ("checksum", "location"):
+            p.update(_prefixprops(elem, name))
+            p[name + "_value"] = elem.text
+        elif name == "metadata":
+            pass
+        elif name == "package":
+            p["file"] = files
+            ret[p["name"] + p["ver"] + "-" + p["rel"]] = p
+            p = {}
+            files = {}
+        elif name == "entry":
+            pass
+        elif name == "format":
+            pass
+        elif name == "file":
+            files[elem.text] = elem.get("type", "file")
+        elif name in ("license", "vendor", "group", "buildhost", "sourcerpm"):
+            p[name] = elem.text
+        elif name in ("provides", "requires", "conflicts", "obsoletes"):
+            prco[name] = [ c2.attrib for c2 in elem ]
+        elif name == "header-range":
+            p.update(_prefixprops(elem, "rpm_header"))
+        elif verbose > 4:
+            print "new primary tag:", name
+        #elem.clear()
+    return ret
+
+def testRepo():
+    release = "/home/mirror/fedora/development/i386/os"
+    time1 = time.clock()
+    for _ in xrange(1000):
+        read_repomd(release + "/repodata/repomd.xml")
+    print time.clock() - time1, "milisec to read one repomd"
+    print read_repomd(release + "/repodata/repomd.xml")
+    time1 = time.clock()
+    for _ in xrange(5):
+        read_primary(release + "/repodata/primary.xml.gz")
+    print (time.clock() - time1) / 5.0, "sec to read primary"
+    print read_primary(release + "/repodata/primary.xml.gz")
+
+
 def getProps(reader):
     Namef = reader.Name
     Valuef = reader.Value
