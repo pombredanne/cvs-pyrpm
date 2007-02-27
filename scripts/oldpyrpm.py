@@ -6290,10 +6290,15 @@ def checkScripts(repo):
                         line.find("rpm --eval") != -1):
                         continue
                     # ignore "find -printf" (cyrus-imapd):
-                    if line.find("-printf") != -1:
-                        continue
+                    #if line.find("-printf") != -1:
+                    #    continue
                     # ignore `date +string`
                     if re.compile(".*date \'?\\+").match(line):
+                        continue
+                    # openSuSE "kmp" rpms
+                    if line.find("set --") != -1:
+                        continue
+                    if line.find("printf") != -1:
                         continue
                     print rpm.filename, "contains \"%\""
                     break
