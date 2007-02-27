@@ -573,7 +573,7 @@ class RpmResolver:
         result = []
         for myfile in filereqs:
             if not db.searchDependency(myfile, 0, ""):
-                result.append(file)
+                result.append(myfile)
         return result
 
     # ----
