@@ -48,14 +48,19 @@ RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
 MultilineVarnames = ("exclude", "installonlypkgs", "kernelpkgnames", "commands", "pluginpath", "pluginconfpath", "baseurl", "gpgkey", "includepkgs")
 
 class YumConf(dict):
-    def __init__(self, releasever, arch, basearch,
-                 filename="/etc/yum.conf", reposdirs=None):
+    def __init__(self, relver, arch, rpmdb=None, filenames=["/etc/yum.conf"],
+                 reposdirs=None):
 
-        self._buildReplaceVars(releasever, arch, basearch)
-        
+        for filename in filenames:
+            if os.path.isfile(filename):
+                self.parseFile(filename)
+            else:
+                log.warning("Couldn't find given yum config file, skipping "
+                            "read of repo %s", yumconf)
+
         if reposdirs == None:
             reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
-        self.parseFile(filename)
+
         k = self.get("main", {}).get("reposdir")
         if k != None:
             reposdirs = k.split(" \t,;")
@@ -63,7 +68,25 @@ class YumConf(dict):
             for filename in glob.glob(reposdir + "/*.repo"):
                 self.parseFile(filename)
 
-    def _buildReplaceVars(self, releasever, arch, basearch):
+        if relver is None and rpmdb:
+            distroverpkg = self.get('main', {}).get(
+                'distroverpkg', "redhat-release")
+            for pkg in rpmdb.searchProvides(distroverpkg, 0, ""):
+                relver = pkg["version"]
+        if relver is None:
+            relver = ''
+
+        self._buildReplaceVars(relver, arch)
+                
+        for name, section in self.iteritems():
+            for key, value in section.iteritems():
+                if isinstance(value, list):
+                    section[key] = [self.replaceVars(item) for item in value]
+                else:
+                    section[key] = self.replaceVars(value)
+
+    def _buildReplaceVars(self, releasever, arch):
+        basearch = buildarchtranslate[arch]
         replacevars = {}
         for name, value in (("$RELEASEVER", releasever),
                             ("$ARCH", arch),
@@ -81,7 +104,7 @@ class YumConf(dict):
     def parseFile(self, filename):
         lines = []
         if os.path.isfile(filename) and os.access(filename, os.R_OK):
-            log.info2("Reading in config file %s.", filename)
+            log.info2("Reading in config file %s", filename)
             lines = open(filename, "r").readlines()
         stanza = "main"
         prevcommand = None
@@ -112,7 +135,6 @@ class YumConf(dict):
                     elif key not in RepoVarnames:
                         raise ValueError, "could not read line %d in %s" % (linenum + 1, filename)
                     prevcommand = None
-                    value = self.replaceVars(value)
                     if key in MultilineVarnames:
                         value = value.split()
                         prevcommand = key
@@ -203,14 +225,14 @@ class RpmYum:
         #    self.always_install = [ ]
         return 1
 
-    def addRepo(self, file):
+    def addRepos(self, files, db):
         """Read yum configuration file and add repositories it uses.
 
         sys.exit() on error."""
 
         try:
-            conf = YumConf(self.config.relver, self.config.machine,
-                           buildarchtranslate[self.config.machine], file)
+            conf = YumConf(self.config.relver, self.config.machine, db,
+                           files)
         except IOError, e:
             log.error("Error reading configuration: %s", e)
             return 0
@@ -295,14 +317,11 @@ class RpmYum:
         for pkg in db.searchProvides("redhat-release", 0, ""):
             self.config.relver = pkg["version"]
 
-        for yumconf in self.config.yumconf:
-            if os.path.isfile(yumconf):
-                if not self.repos_read and not self.command == "remove":
-                    if not self.addRepo(yumconf):
-                        return 0
-            else:
-                log.warning("Couldn't find given yum config file, skipping "
-                            "read of repo %s", yumconf)
+        
+        if not self.repos_read and not self.command == "remove":
+            if not self.addRepos(self.config.yumconf, db):
+                return 0
+
         self.repos_read = 1
         self.opresolver = RpmResolver(self.config, db)
         self.__generateObsoletesList()

@@ -56,7 +56,7 @@ options:
     [--enablerepo repoid|repoglob] [--disablerepo repoid|repoglob]
     [--exclude pkgname/pkgglob]
     [--nocache] [--cachedir DIRECTORY]
-    [--obsoletes] [--noplugins]
+    [--obsoletes] [--noplugins] [--releaseversion]
 """
 
 def lockPyrpm():

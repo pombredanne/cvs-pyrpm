@@ -737,7 +737,7 @@ def parseYumOptions(argv, yum):
          "installpkgs=", "arch=", "archlist=", "checkinstalled", "rusage",
          "srpmdir=", "enablerepo=", "disablerepo=", "nocache", "cachedir=",
          "exclude=", "obsoletes", "noplugins", "diff", "verifyallconfig",
-         "languages="])
+         "languages=", "releaseversion="])
     except getopt.error, e:
         # FIXME: all to stderr
         log.error("Error parsing command-line arguments: %s", e)
@@ -864,7 +864,9 @@ def parseYumOptions(argv, yum):
             rpmconfig.verifyallconfig = True
         elif opt == "--languages":
             yum.langs = val.split()
-
+        elif opt == "--releaseversion":
+            rpmconfig.relver = val
+            
     log.setInfoLogLevel(verbose)
 
     if rpmconfig.arch != None:
