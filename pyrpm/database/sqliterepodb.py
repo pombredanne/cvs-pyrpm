@@ -605,7 +605,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
     def _getDBFlags(self, ob):
         try:
             pre = ob['pre'].lower()
-        except KeyError:
+        except (KeyError, IndexError):
             pre = 'false'
         if pre == 'true':
             return self.flagmap[ob['flags']] | pyrpm.base.RPMSENSE_PREREQ
