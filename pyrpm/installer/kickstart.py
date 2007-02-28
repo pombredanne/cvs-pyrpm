@@ -134,10 +134,10 @@ class KickstartConfig(dict):
 
             if not in_packages and in_post < 0 and not in_pre:
                 if len(args) == 1:
-                    if opt in [ "autopart", "autostep", "cmdline",
+                    if opt in [ "autopart", "autostep", "cmdline", "graphical",
                                 "halt", "install", "interactive", "poweroff",
-                                "reboot", "shutdown", "skipx", "text",
-                                "upgrade", "mouse", "zerombr" ]:
+                                "shutdown", "skipx", "text", "upgrade",
+                                "mouse", "zerombr" ]:
                         self[opt] = None
                     else:
                         log.info1("'%s' is unsupported.", line)
@@ -170,21 +170,15 @@ class KickstartConfig(dict):
                                      [ "append:", "driveorder:", "location:",
                                        "password:", "md5pass:", "lba32",
                                        "upgrade" ])
-                    if self["bootloader"].has_key("driveorder"):
-                        order = self["bootloader"]["driveorder"].split(",")
-                        self["bootloader"]["driveorder"] = order
+                    self.stringSplit(self["bootloader"], "driveorder")
                 elif opt == "cdrom":
                     self.parseSimple(opt, args[1:], [ "exclude:" ])
-                    if self[opt].has_key("exclude"):
-                        self[opt]["exclude"] = string.split( \
-                            self[opt]["exclude"], ",")
+                    self.stringSplit(self[opt], "exclude")
                 elif opt == "clearpart":
                     self.parseSimple(opt, args[1:],
                                      [ "all", "drives:", "initlabel", "linux",
                                        "none" ])
-                    if self["clearpart"].has_key("drives"):
-                        order = self["bootloader"]["drives"].split(",")
-                        self["bootloader"]["drives"] = order
+                    self.stringSplit(self["bootloader"], "drives")
                 elif opt == "device":
                     (_dict, _args) = self.parseArgs(opt, args[1:], [ "opts:" ])
                     if len(_args) != 2:
@@ -194,6 +188,7 @@ class KickstartConfig(dict):
                     if not self[opt].has_key(_args[0]):
                         self[opt][_args[0]] = { }
                     self[opt][_args[0]][_args[1]] = _dict
+                # TODO: dmraid
                 # TODO: driverdisk
                 elif opt == "firewall":
                     # firewall is special, so we have to do it by hand
@@ -261,6 +256,9 @@ class KickstartConfig(dict):
                     if not self[opt].has_key("partition") or \
                        not self[opt].has_key("dir"):
                         raise ValueError, "Error in line '%s'" % line
+                # TODO: ignoredisk
+                # TODO: iscsi
+                # TODO: iscsiname
                 elif opt == "key":
                     self.parseSub(opt, args[1:], [ "skip" ])
                 elif opt == "langsupport":
@@ -271,6 +269,7 @@ class KickstartConfig(dict):
                         self[opt]["supported"] = _args
                     if len(self[opt]) == 0:
                         raise ValueError, "Error in line '%s'" % line
+                # TODO: logging
                 elif opt == "logvol":
                     if args[1] == "swap":
                         args[1] = "swap.%d" % swap_id
@@ -284,10 +283,12 @@ class KickstartConfig(dict):
                                            "percent" ])
                     self.convertLong(dict, "bytes-per-inode")
                     self.convertDouble(dict, "percent")
+                # TODO: mediacheck
                 elif opt == "monitor":
                     self.parseSimple(opt, args[1:],
                                      [ "noprobe", "monitor:", "hsync:",
                                        "vsync:" ])
+                # TODO: multipath
                 elif opt == "network":
                     dict = self.parseMultiple(opt, args[1:],
                                               [ "bootproto:", "device:", "ip:",
@@ -295,21 +296,17 @@ class KickstartConfig(dict):
                                                 "nodns", "netmask:",
                                                 "hostname:", "ethtool:",
                                                 "essid:", "wepkey:", "onboot:",
-                                                "class:" ])
-                    if dict.has_key("nameserver"):
-                        splits = string.split(dict["nameserver"], ",")
-                        dict["nameserver"] = [ ]
-                        for split in splits:
-                            dict["nameserver"].append(string.strip(split))
+                                                "class:", "mtu:", "noipv4",
+                                                "noipv6" ])
+                    self.stringSplit(dict, "nameserver")
                 elif opt == "nfs":
                     self.parseSimple(opt, args[1:],
-                                     [ "server:", "dir:", "exclude:" ])
+                                     [ "server:", "dir:", "exclude:",
+                                       "opts:" ])
                     if not self[opt].has_key("server") or \
                        not self[opt].has_key("dir"):
                         raise ValueError, "Error in line '%s'" % line
-                    if self[opt].has_key("exclude"):
-                        self[opt]["exclude"] = string.split( \
-                            self[opt]["exclude"], ",")
+                    self.stringSplit(self[opt], "exclude")
                 elif opt == "part" or opt == "partition":
                     if args[1] == "swap":
                         args[1] = "swap.%d" % swap_id
@@ -332,10 +329,10 @@ class KickstartConfig(dict):
                 elif opt == "raid":
                     (_dict, _args) = self.parseArgs(opt, args[1:],
                                                     [ "level:", "device:",
+                                                      "bytes_per_inode:",
                                                       "spares:", "fstype:",
                                                       "fsoptions:", "noformat",
                                                       "useexisting" ])
-
                     if len(_args) < 2:
                         raise ValueError, "'%s' is unsupported" % line
                     if not self.has_key(opt):
@@ -349,6 +346,8 @@ class KickstartConfig(dict):
                     self.convertLong(_dict, "spares")
                     _dict["partitions"] = _args[1:]
                     self[opt][_args[0]] = _dict
+                elif opt == "reboot":
+                    self.parseSimple(opt, args[1:], [ "eject" ])
                 elif opt == "repo":
                     (_dict, _args) = self.parseArgs(opt, args[1:],
                                                     [ "name:", "baseurl:",
@@ -363,8 +362,7 @@ class KickstartConfig(dict):
                         raise ValueError, "repo name '%s' is not unique." % \
                               _dict["name"]
 
-                    if _dict.has_key("exclude"):
-                        _dict["exclude"] = string.split(_dict["exclude"], ",")
+                    self.stringSplit(_dict, "exclude")
                     self[opt][_dict["name"]] = _dict
                     del _dict["name"]
                 elif opt == "rootpw":
@@ -372,6 +370,11 @@ class KickstartConfig(dict):
                 elif opt == "selinux":
                     self.parseSimple(opt, args[1:],
                                      [ "enforcing", "permissive", "disabled" ])
+                elif opt == "services":
+                    self.parseSimple(opt, args[1:],
+                                     [ "enabled:", "disabled:" ])
+                    self.stringSplit(self[opt], "enabled")
+                    self.stringSplit(self[opt], "disabled")
                 elif opt == "timezone":
                     self.parseSub(opt, args[1:], [ "utc" ])
                 elif opt == "url":
@@ -380,19 +383,16 @@ class KickstartConfig(dict):
                     if not self[opt].has_key("url") and \
                            not self[opt].has_key("mirrorlist"):
                         raise ValueError, "Error in line '%s'" % line
-                    if self[opt].has_key("exclude"):
-                        self[opt]["exclude"] = self[opt]["exclude"].split(",")
-                    if self[opt].has_key("mirrorlist"):
-                        self[opt]["mirrorlist"] = \
-                            self[opt]["mirrorlist"].split(",")
-                elif opt == "xconfig":
-                    self.parseSimple(opt, args[1:],
-                                     [ "noprobe", "card:", "videoram:",
-                                       "monitor:", "hsync:", "vsync:",
-                                       "defaultdesktop:", "startxonboot",
-                                       "resolution:", "depth:", "driver:" ],
-                                     { "startX": "startxonboot",
-                                       "videoRam": "videoram" })
+                    self.stringSplit(self[opt], "exclude")
+                    self.stringSplit(self[opt], "mirrorlist")
+                elif opt == "user":
+                    dict = self.parseMultiple(opt, args[1:],
+                                              [ "name:", "groups:", "homedir:",
+                                                "password:", "iscrypted",
+                                                "shell:", "uid:", ])
+                    self.stringSplit(dict, "groups")
+                    self.convertLong(dict, "uid")
+                # TODO: vnc
                 elif opt == "volgroup":
                     (_dict, _args) = self.parseArgs(opt, args[1:],
                                                     [ "noformat",
@@ -403,9 +403,18 @@ class KickstartConfig(dict):
                     _dict["partitions"] = _args[1:]
                     if not self.has_key(opt):
                         self[opt] = { }
-                    if not self[opt].has_key(_args[0]):
-                        self[opt][_args[0]] = { }
+                    if self[opt].has_key(_args[0]):
+                        raise ValueError, \
+                              "volgroup '%s' is already defined" % line
                     self[opt][_args[0]] = _dict
+                elif opt == "xconfig":
+                    self.parseSimple(opt, args[1:],
+                                     [ "noprobe", "card:", "videoram:",
+                                       "monitor:", "hsync:", "vsync:",
+                                       "defaultdesktop:", "startxonboot",
+                                       "resolution:", "depth:", "driver:" ],
+                                     { "startX": "startxonboot",
+                                       "videoRam": "videoram" })
                 else:
                     log.info1("'%s' is unsupported.", line)
 
@@ -661,6 +670,26 @@ class KickstartConfig(dict):
                 raise ValueError, "Raid level of '/' has to be 1 " \
                       "if there is no '/boot' partition."
 
+        if self.has_key("services"):
+            dlist = [ ]
+            elist = [ ]
+            if self["services"].has_key("disabled"):
+                for service in self["services"]["disabled"]:
+                    if service in dlist:
+                        raise ValueError, \
+                              "Multiple definition of service '%s'." % service
+                    dlist.append(service)
+            if self["services"].has_key("enabled"):
+                for service in self["services"]["enabled"]:
+                    if service in elist:
+                        raise ValueError, \
+                              "Multiple definition of service '%s'." % service
+                    elist.append(service)
+                    if service in dlist:
+                        raise ValueError, \
+                              "Service '%s' marked for disabling and " \
+                              "enabling." % service
+
         if self.has_key("volgroup"):
             for group in self["volgroup"]:
                 for name in self["volgroup"][group]["partitions"]:
@@ -766,6 +795,14 @@ class KickstartConfig(dict):
                    (var[0] == "'" and var[-1] == "'"):
                 var = var[1:-1]
         return var
+
+    def stringSplit(self, dict, key):
+        if not dict.has_key(key):
+            return
+        splits = dict[key].split(",")
+        dict[key] = [ ]
+        for item in splits:
+            dict[key].append(item.strip())
 
     def convertLong(self, dict, key):
         if not dict.has_key(key):
