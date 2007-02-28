@@ -603,7 +603,11 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 pkg.generateFileNames()
 
     def _getDBFlags(self, ob):
-        if ob.get('pre', 'false').lower() == 'true':
+        try:
+            pre = ob['pre'].lower()
+        except KeyError:
+            pre = 'false'
+        if pre == 'true':
             return self.flagmap[ob['flags']] | pyrpm.base.RPMSENSE_PREREQ
         return self.flagmap[ob['flags']]
 
