@@ -242,7 +242,7 @@ class Source:
                     if not group in groups:
                         groups.append(group)
             groups.remove("everything")
-            everything = 1
+            everything = True
 
         # add default desktop
         if ks.has_key("xconfig"):
