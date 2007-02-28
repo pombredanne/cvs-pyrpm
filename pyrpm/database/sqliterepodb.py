@@ -30,13 +30,23 @@ from pyrpm.logger import log
 dbversion = '9'
 supported_dbversions = ('9', '8')
 
+USEYUM = False
 try:
     import yum.storagefactory
     import yum.mdparser
-    import yum.sqlitecache
-    USEYUM = yum.sqlitecache.dbversion == dbversion
-except ImportError:
-    USEYUM = False
+    try:
+        # new dbversion
+        import yum.constants
+        USEYUM = yum.constants.DBVERSION == dbversion
+    except:
+        try:
+            # old dbversion
+            import yum.sqlitecache
+            USEYUM = yum.sqlitecache.dbversion == dbversion
+        except:
+            pass
+except:
+    pass
 USEYUM = False # disable yum metadata parser for now
                # as it messes up pre requirements
 
