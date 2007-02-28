@@ -805,7 +805,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         result = { }
         evr = functions.evrSplit(version)
         cur = self._primarydb.cursor()
-        cur.execute("SELECT * FROM %s WHERE name = %s" %
+        cur.execute("SELECT * FROM %s WHERE name = '%s'" %
                     (attr_table, name))
         for res in cur.fetchall():
             pkg = self.getPkgByKey(res['pkgKey'])
