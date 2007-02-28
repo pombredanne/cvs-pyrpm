@@ -583,8 +583,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             dirindexes = []
             for ob in cur.fetchall():
                 idx = len(dirnames)
-                base = ob.filenames.split('/')
-                dirnames.append(ob.dirname + '/')
+                base = ob["filenames"].split('/')
+                dirnames.append(ob["dirname"] + '/')
                 basenames.extend(base)
                 dirindexes.extend([idx] * len(base))
             if pkg.has_key('oldfilenames'):
@@ -692,13 +692,13 @@ class SqliteRepoDB(repodb.RpmRepoDB):
     def getPkgs(self):
         cur = self._primarydb.cursor()
         cur.execute('SELECT pkgKey FROM packages')
-        result = [self.getPkgByKey(ob.pkgKey) for ob in cur.fetchall()]
+        result = [self.getPkgByKey(ob["pkgKey"]) for ob in cur.fetchall()]
         return filter(None, result)
 
     def getNames(self):
         cur = self._primarydb.cursor()
         cur.execute("SELECT name FROM packages")
-        return [ob.name for ob in cur.fetchall()]
+        return [ob["name"] for ob in cur.fetchall()]
 
     def hasName(self, name):
         cur = self._primarydb.cursor()
