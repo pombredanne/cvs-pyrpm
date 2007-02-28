@@ -1,0 +1,102 @@
+#!/usr/bin/python
+
+import sys, os.path, getopt
+PYRPMDIR = os.path.dirname(__file__) + "/.."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+
+import pyrpm
+from pyrpm.installer import disk, functions
+
+def get_labels(disk):
+    for partition in disk["partition"].itervalues():
+        label = functions.getLabel(partition["device"])
+        if label:
+            partition["label"] = label
+
+def recursive_mount(mountpoint, image):
+    fstab = functions.load_fstab(mountpoint)
+    got_labels = False
+    for spec, file, vfstype, mntops, freq, passn in fstab:
+        
+        file = os.path.join(mountpoint, file[1:])
+        if not os.path.isdir(file):
+            continue
+        if vfstype == "swap":
+            continue
+        if spec.startswith("LABEL="):
+            if not got_labels:
+                get_labels(image)
+                got_labels = True
+
+            label = spec[len('LABEL='):]
+            for nr, partition in image["partition"].iteritems():
+                if partition.get("label") == label: # XXX raids
+                    print "mount", partition['device'], file
+                    functions.mount(partition['device'], file,
+                                     vfstype, mntops)
+                    del image["partition"][nr]
+                    break
+        elif spec.startswith('/dev/hda') or spec.startswith('/dev/sda'):
+            partition_nr = int(spec[8:])
+            functions.mount(image["partition"][partition_nr], file,
+                             vfstype, mntops)
+            del image["partition"][partition_nr]
+
+def main():
+    log = pyrpm.log
+    #log.setLogLevel(log.INFO1)
+    #log.setDebugLogLevel(log.NO_DEBUG)
+    #log.setFormat("%(label)s%(message)s")
+    #log.setDateFormat("%Y-%m-%d %H:%M:%S")
+                
+
+    
+    (opts_list, args) = getopt.getopt(sys.argv[1:], "hr",
+                                 [ "help", ])
+
+    opts = {}
+    for opt, value in opts_list:
+        opts[opt] = value
+            
+    n_args = len(args)
+    if n_args<1 or '-h' in opts or '--help' in opts:
+        print "pyrpmmountimage [-r] IMAGE [PARTITIONNR MOUNTPOINT]"
+        sys.exit()
+
+    filename = args[0]
+    if not os.path.isfile(filename):
+        print "Not a file"
+        sys.exit(1)
+
+    try:
+        image = disk.Disk(filename, alloc_loop=1, as_image=1)
+
+        if n_args == 1:            
+            image.print_partitions()
+        elif n_args == 3:
+            mountpoint = args[2]
+            if not os.path.isdir(mountpoint):
+                print "Mountpoint must be a directory"
+                return
+
+            try:
+                partition_nr = int(args[1])
+            except ValueError:
+                print "Partition must be a number"
+                return
+
+            if image["partition"].has_key(partition_nr):
+                partition = image["partition"][partition_nr]
+                del image["partition"][partition_nr]
+                functions.mount(partition["device"], mountpoint, "auto")
+                if '-r' in opts:
+                    recursive_mount(mountpoint, image)
+            else:
+                print "Unknown partition number"
+            
+
+    finally:
+        image.close()
+
+main()
