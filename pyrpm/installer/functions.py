@@ -327,7 +327,13 @@ def fuser(what):
                 p = int(pid)
             except:
                 continue
-            os.kill(p, sig)
+            if p == os.getpid():
+                # do not kill yourself
+                continue
+            try:
+                os.kill(p, sig)
+            except:
+                continue
         i += 1
         if i == 20:
             log.error("Failed to kill processes:")
@@ -567,7 +573,7 @@ def mount_cdrom(dir):
     mount(what, dir, fstype="auto", options="ro")
     return "file://%s" % dir
 
-def mount_nfs(url, dir):
+def mount_nfs(url, dir, options=None):
     if url[:6] != "nfs://":
         raise ValueError, "'%s' is no valid nfs url." % url
 
@@ -576,10 +582,11 @@ def mount_nfs(url, dir):
     if splits[0][-1] != ":":
         what = ":/".join(splits)
     del splits
+    if not options:
+        options = "ro,rsize=32768,wsize=32768,hard,nolock"
     # mount nfs source
     log.debug1("Mounting '%s' on '%s'", what, dir)
-    mount(what, dir, fstype="nfs",
-          options="ro,rsize=32768,wsize=32768,hard,nolock")
+    mount(what, dir, fstype="nfs", options=options)
     return "file://%s" % dir
 
 def run_script(command, chroot=''):
