@@ -17,9 +17,10 @@
 #
 
 from pyrpm.cache import NetworkCache
-from pyrpm.functions import stringCompare, normalizeList
+from pyrpm.functions import stringCompare, normalizeList, \
+     blockSignals, unblockSignals
 from pyrpm.database import getRepoDB
-from pyrpm.yum import getVars
+from pyrpm.yum import YumConf
 from pyrpm.base import buildarchtranslate
 from devices import *
 from functions import *
@@ -47,8 +48,12 @@ class Source:
             if ks["cdrom"].has_key("exclude"):
                 self.exclude = ks["cdrom"]["exclude"]
         elif ks.has_key("nfs"):
+            opts = None
+            if ks["nfs"].has_key("opts"):
+                opts = ks["nfs"]["opts"]
             self.url = mount_nfs("nfs://%s:%s" % \
-                                 (ks["nfs"]["server"], ks["nfs"]["dir"]), dir)
+                                 (ks["nfs"]["server"], ks["nfs"]["dir"]), dir,
+                                 options=opts)
             if ks["nfs"].has_key("exclude"):
                 self.exclude = ks["nfs"]["exclude"]
         else:
@@ -88,8 +93,8 @@ class Source:
 
         # load repos
         repos = [ ]
-        replacevars = getVars(self.version, self.arch,
-            buildarchtranslate[self.arch])
+        yumconf = YumConf(self.version, self.arch, None, filenames=[ ],
+                          reposdirs=[ ])
         if self.isRHEL() and self.cmpVersion("4.9") >= 0:
             # RHEL-5
 
@@ -127,34 +132,40 @@ class Source:
                 log.info1("Loading repo '%s'", repo_name)
 
                 # create yumconf
-                yumconf = { }
                 yumconf[repo_name] = { }
                 yumconf[repo_name]["baseurl"] = [ "%s/%s" % (self.url, repo) ]
                 if self.exclude:
                     yumconf[repo_name]["exclude"] = self.exclude
-                _repo = getRepoDB(rpmconfig, yumconf, reponame=repo_name,
-                    replacevars=replacevars)
-                if not _repo.read(replacevars):
+
+                _repo = getRepoDB(rpmconfig, yumconf, reponame=repo_name)
+                self.repos[repo_name] = _repo
+                signals = blockSignals()
+                if not _repo.read():
+                    unblockSignals(signals)
                     log.error("Could not load repository '%s'.", repo_name)
                     return 0
-                self.repos[repo_name] = _repo
+                unblockSignals(signals)
+
         else:
             # RHEL <= 4
             # FC
-            yumconf = { }
             repo = self.release
             yumconf[repo] = { }
             yumconf[repo]["baseurl"] = [ self.url ]
             if self.exclude:
                 yumconf[repo]["exclude"] = self.exclude
-            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo, replacevars=replacevars)
-            if not _repo.read(replacevars):
+
+            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
+            self.repos[repo] = _repo
+            signals = blockSignals()
+            if not _repo.read():
+                unblockSignals(signals)
                 log.error("Could not load repository '%s'.", repo)
                 return 0
+            unblockSignals(signals)
             if not _repo.comps: # every source repo has to have a comps
                 log.error("Missing comps file for '%s'.", repo)
                 return 0
-            self.repos[repo] = _repo
 
         self.base_repo_names = self.repos.keys()
 
@@ -168,26 +179,26 @@ class Source:
 
             log.info1("Loading extra repo '%s'", repo)
 
-            url = ks["repo"][repo]["baseurl"]
-
-            yumconf = { }
             yumconf[repo] = { }
-
-            if ks["repo"][repo].has_key("mirrorlist"):
-                yumconf[repo]["mirrorlist"] = ks["repo"][repo]["mirrorlist"]
-            if ks["repo"][repo].has_key("exclude"):
-                yumconf[repo]["exclude"] = ks["repo"][repo]["exclude"]
-
+            url = ks["repo"][repo]["baseurl"]
             if url[:6] == "nfs://":
                 d = "%s/%s" % (dir, repo)
                 create_dir("", d)
                 url = mount_nfs(url, d)
             yumconf[repo]["baseurl"] = [ url ]
-            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo, replacevars=replacevars)
-            if not _repo.read(replacevars):
+            if ks["repo"][repo].has_key("exclude"):
+                yumconf[repo]["exclude"] = ks["repo"][repo]["exclude"]
+            if ks["repo"][repo].has_key("mirrorlist"):
+                yumconf[repo]["mirrorlist"] = ks["repo"][repo]["mirrorlist"]
+
+            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
+            self.repos[repo] = _repo
+            signals = blockSignals()
+            if not _repo.read():
+                unblockSignals(signals)
                 log.error("Could not load repository '%s'.", repo)
                 return 0
-            self.repos[repo] = _repo
+            unblockSignals(signals)
 
         return 1
 
