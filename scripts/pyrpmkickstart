@@ -28,7 +28,6 @@
 
 import os.path, sys, getopt, md5, stat, tempfile, string, time, random, \
        crypt, signal, types, shutil, traceback, popen2
-#import pprint
 
 PYRPMDIR = os.path.dirname(__file__) + "/.."
 if not PYRPMDIR in sys.path:
@@ -804,7 +803,6 @@ def main():
                         log.info1("Found '%s'.", installed[onpart]["release"])
 
         # check volume groups and logical volumes
-#        print "volgroup=%s" % pprint.pformat(volgroup)
         to_delete = [ ]
         for group in volgroup:
             vgmap[group] = LVM_VOLGROUP(group, chroot=stage2_chroot)
@@ -876,10 +874,6 @@ def main():
                     installed[dev] = inf
 
             raid.stop()
-
-#        print "installed=%s" % pprint.pformat(installed)
-#        sys.stdout.write("\nWaiting - Press any key to continue.")
-#        c = sys.stdin.read(1)
 
         if len(installed) < 1:
             log.error("Could not find any installations.")
@@ -958,7 +952,6 @@ def main():
         del mdmap
         del installed
         os.rmdir(fstemp_dir)
-#        print "partitions=%s" % pprint.pformat(partitions)
 
     # create partitionmap
     partitionmap = { }
@@ -1302,12 +1295,6 @@ def main():
             diskmap[disk].print_info()
             diskmap[disk].print_partitions()
 
-#    print "partitions=%s" % pprint.pformat(partitions)
-#    print "partitionmap=%s" % pprint.pformat(partitionmap)
-#    print "volgroup=%s" % pprint.pformat(volgroup)
-#    print "to_create=%s" % pprint.pformat(to_create)
-
-
     if len(modified) > 0 and confirm == 1:
         if not pyrpm.is_this_ok():
             return 0
@@ -1621,14 +1608,6 @@ def main():
             err = 1
     if err:
         return 1
-
-    #if verbose:
-    #    sys.stdout.write("diskmap=")
-    #    pprint.pprint(diskmap)
-    #    sys.stdout.write("partitionmap=")
-    #    pprint.pprint(partitionmap)
-    #    sys.stdout.write("labels=")
-    #    pprint.pprint(labels)
 
     ############################ format partitions ############################
 
@@ -2525,6 +2504,64 @@ def main():
             if run_script("/usr/sbin/usermod -p '%s' root" % password,
                           target_chroot) != 0:
                 log.error("Setting root password failed.")
+
+    # configure services
+    if ks.has_key("install") and ks.has_key("services"):
+        log.info1("Configuring services")
+
+        if ks["services"].has_key("disabled"):
+            for service in ks["services"]["disabled"]:
+                if run_script("/sbin/chkconfig '%s' off" % service,
+                              target_chroot) != 0:
+                    log.warning("Disabling service '%s' failed.", service)
+                else:
+                    log.info1("Disabled service '%s'", service)
+        if ks["services"].has_key("enabled"):
+            for service in ks["services"]["enabled"]:
+                log.info1("  enabling '%s'", service)
+                if run_script("/sbin/chkconfig '%s' on" % service,
+                              target_chroot) != 0:
+                    log.warning("Enabling service '%s' failed.", service)
+                else:
+                    log.info1("Enabled service '%s'", service)
+
+    # setup users
+    if ks.has_key("install") and ks.has_key("user"):
+        try:
+            check_exists(target_chroot, "/usr/sbin/useradd")
+        except:
+            log.error("/usr/sbin/useradd does not exist, skipping.")
+        else:
+            md5pw = ks["authconfig"].has_key("enablemd5")
+            for user in ks["user"]:
+                log.info1("Creating user '%s'", user["name"])
+                
+                useradd = "/usr/sbin/useradd -m '%s' " % user["name"]
+                if user.has_key("homedir"):
+                    useradd += " -d '%s'" % user["homedir"]
+                else:
+                    useradd += " -d '/home/%s'" % user["name"]
+                if user.has_key("groups"):
+                    useradd += " -G '%s'" % ",".join(user["groups"])
+                if user.has_key("shell"):
+                    useradd += " -s '%s'" % user["shell"]
+                if user.has_key("uid"):
+                    useradd += " -u %d" % user["uid"]
+                if user.has_key("password"):
+                    password = user["password"]
+                    if not user.has_key("iscrypted"):
+                        salt = ""
+                        salt_len = 2
+                        if ks["authconfig"].has_key("enablemd5"):
+                            salt = "$1$"
+                            salt_len = 8
+                        for i in range(salt_len):
+                            salt += random.choice(string.letters+
+                                                  string.digits+"./")
+                        password = crypt.crypt(password, salt)
+                    useradd += " -p '%s'" % password
+                if run_script(useradd, target_chroot) != 0:
+                    log.error("Creation of user '%s' failed.")
 
     # /etc/inittab
     if ks.has_key("install") and \
