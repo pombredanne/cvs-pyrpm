@@ -643,8 +643,10 @@ class Logger:
         if not dict:
             return
 
-        if len(args) > 0:
+        if len(args) > 1:
             dict['message'] = format % args
+        elif len(args) == 1:  # needed for format % dict
+            dict['message'] = format % args[0]
         else:
             dict['message'] = format
 
