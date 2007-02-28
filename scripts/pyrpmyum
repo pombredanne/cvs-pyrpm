@@ -100,7 +100,7 @@ def main():
 
     lockfile = lockPyrpm()
     if lockfile == None:
-        printError("couldn't lock pyrpmyum")
+        rpmconfig.printError("couldn't lock pyrpmyum")
         return 0
     try:
         if not yum.setCommand(args[0]):
