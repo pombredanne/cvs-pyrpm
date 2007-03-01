@@ -671,21 +671,27 @@ def getFreeDiskspace(config, operations):
             ret = 0
     return ret
 
-def int2str(val):
-    """Convert an integer to a string of the format X[.Y] [k|M]""" 
-    kb = int(val / 1024)
-    kr = val - kb * 1024
-    mb = int(kb / 1024)
-    mr = kb - mb * 1024
-    if mb > 9:
-        return str(mb)+" M"
-    if kb > 999:
-        return str(mb)+"."+str(int(mr/103))+" M"
-    if kb > 9:
-        return str(kb)+" k"
-    if val > 999:
-        return str(kb)+"."+str(int(kr/103))+" k"
-    return str(val)
+def int2str(val, binary=True):
+    """Convert an integer to a string of the format X[.Y] [SI prefix]""" 
+    units = "kMGTPEZYND"
+    #small_units = "munpfazy"
+    if binary:
+        divider = 1024
+    else:
+        divider = 1000
+
+    if val>999:
+        mantissa = float(val)
+        exponent = -1
+        while mantissa>999 and exponent<len(units)-1:
+            exponent += 1
+            mantissa /= divider
+        if mantissa>9:
+            return "%i %s" % (matissa, units[exponent])
+        else:
+            return "%.1f %s" % (mantissa, units[exponent])
+    else:
+        return "%i" % val
 
 def _uriToFilename(uri):
     """Convert a file:/ URI or a local path to a local path."""
