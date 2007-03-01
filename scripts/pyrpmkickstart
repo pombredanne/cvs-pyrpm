@@ -76,6 +76,7 @@ def main():
     no_default_groups = 0
     autoerase = 0
     has_raid = False
+    beta_key_verify = False
 
     log.setInfoLogLevel(log.INFO1)
     log.setDebugLogLevel(log.NO_DEBUG)
@@ -89,7 +90,7 @@ def main():
                                        "standalone", "wait", "xen", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
                                        "no-cache", "no-default-groups",
-                                       "drop-unresolved", ])
+                                       "drop-unresolved", "beta-key-verify" ])
     except:
         usage()
         return
@@ -136,6 +137,8 @@ def main():
             no_default_groups = 1
         elif opt == "--drop-unresolved":
             autoerase = 1
+        elif opt == "--beta-key-verify":
+            beta_key_verify = True
         else:
             log.error("Unknown option '%s'.", opt)
             usage()
@@ -224,7 +227,7 @@ def main():
     ############################### load source ###############################
 
     source = Source()
-    if not source.load(ks, source_dir):
+    if not source.load(ks, source_dir, beta_key_verify):
         return 1
 
     # verify source
@@ -3025,6 +3028,7 @@ OPTIONS
                            to install a i586 guest from a i686 installation
                            tree. It is not usable for multilib guest systems at
                            the moment.
+  --beta-key-verify        Use beta key verification code for RHEL >= 5.
   --drop-unresolved        Drop packages, which have unresolved dependencies in
                            installation mode. Please keep in mind that this
                            could result in an incomplete and unusable system.
