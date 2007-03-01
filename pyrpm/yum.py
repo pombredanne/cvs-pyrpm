@@ -722,7 +722,6 @@ class RpmYum:
         updates = { }
         obsoletes = { }
         totsize = ipkgs = epkgs = opkgs = upkgs = 0
-        fmtstr = " %-22.22s  %-9.9s  %-15.15s  %-16.16s  %5.5s"
         for p in resolver.updates:
             updates[p] = [ ]
             if p in installs:
@@ -741,103 +740,134 @@ class RpmYum:
                 obsoletes[p].append(p2)
 
         # Output the whole transaction in a very yummy format. ;)
-        log.info1("\n=============================================================================")
-        log.info1(" Package                 Arch       Version          Repository        Size ")
-        log.info1("=============================================================================")
+        d = [{"NEVRA": "Package", "VRA": "Version", "NAME": "Package", "ARCH": "Arch", "VERSION": "Version", "REPO": "Repository", "SIZE": "Size"}]
+        log.info3("\n===============================================================================")
+        self.outputPkgList(d)
+        log.info3("===============================================================================")
 
         if len(self.__iinstalls) > 0:
-            log.info1("\nInstalling:")
+            log.info3("\nInstalling:")
             self.__iinstalls.sort(lambda x,y:cmp(x["name"], y["name"]))
+            d = []
             for p in self.__iinstalls:
-                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
                 ipkgs += 1
+                totsize += int(p["size_package"])
                 if p in installs:
                     installs.remove(p)
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"]))})
+            self.outputPkgList(d)
+
         if len(self.__iupdates) > 0:
-            log.info1("\nUpdating:")
+            log.info3("\nUpdating:")
             pl = self.__iupdates.keys()
             pl.sort(lambda x,y:cmp(x["name"], y["name"]))
+            d = []
             for p in pl:
-                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
                 upkgs += 1
+                totsize += int(p["size_package"])
                 l = self.__iupdates[p]
                 for p2 in l:
                     if p in updates.keys() and p2 in updates[p]:
                         updates[p].remove(p2)
                 if p in updates.keys() and len(updates[p]) == 0:
                     del updates[p]
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"]))})
+            self.outputPkgList(d)
+
         if len(self.__iobsoletes) > 0:
-            log.info1("\nObsoleting:")
+            log.info3("\nObsoleting:")
             pl = self.__iobsoletes.keys()
             pl.sort(lambda x,y:cmp(x["name"], y["name"]))
+            d = []
             for p in pl:
-                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
                 opkgs += 1
+                totsize += int(p["size_package"])
                 l = self.__iobsoletes[p]
                 for p2 in l:
                     if p in obsoletes.keys() and p2 in obsoletes[p]:
                         obsoletes[p].remove(p2)
                 if p in obsoletes.keys() and len(obsoletes[p]) == 0:
                     del obsoletes[p]
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"])), "COMMENT": "replacing "+l[0].getNEVRA()})
+            self.outputPkgList(d)
+
         if len(self.__ierases) > 0:
-            log.info1("\nErasing:")
+            log.info3("\nErasing:")
             self.__ierases.sort(lambda x,y:cmp(x["name"], y["name"]))
+            d = []
             for p in self.__ierases:
-                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), "rpmdb", "0")
                 epkgs += 1
                 if p in erases:
                     erases.remove(p)
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["size_package"]))})
+            self.outputPkgList(d)
 
         # Dependency fooshizzle output
         if len(installs) > 0:
-            log.info1("\nInstalling for dependencies:")
+            log.info3("\nInstalling for dependencies:")
             installs.sort(lambda x,y:cmp(x["name"], y["name"]))
+            d = []
             for p in installs:
-                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
                 ipkgs += 1
+                totsize += int(p["size_package"])
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"]))})
+            self.outputPkgList(d)
+
         if len(updates) > 0:
-            log.info1("\nUpdating for dependencies:")
+            log.info3("\nUpdating for dependencies:")
             pl = updates.keys()
             pl.sort(lambda x,y:cmp(x["name"], y["name"]))
+            d = []
             for p in pl:
-                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
                 upkgs += 1
+                totsize += int(p["size_package"])
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"]))})
+            self.outputPkgList(d)
+
         if len(obsoletes) > 0:
-            log.info1("\nObsoleting due to dependencies:")
+            log.info3("\nObsoleting due to dependencies:")
             pl = obsoletes.keys()
             pl.sort(lambda x,y:cmp(x["name"], y["name"]))
+            d = []
             for p in pl:
-                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), p.yumrepo.reponame, "0")
                 opkgs += 1
+                totsize += int(p["size_package"])
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"])), "COMMENT": "replacing "+obsoletes[0].getNEVRA()})
+            self.outputPkgList(d)
+
         if len(erases) > 0:
-            log.info1("\nErasing due to dependencies:")
+            log.info3("\nErasing due to dependencies:")
             erases.sort(lambda x,y:cmp(x["name"], y["name"]))
+            d = []
             for p in erases:
-                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), "rpmdb", "0")
                 epkgs += 1
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["size_package"]))})
+            self.outputPkgList(d)
 
         self.erase_list = [pkg for pkg in self.erase_list
                            if pkg in self.pydb]
 
         if len(self.erase_list) > 0:
-            log.info1("\nWarning: Following packages will be automatically "
+            log.info2("\nWarning: Following packages will be automatically "
                       "removed from your system:")
+            d = []
             for p in self.erase_list:
-                log.info1(fmtstr, p["name"], p["arch"], p.getVR(), "rpmdb", "0")
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["size_package"]))})
+            self.outputPkgList(d, 2)
 
         if self.confirm:
-            log.info1("\nTransaction Summary")
-            log.info1("=============================================================================")
+            log.info2("\nTransaction Summary")
+            log.info2("===============================================================================")
             if ipkgs > 0:
-                log.info1("Install      %5d package(s)" % ipkgs)
+                log.info2("Install      %5d package(s)" % ipkgs)
             if upkgs > 0:
-                log.info1("Update       %5d package(s)" % upkgs)
+                log.info2("Update       %5d package(s)" % upkgs)
             if opkgs > 0:
-                log.info1("Obsolete     %5d package(s)" % opkgs)
+                log.info2("Obsolete     %5d package(s)" % opkgs)
             if epkgs > 0:
-                log.info1("Erase        %5d package(s)" % epkgs)
+                log.info2("Erase        %5d package(s)" % epkgs)
 
-        log.info1("\nTotal download size: %d" % totsize)
+        log.info2("\nTotal download size: %s" % int2str(totsize))
         if self.confirm and not self.config.test:
             if not is_this_ok():
                 return 1
@@ -856,7 +886,6 @@ class RpmYum:
         if len(ops) == 0:
             log.info1("Nothing to do.")
             return 1
-        log.info1("The following operations will now be run:")
         ipkgs = 0
         upkgs = 0
         epkgs = 0
@@ -873,6 +902,16 @@ class RpmYum:
                 return 0
         self.pydb.close()
         return 1
+
+    def outputPkgList(self, pkglist, level=3):
+        #fmtstr = " %(NAME)-22.22s  %(ARCH)-9.9s  %(VERSION)-15.15s  %(REPO)-16.16s  %(SIZE)8.8s"
+        #fmtstr  = " %(NEVRA)-50.50s  %(REPO)-16.16s  %(SIZE)8.8s"
+        fmtstr  = " %(NAME)-30.30s %(VRA)-30.30s %(REPO)-10.10s %(SIZE)5.5s"
+        fmtstr2 = "     %(COMMENT)-70.70s"
+        for d in pkglist:
+            log.info(level, fmtstr % d)
+            if d.has_key("COMMENT"):
+                log.info(level, fmtstr2 % d)
 
     def __generateObsoletesList(self):
         """Generate a list of all installed/available RpmPackage's that
@@ -1109,12 +1148,13 @@ class RpmYum:
 
         Return 1 if pkg was obsoleted, 0 if not."""
 
-        obsoleted = 0
+        full = (pkg == None)# Flag if we need to do a full run
+        obsoleted = False
         pkglist = []        # List of packages we have used for obsoleting,
                             # needed for endless loop detection and prevention.
         # Loop until we have found the end of the obsolete chain
         while 1:
-            found = 0
+            found = False
             # Go over all packages we know have obsoletes
             for opkg in self.__obsoleteslist:
                 # If the package has already been tried once or is in our
@@ -1128,9 +1168,17 @@ class RpmYum:
                 for u in opkg["obsoletes"]:
                     # Look in our current database for matches
                     s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
-                    # If the package for which we're checking the obsoletes
-                    # right now isn't in the list skip it.
-                    if not pkg in s:
+                    # If we got no results, we don't obsolete.
+                    if len(s) == 0:
+                        continue
+                    # Same as for the outer loop, if the package names match
+                    # we never obsolete.
+                    if s[0]["name"] == opkg["name"]:
+                        continue
+                    # In case of a full run we always obsolete if we found a
+                    # match. Otherwise if the package for which we were checking
+                    # the obsoletes right now isn't in the list skip it.
+                    if pkg != None and not (pkg in s):
                         continue
                     # Found a matching obsoleting package. Try adding it to
                     # our opresolver with an update so it obsoletes the
@@ -1145,19 +1193,24 @@ class RpmYum:
                     # If everything went well note this and terminate the
                     # inner obsoletes loop
                     if ret > 0:
-                        obsoleted = 1
-                        found = 1
+                        obsoleted = True
+                        found = True
                         break
                 # If we found and handled one obsolete proplerly break the
                 # loop over the obsoletes packages and restart
                 if found:
                     break
             # In case we found an obsolete in the last round replace the package
-            # we're trying to obsolete with the one we just added and make
-            # another run. Otherwise we're finished and can return.
+            # we're trying to obsolete with the one we just added if we had an
+            # initial package. If we need to do a full run reset the package to
+            # None. The just do another iteration.
+            # If nothing was found we're finished and can return.
             if found:
-                pkg = opkg
-                pkglist.append(pkg)
+                pkglist.append(opkg)
+                if full:
+                    pkg = None
+                else:
+                    pkg = opkg
             else:
                 break
         # Return wether we obsoleted any package this time or not.

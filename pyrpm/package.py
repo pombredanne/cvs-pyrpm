@@ -1184,6 +1184,13 @@ class RpmPackage(RpmData):
 
         return "%s-%s" % (self["version"], self["release"])
 
+    def getVRA(self):
+        """Return %version-%release.%arch."""
+
+        if self.isSourceRPM():
+            return "%s-%s.src" % (self["version"], self["release"])
+        return "%s-%s.%s" % (self["version"], self["release"], self["arch"])
+
     def getEVR(self):
         """Return [%epoch:]%version-%release."""
 
