@@ -27,6 +27,11 @@ from functions import *
 from disk import *
 from config import log, rpmconfig
 
+try:
+    import instnum
+except:
+    instnum = None
+
 ################################### classes ###################################
 
 class Source:
@@ -38,7 +43,7 @@ class Source:
         self.base_repo_names = [ ]
         self.mounts = { }
 
-    def load(self, ks, dir):
+    def load(self, ks, dir, beta_key_verify=False):
         self.dir = dir
         self.exclude = None
 
@@ -104,23 +109,48 @@ class Source:
                 key = ks["key"].keys()[0]
                 if ks["key"][key].has_key("skip"):
                     skip = True
+                    key = None
 
-            if self.variant == "Server":
-                repos.append("Server")
-                if key and not skip:
-                    if key.find("C") >= 0:
+            inum = None
+            if key and not skip and not beta_key_verify:
+                if not instnum:
+                    log.error("Unable to verify installation key, "
+                              "module instkey is missing.")
+                    return 0
+                try:
+                    inum = instnum.InstNum(key)
+                except:
+                    log.error("Installation key '%s' is not valid.", key)
+                    return 0
+
+            if inum:
+                if inum.get_product_string().lower() != \
+                       self.variant.lower():
+                    log.error("Installation key for '%s' does not match "
+                              "'%s' media.",
+                              inum.get_product_string().lower(),
+                              self.variant.lower())
+                    return 0
+                for name, path in inum.get_repos_dict().items():
+                    if path == "VT" and \
+                           not self.arch in [ "i386", "x86_64", "ia64" ]:
+                        continue
+                    repos.append(path)
+            else:
+                # BETA
+                if self.variant == "Server":
+                    repos.append("Server")
+                    if key and key.find("C") >= 0:
                         repos.append("Cluster")
-                    if key.find("S") >= 0:
+                    if key and key.find("S") >= 0:
                         repos.append("ClusterStorage")
-            elif self.variant == "Client":
-                repos.append("Client")
-                if key and not skip:
-                    if key.find("W") >= 0:
+                elif self.variant == "Client":
+                    repos.append("Client")
+                    if key and key.find("W") >= 0:
                         repos.append("Workstation")
 
-            if self.arch in [ "i386", "x86_64", "ia64" ]:
-                if key and not skip:
-                    if key.find("V") >= 0:
+                if self.arch in [ "i386", "x86_64", "ia64" ]:
+                    if key and key.find("V") >= 0:
                         repos.append("VT")
 
             for repo in repos:
