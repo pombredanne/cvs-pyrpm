@@ -350,7 +350,10 @@ class RpmYum:
     def lock(self):
         """ Generate /var/run/yum.pid in buildroot to prevent multiple yum
         calls at the same time in the buildroot. """
-        
+
+        if self.lockfile:
+            return 0
+
         if os.getuid() != 0 or self.config.test:
             return 1
         if self.config.buildroot != None:
