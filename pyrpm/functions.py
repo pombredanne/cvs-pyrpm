@@ -687,7 +687,7 @@ def int2str(val, binary=True):
             exponent += 1
             mantissa /= divider
         if mantissa>9:
-            return "%i %s" % (matissa, units[exponent])
+            return "%i %s" % (mantissa, units[exponent])
         else:
             return "%.1f %s" % (mantissa, units[exponent])
     else:
