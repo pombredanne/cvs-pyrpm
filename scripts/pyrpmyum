@@ -59,23 +59,6 @@ options:
     [--obsoletes] [--noplugins] [--releaseversion]
 """
 
-def lockPyrpm():
-    if os.getuid() != 0 or rpmconfig.test:
-        return ""
-    if rpmconfig.buildroot != None:
-        lockfile = rpmconfig.buildroot + "/var/run/yum.pid"
-    else:
-        lockfile = "/var/run/yum.pid"
-    try:
-        makeDirs(lockfile)
-    except OSError:
-        pass
-    if tryUnlock(lockfile) == 1: # FIXME: IOError
-        return None
-    if doLock(lockfile) == 0: # FIXME: OSError
-        return None
-    return lockfile
-
 #
 # Main program
 #
@@ -98,9 +81,8 @@ def main():
         usage()
         return 1
 
-    lockfile = lockPyrpm()
-    if lockfile == None:
-        rpmconfig.printError("couldn't lock pyrpmyum")
+    if not yum.lock():
+        log.error("couldn't lock pyrpmyum")
         return 0
     try:
         if not yum.setCommand(args[0]):
@@ -116,11 +98,9 @@ def main():
     finally:
         if yum.pydb:
             yum.pydb.close()
-        if lockfile:
-            try:
-                os.unlink(lockfile)
-            except OSError:
-                pass
+        if not yum.unLock():
+            log.error("couldn't unlock pyrpmyum")
+
     return 1
 
 if __name__ == '__main__':

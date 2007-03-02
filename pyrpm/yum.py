@@ -191,6 +191,9 @@ class RpmYum:
         # Flag if we have been called with arguments or not
         self.has_args = True
 
+        # lockfile for yum calls
+        self.lockfile = None
+
     def setAutoerase(self, flag):
         """Enable or disable erasing packages with unresolved dependencies
         according to flag."""
@@ -343,6 +346,42 @@ class RpmYum:
                 if lang and not lang in self.langs:
                     self.langs.append(lang)
         return pkglist
+
+    def lock(self):
+        """ Generate /var/run/yum.pid in buildroot to prevent multiple yum
+        calls at the same time in the buildroot. """
+        
+        if os.getuid() != 0 or self.config.test:
+            return 1
+        if self.config.buildroot != None:
+            self.lockfile = self.config.buildroot + "/var/run/yum.pid"
+        else:
+            self.lockfile = "/var/run/yum.pid"
+        try:
+            makeDirs(self.lockfile)
+        except OSError:
+            pass
+        if tryUnlock(self.lockfile) == 1: # FIXME: IOError
+            return 0
+        if doLock(self.lockfile) == 0: # FIXME: OSError
+            return 0
+        return 1
+
+    def isLocked(self):
+        """ Check if yum is locked. """
+        if self.lockfile:
+            return 1
+        return 0
+
+    def unLock(self):
+        """ Remove lockfile if it exists. """
+        if self.lockfile:
+            try:
+                os.unlink(self.lockfile)
+            except OSError:
+                return 0
+            self.lockfile = None
+        return 1
 
     def install(self, name):
         pkglist = self.__findPkgs(name)
