@@ -107,7 +107,7 @@
 # - "rhnplatform" could go away if it is not required.
 #
 
-__version__ = "0.64"
+__version__ = "0.65"
 __doc__ = """Manage everything around Linux RPM packages."""
 
 
