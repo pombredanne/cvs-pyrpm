@@ -50,15 +50,7 @@ except:
 USEYUM = False # disable yum metadata parser for now
                # as it messes up pre requirements
 
-try:
-    import sqlite3
-    sqlite = sqlite3
-except ImportError:
-    sqlite3 = None
-    import sqlite
-    # XXX
-except ImportError:
-    sqlite = None
+import sqlitecompat as sqlite3
 
 class SqliteRpmPackage(package.RpmPackage):
 
@@ -216,14 +208,13 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # this fails
         try:
             f = open(filename, 'w')
-            db = sqlite.connect(filename)
+            db = sqlite3.connect(filename)
         except IOError:
             log.warning("Could not create sqlite cache file, using in memory "
                         "cache instead")
-            db = sqlite.connect(":memory:")
-        if sqlite3:
-            db.row_factory = sqlite3.Row
-            db.text_factory = str
+            db = sqlite3.connect(":memory:")
+        db.row_factory = sqlite3.Row
+        db.text_factory = str
         return db
 
     def createDbInfo(self, cur):
@@ -249,29 +240,17 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         query = "INSERT INTO %s (" % (table)
         query += ",".join(keys)
         query += ") VALUES ("
-        # Quote all values by replacing None with NULL and ' by ''
-        for x in values:
-            if (x == None):
-              query += "NULL,"
-            else:
-              try:
-                query += "'%s'," % (x.replace("'","''"))
-              except AttributeError:
-                query += "'%s'," % x
-        # Remove the last , from query
-        query = query[:-1]
-        # And replace it with )
+        query += ', '.join(["?"] * len(hash))
         query += ")"
-        cursor.execute(query)# XXX ??? .encode('utf8'))
+        cursor.execute(query, hash.values())# XXX ??? .encode('utf8'))
         return cursor.lastrowid
 
     def loadCache(self, filename):
         """Load cache from filename, check if it is valid and that dbversion
         matches the required dbversion"""
-        db = sqlite.connect(filename)
-        if sqlite3:
-            db.row_factory = sqlite3.Row
-            db.text_factory = str
+        db = sqlite3.connect(filename)
+        db.row_factory = sqlite3.Row
+        db.text_factory = str
         cur = db.cursor()
         cur.execute("SELECT * FROM db_info")
         info = cur.fetchone()
@@ -279,13 +258,13 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # (this could happen when the user hits ctrl-c or kills yum
         # when the cache is being generated or updated)
         if not info:
-            raise sqlite.DatabaseError, "Incomplete database cache file"
+            raise sqlite3.DatabaseError, "Incomplete database cache file"
 
         # Now check the database version
         if info['dbversion'] not in supported_dbversions:
             log.info2("Cache file is version %s, we need %s, will "
                       "regenerate.\n", info['dbversion'], dbversion)
-            raise sqlite.DatabaseError, "Older version of yum sqlite: %s" % info['dbversion']
+            raise sqlite3.DatabaseError, "Older version of yum sqlite: %s" % info['dbversion']
 
         # This appears to be a valid database, return checksum value and
         # database object
@@ -404,7 +383,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         if os.path.exists(dbfilename):
             try:
                 csum, db = self.loadCache(dbfilename)
-            except sqlite.Error, e:
+            except sqlite3.Error, e:
                 log.error(e)
                 csum = None
             if self.repomd.has_key(dbtype) and \
@@ -433,7 +412,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
             try:
                 csum, db = self.loadCache(dbfilename)
-            except sqlite.Error, e:
+            except sqlite3.Error, e:
                 csum = None
 
             if self.repomd.has_key(dbtype) and \
@@ -503,20 +482,20 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         """Add a package to the filelists cache"""
         cur = self._primarydb.cursor()
         fcur = self._filelistsdb.cursor()
-        cur.execute('SELECT pkgId, pkgKey FROM packages WHERE name="%s" '
-                    'and epoch="%s" and version="%s" and release="%s" '
-                    'and arch="%s"' %
+        cur.execute('SELECT pkgId, pkgKey FROM packages WHERE name=? '
+                    'and epoch=? and version=? and release=? '
+                    'and arch=?',
                     (name, epoch, version, release, arch))
         op = cur.fetchone()
         if op is None:
             # package not found
             return
-        pkgId, pkgKey = op
+        pkgId, pkgKey = op[0], op[1]
 
         try:
             self.insertHash('packages', {'pkgId' : pkgId, 'pkgKey' : pkgKey},
                 fcur)
-        except sqlite.DatabaseError:
+        except sqlite3.DatabaseError:
             # Files of package already in database: skipping
             return
 
@@ -552,8 +531,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     def readRpm(self, pkgKey):
         cur = self._primarydb.cursor()
-        cur.execute('SELECT %s FROM packages WHERE pkgKey="%s"' %
-                    (self.tags, pkgKey))
+        cur.execute('SELECT %s FROM packages WHERE pkgKey=?' %
+                    self.tags, (pkgKey,))
         ob = cur.fetchone()
         pkg = self._buildRpm(ob)
         return pkg
@@ -579,15 +558,15 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         if tag not in self.COLUMNS_LOOKUP:
             return None
         cur = self._primarydb.cursor()
-        cur.execute('SELECT %s FROM packages WHERE pkgKey="%s"' %
-                    (tag, pkg.pkgKey))
+        cur.execute('SELECT %s FROM packages WHERE pkgKey=?' %
+                    tag, (pkg.pkgKey,))
         return cur.fetchone()[0]
 
     def getFiles(self, pkg):
         pkgKey = pkg.pkgKey
         if self._filelistsdb:
             cur = self._filelistsdb.cursor()
-            cur.execute('SELECT * FROM filelist WHERE pkgKey="%s"' % pkgKey)
+            cur.execute('SELECT * FROM filelist WHERE pkgKey=?', (pkgKey,))
             basenames = []
             dirnames = []
             dirindexes = []
@@ -606,7 +585,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         else:
             cur = self._primarydb.cursor()
             cur.execute(
-                'SELECT * FROM files WHERE pkgKey="%s"' % pkgKey)
+                'SELECT * FROM files WHERE pkgKey=?', (pkgKey,))
             files = [ob['name'] for ob in cur.fetchall()]
             if files:
                 pkg['oldfilenames'] = files
@@ -614,17 +593,20 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     def _getDBFlags(self, ob):
         try:
-            pre = ob['pre'].lower()
+            pre = ob['pre']
         except (KeyError, IndexError):
-            pre = 'false'
-        if pre == 'true':
+            pre = 0
+        if isinstance(pre, str):
+            pre = pre.lower() == 'true'
+            
+        if pre:
             return self.flagmap[ob['flags']] | pyrpm.base.RPMSENSE_PREREQ
         return self.flagmap[ob['flags']]
 
     def getDependencies(self, tag, pkgKey):
         cur = self._primarydb.cursor()
         cur.execute(
-            'SELECT * FROM %s WHERE pkgKey="%s"' % (tag, pkgKey))
+            'SELECT * FROM %s WHERE pkgKey=?' % tag, (pkgKey,))
         return [(ob['name'], self._getDBFlags(ob), functions.evrMerge(
             ob['epoch'], ob['version'], ob['release']))
                 for ob in cur.fetchall()]
@@ -651,8 +633,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             data['size_' + k] = v
 
         # check if package already in db
-        cur.execute('SELECT pkgKey FROM packages WHERE pkgId="%s"' %
-                    data['pkgId'])
+        cur.execute('SELECT pkgKey FROM packages WHERE pkgId=?',
+                    (data['pkgId'],))
         if cur.fetchone():
             return
 
@@ -696,7 +678,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     def getPkgById(self, pkgId):
         cur = self._primarydb.cursor()
-        cur.execute('SELECT pkgKey FROM packages WHERE pkgId="%s"' % pkgId)
+        cur.execute('SELECT pkgKey FROM packages WHERE pkgId=?', (pkgId,))
         ob = cur.fetchone()
         if ob:
             return self.getPkgByKey(ob["pkgKey"])
@@ -716,12 +698,12 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     def hasName(self, name):
         cur = self._primarydb.cursor()
-        cur.execute('SELECT name FROM packages WHERE name="%s"' % name)
+        cur.execute('SELECT name FROM packages WHERE name=?', (name,))
         return bool(cur.fetchone())
 
     def getPkgsByName(self, name):
         cur = self._primarydb.cursor()
-        cur.execute('SELECT pkgKey FROM packages WHERE name="%s"' % name)
+        cur.execute('SELECT pkgKey FROM packages WHERE name=?', (name,))
         result = [self.getPkgByKey(ob['pkgKey']) for ob in cur.fetchall()]
         return filter(None, result)
 
@@ -805,8 +787,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         result = { }
         evr = functions.evrSplit(version)
         cur = self._primarydb.cursor()
-        cur.execute("SELECT * FROM %s WHERE name = '%s'" %
-                    (attr_table, name))
+        cur.execute('SELECT * FROM %s WHERE name = ?' %
+                    attr_table, (name,))
         for res in cur.fetchall():
             pkg = self.getPkgByKey(res['pkgKey'])
             if pkg is None:
@@ -859,7 +841,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
         if matched:
             cur = self._primarydb.cursor()
-            cur.execute('SELECT * FROM files WHERE name = "%s"' % name)
+            cur.execute('SELECT * FROM files WHERE name = ?', (name,))
             files = cur.fetchall()
             for res in files:
                 pkg = self.getPkgByKey(res['pkgKey'])
@@ -876,10 +858,10 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         (dirname, filename) = functions.pathsplit(name)
         if name.find('%') == -1: # no %'s in the thing safe to LIKE
             cur.execute("SELECT * FROM filelist WHERE "
-                        'dirname="%s" AND filenames LIKE "%%%s%%"' %
-                        (dirname,filename))
+                        'dirname=? AND filenames LIKE ?',
+                        (dirname, "%%%s%%" % filename))
         else:
-            cur.execute('SELECT * FROM filelist WHERE dirname="%s"' % dirname)
+            cur.execute('SELECT * FROM filelist WHERE dirname=?', (dirname,))
 
         files = cur.fetchall()
 
@@ -892,7 +874,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         return result
 
 # fall back to RpmRepoDB if sqlite is not installed
-if sqlite is None:
+if not sqlite3.ok:
     SqliteRepoDB = repodb.RpmRepoDB
 
 # vim:ts=4:sw=4:showmatch:expandtab
