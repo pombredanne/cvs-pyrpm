@@ -764,6 +764,11 @@ class RpmYum:
         updates = { }
         obsoletes = { }
         totsize = ipkgs = epkgs = opkgs = upkgs = 0
+
+        if len(installs) == 0 and len(erases) == 0:
+            log.info2("Nothing to do.")
+            return 1
+
         for p in resolver.updates:
             updates[p] = [ ]
             if p in installs:
@@ -841,7 +846,7 @@ class RpmYum:
                 epkgs += 1
                 if p in erases:
                     erases.remove(p)
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["size_package"]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["signature"]["payloadsize"][0]))})
             self.outputPkgList(d)
 
         # Dependency fooshizzle output
@@ -883,7 +888,7 @@ class RpmYum:
             d = []
             for p in erases:
                 epkgs += 1
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["size_package"]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["signature"]["payloadsize"][0]))})
             self.outputPkgList(d)
 
         self.erase_list = [pkg for pkg in self.erase_list
@@ -894,7 +899,7 @@ class RpmYum:
                       "removed from your system:")
             d = []
             for p in self.erase_list:
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["size_package"]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["signature"]["payloadsize"][0]))})
             self.outputPkgList(d, 2)
 
         if self.confirm:
@@ -909,7 +914,9 @@ class RpmYum:
             if epkgs > 0:
                 log.info2("Erase        %5d package(s)" % epkgs)
 
-        log.info2("\nTotal download size: %s" % int2str(totsize))
+        if totsize > 0:
+            log.info2("\nTotal download size: %s" % int2str(totsize))
+
         if self.confirm and not self.config.test:
             if not is_this_ok():
                 return 1
@@ -925,12 +932,6 @@ class RpmYum:
 
         if ops is None:
             return 0
-        if len(ops) == 0:
-            log.info1("Nothing to do.")
-            return 1
-        ipkgs = 0
-        upkgs = 0
-        epkgs = 0
 
         if self.config.timer:
             log.info2("runCommand() took %s seconds", (clock() - time1))

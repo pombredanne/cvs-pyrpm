@@ -103,6 +103,7 @@ class RpmDB(db.RpmDatabase):
             "obsoletename" : None,
             "obsoleteflags" : None,
             "obsoleteversion" : None,
+            "archivesize" : None,
             }
 
     def __contains__(self, pkg):
