@@ -378,10 +378,21 @@ class RpmResolver:
                pkg1_fi.filecolor > 0 and pkg2_fi.filecolor > 0:
             return 0
 
+        # check if data is sufficient
+        if not pkg1_fi.mode:
+            raise ValueError, \
+                  "Package '%s': File mode is not set for file '%s'" % \
+                  (pkg1.getNEVRA(), filename)
+        if not pkg2_fi.mode:
+            raise ValueError, \
+                  "Package '%s': File mode is not set for file '%s'" % \
+                  (pkg2.getNEVRA(), filename)
+
         # check if user and group are identical
         if pkg1_fi.uid != pkg2_fi.uid and \
                pkg1_fi.gid != pkg2_fi.gid:
             return 1
+
         # ignore directories
         if S_ISDIR(pkg1_fi.mode) and S_ISDIR(pkg2_fi.mode):
             return 0
