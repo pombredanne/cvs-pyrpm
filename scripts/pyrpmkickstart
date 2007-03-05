@@ -35,7 +35,7 @@ if not PYRPMDIR in sys.path:
 PYBINDIR = os.path.dirname(sys.argv[0])
 
 import pyrpm
-import pyrpm.database
+import pyrpm.yum
 from pyrpm.installer import *
 
 log = pyrpm.installer.log
@@ -64,19 +64,74 @@ autopart["swap"] = { "size": 128 }
 def exitHandler(signum, frame):
     raise RuntimeError
 
+def usage():
+    log.info1("""
+Usage: pyrpmkickstart <options> <kickstartfile>
+                      [[<disk name>:]<disk image>|<disk device>]*
+
+OPTIONS
+  -h  | --help     Print help.
+  -v  | --verbose  Be verbose, and more, ..
+  -y  | --yes      Do not ask questions, assume yes.
+
+  --arch=<arch>            Set installation arch for guest. This is needed to
+                           to install a i586 guest from a i686 installation
+                           tree. It is not usable for multilib guest systems at
+                           the moment.
+  --beta-key-verify        Use beta key verification code for RHEL >= 5.
+  --drop-unresolved        Drop packages, which have unresolved dependencies in
+                           installation mode. Please keep in mind that this
+                           could result in an incomplete and unusable system.
+  --external-call          Do not use internal yum class for pyrpmyum. Use
+                           popen call. This is also used for '--yum' flag.
+  --label-prefix=<string>  Prepend prefix before labels on partitions
+  --no-stage2              Do not mount stage2.img from installation source,
+                           use host system tools to format partitions. This
+                           does not work for all host and client system
+                           combinations, but could help with others.
+  --no-cache               Do not cache RPM's (e.g. for http and ftp sources).
+  --no-cleanup             Do not cleanup temporary directory and files.
+  --no-default-groups      Do not use base and core as default groups. This is
+                           useful for minimal installations.
+  --repo-comps             Load comps file in repos and use them for package
+                           and group selection.
+  --upgrade=<part>         Upgrade installation in partition <part>. This is
+                           only useful for upgrades and if there is more than#
+                           one installation on the supplied disks.
+  --wait                   Wait after installation before umounting.
+  --xen                    Write a simple xen config file.
+  --yum                    Use yum instead of pyrpmyum.
+
+""")
+# TODO:
+#  --standalone             Start in standalone mode: start network before
+#                           running pre script, swapon swap partitions
+#  --secure                 Secure installation with firewall enabled in
+#                           standalone mode
+
 ################################ main function ################################
 
 def main():
-    global verbose, target_chroot, xen, nocleanup, confirm, tempdir, diskmap, \
-           partitionmap, devmap, wait, orig_yum, target_dir, \
-           label_prefix, standalone, stage2_img_dir, repo_comps, upgrade, \
-           no_stage2, no_cache, raidmap, stage2_chroot, \
-           vgmap, source, repos
+    global target_chroot, nocleanup, tempdir, diskmap, partitionmap, devmap, \
+           wait, target_dir, raidmap, stage2_chroot, \
+           vgmap, source
+    verbose = False
+    xen = False
+    confirm = True
+    orig_yum = False
+    label_prefix = ""
+    standalone = False
+    stage2_img_dir = None
     user_arch = None
-    no_default_groups = 0
-    autoerase = 0
+    no_default_groups = False
+    repo_comps = False
+    upgrade = None
+    no_stage2 = False
+    no_cache = False
+    autoerase = False
     has_raid = False
     beta_key_verify = False
+    external_call = False
 
     log.setInfoLogLevel(log.INFO1)
     log.setDebugLogLevel(log.NO_DEBUG)
@@ -90,7 +145,8 @@ def main():
                                        "standalone", "wait", "xen", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
                                        "no-cache", "no-default-groups",
-                                       "drop-unresolved", "beta-key-verify" ])
+                                       "drop-unresolved", "beta-key-verify",
+                                       "external-call" ])
     except:
         usage()
         return
@@ -100,30 +156,31 @@ def main():
             usage()
             return
         elif opt in [ "-v", "--verbose" ]:
-            verbose += 1
+            verbose = True
             log.setInfoLogLevel(log.getInfoLogLevel() + 1)
             flog.setInfoLogLevel(flog.getInfoLogLevel() + 1)
         elif opt in [ "-d", "--debug" ]:
             log.setDebugLogLevel(log.getDebugLogLevel() + 1)
             flog.setDebugLogLevel(flog.getDebugLogLevel() + 1)
         elif opt in [ "-y", "--yes" ]:
-            confirm = 0
+            confirm = False
         elif opt == "--xen":
-            xen = 1
+            xen = True
         elif opt == "--no-cleanup":
-            nocleanup = 1
+            nocleanup = True
         elif opt == "--wait":
             wait = 1
         elif opt == "--yum":
-            orig_yum = 1
+            orig_yum = True
+            external_call = True
         elif opt == "--label-prefix":
             label_prefix = "%x_" % int(time.strftime("%m%d%H%M"))
         elif opt == "--standalone":
-            standalone = 1
+            standalone = True
         elif opt == "--repo-comps":
-            repo_comps = 1
+            repo_comps = True
         elif opt == "--no-stage2":
-            no_stage2 = 1
+            no_stage2 = True
         elif opt == "--upgrade":
             if val[:5] == "/dev/":
                 upgrade = val[5:]
@@ -132,13 +189,15 @@ def main():
         elif opt == "--arch":
             user_arch = val
         elif opt == "--no-cache":
-            no_cache = 1
+            no_cache = True
         elif opt == "--no-default-groups":
-            no_default_groups = 1
+            no_default_groups = True
         elif opt == "--drop-unresolved":
-            autoerase = 1
+            autoerase = True
         elif opt == "--beta-key-verify":
             beta_key_verify = True
+        elif opt == "--external-call":
+            external_call = true
         else:
             log.error("Unknown option '%s'.", opt)
             usage()
@@ -172,7 +231,7 @@ def main():
         # own environment like stage2
         tempdir = "/tmp"
         stage2_dir = "/"
-        no_stage2 = 1
+        no_stage2 = True
     else:
         # create temp dir in standard mode
         try:
@@ -1298,7 +1357,7 @@ def main():
             diskmap[disk].print_info()
             diskmap[disk].print_partitions()
 
-    if len(modified) > 0 and confirm == 1:
+    if len(modified) > 0 and confirm:
         if not pyrpm.is_this_ok():
             return 0
 
@@ -1693,7 +1752,7 @@ def main():
     del location
 
     # print confirm message
-    if confirm == 1 and len(to_format) > 0:
+    if confirm and len(to_format) > 0:
         log.info1("About to format these partitions:")
         for onpart in to_format:
             name = partitionmap[onpart]["name"]
@@ -2377,81 +2436,107 @@ def main():
     fd.write(source.getYumConf())
     fd.close()
 
-#    # TODO: use RpmYum class instead of external pyrpmyum call
-#    config = RpmConfig()
-#    config.cachedir = cache_dir
-#    config.buildroot = target_chroot
-#    # TODO: yum debug
-#    # TODO: checkinstalled for upgrade?
-#    # TODO: honor user_arch
-#    yum = RpmYum(config)
-#
-#    lockfile = lockPyrpm()
-#    if lockfile == None:
-#        log.error("couldn't lock pyrpmyum")
-#        return 0
-#    if not yum.setCommand(args[0]):
-#        return 0
-#    if not yum.prepareTransaction():
-#        return 0
-#    if not yum.runArgs(args[1:]):
-#        return 0
-#    if not yum.runDepRes():
-#        return 0
-#    if not yum.runCommand():
-#        return 0
-#    if lockfile:
-#        try:
-#            os.unlink(lockfile)
-#        except OSError:
-#            pass
+    # TODO: user_arch
+    # TODO: checkinstalled for upgrade?
 
-    # yum
-    if orig_yum:
-        yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf, target_chroot)
-    else:
-        yum = "PATH=%s:${PATH}; export PATH; " % (PYBINDIR) + \
-              "PYTHONPATH=%s; export PYTHONPATH; " % (PYRPMDIR) + \
-              "pyrpmyum -y --hash -c '%s'" % (yum_conf) + \
-              " --root='%s'" % (target_chroot) + \
-              " --cachedir='%s'" % (cache_dir)
-        if len(languages) > 0:
-            yum += " --languages='%s'" % (" ".join(languages))
-        # --servicehack
+    if not external_call:
+        config = pyrpm.RpmConfig()
+        config.cachedir = cache_dir
+        config.buildroot = target_chroot
+        config.yumconf = [ yum_conf ]
+        config.nofileconflicts = 1
         if no_cache:
-            yum += " --nocache"
-        if verbose:
-            yum += " -v"
-    if ks.has_key("packages") and ks["packages"].has_key("ignoredeps") and \
-           ks["packages"].has_key("ignoremissing"):
-        yum += " --nodeps"
-    if ks.has_key("install"):
-        if autoerase:
-            yum += " --autoerase "
-        yum += " install "
-        yum += string.join(pkgs)
-    else:
-        if not orig_yum:
-            yum += " --autoerase "
-        yum += " update "
-    #print yum
+            config.nocache = 1
 
-    # install / upgrade
-    try:
-        p = popen2.Popen4(yum)
-        ch = p.fromchild.read(1)
-        while ch:
-            log.info1(ch, nl=0, nofmt=1)
-            ch = p.fromchild.read(1)
-        status = p.poll()
-        if status != 0:
-            raise RuntimeError, "failed"
-    except:
-        if ks.has_key("install"):
-            log.error("\nInstallation failed, aborting.")
+        info_level = log.getInfoLogLevel()
+        log.setInfoLogLevel(log.INFO2)
+        debug_level = log.getDebugLogLevel()
+        log.setDebugLogLevel(log.NO_DEBUG)
+
+        try:
+            yum = pyrpm.yum.RpmYum(config)
+            
+            if not yum.lock():
+                log.error("couldn't lock pyrpmyum")
+                return 0
+            try:
+                # do not asky any questions
+                yum.setConfirm(False)
+                yum.setLanguages(languages[:])
+
+                if ks.has_key("install"):
+                    command = "install"
+                    if autoerase:
+                        yum.setAutoerase(True)
+                else:
+                    command = "update"
+                    # allow to automatically erase packages with unresolved
+                    # dependencies
+                    yum.setAutoerase(True)
+                if not yum.setCommand(command):
+                    return 0
+                if not yum.prepareTransaction():
+                    return 0
+                if not yum.runArgs(pkgs):
+                    return 0
+                if not yum.runDepRes():
+                    return 0
+                if not yum.runCommand(clearrepos=True):
+                    return 0
+            finally:
+                if yum.pydb:
+                    yum.pydb.close()
+                if not yum.unLock():
+                    log.error("couldn't unlock pyrpmyum")
+        finally:
+            log.setInfoLogLevel(info_level)
+            log.setDebugLogLevel(debug_level)
+    else:
+        # yum
+        if orig_yum:
+            yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf,
+                                                         target_chroot)
         else:
-            log.error("\nUpgrade failed, aborting.")
-        return 1
+            yum = "PATH=%s:${PATH}; export PATH; " % (PYBINDIR) + \
+                  "PYTHONPATH=%s; export PYTHONPATH; " % (PYRPMDIR) + \
+                  "pyrpmyum -y --hash -c '%s'" % (yum_conf) + \
+                  " --root='%s'" % (target_chroot) + \
+                  " --cachedir='%s'" % (cache_dir)
+            if len(languages) > 0:
+                yum += " --languages='%s'" % (" ".join(languages))
+            if no_cache:
+                yum += " --nocache"
+            if autoerase:
+                yum += " --autoerase"
+        if ks.has_key("packages") and \
+               ks["packages"].has_key("ignoredeps") and \
+               ks["packages"].has_key("ignoremissing"):
+            yum += " --nodeps"
+        if ks.has_key("install"):
+            yum += " install "
+            yum += string.join(pkgs)
+        else:
+            if not orig_yum and not autoerase:
+                yum += " --autoerase"
+            yum += " update "
+        flog.info2(yum, nofmt=1)
+
+        # install / upgrade
+        try:
+            p = popen2.Popen4(yum)
+            ch = p.fromchild.read(1)
+            while ch:
+                log.info1(ch, nl=0, nofmt=1)
+                ch = p.fromchild.read(1)
+            status = p.poll()
+            if status != 0:
+                raise RuntimeError, "failed"
+        except:
+            if ks.has_key("install"):
+                log.error("\nInstallation failed, aborting.")
+            else:
+                log.error("\nUpgrade failed, aborting.")
+            return 1
 
     ##########################################################################
     ############################## configuration #############################
@@ -3012,76 +3097,21 @@ def main():
 
     return 0
 
-##################################### usage ###################################
-
-def usage():
-    log.info1("""
-Usage: pyrpmkickstart <options> <kickstartfile>
-                      [[<disk name>:]<disk image>|<disk device>]*
-
-OPTIONS
-  -h  | --help     Print help.
-  -v  | --verbose  Be verbose, and more, ..
-  -y  | --yes      Do not ask questions, assume yes.
-
-  --arch=<arch>            Set installation arch for guest. This is needed to
-                           to install a i586 guest from a i686 installation
-                           tree. It is not usable for multilib guest systems at
-                           the moment.
-  --beta-key-verify        Use beta key verification code for RHEL >= 5.
-  --drop-unresolved        Drop packages, which have unresolved dependencies in
-                           installation mode. Please keep in mind that this
-                           could result in an incomplete and unusable system.
-  --label-prefix=<string>  Prepend prefix before labels on partitions
-  --no-stage2              Do not mount stage2.img from installation source,
-                           use host system tools to format partitions. This
-                           does not work for all host and client system
-                           combinations, but could help with others.
-  --no-cache               Do not cache RPM's (e.g. for http and ftp sources).
-  --no-cleanup             Do not cleanup temporary directory and files.
-  --no-default-groups      Do not use base and core as default groups. This is
-                           useful for minimal installations.
-  --repo-comps             Load comps file in repos and use them for package
-                           and group selection.
-  --upgrade=<part>         Upgrade installation in partition <part>. This is
-                           only useful for upgrades and if there is more than#
-                           one installation on the supplied disks.
-  --wait                   Wait after installation before umounting.
-  --xen                    Write a simple xen config file.
-  --yum                    Use yum instead of pyrpmyum.
-
-""")
-# TODO:
-#  --standalone     Start in standalone mode: start network before running
-#                   pre script, swapon swap partitions
-#  --secure         Secure installation with firewall enabled in standalone mode
-
 ##################################### main ####################################
 
-verbose = 0
+verbose = False
 target_chroot = ""
-xen = 0
-nocleanup = 0
-confirm = 1
+nocleanup = False
 tempdir = None
 diskmap = None
 partitionmap = None
 devmap = None
 wait = 0
-orig_yum = 0
 target_dir = None
-label_prefix = ""
-standalone = 0
-stage2_img_dir = None
 raidmap = None
-repo_comps = 0
-upgrade = None
-no_stage2 = 0
-no_cache = 0
 stage2_chroot = None
 vgmap = None
 source = None
-repos = { }
 
 # abort if user is not root
 if os.geteuid() != 0:
@@ -3128,9 +3158,6 @@ log.info1("Cleaning up, please wait...")
 if source:
     source.close()
     source = None
-for repo in repos:
-    repos[repo].close()
-repos = None
 
 if devmap:
     # remove temporary devices
