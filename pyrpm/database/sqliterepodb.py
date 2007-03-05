@@ -234,7 +234,6 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     def insertHash(self, table, hash, cursor):
         """Insert the key value pairs in hash into a database table"""
-
         keys = hash.keys()
         values = hash.values()
         query = "INSERT INTO %s (" % (table)
@@ -242,7 +241,12 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         query += ") VALUES ("
         query += ', '.join(["?"] * len(hash))
         query += ")"
-        cursor.execute(query, hash.values())# XXX ??? .encode('utf8'))
+        values = hash.values()
+        if 'pre' in hash and sqlite3.sqlite:
+            idx = hash.keys().index('pre')
+            values[idx] = ("False", "True")[values[idx]]
+            
+        cursor.execute(query, values)# XXX ??? .encode('utf8'))
         return cursor.lastrowid
 
     def loadCache(self, filename):
