@@ -25,140 +25,160 @@ from config import log, flog, rpmconfig
 
 def get_system_disks():
     disks = [ ]
-    fd = open("/proc/partitions", "r")
-    while 1:
-        line = fd.readline()
-        if not line:
-            break
-        line = line.strip()
-        if len(line) < 1 or line[0] == '#':
-            continue
-        if line[:5] == "major":
-            continue
-        splits = line.split() # major, minor, blocks, name
-        if len(splits) < 4:
-            log.error("'/proc/partitions' malformed.")
-            return
-        if int(splits[1]) % 16 == 0: # minor%16=0 for harddisk devices
-            hd = splits[3]
-            if hd[0:4] == "loop":
+    fd = None
+    try:
+        fd = open("/proc/partitions", "r")
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            line = line.strip()
+            if len(line) < 1 or line[0] == '#':
                 continue
-            disks.append("/dev/"+hd)
-    fd.close()
+            if line[:5] == "major":
+                continue
+            splits = line.split() # major, minor, blocks, name
+            if len(splits) < 4:
+                log.error("'/proc/partitions' malformed.")
+                return
+            if int(splits[1]) % 16 == 0: # minor%16=0 for harddisk devices
+                hd = splits[3]
+                if hd[0:4] == "loop":
+                    continue
+                disks.append("/dev/"+hd)
+    finally:
+        if fd:
+            fd.close()
     return disks
 
 def get_system_md_devices():
     map = { }
-    fd = open("/proc/mdstat", "r")
-    while 1:
-        line = fd.readline()
-        if not line:
-            break
-        line = line.strip()
-        if len(line) < 1 or line[0] == '#':
-            continue
-        if line[:2] != "md":
-            continue
-        splits = line.split() # device : data
-        if len(splits) < 3 or splits[1] != ":":
-            log.error("'/proc/mdstat' malformed.")
-            return
-        map[splits[0]] = "/dev/%s" % splits[0]
-    fd.close()
+    fd = None
+    try:
+        fd = open("/proc/mdstat", "r")
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            line = line.strip()
+            if len(line) < 1 or line[0] == '#':
+                continue
+            if line[:2] != "md":
+                continue
+            splits = line.split() # device : data
+            if len(splits) < 3 or splits[1] != ":":
+                log.error("'/proc/mdstat' malformed.")
+                return
+            map[splits[0]] = "/dev/%s" % splits[0]
+    finally:
+        if fd:
+            fd.close()
     return map
 
 def mounted_devices():
     # dict <mount point>:<filesystem type>
     mounted = [ ]
+    fd = None
     try:
-        fd = open("/proc/mounts", "r")
-    except Exception, msg:
-        log.error("Unable to open '/proc/mounts' for reading: %s", msg)
-        return
-    while 1:
-        line = fd.readline()
-        if not line:
-            break
-        margs = line.split()
-        mounted.append(margs[0])
-    fd.close()
+        try:
+            fd = open("/proc/mounts", "r")
+        except Exception, msg:
+            log.error("Unable to open '/proc/mounts' for reading: %s", msg)
+            return
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            margs = line.split()
+            mounted.append(margs[0])
+    finally:
+        if fd:
+            fd.close()
     return mounted
 
 def load_release(chroot=""):
     f = "%s/etc/redhat-release" % chroot
     if not (os.path.exists(f) and os.path.isfile(f)):
         return None
+    fd = None
     try:
-        fd = open(f, "r")
-    except:
-        return None
-    release = fd.readline()
-    fd.close()
+        try:
+            fd = open(f, "r")
+        except:
+            return None
+        release = fd.readline()
+    finally:
+        if fd:
+            fd.close()
     return release.strip()
 
 def load_fstab(chroot=""):
     f = "%s/etc/fstab" % chroot
     if not (os.path.exists(f) and os.path.isfile(f)):
-# TODO: allow etc to be a partition
-#        f = "%s/fstab" % chroot
-#        if not (os.path.exists(f) and os.path.isfile(f)):
-#            return None
         return None
+    fd = None
     try:
-        fd = open(f, "r")
-    except:
-        return None
-    fstab = [ ]
-    while 1:
-        line = fd.readline()
-        if not line:
-            break
-        if len(line) < 1 or line[0] == "#":
-            continue
-        line = line.strip()
-        splits = line.split()
-        if len(splits) != 6:
-            continue
-        if (splits[4] == "1" and splits[5] in ["1", "2"]) or \
-               splits[1] == "swap":
-            fstab.append(splits)
-    fd.close()
+        try:
+            fd = open(f, "r")
+        except:
+            return None
+        fstab = [ ]
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            if len(line) < 1 or line[0] == "#":
+                continue
+            line = line.strip()
+            splits = line.split()
+            if len(splits) != 6:
+                continue
+            if (splits[4] == "1" and splits[5] in ["1", "2"]) or \
+                   splits[1] == "swap":
+                fstab.append(splits)
+    finally:
+        if fd:
+            fd.close()
     return fstab
 
 def load_mdadm_conf(chroot=""):
     f = "%s/etc/mdadm.conf" % chroot
     if not (os.path.exists(f) and os.path.isfile(f)):
         return None
+    fd = None
     try:
-        fd = open(f, "r")
-    except:
-        return None
-    conf = [ ]
-    while 1:
-        line = fd.readline()
-        if not line:
-            break
-        line = line.strip()
-        splits = line.split()
-        if splits[0] == "ARRAY":
-            dev = splits[1]
-            if dev[:5] == "/dev/":
-                dev = dev[5:]
-            conf[dev] = { }
-            for i in xrange(2, len(splits)):
-                (key, value) = splits[i].split("=", 1)
-                key = key.strip()
-                value = value.strip()
-                if key == "devices":
-                    conf[dev][key] = [ ]
-                    for val in value.split(","):
-                        val.strip()
-                        if val[:5] == "/dev/":
-                            val = val[5:]
-                        conf[dev][key].append(val)
-                else:
-                    conf[dev][key] = value
-    fd.close()
+        try:
+            fd = open(f, "r")
+        except:
+            return None
+        conf = [ ]
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            line = line.strip()
+            splits = line.split()
+            if splits[0] == "ARRAY":
+                dev = splits[1]
+                if dev[:5] == "/dev/":
+                    dev = dev[5:]
+                conf[dev] = { }
+                for i in xrange(2, len(splits)):
+                    (key, value) = splits[i].split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if key == "devices":
+                        conf[dev][key] = [ ]
+                        for val in value.split(","):
+                            val.strip()
+                            if val[:5] == "/dev/":
+                                val = val[5:]
+                            conf[dev][key].append(val)
+                    else:
+                        conf[dev][key] = value
+    finally:
+        if fd:
+            fd.close()
     return conf
 
 def get_installation_info(device, fstype, dir):
@@ -191,13 +211,16 @@ def get_installation_info(device, fstype, dir):
 def get_buildstamp_info(dir):
     release = version = arch = None
     buildstamp = "%s/.buildstamp" % dir
+    fd = None
     try:
-        fd = open(buildstamp, "r")
-    except Exception, msg:
-        return None
-
-    lines = fd.readlines()
-    fd.close()
+        try:
+            fd = open(buildstamp, "r")
+        except Exception, msg:
+            return None
+        lines = fd.readlines()
+    finally:
+        if fd:
+            fd.close()
 
     if len(lines) < 3:
         if len(lines) == 1:
@@ -224,13 +247,16 @@ def get_discinfo(discinfo):
     release = version = arch = None
 
     # This should be using the cache to also work for http/ftp.
+    fd = None
     try:
-        fd = open(discinfo, "r")
-    except Exception, msg:
-        return None
-
-    lines = fd.readlines()
-    fd.close()
+        try:
+            fd = open(discinfo, "r")
+        except Exception, msg:
+            return None
+        lines = fd.readlines()
+    finally:
+        if fd:
+            fd.close()
 
     if len(lines) < 4:
         log.error("Discinfo in '%s' is malformed.", discinfo)
@@ -300,19 +326,56 @@ def rpmdb_get(rpmdb, name):
 def get_installed_kernels(chroot=None):
     kernels = [ ]
     rpmdb = getRpmDB(rpmconfig, "/var/lib/rpm", chroot)
-    rpmdb.open()
-    if not rpmdb.read():
-        return kernels
-    list = rpmdb_get(rpmdb, "kernel-smp")
-    list.extend(rpmdb_get(rpmdb, "kernel"))
-    rpmdb.close()
+    try:
+        rpmdb.open()
+        if not rpmdb.read():
+            return kernels
+        list = rpmdb_get(rpmdb, "kernel-smp")
+        list.extend(rpmdb_get(rpmdb, "kernel"))
+    finally:
+        rpmdb.close()
     normalizeList(list)
     kernels = [ "%s-%s" % (pkg["version"], pkg["release"]) for pkg in list ]
     return kernels
 
 def fuser(what):
+    # first stage: close own files
     i = 0
+    mypid = os.getpid()
+    while 1:
+        lsof = "/usr/sbin/lsof -Fpf +D '%s' 2>/dev/null" % what
+        (status, rusage, msg) = runScript(script=lsof)
+        if msg == "":
+            break
+        lines = msg.strip().split()
+        for j in xrange(len(lines)):
+            line = lines[j].strip()
+            if not line or len(line) < 1 or line[0] != "p":
+                continue
+            if line != "p%d" % mypid:
+                continue
+            while j + 1 < len(lines):
+                line = lines[j+1].strip()
+                if not line or len(line) < 1 or line[0] != "f":
+                    break
+                try:
+                    fd = int(line[1:])
+                except:
+                    pass
+                else:
+                    log.info2("Closing danngling fd %d", fd)
+                    try:
+                        os.close(fd)
+                    except:
+                        pass
+                j += 1
+        i += 1
+        if i == 20:
+            log.error("Failed to close open files.")
+            break
 
+    # second stage: kill programs
+    i = 0
     sig = signal.SIGTERM
     while 1:
         lsof = "/usr/sbin/lsof -t +D '%s' 2>/dev/null" % what
@@ -348,21 +411,25 @@ def umount_all(dir):
     # umount target dir and included mount points
     mounted = [ ]
     fstype = { }
+    fd = None
     try:
-        fd = open("/proc/mounts", "r")
-    except Exception, msg:
-        log.error("Unable to open '/proc/mounts' for reading: %s", msg)
-        return
-    while 1:
-        line = fd.readline()
-        if not line:
-            break
-        margs = line.split()
-        i = margs[1].find(dir)
-        if i == 0:
-            mounted.append(margs[1])
-            fstype[margs[1]] = margs[2]
-    fd.close()
+        try:
+            fd = open("/proc/mounts", "r")
+        except Exception, msg:
+            log.error("Unable to open '/proc/mounts' for reading: %s", msg)
+            return
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            margs = line.split()
+            i = margs[1].find(dir)
+            if i == 0:
+                mounted.append(margs[1])
+                fstype[margs[1]] = margs[2]
+    finally:
+        if fd:
+            fd.close()
     # sort reverse
     mounted.sort()
     mounted.reverse()
@@ -390,13 +457,17 @@ def umount_all(dir):
     return failed
 
 def zero_device(device, size, offset=0):
-    fd = open(device, "wb")
-    fd.seek(offset)
-    i = 0
-    while i < size:
-        fd.write("\0")
-        i += 1
-    fd.close()
+    fd = None
+    try:
+        fd = open(device, "wb")
+        fd.seek(offset)
+        i = 0
+        while i < size:
+            fd.write("\0")
+            i += 1
+    finally:
+        if fd:
+            fd.close()
 
 def check_dir(buildroot, dir):
     d = buildroot+dir
@@ -457,20 +528,23 @@ def create_file(buildroot, target, content=None, force=0, mode=None):
     else:
         if not force:
             return -1
+    fd = None
     try:
-        fd = open("%s/%s" % (buildroot, target), "w")
-    except Exception, msg:
-        log.error("Unable to open '%s' for writing: %s", target, msg)
-        return 0
-    if content:
         try:
-            for line in content:
-                fd.write(line)
+            fd = open("%s/%s" % (buildroot, target), "w")
         except Exception, msg:
-            log.error("Unable to write to '%s': %s", target, msg)
-            fd.close()
+            log.error("Unable to open '%s' for writing: %s", target, msg)
             return 0
-    fd.close()
+        if content:
+            try:
+                for line in content:
+                    fd.write(line)
+            except Exception, msg:
+                log.error("Unable to write to '%s': %s", target, msg)
+                return 0
+    finally:
+        if fd:
+            fd.close()
     if mode != None:
         os.chmod("%s/%s" % (buildroot, target), mode)
     return 1
@@ -541,23 +615,27 @@ def getId(name):
     return i
 
 def copy_file(source, target):
+    source_fd = target_fd = None
     try:
-        source_fd = open(source, "r")
-    except Exception, msg:
-        log.error("Failed to open '%s': %s", source, msg)
-        return 1
-    try:
-        target_fd = open(target, "w")
-    except Exception, msg:
-        log.error("Failed to open '%s': %s", target, msg)
-        source_fd.close()
-        return 1
-    data = source_fd.read(65536)
-    while data:
-        target_fd.write(data)
+        try:
+            source_fd = open(source, "r")
+        except Exception, msg:
+            log.error("Failed to open '%s': %s", source, msg)
+            return 1
+        try:
+            target_fd = open(target, "w")
+        except Exception, msg:
+            log.error("Failed to open '%s': %s", target, msg)
+            return 1
         data = source_fd.read(65536)
-    source_fd.close()
-    target_fd.close()
+        while data:
+            target_fd.write(data)
+            data = source_fd.read(65536)
+    finally:
+        if source_fd:
+            source_fd.close()
+        if target_fd:
+            target_fd.close()
 
 def buildroot_copy(buildroot, source, target):
     copy_file(buildroot+source, buildroot+target)
@@ -665,74 +743,75 @@ def detectFstype(device):
     pagesize = resource.getpagesize()
 
     # open device
+    fd = None
     try:
-        fd = open(device, "r")
-    except Exception, msg:
-        log.debug2(msg)
-        return None
+        try:
+            fd = open(device, "r")
+        except Exception, msg:
+            log.debug2(msg)
+            return None
 
-    # read pagesize bytes (at least needed for swap)
-    try:
-        buf = fd.read(pagesize)
-    except: # ignore message
-        fd.close()
-        return None
-    if len(buf) < pagesize:
-        fd.close()
-        return None
+        # read pagesize bytes (at least needed for swap)
+        try:
+            buf = fd.read(pagesize)
+        except: # ignore message
+            return None
+        if len(buf) < pagesize:
+            return None
 
-    ext2magic = ext2_journal = ext2_has_journal = 0
-    try:
-        (ext2magic,) = struct.unpack("H", buf[1024+56:1024+56+2])
-        (ext2_journal,) = struct.unpack("I", buf[1024+96:1024+96+4])
-        (ext2_has_journal,) = struct.unpack("I", buf[1024+92:1024+92+4])
-    except Exception, msg:
-        fd.close()
-        raise Exception, msg
+        ext2magic = ext2_journal = ext2_has_journal = 0
+        try:
+            (ext2magic,) = struct.unpack("H", buf[1024+56:1024+56+2])
+            (ext2_journal,) = struct.unpack("I", buf[1024+96:1024+96+4])
+            (ext2_has_journal,) = struct.unpack("I", buf[1024+92:1024+92+4])
+        except Exception, msg:
+            raise Exception, msg
 
-    if ext2magic == 0xEF53:
-        if ext2_journal & 0x0008 == 0x0008 or \
-               ext2_has_journal & 0x0004 == 0x0004:
-            return "ext3"
-        return "ext2"
+        if ext2magic == 0xEF53:
+            if ext2_journal & 0x0008 == 0x0008 or \
+                   ext2_has_journal & 0x0004 == 0x0004:
+                return "ext3"
+            return "ext2"
 
-    elif buf[pagesize - 10:] == "SWAP_SPACE" or \
-           buf[pagesize - 10:] == "SWAPSPACE2":
-        fd.close()
-        return "swap"
-    elif buf[0:4] == "XFSB":
-        fd.close()
-        return "xfs"
+        elif buf[pagesize - 10:] == "SWAP_SPACE" or \
+               buf[pagesize - 10:] == "SWAPSPACE2":
+            return "swap"
+        elif buf[0:4] == "XFSB":
+            return "xfs"
 
-    # check for jfs
-    try:
-        fd.seek(32768, 0)
-        buf = fd.read(180)
-    except: # ignore message
-        fd.close()
-        return None
-    if len(buf) < 180:
-        fd.close()
-        return None
-    if buf[0:4] == "JFS1":
-        return "jfs"
+        # check for jfs
+        try:
+            fd.seek(32768, 0)
+            buf = fd.read(180)
+        except: # ignore message
+            return None
+        if len(buf) < 180:
+            return None
+        if buf[0:4] == "JFS1":
+            return "jfs"
+    finally:
+        if fd:
+            fd.close()
 
     return None
 
 def ext2Label(device):
     # open device
+    fd = None
     try:
-        fd = open(device, "r")
-    except: # ignore message
-        return None
-    # read 1160 bytes
-    try:
-        fd.seek(1024, 0)
-        buf = fd.read(136)
-    except: # ignore message
-        fd.close()
-        return None
-    fd.close()
+        try:
+            fd = open(device, "r")
+        except: # ignore message
+            return None
+        # read 1160 bytes
+        try:
+            fd.seek(1024, 0)
+            buf = fd.read(136)
+        except: # ignore message
+            return None
+    finally:
+        if fd:
+            fd.close()
 
     label =None
     if len(buf) == 136:
@@ -744,17 +823,20 @@ def ext2Label(device):
 
 def xfsLabel(device):
     # open device
+    fd = None
     try:
-        fd = open(device, "r")
-    except: # ignore message
-        return None
-    # read 128 bytes
-    try:
-        buf = fd.read(128)
-    except: # ignore message
-        fd.close()
-        return None
-    fd.close()
+        try:
+            fd = open(device, "r")
+        except: # ignore message
+            return None
+        # read 128 bytes
+        try:
+            buf = fd.read(128)
+        except: # ignore message
+            return None
+    finally:
+        if fd:
+            fd.close()
 
     label =None
     if len(buf) == 128 and buf[0:4] == "XFSB":
@@ -763,18 +845,21 @@ def xfsLabel(device):
 
 def jfsLabel(device):
     # open device
+    fd = None
     try:
-        fd = open(device, "r")
-    except: # ignore message
-        return None
-    # seek to 32768, read 180 bytes
-    try:
-        fd.seek(32768, 0)
-        buf = fd.read(180)
-    except: # ignore message
-        fd.close()
-        return None
-    fd.close()
+        try:
+            fd = open(device, "r")
+        except: # ignore message
+            return None
+        # seek to 32768, read 180 bytes
+        try:
+            fd.seek(32768, 0)
+            buf = fd.read(180)
+        except: # ignore message
+            return None
+    finally:
+        if fd:
+            fd.close()
 
     label =None
     if len(buf) == 180 and buf[0:4] == "JFS1":
@@ -785,17 +870,20 @@ def swapLabel(device):
     pagesize = resource.getpagesize()
 
     # open device
+    fd = None
     try:
-        fd = open(device, "r")
-    except: # ignore message
-        return None
-    # read pagesize bytes
-    try:
-        buf = fd.read(pagesize)
-    except: # ignore message
-        fd.close()
-        return None
-    fd.close()
+        try:
+            fd = open(device, "r")
+        except: # ignore message
+            return None
+        # read pagesize bytes
+        try:
+            buf = fd.read(pagesize)
+        except: # ignore message
+            return None
+    finally:
+        if fd:
+            fd.close()
 
     label = None
     if len(buf) == pagesize and (buf[pagesize - 10:] == "SWAP_SPACE" or \
