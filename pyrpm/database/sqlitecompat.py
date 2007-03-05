@@ -8,10 +8,10 @@ try:
 except ImportError:
     try:
         import sqlite
+        from sqlite import *
+        ok = True
     except ImportError:
-        sqlite = None
-    from sqlite import *
-    ok = True
+        pass
 
 if sqlite:
 
