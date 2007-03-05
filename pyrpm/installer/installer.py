@@ -98,8 +98,8 @@ class Source:
 
         # load repos
         repos = [ ]
-        yumconf = YumConf(self.version, self.arch, None, filenames=[ ],
-                          reposdirs=[ ])
+        self.yumconf = YumConf(self.version, self.arch, None, filenames=[ ],
+                               reposdirs=[ ])
         if self.isRHEL() and self.cmpVersion("4.9") >= 0:
             # RHEL-5
 
@@ -162,12 +162,13 @@ class Source:
                 log.info1("Loading repo '%s'", repo_name)
 
                 # create yumconf
-                yumconf[repo_name] = { }
-                yumconf[repo_name]["baseurl"] = [ "%s/%s" % (self.url, repo) ]
+                self.yumconf[repo_name] = { }
+                self.yumconf[repo_name]["baseurl"] = [ "%s/%s" % (self.url,
+                                                                  repo) ]
                 if self.exclude:
-                    yumconf[repo_name]["exclude"] = self.exclude
+                    self.yumconf[repo_name]["exclude"] = self.exclude
 
-                _repo = getRepoDB(rpmconfig, yumconf, reponame=repo_name)
+                _repo = getRepoDB(rpmconfig, self.yumconf, reponame=repo_name)
                 self.repos[repo_name] = _repo
                 signals = blockSignals()
                 if not _repo.read():
@@ -180,12 +181,12 @@ class Source:
             # RHEL <= 4
             # FC
             repo = self.release
-            yumconf[repo] = { }
-            yumconf[repo]["baseurl"] = [ self.url ]
+            self.yumconf[repo] = { }
+            self.yumconf[repo]["baseurl"] = [ self.url ]
             if self.exclude:
-                yumconf[repo]["exclude"] = self.exclude
+                self.yumconf[repo]["exclude"] = self.exclude
 
-            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
+            _repo = getRepoDB(rpmconfig, self.yumconf, reponame=repo)
             self.repos[repo] = _repo
             signals = blockSignals()
             if not _repo.read():
@@ -209,19 +210,20 @@ class Source:
 
             log.info1("Loading extra repo '%s'", repo)
 
-            yumconf[repo] = { }
+            self.yumconf[repo] = { }
             url = ks["repo"][repo]["baseurl"]
             if url[:6] == "nfs://":
                 d = "%s/%s" % (dir, repo)
                 create_dir("", d)
                 url = mount_nfs(url, d)
-            yumconf[repo]["baseurl"] = [ url ]
+            self.yumconf[repo]["baseurl"] = [ url ]
             if ks["repo"][repo].has_key("exclude"):
-                yumconf[repo]["exclude"] = ks["repo"][repo]["exclude"]
+                self.yumconf[repo]["exclude"] = ks["repo"][repo]["exclude"]
             if ks["repo"][repo].has_key("mirrorlist"):
-                yumconf[repo]["mirrorlist"] = ks["repo"][repo]["mirrorlist"]
+                self.yumconf[repo]["mirrorlist"] = \
+                                                 ks["repo"][repo]["mirrorlist"]
 
-            _repo = getRepoDB(rpmconfig, yumconf, reponame=repo)
+            _repo = getRepoDB(rpmconfig, self.yumconf, reponame=repo)
             self.repos[repo] = _repo
             signals = blockSignals()
             if not _repo.read():
@@ -274,53 +276,61 @@ class Source:
             groups.remove("everything")
             everything = True
 
-        # add default desktop
-        if ks.has_key("xconfig"):
-            if ks["xconfig"].has_key("startxonboot"):
-                if not "base-x" in groups:
-                    log.info1("Adding group 'base-x'.")
-                    groups.append("base-x")
-                desktop = "GNOME"
-                if ks["xconfig"].has_key("defaultdesktop"):
-                    desktop = ks["xconfig"]["defaultdesktop"]
-                desktop = "%s-desktop" % desktop.lower()
-                if not desktop in groups:
-                    log.info1("Adding group '%s'.", desktop)
-                    groups.append(desktop)
+        if ks.has_key("packages") and ks["packages"].has_key("add") and \
+               "*" in ks["packages"]["add"]:
+            # add all packages
+            for repo in self.repos.keys():
+                pkgs.extend(self.repos[repo].getNames())
+            normalizeList(pkgs)
+        else:
+            # add default desktop
+            if ks.has_key("xconfig"):
+                if ks["xconfig"].has_key("startxonboot"):
+                    if not "base-x" in groups:
+                        log.info1("Adding group 'base-x'.")
+                        groups.append("base-x")
+                    desktop = "GNOME"
+                    if ks["xconfig"].has_key("defaultdesktop"):
+                        desktop = ks["xconfig"]["defaultdesktop"]
+                    desktop = "%s-desktop" % desktop.lower()
+                    if not desktop in groups:
+                        log.info1("Adding group '%s'.", desktop)
+                        groups.append(desktop)
 
-        normalizeList(groups)
+            normalizeList(groups)
 
-        # test if groups are available
-        repo_groups = { }
-        for group in groups:
-            found = False
-            for repo in repos:
-                if not self.repos[repo].comps:
-                    continue
-                _group = self.repos[repo].comps.getGroup(group)
-                if not _group:
-                    continue
-                found = True
-                if not _group in repo_groups.keys() or \
-                       not repo in repo_groups[_group]:
-                    repo_groups.setdefault(_group, [ ]).append(repo)
-            if not found:
-                log.warning("Group '%s' does not exist.", group)
-        del groups
+            # test if groups are available
+            repo_groups = { }
+            for group in groups:
+                found = False
+                for repo in repos:
+                    if not self.repos[repo].comps:
+                        continue
+                    _group = self.repos[repo].comps.getGroup(group)
+                    if not _group:
+                        continue
+                    found = True
+                    if not _group in repo_groups.keys() or \
+                           not repo in repo_groups[_group]:
+                        repo_groups.setdefault(_group, [ ]).append(repo)
+                if not found:
+                    log.warning("Group '%s' does not exist.", group)
+            del groups
 
-        # add packages for groups
-        for group in repo_groups:
-            for repo in repo_groups[group]:
-                comps = self.repos[repo].comps
-                for pkg in comps.getPackageNames(group):
-                    if len(self.repos[repo].searchPkgs([pkg])) > 0:
-                        pkgs.append(pkg)
-                if everything:
-                    # add all packages in this group
-                    for pkg in comps.getConditionalPackageNames(group):
+            # add packages for groups
+            for group in repo_groups:
+                for repo in repo_groups[group]:
+                    comps = self.repos[repo].comps
+                    for pkg in comps.getPackageNames(group):
                         if len(self.repos[repo].searchPkgs([pkg])) > 0:
                             pkgs.append(pkg)
-        del repo_groups
+                    if everything:
+                        # add all packages in this group
+                        for (pkg, req) in \
+                                comps.getConditionalPackageNames(group):
+                            if len(self.repos[repo].searchPkgs([pkg])) > 0:
+                                pkgs.append(pkg)
+            del repo_groups
 
         # add packages
         if ks.has_key("packages") and ks["packages"].has_key("add"):
