@@ -56,7 +56,7 @@ class YumConf(dict):
                 self.parseFile(filename)
             else:
                 log.warning("Couldn't find given yum config file, skipping "
-                            "read of repo %s", yumconf)
+                            "read of repo %s", filename)
 
         if reposdirs == None:
             reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
@@ -214,6 +214,11 @@ class RpmYum:
         flag."""
 
         self.confirm = flag
+
+    def setLanguages(self, languages):
+        """Sets the supported languges for an installation."""
+
+        self.langs = languages
 
     def setCommand(self, command):
         """Set the command to perform to commmand.
