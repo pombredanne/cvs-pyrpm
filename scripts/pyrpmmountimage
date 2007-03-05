@@ -49,8 +49,6 @@ def main():
     #log.setDebugLogLevel(log.NO_DEBUG)
     #log.setFormat("%(label)s%(message)s")
     #log.setDateFormat("%Y-%m-%d %H:%M:%S")
-                
-
     
     (opts_list, args) = getopt.getopt(sys.argv[1:], "hr",
                                  [ "help", ])
