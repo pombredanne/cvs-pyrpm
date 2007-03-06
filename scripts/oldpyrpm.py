@@ -4092,6 +4092,10 @@ def checkCSV():
 def cacheLocal(urls, filename, subdir, verbose, checksum=None,
     checksumtype=None, nofilename=0):
     import urlgrabber
+    try:
+        from M2Crypto.SSL.Checker import WrongHost
+    except ImportError:
+        WrongHost = None
 
     for url in urls:
         if not url:
@@ -4118,12 +4122,12 @@ def cacheLocal(urls, filename, subdir, verbose, checksum=None,
                 keepalive=int(urloptions["keepalive"]),
                 proxies=urloptions["proxies"],
                 http_headers=urloptions["http_headers"])
-        except urlgrabber.grabber.URLGrabError, e:
+        except (urlgrabber.grabber.URLGrabError, WrongHost), e:
             if verbose > 4:
                 print "cacheLocal: error: e:", e
             # urlgrab fails with invalid range for already completely transfered
             # files, pretty strange to me to be honest... :)
-            if e[0] == 9:
+            if type(e) == ListType and e[0] == 9:
                 if checksum and getChecksum(localfile, checksumtype) \
                     != checksum:
                     continue
