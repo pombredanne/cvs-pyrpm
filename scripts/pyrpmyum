@@ -71,9 +71,6 @@ def main():
     # Disabled fileconflicts per default in yum
     rpmconfig.nofileconflicts = 1
 
-    # Default is to be a little verbose.
-    rpmconfig.verbose = 1
-
     # Argument parsing
     args = parseYumOptions(sys.argv[1:], yum)
 
