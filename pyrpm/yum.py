@@ -196,6 +196,12 @@ class RpmYum:
         # lockfile for yum calls
         self.lockfile = None
 
+        # Internal lists, don't ask. ;)
+        self.__iinstalls = [ ]
+        self.__ierases = [ ]
+        self.__iupdates = { }
+        self.__iobsoletes = { }
+
     def setAutoerase(self, flag):
         """Enable or disable erasing packages with unresolved dependencies
         according to flag."""
@@ -303,6 +309,10 @@ class RpmYum:
 
         self.erase_list = []
         self.opkg_list = [ ]
+        self.__iinstalls = [ ]
+        self.__ierases = [ ]
+        self.__iupdates = { }
+        self.__iobsoletes = { }
         if localDb is not None:
             self.pydb = localDb
         else:
@@ -719,6 +729,10 @@ class RpmYum:
             op_func(name)
         if self.config.timer:
             log.info2("runArgs() took %s seconds", (clock() - time1))
+        self._generateTransactionState()
+        return 1
+
+    def _generateTransactionState(self):
         resolver = self.opresolver
         # Remember the current state of the transaction before we do depsolving
         # so we know what operations were requested directly via commandline
@@ -742,7 +756,6 @@ class RpmYum:
                 if p2 in self.__ierases:
                     self.__ierases.remove(p2)
                 self.__iobsoletes[p].append(p2)
-        return 1
 
     def runDepRes(self):
         """Run the complete depresolution.
