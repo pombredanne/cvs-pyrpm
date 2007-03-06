@@ -407,8 +407,6 @@ class RpmYum:
     def install(self, name):
         pkglist = self.__findPkgs(name)
         ret = self.__handleBestPkg("install", pkglist)
-        if self.has_args and not ret:
-            log.info1("No match for argument: %s", name)
         return ret
 
     def groupInstall(self, name):
@@ -527,8 +525,6 @@ class RpmYum:
                 # Trick to avoid multiple adds for same arch, after handling
                 # it once we clear the update package list.
                 pkgnamearchhash[name][arch] = []
-        if self.has_args and not ret:
-            log.info1("No match for argument: %s", name)
         return ret
 
     def _filterPkgVersion(self, pkg, pkglist):
@@ -547,8 +543,6 @@ class RpmYum:
 
     def remove(self, name):
         ret = self.__handleBestPkg("remove", self.pydb.searchPkgs([name, ]))
-        if self.has_args and not ret:
-            log.info1("No match for argument: %s", name)
         return ret
 
     def groupRemove(self, name):
@@ -726,7 +720,6 @@ class RpmYum:
         for name in new_args:
             # We call our operation function which will handle all the
             # details for each specific case.
-            op_func(name)
         if self.config.timer:
             log.info2("runArgs() took %s seconds", (clock() - time1))
         self._generateTransactionState()
