@@ -720,6 +720,9 @@ class RpmYum:
         for name in new_args:
             # We call our operation function which will handle all the
             # details for each specific case.
+            ret = op_func(name)
+            if self.has_args and not ret:
+                log.info1("No match for argument: %s", name)
         if self.config.timer:
             log.info2("runArgs() took %s seconds", (clock() - time1))
         self._generateTransactionState()
