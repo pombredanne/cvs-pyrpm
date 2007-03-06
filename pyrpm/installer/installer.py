@@ -281,7 +281,6 @@ class Source:
             # add all packages
             for repo in self.repos.keys():
                 pkgs.extend(self.repos[repo].getNames())
-            normalizeList(pkgs)
         else:
             # add default desktop
             if ks.has_key("xconfig"):
@@ -335,6 +334,8 @@ class Source:
         # add packages
         if ks.has_key("packages") and ks["packages"].has_key("add"):
             for name in ks["packages"]["add"]:
+                if name == "*":
+                    continue
                 found = False
                 for repo in self.repos.keys():
                     _pkgs = self.repos[repo].searchPkgs([name])
@@ -453,6 +454,7 @@ class Source:
                 for group in _repo.comps.grouphash.keys():
                     self._compsLangsupport(pkgs, _repo.comps, languages, group)
 
+        normalizeList(pkgs)
         return pkgs
 
     def _addPkg(self, name, pkgs, description=""):
