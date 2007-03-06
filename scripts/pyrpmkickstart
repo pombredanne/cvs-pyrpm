@@ -197,7 +197,7 @@ def main():
         elif opt == "--beta-key-verify":
             beta_key_verify = True
         elif opt == "--external-call":
-            external_call = true
+            external_call = True
         else:
             log.error("Unknown option '%s'.", opt)
             usage()
@@ -2449,8 +2449,8 @@ def main():
             config.nocache = 1
 
         info_level = log.getInfoLogLevel()
-        log.setInfoLogLevel(log.INFO2)
         debug_level = log.getDebugLogLevel()
+        log.setInfoLogLevel(log.INFO2)
         log.setDebugLogLevel(log.NO_DEBUG)
 
         try:
@@ -2492,7 +2492,7 @@ def main():
             log.setInfoLogLevel(info_level)
             log.setDebugLogLevel(debug_level)
     else:
-        # yum
+        # external call
         if orig_yum:
             yum = "yum -y -c '%s' --installroot='%s'" % (yum_conf,
                                                          target_chroot)
