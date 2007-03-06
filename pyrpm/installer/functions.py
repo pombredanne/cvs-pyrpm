@@ -363,7 +363,7 @@ def fuser(what):
                 except:
                     pass
                 else:
-                    log.info2("Closing danngling fd %d", fd)
+                    log.info2("Closing dangling fd %d", fd)
                     try:
                         os.close(fd)
                     except:
