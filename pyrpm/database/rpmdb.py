@@ -287,7 +287,6 @@ class RpmDB(db.RpmDatabase):
             data = self.packages_db[pkg.key]
             storedata = data[len(pkg.indexdata)*16+8:]
 
-
         for tag in tags:
             if pkg.indexdata.has_key(tag):
                 index = pkg.indexdata[tag]

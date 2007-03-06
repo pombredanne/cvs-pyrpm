@@ -168,6 +168,8 @@ class RpmYum:
         self.langs = [ ]
         # Internal list of packages that are have to be erased
         self.erase_list = [ ]
+        # Internal list of packages that were used for obsoleting
+        self.opkg_list = [ ]
         # Our database
         self.pydb = None
         # Flag wether we already read all the repos
@@ -300,6 +302,7 @@ class RpmYum:
         database again."""
 
         self.erase_list = []
+        self.opkg_list = [ ]
         if localDb is not None:
             self.pydb = localDb
         else:
@@ -1198,8 +1201,6 @@ class RpmYum:
 
         full = (pkg == None)# Flag if we need to do a full run
         obsoleted = False
-        pkglist = []        # List of packages we have used for obsoleting,
-                            # needed for endless loop detection and prevention.
         # Loop until we have found the end of the obsolete chain
         while 1:
             found = False
@@ -1207,7 +1208,7 @@ class RpmYum:
             for opkg in self.__obsoleteslist:
                 # If the package has already been tried once or is in our
                 # erase_list skip it.
-                if opkg in pkglist or opkg in self.erase_list:
+                if opkg in self.opkg_list or opkg in self.erase_list:
                     continue
                 # Never add obsolete packages for packages with the same name.
                 if pkg != None and pkg["name"] == opkg["name"]:
@@ -1254,7 +1255,7 @@ class RpmYum:
             # None. The just do another iteration.
             # If nothing was found we're finished and can return.
             if found:
-                pkglist.append(opkg)
+                self.opkg_list.append(opkg)
                 if full:
                     pkg = None
                 else:
