@@ -85,7 +85,7 @@ class RpmDB(db.RpmDatabase):
         # Correctly initialize the tscolor based on the current arch
         self.config.tscolor = self.__getInstallColor()
         self.netsharedpath = self.__getNetSharedPath()
-
+        self.reponame = "installed"
         self._pkgs = { }
         self.basenames_cache = {}
         self.clear()

@@ -1214,6 +1214,12 @@ class RpmPackage(RpmData):
             return "%s.src" % self.getNEVR()
         return "%s.%s" % (self.getNEVR(), self["arch"])
 
+    def getNA(self):
+        """Return %name.%arch."""
+        if self.isSourceRPM():
+            return "%s.src" % self["name"]
+        return "%s.%s" % (self["name"], self["arch"])
+    
     def getNVR(self):
         """Return %name-%version-%release."""
 

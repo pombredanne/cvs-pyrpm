@@ -189,7 +189,7 @@ class RpmYum:
         # List of valid commands
         self.command_list = ["install", "update", "upgrade", "remove", \
                              "groupinstall", "groupupdate", "groupupgrade", \
-                             "groupremove"]
+                             "groupremove", "list"]
         # Flag if we have been called with arguments or not
         self.has_args = True
 
@@ -344,8 +344,10 @@ class RpmYum:
                 return 0
 
         self.repos_read = 1
-        self.opresolver = RpmResolver(self.config, db)
-        self.__generateObsoletesList()
+        self.opresolver = RpmResolver(self.config, db,
+                                      nocheck=self.command=="list")
+        if self.command!="list":
+            self.__generateObsoletesList()
         if self.config.timer:
             log.info2("Preparing transaction took %s seconds",
                       (clock() - time1))
@@ -696,6 +698,8 @@ class RpmYum:
                     "update":       self.update,
                     "upgrade":      self.update}
         op_func = func_hash.get(self.command)
+        if self.command == 'list':
+            return self.list(args)
         if op_func == None:
             return 0
         # First pass through our args to find any directories and/or binary
@@ -1381,5 +1385,116 @@ class RpmYum:
                       pkg.getNEVRA())
             ret = 1
         return ret
+
+    ###  list command ######################################################
+
+    def list(self, args):
+        if not args:
+            command, patterns = 'all', []
+        else:
+            command, patterns = args[0].lower(), args[1:]
+        if command == "available":
+            log.info1("Available Packages:")
+            self.formatPkgs(self.getAvailable(patterns))
+        elif command == "updates":
+            log.info1("Available Updates:")
+            self.__generateObsoletesList()
+            self.formatPkgs(self.getUpdates(patterns))
+        elif command == "installed":
+            log.info1("Installed Packages:")
+            self.formatPkgs(self.getInstalled(patterns))
+        elif command == "extras":
+            log.info1("Installed Extra Packages:")
+            self.formatPkgs(self.getExtras(patterns))
+        elif command == "obsoletes":
+            self.__generateObsoletesList()
+            log.info1("Available Obsoleting Packages:")
+            self.formatPkgs(self.getObsoletes(patterns))
+        elif command == "recent":
+            log.error("'pyrpmyum list recent' is not yet supported")
+        elif command == "all":
+            log.info1("Installed Packages:")
+            self.formatPkgs(self.getInstalled(patterns))
+            log.info1("Available Packages:")
+            self.formatPkgs(self.getAvailable(patterns))
+        else:
+            log.info1("Installed Packages:")
+            self.formatPkgs(self.getInstalled(args))
+            log.info1("Available Packages:")
+            self.formatPkgs(self.getAvailable(args))
+        return 0
+
+    def _pkgNameDict(self, pkgs, dict_=None):
+        if dict_ is None:
+            dict_ = {}
+        for pkg in pkgs:
+            dict_.setdefault(pkg['name'], []).append(pkg)
+        return dict_
+
+    def _pkgNameArchDict(self, pkgs, dict_=None):
+        if dict_ is None:
+            dict_ = {}
+        for pkg in pkgs:
+            dict_.setdefault(pkg.getNA(), []).append(pkg)
+        return dict_
+    
+    def _NEVRADict(self, pkgs):
+        return dict([(pkg.getNEVRA(), pkg) for pkg in pkgs])
+
+    def formatPkgs(self, pkgs):
+        pkgs = [(p.getNA(), p.getVR(), p.db.reponame)
+                for p in pkgs]
+        pkgs.sort()
+        for p in pkgs:
+            log.info1("%-40s %-22s %-16s", *p)
+
+    def getInstalled(self, patterns=[]):
+        if not patterns:
+            return self.pydb.getPkgs()
+        else:
+            return self.pydb.searchPkgs(patterns)
+
+    def getRepoPkgs(self, patterns=[]):
+        if not patterns:
+            return self.repos.getPkgs()
+        else:
+            return self.repos.searchPkgs(patterns)
+
+    def getAvailable(self, patterns):
+        pkg_dict = self._pkgNameArchDict(self.getRepoPkgs(patterns))
+        for pkg in self.getInstalled(patterns):
+            na = pkg.getNA()
+            if pkg_dict.has_key(na):
+                del pkg_dict[na]
+        result = []
+        for name, l in pkg_dict.iteritems():
+            l.sort()
+            result.append(l[-1])
+        return result
+
+    def getExtras(self, patterns):
+        pkgs = self.getInstalled(patterns)
+        result = []
+        for pkg in pkgs:
+            if not self.repos.searchPkgs([pkg.getNEVRA()]):
+                result.append(pkg)            
+        return result
+
+    def getUpdates(self, patterns):
+        self.__handleObsoletes()
+        if patterns:
+            names = dict(((pkg['name'], None) for pkg in
+                          self.opresolver.getDatabase().searchPkgs(patterns)))
+            names = names.keys()
+        else:
+            names = self.opresolver.getDatabase().getNames()
+        for name in names:
+            self.update(name, exact=True, do_obsolete=False)
+        return self.opresolver.installs
+    
+    def getObsoletes(self, patterns):
+        # XXX patterns
+        self.__handleObsoletes()
+        return self.opresolver.installs
 
 # vim:ts=4:sw=4:showmatch:expandtab
