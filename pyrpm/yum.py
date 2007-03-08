@@ -20,7 +20,7 @@
 
 
 import os, os.path, glob, re, fnmatch
-from time import clock
+from time import clock, time
 from pyrpm.resolver import RpmResolver
 from pyrpm.control import RpmController
 from pyrpm.functions import *
@@ -50,7 +50,7 @@ MultilineVarnames = ("exclude", "installonlypkgs", "kernelpkgnames", "commands",
 class YumConf(dict):
     def __init__(self, relver, arch, rpmdb=None, filenames=["/etc/yum.conf"],
                  reposdirs=None):
-
+        # load config files
         for filename in filenames:
             if os.path.isfile(filename):
                 self.parseFile(filename)
@@ -64,10 +64,11 @@ class YumConf(dict):
         k = self.get("main", {}).get("reposdir")
         if k != None:
             reposdirs = k.split(" \t,;")
+        # read in repos files
         for reposdir in reposdirs:
             for filename in glob.glob(reposdir + "/*.repo"):
                 self.parseFile(filename)
-
+        # get relver
         if relver is None and rpmdb:
             distroverpkg = self.get('main', {}).get(
                 'distroverpkg', "redhat-release")
@@ -249,6 +250,7 @@ class RpmYum:
         try:
             conf = YumConf(self.config.relver, self.config.machine, db,
                            files)
+            self.yumconfig = conf
         except IOError, e:
             log.error("Error reading configuration: %s", e)
             return 0
@@ -1394,32 +1396,45 @@ class RpmYum:
         else:
             command, patterns = args[0].lower(), args[1:]
         if command == "available":
+            log.info1("")
             log.info1("Available Packages:")
             self.formatPkgs(self.getAvailable(patterns))
         elif command == "updates":
+            log.info1("")
             log.info1("Available Updates:")
             self.__generateObsoletesList()
             self.formatPkgs(self.getUpdates(patterns))
         elif command == "installed":
+            log.info1("")
             log.info1("Installed Packages:")
             self.formatPkgs(self.getInstalled(patterns))
         elif command == "extras":
+            log.info1("")
             log.info1("Installed Extra Packages:")
             self.formatPkgs(self.getExtras(patterns))
         elif command == "obsoletes":
             self.__generateObsoletesList()
+            log.info1("")
             log.info1("Available Obsoleting Packages:")
-            self.formatPkgs(self.getObsoletes(patterns))
+            for new, old in self.getObsoletes(patterns).iteritems():
+                log.info("%32s obsoletes %32s" %
+                         (new.getNEVRA(), old.getNEVRA()))
         elif command == "recent":
-            log.error("'pyrpmyum list recent' is not yet supported")
+            log.info1("")
+            log.info1("Recent Packages:")
+            self.formatPkgs(self.getRecent(patterns))
         elif command == "all":
+            log.info1("")
             log.info1("Installed Packages:")
             self.formatPkgs(self.getInstalled(patterns))
+            log.info1("")
             log.info1("Available Packages:")
             self.formatPkgs(self.getAvailable(patterns))
         else:
+            log.info1("")
             log.info1("Installed Packages:")
             self.formatPkgs(self.getInstalled(args))
+            log.info1("")
             log.info1("Available Packages:")
             self.formatPkgs(self.getAvailable(args))
         return 0
@@ -1495,6 +1510,17 @@ class RpmYum:
     def getObsoletes(self, patterns):
         # XXX patterns
         self.__handleObsoletes()
-        return self.opresolver.installs
+        return self.opresolver.obsoletes
+
+    def getRecent(self, patterns):
+        now = time()
+        result = []
+        for pkg in self.getRepoPkgs(patterns):
+            t = pkg["time_file"] or pkg['time_build']
+            if not t:
+                continue
+            if now - int(t) < self.yumconfig.get('recent', 7) * 86400:
+                result.append(pkg)
+        return result
 
 # vim:ts=4:sw=4:showmatch:expandtab
