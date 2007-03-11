@@ -1195,9 +1195,9 @@ def writeHeader(pkg, tags, taghash, region, skip_tags, useinstall, rpmgroup):
         tagnum = taghash[tagname][0]
         if tagname == region:
             stags3.append((tagnum, tagname))
-        elif skip_tags.has_key(tagname):
+        elif tagname in skip_tags:
             pass
-        elif useinstall and install_keys.has_key(tagname):
+        elif useinstall and tagname in install_keys:
             stags2.append((tagnum, tagname))
         else:
             stags1.append((tagnum, tagname))
@@ -1446,7 +1446,7 @@ def parseFile(filename, requested):
     rethash = {}
     for l in open(filename, "r").readlines():
         tmp = l.split(":")
-        if requested.has_key(tmp[0]):
+        if tmp[0] in requested:
             rethash[tmp[0]] = int(tmp[2])
     return rethash
 
@@ -1475,7 +1475,7 @@ class Uid(UGid):
         if buildroot or not os.path.exists(buildroot + "/sbin/ldconfig"):
             uidhash = parseFile(buildroot + "/etc/passwd", self.ugid)
             for uid in self.ugid.iterkeys():
-                if uidhash.has_key(uid):
+                if uid in uidhash:
                     self.ugid[uid] = uidhash[uid]
                 else:
                     print "Warning: user %s not found, using uid 0." % uid
@@ -1506,7 +1506,7 @@ class Gid(UGid):
         if buildroot or not os.path.exists(buildroot + "/sbin/ldconfig"):
             gidhash = parseFile(buildroot + "/etc/group", self.ugid)
             for gid in self.ugid.iterkeys():
-                if gidhash.has_key(gid):
+                if gid in gidhash:
                     self.ugid[gid] = gidhash[gid]
                 else:
                     print "Warning: group %s not found, using gid 0." % gid
@@ -2566,11 +2566,11 @@ class ReadRpm: # pylint: disable-msg=R0904
                 self.printErr("bad buildarch: %s" % self["buildarchs"])
             if self["excludearch"] != None:
                 for i in self["excludearch"]:
-                    if not possible_archs.has_key(i):
+                    if i not in possible_archs:
                         self.printErr("new possible arch %s" % i)
             if self["exclusivearch"] != None:
                 for i in self["exclusivearch"]:
-                    if not possible_archs.has_key(i):
+                    if i not in possible_archs:
                         self.printErr("new possible arch %s" % i)
         for (s, p) in (("prein", "preinprog"), ("postin", "postinprog"),
             ("preun", "preunprog"), ("postun", "postunprog"),
@@ -2580,7 +2580,7 @@ class ReadRpm: # pylint: disable-msg=R0904
                 self.printErr("no prog")
             if self.strict:
                 if ((not isinstance(prog, basestring) and prog != None) or
-                     not possible_scripts.has_key(prog)):
+                     prog not in possible_scripts):
                     self.printErr("unknown prog: %s" % prog)
                 if script == None and prog == "/bin/sh" and not opensuse:
                     self.printErr("empty script: %s" % s)
@@ -3719,7 +3719,7 @@ class ConnectedComponentsDetector:
 
         # continue until all nodes have been visited
         for pkg in pkgs:
-            if not self.states.has_key(pkg):
+            if pkg not in self.states:
                 self._process(pkg)
         # python-only
         return [ ConnectedComponent(self.relations, pkgs) \
@@ -3745,7 +3745,7 @@ class ConnectedComponentsDetector:
         root_stack.append(pkg)
 
         for next in self.relations[pkg].pre:
-            if states.has_key(next):
+            if next in states:
                 if states[next] > 0:
                     # if visited but not finished
                     # remove all pkgs with higher number from root stack
@@ -4166,7 +4166,7 @@ def parsePackages(pkgs, requests):
     if requests:
         pkgdict = buildPkgRefDict(pkgs)
         for request in requests:
-            if pkgdict.has_key(request):
+            if request in pkgdict:
                 matched.extend(pkgdict[request])
             elif __fnmatchre__.match(request):
                 import fnmatch
@@ -4657,7 +4657,7 @@ class RpmRepo:
     def __removeExcluded(self):
         for pkg in parsePackages(self.pkglist.values(), self.excludes):
             nevra = pkg.getNEVRA0()
-            if self.pkglist.has_key(nevra):
+            if nevra in self.pkglist:
                 del self.pkglist[nevra]
 
     def __isExcluded(self, pkg):
@@ -4823,7 +4823,7 @@ class RpmRepo:
                         break
                     continue
         nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
-        if self.pkglist.has_key(nevra):
+        if nevra in self.pkglist:
             pkg = self.pkglist[nevra]
             pkg["oldfilenames"] = filelist
             #(pkg["basenames"], pkg["dirindexes"], pkg["dirnames"]) = \
@@ -4971,14 +4971,14 @@ class RpmRepo:
                 props = getProps(reader)
                 name  = props["name"]
                 flags = flagmap[props.get("flags", "")]
-                if props.has_key("pre"):
+                if "pre" in props:
                     flags |= RPMSENSE_PREREQ
                 epoch = ""
-                if props.has_key("epoch"):
+                if "epoch" in props:
                     epoch = props["epoch"] + ":"
                 ver = props.get("ver", "")
                 rel = ""
-                if props.has_key("rel"):
+                if "rel" in props:
                     rel = "-" + props["rel"]
                 plist[0].append(name)
                 plist[1].append(flags)
@@ -5289,7 +5289,7 @@ def readRepos(yumconfs, releasever, arch, readdebug,
             excludes = replaceVars(excludes, replacevars)
             # If we have mirrorlist grab it, read it and add the extended
             # lines to our baseurls, just like yum does.
-            if sec.has_key("mirrorlist"):
+            if "mirrorlist" in sec:
                 mirrorlist = sec["mirrorlist"]
                 baseurls.extend(readMirrorlist(mirrorlist, replacevars, key,
                     verbose))
@@ -5749,7 +5749,7 @@ def checkRepo(rpms):
 def verifyStructure(verbose, packages, phash, tag, useidx=1):
     # Verify that all data is also present in /var/lib/rpm/Packages.
     for (tid, mytag) in phash.iteritems():
-        if not packages.has_key(tid):
+        if tid not in packages:
             print "Error %s: Package id %s doesn't exist" % (tag, tid)
             if verbose > 2:
                 print tag, mytag
@@ -5791,7 +5791,7 @@ def verifyStructure(verbose, packages, phash, tag, useidx=1):
         if not refhash:
             continue
         phashtid = None
-        if phash.has_key(tid):
+        if tid in phash:
             phashtid = phash[tid]
         if not useidx:
             # Single entry with data:
@@ -5820,7 +5820,7 @@ def verifyStructure(verbose, packages, phash, tag, useidx=1):
                 continue
             # We only need to store triggernames once per package.
             if tag == "triggername":
-                if tnamehash.has_key(key):
+                if key in tnamehash:
                     continue
                 tnamehash[key] = 1
             # Real check for the actual data:
@@ -5903,7 +5903,7 @@ def readDb(swapendian, filename, dbtype="hash", dotid=None):
         for i in xrange(0, len(v), 8):
             (tid, idx) = unpack("%s2I" % swapendian, v[i:i + 8])
             rethash.setdefault(tid, {})
-            if rethash[tid].has_key(idx):
+            if idx in rethash[tid]:
                 print "ignoring duplicate idx: %s %d %d" % (k, tid, idx)
                 continue
             rethash[tid][idx] = k
@@ -6070,7 +6070,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
             print "Warning: did not expect package with this arch: %s" % \
                 pkg.getFilename()
         if (pkg["arch"] != "noarch" and
-            checkdupes.has_key("%s.noarch" % pkg["name"])):
+            "%s.noarch" % pkg["name"] in checkdupes):
             print "Warning: noarch and arch-dependent package installed:", \
                 pkg.getFilename()
     for (pkg, value) in checkdupes.iteritems():
@@ -6128,7 +6128,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
         found = 0
         nevra = pkg.getNEVRA0()
         for r in repos:
-            if r.pkglist.has_key(nevra):
+            if nevra in r.pkglist:
                 repopkg = r.pkglist[nevra]
                 headerend = None
                 if repopkg["rpm:header-range:end"]:
@@ -6307,7 +6307,7 @@ def checkSymlinks(repo):
             if link[:1] != "/":
                 link = "%s/%s" % (pathdirname(f), link)
             link = os.path.normpath(link)
-            if allfiles.has_key(link):
+            if link in allfiles:
                 goodlinks[f] = link
                 continue
             dangling.append((rpm["name"], f, link))
@@ -6359,7 +6359,7 @@ def checkProvides(repo):
         if len(value) <= 1:
             continue
         # if no require can match this, ignore duplicates
-        if not requires.has_key(p[0]):
+        if p[0] not in requires:
             continue
         x = []
         for rpm in value:
@@ -6834,7 +6834,7 @@ def main():
             if not exactarch:
                 rarch = buildarchtranslate.get(rarch, rarch)
             key = (rpm["name"], rarch)
-            if h.has_key(key):
+            if key in h:
                 h[key].append(rpm)
         # Now select which rpms to install/erase:
         installrpms = []
