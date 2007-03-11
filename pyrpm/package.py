@@ -809,9 +809,9 @@ class RpmPackage(RpmData):
         while key != "-":
             (key, value) = self.io.read()
         self.range_signature = value
-        if tags = None:
+        if tags == None:
             tags = []
-        if ntags = None:
+        if ntags == None:
             ntags = []
         if not self.has_key("signature"):
             self["signature"] = {}
