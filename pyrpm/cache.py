@@ -132,11 +132,10 @@ class NetworkCache:
 
         if name == None:
             name = self.default_name
-        if self.baseurls.has_key(name):
-            for baseurl in self.baseurls[name]:
-                if uri.startswith(baseurl):
-                    uri = uri[len(baseurl):]
-                    break
+        for baseurl in self.baseurls.get(name, []):
+            if uri.startswith(baseurl):
+                uri = uri[len(baseurl):]
+                break
         if self.__isURI(uri):
             return os.path.join(self.__getExternalCachedir(name), uri)
         if self.__isLocalURI([uri,]):

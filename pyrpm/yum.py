@@ -79,8 +79,8 @@ class YumConf(dict):
 
         self._buildReplaceVars(relver, arch)
 
-        for name, section in self.iteritems():
-            for key, value in section.iteritems():
+        for (name, section) in self.iteritems():
+            for (key, value) in section.iteritems():
                 if isinstance(value, list):
                     section[key] = [self.replaceVars(item) for item in value]
                 else:
@@ -268,15 +268,15 @@ class RpmYum:
             sec = conf[key]
             if key == "main":
                 # exactarch can only be found in main section. Default False
-                if sec.has_key("exactarch") and sec["exactarch"] == "1":
+                if sec.get("exactarch") == "1":
                     self.config.exactarch = True
                 # keepcache can only be found in main section. Default True
-                if sec.has_key("keepcache") and sec["keepcache"] == "0":
+                if sec.get("keepcache") == "0":
                     self.config.exactarch = False
             else:
                 # Check if the current repo should be enabled or disabled
                 enabled = True      # Default is enabled
-                if sec.has_key("enabled") and sec["enabled"] == "0":
+                if sec.get("enabled") == "0":
                     enabled = False
                 for regex in erepo:
                     if regex.match(key):
@@ -507,7 +507,7 @@ class RpmYum:
                     march = self.config.machine
                     # Add all noarch packages for arch -> noarch transitions
                     pkgnamearchhash[name].setdefault(arch, []).extend(pkgnamearchhash[name].setdefault("noarch", {}))
-                if not pkgnamearchhash[name].has_key(arch):
+                if arch not in pkgnamearchhash[name]:
                     log.error("Can't find update package with matching arch "
                               "for package %s", ipkg.getNEVRA())
                     return 0
@@ -1479,7 +1479,7 @@ class RpmYum:
         pkg_dict = self._pkgNameArchDict(self.getRepoPkgs(patterns))
         for pkg in self.getInstalled(patterns):
             na = pkg.getNA()
-            if pkg_dict.has_key(na):
+            if na in pkg_dict:
                 del pkg_dict[na]
         result = []
         for name, l in pkg_dict.iteritems():

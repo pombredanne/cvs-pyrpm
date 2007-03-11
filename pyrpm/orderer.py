@@ -598,7 +598,7 @@ class ConnectedComponentsDetector:
 
         # continue until all nodes have been visited
         for pkg in pkgs:
-            if not self.states.has_key(pkg):
+            if pkg not in self.states:
                 self._process(pkg)
         return [ConnectedComponent(self.relations, pkgs) for pkgs in self.sccs]
 
@@ -617,7 +617,7 @@ class ConnectedComponentsDetector:
         root_stack.append(pkg)
 
         for next in self.relations[pkg].pre:
-            if states.has_key(next):
+            if next in states:
                 if states[next] > 0:
                     # if visited but not finished
                     # remove all pkgs with higher number from root stack

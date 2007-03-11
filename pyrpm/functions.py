@@ -608,7 +608,7 @@ def getFreeDiskspace(config, operations):
         for dirname in dirnames:
             while dirname[-1:] == "/" and len(dirname) > 1:
                 dirname = dirname[:-1]
-            if dirhash.has_key(dirname):
+            if dirname in dirhash:
                 continue
             dnames = []
             devname = br + dirname
@@ -620,16 +620,16 @@ def getFreeDiskspace(config, operations):
                 except OSError:
                     dirname = os.path.dirname(dirname)
                     devname = os.path.dirname(devname)
-                    if dirhash.has_key(dirname):
+                    if dirname in dirhash:
                         dev = dirhash[dirname]
                         break
             for d in dnames:
                 dirhash[d] = dev
-            if not freehash.has_key(dev):
+            if dev not in freehash:
                 statvfs = os.statvfs(devname)
                 freehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
                 minfreehash[dev] = [statvfs[0] * statvfs[4], statvfs[0]]
-            if not mountpoint.has_key(dev):
+            if dev not in mountpoint:
                 fulldir = os.path.normpath(br+"/"+dirname)
                 while len(fulldir) > 0:
                     if os.path.ismount(fulldir):
@@ -897,7 +897,7 @@ def parseYumOptions(argv, yum):
            not rpmconfig.ignorearch:
             log.error("Arch option can only be used for tests")
             sys.exit(1)
-        if not buildarchtranslate.has_key(rpmconfig.arch):
+        if rpmconfig.arch not in buildarchtranslate:
             log.error("Unknown arch %s", rpmconfig.arch)
             sys.exit(1)
         rpmconfig.machine = rpmconfig.arch
@@ -917,7 +917,7 @@ def selectNewestPkgs(pkglist):
     for pkg in pkglist:
         name = pkg["name"]
         dist = dhash[pkg["arch"]]
-        if not pkghash.has_key(name):
+        if name not in pkghash:
             pkghash[name] = pkg
             disthash[name] = dist
         else:
@@ -1262,7 +1262,7 @@ def normalizeList(list):
     i = 0
     while i < len(list):
         item = list[i]
-        if h.has_key(item):
+        if item in h:
             list.pop(i)
         else:
             h[item] = 1

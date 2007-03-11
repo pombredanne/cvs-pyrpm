@@ -54,7 +54,7 @@ class HashList:
         return self.hash.__contains__(key)
 
     def __setitem__(self, key, value):
-        if not self.hash.has_key(key):
+        if key not in self.hash:
             self.list.append(key)
         self.hash[key] = value
         return value
@@ -65,7 +65,7 @@ class HashList:
         Return key if it exists, None otherwise."""
         # Protocol says it should raise KeyError if key does not exist
 
-        if self.hash.has_key(key):
+        if key in self.hash:
             del self.hash[key]
             self.list.remove(key)
             return key
@@ -74,7 +74,7 @@ class HashList:
     def setdefault(self, key, value=None):
         """Returns self[key] if it exists, otherwise returns value and sets
         self[key]=value."""
-        if not self.hash.has_key(key):
+        if key not in self.hash:
             self[key] = value
         return self[key]
 

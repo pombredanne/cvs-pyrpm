@@ -147,7 +147,7 @@ class RpmUserCache:
     def getUID(self, username):
         """Return UID for username, or 0 if unknown."""
 
-        if not self.uid.has_key(username):
+        if username not in self.uid:
             if os.path.isfile(self.config.buildroot + "/etc/passwd"):
                 if not self.config.buildroot and \
                    os.path.isfile("/sbin/ldconfig"):
@@ -159,7 +159,7 @@ class RpmUserCache:
                         self.uid[username] = 0
                 else:
                     r = self.__parseFile(self.config.buildroot + "/etc/passwd")
-                    if r.has_key(username):
+                    if username in r:
                         self.uid[username] = r[username]
                     else:
                         # XXX: print warning
@@ -171,7 +171,7 @@ class RpmUserCache:
     def getGID(self, groupname):
         """Return GID for groupname, or 0 if unknown."""
 
-        if not self.gid.has_key(groupname):
+        if groupname not in self.gid:
             if os.path.isfile(self.config.buildroot + "/etc/group"):
                 if not self.config.buildroot and \
                    os.path.isfile("/sbin/ldconfig"):
@@ -183,7 +183,7 @@ class RpmUserCache:
                         self.gid[groupname] = 0
                 else:
                     r = self.__parseFile(self.config.buildroot + "/etc/group")
-                    if r.has_key(groupname):
+                    if groupname in r:
                         self.gid[groupname] = r[groupname]
                     else:
                         # XXX: print warning
@@ -494,7 +494,7 @@ class RpmPackage(RpmData):
             if db.numFileDuplicates(f) > 1:
                 log.debug2("File/Dir %s still in db, not removing...", f)
                 continue
-            if not rfilist.has_key(f):
+            if f not in rfilist:
                 continue
             rfi = rfilist[f]
             if buildroot:
@@ -809,14 +809,18 @@ class RpmPackage(RpmData):
         while key != "-":
             (key, value) = self.io.read()
         self.range_signature = value
+        if tags = None:
+            tags = []
+        if ntags = None:
+            ntags = []
+        if not self.has_key("signature"):
+            self["signature"] = {}
         # Read sig
         (key, value) = self.io.read()
         while key != "-":
-            if not self.has_key("signature"):
-                self["signature"] = {}
-            if tags and key in tags:
+            if key in tags:
                 self["signature"][key] = value
-            elif ntags and not key in ntags:
+            elif key not in ntags:
                 self["signature"][key] = value
             elif not tags and not ntags:
                 self["signature"][key] = value
@@ -825,9 +829,9 @@ class RpmPackage(RpmData):
         # Read header
         (key, value) = self.io.read()
         while key != "-":
-            if tags and key in tags:
+            if key in tags:
                 self[key] = value
-            elif ntags and not key in ntags:
+            elif key not in ntags:
                 self[key] = value
             elif not tags and not ntags:
                 self[key] = value
@@ -1101,7 +1105,7 @@ class RpmPackage(RpmData):
         """Drop information about hard links to RpmFileInfo rfi, if any."""
 
         key = rfi.getHardLinkID()
-        if self.hardlinks.has_key(key):
+        if key in self.hardlinks:
             del self.hardlinks[key]
 
     def __handleRemainingHardlinks(self, useAttrs, pathPrefix):
