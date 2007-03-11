@@ -18,10 +18,10 @@ if sqlite:
     Error = sqlite._sqlite.Error
     DatabaseError = sqlite._sqlite.DatabaseError
     Row = None
-    
+
     def connect(filename):
         return Connection(filename)
-    
+
     class Connection(sqlite.Connection):
 
         def cursor(self):

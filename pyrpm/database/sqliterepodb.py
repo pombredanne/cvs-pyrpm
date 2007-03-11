@@ -84,7 +84,7 @@ class SqliteRpmPackage(package.RpmPackage):
             return self.get(name, None)
         # don't cache other tags
         return self.yumrepo.getPkgTag(self, name)
-        
+
     def get(self, key, value=None):
         if self.has_key(key):
             return self[key]
@@ -245,7 +245,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         if 'pre' in hash and sqlite3.sqlite:
             idx = hash.keys().index('pre')
             values[idx] = ("False", "True")[values[idx]]
-            
+
         cursor.execute(query, values)# XXX ??? .encode('utf8'))
         return cursor.lastrowid
 
@@ -602,7 +602,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             pre = 0
         if isinstance(pre, str):
             pre = pre.lower() == 'true'
-            
+
         if pre:
             return self.flagmap[ob['flags']] | pyrpm.base.RPMSENSE_PREREQ
         return self.flagmap[ob['flags']]

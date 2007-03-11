@@ -78,7 +78,7 @@ class YumConf(dict):
             relver = ''
 
         self._buildReplaceVars(relver, arch)
-                
+
         for name, section in self.iteritems():
             for key, value in section.iteritems():
                 if isinstance(value, list):
@@ -340,7 +340,7 @@ class RpmYum:
         for pkg in db.searchProvides("redhat-release", 0, ""):
             self.config.relver = pkg["version"]
 
-        
+
         if not self.repos_read and not self.command == "remove":
             if not self.addRepos(self.config.yumconf, db):
                 return 0
@@ -1452,7 +1452,7 @@ class RpmYum:
         for pkg in pkgs:
             dict_.setdefault(pkg.getNA(), []).append(pkg)
         return dict_
-    
+
     def _NEVRADict(self, pkgs):
         return dict([(pkg.getNEVRA(), pkg) for pkg in pkgs])
 
@@ -1492,7 +1492,7 @@ class RpmYum:
         result = []
         for pkg in pkgs:
             if not self.repos.searchPkgs([pkg.getNEVRA()]):
-                result.append(pkg)            
+                result.append(pkg)
         return result
 
     def getUpdates(self, patterns):
@@ -1506,7 +1506,7 @@ class RpmYum:
         for name in names:
             self.update(name, exact=True, do_obsolete=False)
         return self.opresolver.installs
-    
+
     def getObsoletes(self, patterns):
         # XXX patterns
         self.__handleObsoletes()

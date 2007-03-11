@@ -672,7 +672,7 @@ def getFreeDiskspace(config, operations):
     return ret
 
 def int2str(val, binary=True):
-    """Convert an integer to a string of the format X[.Y] [SI prefix]""" 
+    """Convert an integer to a string of the format X[.Y] [SI prefix]"""
     units = "kMGTPEZYND"
     #small_units = "munpfazy"
     if binary:
@@ -888,7 +888,7 @@ def parseYumOptions(argv, yum):
             yum.langs = val.split()
         elif opt == "--releaseversion":
             rpmconfig.relver = val
-            
+
     log.setInfoLogLevel(verbose)
 
     if rpmconfig.arch != None:

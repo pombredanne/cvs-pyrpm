@@ -37,7 +37,7 @@ except:
 class Source:
     """ Load Source repo and extra repos according to kickstart configuration.
     """
-    
+
     def __init__(self):
         self.repos = { }
         self.base_repo_names = [ ]

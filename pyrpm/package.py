@@ -1219,7 +1219,7 @@ class RpmPackage(RpmData):
         if self.isSourceRPM():
             return "%s.src" % self["name"]
         return "%s.%s" % (self["name"], self["arch"])
-    
+
     def getNVR(self):
         """Return %name-%version-%release."""
 

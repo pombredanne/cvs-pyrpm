@@ -6,4 +6,3 @@ EXTRA_DIST = $(TESTS) coverage.py deltaanalyze.py deltagen.py delta.py test10
 CLEANFILES := .coverage stdout stderr $(notdir $(wildcard *,cover)) \
 	$(notdir $(wildcard *~)) $(notdir $(wildcard *\#)) $(wildcard *\.pyc)
 
-
