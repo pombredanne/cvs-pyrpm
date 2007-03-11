@@ -11,5 +11,6 @@ pyrpm/Makefile
 pyrpm/database/Makefile
 pyrpm/installer/Makefile
 tests/Makefile
+tests/rpms/Makefile
 contrib/Makefile
 ])
