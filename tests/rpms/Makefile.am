@@ -17,7 +17,7 @@ RPMBUILD = $(RPM) --define "_sourcedir $(SOURCEDIR)" \
                 --define "_srcrpmdir $(SRCRPMDIR)" \
                 --define "_rpmdir $(RPMDIR)"
 
-all:: $(PACKAGES)
+test:: $(PACKAGES)
 
 $(PACKAGES):
 	$(RPMBUILD) -bb --target=$(shell echo $@ | sed -e "s/\.rpm//" | sed -e "s/.*\.//") $(shell echo $@ | awk -F"." '{v=$$1; for(i=2; i<=NF-2; i++) v=v"."$$i; print v}').spec
@@ -27,3 +27,4 @@ clean:
 	@for dir in $(ARCHES); do \
 		$(RM) -rf $$dir; \
 	done
+
