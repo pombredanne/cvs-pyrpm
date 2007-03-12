@@ -188,9 +188,11 @@ class RpmYum:
             "kernel-unsupported", "kernel-modules"
         ]
         # List of valid commands
-        self.command_list = ["install", "update", "upgrade", "remove", \
-                             "groupinstall", "groupupdate", "groupupgrade", \
-                             "groupremove", "list"]
+        self.command_list = ["install", "update", "upgrade", "remove",
+                             "groupinstall", "groupupdate", "groupupgrade",
+                             "groupremove", "list", "info", "search",
+                             "check-update", "provides", "whatprovides",
+                             "resolvedep", "deplist"]
         # Flag if we have been called with arguments or not
         self.has_args = True
 
@@ -346,9 +348,13 @@ class RpmYum:
                 return 0
 
         self.repos_read = 1
+        justquery = not ("install" in self.command or
+                         "update" in self.command or
+                         "upgrade" in self.command or
+                         "remove" in self.command)
         self.opresolver = RpmResolver(self.config, db,
-                                      nocheck=self.command=="list")
-        if self.command!="list":
+                                      nocheck=justquery)
+        if not justquery:
             self.__generateObsoletesList()
         if self.config.timer:
             log.info2("Preparing transaction took %s seconds",
@@ -691,18 +697,30 @@ class RpmYum:
         # Select proper function to be called for every argument. We have
         # a fixed operation for runArgs(), so use a reference to the
         # corresponding function.
-        func_hash = {"groupremove": self.groupRemove,
-                    "groupinstall": self.groupInstall,
-                    "groupupdate":  self.groupUpdate,
-                    "groupupgrade": self.groupUpdate,
-                    "remove":       self.remove,
-                    "install":      self.install,
-                    "update":       self.update,
-                    "upgrade":      self.update}
+        func_hash = {
+            "groupremove": self.groupRemove,
+            "groupinstall": self.groupInstall,
+            "groupupdate":  self.groupUpdate,
+            "groupupgrade": self.groupUpdate,
+            "remove":       self.remove,
+            "install":      self.install,
+            "update":       self.update,
+            "upgrade":      self.update}
+        all_args_func_hash = {
+            "list" : self.list,
+            "info" : self.list,
+            "search" : self.search,
+            "check-update" : self.checkupdate,
+            "provides" : self.resolvedep,
+            "whatprovides" : self.resolvedep,
+            "resolvedep" : self.resolvedep,
+            "deplist" : self.deplist,
+            }
         op_func = func_hash.get(self.command)
-        if self.command == 'list':
-            return self.list(args)
-        if op_func == None:
+        if op_func is None and all_args_func_hash.has_key(self.command):
+            op_func = all_args_func_hash.get(self.command)
+            return op_func(args)
+        if op_func is None:
             return 0
         # First pass through our args to find any directories and/or binary
         # rpms and create a memory repository from them to avoid special
@@ -1388,7 +1406,63 @@ class RpmYum:
             ret = 1
         return ret
 
-    ###  list command ######################################################
+    ###  search/list/info commands ##########################################
+
+    def search(self, args):
+        try:
+            # XXX Installed
+            self.formatPkgs(self.repos.search(args))
+        except NotImplementedError:
+            log.error("'search' needs the sqlite database installed")
+        return 0
+
+    def checkupdate(self, args):
+        log.error("Not invented here")
+        return 0
+
+    def deplist(self, args):
+        pkgs = self._mergePkgLists(self.getInstalled(args),
+                                   self.getRepoPkgs(args))
+        pkgs.sort()
+        for pkg in pkgs:
+            log.info1("Package: %s %s", pkg.getNA(), pkg.getVR())
+            for name, flag, version in pkg['requires']:
+                if name.startswith('rpmlib('):
+                    continue
+                log.info1("\tdependency: %s %s %s",
+                          name, rpmFlag2Str(flag), version)
+                resolvers = self._mergePkgLists(
+                    self.pydb.searchDependency(name, flag, version),
+                    self.repos.searchDependency(name, flag, version))
+                resolvers = [(rpkg.getNA(), rpkg.getVR())
+                             for rpkg in resolvers]
+                resolvers.sort()
+                for na, vr in resolvers:
+                    log.info1('\t\tprovider: %s %s', na, vr)
+        return 0
+
+    def resolvedep(self, args):
+        for arg in args:
+            split_arg = arg.split()
+            if len(split_arg) == 3:
+                name, flag, version = split_arg
+            else:
+                name, flag, version = arg.strip(), 0, ''
+            flag = str2RpmFlag(flag)
+            resolvers = self._mergePkgLists(
+                self.pydb.searchDependency(name, flag, version),
+                self.repos.searchDependency(name, flag, version))
+            resolvers = [(rpkg.getNA(), rpkg.getVR(), rpkg.db.reponame)
+                         for rpkg in resolvers]
+            resolvers.sort()
+            
+            if self.command == 'resolvedep' and resolvers:
+                # XXX prefere installed?
+                log.info1('%s %s %s', *resolvers[-1])
+                return 0
+            for na, vr, repo in resolvers:
+                log.info1('%s %s %s', na, vr, repo)
+        return 0
 
     def list(self, args):
         if not args:
@@ -1396,22 +1470,19 @@ class RpmYum:
         else:
             command, patterns = args[0].lower(), args[1:]
         if command == "available":
-            log.info1("")
-            log.info1("Available Packages:")
-            self.formatPkgs(self.getAvailable(patterns))
-        elif command == "updates":
-            log.info1("")
-            log.info1("Available Updates:")
             self.__generateObsoletesList()
-            self.formatPkgs(self.getUpdates(patterns))
+            self.formatPkgs(self.getAvailable(patterns),
+                            "Available Packages:")
+        elif command == "updates":
+            self.__generateObsoletesList()
+            self.formatPkgs(self.getUpdates(patterns),
+                            "Available Updates:")
         elif command == "installed":
-            log.info1("")
-            log.info1("Installed Packages:")
-            self.formatPkgs(self.getInstalled(patterns))
+            self.formatPkgs(self.getInstalled(patterns),
+                            "Installed Packages:")
         elif command == "extras":
-            log.info1("")
-            log.info1("Installed Extra Packages:")
-            self.formatPkgs(self.getExtras(patterns))
+            self.formatPkgs(self.getExtras(patterns),
+                            "Installed Extra Packages:")
         elif command == "obsoletes":
             self.__generateObsoletesList()
             log.info1("")
@@ -1420,24 +1491,27 @@ class RpmYum:
                 log.info("%32s obsoletes %32s" %
                          (new.getNEVRA(), old.getNEVRA()))
         elif command == "recent":
-            log.info1("")
-            log.info1("Recent Packages:")
-            self.formatPkgs(self.getRecent(patterns))
+            self.formatPkgs(self.getRecent(patterns), "Recent Packages:")
         elif command == "all":
-            log.info1("")
-            log.info1("Installed Packages:")
-            self.formatPkgs(self.getInstalled(patterns))
-            log.info1("")
-            log.info1("Available Packages:")
-            self.formatPkgs(self.getAvailable(patterns))
+            self.formatPkgs(self.getInstalled(patterns),
+                            "Installed Packages:")
+            self.__generateObsoletesList()
+            self.formatPkgs(self.getAvailable(patterns),
+                            "Available Packages:")
         else:
-            log.info1("")
-            log.info1("Installed Packages:")
-            self.formatPkgs(self.getInstalled(args))
-            log.info1("")
-            log.info1("Available Packages:")
-            self.formatPkgs(self.getAvailable(args))
+            self.formatPkgs(self.getInstalled(args), "Installed Packages:")
+            self.__generateObsoletesList()
+            self.formatPkgs(self.getAvailable(args), "Available Packages:")
         return 0
+
+    def _mergePkgLists(self, *lists):
+        d = {}
+        for l in lists:
+            for pkg in l:
+                nevra = pkg.getNEVRA()
+                if not nevra in d:
+                    d[nevra] = pkg
+        return d.values()
 
     def _pkgNameDict(self, pkgs, dict_=None):
         if dict_ is None:
@@ -1456,12 +1530,37 @@ class RpmYum:
     def _NEVRADict(self, pkgs):
         return dict([(pkg.getNEVRA(), pkg) for pkg in pkgs])
 
-    def formatPkgs(self, pkgs):
-        pkgs = [(p.getNA(), p.getVR(), p.db.reponame)
+    def formatPkgs(self, pkgs, msg=''):
+        if not pkgs:
+            return
+        log.info1("")
+        if msg:
+            log.info1(msg)
+        
+        pkgs = [(p.getNA(), p.getVR(), p.db.reponame, p)
                 for p in pkgs]
         pkgs.sort()
-        for p in pkgs:
-            log.info1("%-40s %-22s %-16s", *p)
+        if self.command in ("info", "search"):
+            for p in pkgs:
+                pkg = p[-1]
+                log.info1("Package : %s", p[0])
+                log.info1("Version : %s", p[1])
+                log.info1("Repo    : %s", p[2])
+                vals = [pkg['size'], pkg['summary'], pkg['description']]
+                for idx in range(3):
+                    # XXX fix sqliterepodb
+                    if isinstance(vals[idx], (list, tuple)):
+                        vals[idx] = vals[idx][0]
+                    elif vals[idx] is None:
+                        vals[idx] = ''
+                log.info1("Size    : %s", int2str(vals[0]))
+                log.info1("Summary : %s", vals[1])
+                log.info1("Description:")
+                log.info1(vals[2])
+                log.info1('')
+        else:
+            for p in pkgs:
+                log.info1("%-40s %-22s %-16s", *p[:-1])
 
     def getInstalled(self, patterns=[]):
         if not patterns:
@@ -1485,6 +1584,8 @@ class RpmYum:
         for name, l in pkg_dict.iteritems():
             l.sort()
             result.append(l[-1])
+        result +=  self.getUpdates(patterns)
+        normalizeList(result)
         return result
 
     def getExtras(self, patterns):

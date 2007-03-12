@@ -145,6 +145,9 @@ class RpmDatabase:
     def searchPkgs(self, names):
         raise NotImplementedError
 
+    def search(self, names):
+        raise NotImplementedError
+
     def searchProvides(self, name, flag, version):
         raise NotImplementedError
 

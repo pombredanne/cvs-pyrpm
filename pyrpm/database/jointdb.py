@@ -207,6 +207,12 @@ class JointDB(db.RpmDatabase):
             result.extend(db.searchPkgs(names))
         return result
 
+    def search(self, names):
+        result = []
+        for db in self.dbs:
+            result.extend(db.search(names))
+        return result
+
     def searchProvides(self, name, flag, version):
         return self._merge_search_results(
             [db.searchProvides(name, flag, version)

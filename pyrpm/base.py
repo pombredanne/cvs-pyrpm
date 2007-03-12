@@ -115,6 +115,30 @@ def isInstallPreReq(x):
 def isErasePreReq(x):
     return (x & _ERASE_ONLY_MASK) != 0
 
+def rpmFlag2Str(x):
+    result = ''
+    if x & RPMSENSE_LESS:
+       result += '<'
+    if x & RPMSENSE_GREATER:
+        result += '>'
+    if x & RPMSENSE_EQUAL:
+        result += '='
+    return result
+
+def str2RpmFlag(x):
+    if isinstance(x, int): return x
+    result = 0
+    for c in x:
+        if c == '<':
+            result |= RPMSENSE_LESS
+        elif c == '>':
+            result |= RPMSENSE_GREATER
+        elif c == '=':
+            result |= RPMSENSE_EQUAL
+        else:
+            raise ValueError("'%s' is not a valid comparison" % x)
+    return result
+
 # RPM file attributes
 RPMFILE_NONE        = 0
 RPMFILE_CONFIG      = (1 <<  0)    # from %%config

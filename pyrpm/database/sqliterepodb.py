@@ -157,7 +157,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         'rpm_packager': 'packager',
 
         # 'size_package' : '' pkg.sizes[]
-        # 'size_installed' : ''
+        'size_installed' : 'size'
         # 'size_archive' : '',
 
         # 'location_href' : '', pkg.source
@@ -784,6 +784,20 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                                 result.append(pkg)
                                 break
         #normalizeList(result)
+        return result
+
+    def search(self, words):
+        result = []
+        cur = self._primarydb.cursor()
+        for word in words:
+            word = '%' + word + '%'
+            cur.execute('SELECT pkgKey FROM packages WHERE '
+                        '(name LIKE ?) OR (description LIKE ?) OR '
+                        '(summary LIKE ?) OR (rpm_packager LIKE ?)',
+                        (word, word, word, word))
+            result.extend((self.getPkgByKey(res['pkgKey']) for res in cur))
+        result = filter(None, result)
+        normalizeList(result)
         return result
 
     def _search(self, attr_table, name, flag, version):
