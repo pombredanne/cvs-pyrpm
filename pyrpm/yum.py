@@ -1409,11 +1409,9 @@ class RpmYum:
     ###  search/list/info commands ##########################################
 
     def search(self, args):
-        try:
-            # XXX Installed
-            self.formatPkgs(self.repos.search(args))
-        except NotImplementedError:
-            log.error("'search' needs the sqlite database installed")
+        pkgs = self._mergePkgLists(self.pydb.search(args),
+                                   self.repos.search(args))
+        self.formatPkgs(pkgs)
         return 0
 
     def checkupdate(self, args):
@@ -1485,9 +1483,12 @@ class RpmYum:
                             "Installed Extra Packages:")
         elif command == "obsoletes":
             self.__generateObsoletesList()
+            obsoletes = self.getObsoletes(patterns)
+            if not obsoletes:
+                return 0
             log.info1("")
             log.info1("Available Obsoleting Packages:")
-            for new, old in self.getObsoletes(patterns).iteritems():
+            for new, old in obsoletes.iteritems():
                 log.info("%32s obsoletes %32s" %
                          (new.getNEVRA(), old.getNEVRA()))
         elif command == "recent":
@@ -1605,9 +1606,22 @@ class RpmYum:
         return self.opresolver.installs
 
     def getObsoletes(self, patterns):
-        # XXX patterns
         self.__handleObsoletes()
-        return self.opresolver.obsoletes
+        if not patterns:
+            return self.opresolver.obsoletes
+        result = {}
+        for pkg, opkg in self.opresolver.obsoletes.iteritems():
+            found = False
+            for pattern in patterns:
+                regex = re.compile(fnmatch.translate(pattern))
+                for n in pkg.getAllNames():
+                    if regex.match(n):
+                        result[pkg] = opkg
+                        found = True
+                        break
+                if found:
+                    break
+        return result
 
     def getRecent(self, patterns):
         now = time()

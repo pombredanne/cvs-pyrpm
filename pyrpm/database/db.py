@@ -145,8 +145,21 @@ class RpmDatabase:
     def searchPkgs(self, names):
         raise NotImplementedError
 
-    def search(self, names):
-        raise NotImplementedError
+    def search(self, words):
+        if not words:
+            return []
+        result = []
+        for pkg in self.getPkgs():
+            for word in words:
+                if (word in pkg.get('name', '') or
+                    word in (pkg['summary'] and pkg['summary'][0] or '') or
+                    word in (pkg['description'] and
+                             pkg['description'][0] or '') or
+                    word in (pkg['rpm_packager'] or '')):
+                    result.append(pkg)
+                    break
+        return result
+                
 
     def searchProvides(self, name, flag, version):
         raise NotImplementedError
