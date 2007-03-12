@@ -558,13 +558,19 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         return pkg
 
     def getPkgTag(self, pkg, tag):
+        ttype = base.rpmtag[tag][1]
         tag = self.PKG2DB.get(tag, tag)
         if tag not in self.COLUMNS_LOOKUP:
             return None
         cur = self._primarydb.cursor()
         cur.execute('SELECT %s FROM packages WHERE pkgKey=?' %
                     tag, (pkg.pkgKey,))
-        return cur.fetchone()[0]
+        if ttype == RPM_STRING:
+            return cur.fetchone()[0]
+        elif ttype in (RPM_STRING_ARRAY, RPM_I18NSTRING):
+            return [ cur.fetchone()[0] ]
+        elif ttype in (RPM_CHAR, RPM_INT8, RPM_INT16, RPM_INT32, RPM_INT64):
+            return ( int(cur.fetchone()[0]), )
 
     def getFiles(self, pkg):
         pkgKey = pkg.pkgKey

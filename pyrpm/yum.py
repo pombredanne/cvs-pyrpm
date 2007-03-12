@@ -1546,17 +1546,13 @@ class RpmYum:
                 log.info1("Package : %s", p[0])
                 log.info1("Version : %s", p[1])
                 log.info1("Repo    : %s", p[2])
-                vals = [pkg['size'], pkg['summary'], pkg['description']]
-                for idx in range(3):
-                    # XXX fix sqliterepodb
-                    if isinstance(vals[idx], (list, tuple)):
-                        vals[idx] = vals[idx][0]
-                    elif vals[idx] is None:
-                        vals[idx] = ''
-                log.info1("Size    : %s", int2str(vals[0]))
-                log.info1("Summary : %s", vals[1])
+                log.info1("Size    : %s", int2str(
+                    (pkg['size'] and pkg['size'][0]) or 0))
+                log.info1("Summary : %s", (
+                    pkg['summary'] and pkg['summary'][0]) or '')
                 log.info1("Description:")
-                log.info1(vals[2])
+                log.info1((pkg['description'] and pkg['description'][0])
+                          or '')
                 log.info1('')
         else:
             for p in pkgs:
