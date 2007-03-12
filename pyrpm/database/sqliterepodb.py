@@ -799,8 +799,9 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             word = '%' + word + '%'
             cur.execute('SELECT pkgKey FROM packages WHERE '
                         '(name LIKE ?) OR (description LIKE ?) OR '
-                        '(summary LIKE ?) OR (rpm_packager LIKE ?)',
-                        (word, word, word, word))
+                        '(summary LIKE ?) OR (rpm_packager LIKE ?) OR '
+                        '(rpm_group LIKE ?) OR (url LIKE ?)',
+                        (word, ) * 6)
             result.extend((self.getPkgByKey(res['pkgKey']) for res in cur))
         result = filter(None, result)
         normalizeList(result)

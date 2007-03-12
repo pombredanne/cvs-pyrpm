@@ -155,7 +155,10 @@ class RpmDatabase:
                     word in (pkg['summary'] and pkg['summary'][0] or '') or
                     word in (pkg['description'] and
                              pkg['description'][0] or '') or
-                    word in (pkg['rpm_packager'] or '')):
+                    word in (pkg['rpm_packager'] or '') or 
+                    word in (pkg['group'] and pkg['group'][0] or '') or
+                    word in (pkg['url'] and pkg['url'][0] or '')
+                    ):
                     result.append(pkg)
                     break
         return result
