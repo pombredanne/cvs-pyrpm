@@ -69,18 +69,18 @@ class RpmResolver:
     def clear(self):
         """Clear all changed data."""
 
-        self.installs = [ ] # Added RpmPackage's
+        self.installs = set() # Added RpmPackage's
         self.check_installs = [ ]
         # new RpmPackage
         # => ["originally" installed RpmPackage removed by update]
         self.updates = { }
-        self.erases = [ ] # Removed RpmPackage's
+        self.erases = set() # Removed RpmPackage's
         self.check_erases = [ ]
         self.check_file_requires = False
         # new RpmPackage =>
         # ["originally" installed RpmPackage obsoleted by update]
         self.obsoletes = { }
-        self.installed_unresolved_file_requires = []
+        self.installed_unresolved_file_requires = set()
     # ----
 
 
@@ -118,9 +118,8 @@ class RpmResolver:
                     return ret
 
         if not self.isInstalled(pkg):
-            self.installs.append(pkg)
-        if pkg in self.erases:
-            self.erases.remove(pkg)
+            self.installs.add(pkg)
+        self.erases.discard(pkg)
         self.check_installs.append(pkg)
 
         self.database.addPkg(pkg)
@@ -273,9 +272,8 @@ class RpmResolver:
             return self.NOT_INSTALLED
 
         if self.isInstalled(pkg):
-            self.erases.append(pkg)
-        if pkg in self.installs:
-            self.installs.remove(pkg)
+            self.erases.add(pkg)
+        self.installs.discard(pkg)
         if pkg in self.check_installs:
             self.check_installs.remove(pkg)
         if pkg in self.updates:
@@ -581,10 +579,10 @@ class RpmResolver:
     def getUnresolvedFileRequires(self):
         db = self.database
         filereqs = db.getFileRequires()
-        result = []
+        result = set()
         for myfile in filereqs:
             if not db.searchDependency(myfile, 0, ""):
-                result.append(myfile)
+                result.add(myfile)
         return result
 
     # ----

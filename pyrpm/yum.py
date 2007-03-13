@@ -782,8 +782,8 @@ class RpmYum:
         resolver = self.opresolver
         # Remember the current state of the transaction before we do depsolving
         # so we know what operations were requested directly via commandline
-        self.__iinstalls = resolver.installs[:]
-        self.__ierases = resolver.erases[:]
+        self.__iinstalls = list(resolver.installs)
+        self.__ierases = list(resolver.erases)
         self.__iupdates = { }
         self.__iobsoletes = { }
         for p in resolver.updates:
@@ -826,8 +826,8 @@ class RpmYum:
         # the difference to the pre-depsolver operations. That way we know
         # which operations were required because of dependencies.
         resolver = self.opresolver
-        installs = resolver.installs[:]
-        erases = resolver.erases[:]
+        installs = list(resolver.installs)
+        erases = list(resolver.erases)
         updates = { }
         obsoletes = { }
         totsize = ipkgs = epkgs = opkgs = upkgs = 0
@@ -865,10 +865,10 @@ class RpmYum:
             d = []
             for p in self.__iinstalls:
                 ipkgs += 1
-                totsize += int(p["archivesize"])
+                totsize += int(p["archivesize"][0])
                 if p in installs:
                     installs.remove(p)
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0]))})
             self.outputPkgList(d)
 
         if len(self.__iupdates) > 0:
@@ -878,14 +878,14 @@ class RpmYum:
             d = []
             for p in pl:
                 upkgs += 1
-                totsize += int(p["archivesize"])
+                totsize += int(p["archivesize"][0])
                 l = self.__iupdates[p]
                 for p2 in l:
                     if p in updates.keys() and p2 in updates[p]:
                         updates[p].remove(p2)
                 if p in updates.keys() and len(updates[p]) == 0:
                     del updates[p]
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0]))})
             self.outputPkgList(d)
 
         if len(self.__iobsoletes) > 0:
@@ -895,14 +895,14 @@ class RpmYum:
             d = []
             for p in pl:
                 opkgs += 1
-                totsize += int(p["archivesize"])
+                totsize += int(p["archivesize"][0])
                 l = self.__iobsoletes[p]
                 for p2 in l:
                     if p in obsoletes.keys() and p2 in obsoletes[p]:
                         obsoletes[p].remove(p2)
                 if p in obsoletes.keys() and len(obsoletes[p]) == 0:
                     del obsoletes[p]
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"])), "COMMENT": "replacing "+l[0].getNEVRA()})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0])), "COMMENT": "replacing "+l[0].getNEVRA()})
             self.outputPkgList(d)
 
         if len(self.__ierases) > 0:

@@ -26,7 +26,7 @@ _files = map(lambda v: v[:-3], filter(lambda v: v[-3:] == ".py" and \
                                       v[0] != '.', \
                                       os.listdir(__path__[0])))
 
-# make shure "set" is available
+# make sure "set" is available
 # requires Python 2.3
 try:
     set
