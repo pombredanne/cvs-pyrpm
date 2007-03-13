@@ -26,6 +26,16 @@ _files = map(lambda v: v[:-3], filter(lambda v: v[-3:] == ".py" and \
                                       v[0] != '.', \
                                       os.listdir(__path__[0])))
 
+# make shure "set" is available
+# requires Python 2.3
+try:
+    set
+except NameError:
+    import __builtin__
+    from sets import Set
+    __builtin__.set = Set
+    del Set, __builtin__
+
 locale.setlocale(locale.LC_ALL, "C")
 _files.sort()
 locale.setlocale(locale.LC_ALL, "")
