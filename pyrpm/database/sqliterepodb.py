@@ -138,9 +138,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             'checksum_value',#
             )
 
-    COLUMNS_LOOKUP = {}
-    for col in COLUMNS:
-        COLUMNS_LOOKUP[col] = None
+    COLUMNS_LOOKUP = set(COLUMNS)
 
     DB2PKG = {
         # 'time_file' : '' # -> pkg.time_file

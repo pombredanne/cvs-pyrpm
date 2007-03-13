@@ -133,13 +133,12 @@ class RpmResolver:
         # get obsoletes
         # Valid only during OP_UPDATE: list of RpmPackage's that will be
         # obsoleted by the current update
-        self.pkg_obsoletes = [ ]
+        self.pkg_obsoletes = set()
         for u in pkg["obsoletes"]:
             s = self.database.searchDependency(u[0], u[1], u[2])
             for r in s:
                 if r["name"] != pkg["name"]:
-                    self.pkg_obsoletes.append(r)
-        normalizeList(self.pkg_obsoletes)
+                    self.pkg_obsoletes.add(r)
 
         # update package
 

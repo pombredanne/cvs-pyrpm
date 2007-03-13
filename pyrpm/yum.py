@@ -1032,11 +1032,11 @@ class RpmYum:
         """Generate a list of all installed/available RpmPackage's that
         obsolete something and store it in self.__obsoleteslist."""
 
-        obsoletes = {}
+        obsoletes = set()
         self.__obsoleteslist = [ ]
         for entry in self.repos.iterObsoletes():
-            obsoletes[entry[-1]] = None
-        self.__obsoleteslist = obsoletes.keys()
+            obsoletes.add(entry[-1])
+        self.__obsoleteslist = list(obsoletes)
         orderList(self.__obsoleteslist, self.config.machine)
         nhash = { }
         nlist = [ ]
