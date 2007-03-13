@@ -22,7 +22,7 @@
 #
 
 import os, re, stat
-import base, config, functions
+import base, functions
 
 
 # Files included in primary.xml
@@ -112,17 +112,6 @@ def _entryNode(parent, ns, dep):
         if r != '':
             entry.newProp('rel', r)
     return entry
-
-
-def metadataReadPackage(filename):
-    """Read RPM package filename, without verification or reading the payload.
-
-    For convenience only, other metadata* functions work with any RpmPackage as
-    long it contains all needed tags.  Raise ValueError on invalid data,
-    IOError."""
-
-    return functions.readRpmPackage(config.rpmconfig, filename,
-                                    verify=None, hdronly=True)
 
 
 def metadataPrimaryNode(parent, formatns, pkg, pkgid, sumtype, filename, url):

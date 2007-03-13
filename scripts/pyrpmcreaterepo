@@ -338,6 +338,16 @@ class OutputFile:
         self.doc.freeDoc()
 
 
+def metadataReadPackage(filename):
+    """Read RPM package filename, without verification or reading the payload.
+
+    For convenience only, other metadata* functions work with any RpmPackage
+    as long it contains all needed tags.  Raise ValueError on invalid data,
+    IOError."""
+    return functions.readRpmPackage(pyrpm.rpmconfig, filename, verify=None,
+        hdronly=True)
+
+
 def doPkgMetadata(cmds):
     """all the heavy lifting for the package metadata"""
 
