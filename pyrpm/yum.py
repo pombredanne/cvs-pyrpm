@@ -50,13 +50,19 @@ MultilineVarnames = ("exclude", "installonlypkgs", "kernelpkgnames", "commands",
 class YumConf(dict):
     def __init__(self, relver, arch, rpmdb=None, filenames=["/etc/yum.conf"],
                  reposdirs=None):
+
         # load config files
+        found = False
         for filename in filenames:
             if os.path.isfile(filename):
+                found = True
                 self.parseFile(filename)
             else:
                 log.warning("Couldn't find given yum config file, skipping "
                             "read of repo %s", filename)
+
+        if not found:
+            return
 
         if reposdirs == None:
             reposdirs = ["/etc/yum.repos.d", "/etc/yum/repos.d"]
@@ -204,6 +210,11 @@ class RpmYum:
         self.__ierases = [ ]
         self.__iupdates = { }
         self.__iobsoletes = { }
+
+        # Delay obsolete handling and just collect the packages in an internal
+        # list. By default false (direct obsolete handling).
+        self.delay_obsolete = False
+        self.delay_obsolete_list = [ ]
 
     def setAutoerase(self, flag):
         """Enable or disable erasing packages with unresolved dependencies
@@ -567,6 +578,9 @@ class RpmYum:
         try:
             pkg = readRpmPackage(self.config, name, db=self.pydb,
                                  tags=self.config.resolvertags)
+            if not pkg.has_key("archivesize") and \
+                   pkg["signature"].has_key("payloadsize"):
+                pkg["archivesize"] = pkg["signature"]["payloadsize"][0]
         except (IOError, ValueError), e:
             log.error("%s: %s", name, e)
             return None
@@ -671,7 +685,10 @@ class RpmYum:
                     for name in l:
                         self.update(name)
                     if do_obsolete:
-                        self.__handleObsoletes(upkg)
+                        if self.delay_obsolete:
+                            self.delay_obsolete_list.append(upkg)
+                        else:
+                            self.__handleObsoletes([upkg])
                 ret |= r
         return ret
 
@@ -691,9 +708,9 @@ class RpmYum:
             if self.command == "update" or self.command == "upgrade":
                 # For complete updates we need to do a full obsoletes run, not
                 # on a specific package.
-                self.__handleObsoletes()
                 for name in self.opresolver.getDatabase().getNames():
                     self.update(name, exact=True, do_obsolete=False)
+                self.__handleObsoletes()
         # Select proper function to be called for every argument. We have
         # a fixed operation for runArgs(), so use a reference to the
         # corresponding function.
@@ -744,6 +761,8 @@ class RpmYum:
         # Append our new temporary repo to our internal repositories
         self.repos.addDB(memory_repo)
         args = new_args
+        self.delay_obsolete = True
+        self.delay_obsolete_list = [ ]
         # Loop over all args and call the appropriate handler function for each
         for name in new_args:
             # We call our operation function which will handle all the
@@ -751,6 +770,9 @@ class RpmYum:
             ret = op_func(name, exact)
             if self.has_args and not ret:
                 log.info1("No match for argument: %s", name)
+        self.__handleObsoletes(self.delay_obsolete_list)
+        self.delay_obsolete = False
+        self.delay_obsolete_list = [ ]
         if self.config.timer:
             log.info2("runArgs() took %s seconds", (clock() - time1))
         self._generateTransactionState()
@@ -843,10 +865,10 @@ class RpmYum:
             d = []
             for p in self.__iinstalls:
                 ipkgs += 1
-                totsize += int(p["size_package"])
+                totsize += int(p["archivesize"])
                 if p in installs:
                     installs.remove(p)
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"]))})
             self.outputPkgList(d)
 
         if len(self.__iupdates) > 0:
@@ -856,14 +878,14 @@ class RpmYum:
             d = []
             for p in pl:
                 upkgs += 1
-                totsize += int(p["size_package"])
+                totsize += int(p["archivesize"])
                 l = self.__iupdates[p]
                 for p2 in l:
                     if p in updates.keys() and p2 in updates[p]:
                         updates[p].remove(p2)
                 if p in updates.keys() and len(updates[p]) == 0:
                     del updates[p]
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"]))})
             self.outputPkgList(d)
 
         if len(self.__iobsoletes) > 0:
@@ -873,14 +895,14 @@ class RpmYum:
             d = []
             for p in pl:
                 opkgs += 1
-                totsize += int(p["size_package"])
+                totsize += int(p["archivesize"])
                 l = self.__iobsoletes[p]
                 for p2 in l:
                     if p in obsoletes.keys() and p2 in obsoletes[p]:
                         obsoletes[p].remove(p2)
                 if p in obsoletes.keys() and len(obsoletes[p]) == 0:
                     del obsoletes[p]
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"])), "COMMENT": "replacing "+l[0].getNEVRA()})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"])), "COMMENT": "replacing "+l[0].getNEVRA()})
             self.outputPkgList(d)
 
         if len(self.__ierases) > 0:
@@ -891,7 +913,7 @@ class RpmYum:
                 epkgs += 1
                 if p in erases:
                     erases.remove(p)
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["signature"]["payloadsize"][0]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["signature"]["payloadsize"][0]))})
             self.outputPkgList(d)
 
         # Dependency fooshizzle output
@@ -901,8 +923,8 @@ class RpmYum:
             d = []
             for p in installs:
                 ipkgs += 1
-                totsize += int(p["size_package"])
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"]))})
+                totsize += int(p["archivesize"])
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"]))})
             self.outputPkgList(d)
 
         if len(updates) > 0:
@@ -912,8 +934,8 @@ class RpmYum:
             d = []
             for p in pl:
                 upkgs += 1
-                totsize += int(p["size_package"])
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"]))})
+                totsize += int(p["archivesize"])
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"]))})
             self.outputPkgList(d)
 
         if len(obsoletes) > 0:
@@ -923,8 +945,8 @@ class RpmYum:
             d = []
             for p in pl:
                 opkgs += 1
-                totsize += int(p["size_package"])
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.yumrepo.reponame, "SIZE": int2str(int(p["size_package"])), "COMMENT": "replacing "+obsoletes[0].getNEVRA()})
+                totsize += int(p["archivesize"])
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"])), "COMMENT": "replacing "+obsoletes[0].getNEVRA()})
             self.outputPkgList(d)
 
         if len(erases) > 0:
@@ -933,7 +955,7 @@ class RpmYum:
             d = []
             for p in erases:
                 epkgs += 1
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["signature"]["payloadsize"][0]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["signature"]["payloadsize"][0]))})
             self.outputPkgList(d)
 
         self.erase_list = [pkg for pkg in self.erase_list
@@ -944,7 +966,7 @@ class RpmYum:
                       "removed from your system:")
             d = []
             for p in self.erase_list:
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": "installed", "SIZE": int2str(int(p["signature"]["payloadsize"][0]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["signature"]["payloadsize"][0]))})
             self.outputPkgList(d, 2)
 
         if self.confirm:
@@ -1230,28 +1252,36 @@ class RpmYum:
             return self.__handleConflictAutoerases()
         return ret
 
-    def __handleObsoletes(self, pkg=None):
+    def __handleObsoletes(self, pkglist=[ ]):
         """Try to replace RpmPackage pkg in self.opresolver by a package
         obsoleting it, iterate until no obsoletes: applies.
 
         Return 1 if pkg was obsoleted, 0 if not."""
 
-        full = (pkg == None)# Flag if we need to do a full run
+        full = (len(pkglist) == 0)  # Flag if we need to do a full run
         obsoleted = False
         # Loop until we have found the end of the obsolete chain
         while 1:
             found = False
             # Go over all packages we know have obsoletes
             for opkg in self.__obsoleteslist:
-                # If the package has already been tried once or is in our
-                # erase_list skip it.
+                # If the obsolete package has already been tried once or is in
+                # our erase_list skip it.
                 if opkg in self.opkg_list or opkg in self.erase_list:
                     continue
                 # Never add obsolete packages for packages with the same name.
-                if pkg != None and pkg["name"] == opkg["name"]:
-                    continue
+                phash = { }
+                if len(pkglist) > 0:
+                    for pkg in pkglist:
+                        if pkg["name"] == opkg["name"]:
+                            continue
+                        phash[pkg] = True
+                    if len(phash.keys()) == 0:
+                        continue
                 # Go through all obsoletes
                 for u in opkg["obsoletes"]:
+                    # Reinit plist
+                    plist = [ ]
                     # Look in our current database for matches
                     s = self.opresolver.getDatabase().searchDependency(u[0], u[1], u[2])
                     # If we got no results, we don't obsolete.
@@ -1262,17 +1292,22 @@ class RpmYum:
                     if s[0]["name"] == opkg["name"]:
                         continue
                     # In case of a full run we always obsolete if we found a
-                    # match. Otherwise if the package for which we were checking
-                    # the obsoletes right now isn't in the list skip it.
-                    if pkg != None and not (pkg in s):
-                        continue
+                    # match. Otherwise if the packages for which we were
+                    # checking the obsoletes right now isn't in the list skip
+                    # it.
+                    if len(phash.keys()) > 0:
+                        for p in s:
+                            if phash.get(p) == True:
+                                plist.append(p)
+                        if len(plist) == 0:
+                            continue
                     # Found a matching obsoleting package. Try adding it to
                     # our opresolver with an update so it obsoletes the
                     # installed package
                     ret = self.opresolver.update(opkg)
                     # If it has already been added before readd it by erasing
                     # it and adding it again. This will ensure that the
-                    # obsoleting will occur.
+                    # obsoleting will occur in the resolver.
                     if ret == self.opresolver.ALREADY_ADDED:
                         self.opresolver.erase(opkg)
                         ret = self.opresolver.update(opkg)
@@ -1293,10 +1328,10 @@ class RpmYum:
             # If nothing was found we're finished and can return.
             if found:
                 self.opkg_list.append(opkg)
-                if full:
-                    pkg = None
-                else:
-                    pkg = opkg
+                if not full:
+                    pkglist.append(opkg)
+                    for p in plist:
+                        pkglist.remove(p)
             else:
                 break
         # Return wether we obsoleted any package this time or not.

@@ -55,7 +55,8 @@ class RpmConfig:
             "conflictversion", "filesizes", "filemodes", "filemd5s",
             "fileusername", "filegroupname", "filelinktos", "fileflags",
             "filecolors", "fileverifyflags", "dirindexes", "basenames",
-            "dirnames", "oldfilenames", "md5", "sha1header")
+            "dirnames", "oldfilenames", "md5", "sha1header", "archivesize",
+            "payloadsize")
             # Tags used by RpmResolver
         self.diskspacetags = self.nevratags + \
                              ("filesizes", "dirindexes", "basenames",

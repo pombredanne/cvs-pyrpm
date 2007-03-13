@@ -200,6 +200,7 @@ class RpmPackage(RpmData):
         self.clear()
         self.source = source
         self.yumrepo = None     # Yum repository if package is from that repo
+        self.reponame = "binaryrpm"     # Name/type of the repository
         self.yumhref = None     # Original relative href in yum repo
         self.compstype = None   # If available refers to the type in comps.xml
         self.verifySignature = verify   # Verify signature

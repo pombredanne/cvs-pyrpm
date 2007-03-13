@@ -217,6 +217,7 @@ class RpmDB(db.RpmDatabase):
 
     def readRpm(self, key, db, tags):
         pkg = RpmDBPackage(self.config, "dummy")
+        pkg.reponame = "installed"
         pkg.key = key
         pkg.db = self
         data = db[key]

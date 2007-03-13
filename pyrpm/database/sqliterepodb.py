@@ -156,7 +156,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # 'rpm_header_end' : '',
         'rpm_packager': 'packager',
 
-        # 'size_package' : '' pkg.sizes[]
+        'size_package' : 'archivesize'
         'size_installed' : 'size'
         # 'size_archive' : '',
 
@@ -544,6 +544,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
     def _buildRpm(self, data):
         pkg = SqliteRpmPackage(self.config, source='', db=self)
         pkg.yumrepo = self
+        pkg.reponame = self.reponame
         for key in ['pkgKey', 'name', 'arch', 'version',
                     'epoch', 'release', 'location_href']:
             name = self.DB2PKG.get(key, key)
