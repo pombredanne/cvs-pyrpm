@@ -156,8 +156,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # 'rpm_header_end' : '',
         'rpm_packager': 'packager',
 
-        'size_package' : 'archivesize'
-        'size_installed' : 'size'
+        'size_package' : 'archivesize',
+        'size_installed' : 'size',
         # 'size_archive' : '',
 
         # 'location_href' : '', pkg.source
