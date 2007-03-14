@@ -58,7 +58,7 @@ class RpmExternalSearchDB(RpmMemoryDB):
             del cache[0] # remove first entry
         cache[query] = value
 
-    if False: # was commented out for performance issues
+    if True: # was commented out for performance issues
 
         def getFileRequires(self):
             if len(self) == 0:

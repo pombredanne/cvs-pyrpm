@@ -56,7 +56,7 @@ from pyrpm.hashlist import HashList
 class SqliteRpmPackage(package.RpmPackage):
 
     CACHE = {
-#        'requires' : HashList(),
+        'requires' : HashList(),
         'provides' : HashList(),
         'conflicts' : HashList(),
         }
@@ -369,6 +369,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # Create indexes for faster searching
         cur.execute("CREATE INDEX packagename ON packages (name)")
         cur.execute("CREATE INDEX providesname ON provides (name)")
+        cur.execute("CREATE INDEX requiresname ON requires (name)")
         cur.execute("CREATE INDEX packageId ON packages (pkgId)")
         self._primarydb.commit()
 
