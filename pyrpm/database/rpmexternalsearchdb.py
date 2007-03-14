@@ -66,7 +66,7 @@ class RpmExternalSearchDB(RpmMemoryDB):
             if self._filerequires is None:
                 self._filerequires = self.externaldb.getPkgsFileRequires()
             result = set()
-            for pkg, files in self._filerequires.iteritems():
+            for pkg, filenames in self._filerequires.iteritems():
                 if pkg in self:
                     for filename in filenames:
                         result.add(filename)

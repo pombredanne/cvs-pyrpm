@@ -951,7 +951,7 @@ class RpmYum:
             for p in pl:
                 opkgs += 1
                 totsize += int(p["archivesize"][0])
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0])), "COMMENT": "replacing "+obsoletes[0].getNEVRA()})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0])), "COMMENT": "replacing "+obsoletes[p][0].getNEVRA()})
             self.outputPkgList(d)
 
         if len(erases) > 0:
