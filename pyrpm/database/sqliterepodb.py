@@ -56,7 +56,7 @@ from pyrpm.hashlist import HashList
 class SqliteRpmPackage(package.RpmPackage):
 
     CACHE = {
-        'requires' : HashList(),
+#        'requires' : HashList(),
         'provides' : HashList(),
         'conflicts' : HashList(),
         }

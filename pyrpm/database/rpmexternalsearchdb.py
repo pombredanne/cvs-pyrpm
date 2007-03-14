@@ -58,7 +58,7 @@ class RpmExternalSearchDB(RpmMemoryDB):
             del cache[0] # remove first entry
         cache[query] = value
 
-    if True: # was commented out for performance issues
+    if False: # was commented out for performance issues
 
         def getFileRequires(self):
             if len(self) == 0:
@@ -72,6 +72,18 @@ class RpmExternalSearchDB(RpmMemoryDB):
                         result.add(filename)
             return list(result)
         
+        def searchRequires(self, name, flag, version):
+            query = (name, flag, version)
+            cache = self.cache['requires']
+            result = self._queryCache(cache, query)
+            if result is None:
+                result = self.externaldb.searchRequires(
+                    name, flag, version)
+                self._storeCache(cache, query, result)
+            return self._filterdict(result)
+
+    if True:
+
         def searchProvides(self, name, flag, version):
             query = (name, flag, version)
             cache = self.cache['provides']
@@ -82,15 +94,6 @@ class RpmExternalSearchDB(RpmMemoryDB):
                 self._storeCache(cache, query, result)
             return self._filterdict(result)
 
-        def searchRequires(self, name, flag, version):
-            query = (name, flag, version)
-            cache = self.cache['requires']
-            result = self._queryCache(cache, query)
-            if result is None:
-                result = self.externaldb.searchRequires(
-                    name, flag, version)
-                self._storeCache(cache, query, result)
-            return self._filterdict(result)
 
         def searchConflicts(self, name, flag, version):
             query = (name, flag, version)
