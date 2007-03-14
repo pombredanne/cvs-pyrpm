@@ -51,8 +51,16 @@ USEYUM = False # disable yum metadata parser for now
                # as it messes up pre requirements
 
 import sqlitecompat as sqlite3
+from pyrpm.hashlist import HashList
 
 class SqliteRpmPackage(package.RpmPackage):
+
+    CACHE = {
+        'requires' : HashList(),
+        'provides' : HashList(),
+        'conflicts' : HashList(),
+        }
+    CACHESIZE = 30
 
     def __init__(self, config, source, verify=None, hdronly=None, db=None):
         self.filesloaded = False
@@ -73,7 +81,18 @@ class SqliteRpmPackage(package.RpmPackage):
     def __getitem__(self, name):
         if dict.has_key(self, name):
             return dict.get(self, name)
-        if name in ('requires','provides','conflicts','obsoletes'):
+        if name in self.CACHE:
+            if self.CACHE[name].has_key(self):
+                result = self.CACHE[name][self]
+                del self.CACHE[name][self] #  move to the end
+                self.CACHE[name][self] = result
+                return result
+            deps = self.yumrepo.getDependencies(name, self.pkgKey)
+            if len(self.CACHE[name]) > self.CACHESIZE:
+                del self.CACHE[name][0] # remove first entry
+            self.CACHE[name][self] = deps
+            return deps
+        if name in ('obsoletes', 'requires','provides','conflicts'):
             deps = self.yumrepo.getDependencies(name, self.pkgKey)
             self[name] = deps
             return deps

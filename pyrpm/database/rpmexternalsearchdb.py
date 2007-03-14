@@ -26,11 +26,6 @@ class RpmExternalSearchDB(RpmMemoryDB):
                 result[pkg] = entry
         return result
 
-     # Commented out for performance issues
-#    def searchProvides(self, name, flag, version):
-#        return self._filterdict(self.externaldb.searchProvides(
-#            name, flag, version))
-
     def reloadDependencies(self):
         self.filecache.clear()
         RpmMemoryDB.reloadDependencies(self)
@@ -39,28 +34,32 @@ class RpmExternalSearchDB(RpmMemoryDB):
         if not self.filecache.has_key(filename):
             self.filecache[filename] = self.externaldb.searchFilenames(
                 filename)
-
         r =  self._filter(self.filecache[filename])
         return r
 
-     # Commented out for performance issues
-#    def searchRequires(self, name, flag, version):
-#        return self._filterdict(self.externaldb.searchRequires(
-#            name, flag, version))
 
-#    def searchConflicts(self, name, flag, version):
-#        return self._filterdict(self.externaldb.searchConflicts(
-#            name, flag, version))
+    if True: # was commented out for performance issues
+        def searchProvides(self, name, flag, version):
+            return self._filterdict(self.externaldb.searchProvides(
+                name, flag, version))
 
-#    def searchObsoletes(self, name, flag, version):
-#        return self._filterdict(self.externaldb.searchObsoletes(
-#            name, flag, version))
+        def searchRequires(self, name, flag, version):
+            return self._filterdict(self.externaldb.searchRequires(
+                name, flag, version))
 
-#    def searchTriggers(self, name, flag, version):
-#        return self._filterdict(self.externaldb.searchTriggers(
-#            name, flag, version))
+        def searchConflicts(self, name, flag, version):
+            return self._filterdict(self.externaldb.searchConflicts(
+                name, flag, version))
 
-#    def searchPkgs(self, names):
-#        return self._filterdict(self.externaldb.searchPkgs(
-#            name, flag, version))
+        #def searchObsoletes(self, name, flag, version):
+        #    return self._filterdict(self.externaldb.searchObsoletes(
+        #        name, flag, version))
+
+        def searchTriggers(self, name, flag, version):
+            return self._filterdict(self.externaldb.searchTriggers(
+                name, flag, version))
+
+        def searchPkgs(self, names):
+            return self._filterdict(self.externaldb.searchPkgs(
+                name, flag, version))
 
