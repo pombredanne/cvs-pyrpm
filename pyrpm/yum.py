@@ -1061,17 +1061,14 @@ class RpmYum:
         # changes something to the package set we need to continue the loop.
         # Afterwards there may still be unresolved deps or conflicts for which
         # we then have to check.
-        nowork_count = 0
-        while nowork_count < 3: # XXX Why not 2???
-            if not self.__handleUnresolvedDeps():
-                nowork_count += 1
-            else:
-                nowork_count = 0
-            unresolved = None
-            if not self.__handleConflicts():
-                nowork_count += 1
-            else:
-                nowork_count = 0
+        self.delay_obsolete = True
+        working = 1
+        while working:
+            working = 0
+            working += self.__handleUnresolvedDeps()
+            working += self.__handleObsoletes(self.delay_obsolete_list)
+            working += self.__handleConflicts()
+            self.delay_obsolete_list = [ ]
         unresolved = self.opresolver.getUnresolvedDependencies()
         conflicts = self.opresolver.getConflicts()
         if len(unresolved) > 0:
