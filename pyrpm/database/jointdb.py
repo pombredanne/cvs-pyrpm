@@ -183,6 +183,12 @@ class JointDB(db.RpmDatabase):
             result.extend(db.getFileRequires())
         return result
 
+    def getPkgsFileRequires(self):
+        result = {}
+        for db in self.dbs:
+            result.update(db.getPkgsFileRequires())
+        return result
+
     def iterProvides(self):
         return chain(*[db.iterProvides() for db in self.dbs])
 

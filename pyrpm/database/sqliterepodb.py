@@ -735,6 +735,17 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         result = [self.getPkgByKey(ob['pkgKey']) for ob in cur.fetchall()]
         return filter(None, result)
 
+    def getPkgsFileRequires(self):
+        cur = self._primarydb.cursor()
+        cur.execute('SELECT pkgKey, name FROM requires WHERE name LIKE "/%"')
+        result = {}
+        for ob in cur.fetchall():
+            pkg = self.getPkgByKey(ob[0])
+            if pkg is None:
+                continue
+            result.setdefault(pkg, [ ]).append(ob[1])
+        return result
+
     def getFilenames(self):
         raise NotImplementedError
 

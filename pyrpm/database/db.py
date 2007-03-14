@@ -127,9 +127,15 @@ class RpmDatabase:
         raise NotImplementedError
 
     def getFileRequires(self):
-        return [file for file, f, ver, pkg in self.iterRequires()
-                if file[0]=="/"]
+        return [filename for filename, f, ver, pkg in self.iterRequires()
+                if filename[0]=="/"]
 
+    def getPkgsFileRequires(self):
+        result = {}
+        for filename, flag, ver, pkg in self.iterRequires():
+            result.setdefault(pkg, []).append(filename)
+        return result
+    
     def iterConflicts(self):
         raise NotImplementedError
 
