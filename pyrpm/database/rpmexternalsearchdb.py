@@ -114,6 +114,6 @@ class RpmExternalSearchDB(RpmMemoryDB):
                 name, flag, version))
 
         def searchPkgs(self, names):
-            return self._filterdict(self.externaldb.searchPkgs(
-                name, flag, version))
+            return self._filterdict(self.externaldb.searchPkgs(names))
 
+# vim:ts=4:sw=4:showmatch:expandtab
