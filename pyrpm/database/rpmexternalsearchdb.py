@@ -1,5 +1,6 @@
 from memorydb import RpmMemoryDB
 from pyrpm.hashlist import HashList
+from lrucache import SmallLRUCache
 
 class RpmExternalSearchDB(RpmMemoryDB):
     """MemoryDb that uses an external db for (filename) queries. The external
@@ -14,9 +15,9 @@ class RpmExternalSearchDB(RpmMemoryDB):
         self.externaldb = externaldb
         RpmMemoryDB.__init__(self, config, source, buildroot)
         self.cache = {
-            "provides" : HashList(),
-            "requires" : HashList(),
-            "conflicts" : HashList()
+            "provides" : SmallLRUCache(maxsize=30),
+            "requires" : SmallLRUCache(maxsize=30),
+            "conflicts" : SmallLRUCache(maxsize=30),
             }
         self.cachesize = 30
         self.filecache = {} # filename -> [pkgs], contains all available pkgs
@@ -45,13 +46,6 @@ class RpmExternalSearchDB(RpmMemoryDB):
         r =  self._filter(self.filecache[filename])
         return r
 
-    def _queryCache(self, cache, query):
-        if cache.has_key(query):
-            result = cache[query]
-            del cache[query] #  move to the end
-            cache[query] = result
-            return result
-        return None
 
     def _storeCache(self, cache, query, value):
         if len(cache) > self.cachesize:
@@ -75,11 +69,12 @@ class RpmExternalSearchDB(RpmMemoryDB):
         def searchRequires(self, name, flag, version):
             query = (name, flag, version)
             cache = self.cache['requires']
-            result = self._queryCache(cache, query)
-            if result is None:
+            if cache.has_key(query):
+                result = cache[query]
+            else:
                 result = self.externaldb.searchRequires(
                     name, flag, version)
-                self._storeCache(cache, query, result)
+                cache[query] = result
             return self._filterdict(result)
 
     if True:
@@ -87,22 +82,23 @@ class RpmExternalSearchDB(RpmMemoryDB):
         def searchProvides(self, name, flag, version):
             query = (name, flag, version)
             cache = self.cache['provides']
-            result = self._queryCache(cache, query)
-            if result is None:
+            if cache.has_key(query):
+                result = cache[query]
+            else:
                 result = self.externaldb.searchProvides(
                     name, flag, version)
-                self._storeCache(cache, query, result)
+                cache[query] = result
             return self._filterdict(result)
-
 
         def searchConflicts(self, name, flag, version):
             query = (name, flag, version)
             cache = self.cache['conflicts']
-            result = self._queryCache(cache, query)
-            if result is None:
+            if cache.has_key(query):
+                result = cache[query]
+            else:
                 result = self.externaldb.searchConflicts(
                     name, flag, version)
-                self._storeCache(cache, query, result)
+                cache[query] = result
             return self._filterdict(result)
 
         #def searchObsoletes(self, name, flag, version):
@@ -117,3 +113,4 @@ class RpmExternalSearchDB(RpmMemoryDB):
             return self._filter(self.externaldb.searchPkgs(names))
 
 # vim:ts=4:sw=4:showmatch:expandtab
+

@@ -51,16 +51,15 @@ USEYUM = False # disable yum metadata parser for now
                # as it messes up pre requirements
 
 import sqlitecompat as sqlite3
-from pyrpm.hashlist import HashList
+from lrucache import SmallLRUCache
 
 class SqliteRpmPackage(package.RpmPackage):
 
     CACHE = {
-        'requires' : HashList(),
-        'provides' : HashList(),
-        'conflicts' : HashList(),
+        'requires' : SmallLRUCache(maxsize=100),
+        'provides' : SmallLRUCache(maxsize=100),
+        'conflicts' : SmallLRUCache(maxsize=100),
         }
-    CACHESIZE = 30
 
     def __init__(self, config, source, verify=None, hdronly=None, db=None):
         self.filesloaded = False
@@ -83,13 +82,8 @@ class SqliteRpmPackage(package.RpmPackage):
             return dict.get(self, name)
         if name in self.CACHE:
             if self.CACHE[name].has_key(self):
-                result = self.CACHE[name][self]
-                del self.CACHE[name][self] #  move to the end
-                self.CACHE[name][self] = result
-                return result
+                return self.CACHE[name][self]
             deps = self.yumrepo.getDependencies(name, self.pkgKey)
-            if len(self.CACHE[name]) > self.CACHESIZE:
-                del self.CACHE[name][0] # remove first entry
             self.CACHE[name][self] = deps
             return deps
         if name in ('obsoletes', 'requires','provides','conflicts'):
@@ -309,6 +303,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         """)
         cur.execute("CREATE INDEX keyfile ON filelist (pkgKey)")
         cur.execute("CREATE INDEX pkgId ON packages (pkgId)")
+        cur.execute("CREATE INDEX dirnames ON filelist (dirname)")
         self._filelistsdb.commit()
 
     def createOthersTables(self):
@@ -369,8 +364,11 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # Create indexes for faster searching
         cur.execute("CREATE INDEX packagename ON packages (name)")
         cur.execute("CREATE INDEX providesname ON provides (name)")
+        cur.execute("CREATE INDEX pkgprovides ON provides (pkgKey)")
         cur.execute("CREATE INDEX requiresname ON requires (name)")
+        cur.execute("CREATE INDEX pkgrequires ON requires (pkgKey)")
         cur.execute("CREATE INDEX packageId ON packages (pkgId)")
+        cur.execute("CREATE INDEX filenames ON files (name)")
         self._primarydb.commit()
 
     def open(self):
@@ -476,6 +474,11 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 # XXX error handling
                 shutil.move(filename + '.sqlite', dbfilename)
                 setattr(self, "_%sdb" % dbtype, db)
+                if dbtype == 'primary':
+                    cur = db.cursor()
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS "
+                        "requiresname ON requires (name)")
                 return 1
             db = self.create(dbfilename)
             setattr(self, "_%sdb" % dbtype, db)
