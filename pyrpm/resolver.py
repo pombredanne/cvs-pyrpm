@@ -96,12 +96,13 @@ class RpmResolver:
                 s = self.database.searchObsoletes(name, flag, version)
                 if self._checkObsoletes(pkg, dep, s, operation):
                     return self.CONFLICT
-            # check conflicts for filenames
-            for f in pkg.iterFilenames():
-                dep = (f, 0, "")
-                s = self.database.searchObsoletes(f, 0, "")
-                if self._checkObsoletes(pkg, dep, s, operation):
-                    return self.CONFLICT
+            if self.config.nofileconflicts == 0:
+                # check conflicts for filenames
+                for f in pkg.iterFilenames():
+                    dep = (f, 0, "")
+                    s = self.database.searchObsoletes(f, 0, "")
+                    if self._checkObsoletes(pkg, dep, s, operation):
+                        return self.CONFLICT
             #for name in self.database.getObsoletes().keys():
             #    if name.startswith("/") and name in pkg.iterFilenames():
             #        return self.CONFLICT
