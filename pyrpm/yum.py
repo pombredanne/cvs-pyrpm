@@ -772,6 +772,9 @@ class RpmYum:
                 log.info1("No match for argument: %s", name)
         if self.config.timer:
             log.info2("package selection took %s seconds", (clock() - time1))
+        if self.command.endswith("install") or self.command.endswith("remove"):
+            self._generateTransactionState()
+            return 1
         log.info2("Processing obsoletes")
         if self.config.timer:
             time1 = clock()
