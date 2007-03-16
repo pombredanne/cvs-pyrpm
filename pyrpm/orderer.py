@@ -103,24 +103,20 @@ class RpmRelation:
         return "%d %d" % (len(self.pre), len(self.post))
 
 
-class RpmRelations:
+class RpmRelations(dict):
     """List of relations for each package (a dependency graph)."""
-
+    # RpmPackage => RpmRelation
     def __init__(self, config, rpms, operation, externaldb=None):
         self.config = config
-        self.list = HashList()          # RpmPackage => RpmRelation
-        self.__len__ = self.list.__len__
-        self.__getitem__ = self.list.__getitem__
-        self.has_key = self.list.has_key
         self.genRelations(rpms, operation, externaldb)
 
     def genRelations(self, rpms, operation, externaldb=None):
         # clear list to get to a sane state
-        self.list.clear()
+        self.clear()
 
         # add relations for all packages
         for pkg in rpms:
-            self.list[pkg] = RpmRelation()
+            self[pkg] = RpmRelation()
 
         # Build a new resolver to list all dependencies between packages.
         if externaldb:
@@ -176,24 +172,24 @@ class RpmRelations:
     def addRelation(self, pkg, pre, flag):
         """Add an arc from RpmPackage pre to RpmPackage pkg with flag.
         pre can be None to add pkg to the graph with no arcs."""
-        i = self.list[pkg]
+        i = self[pkg]
         if flag or pre not in i.pre:
             # prefer hard requirements, do not overwrite with soft req
             i.pre[pre] = flag
-            self.list[pre].post[pkg] = 1
+            self[pre].post[pkg] = 1
 
     # ----
 
     def remove(self, pkg):
         """Remove RpmPackage pkg from the dependency graph."""
-        rel = self.list[pkg]
+        rel = self[pkg]
         # remove all post relations for the matching pre relation packages
         for r in rel.pre:
-            del self.list[r].post[pkg]
+            del self[r].post[pkg]
         # remove all pre relations for the matching post relation packages
         for r in rel.post:
-            del self.list[r].pre[pkg]
-        del self.list[pkg]
+            del self[r].pre[pkg]
+        del self[pkg]
 
     # ----
 
@@ -402,7 +398,7 @@ class ConnectedComponent:
 
         self.relations = relations
 
-        relations.list[self] = RpmRelation()
+        relations[self] = RpmRelation()
 
         self.pkgs = { }
         for pkg in pkgs:
