@@ -3341,36 +3341,33 @@ class RpmRelation:
         return "%d %d" % (len(self.pre), len(self.post))
 
 
-class RpmRelations:
+class RpmRelations(dict):
     """List of relations for each package (a dependency graph)."""
-
+    # RpmPackage => RpmRelation
     def __init__(self, rpms):
-        self.list = HashList() # RpmPackage => RpmRelation
-        self.__len__ = self.list.__len__
-        self.__getitem__ = self.list.__getitem__
-        self.has_key = self.list.has_key
+        dict.__init__()
         for pkg in rpms:
-            self.list[pkg] = RpmRelation()
+            self[pkg] = RpmRelation()
 
-    def addRel(self, pkg, pre, flag):
+    def addRelation(self, pkg, pre, flag):
         """Add an arc from RpmPackage pre to RpmPackage pkg with flag.
         pre can be None to add pkg to the graph with no arcs."""
-        i = self.list[pkg]
+        i = self[pkg]
         if flag or pre not in i.pre:
             # prefer hard requirements, do not overwrite with soft req
             i.pre[pre] = flag
-            self.list[pre].post[pkg] = 1
+            self[pre].post[pkg] = 1
 
     def remove(self, pkg):
         """Remove RpmPackage pkg from the dependency graph."""
-        rel = self.list[pkg]
+        rel = self[pkg]
         # remove all post relations for the matching pre relation packages
         for r in rel.pre:
-            del self.list[r].post[pkg]
+            del self[r].post[pkg]
         # remove all pre relations for the matching post relation packages
         for r in rel.post:
-            del self.list[r].pre[pkg]
-        del self.list[pkg]
+            del self[r].pre[pkg]
+        del self[pkg]
 
     def removeRelation(self, node, next):
         """Drop the "RpmPackage node requires RpmPackage next" arc."""
@@ -3534,7 +3531,7 @@ class ConnectedComponent:
 
         self.relations = relations
         # add myself to the list
-        relations.list[self] = RpmRelation()
+        relations[self] = RpmRelation()
         self.pkgs = {}
         for pkg in pkgs:
             self.pkgs[pkg] = pkg
@@ -3549,7 +3546,7 @@ class ConnectedComponent:
             for p in to_remove:
                 flag = relations[pkg].pre[p]
                 relations.removeRelation(pkg, p)
-                relations.addRel(self, p, flag)
+                relations.addRelation(self, p, flag)
 
 
             to_remove = []
@@ -3559,7 +3556,7 @@ class ConnectedComponent:
             for p in to_remove:
                 flag = relations[pkg].post[p]
                 relations.removeRelation(p, pkg)
-                relations.addRel(p, self, flag)
+                relations.addRelation(p, self, flag)
 
         relations[self].weight = len(self.pkgs)
         # uncomment for use of the dict based weight algorithm
@@ -3824,12 +3821,12 @@ class RpmOrderer:
             for pkg in rpms:
                 if pkg in resolved: # ignore deps resolved also by itself
                     continue
-                i = relations.list[pkg]
+                i = relations[pkg]
                 for pre in resolved:
                     # prefer hard requirements, do not overwrite with soft req
                     if f2 or pre not in i.pre:
                         i.pre[pre] = f2
-                        relations.list[pre].post[pkg] = 1
+                        relations[pre].post[pkg] = 1
         return relations
 
     def genOperations(self, order):
