@@ -369,15 +369,6 @@ def makeDirs(fullname):
     if len(dirname) > 1 and not os.path.isdir(dirname):
         os.makedirs(dirname)
 
-def listRpmDir(dirname):
-    """List directory like standard os.listdir, but returns only .rpm files"""
-
-    files = []
-    for f in os.listdir(dirname):
-        if f.endswith('.rpm'):
-            files.append(f)
-    return files
-
 def createLink(src, dst):
     """Create a link from src to dst.
 
@@ -705,31 +696,6 @@ def _uriToFilename(uri):
             if idx != -1:
                 filename = filename[idx+2:]
     return filename
-
-def checksumCacheLocal(url, subdir, type):
-    """Calculates and returns the checksum for a give URL and corresponding
-    subdir. The type parameter is either "sha" or "md5".
-
-    Returns None if no cache file for the given URL is there or a wrong type
-    was given, otherwise the calculated checksum."""
-    digest = None
-    if   type == "sha":
-        digest = sha.new()
-    elif type == "md5":
-        digest = md5.new()
-    else:
-        return (None, None)
-    if url.startswith("http://") or url.startswith("ftp://"):
-        fname = os.path.join(rpmconfig.cachedir, subdir)
-        fname = os.path.join(fname, os.path.basename(url))
-    else:
-        fname = _uriToFilename(url)
-    try:
-        fd = open(fname)
-        updateDigestFromFile(digest, fd)
-        return (digest.hexdigest(), fname)
-    except IOError:
-        return (None, None)
 
 def parseBoolean(str):
     """Convert str to a boolean.
