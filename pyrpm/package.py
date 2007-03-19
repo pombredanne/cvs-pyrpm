@@ -109,7 +109,7 @@ class RpmData(dict):
         return self.hash
 
     def __eq__(self, pkg):
-        if not isinstance(pkg, RpmData):
+        if not hasattr(pkg, 'hash'):
             return 0
         return self.hash == pkg.hash
 
