@@ -1219,20 +1219,11 @@ def filterArchCompat(list, arch):
                         list[i].source, arch)
             list.pop(i)
 
-def normalizeList(list):
-    """Modify list to contain every entry at most once."""
-
-    if len(list) < 2:
-        return
-    h = { }
-    i = 0
-    while i < len(list):
-        item = list[i]
-        if item in h:
-            list.pop(i)
-        else:
-            h[item] = 1
-            i += 1
+def normalizeList(l):
+    """Modify list to contain every entry at most once.
+    Doesn't use a stable algorithm anymore!
+    """
+    l[:] = set(l)
 
 def pkgmdcmp((pkg1, md1), (pkg2, md2)):
     # Need a special comparator function for this as pkg equality atm isn't
