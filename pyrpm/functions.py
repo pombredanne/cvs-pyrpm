@@ -651,7 +651,7 @@ def getFreeDiskspace(config, operations):
         for (dev, val) in minfreehash.iteritems():
             # Less than 30MB space left on device?
             if val[0] < 31457280:
-                log.info2("%s: Less than 30MB of diskspace left on %s",
+                log.debug1("%s: Less than 30MB of diskspace left on %s",
                           pkg.getNEVRA(), mountpoint[dev])
         pkg.close()
         pkg.clear(ntags=config.nevratags)
