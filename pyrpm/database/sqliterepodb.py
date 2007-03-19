@@ -189,6 +189,12 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         self._filelistsdb = None
         self._othersdb = None
         self._pkgs = { }
+        self.search_cache = {
+            "provides" : SmallLRUCache(maxsize=1000),
+            "requires" : SmallLRUCache(maxsize=1000),
+            "obsoletes" : SmallLRUCache(maxsize=1000),
+            "conflicts" : SmallLRUCache(maxsize=1000),
+            }
 
     def isIdentitySave(self):
         """return if package objects that are added are in the db afterwards
@@ -329,7 +335,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
     def createPrimaryTables(self):
         """Create the required tables for primary metadata in the sqlite
            database"""
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         self.createDbInfo(cur)
         # The packages table contains most of the information in primary.xml.gz
 
@@ -367,6 +373,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         cur.execute("CREATE INDEX pkgprovides ON provides (pkgKey)")
         cur.execute("CREATE INDEX requiresname ON requires (name)")
         cur.execute("CREATE INDEX pkgrequires ON requires (pkgKey)")
+        cur.execute("CREATE INDEX pkgconflicts ON conflicts (pkgKey)")
+        cur.execute("CREATE INDEX pkgobsoletes ON obsoletes (pkgKey)")
         cur.execute("CREATE INDEX packageId ON packages (pkgId)")
         cur.execute("CREATE INDEX filenames ON files (name)")
         self._primarydb.commit()
@@ -386,7 +394,6 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         return 1
 
     def getDbFile(self, dbtype):
-
         if dbtype != "primary":
             log.info2("Loading %s for %s...", dbtype, self.reponame)
 
@@ -410,6 +417,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                    self.repomd[dbtype].has_key("checksum") and \
                    csum == self.repomd[dbtype]["checksum"]:
                 setattr(self, "_%sdb" % dbtype, db)
+                setattr(self, "_%sdb_cursor" % dbtype, db.cursor())
                 return 1
 
         # try to get %dbtype.xml.gz.sqlite.bz2 from repository
@@ -439,6 +447,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                    self.repomd[dbtype].has_key("checksum") and \
                    csum == self.repomd[dbtype]["checksum"]:
                 setattr(self, "_%sdb" % dbtype, db)
+                setattr(self, "_%sdb_cursor" % dbtype, db.cursor())
                 return 1
 
         # get %dbtype.xml.gz and create sqlite db
@@ -474,6 +483,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 # XXX error handling
                 shutil.move(filename + '.sqlite', dbfilename)
                 setattr(self, "_%sdb" % dbtype, db)
+                setattr(self, "_%sdb_cursor" % dbtype, db.cursor())
+                # TODO: add all other indices
                 if dbtype == 'primary':
                     cur = db.cursor()
                     cur.execute(
@@ -482,6 +493,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 return 1
             db = self.create(dbfilename)
             setattr(self, "_%sdb" % dbtype, db)
+            setattr(self, "_%sdb_cursor" % dbtype, db.cursor())
             if dbtype == 'primary':
                 self.createPrimaryTables()
             elif dbtype == 'filelists':
@@ -500,13 +512,15 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         return 0
 
     def readPrimary(self):
-        return self.getDbFile("primary")
+        result = self.getDbFile("primary")
+        #self.readRpms()
+        return result
 
     def addFilesToPkg(self, name, epoch, version, release, arch, filelist,
                       filetypelist):
         """Add a package to the filelists cache"""
-        cur = self._primarydb.cursor()
-        fcur = self._filelistsdb.cursor()
+        cur = self._primarydb_cursor
+        fcur = self._filelistsdb_cursor
         cur.execute('SELECT pkgId, pkgKey FROM packages WHERE name=? '
                     'and epoch=? and version=? and release=? '
                     'and arch=?',
@@ -555,12 +569,25 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         return 0
 
     def readRpm(self, pkgKey):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute('SELECT %s FROM packages WHERE pkgKey=?' %
                     self.tags, (pkgKey,))
         ob = cur.fetchone()
         pkg = self._buildRpm(ob)
         return pkg
+
+    def readRpms(self):
+        self._primarydb_cursor.execute("SELECT %s FROM packages" % self.tags)
+        for ob in self._primarydb_cursor.fetchall():
+            pkgKey = int(ob['pkgKey'])
+            if self._pkgs.has_key(pkgKey):
+                continue
+            pkg = self._buildRpm(ob)
+            if pkg:
+                self._pkgs[pkgKey] = pkg
+                if self._isExcluded(pkg):
+                    self._pkgs[pkgKey] = None
+                                                
 
     def _buildRpm(self, data):
         pkg = SqliteRpmPackage(self.config, source='', db=self)
@@ -584,7 +611,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         tag = self.PKG2DB.get(tag, tag)
         if tag not in self.COLUMNS_LOOKUP:
             return None
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute('SELECT %s FROM packages WHERE pkgKey=?' %
                     tag, (pkg.pkgKey,))
         if ttype == RPM_STRING:
@@ -615,7 +642,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 pkg['dirnames'] = dirnames
                 pkg['dirindexes'] = dirindexes
         else:
-            cur = self._primarydb.cursor()
+            cur = self._primarydb_cursor
             cur.execute(
                 'SELECT * FROM files WHERE pkgKey=?', (pkgKey,))
             files = [ob['name'] for ob in cur.fetchall()]
@@ -636,7 +663,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         return self.flagmap[ob['flags']]
 
     def getDependencies(self, tag, pkgKey):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute(
             'SELECT * FROM %s WHERE pkgKey=?' % tag, (pkgKey,))
         return [(ob['name'], self._getDBFlags(ob), functions.evrMerge(
@@ -645,7 +672,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     # add package
     def addPkg(self, pkg):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         data = {}
         for tag in self.COLUMNS:
             data[tag] = pkg[self.DB2PKG.get(tag, tag)]
@@ -709,7 +736,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         return pkg
 
     def getPkgById(self, pkgId):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute('SELECT pkgKey FROM packages WHERE pkgId=?', (pkgId,))
         ob = cur.fetchone()
         if ob:
@@ -718,29 +745,29 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             return None
 
     def getPkgs(self):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute('SELECT pkgKey FROM packages')
         result = [self.getPkgByKey(ob["pkgKey"]) for ob in cur.fetchall()]
         return filter(None, result)
 
     def getNames(self):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute("SELECT name FROM packages")
         return [ob["name"] for ob in cur.fetchall()]
 
     def hasName(self, name):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute('SELECT name FROM packages WHERE name=?', (name,))
         return bool(cur.fetchone())
 
     def getPkgsByName(self, name):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute('SELECT pkgKey FROM packages WHERE name=?', (name,))
         result = [self.getPkgByKey(ob['pkgKey']) for ob in cur.fetchall()]
         return filter(None, result)
 
     def getPkgsFileRequires(self):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute('SELECT pkgKey, name FROM requires WHERE name LIKE "/%"')
         result = {}
         for ob in cur.fetchall():
@@ -760,7 +787,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         raise NotImplementedError
 
     def _iter(self, tag):
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         cur.execute("SELECT * FROM %s" % tag)
         for res in cur:
             pkg = self.getPkgByKey(res['pkgKey'])
@@ -827,7 +854,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
     def search(self, words):
         result = []
-        cur = self._primarydb.cursor()
+        cur = self._primarydb_cursor
         for word in words:
             word = '%' + word + '%'
             cur.execute('SELECT pkgKey FROM packages WHERE '
@@ -844,7 +871,13 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         """return list of packages having prcotype name (any evr and flag)"""
         result = { }
         evr = functions.evrSplit(version)
-        cur = self._primarydb.cursor()
+        cache = None
+        if self.search_cache.has_key(attr_table):
+            cache = self.search_cache[attr_table]
+            query = (name, flag, version)
+            if query in cache:
+                return cache[query]
+        cur = self._primarydb_cursor
         cur.execute('SELECT * FROM %s WHERE name = ?' %
                     attr_table, (name,))
         for res in cur.fetchall():
@@ -868,6 +901,8 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 #if functions.evrCompare(evr2, flag, evr):
                 #    result.setdefault(pkg, [ ]).append(
                 #        (name_, flag_, version_))
+        if cache is not None:
+            cache[query] = result
         return result
 
     def searchProvides(self, name, flag, version):
@@ -898,7 +933,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         result = [ ]
 
         if matched:
-            cur = self._primarydb.cursor()
+            cur = self._primarydb_cursor
             cur.execute('SELECT * FROM files WHERE name = ?', (name,))
             files = cur.fetchall()
             for res in files:

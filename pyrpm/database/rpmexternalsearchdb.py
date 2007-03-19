@@ -1,6 +1,5 @@
 from memorydb import RpmMemoryDB
 from pyrpm.hashlist import HashList
-from lrucache import SmallLRUCache
 
 class RpmExternalSearchDB(RpmMemoryDB):
     """MemoryDb that uses an external db for (filename) queries. The external
@@ -14,12 +13,6 @@ class RpmExternalSearchDB(RpmMemoryDB):
     def __init__(self, externaldb, config, source, buildroot=''):
         self.externaldb = externaldb
         RpmMemoryDB.__init__(self, config, source, buildroot)
-        self.cache = {
-            "provides" : SmallLRUCache(maxsize=30),
-            "requires" : SmallLRUCache(maxsize=30),
-            "conflicts" : SmallLRUCache(maxsize=30),
-            }
-        self.cachesize = 30
         self.filecache = {} # filename -> [pkgs], contains all available pkgs
         self._filerequires = None
 
@@ -46,12 +39,6 @@ class RpmExternalSearchDB(RpmMemoryDB):
         r =  self._filter(self.filecache[filename])
         return r
 
-
-    def _storeCache(self, cache, query, value):
-        if len(cache) > self.cachesize:
-            del cache[0] # remove first entry
-        cache[query] = value
-
     if True: # was commented out for performance issues
 
         def getFileRequires(self):
@@ -67,38 +54,20 @@ class RpmExternalSearchDB(RpmMemoryDB):
             return list(result)
         
         def searchRequires(self, name, flag, version):
-            query = (name, flag, version)
-            cache = self.cache['requires']
-            if cache.has_key(query):
-                result = cache[query]
-            else:
-                result = self.externaldb.searchRequires(
-                    name, flag, version)
-                cache[query] = result
+            result = self.externaldb.searchRequires(
+                name, flag, version)
             return self._filterdict(result)
 
     if True:
 
         def searchProvides(self, name, flag, version):
-            query = (name, flag, version)
-            cache = self.cache['provides']
-            if cache.has_key(query):
-                result = cache[query]
-            else:
-                result = self.externaldb.searchProvides(
-                    name, flag, version)
-                cache[query] = result
+            result = self.externaldb.searchProvides(
+                name, flag, version)
             return self._filterdict(result)
 
         def searchConflicts(self, name, flag, version):
-            query = (name, flag, version)
-            cache = self.cache['conflicts']
-            if cache.has_key(query):
-                result = cache[query]
-            else:
-                result = self.externaldb.searchConflicts(
-                    name, flag, version)
-                cache[query] = result
+            result = self.externaldb.searchConflicts(
+                name, flag, version)
             return self._filterdict(result)
 
         #def searchObsoletes(self, name, flag, version):

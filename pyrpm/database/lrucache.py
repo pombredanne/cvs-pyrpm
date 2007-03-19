@@ -3,7 +3,7 @@
 #  This file is licensed under the
 #    GNU Lesser General Public License v2.1.
 #    See the file COPYING or visit http://www.gnu.org/ for details.
-
+#  http://zooko.com/repos/pyutil/pyutil/pyutil/
 """
 This module offers three implementations of an LRUCache, which is a dict that
 drops items according to a Least-Recently-Used policy if the dict exceeds a
