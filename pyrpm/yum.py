@@ -759,7 +759,8 @@ class RpmYum:
             else:
                 new_args.append(name)
         # Append our new temporary repo to our internal repositories
-        self.repos.addDB(memory_repo)
+        if memory_repo:
+            self.repos.addDB(memory_repo)
         args = new_args
         self.delay_obsolete = True
         self.delay_obsolete_list = [ ]
@@ -834,8 +835,8 @@ class RpmYum:
         # the difference to the pre-depsolver operations. That way we know
         # which operations were required because of dependencies.
         resolver = self.opresolver
-        installs = list(resolver.installs)
-        erases = list(resolver.erases)
+        installs = resolver.installs.copy()
+        erases = resolver.erases.copy()
         updates = { }
         obsoletes = { }
         totsize = ipkgs = epkgs = opkgs = upkgs = 0
@@ -927,6 +928,7 @@ class RpmYum:
         # Dependency fooshizzle output
         if len(installs) > 0:
             log.info3("\nInstalling for dependencies:")
+            installs = list(installs)
             installs.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
             for p in installs:
@@ -959,6 +961,7 @@ class RpmYum:
 
         if len(erases) > 0:
             log.info3("\nErasing due to dependencies:")
+            erases = list(erases)
             erases.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
             for p in erases:
@@ -1009,7 +1012,7 @@ class RpmYum:
             return 0
 
         if self.config.timer:
-            log.info2("runCommand() took %s seconds", (clock() - time1))
+            log.info2("runCommand() took %.2f seconds", (clock() - time1))
         if self.config.test:
             log.info1("Test run stopped")
         else:
@@ -1071,9 +1074,11 @@ class RpmYum:
             working += self.__handleUnresolvedDeps()
             working += self.__handleObsoletes(self.delay_obsolete_list)
             working += self.__handleConflicts()
+            working += self.__handleObsoleteConflicts()
             self.delay_obsolete_list = [ ]
         unresolved = self.opresolver.getUnresolvedDependencies()
         conflicts = self.opresolver.getConflicts()
+        obsoleteconflicts = list(self.opresolver.getObsoleteConflicts())
         if len(unresolved) > 0:
             log.error("Unresolvable dependencies:")
             for pkg in unresolved.keys():
@@ -1086,7 +1091,14 @@ class RpmYum:
                 log.error("Unresolved conflicts for %s", pkg.getNEVRA())
                 for (dep, r) in conflicts[pkg]:
                     log.error("\t%s", depString(dep))
-        if len(unresolved) == 0 and len(conflicts) == 0:
+        if len(obsoleteconflicts) > 0:
+            log.error("Already installed obsoletes:")
+            for pkg in conflicts.keys():
+                log.error("Obsolete conflicts for %s", pkg.getNEVRA())
+                for (dep, r) in conflicts[pkg]:
+                    log.error("\t%s on %s", depString(dep), r.getNEVRA())
+        if len(unresolved) == 0 and len(conflicts) == 0 and \
+               len(obsoleteconflicts) == 0:
             return 1
         return 0
 
@@ -1154,7 +1166,7 @@ class RpmYum:
                     repo.importFilelist()
                     repo.reloadDependencies()
                     if self.config.timer:
-                        log.info2("Importing filelist took %s seconds",
+                        log.info2("Importing filelist took %.2f seconds",
                                   (clock() - time1))
                     modified_repo = 1
             # In case we have modified at least one repository we now check if
@@ -1255,6 +1267,15 @@ class RpmYum:
                 conflicts = self.opresolver.getFileConflicts()
         if not (handled_conflict and handled_fileconflict) and self.autoerase:
             return self.__handleConflictAutoerases()
+        return ret
+
+    def __handleObsoleteConflicts(self):
+        ret = 0
+        if not self.autoerase:
+            return 0
+        for old_pkg, new_pkg in self.opresolver.getObsoleteConflicts():
+            self.__doAutoerase(new_pkg)
+            ret = 1
         return ret
 
     def __handleObsoletes(self, pkglist=[ ]):

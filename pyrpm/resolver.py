@@ -89,24 +89,6 @@ class RpmResolver:
 
         Return an RpmList error code (after warning the user)."""
 
-        if self.config.noconflicts == 0:
-            # check Obsoletes: for our Provides:
-            for dep in pkg["provides"]:
-                (name, flag, version) = dep
-                s = self.database.searchObsoletes(name, flag, version)
-                if self._checkObsoletes(pkg, dep, s, operation):
-                    return self.CONFLICT
-            if self.config.nofileconflicts == 0:
-                # check conflicts for filenames
-                for f in pkg.iterFilenames():
-                    dep = (f, 0, "")
-                    s = self.database.searchObsoletes(f, 0, "")
-                    if self._checkObsoletes(pkg, dep, s, operation):
-                        return self.CONFLICT
-            #for name in self.database.getObsoletes().keys():
-            #    if name.startswith("/") and name in pkg.iterFilenames():
-            #        return self.CONFLICT
-
         # Add RpmPackage
         # Return an RpmList error code (after warning the user). Check whether
         # a package with the same NEVRA is already in the database.
@@ -575,9 +557,12 @@ class RpmResolver:
 
     # ----
 
-    def getUnresolvedFileRequires(self):
+    def getUnresolvedFileRequires(self, ignore=set()):
         db = self.database
         filereqs = db.getFileRequires()
+        normalizeList(filereqs)
+        if ignore:
+            filereqs = [f for f in filereqs if f not in ignore]
         result = set()
         for myfile in filereqs:
             if not db.searchDependency(myfile, 0, ""):
@@ -697,8 +682,8 @@ class RpmResolver:
             ok = True
             # check if filenames are required and not provided by another
             # package
-            unresolved = [f for f in self.getUnresolvedFileRequires()
-                          if f not in self.installed_unresolved_file_requires]
+            unresolved = self.getUnresolvedFileRequires(
+                self.installed_unresolved_file_requires)
             for f in unresolved:
                 sr = self.database.searchRequires(f, 0, "")
                 for p, r in sr.iteritems():
@@ -749,6 +734,29 @@ class RpmResolver:
                 self.getPkgConflicts(r, r["conflicts"] + r["obsoletes"],
                                      conflicts)
         return conflicts
+
+    def getObsoleteConflicts(self):
+        """Check for conflicts from obsoletes of installed packages
+        against newly installed packages.
+        
+        Return a HashList: RpmPackage =>
+        [((name, RPMSENSE_* flags, EVR string), conflicting RpmPackage)]."""
+        conflicts = HashList()
+        if self.config.checkinstalled:
+            # conflicts get caught by getConflicts()
+            return conflicts
+
+        for n, f, v, pkg in self.database.iterObsoletes():
+            if pkg in self.installs:
+                continue
+            for p in self.database.searchDependency(n, f, v):
+                if not p in self.installs:
+                    continue
+                # if p in self.updates:
+                # XXX check old pkg has already same conflict 
+                conflicts.setdefault(pkg, []).append(((n, f, v), p))
+        return conflicts
+
     # ----
 
     def getObsoletes(self):
@@ -780,24 +788,24 @@ class RpmResolver:
         """Check for package conflicts, report errors.
 
         Return 1 if OK, 0 if there are conflicts (after warning the user)."""
-
-        conflicts = self.getConflicts()
-        if len(conflicts) == 0:
-            return 1
-
-        for pkg in conflicts:
-            conf = { }
-            for c,r in conflicts[pkg]:
-                if not r in conf:
-                    conf[r] = [ ]
-                if not c in conf[r]:
-                    conf[r].append(c)
-            for r in conf.keys():
-                log.error("%s conflicts with %s on:", pkg.getNEVRA(),
-                          r.getNEVRA())
-                for c in conf[r]:
-                    log.error("\t%s", depString(c))
-        return 0
+        result = 1
+        for conflicts in self.getConflicts(), self.getObsoleteConflicts():
+            if len(conflicts) == 0:
+                continue
+            result = 0
+            for pkg in conflicts:
+                conf = { }
+                for c,r in conflicts[pkg]:
+                    if not r in conf:
+                        conf[r] = [ ]
+                    if not c in conf[r]:
+                        conf[r].append(c)
+                for r in conf.keys():
+                    log.error("%s conflicts with %s on:", pkg.getNEVRA(),
+                              r.getNEVRA())
+                    for c in conf[r]:
+                        log.error("\t%s", depString(c))
+        return result
     # ----
 
     def getFileConflicts(self):
