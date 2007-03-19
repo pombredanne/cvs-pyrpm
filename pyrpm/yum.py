@@ -864,12 +864,12 @@ class RpmYum:
 
         # Output the whole transaction in a very yummy format. ;)
         d = [{"NEVRA": "Package", "VRA": "Version", "NAME": "Package", "ARCH": "Arch", "VERSION": "Version", "REPO": "Repository", "SIZE": "Size"}]
-        log.info3("\n===============================================================================")
+        log.info2("\n===============================================================================")
         self.outputPkgList(d)
-        log.info3("===============================================================================")
+        log.info2("===============================================================================")
 
         if len(self.__iinstalls) > 0:
-            log.info3("\nInstalling:")
+            log.info2("\nInstalling:")
             self.__iinstalls.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
             for p in self.__iinstalls:
@@ -881,7 +881,7 @@ class RpmYum:
             self.outputPkgList(d)
 
         if len(self.__iupdates) > 0:
-            log.info3("\nUpdating:")
+            log.info2("\nUpdating:")
             pl = self.__iupdates.keys()
             pl.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
@@ -898,7 +898,7 @@ class RpmYum:
             self.outputPkgList(d)
 
         if len(self.__iobsoletes) > 0:
-            log.info3("\nObsoleting:")
+            log.info2("\nObsoleting:")
             pl = self.__iobsoletes.keys()
             pl.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
@@ -915,7 +915,7 @@ class RpmYum:
             self.outputPkgList(d)
 
         if len(self.__ierases) > 0:
-            log.info3("\nErasing:")
+            log.info2("\nErasing:")
             self.__ierases.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
             for p in self.__ierases:
@@ -927,7 +927,7 @@ class RpmYum:
 
         # Dependency fooshizzle output
         if len(installs) > 0:
-            log.info3("\nInstalling for dependencies:")
+            log.info2("\nInstalling for dependencies:")
             installs = list(installs)
             installs.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
@@ -938,7 +938,7 @@ class RpmYum:
             self.outputPkgList(d)
 
         if len(updates) > 0:
-            log.info3("\nUpdating for dependencies:")
+            log.info2("\nUpdating for dependencies:")
             pl = updates.keys()
             pl.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
@@ -949,7 +949,7 @@ class RpmYum:
             self.outputPkgList(d)
 
         if len(obsoletes) > 0:
-            log.info3("\nObsoleting due to dependencies:")
+            log.info2("\nObsoleting due to dependencies:")
             pl = obsoletes.keys()
             pl.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
@@ -960,7 +960,7 @@ class RpmYum:
             self.outputPkgList(d)
 
         if len(erases) > 0:
-            log.info3("\nErasing due to dependencies:")
+            log.info2("\nErasing due to dependencies:")
             erases = list(erases)
             erases.sort(lambda x,y:cmp(x["name"], y["name"]))
             d = []
@@ -1024,7 +1024,7 @@ class RpmYum:
         self.pydb.close()
         return 1
 
-    def outputPkgList(self, pkglist, level=3):
+    def outputPkgList(self, pkglist, level=2):
         #fmtstr = " %(NAME)-22.22s  %(ARCH)-9.9s  %(VERSION)-15.15s  %(REPO)-16.16s  %(SIZE)8.8s"
         #fmtstr  = " %(NEVRA)-50.50s  %(REPO)-16.16s  %(SIZE)8.8s"
         fmtstr  = " %(NAME)-30.30s %(VRA)-30.30s %(REPO)-10.10s %(SIZE)5.5s"
