@@ -953,10 +953,13 @@ def evrSplitString(evr):
     p = evr.find(":") # epoch
     if p != -1:
         epoch = evr[:p]
-        i = p + 1
+        if epoch.isdigit():
+            i = p + 1
+        else:
+            epoch = ""
     else:
         epoch = ""
-    p = evr.find("-", i) # version
+    p = evr.rfind("-", i) # version
     if p != -1:
         version = evr[i:p]
         release = evr[p+1:]
