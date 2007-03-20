@@ -702,7 +702,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
 
         for tag in ('requires', 'provides', 'conflicts', 'obsoletes'):
             for (n, f, v) in pkg[tag]:
-                epoch, version, release = functions.evrSplitString(v)
+                epoch, version, release = functions.evrSplit(v, "")
                 data = {
                     'name' : n,
                     'flags' : self.flagmap[f & base.RPMSENSE_SENSEMASK],

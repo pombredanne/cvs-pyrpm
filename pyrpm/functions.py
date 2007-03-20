@@ -17,8 +17,7 @@
 #
 
 
-import fcntl, os, os.path, sys, resource, getopt, errno, signal
-import shutil, sha, md5
+import fcntl, os, os.path, sys, resource, getopt, errno, signal, shutil
 from types import TupleType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 try:
@@ -936,37 +935,19 @@ def bsearch(key, list):
 
 # ----------------------------------------------------------------------------
 
-def evrSplit(evr):
+def evrSplit(evr, defaultepoch="0"):
     """Split evr to components.
 
-    Return (E, V, R).  Default epoch to 0, release to "" if not specified."""
-    e, v, r = evrSplitString(evr)
-    if e == '':
-        e = '0'
-    return e, v, r
-
-def evrSplitString(evr):
-    """Split evr to components.
-
-    Return (E, V, R).  Default epoch and release to "" if not specified."""
-    i = 0
-    p = evr.find(":") # epoch
-    if p != -1:
-        epoch = evr[:p]
-        if epoch.isdigit():
-            i = p + 1
-        else:
-            epoch = ""
-    else:
-        epoch = ""
-    p = evr.rfind("-", i) # version
-    if p != -1:
-        version = evr[i:p]
-        release = evr[p+1:]
-    else:
-        version = evr[i:]
-        release = ""
-    return (epoch, version, release)
+    Return (E, V, R).  Default epoch to defaultepoch and release to ""
+    if not specified."""
+    epoch = defaultepoch
+    i = evr.find(":")
+    if i != -1 and evr[:i].isdigit():
+        epoch = evr[:i]
+    j = evr.rfind("-", i + 1)
+    if j != -1:
+        return (epoch, evr[i + 1:j], evr[j + 1:])
+    return (epoch, evr[i + 1:], "")
 
 def evrMerge(e, v, r):
     result = v or ""
