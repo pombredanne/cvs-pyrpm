@@ -2499,6 +2499,17 @@ class ReadRpm: # pylint: disable-msg=R0904
                 if (i in self["name"] or i in self["version"] or
                     i in self["release"]):
                     self.printErr("name/version/release contains wrong char")
+            for i in self.hdr.get("provideversion", []) + \
+                self.hdr.get("requireversion", []) + \
+                self.hdr.get("obsoleteversion", []) + \
+                self.hdr.get("conflictversion", []):
+                j = i.find(":")
+                if (j != -1 and not i[:j].isdigit()) or i.count(":") > 1:
+                    self.printErr("wrong char ':' in deps")
+                if " " in i or "," in i or "\t" in i:
+                    self.printErr("wrong char [ ,\\t] in deps")
+                if i.count("-") >= 2:
+                    self.printErr("too many '-' in deps")
         if self["payloadformat"] not in [None, "cpio", "drpm"]:
             self.printErr("wrong payload format %s" % self["payloadformat"])
         if self.strict:
