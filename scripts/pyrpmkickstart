@@ -78,29 +78,29 @@ OPTIONS
                            to install a i586 guest from a i686 installation
                            tree. It is not usable for multilib guest systems at
                            the moment.
+  --autoerase              Drop packages, which have unresolved dependencies in
+                           installation mode and erase packages with
+                           unresolved dependencies in update mode. Please keep
+                           in mind that this could result in an incomplete and
+                           unusable system.
   --beta-key-verify        Use beta key verification code for RHEL >= 5.
-  --drop-unresolved        Drop packages, which have unresolved dependencies in
-                           installation mode. Please keep in mind that this
-                           could result in an incomplete and unusable system.
-  --external-call          Do not use internal yum class for pyrpmyum. Use
+  --external-yum           Do not use internal yum class for pyrpmyum. Use
                            popen call. This is also used for '--yum' flag.
   --label-prefix=<string>  Prepend prefix before labels on partitions
+  --no-cache               Do not cache RPM's (e.g. for http and ftp sources).
+  --no-cleanup             Do not cleanup temporary directory and files.
   --no-stage2              Do not mount stage2.img from installation source,
                            use host system tools to format partitions. This
                            does not work for all host and client system
                            combinations, but could help with others.
-  --no-cache               Do not cache RPM's (e.g. for http and ftp sources).
-  --no-cleanup             Do not cleanup temporary directory and files.
-  --no-default-groups      Do not use base and core as default groups. This is
-                           useful for minimal installations.
   --repo-comps             Load comps file in repos and use them for package
                            and group selection.
   --upgrade=<part>         Upgrade installation in partition <part>. This is
                            only useful for upgrades and if there is more than#
                            one installation on the supplied disks.
   --wait                   Wait after installation before umounting.
-  --xen                    Write a simple xen config file.
   --yum                    Use yum instead of pyrpmyum.
+  --yum-verbose            Be verbose in yum and pyrpmyum.
 
 """)
 # TODO:
@@ -116,14 +116,13 @@ def main():
            wait, target_dir, raidmap, stage2_chroot, \
            vgmap, source
     verbose = False
-    xen = False
+    yum_verbose = 0
     confirm = True
     orig_yum = False
     label_prefix = ""
     standalone = False
     stage2_img_dir = None
     user_arch = None
-    no_default_groups = False
     repo_comps = False
     upgrade = None
     no_stage2 = False
@@ -131,7 +130,7 @@ def main():
     autoerase = False
     has_raid = False
     beta_key_verify = False
-    external_call = False
+    external_yum = False
 
     log.setInfoLogLevel(log.INFO1)
     log.setDebugLogLevel(log.NO_DEBUG)
@@ -142,11 +141,11 @@ def main():
         (opts, args) = getopt.getopt(sys.argv[1:], "hvdy",
                                      [ "help", "verbose", "debug", "yes",
                                        "label-prefix", "no-cleanup",
-                                       "standalone", "wait", "xen", "yum",
+                                       "standalone", "wait", "yum",
                                        "repo-comps", "no-stage2", "upgrade=",
-                                       "no-cache", "no-default-groups",
-                                       "drop-unresolved", "beta-key-verify",
-                                       "external-call" ])
+                                       "no-cache", "autoerase",
+                                       "beta-key-verify", "external-yum",
+                                       "yum-verbose" ])
     except:
         usage()
         return
@@ -164,15 +163,13 @@ def main():
             flog.setDebugLogLevel(flog.getDebugLogLevel() + 1)
         elif opt in [ "-y", "--yes" ]:
             confirm = False
-        elif opt == "--xen":
-            xen = True
         elif opt == "--no-cleanup":
             nocleanup = True
         elif opt == "--wait":
             wait = 1
         elif opt == "--yum":
             orig_yum = True
-            external_call = True
+            external_yum = True
         elif opt == "--label-prefix":
             label_prefix = "%x_" % int(time.strftime("%m%d%H%M"))
         elif opt == "--standalone":
@@ -190,14 +187,14 @@ def main():
             user_arch = val
         elif opt == "--no-cache":
             no_cache = True
-        elif opt == "--no-default-groups":
-            no_default_groups = True
-        elif opt == "--drop-unresolved":
+        elif opt == "--autoerase":
             autoerase = True
         elif opt == "--beta-key-verify":
             beta_key_verify = True
-        elif opt == "--external-call":
-            external_call = True
+        elif opt == "--external-yum":
+            external_yum = True
+        elif opt == "--yum-verbose":
+            yum_verbose += 1
         else:
             log.error("Unknown option '%s'.", opt)
             usage()
@@ -1994,8 +1991,8 @@ def main():
     ############################ package selection ############################
 
     if ks.has_key("install"):
-        pkgs = source.getPackages(ks, languages, no_default_groups,
-                                  repo_comps, has_raid, needed_fstypes)
+        pkgs = source.getPackages(ks, languages, repo_comps, has_raid,
+                                  needed_fstypes)
         pyrpm.normalizeList(pkgs)
 
         # no packages?
@@ -2419,7 +2416,7 @@ def main():
         return 1
     fd.write("[main]\n")
     fd.write("cachedir=%s/yum.cache\n" % tempdir)
-    fd.write("debuglevel=1\n")
+    fd.write("debuglevel=%d\n" % (yum_verbose + 2))
     fd.write("errorlevel=0\n")
     fd.write("pkgpolicy=newest\n")
     fd.write("distroverpkg=redhat-release\n")
@@ -2439,18 +2436,18 @@ def main():
     # TODO: user_arch
     # TODO: checkinstalled for upgrade?
 
-    if not external_call:
+    if not external_yum:
         config = pyrpm.RpmConfig()
         config.cachedir = cache_dir
         config.buildroot = target_chroot
         config.yumconf = [ yum_conf ]
+        config.printhash = 1
         config.nofileconflicts = 1
-        if no_cache:
-            config.nocache = 1
+        config.nocache = int(no_cache)
 
         info_level = log.getInfoLogLevel()
         debug_level = log.getDebugLogLevel()
-        log.setInfoLogLevel(log.INFO2)
+        log.setInfoLogLevel(log.INFO2 + yum_verbose)
         log.setDebugLogLevel(log.NO_DEBUG)
 
         try:
@@ -2601,7 +2598,7 @@ def main():
             for service in ks["services"]["disabled"]:
                 if run_script("/sbin/chkconfig '%s' off" % service,
                               target_chroot) != 0:
-                    log.warning("Disabling service '%s' failed.", service)
+                    log.info2("No service '%s', can not disable.", service)
                 else:
                     log.info1("Disabled service '%s'", service)
         if ks["services"].has_key("enabled"):
@@ -2609,7 +2606,7 @@ def main():
                 log.info1("  enabling '%s'", service)
                 if run_script("/sbin/chkconfig '%s' on" % service,
                               target_chroot) != 0:
-                    log.warning("Enabling service '%s' failed.", service)
+                    log.info2("No service '%s', can not enable.", service)
                 else:
                     log.info1("Enabled service '%s'", service)
 
@@ -3050,30 +3047,6 @@ def main():
                 if not run_ks_script(dict, chroot):
                     return 1
             i += 1
-
-    if xen:
-        log.info1("Writing xen.conf")
-        try:
-            fd = open("xen.conf", "w")
-        except Exception, msg:
-            log.error("Configuration of 'xen.conf' failed: %s", msg)
-        else:
-            fd.write('kernel = "/boot/vmlinuz-VERSION"\n')
-            fd.write('ramdisk = "/boot/initrd-VERSION.img"\n')
-            fd.write('memory = 128\n')
-            fd.write('name = "xen"\n')
-            fd.write('nics = 1\n')
-            for disk in diskmap:
-                if diskmap[disk].has_key("image") and \
-                       diskmap[disk].has_key("device"):
-                    fd.write('disk = [ "file:%s,%s,r" ]\n' % \
-                             (diskmap[disk]["image"], disk))
-                else:
-                    fd.write('disk = [ "phy:%s,%s,r" ]\n' % \
-                             (diskmap[disk]["device"], disk))
-            fd.write('root = "%s"\n' % mountmap["/"])
-            fd.write('extra = "ro"\n')
-            fd.close()
 
     # copy log file into target_chroot+/root/
     log.close()

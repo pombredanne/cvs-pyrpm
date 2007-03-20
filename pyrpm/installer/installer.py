@@ -17,8 +17,7 @@
 #
 
 from pyrpm.cache import NetworkCache
-from pyrpm.functions import stringCompare, normalizeList, \
-     blockSignals, unblockSignals
+from pyrpm.functions import stringCompare, normalizeList
 from pyrpm.database import getRepoDB
 from pyrpm.yum import YumConf
 from pyrpm.base import buildarchtranslate
@@ -170,12 +169,9 @@ class Source:
 
                 _repo = getRepoDB(rpmconfig, self.yumconf, reponame=repo_name)
                 self.repos[repo_name] = _repo
-                signals = blockSignals()
                 if not _repo.read():
-                    unblockSignals(signals)
                     log.error("Could not load repository '%s'.", repo_name)
                     return 0
-                unblockSignals(signals)
 
         else:
             # RHEL <= 4
@@ -188,12 +184,9 @@ class Source:
 
             _repo = getRepoDB(rpmconfig, self.yumconf, reponame=repo)
             self.repos[repo] = _repo
-            signals = blockSignals()
             if not _repo.read():
-                unblockSignals(signals)
                 log.error("Could not load repository '%s'.", repo)
                 return 0
-            unblockSignals(signals)
             if not _repo.comps: # every source repo has to have a comps
                 log.error("Missing comps file for '%s'.", repo)
                 return 0
@@ -208,7 +201,7 @@ class Source:
                 log.error("Repository '%s' already defined.", repo)
                 return 0
 
-            log.info1("Loading extra repo '%s'", repo)
+            log.info1("Loading repository '%s'", repo)
 
             self.yumconf[repo] = { }
             url = ks["repo"][repo]["baseurl"]
@@ -225,12 +218,9 @@ class Source:
 
             _repo = getRepoDB(rpmconfig, self.yumconf, reponame=repo)
             self.repos[repo] = _repo
-            signals = blockSignals()
             if not _repo.read():
-                unblockSignals(signals)
                 log.error("Could not load repository '%s'.", repo)
                 return 0
-            unblockSignals(signals)
 
         return 1
 
@@ -243,8 +233,7 @@ class Source:
             else:
                 return self.cache.cache("images/stage2.img")
 
-    def getPackages(self, ks, languages, no_default_groups, all_comps,
-                    has_raid, fstypes):
+    def getPackages(self, ks, languages, all_comps, has_raid, fstypes):
         groups = [ ]
         pkgs = [ ]
         everything = False
@@ -254,10 +243,8 @@ class Source:
             groups = ks["packages"]["groups"]
 
         # add default group "base" and "core if it is not in groups and
-        # no_default_groups is not set
-        if not ks.has_key("packages") or \
-               (not ks["packages"].has_key("nobase") and \
-                not no_default_groups):
+        # nobase is not set
+        if not ks.has_key("packages") or not ks["packages"].has_key("nobase"):
             if not "base" in groups:
                 groups.append("base")
             if not "core" in groups:
@@ -322,13 +309,15 @@ class Source:
                     comps = self.repos[repo].comps
                     for pkg in comps.getPackageNames(group):
                         if len(self.repos[repo].searchPkgs([pkg])) > 0:
-                            pkgs.append(pkg)
+                            if not pkg in pkgs:
+                                pkgs.append(pkg)
                     if everything:
                         # add all packages in this group
                         for (pkg, req) in \
                                 comps.getConditionalPackageNames(group):
                             if len(self.repos[repo].searchPkgs([pkg])) > 0:
-                                pkgs.append(pkg)
+                                if not pkg in pkgs:
+                                    pkgs.append(pkg)
             del repo_groups
 
         # add packages
@@ -347,6 +336,7 @@ class Source:
                         break
                 if not found:
                     log.warning("Package '%s' is not available.", pkg)
+
         # remove packages
         if ks.has_key("packages") and ks["packages"].has_key("drop"):
             for pkg in ks["packages"]["drop"]:
