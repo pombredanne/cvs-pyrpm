@@ -1261,8 +1261,18 @@ def readRpmPackage(config, source, verify=None, hdronly=None,
     data, IOError."""
 
     pkg = package.RpmPackage(config, source, verify, hdronly, db)
-    pkg.read(tags=tags)
-    pkg.close()
+    try:
+        pkg.read(tags=tags)
+        pkg.close()
+    except (IOError, ValueError), e:
+        log.error("%s: %s\n", pkg, e)
+        return None
+    if not config.ignorearch and \
+       not archCompat(pkg["arch"], config.machine) and \
+       not pkg.isSourceRPM():
+        log.info3("%s: Package excluded because of arch "
+                   "incompatibility", pkg.getNEVRA())
+        return None
     return pkg
 
 def readDir(dir, list, rtags=None):
@@ -1276,19 +1286,9 @@ def readDir(dir, list, rtags=None):
         if os.path.isdir("%s/%s" % (dir, f)):
             readDir("%s/%s" % (dir, f), list)
         elif f.endswith(".rpm"):
-            pkg = package.RpmPackage(rpmconfig, dir+"/"+f)
-            try:
-                pkg.read(tags=rtags)
-                pkg.close()
-            except (IOError, ValueError), e:
-                log.warning("%s: %s\n", pkg, e)
+            pkg = readRpmPackage(rpmconfig, dir+"/"+f)
+            if pkg == None:
                 continue
-            if not rpmconfig.ignorearch and \
-               not archCompat(pkg["arch"], rpmconfig.machine) and \
-               not pkg.isSourceRPM():
-               log.warning("%s: Package excluded because of arch "
-                           "incompatibility", pkg.getNEVRA())
-               continue
             log.info3("Reading package %s.", pkg.getNEVRA())
             list.append(pkg)
 

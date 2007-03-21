@@ -574,23 +574,6 @@ class RpmYum:
             ret |= self.remove(pkgname, exact)
         return ret
 
-    def __readPackage(self, name):
-        try:
-            pkg = readRpmPackage(self.config, name, db=self.pydb,
-                                 tags=self.config.resolvertags)
-            if not pkg.has_key("archivesize") and \
-                   pkg["signature"].has_key("payloadsize"):
-                pkg["archivesize"] = pkg["signature"]["payloadsize"]
-        except (IOError, ValueError), e:
-            log.error("%s: %s", name, e)
-            return None
-        if self.config.ignorearch or \
-           pkg.isSourceRPM() or \
-           archCompat(pkg["arch"], self.config.machine):
-            return pkg
-        log.info3("%s: Package excluded because of arch incompatibility", name)
-        return None
-
     def __findPkgs(self, name, exact=False):
         if name[0] != "/":
             if exact:
@@ -746,7 +729,8 @@ class RpmYum:
         new_args = []
         for name in args:
             if   os.path.isfile(name) and name.endswith(".rpm"):
-                pkg = self.__readPackage(name)
+                pkg = readRpmPackage(self.config, name, db=self.pydb,
+                                     tags=self.config.resolvertags)
                 if pkg != None:
                     memory_repo.addPkg(pkg)
                     new_args.append(pkg.getNVRA())
@@ -874,10 +858,10 @@ class RpmYum:
             d = []
             for p in self.__iinstalls:
                 ipkgs += 1
-                totsize += int(p["archivesize"][0])
+                totsize += p.size
                 if p in installs:
                     installs.remove(p)
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(p.size)})
             self.outputPkgList(d)
 
         if len(self.__iupdates) > 0:
@@ -887,14 +871,14 @@ class RpmYum:
             d = []
             for p in pl:
                 upkgs += 1
-                totsize += int(p["archivesize"][0])
+                totsize += p.size
                 l = self.__iupdates[p]
                 for p2 in l:
                     if p in updates.keys() and p2 in updates[p]:
                         updates[p].remove(p2)
                 if p in updates.keys() and len(updates[p]) == 0:
                     del updates[p]
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0]))})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(p.size)})
             self.outputPkgList(d)
 
         if len(self.__iobsoletes) > 0:
@@ -904,14 +888,14 @@ class RpmYum:
             d = []
             for p in pl:
                 opkgs += 1
-                totsize += int(p["archivesize"][0])
+                totsize += p.size
                 l = self.__iobsoletes[p]
                 for p2 in l:
                     if p in obsoletes.keys() and p2 in obsoletes[p]:
                         obsoletes[p].remove(p2)
                 if p in obsoletes.keys() and len(obsoletes[p]) == 0:
                     del obsoletes[p]
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0])), "COMMENT": "replacing "+l[0].getNEVRA()})
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(p.size), "COMMENT": "replacing "+l[0].getNEVRA()})
             self.outputPkgList(d)
 
         if len(self.__ierases) > 0:
@@ -933,8 +917,8 @@ class RpmYum:
             d = []
             for p in installs:
                 ipkgs += 1
-                totsize += int(p["archivesize"][0])
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0]))})
+                totsize += p.size
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(p.size)})
             self.outputPkgList(d)
 
         if len(updates) > 0:
@@ -944,8 +928,8 @@ class RpmYum:
             d = []
             for p in pl:
                 upkgs += 1
-                totsize += int(p["archivesize"][0])
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0]))})
+                totsize += p.size
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(p.size)})
             self.outputPkgList(d)
 
         if len(obsoletes) > 0:
@@ -955,8 +939,8 @@ class RpmYum:
             d = []
             for p in pl:
                 opkgs += 1
-                totsize += int(p["archivesize"][0])
-                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(int(p["archivesize"][0])), "COMMENT": "replacing "+obsoletes[p][0].getNEVRA()})
+                totsize += p.size
+                d.append({"NEVRA": p.getNEVRA(), "VRA": p.getVRA(), "NAME": p["name"], "ARCH": p["arch"], "VERSION": p.getVR(), "REPO": p.reponame, "SIZE": int2str(p.size), "COMMENT": "replacing "+obsoletes[p][0].getNEVRA()})
             self.outputPkgList(d)
 
         if len(erases) > 0:

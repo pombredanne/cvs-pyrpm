@@ -208,6 +208,7 @@ class RpmPackage(RpmData):
         self.db = db            # RpmDatabase
         self.io = None          # Our rpm IO class
         self.issrc = None       # Stored from rpm IO class after read
+        self.size = 0           # Size of the package (can vary by type)
         # Ranges are (starting position or None, length)
         self.range_signature = (None, None) # Signature header
         self.range_header = (None, None) # Main header
@@ -277,6 +278,10 @@ class RpmPackage(RpmData):
             raise ValueError, "Signature verification failed."""
         if self.io:
             self.issrc = self.io.issrc
+        if   self.has_key("archivesize"):
+            self.size = int(pkg["archivesize"][0])
+        elif self["signature"].has_key("payloadsize"):
+            self.size = int(pkg"signature"]["payloadsize"][0])
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
