@@ -281,7 +281,7 @@ class RpmPackage(RpmData):
         if   self.has_key("archivesize"):
             self.size = int(pkg["archivesize"][0])
         elif self["signature"].has_key("payloadsize"):
-            self.size = int(pkg"signature"]["payloadsize"][0])
+            self.size = int(pkg["signature"]["payloadsize"][0])
         self["provides"] = self.getProvides()
         self["requires"] = self.getRequires()
         self["obsoletes"] = self.getObsoletes()
