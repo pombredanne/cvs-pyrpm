@@ -38,7 +38,7 @@ link:http://smartpm.org/[].
 
 up2date and rhnlib are the client software for
 link:http://rhn.redhat.com/[Red Hat Network] and can be downloaded from
-link:http://download.fedora.redhat.com/pub/fedora/linux/core/development/SRPMS/[].
+link:http://download.fedora.redhat.com/pub/fedora/linux/core/development/source/SRPMS/[].
 
 link:http://www.pardus.org.tr/eng/projects/pisi/index.html[PiSi]
 is an update tool written in python for the

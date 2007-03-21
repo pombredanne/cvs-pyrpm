@@ -19,7 +19,7 @@ there.
 Check some common problems with packages and interdependencies for
 Fedora Core Devel:
 -----------------------
-pyrpmcheck /mirror/fedora/development/i386/Fedora/RPMS
+pyrpmcheck /mirror/fedora/development/i386/os/Fedora
 -----------------------
 
 
@@ -55,7 +55,7 @@ for d in dev dev/shm dev/pts proc sys ; do
 done
 mkdir -p $DEST/etc
 touch $DEST/etc/fstab
-pyrpmcheckinstall -y -c /dev/null -r $DEST /mirror/fedora/development/i386/os/Fedora/RPMS &> /tmp/installtest
+pyrpmcheckinstall -y -c /dev/null -r $DEST /mirror/fedora/development/i386/os/Fedora &> /tmp/installtest
 # grep for "Error" in the logs
 -----------------------
 
@@ -115,7 +115,7 @@ updates for all kinds of archs can be performed this way on one single machine.
 Check if an update from Fedora Core 4 to Fedora Core Devel works or what
 problems come up:
 -----------------------
-pyrpmcheckrepo -r /mnt/foo install /mirror/fedora/4/i386/os/Fedora/RPMS update /mirror/fedora/development/i386/Fedora/RPMS
+pyrpmcheckrepo -r /mnt/foo install /mirror/fedora/4/i386/os/Fedora/RPMS update /mirror/fedora/development/i386/os/Fedora
 -----------------------
 
 
@@ -181,7 +181,7 @@ pyrpmdbverify
 
 Same, but this time we use external rpms to verify against, too
 -----------------------
-pyrpmdbverify /mirror/fedora/development/i386/Fedora/RPMS
+pyrpmdbverify /mirror/fedora/development/i386/os/Fedora
 -----------------------
 
 Verify our rpm database in our FC-4 buildroot using external rpms as well
@@ -459,7 +459,7 @@ Excluded Arch Checking
 You can check source rpm packages and mark the ones which are excluded from
 building on certain architectures.
 -----------------------
-oldpyrpm.py --checkarch /mirror/fedora/development/SRPMS
+oldpyrpm.py --checkarch /mirror/fedora/development/source/SRPMS
 -----------------------
 
 
@@ -577,15 +577,15 @@ Example usages:
 -----------------------
 find /mirror/ -name "*.rpm" -type f -print0 2>/dev/null | xargs -0 oldpyrpm.py --nodigest --nopayload
 locate '*.rpm' | xargs oldpyrpm.py --nodigest --nopayload
-oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/i386/Fedora/RPMS
-oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/SRPMS
+oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/i386/os/Fedora
+oldpyrpm.py --strict --nodigest --nopayload /mirror/fedora/development/source/SRPMS
 -----------------------
 
 Only read in the needed rpm tags and do dependency checking without further
 debug checks. This shows the full speed of the current implementation and
 finishes in under 14 seconds for FC-development on some laptop:
 -----------------------
-time oldpyrpm.py --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/development/i386/Fedora/RPMS
+time oldpyrpm.py --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/development/i386/os/Fedora/RPMS
 time oldpyrpm.py --checkdeps --small --nodigest --nopayload --noverify /mirror/fedora/4/i386/os/Fedora/RPMS /mirror/fedora/updates/4/i386 /mirror/fedora-extras/4/i386
 -----------------------
 
