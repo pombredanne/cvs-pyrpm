@@ -57,6 +57,7 @@ PACKAGES: Same for rpm binary packages
 # Function to loop over a pkglist to test
 #
 def testPkglist(yum, numcpu, j):
+    yum.setCommand("update")
     if yum.prepareTransaction() == 0:
         return 0
     pkglist = yum.repos.getPkgs()
