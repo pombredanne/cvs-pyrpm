@@ -56,7 +56,10 @@ done
 mkdir -p $DEST/etc
 touch $DEST/etc/fstab
 pyrpmcheckinstall -y -c /dev/null -r $DEST /mirror/fedora/development/i386/os/Fedora &> /tmp/installtest
-# grep for "Error" in the logs
+for d in sys proc dev/pts dev/shm dev ; do
+  umount $DEST/$d
+done
+# grep for "ERROR" in the logs
 -----------------------
 
 If you have a multiple CPUs and a lot of ram you can run the whole test in a
