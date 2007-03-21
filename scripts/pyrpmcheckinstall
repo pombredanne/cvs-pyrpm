@@ -111,12 +111,13 @@ def main():
     # Argument parsing
     args = parseYumOptions(sys.argv[1:], yum)
 
-    if args[0].startswith("numcpu="):
-        numcpu = int(args[0][7:])
-        args = args[1:]
-    if args[0].startswith("logfile="):
-        logfile = args[0][8:]
-        args = args[1:]
+    if args:
+        if args[0].startswith("numcpu="):
+            numcpu = int(args[0][7:])
+            args = args[1:]
+        if args[0].startswith("logfile="):
+            logfile = args[0][8:]
+            args = args[1:]
 
     # Read additional dirs/packages
     pkglist = []
