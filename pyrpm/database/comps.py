@@ -17,7 +17,20 @@
 #
 
 
-import libxml2
+try:
+    # python-2.5 layout:
+    from xml.etree.cElementTree import iterparse
+except ImportError:
+    try:
+        # often older python versions add this to site-packages:
+        from cElementTree import iterparse
+    except ImportError:
+        try:
+            # maybe the python-only version is available?
+            from ElementTree import iterparse
+        except:
+            raise "No ElementTree parser found. Aborting."
+
 import pyrpm.functions as functions
 from pyrpm.logger import log
 
@@ -42,11 +55,12 @@ class RpmCompsXML:
         Return 1 on success, 0 on failure."""
 
         try:
-            doc = libxml2.parseFile (self.source)
-            root = doc.getRootElement()
-        except libxml2.libxmlError:
+            fd = open(self.source)
+            ip = iterparse(fd, events=("start","end"))
+            ip = iter(ip)
+        except IOError:
             return 0
-        return self.__parseNode(root.children)
+        return self.__parse(ip)
 
     def hasGroup(self, name):
         """Return true if group id or localized group name is valid."""
@@ -172,6 +186,116 @@ class RpmCompsXML:
             return False
         return type in self.pkgtypehash[pkgname]
 
+    def __parse(self, ip):
+        """Parse node and its siblings under the root element.
+
+        Return 1 on success, 0 on failure.  Handle <group>, <grouphierarchy>,
+        warn about other tags."""
+
+        for event, elem in ip:
+            tag = elem.tag
+            isend = (event == "end")
+            if  tag == "comps":
+                continue
+            elif tag == "group" or tag == "category":
+                self.__parseGroup(ip)
+            elif tag == "grouphierarchy":
+                ret = self.__parseGroupHierarchy(ip)
+            else:
+                log.warning("Unknown entry in comps.xml: %s", tag)
+                return 0
+        return 1
+
+    def __parseGroup(self, ip):
+        """Parse libxml2.xmlNode node and its siblings under <group>."""
+
+        group = {}
+        for event, elem in ip:
+            tag = elem.tag
+            isend = (event == "end")
+            if  isend and tag == "name":
+                lang = elem.attrib.get('{http://www.w3.org/XML/1998/namespace}lang')
+                if lang:
+                    group["name:"+lang] = elem.text
+                else:
+                    group["name"] = elem.text
+            elif isend and tag == "id":
+                group["id"] = elem.text
+            elif isend and tag == "description":
+                lang = elem.attrib.get('{http://www.w3.org/XML/1998/namespace}lang')
+                if lang:
+                    group["description:"+lang] = elem.text
+                else:
+                    group["description"] = elem.text
+            elif isend and tag == "default":
+                group["default"] = functions.parseBoolean(elem.text)
+            elif isend and tag == "langonly":
+                group["langonly"] = elem.text
+                self.langhash[group["langonly"]] = group
+            elif tag == "packagelist":
+                group["packagelist"] = self.__parsePackageList(ip)
+            elif tag == "grouplist":
+                group["grouplist"] = self.__parseGroupList(ip)
+            elif isend and (tag == "group" or tag == "category"):
+                break
+        self.grouphash[group["id"]] = group
+
+    def __parsePackageList(self, ip):
+        """Parse libxml2.xmlNode node and its siblings under <packagelist>.
+
+        Return { package => (selection, [requirement]) }."""
+
+        plist = {}
+        for event, elem in ip:
+            tag = elem.tag
+            isend = (event == "end")
+            if  isend and tag == "packagereq":
+                ptype = elem.attrib.get('type')
+                if ptype == None:
+                    ptype = "default"
+                requires = elem.attrib.get('requires')
+                if requires != None:
+                    requires = requires.split()
+                else:
+                    requires = []
+                plist[elem.text] = (ptype, requires)
+                self.pkgtypehash.setdefault(elem.text, []).append(ptype)
+            elif tag == "packagelist":
+                break
+        return plist
+
+    def __parseGroupList(self, ip):
+        """Parse libxml2.xmlNode node and its siblings under <grouplist>.
+
+        Return { "groupgreqs" => [requirement],
+        "metapkgs" => { requirement => requirement type } }."""
+
+        glist = {}
+        glist["groupreqs"] = []
+        glist["metapkgs"] = {}
+        for event, elem in ip:
+            tag = elem.tag
+            isend = (event == "end")
+            if   isend and (tag == "groupreq" or tag == "groupid"):
+                glist["groupreqs"].append(elem.text)
+            elif isend and tag == "metapkg":
+                gtype = elem.attrib.get("type")
+                if gtype == None:
+                    gtype = "default"
+                glist["metapkgs"][elem.text] = gtype
+            elif tag == "grouplist":
+                break
+        return glist
+
+    def __parseGroupHierarchy(self, node):
+        """"Parse" libxml2.xmlNode node and its siblings under
+        <grouphierarchy>.
+
+        Return 1."""
+
+        # We don't need grouphierarchies, so don't parse them ;)
+        return 1
+
     def __getPackageNames(self, group, typelist):
         """Return a sorted list of (package name, [package requirement]) of
         packages from group and its dependencies with selection type in
@@ -199,118 +323,5 @@ class RpmCompsXML:
             if ret[i+1] == ret[i]:
                 ret.pop(i+1)
         return ret
-
-    def __parseNode(self, node):
-        """Parse libxml2.xmlNode node and its siblings under the root
-        element.
-
-        Return 1 on success, 0 on failure.  Handle <group>, <grouphierarchy>,
-        warn about other tags."""
-
-        while node != None:
-            if node.type != "element":
-                node = node.next
-                continue
-            if node.name == "group" or node.name == "category":
-                self.__parseGroup(node.children)
-            elif node.name == "grouphierarchy":
-                ret = self.__parseGroupHierarchy(node.children)
-                if not ret:
-                    return 0
-            else:
-                log.warning("Unknown entry in comps.xml: %s", node.name)
-                return 0
-            node = node.next
-        return 1
-
-    def __parseGroup(self, node):
-        """Parse libxml2.xmlNode node and its siblings under <group>."""
-
-        group = {}
-        while node != None:
-            if node.type != "element":
-                node = node.next
-                continue
-            if  node.name == "name":
-                lang = node.prop("lang")
-                if lang:
-                    group["name:"+lang] = node.content
-                else:
-                    group["name"] = node.content
-            elif node.name == "id":
-                group["id"] = node.content
-            elif node.name == "description":
-                lang = node.prop("lang")
-                if lang:
-                    group["description:"+lang] = node.content
-                else:
-                    group["description"] = node.content
-            elif node.name == "default":
-                group["default"] = functions.parseBoolean(node.content)
-            elif node.name == "langonly":
-                group["langonly"] = node.content
-                self.langhash[group["langonly"]] = group
-            elif node.name == "packagelist":
-                group["packagelist"] = self.__parsePackageList(node.children)
-            elif node.name == "grouplist":
-                group["grouplist"] = self.__parseGroupList(node.children)
-            node = node.next
-        self.grouphash[group["id"]] = group
-
-    def __parsePackageList(self, node):
-        """Parse libxml2.xmlNode node and its siblings under <packagelist>.
-
-        Return { package => (selection, [requirement]) }."""
-
-        plist = {}
-        while node != None:
-            if node.type != "element":
-                node = node.next
-                continue
-            if node.name == "packagereq":
-                ptype = node.prop("type")
-                if ptype == None:
-                    ptype = "default"
-                requires = node.prop("requires")
-                if requires != None:
-                    requires = requires.split()
-                else:
-                    requires = []
-                plist[node.content] = (ptype, requires)
-                self.pkgtypehash.setdefault(node.content, []).append(ptype)
-            node = node.next
-        return plist
-
-    def __parseGroupList(self, node):
-        """Parse libxml2.xmlNode node and its siblings under <grouplist>.
-
-        Return { "groupgreqs" => [requirement],
-        "metapkgs" => { requirement => requirement type } }."""
-
-        glist = {}
-        glist["groupreqs"] = []
-        glist["metapkgs"] = {}
-        while node != None:
-            if node.type != "element":
-                node = node.next
-                continue
-            if   node.name == "groupreq" or node.name == "groupid":
-                glist["groupreqs"].append(node.content)
-            elif node.name == "metapkg":
-                gtype = node.prop("type")
-                if gtype == None:
-                    gtype = "default"
-                glist["metapkgs"][node.content] = gtype
-            node = node.next
-        return glist
-
-    def __parseGroupHierarchy(self, node):
-        """"Parse" libxml2.xmlNode node and its siblings under
-        <grouphierarchy>.
-
-        Return 1."""
-
-        # We don't need grouphierarchies, so don't parse them ;)
-        return 1
 
 # vim:ts=4:sw=4:showmatch:expandtab
