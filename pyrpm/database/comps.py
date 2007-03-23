@@ -194,7 +194,6 @@ class RpmCompsXML:
 
         for event, elem in ip:
             tag = elem.tag
-            isend = (event == "end")
             if  tag == "comps":
                 continue
             elif tag == "group" or tag == "category":
@@ -213,29 +212,31 @@ class RpmCompsXML:
         for event, elem in ip:
             tag = elem.tag
             isend = (event == "end")
-            if  isend and tag == "name":
+            if   not isend and tag == "packagelist":
+                group["packagelist"] = self.__parsePackageList(ip)
+            elif not isend and tag == "grouplist": 
+                group["grouplist"] = self.__parseGroupList(ip)
+            if not isend:
+                continue
+            if   tag == "name":
                 lang = elem.attrib.get('{http://www.w3.org/XML/1998/namespace}lang')
                 if lang:
                     group["name:"+lang] = elem.text
                 else:
                     group["name"] = elem.text
-            elif isend and tag == "id":
-                group["id"] = elem.text
-            elif isend and tag == "description":
+            elif tag == "description":
                 lang = elem.attrib.get('{http://www.w3.org/XML/1998/namespace}lang')
                 if lang:
                     group["description:"+lang] = elem.text
                 else:
                     group["description"] = elem.text
-            elif isend and tag == "default":
+            elif tag == "id":
+                group["id"] = elem.text
+            elif tag == "default":
                 group["default"] = functions.parseBoolean(elem.text)
-            elif isend and tag == "langonly":
+            elif tag == "langonly":
                 group["langonly"] = elem.text
                 self.langhash[group["langonly"]] = group
-            elif tag == "packagelist":
-                group["packagelist"] = self.__parsePackageList(ip)
-            elif tag == "grouplist":
-                group["grouplist"] = self.__parseGroupList(ip)
             elif isend and (tag == "group" or tag == "category"):
                 break
         self.grouphash[group["id"]] = group
@@ -248,8 +249,7 @@ class RpmCompsXML:
         plist = {}
         for event, elem in ip:
             tag = elem.tag
-            isend = (event == "end")
-            if  isend and tag == "packagereq":
+            if  event == "end" and tag == "packagereq":
                 ptype = elem.attrib.get('type')
                 if ptype == None:
                     ptype = "default"
