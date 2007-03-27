@@ -18,7 +18,7 @@
 #
 
 
-import os.path, stat, sys, pwd, grp, md5, sha
+import os.path, stat, sys, pwd, grp, md5, sha, errno
 from pyrpm.io import getRpmIOFactory
 from base import *
 import elf
@@ -509,7 +509,12 @@ class RpmPackage(RpmData):
                 try:
                     os.rmdir(f)
                 except OSError:
-                    log.warning("Couldn't remove dir %s from pkg %s",
+                    if e.errno not in (errno.ENOTEMPTY, errno.ENOENT,
+                        errno.EBUSY):
+                        log.warning("Couldn't remove dir %s from pkg %s",
+                                f, self.source)
+                    else:
+                        log.debug2("Couldn't remove dir %s from pkg %s",
                                 f, self.source)
             else:
                 # Check if we need to erase the file
@@ -519,7 +524,11 @@ class RpmPackage(RpmData):
                 try:
                     os.unlink(f)
                 except OSError:
-                    log.warning("Couldn't remove file %s from pkg %s",
+                    if e.errno != errno.ENOENT:
+                        log.warning("Couldn't remove file %s from pkg %s",
+                                f, self.source)
+                    else:
+                        log.debug2("Couldn't remove file %s from pkg %s",
                                 f, self.source)
         if self.config.printhash:
             if nfiles == 0:
