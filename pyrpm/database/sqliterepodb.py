@@ -17,7 +17,19 @@
 #
 
 import os, re, bz2, shutil
-import libxml2
+try:
+    # python-2.5 layout:
+    from xml.etree.cElementTree import iterparse
+except ImportError:
+    try:
+        # often older python versions add this to site-packages:
+        from cElementTree import iterparse
+    except ImportError:
+        try:
+            # maybe the python-only version is available?
+            from ElementTree import iterparse
+        except:
+            raise "No ElementTree parser found. Aborting."
 
 from pyrpm import *
 import pyrpm.base
@@ -225,7 +237,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # this fails
         try:
             f = open(filename, 'w')
-            db = sqlite3.connect(filename)
+            db = sqlite3.connect(filename, client_encoding='utf8')
         except IOError:
             log.warning("Could not create sqlite cache file, using in memory "
                         "cache instead")
@@ -502,10 +514,13 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 self.createOthersTables()
 
             try:
-                reader = libxml2.newTextReaderFilename(filename)
-            except libxml2.libxmlError:
+                print filename
+                fd = PyGZIP(filename)
+                ip = iterparse(fd, events=("start","end"))
+                ip = iter(ip)
+            except IOError:
                 return 0
-            self._parseNode(reader)
+            self._parse(ip)
             self.setInfo(db, dbversion, self.repomd[dbtype]["checksum"])
             db.commit()
             return 1
@@ -516,7 +531,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         #self.readRpms()
         return result
 
-    def addFilesToPkg(self, name, epoch, version, release, arch, filelist,
+    def _addFilesToPkg(self, name, epoch, version, release, arch, filelist,
                       filetypelist):
         """Add a package to the filelists cache"""
         cur = self._primarydb_cursor
@@ -868,7 +883,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         return result
 
     def _search(self, attr_table, name, flag, version):
-        """return list of packages having prcotype name (any evr and flag)"""
+        """return hash {pkg -> [ (name, flag, evr), ... ]"""
         result = { }
         evr = functions.evrSplit(version)
         cache = None

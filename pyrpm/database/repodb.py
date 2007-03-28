@@ -17,6 +17,7 @@
 #
 
 
+from types import *
 import libxml2, re, os, os.path, stat
 from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
 import memorydb
@@ -28,6 +29,20 @@ import pyrpm.package as package
 import pyrpm.openpgp as openpgp
 import lists, types
 from pyrpm.logger import log
+from pyrpm.io import PyGZIP
+try:
+    # python-2.5 layout:
+    from xml.etree.cElementTree import iterparse
+except ImportError:
+    try:
+        # often older python versions add this to site-packages:
+        from cElementTree import iterparse
+    except ImportError:
+        try:
+            # maybe the python-only version is available?
+            from ElementTree import iterparse
+        except:
+            raise "No ElementTree parser found. Aborting."
 
 class RpmRepoDB(memorydb.RpmMemoryDB):
     """A (mostly) read-only RPM database storage in repodata XML.
@@ -130,12 +145,14 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             log.error("Couldn't open repomd.xml")
             return 0
         try:
-            reader = libxml2.newTextReaderFilename(filename)
-        except libxml2.libxmlError:
+            fd = open(filename)
+            ip = iterparse(fd, events=("start","end"))
+            ip = iter(ip)
+        except IOError:
             log.error("Couldn't parse repomd.xml")
             return 0
         # Create our network cache object
-        self.repomd = self._parseNode(reader)
+        self.repomd = self._parse(ip)
         return 1
 
     def readComps(self):
@@ -179,10 +196,13 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if not filename:
                 return 0
             try:
-                reader = libxml2.newTextReaderFilename(filename)
-            except libxml2.libxmlError:
+                fd = PyGZIP(filename)
+                ip = iterparse(fd, events=("start","end"))
+                ip = iter(ip)
+            except IOError:
+                log.error("Couldn't parse primary.xml")
                 return 0
-            self._parseNode(reader)
+            self._parse(ip)
         return 1
 
     def readPGPKeys(self):
@@ -259,10 +279,13 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             if not filename:
                 return 0
             try:
-                reader = libxml2.newTextReaderFilename(filename)
-            except libxml2.libxmlError:
+                fd = PyGZIP(filename)
+                ip = iterparse(fd, events=("start","end"))
+                ip = iter(ip)
+            except IOError:
+                log.error("Couldn't parse filelists.xml")
                 return 0
-            self._parseNode(reader)
+            self._parse(ip)
             self.filelist_imported = 1
         return 1
 
@@ -364,26 +387,22 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         return self._filerc.match(fname) or \
                self._dirrc.match(fname)
 
-    def _parseNode(self, reader):
+    def _parse(self, ip):
         """Parse <package> tags from libxml2.xmlTextReader reader."""
 
-        # Make local variables for heavy used functions to speed up this loop
-        Readf = reader.Read
-        NodeTypef = reader.NodeType
-        Namef = reader.Name
-        while Readf() == 1:
-            ntype = NodeTypef()
-            if ntype != XML_READER_TYPE_ELEMENT:
+        for event, elem in ip:
+            tag = elem.tag
+            if event != "start":
                 continue
-            name = Namef()
-            if name != "package" and name != "repomd":
+            if not tag.endswith("}package") and \
+               not tag.endswith("}repomd"):
                 continue
-            if name == "repomd":
-                return self.__parseRepomd(reader)
-            props = self.__getProps(reader)
+            if tag.endswith("}repomd"):
+                return self.__parseRepomd(ip)
+            props = elem.attrib
             if   props.get("type") == "rpm":
                 try:
-                    pkg = self.__parsePackage(reader)
+                    pkg = self.__parsePackage(ip)
                 except ValueError, e:
                     log.warning("%s: %s", pkg.getNEVRA(), e)
                     continue
@@ -400,13 +419,12 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                         pkg.compstype = "optional"
                 self.addPkg(pkg)
             elif props.has_key("name"):
-                try:
-                    arch = props["arch"]
-                except KeyError:
+                arch = props.get("arch")
+                if arch == None:
                     log.warning("%s: missing arch= in <package>",
                                 pkg.getNEVRA())
                     continue
-                self.__parseFilelist(reader, props["name"], arch)
+                self.__parseFilelist(ip, props["name"], arch)
 
     def _isExcluded(self, pkg):
         """Return True if RpmPackage pkg is excluded by configuration."""
@@ -454,6 +472,311 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             else:
                 newstring = newstring + char
         return re.sub("\n$", '', newstring) # FIXME: not done in other returns
+
+    def __parseRepomd(self, ip):
+        """Parse repomd.xml for SHA1 checks of the files.
+        Returns a hash of the form:
+          name -> {location, checksum, timestamp, open-checksum}"""
+        rethash = {}
+        # Make local variables for heavy used functions to speed up this loop
+        tmphash = {}
+        fname = None
+        for event, elem in ip:
+            isend = (event == "end")
+            props = elem.attrib
+            tag = elem.tag
+            if not isend and tag.endswith("}data"):
+                fname = props.get("type")
+                if not fname:
+                    break
+                tmphash = {}
+                rethash[fname] = tmphash
+            if not isend:
+                continue
+            if   tag.endswith("}repomd"):
+                break
+            elif tag.endswith("}location"):
+                loc = props.get("href")
+                if loc:
+                    tmphash["location"] = loc
+            elif tag.endswith("}checksum"):
+                type = props.get("type")
+                if type != "sha":
+                    log.warning("Unsupported checksum type %s in repomd.xml "
+                                "for file %s", type, fname)
+                    continue
+                tmphash["checksum"] = elem.text
+            elif tag.endswith("}timestamp"):
+                tmphash["timestamp"] = elem.text
+            elif tag.endswith("}open-checksum"):
+                type = props.get("type")
+                if type != "sha":
+                    log.warning("Unsupported open-checksum type %s in "
+                                "repomd.xml for file %s", type, fname)
+                    continue
+                tmphash["open-checksum"] = elem.text
+        return rethash
+
+    def __parsePackage(self, ip):
+        """Parse a package from current <package> tag at libxml2.xmlTextReader
+        reader.
+
+        Raise ValueError on invalid data."""
+
+        pkg = package.RpmPackage(self.config, "dummy", db = self)
+        pkg["signature"] = {}
+        pkg["signature"]["size_in_sig"] = [0,]
+        pkg.time_file = None
+        pname = None
+        pepoch = None
+        pversion = None
+        prelease = None
+        parch = None
+        excheck = 0
+        for event, elem in ip:
+            tag = elem.tag
+            if tag.endswith("}format"):
+                self.__parseFormat(ip, pkg)
+            isend = (event == "end")
+            if not isend:
+                continue
+            props = elem.attrib
+            if tag.endswith("}package"):
+                break
+            elif not excheck and pname != None and pepoch != None and \
+                 pversion != None and prelease != None and parch != None:
+                excheck = 1
+                if self._isExcluded(pkg):
+                    return None
+            if tag.endswith("}name"):
+                pname = elem.text
+                pkg["name"] = pname
+            elif tag.endswith("}arch"):
+                parch = elem.text
+                pkg["arch"] = parch
+                if parch != "src":
+                    pkg["sourcerpm"] = ""
+            elif tag.endswith("}version"):
+                pversion = props.get("ver")
+                prelease = props.get("rel")
+                pepoch = props.get("epoch")
+                if pversion == None or prelease == None or pepoch == None:
+                    raise ValueError, "Missing attributes of <version>"
+                pepoch = [int(pepoch),]
+                pkg["version"] = pversion
+                pkg["release"] = prelease
+                pkg["epoch"] = pepoch
+            elif tag.endswith("}checksum"):
+                type_ = props.get("type")
+                if   type_ == "md5":
+                    pkg["signature"]["md5"] = elem.text
+                elif type_ == "sha":
+                    pkg["signature"]["sha1header"] = elem.text
+                else:
+                    raise ValueError, "Wrong or missing type= in <checksum>"
+            elif tag.endswith("}location"):
+                href = props.get("href")
+                if href == None:
+                    raise ValueError, "Missing href= in <location>"
+                if self.config.nocache:
+                    pkg.source = os.path.join(self.nc.getBaseURL(self.reponame), href)
+                else:
+                    pkg.source = href
+                pkg.yumhref = href
+            elif tag.endswith("}size"):
+                size_in_sig = props.get("package")
+                if size_in_sig == None:
+                    raise ValueError, "Missing package= in <size>"
+                pkg["signature"]["size_in_sig"][0] += int(size_in_sig)
+                pkg.sizes = props
+            elif tag.endswith("}time"):
+                pkg.time_file = props.get('file')
+                pkg['buildtime'] = props.get('build')
+            else:
+                for pkgtag, xmltag in (("summary", "summary"),
+                                       ("description", "description"),
+                                       ("url", "url"),
+                                       ("packager", "packager")):
+                    if not tag.endswith("}%s" % xmltag):
+                        continue
+                    if elem.text == None or elem.text == '\n  ':
+                        pkg[pkgtag] = None # fix for empty tags
+                    else:
+                        pkg[pkgtag] = elem.text
+                else:
+                    continue
+                break # break while loop if break in for loop
+        pkg.header_read = 1
+        pkg["provides"] = pkg.getProvides()
+        pkg["requires"] = pkg.getRequires()
+        pkg["obsoletes"] = pkg.getObsoletes()
+        pkg["conflicts"] = pkg.getConflicts()
+        pkg["triggers"] = pkg.getTriggers()
+        # clean up list
+        for tag in ("provide", "require", "obsolete",
+                    "conflict", "trigger"):
+            for suffix in ("name", "flags", "version"):
+                pkg.pop(tag + suffix, None) # remove if set
+        return pkg
+
+    def __parseFilelist(self, ip, pname, arch):
+        """Parse a file list from current <package name=pname> tag at
+        libxml2.xmlTextReader reader for package with arch arch.
+
+        Raise ValueError on invalid data."""
+
+        filelist = []
+        typelist = []
+        version, release, epoch = None, None, None
+        for event, elem in ip:
+            tag = elem.tag
+            isend = (event == "end")
+            if not isend:
+                continue
+            props = elem.attrib
+            if   tag.endswith("}file"):
+                filelist.append(elem.text)
+                typelist.append(props.get("type", "file"))
+            elif tag.endswith("}version"):
+                version = props.get("ver")
+                release = props.get("rel")
+                epoch   = props.get("epoch")
+            elif tag.endswith("}package"):
+                break
+        if version is None or release is None or epoch is None:
+            raise ValueError, "Missing version information"
+        self._addFilesToPkg(pname, epoch, version, release, arch,
+                           filelist, typelist)
+
+    def __parseFormat(self, ip, pkg):
+        """Parse data from current <format> tag at libxml2.xmlTextReader reader
+        to RpmPackage pkg.
+
+        Raise ValueError on invalid input."""
+
+        pkg["oldfilenames"] = []
+        pkg.filetypelist = []
+        for event, elem in ip:
+            tag = elem.tag
+            isend = (event == "end")
+            props = elem.attrib
+            if not isend:
+                for rtag in ("provide", "require", "obsolete", "conflict"):
+                    if not tag.endswith("}%ss" % rtag):
+                        continue
+                    plist = self.__parseDeps(ip, rtag)
+                    (pkg[rtag + 'name'], pkg[rtag + 'flags'],
+                     pkg[rtag + 'version']) = plist
+            if not isend:
+                continue
+            if   tag.endswith("}file"):
+                pkg.filetypelist.append(props.get("type", "file"))
+                pkg["oldfilenames"].append(elem.text)
+            elif tag.endswith("}format"):
+                break
+            elif tag.endswith("}header-range"):
+                header_start = props.get("start")
+                header_end = props.get("end")
+                if header_start == None or header_end == None:
+                    raise ValueError, "Missing property in <rpm:header_range>"
+                header_start = int(header_start)
+                header_end = int(header_end)
+                pkg["signature"]["size_in_sig"][0] -= header_start
+                pkg.range_signature = [96, header_start-96]
+                pkg.range_header = [header_start, header_end-header_start]
+                pkg.range_payload = [header_end, None]
+            else:
+                for rtag in ("license", "sourcerpm",
+                                       "vendor", "buildhost", "group"):
+                    if not tag.endswith("}%s" % rtag):
+                        continue
+                    pkg[rtag] = elem.text
+
+    def __parseDeps(self, ip, ename):
+        """Parse a dependency list from currrent tag ename at
+        libxml2.xmlTextReader reader.
+
+        Return [namelist, flaglist, versionlist].  Raise ValueError on invalid
+        input."""
+
+        plist = [[], [], []]
+        for event, elem in ip:
+            tag = elem.tag
+            isend = (event == "end")
+            if not isend:
+                continue 
+            if tag.endswith("}%ss" % ename):
+                break
+            props = elem.attrib
+            if tag.endswith("}entry"):
+                name = props.get("name")
+                if name == None:
+                    raise ValueError, "Missing name= in <rpm.entry>"
+                ver = props.get("ver")
+                flags = props.get("flags")
+                if props.has_key("pre"):
+                    prereq = RPMSENSE_PREREQ
+                else:
+                    prereq = 0
+                if ver == None:
+                    plist[0].append(name)
+                    plist[1].append(prereq)
+                    plist[2].append("")
+                    continue
+                epoch = props.get("epoch")
+                rel = props.get("rel")
+                if epoch != None:
+                    ver = "%s:%s" % (epoch, ver)
+                if rel != None:
+                    ver = "%s-%s" % (ver, rel)
+                plist[0].append(name)
+                try:
+                    flags = self.flagmap[flags]
+                except KeyError:
+                    raise ValueError, "Unknown flags %s" % flags
+                plist[1].append(flags + prereq)
+                plist[2].append(ver)
+        return plist
+
+    def _addFilesToPkg(self, pname, epoch, version, release, arch,
+                      filelist, filetypelist):
+        nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
+        pkgs = self.getPkgsByName(pname)
+        dhash = {}
+        for pkg in pkgs:
+            if pkg.getNEVRA() == nevra:
+                if len(dhash) == 0:
+                    (didx, dnameold) = (-1, None)
+                    (dnames, dindexes, bnames) = ([], [], [])
+                    for f in filelist:
+                        idx = f.rindex("/")
+                        if idx < 0:
+                            raise ValueError, "Couldn't find '/' in filename from filelist"
+                        dname = f[:idx+1]
+                        fname = f[idx+1:]
+                        dhash.setdefault(dname, []).append(fname)
+                        bnames.append(fname)
+                        if dnameold == dname:
+                            dindexes.append(didx)
+                        else:
+                            dnames.append(dname)
+                            didx += 1
+                            dindexes.append(didx)
+                            dnameold = dname
+                pkg["dirnames"] = dnames
+                pkg["dirindexes"] = dindexes
+                pkg["basenames"] = bnames
+                if pkg.has_key("oldfilenames"):
+                    del pkg["oldfilenames"]
+                pkg.filetypelist = filetypelist
+                # get rid of old dirnames, dirindexes and basenames
+                #if pkg.has_key("dirnames"):
+                #    del pkg["dirnames"]
+                #if pkg.has_key("dirindexes"):
+                #    del pkg["dirindexes"]
+                #if pkg.has_key("basenames"):
+                #    del pkg["basenames"]
+                #pkg["oldfilenames"] = filelist
 
     def __readDir(self, dir, location):
         """Look for non-excluded *.rpm files under dir and add them to
@@ -560,281 +883,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         io.updateDigestFromRange(s, 0, None)
         return s.hexdigest()
 
-    def __getProps(self, reader):
-        """Return a dictionary (name => value) of attributes of current tag
-        from libxml2.xmlTextReader reader."""
-
-        # Make local variables for heavy used functions to speed up this loop
-        MoveToNextAttributef = reader.MoveToNextAttribute
-        Namef = reader.Name
-        Valuef = reader.Value
-        props = {}
-        while MoveToNextAttributef():
-            props[Namef()] = Valuef()
-        return props
-
-    def __parseRepomd(self, reader):
-        """Parse repomd.xml for SHA1 checks of the files.
-        Returns a hash of the form:
-          name -> {location, checksum, timestamp, open-checksum}"""
-        rethash = {}
-        # Make local variables for heavy used functions to speed up this loop
-        Readf = reader.Read
-        NodeTypef = reader.NodeType
-        Namef = reader.Name
-        Valuef = reader.Value
-        tmphash = {}
-        fname = None
-        while Readf() == 1:
-            ntype = NodeTypef()
-            if ntype != XML_READER_TYPE_ELEMENT and \
-               ntype != XML_READER_TYPE_END_ELEMENT:
-                continue
-            name = Namef()
-            if ntype == XML_READER_TYPE_END_ELEMENT:
-                if name == "repomd":
-                    break
-                continue
-            if   name == "data":
-                props = self.__getProps(reader)
-                fname = props.get("type")
-                if not fname:
-                    break
-                tmphash = {}
-                rethash[fname] = tmphash
-            elif name == "location":
-                props = self.__getProps(reader)
-                loc = props.get("href")
-                if loc:
-                    tmphash["location"] = loc
-            elif name == "checksum":
-                props = self.__getProps(reader)
-                type = props.get("type")
-                if type != "sha":
-                    log.warning("Unsupported checksum type %s in repomd.xml "
-                                "for file %s", type, fname)
-                    continue
-                if Readf() != 1:
-                    break
-                tmphash["checksum"] = Valuef()
-            elif name == "timestamp":
-                if Readf() != 1:
-                    break
-                tmphash["timestamp"] = Valuef()
-            elif name == "open-checksum":
-                props = self.__getProps(reader)
-                type = props.get("type")
-                if type != "sha":
-                    log.warning("Unsupported open-checksum type %s in "
-                                "repomd.xml for file %s", type, fname)
-                    continue
-                if Readf() != 1:
-                    break
-                tmphash["open-checksum"] = Valuef()
-        return rethash
-
-    def __parsePackage(self, reader):
-        """Parse a package from current <package> tag at libxml2.xmlTextReader
-        reader.
-
-        Raise ValueError on invalid data."""
-
-        # Make local variables for heavy used functions to speed up this loop
-        Readf = reader.Read
-        NodeTypef = reader.NodeType
-        Namef = reader.Name
-        Valuef = reader.Value
-        pkg = package.RpmPackage(self.config, "dummy", db = self)
-        pkg["signature"] = {}
-        pkg["signature"]["size_in_sig"] = [0,]
-        pkg.time_file = None
-        pname = None
-        pepoch = None
-        pversion = None
-        prelease = None
-        parch = None
-        excheck = 0
-        while Readf() == 1:
-            ntype = NodeTypef()
-            if ntype != XML_READER_TYPE_ELEMENT and \
-               ntype != XML_READER_TYPE_END_ELEMENT:
-                continue
-            name = Namef()
-            if ntype == XML_READER_TYPE_END_ELEMENT:
-                if name == "package":
-                    break
-                elif not excheck and pname != None and pepoch != None and \
-                     pversion != None and prelease != None and parch != None:
-                    excheck = 1
-                    if self._isExcluded(pkg):
-                        return None
-                continue
-            if name == "name":
-                if Readf() != 1:
-                    break
-                pname = Valuef()
-                pkg["name"] = pname
-            elif name == "arch":
-                if Readf() != 1:
-                    break
-                parch = Valuef()
-                pkg["arch"] = parch
-                if parch != "src":
-                    pkg["sourcerpm"] = ""
-            elif name == "version":
-                props = self.__getProps(reader)
-                try:
-                    pversion = props["ver"]
-                    prelease = props["rel"]
-                    pepoch = [int(props["epoch"]),]
-                except KeyError:
-                    raise ValueError, "Missing attributes of <version>"
-                pkg["version"] = pversion
-                pkg["release"] = prelease
-                pkg["epoch"] = pepoch
-            elif name == "checksum":
-                props = self.__getProps(reader)
-                try:
-                    type_ = props["type"]
-                except KeyError:
-                    raise ValueError, "Missing type= in <checksum>"
-                if   type_ == "md5":
-                    if Readf() != 1:
-                        break
-                    pkg["signature"]["md5"] = Valuef()
-                elif type_ == "sha":
-                    if Readf() != 1:
-                        break
-                    pkg["signature"]["sha1header"] = Valuef()
-            elif name == "location":
-                props = self.__getProps(reader)
-                if not props.has_key("href"):
-                    raise ValueError, "Missing href= in <location>"
-                if self.config.nocache:
-                    pkg.source = os.path.join(self.nc.getBaseURL(self.reponame), props["href"])
-                else:
-                    pkg.source = props["href"]
-                pkg.yumhref = props["href"]
-            elif name == "size":
-                props = self.__getProps(reader)
-                try:
-                    pkg["signature"]["size_in_sig"][0] += int(props["package"])
-                except KeyError:
-                    raise ValueError, "Missing package= in <size>"
-                pkg.sizes = props
-            elif name == "format":
-                self.__parseFormat(reader, pkg)
-            elif name == "time":
-                props = self.__getProps(reader)
-                pkg.time_file = props.get('file', None)
-                pkg['buildtime'] = props.get('build', None)
-            else:
-                for pkgtag, xmltag in (("summary", "summary"),
-                                       ("description", "description"),
-                                       ("url", "url"),
-                                       ("packager", "packager")):
-                    if name != xmltag: continue
-                    if Readf() != 1:
-                        break
-                    val = Valuef()
-                    if val == '\n  ': val = None # fix for empty tags
-                    pkg[pkgtag] = val
-                else:
-                    continue
-                break # break while loop if break in for loop
-        pkg.header_read = 1
-        pkg["provides"] = pkg.getProvides()
-        pkg["requires"] = pkg.getRequires()
-        pkg["obsoletes"] = pkg.getObsoletes()
-        pkg["conflicts"] = pkg.getConflicts()
-        pkg["triggers"] = pkg.getTriggers()
-        # clean up list
-        for tag in ("provide", "require", "obsolete",
-                    "conflict", "trigger"):
-            for suffix in ("name", "flags", "version"):
-                pkg.pop(tag + suffix, None) # remove if set
-        return pkg
-
-    def __parseFilelist(self, reader, pname, arch):
-        """Parse a file list from current <package name=pname> tag at
-        libxml2.xmlTextReader reader for package with arch arch.
-
-        Raise ValueError on invalid data."""
-
-        # Make local variables for heavy used functions to speed up this loop
-        Readf = reader.Read
-        NodeTypef = reader.NodeType
-        Namef = reader.Name
-        Valuef = reader.Value
-        filelist = []
-        typelist = []
-        version, release, epoch = None, None, None
-        while Readf() == 1:
-            ntype = NodeTypef()
-            if ntype != XML_READER_TYPE_ELEMENT and \
-               ntype != XML_READER_TYPE_END_ELEMENT:
-                continue
-            name = Namef()
-            if ntype == XML_READER_TYPE_END_ELEMENT:
-                if name == "package":
-                    break
-                continue
-            if   name == "version":
-                props = self.__getProps(reader)
-                version = props.get("ver")
-                release = props.get("rel")
-                epoch   = props.get("epoch")
-            elif name == "file":
-                props = self.__getProps(reader)
-                if Readf() != 1:
-                    break
-                filelist.append(Valuef())
-                typelist.append(props.get("type", "file"))
-        if version is None or release is None or epoch is None:
-            raise ValueError, "Missing version information"
-        self.addFilesToPkg(pname, epoch, version, release, arch,
-                           filelist, typelist)
-
-    def addFilesToPkg(self, pname, epoch, version, release, arch,
-                      filelist, filetypelist):
-        nevra = "%s-%s:%s-%s.%s" % (pname, epoch, version, release, arch)
-        pkgs = self.getPkgsByName(pname)
-        dhash = {}
-        for pkg in pkgs:
-            if pkg.getNEVRA() == nevra:
-                if len(dhash) == 0:
-                    (didx, dnameold) = (-1, None)
-                    (dnames, dindexes, bnames) = ([], [], [])
-                    for f in filelist:
-                        idx = f.rindex("/")
-                        if idx < 0:
-                            raise ValueError, "Couldn't find '/' in filename from filelist"
-                        dname = f[:idx+1]
-                        fname = f[idx+1:]
-                        dhash.setdefault(dname, []).append(fname)
-                        bnames.append(fname)
-                        if dnameold == dname:
-                            dindexes.append(didx)
-                        else:
-                            dnames.append(dname)
-                            didx += 1
-                            dindexes.append(didx)
-                            dnameold = dname
-                pkg["dirnames"] = dnames
-                pkg["dirindexes"] = dindexes
-                pkg["basenames"] = bnames
-                if pkg.has_key("oldfilenames"):
-                    del pkg["oldfilenames"]
-                pkg.filetypelist = filetypelist
-                # get rid of old dirnames, dirindexes and basenames
-                #if pkg.has_key("dirnames"):
-                #    del pkg["dirnames"]
-                #if pkg.has_key("dirindexes"):
-                #    del pkg["dirindexes"]
-                #if pkg.has_key("basenames"):
-                #    del pkg["basenames"]
-                #pkg["oldfilenames"] = filelist
-
     def __generateFormat(self, node, pkg):
         """Add RPM-specific tags under libxml2.xmlNode node for RpmPackage
         pkg."""
@@ -914,62 +962,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             tnode = node.newChild(None, "file", self.__escape(f))
             tnode.newProp("type", "ghost")
 
-    def __parseFormat(self, reader, pkg):
-        """Parse data from current <format> tag at libxml2.xmlTextReader reader
-        to RpmPackage pkg.
-
-        Raise ValueError on invalid input."""
-
-        # Make local variables for heavy used functions to speed up this loop
-        Readf = reader.Read
-        NodeTypef = reader.NodeType
-        Namef = reader.Name
-        Valuef = reader.Value
-        pkg["oldfilenames"] = []
-        pkg.filetypelist = []
-        while Readf() == 1:
-            ntype = NodeTypef()
-            if ntype != XML_READER_TYPE_ELEMENT and \
-               ntype != XML_READER_TYPE_END_ELEMENT:
-                continue
-            name = Namef()
-            if ntype == XML_READER_TYPE_END_ELEMENT:
-                if name == "format":
-                    break
-                continue
-            elif name == "rpm:header-range":
-                props = self.__getProps(reader)
-                try:
-                    header_start = int(props["start"])
-                    header_end = int(props["end"])
-                except KeyError:
-                    raise ValueError, "Missing start= in <rpm:header_range>"
-                pkg["signature"]["size_in_sig"][0] -= header_start
-                pkg.range_signature = [96, header_start-96]
-                pkg.range_header = [header_start, header_end-header_start]
-                pkg.range_payload = [header_end, None]
-            elif name == "file":
-                props = self.__getProps(reader)
-                pkg.filetypelist.append(props.get("type", "file"))
-                if Readf() != 1:
-                    break
-                pkg["oldfilenames"].append(Valuef())
-            else:
-                for tag in ("provide", "require", "obsolete", "conflict"):
-                    if name != "rpm:%ss" % tag: continue
-                    plist = self.__parseDeps(reader, name)
-                    (pkg[tag + 'name'], pkg[tag + 'flags'],
-                     pkg[tag + 'version']) = plist
-
-                for pkgtag, xmltag in (("license", "rpm:license"),
-                                       ("sourcerpm", "rpm:sourcerpm"),
-                                       ("vendor", "rpm:vendor"),
-                                       ("buildhost", "rpm:buildhost"),
-                                       ("group", "rpm:group")):
-                    if name != xmltag: continue
-                    if Readf() != 1: return
-                    pkg[pkgtag] = Valuef()
-
     def __filterDuplicateDeps(self, deps):
         """Return the list of (name, flags, release) dependencies deps with
         duplicates (when output by __generateDeps ()) removed."""
@@ -981,59 +973,5 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 fdeps.append((name, flags, version))
         fdeps.sort()
         return fdeps
-
-    def __parseDeps(self, reader, ename):
-        """Parse a dependency list from currrent tag ename at
-        libxml2.xmlTextReader reader.
-
-        Return [namelist, flaglist, versionlist].  Raise ValueError on invalid
-        input."""
-
-        # Make local variables for heavy used functions to speed up this loop
-        Readf = reader.Read
-        NodeTypef = reader.NodeType
-        Namef = reader.Name
-        plist = [[], [], []]
-        while Readf() == 1:
-            ntype = NodeTypef()
-            if ntype != XML_READER_TYPE_ELEMENT and \
-               ntype != XML_READER_TYPE_END_ELEMENT:
-                continue
-            name = Namef()
-            if ntype == XML_READER_TYPE_END_ELEMENT:
-                if name == ename:
-                    break
-                continue
-            if name == "rpm:entry":
-                props = self.__getProps(reader)
-                try:
-                    name = props["name"]
-                except KeyError:
-                    raise ValueError, "Missing name= in <rpm.entry>"
-                ver = props.get("ver")
-                flags = props.get("flags")
-                if props.has_key("pre"):
-                    prereq = RPMSENSE_PREREQ
-                else:
-                    prereq = 0
-                if ver == None:
-                    plist[0].append(name)
-                    plist[1].append(prereq)
-                    plist[2].append("")
-                    continue
-                epoch = props.get("epoch")
-                rel = props.get("rel")
-                if epoch != None:
-                    ver = "%s:%s" % (epoch, ver)
-                if rel != None:
-                    ver = "%s-%s" % (ver, rel)
-                plist[0].append(name)
-                try:
-                    flags = self.flagmap[flags]
-                except KeyError:
-                    raise ValueError, "Unknown flags %s" % flags
-                plist[1].append(flags + prereq)
-                plist[2].append(ver)
-        return plist
 
 # vim:ts=4:sw=4:showmatch:expandtab

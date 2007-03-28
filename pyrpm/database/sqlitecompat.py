@@ -19,8 +19,8 @@ if sqlite:
     DatabaseError = sqlite._sqlite.DatabaseError
     Row = None
 
-    def connect(filename):
-        return Connection(filename)
+    def connect(*args, **kwargs):
+        return Connection(*args, **kwargs)
 
     class Connection(sqlite.Connection):
 
