@@ -35,9 +35,11 @@ class NetworkCache:
         self.baseurls = { }
         self.pos = { }
         self.is_local = { }
+        self.headers = { }
         self.baseurls[name] = baseurls
         self.pos[name] = 0
         self.is_local[name] = self.__isLocalURI(self.baseurls[name])
+        self.headers[name] = [ ]
 
     def __isLocalURI(self, uris):
         is_local = True
@@ -93,6 +95,14 @@ class NetworkCache:
         self.baseurls[name] = baseurls
         self.pos[name] = 0
         self.is_local[name] = self.__isLocalURI(self.baseurls[name])
+
+    def setHeaders(self, headers, name=None):
+        """Sets the given headers for the cache. Those will be included in
+        all requests accessing that cache."""
+
+        if name == None:
+            name = self.default_name
+        self.headers[name] = headers.items()
 
     def delCache(self, baseurls, name=None):
         """Deletes the given baseurls from the cache. If no name is given the
@@ -158,7 +168,7 @@ class NetworkCache:
         while True:
             sourceurl = self.__createSourceURI(uri, name)
             try:
-                f = urlopen(sourceurl)
+                f = urlopen(sourceurl, http_headers=self.headers[name])
             except IOError:
                 f = None
             # We managed to find and open the file, return the descriptor.
@@ -199,11 +209,13 @@ class NetworkCache:
             sourceurl = self.__createSourceURI(uri, name)
             try:
                 if force:
-                    f = urlgrab(sourceurl, destfile,
-                                timeout=30.0, copy_local=copy_local)
+                    f = urlgrab(sourceurl, destfile, timeout=30.0,
+                                copy_local=copy_local,
+                                http_headers=self.headers[name])
                 else:
                     f = urlgrab(sourceurl, destfile, timeout=30.0,
-                                reget='check_timestamp', copy_local=copy_local)
+                                reget='check_timestamp', copy_local=copy_local,
+                                http_headers=self.headers[name])
             except Exception, e:
                 # urlgrab fails with invalid range for already completely
                 # transfered files, pretty strange to me to be honest... :)

@@ -29,6 +29,7 @@ import pyrpm.database as database
 import pyrpm.database.repodb
 # from pyrpm.database.repodb import RpmRepoDB
 from pyrpm.database.jointdb import JointDB
+from pyrpm.database.rhndb import RhnRepoDB
 from pyrpm.logger import log
 
 MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
@@ -173,6 +174,8 @@ class RpmYum:
         self.repos = JointDB(config, "Yum repos")
         # List of languages we want to install for.
         self.langs = [ ]
+        # Flag if RHN support is enabled or not. True by default
+        self.rhnenabled = True
         # Internal list of packages that are have to be erased
         self.erase_list = [ ]
         # Internal list of packages that were used for obsoleting
@@ -353,7 +356,11 @@ class RpmYum:
         for pkg in db.searchProvides("redhat-release", 0, ""):
             self.config.relver = pkg["version"]
 
-
+        if self.rhnenabled:
+            print "Reading RHN repositories"
+            rhnrepo = RhnRepoDB(self.config, None, self.config.buildroot)
+            rhnrepo.read()
+            self.repos.addDB(rhnrepo)
         if not self.repos_read and not self.command == "remove":
             if not self.addRepos(self.config.yumconf, db):
                 return 0

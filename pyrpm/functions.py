@@ -724,7 +724,7 @@ def parseYumOptions(argv, yum):
          "installpkgs=", "arch=", "archlist=", "checkinstalled", "rusage",
          "srpmdir=", "enablerepo=", "disablerepo=", "nocache", "cachedir=",
          "exclude=", "obsoletes", "noplugins", "diff", "verifyallconfig",
-         "languages=", "releaseversion="])
+         "languages=", "releaseversion=", "disablerhn"])
     except getopt.error, e:
         # FIXME: all to stderr
         log.error("Error parsing command-line arguments: %s", e)
@@ -853,6 +853,8 @@ def parseYumOptions(argv, yum):
             yum.langs = val.split()
         elif opt == "--releaseversion":
             rpmconfig.relver = val
+        elif opt == "--disablerhn":
+            yum.rhnenabled = False
 
     log.setInfoLogLevel(verbose)
 
