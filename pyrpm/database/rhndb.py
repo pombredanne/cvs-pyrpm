@@ -93,4 +93,8 @@ class RhnChannelRepoDB(SqliteRepoDB):
                 raise ValueError
             self.http_headers[header] = li[header]
 
+    def read(self):
+        log.info2("Reading RHN channel repository '%s'", self.reponame)
+        SqliteRepoDB.read(self)
+
 # vim:ts=4:sw=4:showmatch:expandtab
