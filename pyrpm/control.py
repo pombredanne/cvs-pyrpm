@@ -125,6 +125,7 @@ class RpmController:
                 nc = None
                 if not self.config.nocache and \
                        (pkg.source.startswith("http://") or \
+                        pkg.source.startswith("https://") or \
                         pkg.yumrepo != None):
                     if pkg.yumrepo != None:
                         nc = pkg.yumrepo.getNetworkCache()
@@ -189,6 +190,7 @@ class RpmController:
                 # cache remote pkgs to disk
                 if not self.config.nocache and \
                    (pkg.source.startswith("http://") or \
+                    pkg.source.startswith("https://") or \
                     pkg.yumrepo != None):
                     log.info3("Caching network package %s", pkg.getNEVRA())
                     source = pkg.nc.cache(pkg.source)

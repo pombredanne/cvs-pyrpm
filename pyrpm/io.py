@@ -681,7 +681,7 @@ class RpmStreamIO(RpmIO):
                 pos = self._tell()
                 self.hdrdata = None
                 self.hdr = {}
-                cpiofd = PyGZIP(self.fd)
+                cpiofd = PyGZIP(fileobj=self.fd)
                 self.cpio = CPIOFile(cpiofd)
                 self.where = 4
                 # Nobody cares about gzipped payload length so far

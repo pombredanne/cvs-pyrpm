@@ -48,8 +48,8 @@ class NetworkCache:
         return is_local
 
     def __isURI(self, uri):
-        return uri.startswith("http://") or uri.startswith("ftp://") or \
-               uri.startswith("file://")
+        return uri.startswith("http://") or uri.startswith("https://") or \
+               uri.startswith("ftp://") or uri.startswith("file://") 
 
     def __makeRel(self, uri):
         if uri[0] == "/":
