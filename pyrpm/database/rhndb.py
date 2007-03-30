@@ -95,6 +95,6 @@ class RhnChannelRepoDB(SqliteRepoDB):
 
     def read(self):
         log.info2("Reading RHN channel repository '%s'", self.reponame)
-        SqliteRepoDB.read(self)
+        return SqliteRepoDB.read(self)
 
 # vim:ts=4:sw=4:showmatch:expandtab
