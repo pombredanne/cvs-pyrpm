@@ -24,7 +24,7 @@
 
 import sys
 from pyrpm.database.jointdb import JointDB
-from pyrpm.database.repodb import RpmRepoDB
+from pyrpm.database.sqliterepodb import SqliteRepoDB
 from pyrpm.logger import log
 sys.path.append("/usr/share/rhn/")
 try:
@@ -59,7 +59,7 @@ class RhnRepoDB(JointDB):
             self.addDB(rcdb)
 
 
-class RhnChannelRepoDB(RpmRepoDB):
+class RhnChannelRepoDB(SqliteRepoDB):
     """
     Database for Red Hat Network repositories.
     """
@@ -73,7 +73,7 @@ class RhnChannelRepoDB(RpmRepoDB):
     def __init__(self, config, source, buildroot='', channelname='default', nc=None):
         self.http_headers = { }
         self.__setupRhnHttpHeaders()
-        RpmRepoDB.__init__(self, config, source, buildroot, channelname, nc)
+        SqliteRepoDB.__init__(self, config, source, buildroot, channelname, nc)
         self.nc.setHeaders(self.http_headers, channelname)
 
     def __setupRhnHttpHeaders(self):

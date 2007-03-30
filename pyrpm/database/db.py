@@ -133,7 +133,8 @@ class RpmDatabase:
     def getPkgsFileRequires(self):
         result = {}
         for filename, flag, ver, pkg in self.iterRequires():
-            result.setdefault(pkg, []).append(filename)
+            if filename[0] == "/":
+                result.setdefault(pkg, []).append(filename)
         return result
     
     def iterConflicts(self):

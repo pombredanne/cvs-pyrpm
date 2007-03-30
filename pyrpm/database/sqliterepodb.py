@@ -514,7 +514,6 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 self.createOthersTables()
 
             try:
-                print filename
                 fd = PyGZIP(filename)
                 ip = iterparse(fd, events=("start","end"))
                 ip = iter(ip)
