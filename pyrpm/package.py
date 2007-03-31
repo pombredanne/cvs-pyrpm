@@ -508,7 +508,7 @@ class RpmPackage(RpmData):
             if stat.S_ISDIR(rfi.mode):
                 try:
                     os.rmdir(f)
-                except OSError:
+                except OSError, e:
                     if e.errno not in (errno.ENOTEMPTY, errno.ENOENT,
                         errno.EBUSY):
                         log.warning("Couldn't remove dir %s from pkg %s",
@@ -523,7 +523,7 @@ class RpmPackage(RpmData):
                         continue
                 try:
                     os.unlink(f)
-                except OSError:
+                except OSError, e:
                     if e.errno != errno.ENOENT:
                         log.warning("Couldn't remove file %s from pkg %s",
                                 f, self.source)
