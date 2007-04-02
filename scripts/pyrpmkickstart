@@ -2603,7 +2603,6 @@ def main():
                     log.info1("Disabled service '%s'", service)
         if ks["services"].has_key("enabled"):
             for service in ks["services"]["enabled"]:
-                log.info1("  enabling '%s'", service)
                 if run_script("/sbin/chkconfig '%s' on" % service,
                               target_chroot) != 0:
                     log.info2("No service '%s', can not enable.", service)
