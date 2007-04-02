@@ -1,6 +1,6 @@
-SPECS = $(shell ls -1 *.spec)
+SPECS = $(shell ls -1 *._spec)
 ARCHES = noarch i386 x86_64
-NAMES = $(SPECS:.spec=)
+NAMES = $(SPECS:._spec=)
 
 PACKAGES = $(shell for name in $(NAMES); do for arch in $(ARCHES); do echo "$$name.$$arch.rpm "; done; done)
 
@@ -20,7 +20,7 @@ RPMBUILD = $(RPM) --define "_sourcedir $(SOURCEDIR)" \
 test:: $(PACKAGES)
 
 $(PACKAGES):
-	$(RPMBUILD) -bb --target=$(shell echo $@ | sed -e "s/\.rpm//" | sed -e "s/.*\.//") $(shell echo $@ | awk -F"." '{v=$$1; for(i=2; i<=NF-2; i++) v=v"."$$i; print v}').spec
+	$(RPMBUILD) -bb --target=$(shell echo $@ | sed -e "s/\.rpm//" | sed -e "s/.*\.//") $(shell echo $@ | awk -F"." '{v=$$1; for(i=2; i<=NF-2; i++) v=v"."$$i; print v}')._spec
 
 clean:
 	@echo Cleaning..
