@@ -289,10 +289,6 @@ kickstart file "ks.cfg":
 
         pyrpmkickstart ks.cfg disk2G.img
 
-pyrpmkickstart is able to write a simple xen config file with the option
-"--xen". You have to replace VERSION with the version of the xen kernel in the
-resulting "xen.conf" file.
-
 Here is the command to use a disk image with QEMU.
 
         qemu -m 256 disk2G.img
@@ -308,6 +304,14 @@ to install onto the second IDE disk with:
 
 pyrpmkickstart first downloads all rpm packages before the installation
 begins. This can be changed with the option "--no-cache".
+
+
+Fedora Core 7 and later:
+
+If you need ata disk drive support, you have to add a device entry for the
+driver to the kickstart file:
+
+    device scsi ata_piix
 
 
 pyrpmrandomizer
