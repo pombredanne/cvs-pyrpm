@@ -42,9 +42,9 @@ except:
 class RhnRepoDB(JointDB):
 
     def __init__(self, config, source, buildroot='', nc=None):
+        JointDB.__init__(self, config, source, buildroot)
         if not use_rhn:
             return
-        JointDB.__init__(self, config, source, buildroot)
         up2date_cfg = rhnconfig.initUp2dateConfig()
         try:
             login_info = up2dateAuth.getLoginInfo()
