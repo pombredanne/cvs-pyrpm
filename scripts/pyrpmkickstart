@@ -89,6 +89,7 @@ OPTIONS
   --label-prefix=<string>  Prepend prefix before labels on partitions
   --no-cache               Do not cache RPM's (e.g. for http and ftp sources).
   --no-cleanup             Do not cleanup temporary directory and files.
+  --no-dmsetup-init        Do not initialize dmsetup
   --no-stage2              Do not mount stage2.img from installation source,
                            use host system tools to format partitions. This
                            does not work for all host and client system
@@ -131,6 +132,7 @@ def main():
     has_raid = False
     beta_key_verify = False
     external_yum = False
+    dmsetup_init = True
 
     log.setInfoLogLevel(log.INFO1)
     log.setDebugLogLevel(log.NO_DEBUG)
@@ -145,7 +147,7 @@ def main():
                                        "repo-comps", "no-stage2", "upgrade=",
                                        "no-cache", "autoerase",
                                        "beta-key-verify", "external-yum",
-                                       "yum-verbose" ])
+                                       "yum-verbose", "no-dmsetup-init" ])
     except:
         usage()
         return
@@ -195,6 +197,8 @@ def main():
             external_yum = True
         elif opt == "--yum-verbose":
             yum_verbose += 1
+        elif opt == "--no-dmsetup-init":
+            dmsetup_init = False
         else:
             log.error("Unknown option '%s'.", opt)
             usage()
@@ -611,7 +615,8 @@ def main():
     ############## clear and generate partitions and disklabels ##############
 
     # initialize dmsetup
-    if (source.isRHEL() and source.cmpVersion("5") >= 0) or \
+    if dmsetup_init and \
+           (source.isRHEL() and source.cmpVersion("5") >= 0) or \
            (source.isFedora() and source.cmpVersion("4") >= 0):
         if os.path.exists(stage2_dir+"/sbin/dmsetup"):
             log.info1("Initializing device mapper.")
@@ -627,7 +632,7 @@ def main():
     zero_mbr = [ ]
 
     if ks.has_key("install"):
-        if ks.has_key("zerombr") and ks["zerombr"] == "yes":
+        if ks.has_key("zerombr") and ks["zerombr"] != "no":
             for disk in diskmap.keys():
                 if not diskmap[disk].has_disklabel() or \
                        diskmap[disk]["disklabel"] not in usable_disklabels:
@@ -660,6 +665,8 @@ def main():
                     diskmap[disk].new_disklabel(usable_disklabels[0])
                     if not disk in modified:
                         modified.append(disk)
+                elif not diskmap[disk].has_disklabel():
+                    pass
                 elif ks["clearpart"].has_key("all"):
                     log.info1("Removing all partitions on disk '%s'.", disk)
                     diskmap[disk].delete_all_partitions()
@@ -1093,7 +1100,8 @@ def main():
                 log.error("'%s' is not defined.", ondisk)
                 return 1
             if not diskmap[ondisk].has_disklabel():
-                log.error("Disk '%s' is not initialized.", ondisk)
+                log.error("Disk '%s' is not initialized. Use 'zerombr' or "
+                          "'clearpart --initlabel'", ondisk)
                 return 1
             if not diskmap[disk]["disklabel"] in usable_disklabels:
                 log.error("Disk '%s' has no usable disklabel.", ondisk)
