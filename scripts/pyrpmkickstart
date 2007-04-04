@@ -524,6 +524,10 @@ def main():
     # get system logical volumes
     system["lvmap"] = LVM_VOLGROUP.display()
 
+    # get selinux state of host system
+    (status, rusage, msg) = runScript(script="/usr/sbin/selinuxenabled")
+    selinux_enabled = (status == 0)
+
     # TODO: add other usable disklabels
     usable_disklabels = [ "msdos" ]
 
@@ -3036,6 +3040,35 @@ def main():
                 os.unlink(lvm_cache)
             except:
                 log.error("Unable to remove cache file.")
+
+
+    # relabel if selinux is enabled
+    if ks.has_key("install") and ks.has_key("selinux") and \
+           not ks["selinux"].has_key("disabled") and \
+           ((source.isRHEL() and source.cmpVersion("3") > 0) or \
+            (source.isFedora() and source.cmpVersion("2") > 0)):
+
+        log.info1("Fixing SELinux file contexts")
+
+        if not selinux_enabled:
+            # selinux not enforcing and not permissive in host system
+            # touch .autorelabel in target chroot
+            if not create_file(target_chroot, "/.autorelabel"):
+                log.error("Failed to create .autorelabel file.")
+                return 1
+            else:
+                log.info1("Relabling at first boot.")
+        else:
+            log.info1("Relabling ...")
+            try:
+                check_exists(target_chroot, "/sbin/fixfiles")
+            except:
+                log.error("/sbin/fixfiles does not exist.")
+                return 1
+            else:
+                fixfiles = "/sbin/fixfiles restore"
+                if run_script(fixfiles, target_chroot) != 0:
+                    log.error("Relabling failed.")
 
     # run post script
     if ks.has_key("install") and ks.has_key("post") and len(ks["post"]) > 0:
