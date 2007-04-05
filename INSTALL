@@ -9,8 +9,6 @@ The easiest way to install PyRPM is by compiling the src.rpm and installing
 that. Python 2.3 or newer is required. In addition to standard python modules
 PyRPM depends on:
 
- - libxml2-python to read xml files like the repo data from yum. Available from
-   link:http://xmlsoft.org/[].
  - pysqlite (which is installed as python-sqlite on Fedora Core) and sqlite
    from link:http://pysqlite.org/[] and link:http://sqlite.org/[]
  - urlgrabber to download files via http and ftp
