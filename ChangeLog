@@ -1,3 +1,153 @@
+2007-04-05  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.68, pyrpm/__init__.py 1.70, scripts/oldpyrpm.py 1.307:
+	- release 0.67
+
+	* pyrpm/yum.py 1.160:
+	- additional check for systeid file before using rhn repos
+
+	* doc/pyrpm.txt 1.18: - mention selinux dependency
+
+2007-04-04  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.121: [tw]
+	- relabel SELinux contexts as long as there is no selinux support in
+	  RpmPackage::install
+
+2007-04-03  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.120: [tw]
+	- new option --no-dmsetup-init
+	- fixed zerombr usage
+	  "zerombr" is equal to "zerombr yes" for new releases
+	- do not try to remove partitions on not-initialized disks
+	- suggest a solution for not initialized disks
+
+2007-04-02  Thomas Woerner  <twoerner@redhat.com>
+
+	* scripts/pyrpmkickstart 1.119: [tw]
+	- dropped debug log output for services
+
+	* doc/pyrpm-tools.txt 1.23: [tw]
+	* Documentation for pyrpmkickstart
+	- dropped xen option
+	- added F7 ata section
+
+	* tests/rpms/base-0.9-1._spec 1.1, tests/rpms/base-1.0-1._spec 1.1, tests/rpms/filesys-1.4-2._spec 1.1, tests/rpms/filesys-1.4-3._spec 1.1, tests/rpms/setup-1.0-1._spec 1.1, tests/rpms/setup-2.0-1._spec 1.1:
+	[tw]
+	dito
+
+	* tests/rpms/Makefile.am 1.3, tests/rpms/base-0.9-1.spec 1.2, tests/rpms/base-1.0-1.spec 1.2, tests/rpms/filesys-1.4-2.spec 1.2, tests/rpms/filesys-1.4-3.spec 1.2, tests/rpms/setup-1.0-1.spec 1.2, tests/rpms/setup-2.0-1.spec 1.2:
+	[tw]
+	- renamed spec files *.spec to *._spec to avoid build problems with
+	  rpmbuild -ta pyrpm-X.Y.z.tar.bz2
+
+	* pyrpm/database/rhndb.py 1.5: [tw]
+	- always call JointDB.__init__ in RhnRepoDB.__init__
+
+2007-03-31  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/package.py 1.163: - correctly allow to check errno
+
+2007-03-30  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/cache.py 1.27, pyrpm/control.py 1.117, pyrpm/io.py 1.141:
+	- Treat https:// as a valid URI
+	- Fixed bug in io to properly use fileobj for PyGZIP objects using fds'
+	- For RHN repos we currently can't use getFreeDiskSpace() or signature checks
+	  because we don't use the nc cache for them (yet).
+
+	* pyrpm/database/rhndb.py 1.4:
+	- Fixed bug in RhnChannelRepoDB.read() where i need to return the result
+	  of SqliteRepoDB.read()
+
+	* pyrpm/database/rhndb.py 1.3:
+	- Small trick to output channel reading for RHN repositories.
+
+	* pyrpm/database/db.py 1.27, pyrpm/database/rhndb.py 1.2, pyrpm/database/sqliterepodb.py 1.39:
+	- Fixed a bug in our RpmDatabase implementation of getPkgsFileRequires() which
+	  returned all requirements instead of only file requirements
+	- Properly use SqliteRepoDB instead of RpmRepoDB for RhnChannelRepoDB
+	- Removed some debug print from sqliterepodb
+
+	* pyrpm/cache.py 1.26, pyrpm/database/rhndb.py 1.1, pyrpm/functions.py 1.232, pyrpm/yum.py 1.159:
+	- First cut of the RHEL5 RHN repo DB. Still needs cookie timeout checks, but
+	  works if depsolving, ordering and package downloads take less then 1h ;)
+	- Added option to disable RHN repo support for yum (--disablerhn)
+
+2007-03-28  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/repodb.py 1.47, pyrpm/database/sqlitecompat.py 1.4, pyrpm/database/sqliterepodb.py 1.38, pyrpm/io.py 1.140:
+	- Included the latest PyGZIP implementation we have (which was submitted
+	  upstream).
+	- Switched xml input parsing to ElementTree parser.
+	- Fixed incorrect interface for sqlitecompat class for connect.
+
+2007-03-27  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/package.py 1.162:
+	- do not warn on rpm removal if file/dir is already
+	  deleted, dir not empty or dir busy (/proc)
+
+2007-03-23  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/comps.py 1.8:
+	- Some final optimizations for new comps parser
+
+2007-03-22  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/comps.py 1.7:
+	- Rewrote comps.xml parser to use ElementTree parser
+
+2007-03-21  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-tools.txt 1.22: - umount after running the tests
+
+	* scripts/pyrpmcheckinstall 1.14:
+	- fix another traceback if args is not set at all
+
+2007-03-21  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/package.py 1.161: - Few more typo fixes
+
+	* pyrpm/package.py 1.160: - Typo fix
+
+	* pyrpm/functions.py 1.231, pyrpm/package.py 1.159, pyrpm/yum.py 1.158:
+	- Rewrote readRpmPackage() a little bit
+	- Adapted readDir() to use new readRpmPackage() style
+	- Dropped __readPackage() from yum, use readRpmPackage()
+	- RpmPackage.size introduced and used wheverever needed
+
+2007-03-21  Florian La Roche  <laroche@redhat.com>
+
+	* doc/pyrpm-links.txt 1.15, doc/pyrpm-tools.txt 1.21: - adjust paths
+
+2007-03-21  Philip Knirsch  <pknirsch@redhat.com>
+
+	* scripts/pyrpmcheckinstall 1.13:
+	- Set command to "update" before any prepareTransaction() is done.
+
+2007-03-20  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.306:
+	- add extra consistency checks for provides/requires/conflicts/obsoletes
+	  lines (the version-release parts of it)
+
+	* pyrpm/database/sqliterepodb.py 1.37, pyrpm/functions.py 1.230:
+	- merge evrSplit() and evrSplitString(), compacter code
+
+2007-03-20  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.229:
+	- Fixed evrSplit() and made it exactly the same as rpm
+
+2007-03-20  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.305, configure.in 1.67, pyrpm/__init__.py 1.69:
+	- release 0.66
+
+	* ChangeLog 1.22: - update changelog
+
 2007-03-20  Thomas Woerner  <twoerner@redhat.com>
 
 	* pyrpm/installer/installer.py 1.36, scripts/pyrpmkickstart 1.118: [tw]
