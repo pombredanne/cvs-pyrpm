@@ -182,7 +182,7 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
         return (0, None, "")
     elif rpmconfig.delayldconfig:
         rpmconfig.delayldconfig = 0
-        runScript("/sbin/ldconfig", force=1)
+        runScript("/sbin/ldconfig", force=1, chroot=chroot)
     if script != None:
         (fd, tmpfilename) = mkstemp_file(tdir, "rpm-tmp.")
         # test for open fds:
