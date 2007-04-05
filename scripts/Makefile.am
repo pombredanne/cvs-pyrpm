@@ -1,5 +1,5 @@
 scripts = oldpyrpm.py pyrpmcheck pyrpmcheckinstall pyrpmcheckrepo \
-	pyrpmcreatefilereq pyrpmcreaterepo pyrpmdbverify pyrpminstall \
+	pyrpmcreaterepo pyrpmdbverify pyrpminstall \
 	pyrpmkickstart pyrpmrandomizer pyrpmrebuilddb pyrpmspecinfo pyrpmyum
 EXTRA_DIST = $(scripts) pyrexoldpyrpm.py
 
