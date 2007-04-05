@@ -1,4 +1,4 @@
-# Creating libxml2 subtrees of RPM metadata from RpmPackage objects
+# Create xml repodata (metadata) from RpmPackage objects
 #
 # Copyright (C) 2004 Duke University
 # Copyright (C) 2005 Red Hat, Inc.

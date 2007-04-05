@@ -206,7 +206,7 @@ class RpmCompsXML:
         return 1
 
     def __parseGroup(self, ip):
-        """Parse libxml2.xmlNode node and its siblings under <group>."""
+        """Parse <group>."""
 
         group = {}
         for event, elem in ip:
@@ -242,7 +242,7 @@ class RpmCompsXML:
         self.grouphash[group["id"]] = group
 
     def __parsePackageList(self, ip):
-        """Parse libxml2.xmlNode node and its siblings under <packagelist>.
+        """Parse <packagelist>.
 
         Return { package => (selection, [requirement]) }."""
 
@@ -265,7 +265,7 @@ class RpmCompsXML:
         return plist
 
     def __parseGroupList(self, ip):
-        """Parse libxml2.xmlNode node and its siblings under <grouplist>.
+        """Parse <grouplist>.
 
         Return { "groupgreqs" => [requirement],
         "metapkgs" => { requirement => requirement type } }."""
@@ -288,8 +288,7 @@ class RpmCompsXML:
         return glist
 
     def __parseGroupHierarchy(self, node):
-        """"Parse" libxml2.xmlNode node and its siblings under
-        <grouphierarchy>.
+        """Parse <grouphierarchy>.
 
         Return 1."""
 

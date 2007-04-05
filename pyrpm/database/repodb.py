@@ -18,8 +18,7 @@
 
 
 from types import *
-import libxml2, re, os, os.path, stat
-from libxml2 import XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT
+import re, os, os.path, stat
 import memorydb
 from pyrpm.base import *
 from pyrpm.cache import NetworkCache
@@ -295,7 +294,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         Return 1 on success, 0 on failure.  Assumes self.source is a local file
         system path without schema prefix."""
 
-        import gzip
+        import gzip, libxml2
         log.info1("Pass 1: Parsing package headers for file requires.")
         self.__readDir(self.source, "")
         filename = functions._uriToFilename(self.source)
@@ -388,7 +387,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                self._dirrc.match(fname)
 
     def _parse(self, ip):
-        """Parse <package> tags from libxml2.xmlTextReader reader."""
+        """Parse <package> tags."""
 
         for event, elem in ip:
             tag = elem.tag
@@ -518,8 +517,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         return rethash
 
     def __parsePackage(self, ip):
-        """Parse a package from current <package> tag at libxml2.xmlTextReader
-        reader.
+        """Parse a package from current <package> tag.
 
         Raise ValueError on invalid data."""
 
@@ -620,8 +618,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         return pkg
 
     def __parseFilelist(self, ip, pname, arch):
-        """Parse a file list from current <package name=pname> tag at
-        libxml2.xmlTextReader reader for package with arch arch.
+        """Parse a file list from current <package name=pname> tag.
 
         Raise ValueError on invalid data."""
 
@@ -649,8 +646,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                            filelist, typelist)
 
     def __parseFormat(self, ip, pkg):
-        """Parse data from current <format> tag at libxml2.xmlTextReader reader
-        to RpmPackage pkg.
+        """Parse data from current <format> tag to RpmPackage pkg.
 
         Raise ValueError on invalid input."""
 
@@ -693,8 +689,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     pkg[rtag] = elem.text
 
     def __parseDeps(self, ip, ename):
-        """Parse a dependency list from currrent tag ename at
-        libxml2.xmlTextReader reader.
+        """Parse a dependency list from currrent tag ename.
 
         Return [namelist, flaglist, versionlist].  Raise ValueError on invalid
         input."""
@@ -805,10 +800,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             self.addPkg(pkg)
 
     def __writePrimary(self, fd, parent, pkg):
-        """Write primary.xml data about RpmPackage pkg to fd.
-
-        Use libxml2.xmlNode parent as root of a temporary xml subtree."""
-
+        """Write primary.xml data about RpmPackage pkg to fd."""
         pkg_node = parent.newChild(None, "package", None)
         pkg_node.newProp('type', 'rpm')
         pkg_node.newChild(None, 'name', pkg['name'])
@@ -845,10 +837,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         del pkg_node
 
     def __writeFilelists(self, fd, parent, pkg):
-        """Write primary.xml data about RpmPackage pkg to fd.
-
-        Use libxml2.xmlNode parent as root of a temporary xml subtree."""
-
+        """Write primary.xml data about RpmPackage pkg to fd."""
         pkg_node = parent.newChild(None, "package", None)
         pkg_node.newProp('pkgid', pkg["yumchecksum"])
         pkg_node.newProp('name', pkg["name"])
@@ -884,8 +873,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         return s.hexdigest()
 
     def __generateFormat(self, node, pkg):
-        """Add RPM-specific tags under libxml2.xmlNode node for RpmPackage
-        pkg."""
+        """Add RPM-specific tags for RpmPackage pkg."""
 
         node.newChild(None, 'rpm:license', self.__escape(pkg['license']))
         node.newChild(None, 'rpm:vendor', self.__escape(pkg['vendor']))
@@ -906,7 +894,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
         self.__generateFilelist(node, pkg)
 
     def __generateDeps(self, node, pkg, name):
-        """Add RPM-specific dependency info under libxml2.xmlNode node for
+        """Add RPM-specific dependency info for
         RpmPackage pkg dependencies "name"."""
 
         dnode = node.newChild(None, 'rpm:%s' % name, None)
@@ -927,8 +915,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                     enode.newProp('rel', r)
 
     def __generateFilelist(self, node, pkg, filter=1):
-        """Add RPM-specific file list under libxml2.xmlNode node for RpmPackage
-        pkg.
+        """Add RPM-specific file list for RpmPackage pkg.
 
         Restrict the output to _dirrc/_filerc or known file requires if
         filter."""

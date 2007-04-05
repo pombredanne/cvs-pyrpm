@@ -124,8 +124,8 @@ This is required for PyRPM to work:
 
 - link:http://python.org/[python] 2.3 or newer. PyRPM is also using the
   gzip, zlib, bz2, bsddb python modules.
-- link:http://xmlsoft.org/[libxml2] with the python bindings in
-  `libxml2-python`
+- `python-elementtree` for a fast xml parser (This used to be an extra
+  python module, more recent versions of python have this as standard module.)
 - link:http://linux.duke.edu/projects/urlgrabber/[python-urlgrabber] to read
   data via http and ftp.
 
@@ -140,6 +140,8 @@ There are also optional dependencies like:
 - link:http://pysqlite.org/[python-sqlite] if you want to experiment with the
   optional sqlite database backend.
 - `libselinux-python` for proper selinux support
+- link:http://xmlsoft.org/[libxml2] with the python bindings in
+  `libxml2-python`
 
 PyRPM is currently spending most of its CPU and memory on the list of files
 that are stored within rpm packages. Those are needed for dependency
