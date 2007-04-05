@@ -139,6 +139,7 @@ There are also optional dependencies like:
   contain pre-generated html files.
 - link:http://pysqlite.org/[python-sqlite] if you want to experiment with the
   optional sqlite database backend.
+- `libselinux-python` for proper selinux support
 
 PyRPM is currently spending most of its CPU and memory on the list of files
 that are stored within rpm packages. Those are needed for dependency
