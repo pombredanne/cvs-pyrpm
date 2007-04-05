@@ -6,7 +6,7 @@ License: GPL
 Group: System Environment/Base
 URL: http://people.redhat.com/laroche/pyrpm/
 Source: %{name}-%{version}.tar.bz2
-Requires: libxml2-python, python-urlgrabber
+Requires: python-urlgrabber
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildRequires: asciidoc
 BuildArch: noarch
