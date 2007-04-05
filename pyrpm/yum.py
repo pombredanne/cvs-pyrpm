@@ -356,7 +356,8 @@ class RpmYum:
         for pkg in db.searchProvides("redhat-release", 0, ""):
             self.config.relver = pkg["version"]
 
-        if self.rhnenabled:
+        if self.rhnenabled and os.access(self.config.buildroot + \
+            "/etc/sysconfig/rhn/systemid", os.R_OK):
             print "Reading RHN repositories"
             rhnrepo = RhnRepoDB(self.config, None, self.config.buildroot)
             rhnrepo.read()
