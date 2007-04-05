@@ -311,7 +311,8 @@ class RpmController:
         if self.config.delayldconfig:
             self.config.delayldconfig = 0
             try:
-                runScript("/sbin/ldconfig", force=1)
+                runScript("/sbin/ldconfig", force=1,
+                          chroot=self.config.buildroot)
             except (IOError, OSError), e:
                 log.warning("Error running /sbin/ldconfig: %s", e)
             log.info2("number of /sbin/ldconfig calls optimized away: %d",
