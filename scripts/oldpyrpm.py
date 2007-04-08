@@ -3243,17 +3243,18 @@ def evrSplit(evr):
         return (epoch, evr[i + 1:j], evr[j + 1:])
     return (epoch, evr[i + 1:], "")
 
+flagmap2 = {
+    RPMSENSE_EQUAL: "=",
+    RPMSENSE_LESS: "<",
+    RPMSENSE_GREATER: ">",
+    RPMSENSE_EQUAL | RPMSENSE_LESS: "<=",
+    RPMSENSE_EQUAL | RPMSENSE_GREATER: ">="
+}
+
 def depString(name, flag, version):
     if version == "":
         return name
-    op = ""
-    if flag & RPMSENSE_LESS:
-        op = "<"
-    if flag & RPMSENSE_GREATER:
-        op += ">"
-    if flag & RPMSENSE_EQUAL:
-        op += "="
-    return "(%s %s %s)" % (name, op, version)
+    return "(%s %s %s)" % (name, flagmap2[flag & RPMSENSE_SENSEMASK], version)
 
 def searchDependency(name, flag, version, mydeps):
     deps = mydeps.get(name, [])
