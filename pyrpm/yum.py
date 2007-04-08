@@ -1265,7 +1265,7 @@ class RpmYum:
         ret = 0
         if not self.autoerase:
             return 0
-        for old_pkg, new_pkg in self.opresolver.getObsoleteConflicts():
+        for (old_pkg, new_pkg) in self.opresolver.getObsoleteConflicts():
             self.__doAutoerase(new_pkg)
             ret = 1
         return ret

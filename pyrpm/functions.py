@@ -1155,25 +1155,13 @@ def rangeCompare(flag1, evr1, flag2, evr2):
         result = 1
     return result
 
-def depOperatorString(flag):
-    """Return a string representation of RPMSENSE_* comparison operator."""
-
-    op = ""
-    if flag & RPMSENSE_LESS:
-        op = "<"
-    if flag & RPMSENSE_GREATER:
-        op += ">"
-    if flag & RPMSENSE_EQUAL:
-        op += "="
-    return op
-
 def depString((name, flag, version)):
     """Return a string representation of (name, RPMSENSE_* flag, version)
     condition."""
 
     if version == "":
         return name
-    return "%s %s %s" % (name, depOperatorString(flag), version)
+    return "%s %s %s" % (name, rpmFlag2Str(flag), version)
 
 def archCompat(parch, arch):
     """Return True if package with architecture parch can be installed on

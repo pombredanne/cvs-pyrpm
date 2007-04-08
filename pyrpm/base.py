@@ -115,29 +115,31 @@ def isInstallPreReq(x):
 def isErasePreReq(x):
     return (x & _ERASE_ONLY_MASK) != 0
 
-def rpmFlag2Str(x):
-    result = ''
-    if x & RPMSENSE_LESS:
-       result += '<'
-    if x & RPMSENSE_GREATER:
-        result += '>'
-    if x & RPMSENSE_EQUAL:
-        result += '='
-    return result
+flagmap2 = {
+    0: "",
+    RPMSENSE_EQUAL: "=",
+    RPMSENSE_LESS: "<",
+    RPMSENSE_GREATER: ">",
+    RPMSENSE_EQUAL | RPMSENSE_LESS: "<=",
+    RPMSENSE_EQUAL | RPMSENSE_GREATER: ">=",
+}
+
+def rpmFlag2Str(flag):
+    return flagmap2[flag & RPMSENSE_SENSEMASK]
+
+flagmap3 = {
+    "": 0,
+    "=": RPMSENSE_EQUAL,
+    "<": RPMSENSE_LESS,
+    ">": RPMSENSE_GREATER,
+    "<=": RPMSENSE_EQUAL | RPMSENSE_LESS,
+    ">=": RPMSENSE_EQUAL | RPMSENSE_GREATER,
+}
 
 def str2RpmFlag(x):
-    if isinstance(x, int): return x
-    result = 0
-    for c in x:
-        if c == '<':
-            result |= RPMSENSE_LESS
-        elif c == '>':
-            result |= RPMSENSE_GREATER
-        elif c == '=':
-            result |= RPMSENSE_EQUAL
-        else:
-            raise ValueError("'%s' is not a valid comparison" % x)
-    return result
+    if isinstance(x, int):
+        return x
+    return flagmap3[x]
 
 # RPM file attributes
 RPMFILE_NONE        = 0
