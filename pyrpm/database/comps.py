@@ -287,12 +287,15 @@ class RpmCompsXML:
                 break
         return glist
 
-    def __parseGroupHierarchy(self, node):
+    def __parseGroupHierarchy(self, ip):
         """Parse <grouphierarchy>.
 
         Return 1."""
 
         # We don't need grouphierarchies, so don't parse them ;)
+        for event, elem in ip:
+            if elem.tag == "grouphierarchy":
+                break
         return 1
 
     def __getPackageNames(self, group, typelist):

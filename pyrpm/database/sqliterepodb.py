@@ -743,6 +743,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             return self._pkgs[pkgKey]
         pkg = self.readRpm(pkgKey)
         if pkg:
+            pkg.size = int(pkg["archivesize"][0])
             self._pkgs[pkgKey] = pkg
             if self._isExcluded(pkg):
                 self._pkgs[pkgKey] = None
