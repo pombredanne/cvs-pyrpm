@@ -612,84 +612,86 @@ class RpmYum:
         pkgnamehash = {}
         # Hash for types. Each type will have a ordered list of packages.
         typehash = {}
+        for upkg in pkglist:
+            # Skip all packages that are either blocked via our erase_list
+            # or that are already in the opresolver
+            if upkg in self.erase_list or \
+               upkg in self.opresolver.getDatabase():
+                continue
+            # If exactarch is set skip all packages that don't match
+            # the arch exactly.
+            if exactarch and upkg["arch"] != arch and \
+                             upkg["arch"] != "noarch":
+                continue
+            # Only try to update if the package itself or the update package
+            # are noarch or if they are buildarchtranslate or arch
+            # compatible. Some exception needs to be done for
+            # filerequirements.
+            if not (is_filereq or \
+                    archDuplicate(upkg["arch"], arch) or \
+                    archCompat(upkg["arch"], arch) or \
+                    archCompat(arch, upkg["arch"])):
+                continue
+            # Populate our 2 dicts properly
+            if not pkgnamehash.has_key(upkg["name"]):
+                pkgnamehash[upkg["name"]] = upkg
+            typehash.setdefault(upkg.compstype, []).append(upkg)
+        # In case of a single package selection we select the package with the
+        # "highest" comps type and then use the newest version of it for the
+        # operation.
+        if single:
+            for type in ("mandatory", "default", "optional", None):
+                if typehash.has_key(type):
+                    pkg = pkgnamehash[typehash[type][0]["name"]]
+                    print "FOO", type, pkg.getNEVRA()
+                    return self.__handleSinglePkg(cmd, pkg, arch, is_filereq,
+                                                  do_obsolete)
+            # Although we should never get here, still handle it correctly.
+            return 0
+        # For the normal case we just use the newest version of each name for
+        # the operation.
         ret = 0
-        #for upkg in pkglist:
-        #    if not pkgnamehash.has_key(upkg["name"]):
-        #        pkgnamehash[upkg["name"]] = upkg
-        #    typehash.setdefault(upkg.compstype, []).append(upkg)
-        for type in ["mandatory", "default", "optional", None]:
-            for upkg in pkglist:
-                # Skip all packages that are either blocked via our erase_list
-                # or that are already in the opresolver
-                if upkg in self.erase_list or \
-                   upkg in self.opresolver.getDatabase():
-                    continue
-                # If exactarch is set skip all packages that don't match
-                # the arch exactly.
-                if exactarch and upkg["arch"] != arch and \
-                                 upkg["arch"] != "noarch":
-                    continue
-                # If no package with the same name has already been found enter
-                # it in the pkgnamehash That way pkgnamehash will always
-                # contain the newest not-blocked available package for each
-                # name.
-                # In case of single selection the first match determins the
-                # final name though.
-                if not pkgnamehash.has_key(upkg["name"]):
-                    if single:
-                        if upkg.compstype != type or len(pkgnamehash.keys()) > 0:
-                            continue
-                    pkgnamehash[upkg["name"]] = upkg
-                # If the compstype doesn't fit, skip it for now.
-                if upkg.compstype != type:
-                    continue
-                # Now we need to replace the fitting package with the newest
-                # version available (which could be the same).
-                upkg = pkgnamehash[upkg["name"]]
-                # "fake" Source RPMS to be noarch rpms without any reqs/deps
-                # etc. except if we want pyrpmyum to install the buildprereqs
-                # from the srpm.
-                if upkg.isSourceRPM():
-                    upkg["arch"] = "noarch"
-                    upkg["provides"] = []
-                    upkg["conflicts"] = []
-                    upkg["obsoletes"] = []
-                # Only try to update if the package itself or the update package
-                # are noarch or if they are buildarchtranslate or arch
-                # compatible. Some exception needs to be done for
-                # filerequirements.
-                if not (is_filereq or \
-                        archDuplicate(upkg["arch"], arch) or \
-                        archCompat(upkg["arch"], arch) or \
-                        archCompat(arch, upkg["arch"])):
-                    continue
-                # Depending on the command we gave to handle we need to either
-                # install, update or remove the package now.
-                if   cmd.endswith("install"):
-                    r = self.opresolver.install(upkg)
-                elif cmd.endswith("update") or cmd.endswith("upgrade"):
-                    if upkg["name"] in self.always_install:
-                        r = self.opresolver.install(upkg)
-                    else:
-                        r = self.opresolver.update(upkg)
-                # We just handled one package, make sure we handle it's
-                # obsoletes and language related packages
-                if upkg and r > 0:
-                    l = []
-                    for repo in self.repos.dbs:
-                        if hasattr(repo, 'comps') and repo.comps:
-                            for lang in self.langs:
-                                l.extend(repo.comps.getLangOnlyPackageNames(lang, upkg["name"]))
-                    normalizeList(l)
-                    for name in l:
-                        self.update(name)
-                    if do_obsolete:
-                        if self.delay_obsolete:
-                            self.delay_obsolete_list.append(upkg)
-                        else:
-                            self.__handleObsoletes([upkg])
-                ret |= r
+        for upkg in pkgnamehash.values():
+            ret |= self.__handleSinglePkg(cmd, upkg, arch, is_filereq,
+                                          do_obsolete)
         return ret
+
+    def __handleSinglePkg(self, cmd, upkg, arch=None, is_filereq=0, do_obsolete=True):
+        # "fake" Source RPMS to be noarch rpms without any reqs/deps
+        # etc. except if we want pyrpmyum to install the buildprereqs
+        # from the srpm.
+        if upkg.isSourceRPM():
+            upkg["arch"] = "noarch"
+            upkg["provides"] = []
+            upkg["conflicts"] = []
+            upkg["obsoletes"] = []
+        # Depending on the command we gave to handle we need to either
+        # install, update or remove the package now.
+        if   cmd.endswith("install"):
+            r = self.opresolver.install(upkg)
+        elif cmd.endswith("update") or cmd.endswith("upgrade"):
+            if upkg["name"] in self.always_install:
+                r = self.opresolver.install(upkg)
+            else:
+                r = self.opresolver.update(upkg)
+        # We just handled one package, make sure we handle it's
+        # obsoletes and language related packages
+        if upkg and r > 0:
+            l = []
+            for repo in self.repos.dbs:
+                if hasattr(repo, 'comps') and repo.comps:
+                    for lang in self.langs:
+                        l.extend(repo.comps.getLangOnlyPackageNames(lang,
+                                                                upkg["name"]))
+            normalizeList(l)
+            for name in l:
+                self.update(name)
+            if do_obsolete:
+                if self.delay_obsolete:
+                    self.delay_obsolete_list.append(upkg)
+                else:
+                    self.__handleObsoletes([upkg])
+        return r
 
     def runArgs(self, args, exact=False):
         """Find all packages that match the args and run the given command on
