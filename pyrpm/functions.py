@@ -1133,7 +1133,7 @@ def doesObsolete(pkg1, pkg2):
         for pro in pkg2["provides"]:
             if obs[0] != pro[0]:
                 continue
-            if rangeCompare(obs[1], obs[2], pro[1], pro[2]):
+            if rangeCompare(obs[1], evrSplit(obs[2]), pro[1], evrSplit(pro[2])):
                 return 1
     return 0
 
