@@ -871,35 +871,6 @@ def parseYumOptions(argv, yum):
 
     return args
 
-def selectNewestPkgs(pkglist):
-    """Select the "best" packages for each base arch from RpmPackage list
-    pkglist.
-
-    Return a list of the "best" packages, selecting the highest EVR.arch for
-    each base arch."""
-
-    pkghash = {}
-    disthash = {}
-    dhash = calcDistanceHash(rpmconfig.machine)
-    for pkg in pkglist:
-        name = pkg["name"]
-        dist = dhash[pkg["arch"]]
-        if name not in pkghash:
-            pkghash[name] = pkg
-            disthash[name] = dist
-        else:
-            if dist < disthash[name]:
-                pkghash[name] = pkg
-                disthash[name] = dist
-            if dist == disthash[name] and pkgCompare(pkghash[name], pkg) < 0:
-                pkghash[name] = pkg
-                disthash[name] = dist
-    retlist = []
-    for pkg in pkglist:
-        if pkghash.get(pkg["name"]) == pkg:
-            retlist.append(pkg)
-    return retlist
-
 def calcDistanceHash(arch):
     """Calculate a machine distance hash for all arches for the given arch"""
 
@@ -1154,6 +1125,17 @@ def rangeCompare(flag1, evr1, flag2, evr2):
               (flag1 & RPMSENSE_GREATER and flag2 & RPMSENSE_GREATER)):
         result = 1
     return result
+
+def doesObsolete(pkg1, pkg2):
+    """Checks whether pk1 obsoletes pkg2. Return 1 if it does, 0 otherwise."""
+    
+    for obs in pkg1["obsoletes"]:
+        for pro in pkg2["provides"]:
+            if obs[0] != pro[0]:
+                continue
+            if rangeCompare(obs[1], obs[2], pro[1], pro[2]):
+                return 1
+    return 0
 
 def depString((name, flag, version)):
     """Return a string representation of (name, RPMSENSE_* flag, version)

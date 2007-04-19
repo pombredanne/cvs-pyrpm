@@ -35,7 +35,7 @@ try:
     from up2date_client import up2dateErrors
     use_rhn = True
 except:
-    log.error("Couldn't import up2date_client modules. Disabling RHN support.")
+    log.warning("Couldn't import up2date_client modules. Disabling RHN support.")
     use_rhn = False
 
 

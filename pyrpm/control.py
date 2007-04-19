@@ -433,7 +433,6 @@ class RpmController:
         for name, f, v, prog, script in pkg["triggers"]:
             if (functions.rangeCompare(flag, evr, f, functions.evrSplit(v)) or
                 v == ""):
-                # (v == "" and functions.evrCompare(evr, flag, evr))):
                 try:
                     runScript(prog, script, [tnumPkgs, tnumPkgs],
                               chroot=buildroot)

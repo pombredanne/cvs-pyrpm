@@ -42,6 +42,38 @@ pyrpmcheck [--nodir] [--noprovides] [--nosymlinks] [-h, --help] [-v, --verbose] 
 rtags = ("name", "epoch", "version", "release", "arch", "dirindexes", "dirnames", "basenames", "fileusername", "filegroupname", "filemodes", "filelinktos", "providename", "provideflags", "provideversion", "requirename", "requireflags", "requireversion")
 
 #
+# Previously in functions.py, but only used here anymore, so moved.
+#
+def selectNewestPkgs(pkglist):
+    """Select the "best" packages for each base arch from RpmPackage list
+    pkglist.
+
+    Return a list of the "best" packages, selecting the highest EVR.arch for
+    each base arch."""
+
+    pkghash = {}
+    disthash = {}
+    dhash = calcDistanceHash(rpmconfig.machine)
+    for pkg in pkglist:
+        name = pkg["name"]
+        dist = dhash[pkg["arch"]]
+        if name not in pkghash:
+            pkghash[name] = pkg
+            disthash[name] = dist
+        else:
+            if dist < disthash[name]:
+                pkghash[name] = pkg
+                disthash[name] = dist
+            if dist == disthash[name] and pkgCompare(pkghash[name], pkg) < 0:
+                pkghash[name] = pkg
+                disthash[name] = dist
+    retlist = []
+    for pkg in pkglist:
+        if pkghash.get(pkg["name"]) == pkg:
+            retlist.append(pkg)
+    return retlist
+
+#
 # Put more check functions here
 #
 def checkOverlap(list):

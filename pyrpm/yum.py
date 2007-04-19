@@ -358,7 +358,7 @@ class RpmYum:
 
         if self.rhnenabled and os.access(self.config.buildroot + \
             "/etc/sysconfig/rhn/systemid", os.R_OK):
-            print "Reading RHN repositories"
+            log.info2("Reading RHN repositories")
             rhnrepo = RhnRepoDB(self.config, None, self.config.buildroot)
             rhnrepo.read()
             self.repos.addDB(rhnrepo)
@@ -643,7 +643,6 @@ class RpmYum:
             for type in ("mandatory", "default", "optional", None):
                 if typehash.has_key(type):
                     pkg = pkgnamehash[typehash[type][0]["name"]]
-                    print "FOO", type, pkg.getNEVRA()
                     return self.__handleSinglePkg(cmd, pkg, arch, is_filereq,
                                                   do_obsolete)
             # Although we should never get here, still handle it correctly.
@@ -1456,6 +1455,10 @@ class RpmYum:
                     pkg = pkg2
                 else:
                     pkg = pkg1
+        elif doesObsolete(pkg1, pkg2):
+            pkg = pkg2
+        elif doesObsolete(pkg2, pkg1):
+            pkg = pkg1
         elif len(pkg1.getNEVRA()) < len(pkg2.getNEVRA()):
             pkg = pkg2
         else:
