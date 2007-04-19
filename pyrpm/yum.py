@@ -462,7 +462,8 @@ class RpmYum:
         pkgnamearchhash = {}
         for pkg in pkglist:
             pkgnamehash.setdefault(pkg["name"], []).append(pkg)
-            pkgnamearchhash.setdefault(pkg["name"], {}).setdefault(pkg["arch"], []).append(pkg)
+            pkgnamearchhash.setdefault(pkg["name"], {}).setdefault(pkg["arch"],
+                                       []).append(pkg)
         # Now go over all package names we found and find the correct update
         # packages.
         ret = 0
@@ -473,7 +474,8 @@ class RpmYum:
             # package with that name was installed we simply try to select the
             # best matching package update for this arch.
             if name in self.always_install or len(dbpkgs) == 0:
-                ret |= self.__handleBestPkg("update", pkgnamehash[name], do_obsolete=do_obsolete)
+                ret |= self.__handleBestPkg("update", pkgnamehash[name],
+                                            do_obsolete=do_obsolete)
                 continue
             # Next trick: We now know that this is an update package and we
             # have at least 1 package with that name installed. In order to
@@ -541,7 +543,9 @@ class RpmYum:
                 l = self._filterPkgVersion(ipkg, pkgnamearchhash[name][arch])
                 # Find the best matching package for the given list of packages
                 # and archs.
-                r = self.__handleBestPkg("update", l, march, self.config.exactarch, do_obsolete=do_obsolete)
+                r = self.__handleBestPkg("update", l, march,
+                                         self.config.exactarch,
+                                         do_obsolete=do_obsolete)
                 # In case we had a successfull update make sure we erase the
                 # package we just updated. Otherwise cross arch switches won't
                 # work properly.
@@ -591,7 +595,7 @@ class RpmYum:
         else:
             return self.repos.searchFilenames(name)
 
-    def __handleBestPkg(self, cmd, pkglist, arch=None, exactarch=False, is_filereq=0, do_obsolete=True):
+    def __handleBestPkg(self, cmd, pkglist, arch=None, exactarch=False, is_filereq=0, do_obsolete=True, single=False):
         # Handle removes directly here, they don't need any special handling.
         if cmd.endswith("remove"):
             for upkg in pkglist:
@@ -606,15 +610,15 @@ class RpmYum:
         # Prepare a pkg name hash for possibly newer packages that have "higher"
         # ranked packages via the comps with lower version in other repos.
         pkgnamehash = {}
-        # Also have a hash for package names that have already been handled.
-        donehash = {}
+        # Hash for types. Each type will have a ordered list of packages.
+        typehash = {}
         ret = 0
-        upkg = None
+        #for upkg in pkglist:
+        #    if not pkgnamehash.has_key(upkg["name"]):
+        #        pkgnamehash[upkg["name"]] = upkg
+        #    typehash.setdefault(upkg.compstype, []).append(upkg)
         for type in ["mandatory", "default", "optional", None]:
             for upkg in pkglist:
-                # Skip package names that have already been handled.
-                if donehash.has_key(upkg["name"]):
-                    continue
                 # Skip all packages that are either blocked via our erase_list
                 # or that are already in the opresolver
                 if upkg in self.erase_list or \
@@ -626,10 +630,15 @@ class RpmYum:
                                  upkg["arch"] != "noarch":
                     continue
                 # If no package with the same name has already been found enter
-                # it in the pkgnamehash. That way pkgnamehash will always
+                # it in the pkgnamehash That way pkgnamehash will always
                 # contain the newest not-blocked available package for each
                 # name.
+                # In case of single selection the first match determins the
+                # final name though.
                 if not pkgnamehash.has_key(upkg["name"]):
+                    if single:
+                        if upkg.compstype != type or len(pkgnamehash.keys()) > 0:
+                            continue
                     pkgnamehash[upkg["name"]] = upkg
                 # If the compstype doesn't fit, skip it for now.
                 if upkg.compstype != type:
@@ -663,7 +672,6 @@ class RpmYum:
                         r = self.opresolver.install(upkg)
                     else:
                         r = self.opresolver.update(upkg)
-                donehash[upkg["name"]] = 1
                 # We just handled one package, make sure we handle it's
                 # obsoletes and language related packages
                 if upkg and r > 0:
@@ -1183,7 +1191,7 @@ class RpmYum:
         # distance and evr.
         # Special handling of filerequirements need to be done here in order to
         # allow cross buildarchtranslate compatible package updates.
-        ret = self.__handleBestPkg("update", pkg_list, None, False, dep[0][0] == "/")
+        ret = self.__handleBestPkg("update", pkg_list, None, False, dep[0][0] == "/", single=True)
         if ret > 0:
             return 1
         # Ok, we didn't find any package that could fullfill the

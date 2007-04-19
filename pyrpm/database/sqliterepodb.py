@@ -617,6 +617,14 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         pkg['epoch'] = [int(pkg['epoch'])]
         pkg.source = data['location_href']
         pkg.issrc = 0
+        pkg.size = int(pkg["archivesize"][0])
+        if self.comps != None:
+            if   self.comps.hasType(pkg["name"], "mandatory"):
+                pkg.compstype = "mandatory"
+            elif self.comps.hasType(pkg["name"], "default"):
+                pkg.compstype = "default"
+            elif self.comps.hasType(pkg["name"], "optional"):
+                pkg.compstype = "optional"
         pkg["triggers"] = []
         return pkg
 
@@ -743,7 +751,6 @@ class SqliteRepoDB(repodb.RpmRepoDB):
             return self._pkgs[pkgKey]
         pkg = self.readRpm(pkgKey)
         if pkg:
-            pkg.size = int(pkg["archivesize"][0])
             self._pkgs[pkgKey] = pkg
             if self._isExcluded(pkg):
                 self._pkgs[pkgKey] = None
