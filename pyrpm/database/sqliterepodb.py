@@ -237,7 +237,7 @@ class SqliteRepoDB(repodb.RpmRepoDB):
         # this fails
         try:
             f = open(filename, 'w')
-            db = sqlite3.connect(filename, client_encoding='utf8')
+            db = sqlite3.connect(filename)
         except IOError:
             log.warning("Could not create sqlite cache file, using in memory "
                         "cache instead")

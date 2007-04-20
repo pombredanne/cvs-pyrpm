@@ -20,6 +20,9 @@ if sqlite:
     Row = None
 
     def connect(*args, **kwargs):
+        # We currently require utf8 enconding for sqlite2 python
+        if not kwargs.has_key('client_encoding'):
+            kwargs['client_encoding'] = 'utf8'
         return Connection(*args, **kwargs)
 
     class Connection(sqlite.Connection):
@@ -45,3 +48,5 @@ if sqlite:
         def executemany(self, query, param_sequence):
             query = self.___translate_query(query)
             return self.cursor.executemany(SQL, param_sequence)
+
+# vim:ts=4:sw=4:showmatch:expandtab
