@@ -47,6 +47,18 @@ class JointDB(db.RpmDatabase):
                 return True
         return False
 
+    def importFilelist(self):
+        ret = 0
+        for db in self.dbs:
+            ret |= db.importFilelist()
+        return ret
+
+    def isFilelistImported(self):
+        ret = 1
+        for db in self.dbs:
+            ret &= db.isFilelistImported()
+        return ret
+
     def isIdentitySave(self):
         """return if package objects that are added are in the db afterwards
         (.__contains__() returns True and the object are return from searches)

@@ -60,6 +60,12 @@ class RpmDatabase:
         if self.buildroot and self.buildroot[-1] != '/':
             self.buildroot += '/'
 
+    def importFilelist(self):
+        return 1
+
+    def isFilelistImported(self):
+        return 1
+
     ### not implemented functions ###
 
     def open(self):

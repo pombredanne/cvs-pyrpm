@@ -43,6 +43,7 @@ class RhnRepoDB(JointDB):
 
     def __init__(self, config, source, buildroot='', nc=None):
         JointDB.__init__(self, config, source, buildroot)
+        self.reponame = "rhnrepo"
         if not use_rhn:
             return
         up2date_cfg = rhnconfig.initUp2dateConfig()
@@ -57,6 +58,12 @@ class RhnRepoDB(JointDB):
         for channel in svrChannels: 
             rcdb = RhnChannelRepoDB(config, (channel['url']+'/GET-REQ/'+channel['label'], ), buildroot, channel['label'], nc)
             self.addDB(rcdb)
+
+    def _matchesFile(self, fname):
+        ret = True
+        for db in self.dbs:
+            ret &= (db._matchesFile(fname) != None)
+        return ret
 
 
 class RhnChannelRepoDB(SqliteRepoDB):
