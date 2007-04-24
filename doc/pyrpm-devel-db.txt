@@ -1,0 +1,391 @@
+Database Interface
+------------------
+
+A database within pyrpm is a set of rpms. Basic operations supported 
+by databases are:
+
+ * open, close, read, clear - NOPs for some classes
+ * clearPkgs - remove tags from rpms to reduce memeory usage
+ * isFilelistImported, importFilelist - NOPs for non repo dbs
+ * reloadDependencies - needed after loading filelist
+ * adding and removing rpms - some do that in memory others directly 
+                              write to disk
+ * in operator
+ * getMemoryCopy - a copy of the database that can be modified in memory
+ * iterate over Provides, Requires, Conflicts, Obsoletes, Triggers and Files
+   (PRCOTFs)
+ * search for name and PRCOTFs
+ * getFileRequires, getPkgsFileRequires
+
+Database Classes
+----------------
+
+Most features are implemented in seperate classes. Those features are brought
+together either by inheritance or by using instances of other classes.
+
+ RpmDatabase - abstract super class
+   RpmDB - The on disk rpm db(4)
+     RpmDiskShadowDB - allow virtually removes from db that are not written 
+                       to disk but insted are just filtered from all results
+   RpmMemoryDB - in memory db that builds hashes for searching, work with all 
+                 kind of rpms
+     RpmRepoDB - Yum repository, reads data into memory
+       SqliteRepoDB - uses the yum sqlite db
+         RhnChannelRepoDB - deals with RHN channels which are very similar 
+                            to Yum repositories
+     RpmExternalSearchDB - use another db (sqlite) for searching while 
+                           maintaining an own list of rpms. All rpms must be 
+                           contained in the external db! 
+   JointDB - treat several dbs as one
+     RhnRepoDB - RHN Repository. Work is done by RhnChannelRepoDB instances
+     RpmShadowDB - current state during resolving - see RpmYum.pydb 
+                   use case below
+
+Use Cases
+---------
+
+Altough databases are used in more or less every script. There are two
+use cases within pyrpmyum that cover all database classes.
+
+"->" means holding a pointer to an/several instance(s) of another class 
+
+RpmYum.repos 
+~~~~~~~~~~~~
+
+Database containing all rpms that are used to resolve
+dependencies. After creation this database is read only.
+
+ JointDB
+  -> SqliteRepoDB - on per repository 
+  -> RhnRepoDB - optional
+   -> RhnChannelRepoDB - one per channel 
+  -> RpmMemoryDB - containing rpms given at the command line (optional)
+
+RpmYum.pydb
+~~~~~~~~~~~
+
+Database used for resolving. Rpms are added and removed to/from that
+db and the searches for resolving dependencies are performed on
+it. All modifications are kept in memory. It uses the RpmYum.repos and
+the RpmDB for searching and filters the results to the rpms that have
+not yet removed or have been added. That way neither linear search nor
+building additional hashes is needed.
+ 
+ RpmShadowDB
+  -> RpmExternalSearchDB - keeps track of rpms installed from the repos
+   -> RpmYum.repos - used for searches. See above for details
+  -> RpmDiskShadowDB - keeps track of the rpms deleted in the RpmDB
+   -> RpmDB - used for searches
+
+How does a binary rpm look like?
+--------------------------------
+
+For RPM there are nowadays several "formats" in which you can find information
+about rpm packages. The most typical one is of course the binary rpm header
+which is part of every binart rpm package. A typical binary rpm package looks
+like this:
+
+-------------------------------------------
++------+-----------+--------+-------------+
+| Lead | Signature | Header | Gziped CPIO |
++------+-----------+--------+-------------+
+-------------------------------------------
+
+The lead has a fixed size of 96 bytes and contains some very basic information
+about the binary rpm. It can also generally be used to determine if a file is
+a binary rpm or not (using file e.g.) as it contains some very specific to
+easily identify them.
+
+The signature and the header are stored as rpm header structures. Rpm header
+structures look like this:
+
+-------------------------------------------------------
++-------+---------+-----------+-----------+-----------+
+| Magic | IndexNr | StoreSize | Indexdata | Storedata |
++-------+---------+-----------+-----------+-----------+
+-------------------------------------------------------
+
+The Magic is a hardcoded value, IndexNr the number of index entries and
+StoreSize the size in bytes of the store data.
+
+Indexdata consists of IndexNr index entries each of which is 16 bytes. Each
+index entry looks like this:
+
+-------------------------------
++-----+------+--------+-------+
+| Tag | Type | Offset | Count |
++-----+------+--------+-------+
+-------------------------------
+
+Tag specifies which tag this entry is about. Type specifies the type of the
+tage. Offset specifies at which offset in the Storedata the data begins for
+this tag. Count has various size meanings depending on the type.
+
+Storedata finally contains the real tag information. As mentioned in the
+previous paragraph by using an index entry from the Indexdata you can find
+and parse all data relevant to a specifc tag. The format depends of course
+on the type of the tag.
+
+More detailed information about the binary rpm format can be found here:
+link:http://www.rpm.org/max-rpm/s1-rpm-file-format-rpm-file-format.html[]
+
+The rpm binary format can be partially found in the rpmdb as well. The file
+/var/lib/rpm/Packages contains the complete headers of the orignal binary
+rpms in a rpm header structure format without the 8 byte magic and with
+some additional installation revelvant indexes appended.
+
+Another nowadays common format for reduced rpm header data is the repo metadata
+format used by yum. It is a split up and reduced version of the orignal
+rpm header information using XML. It is mainly useful to determine and resolve
+dependencies of rpm packages. More information about the metadata can be found
+here:
+
+link:http://linux.duke.edu/projects/metadata/[]
+
+Other less common storage formats include databases like SQLite or MySQL which
+e.g yum uses to convert the repodata format to a more usable form locally.
+
+Apart from that rpm itself extracts quite a bit of the information from rpm
+binary headers and writes them in various db4 files in /var/lib/rpm.
+
+
+RPM database internals
+----------------------
+
+This section describes the structure from the various files in
+/var/lib/rpm. All files are db4 files, either hash or btree based. With the
+exception of Packages all files have the corresponding rpmtag based value as
+key. The data consists of integer pairs which contain the package id and
+the index at which this entry can be found in the rpm header of that tag. The
+values are 4 byte integers in host byte order. For some tags the index doesn't
+make any sense. In those cases the index value will always be set to 0.
+
+
+Filelist
+~~~~~~~~
+
+Basenames (hash)::
+ * key: Basename (string)
+ * values: list of 2-tuples: installid (4 byte int), basenameindex (4 byte int)
+
+Conflictname (hash)::
+ * key: Conflictname (string)
+ * values: list of 2-tuples: installid (4 byte int), conflictindex (4 byte int)
+
+Dirnames (btree)::
+ * key: Dirname (string)
+ * values: list of 2-tuples: installid (4 byte int), dirindex (4 byte int)
+
+Filemd5s (hash)::
+ * key: md5sum (4 * 4 byte int, no hex string!)
+ * values: list of 2-tuples: installid (4 byte int), filemd5sindex (4 byte int)
+
+ Only stored if file md5sum exists and if the file is a regular file (usually
+ equivalent)
+
+Group (hash)::
+ * key: Groupname (string)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Installtid (btree)::
+ * key: Installtime of transaction (4 byte int, time() value)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Name (hash)::
+ * key: Packagename (string)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Packages (hash)::
+ * key: Installid (4 byte int)
+ * values: Complete binary rpm header with some  additional information from
+           signature without lead.
+
+Providename (hash)::
+ * key: Providename (string)
+ * values: list of 2-tuples: installid (4 byte int), providenameindex (4 byte int)
+
+Provideversion (btree)::
+ * key: Provideversion (string)
+ * values: list of 2-tuples: installid (4 byte int), provideversionindex (4 byte int)
+
+Pubkeys (hash)::
+ * key: unknown yet
+ * values: unknown yet
+
+Requirename (hash)::
+ * key: Requirename (string)
+ * values: list of 2-tuples: installid (4 byte int), requirenameindex (4 byte int)
+
+ Only contains the requirenames of not install prereqs
+
+Requireversion (btree)::
+ * key: Requireversion (string)
+ * values: list of 2-tuples: installid (4 byte int), requireversionindex (4 byte int)
+
+Sha1header (hash)::
+ * key: Sha1header (string) (just as the value from the header)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Sigmd5 (hash)::
+ * key: md5sum from header (4 * 4 byte int)
+ * values: list of 2-tuples: installid (4 byte int), index (4 byte int) (always 0)
+
+Triggername (hash)::
+ * key: Triggername (string)
+ * values: list of 2-tuples: installid (4 byte int), triggerindex (4 byte int)
+
+ Only contains the first entry for each name from a package
+
+
+Example
+~~~~~~~
+
+Now an example of the connection between the package headers which are stored
+in Packages and the rest of the files.
+
+The connection between /var/lib/rpm/Packages and the other files looks like
+this:
+
+/var/lib/rpm/Packages:
+^^^^^^^^^^^^^^^^^^^^^^
+'----------'-----------'-----
+ Package id Requirename Index
+-----------------------------
+ 5          a           0
+            b           1
+ 8          c           0
+            a           1
+            b           2
+-----------------------------
+
+
+/var/lib/rpm/Requirename:
+^^^^^^^^^^^^^^^^^^^^^^^^^
+'-----------'----------'-----
+ Requirename Package Id Index
+-----------------------------
+ a           5          0
+             8          1
+ b           5          1
+             8          2
+ c           8          0
+-----------------------------
+
+That means the complete /var/lib/rpm files can be cross checked with
+/var/lib/rpm/Packages and can be regenerated from that file as well.
+
+An exception is Installtid. This db file contains as keys the TID which is a
+unique time in seconds since 1970 that reflects a complete transaction. Every
+header in Packages contains that TID as "installtid" tag. The values of the
+Installtid db file are again pairs of integers with a package id as first
+value and the second value always 0. Here a small example:
+
+
+/var/lib/rpm/Packages:
+^^^^^^^^^^^^^^^^^^^^^^
+'----------'-----------
+ Package id Install Tid
+-----------------------
+ 5          1000000
+ 8          1000000
+ 6          1234567
+ 9          1234567
+ 7          2345678
+-----------------------
+
+/var/lib/rpm/Installtid:
+^^^^^^^^^^^^^^^^^^^^^^^^
+'-----------'----------'-----
+ Install Tid Package ID Index
+-----------------------------
+ 1000000     5          0
+             8          0
+ 1234567     6          0
+             9          0
+ 2345678     7          0
+-----------------------------
+
+As you can see it can happen that package ID's get reused, in our example 6.
+This can happen if a package gets deleted and the ID "dropped". So there is
+unfortunately no autoincrementing ID for the packages.
+
+Notes about the Repo-Metadata
+-----------------------------
+
+The following things should be noted about the repo metadata. yum is using
+the repodata only within the resolver part to determine a set of rpms that
+should be updated and/or installed. Then the complete rpm headers are
+downloaded and another dependency check from librpm is run in addition to
+determining the ordering of rpm packages.
+
+Here a few limitations you should be aware of if you want to work with the
+repodata for more than the resolver or understand the limits of the
+resolver:
+
+ - Repodata has evolved over time. Until now no version information has been
+   added to the created data, this might make sense for future changes.
+ - Even if no epoch is specified in the rpm header, the metadata will
+   specify this as "0". That's the correct way for version and dependency
+   checks.
+ - Dependency information is often specified like `bash >= 3.0` and consists
+   of a (name, flag, version) triple. The flag part is specified as integer
+   within the rpm header and is only partially copied over into the repodata.
+   Installation ordering of rpm packages is not possible with the current
+   available data (or only based on reduced data). Future repodata could make
+   the data more complete or just copy the integer into the output to provide
+   it as exact copy.
+   (Repo data adds a "pre" flag if the RPMSENSE_PREREQ flag is set. That
+   information is actually not complete to identify install prereq versus
+   an erase prereq.)
+ - The `primary.xml.gz` file contains a subset of the included files. Because
+   of thise some operations cannot be equivalently with binary rpms or
+   repodata headers.
+
+Huge Dependency Data
+--------------------
+
+The data eating up RAM in rpm headers are descriptions, changelogs and
+filelists.
+
+The dependency data we operate with is extremely huge. In addition to the
+`Provides:` data which contains shared libs, rpm versions and explicitely
+listed ones in .spec files, dependency data can also use any filerequires
+like e.g. `Requires: /usr/bin/foo` to reference any file in any other rpm
+package. That means we potentially have to look at a filelist of all rpm
+packages. That data is extremely huge as the current Fedora Core
+development tree contains more than 350000 files.
+
+As the dependency data is worked with on each client to update the machine,
+it must be a goal to reduce this data to a smaller subset.
+
+The current repo metadata has a fixed file regex of
+`^(.\*bin/.\*|/etc/.\*|/usr/lib/sendmail)$` and a directory regex of
+`^(.\*bin/.\*|/etc/.\*)$`. That regex specifies the data given in the
+`repodata/primary.xml.gz` file and you have to fallback to the complete
+filelists available in `repodata/filelists.xml.gz` if any dependency
+request is done outside of that data. (The regex gives a deterministic way
+to know when to load the full filelist.) The regex used to be pretty
+complete for Fedora Core in the past, but additional filerequires are
+present in newer Fedora Core and Fedora Extra rpm packages which require
+a reload of the complete lists.
+
+In addition to the completeness problems above, it was also noted that
+the regex lists contain 100 times more data than actually being used in
+current repositories. Conary is thus maintaining explicit lists of
+possible file requires. Maybe new ways to add autogenerated, small filelists
+can be worked out that would work for most comon usage cases, also with
+the fallback to the complete lists like yum / createrepo implement right
+now.
+
+
+Storing Complete Dep Graphs
+---------------------------
+
+It would also be possible to store dependency graphs that contain data for
+the resolver to select the right rpm packages plus the orderer to specify
+the right sequence to install them. But many machines do have further
+packages installed outside of that package set, so this would then mostly
+be used for new installs. Optimizing the general update path for running
+machines should be more important than improving the install path for
+new installs, so this is currently no goal, but would very well be possible
+todo.
