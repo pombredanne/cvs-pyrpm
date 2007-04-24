@@ -918,11 +918,6 @@ class SqliteRepoDB(repodb.RpmRepoDB):
                 result.setdefault(pkg, [ ]).append((name_, flag_, version_))
             elif version_ == "":
                 result.setdefault(pkg, [ ]).append((name_, flag_, version_))
-                # compare with package version for unversioned provides
-                #evr2 = (pkg.getEpoch(), pkg["version"], pkg["release"])
-                #if functions.evrCompare(evr2, flag, evr):
-                #    result.setdefault(pkg, [ ]).append(
-                #        (name_, flag_, version_))
         if cache is not None:
             cache[query] = result
         return result

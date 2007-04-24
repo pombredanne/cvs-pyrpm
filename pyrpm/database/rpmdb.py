@@ -770,10 +770,6 @@ class RpmDB(db.RpmDatabase):
                 result.setdefault(pkg, [ ]).append(dep)
             elif version_ == "":
                 result.setdefault(pkg, [ ]).append(dep)
-                # compare with package version for unversioned provides
-                #evr2 = (pkg.getEpoch(), pkg["version"], pkg["release"])
-                #if functions.evrCompare(evr2, flag, evr):
-                #    result.setdefault(pkg, [ ]).append(dep)
         return result
 
     def searchProvides(self, name, flag, version):
@@ -788,7 +784,6 @@ class RpmDB(db.RpmDatabase):
         for id in self.iterId(data2):
             dirname_ids[id] = None
 
-        #print `data1` , `data2`, set2
         result = []
         for id, idx in self.iterIdIdx(data1):
             if id not in dirname_ids:
@@ -796,8 +791,6 @@ class RpmDB(db.RpmDatabase):
             pkg = self.getPkgById(id)
             if pkg and pkg.iterFilenames()[idx] == filename:
                 result.append(pkg)
-            #elif pkg:
-            #    print "dropping", pkg.getNEVRA(), pkg.iterFilenames()[idx]
         return result
 
     def searchRequires(self, name, flag, version):
@@ -861,7 +854,7 @@ class RpmDB(db.RpmDatabase):
                             if n == name:
                                 result.append(pkg)
                                 break
-        #normalizeList(result)
+        normalizeList(result)
         return result
 
     def _getDBPath(self):

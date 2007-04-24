@@ -1064,37 +1064,6 @@ def labelCompare(e1, e2):
             r = stringCompare(e1[2], e2[2])
     return r
 
-#def evrCompare(evr1, comp, evr2):
-#    """Check whether evr1 matches comp (RPMSENSE_*) evr2.
-#
-#    Return True if it does, False otherwise.  Each of evr1 and evr2 can be
-#    a string or an (E, V, R) string tuple."""
-#
-#    if isinstance(evr1, TupleType):
-#        e1 = evr1
-#    else:
-#        e1 = evrSplit(evr1)
-#    if isinstance(evr2, TupleType):
-#        e2 = evr2
-#    else:
-#        e2 = evrSplit(evr2)
-#    #if rpmconfig.ignore_epoch:
-#    #    if comp == RPMSENSE_EQUAL and e1[1] == e2[1]:
-#    #        e1 = ("0", e1[1], e1[2])
-#    #        e2 = ("0", e2[1], e2[2])
-#    r = labelCompare(e1, e2)
-#    res = False
-#    if r == -1:
-#        if comp & RPMSENSE_LESS:
-#            res = True
-#    elif r == 0:
-#        if comp & RPMSENSE_EQUAL:
-#            res = True
-#    else: # res == 1
-#        if comp & RPMSENSE_GREATER:
-#            res = True
-#    return res
-
 def pkgCompare(p1, p2):
     """Compare EVR of RpmPackage's p1 and p2.
 

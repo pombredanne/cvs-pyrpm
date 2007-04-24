@@ -160,12 +160,6 @@ class ProvidesList:
                 continue
             if v == "":
                 ret.setdefault(rpm, [ ]).append((name, f, v))
-                # The following check is stricter, but not correct:
-                # Compare with package version for unversioned provides.
-                #evr2 = (rpm.getEpoch(), rpm["version"], rpm["release"])
-                #if functions.evrCompare(evr2, flag, evr):
-                #    ret.setdefault(rpm, [ ]).append((name, f, v))
-
         return ret
 
     def __iter__(self):
