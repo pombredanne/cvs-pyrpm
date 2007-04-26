@@ -2513,6 +2513,8 @@ class ReadRpm: # pylint: disable-msg=R0904
                 if i[:1] and not i[:1].isdigit():
                     self.printErr("dependency version starts " +
                         "with non-digit: %s" % i)
+                if "%" in i:
+                    self.printErr("dependency version contains %%: %s" % i)
         if self["payloadformat"] not in [None, "cpio", "drpm"]:
             self.printErr("wrong payload format %s" % self["payloadformat"])
         if self.strict:
