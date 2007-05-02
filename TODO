@@ -1,0 +1,43 @@
+todo list:
+ * anything we should add to pyrpm:
+   http://www.jur-linux.org/hg/rpm/?rev/6a6942188e65
+ * better docu
+ * remove pyrpmcreaterepo
+ * faster import of XML repodata into sqlite by importing all data within one
+   transaction?
+ * presto/deltarpm integration
+ * For space checks on the filesystem, the current algorithm needs quite a lot
+   of time. Can a simpler version be used for e.g. new installs into one
+   filesystem or other special cases?
+ * only works as root user: "pyrpmyum list all" (rpmdb opened rw instead of
+   ro?)
+ * error line for "Output running pre uninstall" needs a newline if hashes
+   are output
+ * RHN cookies, re-auth after timeout
+ * directly read sqlite data instead of repomd in FC-development trees, also
+   sign the sqlite data?
+ * better sqlite support
+ * better selinux support
+ * Update 64bit -> 32bit package: 64bit apps stay installed for multilib
+   support, maybe check for updates versus multilib installs.
+ * update/sync to some package selection from a kickstart file:
+   "pyrpmyum --packageselection=ksfile upgrade"
+ * testcases for how updates should work
+ * add python !ElementTree compat code if it is not yet installed
+ * improve db4 python bindings for better option settings
+ * oldpyrpm: debuginfo checking if empty
+ * create a development tree where all deps stay in sync and only newer rpms
+   with ok deps are added
+ * no persistent connections are used for pyrpmdbverify -c yum.conf
+ * urlgrabber: oldpyrpm.py: "./oldpyrpm.py -c yum.conf --nodigest --nopayload"
+   for missing rpms openFd errors, but then a connection stays open.
+ * use class !PrintHash in pyrpm
+ * oldpyrpm.py: mirrorlist: use threading and several processes to
+   speed up checks
+
+nice ideas, but probably won't get done from existing developers:
+ * allow translated output
+ * pyrpm should first update itself, then the rest of the system
+ * advise to reboot if a newer kernel is installed
+ * opengpg reading the rpm header to use oldpyrpm.py routine
+
