@@ -32,6 +32,7 @@ class HashList:
         self.index = self.list.index
         self.has_key = self.hash.has_key
         self.keys = self.hash.keys
+        self.iteritems = self.hash.iteritems
 
     def clear(self):
         """ clear internal structures """
