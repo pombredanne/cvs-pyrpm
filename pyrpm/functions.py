@@ -549,7 +549,7 @@ def getFreeCachespace(config, operations):
         if op == OP_ERASE:
             continue
         # Also local files won't be cached either.
-        if pkg.source.startswith("FIle:/") or pkg.source[0] == "/":
+        if pkg.source.startswith("file:/") or pkg.source[0] == "/":
             continue
         try:
             freespace -= pkg['signature']['size_in_sig'][0]+pkg.range_header[0]
