@@ -541,6 +541,9 @@ class RpmYum:
 
                 # Filter packages with lower versions from our final list
                 l = self._filterPkgVersion(ipkg, pkgnamearchhash[name][arch])
+                if len(l) == 0:
+                    pkgnamearchhash[name][arch] = []
+                    continue
                 # Find the best matching package for the given list of packages
                 # and archs.
                 r = self.__handleBestPkg("update", l, march,

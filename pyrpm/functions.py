@@ -549,7 +549,7 @@ def getFreeCachespace(config, operations):
         if op == OP_ERASE:
             continue
         # Also local files won't be cached either.
-        if pkg.source.startswith("file:/") or pkg.source[0] == "/":
+        if pkg.source.startswith("FIle:/") or pkg.source[0] == "/":
             continue
         try:
             freespace -= pkg['signature']['size_in_sig'][0]+pkg.range_header[0]
@@ -686,7 +686,7 @@ def int2str(val, binary=True):
 def _uriToFilename(uri):
     """Convert a file:/ URI or a local path to a local path."""
 
-    if not uri.startswith("file://"):
+    if not uri.startswith("file:/"):
         filename = uri
     else:
         filename = uri[5:]
