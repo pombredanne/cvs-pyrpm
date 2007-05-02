@@ -47,9 +47,10 @@ if sys.version_info < (2, 3):
 for _i in _files:
     _cmd = "from %s import *" % _i
     exec _cmd
+else:
+    del _i
+    del _cmd
 
-del _i
 del _files
-del _cmd
 
 # vim:ts=4:sw=4:showmatch:expandtab
