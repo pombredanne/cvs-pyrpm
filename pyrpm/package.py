@@ -26,11 +26,7 @@ import functions
 from hashlist import HashList
 import openpgp
 from pyrpm.logger import log
-
-try:
-    import selinux
-except ImportError:
-    selinux = None
+import se_linux
 
 class _RpmFilenamesIterator:
     """An iterator over package files stored as basenames + dirindexes"""
@@ -580,10 +576,8 @@ class RpmPackage(RpmData):
         errors = []
         if not self.config.justdb:
             rfilist = self.__generateFileInfoList()
-            selinux_enabled = (selinux is not None and
-                               selinux.is_selinux_enabled() > 0)
             for filename in self.iterFilenames():
-                self.__verifyFile(errors, filename, db, selinux_enabled, rfilist[filename])
+                self.__verifyFile(errors, filename, db, rfilist[filename])
         if resolver is not None:
             if not self.config.nodeps:
                 (unresolved, _) = resolver.getPkgDependencies(self)
@@ -640,15 +634,16 @@ class RpmPackage(RpmData):
         self.__readHeader()
         if not directory.endswith('/'):
             directory += '/'
-        self.__extract(useAttrs = False, pathPrefix = directory)
+        self.__extract(useAttrs = False, pathPrefix = directory,
+                       useSEcontext = False)
         log.info2("", nofmt=1)
 
-    def __verifyFile(self, errors, filename, db, selinux_enabled, rfi):
+    def __verifyFile(self, errors, filename, db, rfi):
         """Verify the file named by filename.
 
         Append a list of failures for self.verify to errors.  Use db for
         multilib conflict resolution.  Check SELinux contexts if
-        selinux_enabled."""
+        selinux is enabled."""
 
         def appendError(e):
             """Append IOError or OSError exception to errors."""
@@ -678,14 +673,14 @@ class RpmPackage(RpmData):
                       filename, stat.S_IFMT(st.st_mode), stat.S_IFMT(rfi.mode))
             errors.append((filename, "File type mismatch"))
             return
-        if selinux_enabled:
-            (err, file_context) = selinux.lgetfilecon(filename)
+        if self.config.selinux_enabled and se_linux.is_selinux_enabled():
+            (err, file_context) = se_linux.lgetfilecon(filename)
             if err < 0:
                 errors.append((filename, "lgetfilecon() failed"))
             else:
                 # %filecontexts not supported
-                (err, policy_context) = selinux.matchpathcon(filename,
-                                                             st.st_mode)
+                (err, policy_context) = se_linux.matchpathcon(filename,
+                                                              st.st_mode)
                 if err < 0:
                     errors.append((filename, "matchpathcon() failed"))
                 elif file_context != policy_context:
@@ -856,7 +851,8 @@ class RpmPackage(RpmData):
         self.generateFileNames()
         self.header_read = 1
 
-    def __extract(self, db=None, pathPrefix='', useAttrs=True):
+    def __extract(self, db=None, pathPrefix='', useAttrs=True,
+                  useSEcontext=None):
         """Extract files from self.io (positioned at start of payload).
 
         Raise ValueError on invalid package data, IOError, OSError.  Ignore
@@ -875,6 +871,10 @@ class RpmPackage(RpmData):
         issrc = self.isSourceRPM()
         if issrc:
             useAttrs = False
+            if useSEcontext is None:
+                useSEcontext = False
+        if useSEcontext is None:
+            useSEcontext = self.config.selinux_enabled
         if self.config.printhash:
             log.info2("\r\t\t\t\t\t\t ", nl=0, nofmt=1)
         while filename != "EOF":
@@ -894,7 +894,8 @@ class RpmPackage(RpmData):
                         self.__possibleHardLink(rfi)
                     else:
                         functions.installFile(rfi, cpio, filesize, useAttrs,
-                                              pathPrefix = pathPrefix)
+                                              pathPrefix = pathPrefix,
+                                              useSEcontext = useSEcontext)
                         # Many scripts have problems like e.g. openssh is
                         # stopping all sshd (also outside of a chroot if
                         # it is de-installed. Real hacky workaround:
@@ -914,7 +915,7 @@ class RpmPackage(RpmData):
             nfiles = 1
         if self.config.printhash:
             log.info2("#"*(30-int(30*n/nfiles)), nl=0, nofmt=1)
-        self.__handleRemainingHardlinks(useAttrs, pathPrefix)
+        self.__handleRemainingHardlinks(useAttrs, pathPrefix, useSEcontext)
 
     def __verifyFileInstall(self, rfi, db, pathPrefix=''):
         """Return 1 if file with RpmFileInfo rfi should be installed.
@@ -1123,7 +1124,7 @@ class RpmPackage(RpmData):
         if key in self.hardlinks:
             del self.hardlinks[key]
 
-    def __handleRemainingHardlinks(self, useAttrs, pathPrefix):
+    def __handleRemainingHardlinks(self, useAttrs, pathPrefix, useSEcontext):
         """Create empty hard-linked files according to self.hardlinks.
 
         Ignore file attributes if not useAttrs.  Prefix filenames by pathPrefix
@@ -1133,7 +1134,8 @@ class RpmPackage(RpmData):
         for key in self.hardlinks.keys():
             rfi = self.hardlinks[key].pop(0)
             functions.installFile(rfi, None, 0, useAttrs,
-                                  pathPrefix = pathPrefix)
+                                  pathPrefix = pathPrefix,
+                                  useSEcontext = useSEcontext)
             self.__handleHardlinks(rfi, pathPrefix)
 
     def getRpmFileInfo(self, filename, i=None):

@@ -97,8 +97,8 @@ class Source:
 
         # load repos
         repos = [ ]
-        self.yumconf = YumConf(self.version, self.arch, None, filenames=[ ],
-                               reposdirs=[ ])
+        self.yumconf = YumConf(self.version, self.arch, rpmdb=None,
+                               filenames=[ ], reposdirs=[ ])
         if self.isRHEL() and self.cmpVersion("4.9") >= 0:
             # RHEL-5
 

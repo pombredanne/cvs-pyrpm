@@ -25,6 +25,7 @@ from orderer import *
 from logger import log
 from pyrpm.cache import NetworkCache
 from pyrpm import functions
+import se_linux
 
 class RpmController:
     """RPM state manager, handling package installation and deinstallation."""
@@ -41,6 +42,9 @@ class RpmController:
         self.db.open()
         if not self.db.read():
             raise ValueError, "Fatal: Couldn't read database"
+
+        if self.config.selinux_enabled:
+            se_linux.matchpathcon_init()
 
     def handleFiles(self, args):
         """Add packages with names (for OP_ERASE) or "URI"s (for other

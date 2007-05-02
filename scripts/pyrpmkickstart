@@ -36,6 +36,7 @@ PYBINDIR = os.path.dirname(sys.argv[0])
 
 import pyrpm
 import pyrpm.yum
+import pyrpm.se_linux
 from pyrpm.installer import *
 
 log = pyrpm.installer.log
@@ -374,6 +375,15 @@ def main():
         umount(stage2_img_dir)
         stage2_img_dir = None
 
+        if not (ks.has_key("install") and ks.has_key("selinux") and \
+                not ks["selinux"].has_key("disabled")):
+            pyrpm.rpmconfig.selinux_enabled = False
+        
+        # setup selinux to use stage2 contexts
+        if pyrpm.rpmconfig.selinux_enabled:
+            pyrpm.se_linux.matchpathcon_fini()
+            pyrpm.se_linux.matchpathcon_init_from_chroot(stage2_dir)
+
         # create dirs
         create_dir(stage2_dir, "/bin")
         create_dir(stage2_dir, "/dev")
@@ -425,8 +435,7 @@ def main():
         stage2_chroot = stage2_dir
         # test if bash is usable in changeroot
         log.info1("Testing if /bin/bash is usable in stage2")
-        if run_script("/bin/bash --version 2>/dev/null",
-                      stage2_chroot) != 0:
+        if run_script("/bin/bash --version", stage2_chroot) != 0:
             log.error("/bin/bash in stage2 is not usable, exiting.")
             return 1
 
@@ -490,7 +499,7 @@ def main():
             log.error("langsupport is not defined, exiting.")
             return 1
     else:
-        log.warning("langsupport is deprecated, ignoring.")
+        log.warning("langsupport is deprecated.")
 
     # monitor and xconfig::monitor
     if (source.isRHEL() and source.cmpVersion("5") < 0) or \
@@ -523,10 +532,6 @@ def main():
 
     # get system logical volumes
     system["lvmap"] = LVM_VOLGROUP.display()
-
-    # get selinux state of host system
-    (status, rusage, msg) = runScript(script="/usr/sbin/selinuxenabled")
-    selinux_enabled = (status == 0)
 
     # TODO: add other usable disklabels
     usable_disklabels = [ "msdos" ]
@@ -1987,18 +1992,18 @@ def main():
     ################################ languages ################################
 
     languages = [ ]
-    if (source.isRHEL() and source.cmpVersion("4.9") < 0) or \
-           (source.isFedora() and source.cmpVersion("6") < 0):
-        # langsupport is deprecated for RHEL>=5 and FC>=6
-        # get langsupport packages
-        if ks.has_key("langsupport"):
-            if ks["langsupport"].has_key("default"):
-                languages.append(ks["langsupport"]["default"][:2])
-                languages.append(ks["langsupport"]["default"][:5])
-            for lang in ks["langsupport"]["supported"]:
-                languages.append(lang[:2])
-                languages.append(lang[:5])
-            pyrpm.normalizeList(languages)
+#    if (source.isRHEL() and source.cmpVersion("4.9") < 0) or \
+#           (source.isFedora() and source.cmpVersion("6") < 0):
+    # langsupport is deprecated for RHEL>=5 and FC>=6
+    # get langsupport packages
+    if ks.has_key("langsupport"):
+        if ks["langsupport"].has_key("default"):
+            languages.append(ks["langsupport"]["default"][:2])
+            languages.append(ks["langsupport"]["default"][:5])
+        for lang in ks["langsupport"]["supported"]:
+            languages.append(lang[:2])
+            languages.append(lang[:5])
+        pyrpm.normalizeList(languages)
 
     ############################ package selection ############################
 
@@ -2449,9 +2454,7 @@ def main():
     # TODO: checkinstalled for upgrade?
 
     if not external_yum:
-        config = pyrpm.RpmConfig()
-        config.cachedir = cache_dir
-        config.buildroot = target_chroot
+        config = pyrpm.rpmconfig.copy()
         config.yumconf = [ yum_conf ]
         config.printhash = 1
         config.nofileconflicts = 1
@@ -3042,33 +3045,50 @@ def main():
                 log.error("Unable to remove cache file.")
 
 
-    # relabel if selinux is enabled
+    # relabel on first boot if selinux is enabled for guest and not available
+    # on host because of missing module or no support for selinux
     if ks.has_key("install") and ks.has_key("selinux") and \
            not ks["selinux"].has_key("disabled") and \
            ((source.isRHEL() and source.cmpVersion("3") > 0) or \
             (source.isFedora() and source.cmpVersion("2") > 0)):
 
-        log.info1("Fixing SELinux file contexts")
-
-        if not selinux_enabled:
+        if not pyrpm.rpmconfig.selinux_enabled or \
+               not pyrpm.se_linux.is_selinux_enabled() > 0:
+        
+            log.info1("Enabled SELinux file contexts relabling at first boot.")
+            
             # selinux not enforcing and not permissive in host system
             # touch .autorelabel in target chroot
             if not create_file(target_chroot, "/.autorelabel"):
                 log.error("Failed to create .autorelabel file.")
                 return 1
-            else:
-                log.info1("Relabling at first boot.")
+
         else:
-            log.info1("Relabling ...")
-            try:
-                check_exists(target_chroot, "/sbin/fixfiles")
-            except:
-                log.error("/sbin/fixfiles does not exist.")
-                return 1
-            else:
-                fixfiles = "/sbin/fixfiles restore"
-                if run_script(fixfiles, target_chroot) != 0:
-                    log.error("Relabling failed.")
+            # copy the stage2 file contexts file and relabel the differences
+            # to the installed file if the stage2 file is different
+
+            fname_1 = se_linux._gen_file_context_path(stage2_chroot)
+            digest = md5.new()
+            fd = open(fname_1)
+            pyrpm.updateDigestFromFile(digest, fd)
+            fd.close()
+            md5_1 = digest.hexdigest()
+
+            fname_2 = se_linux._gen_file_context_path(target_chroot)
+            digest = md5.new()
+            fd = open(fname_2)
+            pyrpm.updateDigestFromFile(digest, fd)
+            fd.close()
+            md5_2 = digest.hexdigest()
+
+            if md5_1 != md5_2:
+                # relabel if file_contexts file from stage2 is not identical to
+                # the installed one!
+                copy_file(fname_1, "%s.pre" % fname_2)
+                log.info1("SELinux file contexts difference relabling from "
+                          "stage2 to installed...")
+                run_script("fixfiles -C %s.pre restore" % fname_2,
+                           target_chroot)
 
     # run post script
     if ks.has_key("install") and ks.has_key("post") and len(ks["post"]) > 0:

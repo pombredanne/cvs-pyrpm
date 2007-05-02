@@ -25,6 +25,7 @@ try:
 except ImportError:
     print >> sys.stderr, "Error: Couldn't import tempfile python module. Only check scripts available."
 
+import se_linux
 import package
 
 from config import rpmconfig
@@ -226,7 +227,11 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
                 for prefix in pkg["prefixes"]:
                     e["RPM_INSTALL_PREFIX%d" % idx] = prefix
                     idx += 1
-            os.execve(args[0], args, e)
+            if rpmconfig.selinux_enabled and se_linux.is_selinux_enabled():
+                _env = [ "%s=%s" % (key, e[key]) for key in e.keys() ]
+                se_linux.rpm_execcon(0, args[0], args, _env)
+            else:
+                os.execve(args[0], args, e)
         finally:
             os._exit(255)
     os.close(wfd)
@@ -251,7 +256,8 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
 
     return (status, rusage_val, cret)
 
-def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
+def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None,
+                useSEcontext=True):
     """Install a file described by RpmFileInfo rfi, with input of given size
     from CPIOFile infd.
 
@@ -278,6 +284,8 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
                 os.close(fd)
             if useAttrs:
                 _setFileAttrs(tmpfilename, rfi)
+            if useSEcontext:
+                _setSEcontext(tmpfilename, rfi)
         except (IOError, OSError):
             os.unlink(tmpfilename)
             raise
@@ -287,6 +295,8 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
             os.makedirs(filename)
         if useAttrs:
             _setFileAttrs(filename, rfi)
+        if useSEcontext:
+            _setSEcontext(filename, rfi)
     elif S_ISLNK(mode):
         data1 = rfi.linkto
         data2 = infd.read(size)
@@ -303,6 +313,8 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
         try:
             if useAttrs:
                 os.lchown(tmpfilename, rfi.uid, rfi.gid)
+            if useSEcontext:
+                _setSEcontext(tmpfilename, rfi)
         except OSError:
             os.unlink(tmpfilename)
             raise
@@ -313,6 +325,8 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
         try:
             if useAttrs:
                 _setFileAttrs(tmpfilename, rfi)
+            if useSEcontext:
+                _setSEcontext(tmpfilename, rfi)
         except OSError:
             os.unlink(tmpfilename)
             raise
@@ -327,6 +341,8 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
         try:
             if useAttrs:
                 _setFileAttrs(tmpfilename, rfi)
+            if useSEcontext:
+                _setSEcontext(tmpfilename, rfi)
         except OSError:
             os.unlink(filename)
             raise
@@ -343,6 +359,8 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None):
         try:
             if useAttrs:
                 _setFileAttrs(tmpfilename, rfi)
+            if useSEcontext:
+                _setSEcontext(tmpfilename, rfi)
         except OSError:
             os.unlink(filename)
             raise
@@ -358,6 +376,17 @@ def _setFileAttrs(filename, rfi):
     os.chown(filename, rfi.uid, rfi.gid)
     os.chmod(filename, S_IMODE(rfi.mode))
     os.utime(filename, (rfi.mtime, rfi.mtime))
+
+def _setSEcontext(filename, rfi):
+    """Set SELinux context of filename data from RpmFileInfo rfi.
+
+    Raise OSError."""
+
+    if se_linux.is_selinux_enabled() >= 0:
+        context = se_linux.matchpathcon(rfi.filename, rfi.mode)
+        se_linux.lsetfilecon(filename, context[1])
+    else:
+        raise ImportError, "selinux module is not available"
 
 def makeDirs(fullname):
     """Create a parent directory of fullname if it does not already exist.

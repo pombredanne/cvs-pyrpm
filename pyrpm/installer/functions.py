@@ -20,6 +20,7 @@ import os, os.path, stat, signal, string, time, resource, struct
 from pyrpm.functions import normalizeList, runScript, pkgCompare
 from pyrpm.database import getRpmDB
 from config import log, flog, rpmconfig
+import pyrpm.se_linux as se_linux
 
 ################################## functions ##################################
 
@@ -495,6 +496,7 @@ def create_dir(buildroot, dir, mode=None):
             raise IOError, "'%s' is no directory." % dir
     if mode != None:
         os.chmod(d, mode)
+    set_SE_context(buildroot, dir)
 
 def create_link(buildroot, source, target):
     t = "%s/%s" % (buildroot, target)
@@ -508,6 +510,7 @@ def create_link(buildroot, source, target):
     else:
         if not os.path.islink(t):
             raise IOError, "'%s' is not a link." % target
+    set_SE_context(buildroot, target)
 
 def realpath(buildroot, path):
     t = "%s/%s" % (buildroot, path)
@@ -521,6 +524,7 @@ def check_exists(buildroot, target):
         raise IOError, "%s is missing." % target
 
 def create_file(buildroot, target, content=None, force=0, mode=None):
+    t = "%s/%s" % (buildroot, target)
     try:
         check_exists(buildroot, target)
     except:
@@ -531,7 +535,7 @@ def create_file(buildroot, target, content=None, force=0, mode=None):
     fd = None
     try:
         try:
-            fd = open("%s/%s" % (buildroot, target), "w")
+            fd = open(t, "w")
         except Exception, msg:
             log.error("Unable to open '%s' for writing: %s", target, msg)
             return 0
@@ -546,7 +550,9 @@ def create_file(buildroot, target, content=None, force=0, mode=None):
         if fd:
             fd.close()
     if mode != None:
-        os.chmod("%s/%s" % (buildroot, target), mode)
+        os.chmod(t, mode)
+    set_SE_context(buildroot, target)
+
     return 1
 
 def copy_device(source, target_dir, source_dir="", target=None):
@@ -570,30 +576,34 @@ def copy_device(source, target_dir, source_dir="", target=None):
     try:
         if s_linkto:
             create_dir(target_dir, os.path.dirname(s_linkto))
-            os.mknod("%s/%s" % (target_dir, s_linkto), stats.st_mode,
-                     stats.st_rdev)
+            create_device(target_dir, s_linkto, stats.st_mode,
+                          os.major(stats.st_rdev), os.minor(stats.st_rdev))
             create_dir(target_dir, os.path.dirname(target))
             os.symlink(s_linkto, t)
         else:
-            os.mknod(t, stats.st_mode, stats.st_rdev)
+            create_device(target_dir, target, stats.st_mode,
+                          os.major(stats.st_rdev), os.minor(stats.st_rdev))
     except Exception, msg:
         raise IOError, "Unable to copy device '%s': %s" % (s, msg)
 
 def create_device(buildroot, name, stat, major, minor):
-    if not os.path.exists(buildroot+name):
-        os.mknod(buildroot+name, stat, os.makedev(major, minor))
+    t = "%s/%s" % (buildroot, name)
+    if not os.path.exists(t):
+        os.mknod(t, stat, os.makedev(major, minor))
+        set_SE_context(buildroot, name)
+
+def set_SE_context(buildroot, filename):
+    t = "%s/%s" % (buildroot, filename)
+    if rpmconfig.selinux_enabled:
+        st = os.stat(t)
+        context = se_linux.matchpathcon(filename, st.st_mode)
+        se_linux.lsetfilecon(t, context[1])
 
 def create_min_devices(buildroot):
-    if not os.path.exists(buildroot+"/dev/console"):
-        os.mknod(buildroot+"/dev/console", 0666 | stat.S_IFCHR,
-                 os.makedev(5, 1))
-    if not os.path.exists(buildroot+"/dev/null"):
-        os.mknod(buildroot+"/dev/null", 0666 | stat.S_IFCHR, os.makedev(1, 3))
-    if not os.path.exists(buildroot+"/dev/urandom"):
-        os.mknod(buildroot+"/dev/urandom", 0666 | stat.S_IFCHR,
-                 os.makedev(1, 9))
-    if not os.path.exists(buildroot+"/dev/zero"):
-        os.mknod(buildroot+"/dev/zero", 0666 | stat.S_IFCHR, os.makedev(1, 5))
+    create_device(buildroot, "/dev/console", 0666 | stat.S_IFCHR, 5, 1)
+    create_device(buildroot, "/dev/null", 0666 | stat.S_IFCHR, 1, 3)
+    create_device(buildroot, "/dev/urandom", 0666 | stat.S_IFCHR, 1, 9)
+    create_device(buildroot, "/dev/zero", 0666 | stat.S_IFCHR, 1, 5)
 
 def getName(name):
     tmp = name[:]
