@@ -65,6 +65,9 @@ options:
 # Main program
 #
 def main():
+    if isSelinuxRunning() and not rpmconfig.selinux_enabled:
+        log.warning("SELinux support disabled because python interface not available. Please run fixfiles manually after operation is complete.")
+
     log.setInfoLogLevel(log.INFO2)
 
     # Our yum worker object
@@ -83,6 +86,7 @@ def main():
     if not yum.lock():
         log.error("couldn't lock pyrpmyum")
         return 0
+
     try:
         if not yum.setCommand(args[0]):
             return 0

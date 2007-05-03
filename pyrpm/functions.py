@@ -556,6 +556,15 @@ def shellCommandLine(args):
 
     return " ".join([_shellQuoteString(s) for s in args])
 
+def isSelinuxRunning():
+    """Returns True if selinux is running (premissive or enforcing), false
+    otherwise."""
+    # No selinuxenabled check: Surely no selinux on the machine.
+    if not os.path.isfile("/usr/sbin/selinuxenabled"):
+        return False
+    # selinuxenabled returns 0 if selinux is running
+    return (os.system("/usr/sbin/selinuxenabled") == 0)
+
 def getFreeCachespace(config, operations):
     """Check if there is enough diskspace for caching the rpms for the given
     operations.
