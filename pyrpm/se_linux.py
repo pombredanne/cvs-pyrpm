@@ -33,8 +33,7 @@ else:
         __a = selinux.rpm_execcon
         __a = selinux.lsetfilecon
         __a = selinux.lgetfilecon
-    except Exception, msg:
-        print msg
+    except:
         selinux = None
     else:
         del __a
