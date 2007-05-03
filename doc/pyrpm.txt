@@ -115,7 +115,9 @@ Over time quite a few nice things have come out of the project:
   Using pyrpmkickstart you can easily use a typical anaconda kickstart file
   to do an automated install either on a disk, partition, diskimage or even
   simple changeroots.
-
+- SELinux support is only working with newer versions of the python bindings
+  (v 2.0.13+). If the libselinux version is older, then SELinux support is 
+  disabled, because there are missing functions and a bug in rpm_execcon.
 
 Requirements for PyRPM
 ----------------------
