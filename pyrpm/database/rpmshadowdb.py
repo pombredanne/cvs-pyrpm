@@ -121,3 +121,5 @@ class RpmShadowDB(jointdb.JointDB):
         if len(self.dbs) == 1: return
         self.memorydb.addPkgs(self.diskdb.getPkgs())
         del self.dbs[1]
+
+# vim:ts=4:sw=4:showmatch:expandtab

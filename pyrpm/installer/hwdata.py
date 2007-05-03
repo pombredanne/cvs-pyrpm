@@ -123,3 +123,5 @@ class Monitors:
         if not self.monitors.has_key(monitor):
             return None
         return self.monitors[monitor]
+
+# vim:ts=4:sw=4:showmatch:expandtab

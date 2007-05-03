@@ -734,3 +734,5 @@ class LinkedListLRUCache:
         i = self.last.me
         obj = self.remove(i[0])
         return i
+
+# vim:ts=4:sw=4:showmatch:expandtab

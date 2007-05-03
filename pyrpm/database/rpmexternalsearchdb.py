@@ -82,4 +82,3 @@ class RpmExternalSearchDB(RpmMemoryDB):
             return self._filter(self.externaldb.searchPkgs(names))
 
 # vim:ts=4:sw=4:showmatch:expandtab
-

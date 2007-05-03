@@ -98,3 +98,5 @@ def lgetfilecon(filename):
     if __enabled < 0:
         return
     return selinux.lgetfilecon(filename)
+
+# vim:ts=4:sw=4:showmatch:expandtab
