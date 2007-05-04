@@ -4645,6 +4645,10 @@ class RpmRepo:
                 if Readf() != 1:
                     break
                 tmphash["timestamp"] = reader.Value()
+            elif name == "database_version":
+                if Readf() != 1:
+                    break
+                tmphash["database_version"] = reader.Value()
             elif self.verbose > 4:
                 print "new repomd entry: %s" % name
         return rethash
