@@ -5748,20 +5748,30 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
 def checkRepo(rpms):
     """Check if all src.rpms are included and does each -devel rpm have
     a corresponding normal rpm of the same arch."""
+    f = {}
     h = {}
     srcrpms = {}
     for rpm in rpms:
         h[(rpm["name"], rpm.getArch())] = 1
         if rpm.issrc:
-            srcrpms[rpm.getFilename()] = 1
+            srcrpms[rpm.getFilename()] = 0
+            f.setdefault(rpm["name"], []).append(rpm)
     for rpm in rpms:
         if rpm.issrc:
             continue
         if rpm["name"].endswith("-devel"):
             if not h.get((rpm["name"][:-6], rpm.getArch())):
                 print rpm.getFilename(), "only has a -devel subrpm"
-        if not srcrpms.get(rpm["sourcerpm"]):
+        if srcrpms.get(rpm["sourcerpm"]) == None:
             print rpm.getFilename(), "does not have a src.rpm", rpm["sourcerpm"]
+        else:
+            srcrpms[rpm["sourcerpm"]] += 1
+    for (rpm, value) in srcrpms.iteritems():
+        if value == 0:
+            print rpm, "only has a src.rpm"
+    for (name, rpms) in f.iteritems():
+        if len(rpms) > 1:
+            print name, "has more than one src.rpm with the same name"
 
 
 def verifyStructure(verbose, packages, phash, tag, useidx=1):
