@@ -854,7 +854,7 @@ class RpmDB(db.RpmDatabase):
                             if n == name:
                                 result.append(pkg)
                                 break
-        normalizeList(result)
+        functions.normalizeList(result)
         return result
 
     def _getDBPath(self):
