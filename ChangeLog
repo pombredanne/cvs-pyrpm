@@ -1,4 +1,179 @@
+2007-05-07  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.70, pyrpm/__init__.py 1.73, scripts/oldpyrpm.py 1.314:
+	- release 0.69
+
+2007-05-04  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.313:
+	- new entry in repomd.xml in FE-development
+
+2007-05-03  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/database/lrucache.py 1.3, pyrpm/database/rpmexternalsearchdb.py 1.12, pyrpm/database/rpmshadowdb.py 1.10, pyrpm/installer/hwdata.py 1.5, pyrpm/se_linux.py 1.3, scripts/pyrpmmountimage 1.3:
+	- make vim users happy
+
+2007-05-03  Thomas Woerner  <twoerner@redhat.com>
+
+	* doc/pyrpm-tools.txt 1.24, doc/pyrpm.txt 1.20: [tw9
+	- some documentation for SELinux support
+
+2007-05-03  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.241, scripts/pyrpmyum 1.71:
+	- Add warning in case SELinux is enabled but python bindings don't work.
+
+2007-05-03  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/se_linux.py 1.2: [tw]
+	- dropped debug message for missing selinux functions
+
+2007-05-02  Florian La Roche  <laroche@redhat.com>
+
+	* TODO 1.14: - add pyrpmyum/selinux todo
+
+2007-05-02  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/config.py 1.72, pyrpm/control.py 1.121, pyrpm/functions.py 1.240, pyrpm/installer/functions.py 1.34, pyrpm/installer/installer.py 1.37, pyrpm/package.py 1.164, pyrpm/se_linux.py 1.1, scripts/pyrpmkickstart 1.122:
+	[tw]
+	- make pyrpm and pyrpmkickstart SELinux aware
+
+	* pyrpm/__init__.py 1.72: [tw]
+	- only free _i and _cmd if set
+
+2007-05-02  Florian La Roche  <laroche@redhat.com>
+
+	* TODO 1.13:
+	- add TODO file to cvs again, best place to keep this info current
+
+2007-05-02  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.239: - Vim outsmarted me! fixed!
+
+	* pyrpm/cache.py 1.28, pyrpm/functions.py 1.238, pyrpm/yum.py 1.167:
+	- Make sure file URLS are treated similar to yum (file:/foo/bar/ is wrongly
+	  valid in yum).
+
+2007-05-02  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/yum.py 1.166: next try
+
+	* pyrpm/hashlist.py 1.27, pyrpm/yum.py 1.165:
+	Fix: getObsoleteConflicts() returns a hashlist
+
+2007-04-26  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.312:
+	- add another check: warn if % is in a dependency version tag
+
+	* scripts/oldpyrpm.py 1.311: - improve the error message
+
+2007-04-25  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/base.py 1.61, pyrpm/control.py 1.120:
+	- Added [pre|post]trans support
+
+2007-04-25  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/oldpyrpm.py 1.310:
+	- Deps are of the form (name, tag, version). Warn if the version does not
+	  start with a digit for the --strict case.
+
+2007-04-24  Florian Festi  <ffesti@redhat.com>
+
+	* doc/Makefile.am 1.15: added pyrpm-devel-db.txt to the Makefile
+
+	* doc/pyrpm-devel-db.txt 1.1, doc/pyrpm-devel.txt 1.7:
+	split database documentation from pyrpm-devel.txt and added description of our database classes
+
+2007-04-24  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/lists.py 1.31, pyrpm/database/rpmdb.py 1.44, pyrpm/database/sqliterepodb.py 1.43, pyrpm/functions.py 1.237:
+	- Drop unused evrCompare() function and all commented out sections that were
+	  using it in the past.
+	- Normalize list in rpmdb.searchPkgs()
+
+2007-04-24  Florian Festi  <ffesti@redhat.com>
+
+	* pyrpm/database/rpmmemorydb.py 1.7:
+	remove no longer used pyrpm.database.rpmmemorydb module
+
+2007-04-23  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/db.py 1.28, pyrpm/database/jointdb.py 1.14, pyrpm/database/rhndb.py 1.7:
+	- Fixed a few bugs related to filelist imports for the new rhndb.
+
+2007-04-20  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/sqlitecompat.py 1.5, pyrpm/database/sqliterepodb.py 1.42:
+	- Fix to make our sqlite[3] interface work on python2.5/sqlite3 properly again
+
+2007-04-20  Florian La Roche  <laroche@redhat.com>
+
+	* configure.in 1.69, pyrpm/__init__.py 1.71, scripts/oldpyrpm.py 1.309:
+	- release 0.68
+
+2007-04-19  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/functions.py 1.236:
+	- Fixed missing evrSplit() in new doesObsolete() function
+
+	* pyrpm/control.py 1.119, pyrpm/database/rhndb.py 1.6, pyrpm/functions.py 1.235, pyrpm/yum.py 1.164, scripts/pyrpmcheck 1.18:
+	- Moved selectNewestPkgs() to pyrpmcheck (only place we use it)
+	- Wrote a doesObsolete() function to check if pkg1 obsoletes pkg2
+	- Extended the autoerase conflict logic to select packages that get obsoleted
+	  for removal.
+
+	* pyrpm/yum.py 1.163:
+	- Rewrote __handleBestPkg() to be more logical and simple to understand.
+	  Results are still the same as previously.
+
+	* pyrpm/database/sqliterepodb.py 1.41, pyrpm/yum.py 1.162:
+	- Some whitespace changes
+	- SqliteRepoDB now correctly sets the comps type of packages
+	- __handleBestPkg() now correctly honors the comps type again
+	- Extended __handleBestPkg() to allow single pkg selections instead of name
+	  based.
+
+2007-04-18  Philip Knirsch  <pknirsch@redhat.com>
+
+	* pyrpm/database/comps.py 1.10, pyrpm/database/sqliterepodb.py 1.40:
+	- Fixed problem with FC4 comps.xml and grouphierarchy
+	- Fixed missing sizes for sqliterepodb packages
+
+2007-04-08  Florian La Roche  <laroche@redhat.com>
+
+	* pyrpm/base.py 1.60, pyrpm/functions.py 1.234, pyrpm/yum.py 1.161:
+	- use hash lookup to change between dep flags and strings
+
+	* scripts/oldpyrpm.py 1.308: - faster dep output
+
+2007-04-05  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/control.py 1.118: [tw]
+	- one more delayed ldconfig chroot fix
+
 2007-04-05  Florian La Roche  <laroche@redhat.com>
+
+	* scripts/Makefile.am 1.20, scripts/pyrpmcreatefilereq 1.8:
+	- remove pyrpmcreatefilereq
+
+	* INSTALL 1.3: - remove libxml2 req
+
+	* pyrpm.spec.in 1.21:
+	- do not add a hard requirement for libxml2-python
+
+	* doc/pyrpm.txt 1.19, pyrpm/createrepo.py 1.16, pyrpm/database/comps.py 1.9, pyrpm/database/repodb.py 1.48:
+	- do not import libxml2 if not needed
+
+2007-04-05  Thomas Woerner  <twoerner@redhat.com>
+
+	* pyrpm/functions.py 1.233: [tw]
+	- use chroot for delayed ldconfig call
+
+2007-04-05  Florian La Roche  <laroche@redhat.com>
+
+	* ChangeLog 1.23: - update changelog
 
 	* configure.in 1.68, pyrpm/__init__.py 1.70, scripts/oldpyrpm.py 1.307:
 	- release 0.67
