@@ -1209,11 +1209,10 @@ class RpmYum:
         #   - Scrap it as we can't update the system without unresolved deps
         #   - Erase the packages that had unresolved deps (autoerase option)
         if self.autoerase:
-            log.info2("Autoerasing package %s due to unresolved symbols.",
-                      pkg.getNEVRA())
-            if not self.__doAutoerase(pkg):
-                return 0
-            return 1
+            if self.__doAutoerase(pkg):
+                log.info2("Autoerasing package %s due to unresolved symbols.",
+                          pkg.getNEVRA())
+                return 1
         return 0
 
     def __handleConflicts(self):
@@ -1274,13 +1273,15 @@ class RpmYum:
         return ret
 
     def __handleObsoleteConflicts(self):
-        ret = 0
         if not self.autoerase:
             return 0
+        ret = 0
         for (old_pkg, new_pkgs) in self.opresolver.getObsoleteConflicts().iteritems():
             for obsolete, new_pkg in new_pkgs:
-                self.__doAutoerase(new_pkg)
-            ret = 1
+                if self.__doAutoerase(new_pkg):
+                    log.info2("Autoerasing package %s due to conflicting obsoletes.",
+                              pkg.getNEVRA())
+                    ret = 1
         return ret
 
     def __handleObsoletes(self, pkglist=[ ]):
