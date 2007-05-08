@@ -1376,7 +1376,7 @@ class RpmYum:
             if reex.match(pkg["name"]) and \
              len(self.opresolver.getDatabase().getPkgsByName(pkg["name"])) == 1:
                 self.erase_list.append(pkg)
-                log.Info3("No autoerase of package %s due to exclude list.",
+                log.Info2("No autoerase of package %s due to exclude list.",
                           pkg.getNEVRA())
                 return 0
         if self.opresolver.updates.has_key(pkg):
