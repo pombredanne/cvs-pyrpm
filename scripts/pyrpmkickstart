@@ -2932,13 +2932,21 @@ def main():
 
             # add all kernels:
             for kernel in kernels:
-                kernel = string.strip(kernel)
+                vmlinuz = '%s/vmlinuz-%s' % (prefix, kernel)
+                initrd = '%s/initrd-%s.img' % (prefix, kernel)
+                if not os.path.exists(target_chroot+vmlinuz):
+                    log.warning("Kernel image for kernel "
+                                "'%s' does not exist, skipping." % \
+                                kernel)
+                    continue
+                if not os.path.exists(target_chroot+vmlinuz):
+                    log.warning("Initrd for kernel '%s' does not exist." % \
+                                kernel)
                 content.extend( \
                     [ 'title %s (%s)\n' % (source.getName(), kernel),
                       '\troot (%s)\n' % hd_boot,
-                      '\tkernel %s/vmlinuz-%s ro root=%s%s\n' % \
-                      (prefix, kernel, root, append),
-                      '\tinitrd %s/initrd-%s.img\n' % (prefix, kernel) ] )
+                      '\tkernel %s ro root=%s%s\n' % (vmlinuz, root, append),
+                      '\tinitrd %s\n' % initrd ] )
 
             create_file(target_chroot, "/boot/grub/grub.conf", content,
                         force=1, mode=0600)

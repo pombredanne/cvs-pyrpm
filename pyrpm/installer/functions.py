@@ -17,7 +17,7 @@
 #
 
 import os, os.path, stat, signal, string, time, resource, struct
-from pyrpm.functions import normalizeList, runScript, pkgCompare
+from pyrpm.functions import normalizeList, runScript, labelCompare, evrSplit
 from pyrpm.database import getRpmDB
 from config import log, flog, rpmconfig
 import pyrpm.se_linux as se_linux
@@ -308,35 +308,38 @@ def get_size_in_byte(size):
         s *= 1000*1000*1000*1000
     return s
 
-def rpmdb_get(rpmdb, name):
-    list = rpmdb.getPkgsByName(name)
-    # sort by NEVRA
-    _list = [ ]
-    for pkg in list:
-        found = 0
-        for j in xrange(len(_list)):
-            pkg2 = _list[j]
-            if pkgCompare(pkg, pkg2) > 0:
-                _list.insert(j, pkg)
-                found = 1
-                break
-        if not found:
-            _list.append(pkg)
-    return _list
-
 def get_installed_kernels(chroot=None):
     kernels = [ ]
+
     rpmdb = getRpmDB(rpmconfig, "/var/lib/rpm", chroot)
-    try:
-        rpmdb.open()
-        if not rpmdb.read():
-            return kernels
-        list = rpmdb_get(rpmdb, "kernel-smp")
-        list.extend(rpmdb_get(rpmdb, "kernel"))
-    finally:
-        rpmdb.close()
-    normalizeList(list)
-    kernels = [ "%s-%s" % (pkg["version"], pkg["release"]) for pkg in list ]
+    rpmdb.open()
+    if not rpmdb.read():
+        return kernels
+    hash = rpmdb.searchProvides("kernel", 0, "")
+    rpmdb.close()
+
+    version = { }
+    for pkg in hash:
+        ver = "%s-%s" % (pkg["version"], pkg["release"])
+        if pkg["name"][:7] == "kernel-":
+            ver += pkg["name"][7:]
+        version[pkg] = ver
+
+    sorted_list = [ ]
+    for pkg in hash:
+        found = False
+        evr = evrSplit(version[pkg])
+        for j in xrange(len(sorted_list)):
+            pkg2 = sorted_list[j]
+            evr2 = evrSplit(version[pkg2])
+            if labelCompare(evr, evr2) > 0:
+                sorted_list.insert(j, pkg)
+                found = True
+                break
+        if not found:
+            sorted_list.append(pkg)
+
+    kernels = [ version[pkg] for pkg in sorted_list ]
     return kernels
 
 def fuser(what):
