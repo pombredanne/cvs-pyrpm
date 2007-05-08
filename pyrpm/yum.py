@@ -1209,7 +1209,7 @@ class RpmYum:
         #   - Scrap it as we can't update the system without unresolved deps
         #   - Erase the packages that had unresolved deps (autoerase option)
         if self.autoerase:
-            log.info3("Autoerasing package %s due to unresolved symbols.",
+            log.info2("Autoerasing package %s due to unresolved symbols.",
                       pkg.getNEVRA())
             if not self.__doAutoerase(pkg):
                 return 0
