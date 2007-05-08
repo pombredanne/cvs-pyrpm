@@ -405,9 +405,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 except ValueError, e:
                     log.warning("%s: %s", pkg.getNEVRA(), e)
                     continue
-                # pkg can be None if it is excluded
-                if pkg == None:
-                    continue
                 pkg.yumrepo = self
                 if self.comps != None:
                     if   self.comps.hasType(pkg["name"], "mandatory"):
@@ -544,8 +541,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
             elif not excheck and pname != None and pepoch != None and \
                  pversion != None and prelease != None and parch != None:
                 excheck = 1
-                if self._isExcluded(pkg):
-                    return None
             if tag.endswith("}name"):
                 pname = elem.text
                 pkg["name"] = pname
@@ -787,8 +782,6 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                            "sourcerpm", "requirename", "requireflags",
                            "requireversion"))
         for pkg in tmplist:
-            if self._isExcluded(pkg):
-                continue
             # FIXME: this is done in createRepo too
             # If it is a source rpm change the arch to "src". Only valid
             # for createRepo, never do this anywhere else. ;)
