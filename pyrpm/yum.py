@@ -616,7 +616,6 @@ class RpmYum:
         # Hash for types. Each type will have a ordered list of packages.
         typehash = {}
         for upkg in pkglist:
-            print upkg.getNEVRA()
             # Skip all packages that are either blocked via our erase_list
             # or that are already in the opresolver
             if upkg in self.erase_list or \
