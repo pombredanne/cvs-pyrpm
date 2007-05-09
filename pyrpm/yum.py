@@ -616,6 +616,7 @@ class RpmYum:
         # Hash for types. Each type will have a ordered list of packages.
         typehash = {}
         for upkg in pkglist:
+            print upkg.getNEVRA()
             # Skip all packages that are either blocked via our erase_list
             # or that are already in the opresolver
             if upkg in self.erase_list or \
@@ -646,8 +647,10 @@ class RpmYum:
             for type in ("mandatory", "default", "optional", None):
                 if typehash.has_key(type):
                     pkg = pkgnamehash[typehash[type][0]["name"]]
-                    return self.__handleSinglePkg(cmd, pkg, arch, is_filereq,
-                                                  do_obsolete)
+                    ret = self.__handleSinglePkg(cmd, pkg, arch, is_filereq,
+                                                 do_obsolete)
+                    if ret > 0:
+                        return 1
             # Although we should never get here, still handle it correctly.
             return 0
         # For the normal case we just use the newest version of each name for
