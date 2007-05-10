@@ -610,8 +610,7 @@ class RpmYum:
         # Order the elements of the potential packages by machine
         # distance and evr
         orderList(pkglist, arch)
-        # Prepare a pkg name hash for possibly newer packages that have "higher"
-        # ranked packages via the comps with lower version in other repos.
+        # Hash for names. Each name key will have a ordered list of packages.
         pkgnamehash = {}
         # Hash for types. Each type will have a ordered list of packages.
         typehash = {}
@@ -636,28 +635,35 @@ class RpmYum:
                     archCompat(arch, upkg["arch"])):
                 continue
             # Populate our 2 dicts properly
-            if not pkgnamehash.has_key(upkg["name"]):
-                pkgnamehash[upkg["name"]] = upkg
+            pkgnamehash.setdefault(upkg["name"], []).append(upkg)
             typehash.setdefault(upkg.compstype, []).append(upkg)
-        # In case of a single package selection we select the package with the
-        # "highest" comps type and then use the newest version of it for the
-        # operation.
+        # In case of a single package selection we iterate over the various
+        # types and try until we find a package that works. This way we ensure
+        # that we're honoring the types properly and for each type try to use
+        # the newest/best packages first.
         if single:
             for type in ("mandatory", "default", "optional", None):
-                if typehash.has_key(type):
-                    pkg = pkgnamehash[typehash[type][0]["name"]]
+                if not typehash.has_key(type):
+                    continue
+                for pkg in typehash[type]:
                     ret = self.__handleSinglePkg(cmd, pkg, arch, is_filereq,
                                                  do_obsolete)
                     if ret > 0:
                         return 1
-            # Although we should never get here, still handle it correctly.
+            # In case we couldn't add any package we need to report that
+            # failure.
             return 0
-        # For the normal case we just use the newest version of each name for
-        # the operation.
-        ret = 0
-        for upkg in pkgnamehash.values():
-            ret |= self.__handleSinglePkg(cmd, upkg, arch, is_filereq,
-                                          do_obsolete)
+        # For the normal case we try to add a package for each name and for
+        # each name start with the best package.
+        ret = False
+        for name in pkgnamehash.keys():
+            r = False
+            for pkg in pkgnamehash[name]:
+                r = self.__handleSinglePkg(cmd, upkg, arch, is_filereq,
+                                            do_obsolete)
+                if r:
+                    break
+            ret |= r
         return ret
 
     def __handleSinglePkg(self, cmd, upkg, arch=None, is_filereq=0, do_obsolete=True):
