@@ -421,6 +421,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                                 pkg.getNEVRA())
                     continue
                 self.__parseFilelist(ip, props["name"], arch)
+            elem.clear()
 
     def _isExcluded(self, pkg):
         """Return True if RpmPackage pkg is excluded by configuration."""
@@ -635,6 +636,7 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 epoch   = props.get("epoch")
             elif tag.endswith("}package"):
                 break
+            elem.clear()
         if version is None or release is None or epoch is None:
             raise ValueError, "Missing version information"
         self._addFilesToPkg(pname, epoch, version, release, arch,
