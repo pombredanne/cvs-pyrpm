@@ -658,12 +658,12 @@ class RpmYum:
         ret = False
         for name in pkgnamehash.keys():
             r = False
-            for pkg in pkgnamehash[name]:
+            for upkg in pkgnamehash[name]:
                 r = self.__handleSinglePkg(cmd, upkg, arch, is_filereq,
                                             do_obsolete)
-                if r:
+                if r > 0:
                     break
-            ret |= r
+            ret |= (r > 0)
         return ret
 
     def __handleSinglePkg(self, cmd, upkg, arch=None, is_filereq=0, do_obsolete=True):
