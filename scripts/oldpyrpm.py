@@ -2544,12 +2544,12 @@ class ReadRpm: # pylint: disable-msg=R0904
                     "SUSE LINUX Products GmbH, Nuernberg, Germany",):
                     self.printErr("unknown vendor: %s" % self["vendor"])
             else:
-                if self["packager"] not in (None,
+                if self["packager"] not in (None, "Koji",
                     "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>",
                     "Fedora Project <http://bugzilla.redhat.com/bugzilla>",
                     "Matthias Saou <matthias@rpmforge.net>"):
                     self.printErr("unknown packager: %s" % self["packager"])
-                if self["vendor"] not in (None, "Red Hat, Inc.",
+                if self["vendor"] not in (None, "Red Hat, Inc.", "Koji",
                     "Fedora Project", "Livna.org RPMS", "Freshrpms.net"):
                     self.printErr("unknown vendor: %s" % self["vendor"])
                 if self["distribution"] not in (None, "Red Hat",
@@ -2557,7 +2557,7 @@ class ReadRpm: # pylint: disable-msg=R0904
                     "Red Hat (FC-4)", "Red Hat (FC-5)", "Red Hat (FC-6)",
                     "Red Hat (FC-7)", "Fedora Extras", "Red Hat (scratch)",
                     "Red Hat (RHEL-3)", "Red Hat (RHEL-4)",
-                    "Red Hat (RHEL-5)"):
+                    "Red Hat (RHEL-5)", "Unknown"):
                     self.printErr("unknown distribution: %s" % \
                         self["distribution"])
         arch = self["arch"]
