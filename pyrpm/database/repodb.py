@@ -17,7 +17,7 @@
 #
 
 
-from types import *
+import lists, types
 import re, os, os.path, stat
 import memorydb
 from pyrpm.base import *
@@ -26,9 +26,9 @@ from comps import RpmCompsXML
 import pyrpm.functions as functions
 import pyrpm.package as package
 import pyrpm.openpgp as openpgp
-import lists, types
 from pyrpm.logger import log
 from pyrpm.io import PyGZIP
+
 try:
     # python-2.5 layout:
     from xml.etree.cElementTree import iterparse
@@ -719,7 +719,8 @@ class RpmRepoDB(memorydb.RpmMemoryDB):
                 rel = props.get("rel")
                 if epoch != None:
                     ver = "%s:%s" % (epoch, ver)
-                if rel != None:
+                if rel != None and \
+                  (rel != "0" or self.__class__.__name__ != "RhnChannelRepoDB"):
                     ver = "%s-%s" % (ver, rel)
                 plist[0].append(name)
                 try:
