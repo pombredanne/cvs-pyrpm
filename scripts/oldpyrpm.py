@@ -3030,6 +3030,68 @@ def diffTwoSrpms(oldsrpm, newsrpm, explode=None):
     os.system("rm -rf " + obuildroot + " " + nbuildroot)
     return ret
 
+def TreeDiff(dir1, dir2):
+    import glob
+    new = []
+    changed = []
+    files2 = os.listdir(dir2)
+    files2.sort()
+    for f in files2:
+        # only look at .rpm files
+        if f[-4:] != ".rpm":
+            continue
+        # continue if the same file already existed
+        if os.path.exists("%s/%s" % (dir1, f)):
+            continue
+        # read the new rpm header
+        rpm = ReadRpm("%s/%s" % (dir2, f))
+        if rpm.readHeader(rpmsigtag, rpmtag):
+            print "Cannot read %s.\n" % f # XXX traceback instead of print?
+            continue
+        # Is there a previous rpm?
+        oldf = glob.glob("%s/%s*" % (dir1, rpm["name"]))
+        if not oldf:
+            # No previous, so list this as new package.
+            new.append("New package %s\n\t%s\n" % (rpm["name"],
+                rpm["summary"][0]))
+        else:
+            # Output the new changes:
+            orpm = ReadRpm(oldf[0])
+            if orpm.readHeader(rpmsigtag, rpmtag):
+                print "Cannot read %s.\n" % oldf[0]
+                continue
+            (changelognum, changelogtime) = getChangeLogFromRpm(rpm, orpm)
+            clist = "\n"
+            if changelognum != -1 or changelogtime != None:
+                clist = rpm.getChangeLog(changelognum, changelogtime)
+            nvr = rpm.getNVR()
+            changed.append("%s (from %s-%s)\n%s\n%s" % (nvr, orpm["version"],
+                orpm["release"], "-" * len(nvr), clist))
+    # List all removed packages:
+    removed = []
+    files1 = os.listdir(dir1)
+    files1.sort()
+    for f in files1:
+        # only look at .rpm files
+        if f[-4:] != ".rpm":
+            continue
+        # continue if the same file still exists
+        if os.path.exists("%s/%s" % (dir2, f)):
+            continue
+        # read the old rpm header
+        rpm = ReadRpm("%s/%s" % (dir1, f))
+        if rpm.readHeader(rpmsigtag, rpmtag):
+            print "Cannot read %s.\n" % f
+            continue
+        # Is there a new rpm?
+        if not glob.glob("%s/%s*" % (dir2, rpm["name"])):
+            removed.append("Removed package %s\n" % rpm["name"])
+    
+    if not changed:
+        changed = ["(none)",]
+    return  "".join(("\n".join(new), "\n\n", "\n".join(removed),
+        "\n\nUpdated Packages:\n\n", "".join(changed)))
+
 
 class HashList:
     """ hash list """
@@ -6556,6 +6618,7 @@ def main():
     small = 0
     explode = 0
     diff = 0
+    treediff = 0
     extract = 0
     excludes = ""
     checksrpms = 0
@@ -6586,7 +6649,8 @@ def main():
             ["help", "verbose", "quiet", "arch=", "archlist=", "releasever=",
             "distroverpkg", "strict", "ignoresymlinks",
             "digest", "nodigest", "payload", "nopayload",
-            "wait", "noverify", "small", "explode", "diff", "extract",
+            "wait", "noverify", "small", "explode", "diff", "treediff",
+            "extract",
             "excludes=", "nofileconflicts", "fileconflicts", "runorderer",
             "updaterpms", "reposdir=", "disablereposdir", "enablerepos",
             "checksrpms", "checkarch", "rpmdbpath=", "dbpath=", "withdb",
@@ -6652,6 +6716,8 @@ def main():
             explode = 1
         elif opt == "--diff":
             diff = 1
+        elif opt == "--treediff":
+            treediff = 1
         elif opt == "--extract":
             extract = 1
         elif opt == "--excludes":
@@ -6715,6 +6781,8 @@ def main():
         diff = diffTwoSrpms(args[0], args[1], explode)
         if diff != "":
             print diff
+    elif treediff:
+        print TreeDiff(args[0], args[1])
     elif extract:
         db = None
         if withdb:
