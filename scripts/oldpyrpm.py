@@ -2547,6 +2547,7 @@ class ReadRpm: # pylint: disable-msg=R0904
                 if self["packager"] not in (None, "Koji",
                     "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>",
                     "Fedora Project <http://bugzilla.redhat.com/bugzilla>",
+                    "Fedora Project",
                     "Matthias Saou <matthias@rpmforge.net>"):
                     self.printErr("unknown packager: %s" % self["packager"])
                 if self["vendor"] not in (None, "Red Hat, Inc.", "Koji",
