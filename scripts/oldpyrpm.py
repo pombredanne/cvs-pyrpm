@@ -5727,6 +5727,7 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
                     rpm.getFilename()
                 resolver.removePkg(pkg)
     # Check all conflicts.
+    conflicts = []
     deps = resolver.conflicts_list.keys()
     deps.sort()
     for (name, flag, version) in deps:
@@ -5737,6 +5738,8 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
                     continue
                 print "Warning:", rpm.getFilename(), \
                     "contains a conflict with", pkg.getFilename()
+                conflicts.append((rpm, pkg))
+                conflicts.append((pkg, rpm))
     # Check all requires.
     deps = resolver.requires_list.keys()
     deps.sort()
@@ -5789,8 +5792,13 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
                             filecolorsi2 = rpm2["filecolors"][i2]
                             if filecolorsi2 and filecolorsi1 != filecolorsi2:
                                 continue
+                        # Mention which fileconflicts also have a real
+                        # Conflicts: dependency within the packages:
+                        kn = ""
+                        if (rpm1, rpm2) in conflicts:
+                            kn = "(known)"
                         print "fileconflict for", dirname + basename, "in", \
-                            rpm1.getFilename(), "and", rpm2.getFilename()
+                            rpm1.getFilename(), "and", rpm2.getFilename(), kn
         if verbose > 3:
             time2 = time.clock()
             print "- Needed", time2 - time1, "sec for fileconflicts."
