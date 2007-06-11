@@ -5,7 +5,7 @@ A database within pyrpm is a set of rpms. Basic operations supported
 by databases are:
 
  * open, close, read, clear - NOPs for some classes
- * clearPkgs - remove tags from rpms to reduce memeory usage
+ * clearPkgs - remove tags from rpms to reduce memory usage
  * isFilelistImported, importFilelist - NOPs for non repo dbs
  * reloadDependencies - needed after loading filelist
  * adding and removing rpms - some do that in memory others directly 
@@ -44,7 +44,7 @@ together either by inheritance or by using instances of other classes.
 Use Cases
 ---------
 
-Altough databases are used in more or less every script. There are two
+Although databases are used in more or less every script. There are two
 use cases within pyrpmyum that cover all database classes.
 
 "->" means holding a pointer to an/several instance(s) of another class 
