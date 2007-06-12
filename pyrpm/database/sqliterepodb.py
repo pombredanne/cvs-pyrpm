@@ -811,13 +811,13 @@ class SqliteRepoDB(repodb.RpmRepoDB):
     def _iter(self, tag):
         cur = self._primarydb_cursor
         cur.execute("SELECT * FROM %s" % tag)
-        for res in cur:
+        for res in cur.fetchall():
             pkg = self.getPkgByKey(res['pkgKey'])
             if pkg is None:
                 continue
             version = functions.evrMerge(res['epoch'], res['version'],
                                          res['release'])
-            yield res['name'], res['flags'], version, pkg
+            yield res['name'], self.flagmap[res['flags']], version, pkg
 
     def _iter2(self, tag):
         for pkg in self.getPkgs():
