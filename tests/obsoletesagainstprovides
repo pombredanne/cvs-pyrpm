@@ -1,0 +1,91 @@
+#!/usr/bin/python
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2007 Red Hat, Inc.
+#
+# Author: Florian Festi
+#
+
+import sys, os.path
+
+PYRPMDIR = os.path.dirname(__file__) + "/.."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+from pyrpm import __version__
+from pyrpm import *
+from pyrpm.logger import log
+
+arch = 'i386'
+
+def readRepositories(configfile, relver, name):
+    config = yum.YumConf(relver, arch, filenames=[configfile])
+    db = JointDB(config, name)
+    # copied from Yum.addRepos
+    erepo = []
+    #for ritem in self.config.enablerepo:
+    #    ritem = fnmatch.translate(ritem)
+    #    regex = re.compile(ritem)
+    #    erepo.append(regex)
+    drepo = []
+    #for ritem in self.config.disablerepo:
+    #    ritem = fnmatch.translate(ritem)
+    #    regex = re.compile(ritem)
+    #    drepo.append(regex)
+    for key, sec in config.copy().iteritems():
+        if key != "main":
+            # Check if the current repo should be enabled or disabled
+            enabled = True      # Default is enabled
+            if sec.get("enabled") == "0":
+                enabled = False
+            for regex in erepo:
+                if regex.match(key):
+                    enabled = True
+                    break
+            for regex in drepo:
+                if regex.match(key):
+                    enabled = False
+                    break
+            # Repo is not enabled: skip it.
+            if not enabled:
+                continue
+            # append relver to name to avoid overwriting the cache
+            name = '%s-%s' % (key, relver)
+            config[name] = sec
+            repo = database.getRepoDB(rpmconfig, config, rpmconfig.buildroot, name)
+            if repo.read() == 0:
+                log.error("Error reading repository %s", key)
+            db.addDB(repo)
+    return db
+
+def checkObsoltes(oldDB, newDB):
+    for name, flags, version, pkg in newDB.iterObsoletes():
+        
+        for db in oldDB, newDB:
+            for p, hits in db.searchProvides(name, flags, version).iteritems():
+                for n, f, v in hits:
+                    if n!=p['name'] and pkg['name']!=p['name']:
+                        print '%-50s obsoletes %-30s provided by %s' % (pkg.getNVRA(), name, p.getNVRA())
+    return
+
+def main():
+    log.setInfoLogLevel(log.INFO2)
+
+    if len(sys.argv) != 5:
+        print "USAGE: obsoletesagainstprovides oldyumconf relver newyumconf relver"
+        return
+
+    oldDB = readRepositories(sys.argv[1], sys.argv[2], 'Old Version')
+    newDB = readRepositories(sys.argv[3], sys.argv[4], 'New Version')
+    checkObsoltes(oldDB, newDB)
+    
+main()
