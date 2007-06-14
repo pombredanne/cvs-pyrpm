@@ -63,7 +63,7 @@ def main():
         sys.exit()
 
     filename = args[0]
-    if not os.path.isfile(filename):
+    if not os.path.exists(filename):
         print "Not a file"
         sys.exit(1)
 
