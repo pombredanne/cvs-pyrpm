@@ -1158,13 +1158,15 @@ def setMachineDistance(arch, archlist=None):
     return h
 
 # check arch names against this list
-possible_archs = {"noarch":1, "i386":1, "i486":1, "i586":1, "i686":1,
+possible_archs = {
+    "noarch":1, "i386":1, "i486":1, "i586":1, "i686":1,
     "athlon":1, "pentium3":1, "pentium4":1, "x86_64":1, "ia32e":1, "ia64":1,
     "alpha":1, "alphaev56":1, "alphaev6":1, "axp":1, "sparc":1, "sparc64":1,
     "s390":1, "s390x":1,
     "ppc":1, "ppc64":1, "ppc64iseries":1, "ppc64pseries":1, "ppcpseries":1,
     "ppciseries":1, "ppcmac":1, "ppc8260":1, "m68k":1,
-    "arm":1, "armv4l":1, "mips":1, "mipseb":1, "mipsel":1, "hppa":1, "sh":1}
+    "arm":1, "armv4l":1, "mips":1, "mipseb":1, "mipsel":1, "hppa":1, "sh":1,
+}
 
 possible_scripts = {
     None: 1,
@@ -1183,7 +1185,10 @@ possible_scripts = {
     "/usr/sbin/glibc_post_upgrade.s390x": 1,
     "/usr/sbin/glibc_post_upgrade.x86_64": 1,
     "/usr/sbin/libgcc_post_upgrade": 1,
-    "/usr/bin/rebuild-gcj-db": 1 }
+    "/usr/bin/rebuild-gcj-db": 1,
+    "/usr/libexec/twisted-dropin-cache": 1,
+    "/usr/bin/texhash": 1,
+}
 
 
 def writeHeader(pkg, tags, taghash, region, skip_tags, useinstall, rpmgroup):
