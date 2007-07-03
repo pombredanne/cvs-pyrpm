@@ -1,4 +1,6 @@
 todo list:
+ * How is "Requires(hint):" supported? (MISSINGOK)
+ * IPv6: ftp.chg.ru
  * anything we should add to pyrpm:
    http://www.jur-linux.org/hg/rpm/?rev/6a6942188e65
  * pyrpmyum: warn on permissive/enforcing system if selinux support is within
