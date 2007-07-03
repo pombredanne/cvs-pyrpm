@@ -5261,12 +5261,13 @@ MainVarnames = ("cachedir", "keepcache", "reposdir", "debuglevel",
         "diskspacecheck", "tsflags", "recent", "retries", "keepalive",
         "timeout", "http_caching", "throttle", "bandwidth", "commands",
         "proxy", "proxy_username", "proxy_password", "pkgpolicy",
-        "plugins", "pluginpath", "pluginconfpath", "metadata_expire")
+        "plugins", "pluginpath", "pluginconfpath", "metadata_expire",
+        "mirrorlist_expire")
 RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
         "keepalive", "timeout", "http_caching", "retries", "throttle",
         "bandwidth", "metadata_expire", "proxy", "proxy_username",
-        "proxy_password")
+        "proxy_password", "mirrorlist_expire")
 
 def YumConf(verbose, buildroot="", filename="/etc/yum.conf",
     reposdirs=[]): # pylint: disable-msg=W0102

@@ -40,13 +40,16 @@ MainVarnames = ("cachedir", "reposdir", "debuglevel", "errorlevel",
         "diskspacecheck", "tsflags", "recent", "retries", "keepalive",
         "timeout", "http_caching", "throttle", "bandwidth", "commands",
         "keepcache", "proxy", "proxy_username", "proxy_password", "pkgpolicy",
-        "plugins", "pluginpath", "pluginconfpath", "metadata_expire")
+        "plugins", "pluginpath", "pluginconfpath", "metadata_expire",
+        "mirrorlist_expire")
 RepoVarnames = ("name", "baseurl", "mirrorlist", "enabled", "gpgcheck",
         "gpgkey", "exclude", "includepkgs", "enablegroups", "failovermethod",
         "keepalive", "timeout", "http_caching", "retries", "throttle",
         "bandwidth", "metadata_expire", "proxy", "proxy_username",
-        "proxy_password")
-MultilineVarnames = ("exclude", "installonlypkgs", "kernelpkgnames", "commands", "pluginpath", "pluginconfpath", "baseurl", "gpgkey", "includepkgs")
+        "proxy_password", "mirrorlist_expire")
+MultilineVarnames = ("exclude", "installonlypkgs", "kernelpkgnames",
+        "commands", "pluginpath", "pluginconfpath", "baseurl", "gpgkey",
+        "includepkgs")
 
 class YumConf(dict):
     def __init__(self, relver, arch, rpmdb=None, filenames=["/etc/yum.conf"],
