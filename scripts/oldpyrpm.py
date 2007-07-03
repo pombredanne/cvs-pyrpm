@@ -5413,44 +5413,59 @@ def testMirrors(verbose, args):
         #args = args2
         # pyrex-code-end
     else:
-        ml = "http://fedora.redhat.com/Download/mirrors/"
+        ml = "http://mirrors.fedoraproject.org/mirrorlist?"
+        ml = ml + "arch=$basearch&country=global&repo="
         args = [
             # FC-releases
-            (ml + "fedora-core-$releasever", "4", "i686", "i386"),
-            (ml + "fedora-core-$releasever", "5", "i686", "i386"),
-            (ml + "fedora-core-debug-$releasever", "5", "i686", "i386"),
-            (ml + "fedora-core-source-$releasever", "5", "i686", "i386"),
-            (ml + "fedora-core-$releasever", "6", "i686", "i386"),
-            (ml + "fedora-core-debug-$releasever", "6", "i686", "i386"),
-            (ml + "fedora-core-source-$releasever", "6", "i686", "i386"),
-            (ml + "fedora-core-rawhide", "7", "i686", "i386"),
-            (ml + "fedora-core-rawhide-debug", "7", "i686", "i386"),
-            (ml + "fedora-core-rawhide-source", "7", "i686", "i386"),
+            (ml + "core-$releasever", "4", "i686", "i386"),
+            (ml + "core-debug-$releasever", "4", "i686", "i386"),
+            (ml + "core-source-$releasever", "4", "i686", "i386"),
+            (ml + "core-$releasever", "5", "i686", "i386"),
+            (ml + "core-debug-$releasever", "5", "i686", "i386"),
+            (ml + "core-source-$releasever", "5", "i686", "i386"),
+            (ml + "core-$releasever", "6", "i686", "i386"),
+            (ml + "core-debug-$releasever", "6", "i686", "i386"),
+            (ml + "core-source-$releasever", "6", "i686", "i386"),
+            (ml + "fedora-$releasever", "7", "i686", "i386"),
+            (ml + "fedora-debug-$releasever", "7", "i686", "i386"),
+            (ml + "fedora-source-$releasever", "7", "i686", "i386"),
+            (ml + "rawhide", "8", "i686", "i386"),
+            (ml + "rawhide-debug", "8", "i686", "i386"),
+            (ml + "rawhide-source", "8", "i686", "i386"),
             # FC-updates
             (ml + "updates-released-fc$releasever", "4", "i686", "i386"),
+            (ml + "updates-released-debug-fc$releasever", "4", "i686", "i386"),
+            (ml + "updates-released-source-fc$releasever", "4", "i686","i386"),
             (ml + "updates-released-fc$releasever", "5", "i686", "i386"),
             (ml + "updates-released-debug-fc$releasever", "5", "i686", "i386"),
             (ml + "updates-released-source-fc$releasever", "5", "i686","i386"),
             (ml + "updates-released-fc$releasever", "6", "i686", "i386"),
             (ml + "updates-released-debug-fc$releasever", "6", "i686", "i386"),
             (ml + "updates-released-source-fc$releasever", "6", "i686","i386"),
+            (ml + "updates-released-f$releasever", "7", "i686", "i386"),
+            (ml + "updates-released-debug-f$releasever", "7", "i686", "i386"),
+            (ml + "updates-released-source-f$releasever", "7", "i686","i386"),
             # FC-updates-testing
             (ml + "updates-testing-fc$releasever", "4", "i686", "i386"),
+            (ml + "updates-testing-debug-fc$releasever", "4", "i686", "i386"),
+            (ml + "updates-testing-source-fc$releasever", "4", "i686", "i386"),
             (ml + "updates-testing-fc$releasever", "5", "i686", "i386"),
             (ml + "updates-testing-debug-fc$releasever", "5", "i686", "i386"),
             (ml + "updates-testing-source-fc$releasever", "5", "i686", "i386"),
             (ml + "updates-testing-fc$releasever", "6", "i686", "i386"),
             (ml + "updates-testing-debug-fc$releasever", "6", "i686", "i386"),
             (ml + "updates-testing-source-fc$releasever", "6", "i686", "i386"),
+            (ml + "updates-testing-f$releasever", "7", "i686", "i386"),
+            (ml + "updates-testing-debug-f$releasever", "7", "i686", "i386"),
+            (ml + "updates-testing-source-f$releasever", "7", "i686", "i386"),
             # Fedora Extras
-            (ml + "fedora-extras-$releasever", "4", "i686", "i386"),
-            (ml + "fedora-extras-$releasever", "5", "i686", "i386"),
-            (ml + "fedora-extras-debug-$releasever", "5", "i686", "i386"),
-            (ml + "fedora-extras-source-$releasever", "5", "i686", "i386"),
-            (ml + "fedora-extras-$releasever", "6", "i686", "i386"),
-            (ml + "fedora-extras-debug-$releasever", "6", "i686", "i386"),
-            (ml + "fedora-extras-source-$releasever", "6", "i686", "i386"),
-            (ml + "fedora-extras-devel", "7", "i686", "i386"),
+            (ml + "extras-$releasever", "4", "i686", "i386"),
+            (ml + "extras-$releasever", "5", "i686", "i386"),
+            (ml + "extras-debug-$releasever", "5", "i686", "i386"),
+            (ml + "extras-source-$releasever", "5", "i686", "i386"),
+            (ml + "extras-$releasever", "6", "i686", "i386"),
+            (ml + "extras-debug-$releasever", "6", "i686", "i386"),
+            (ml + "extras-source-$releasever", "6", "i686", "i386"),
         ]
     for (mirrorlist, releasever, arch, basearch) in args:
         print "---------------------------------------"
