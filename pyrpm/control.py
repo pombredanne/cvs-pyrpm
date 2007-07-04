@@ -225,7 +225,7 @@ class RpmController:
                 try:
                     (status, rusage, output) = functions.runScript(
                         pkg["pretransprog"], pkg["pretrans"], [0],
-                        rusage=self.config.rusage, pkg=pkg,
+                        rusage=self.config.rusage, prefixes=pkg["prefixes"],
                         chroot=self.config.buildroot)
                 except (IOError, OSError), e:
                     log.error("\n%s: Error running pre transaction script: %s",
@@ -247,6 +247,7 @@ class RpmController:
         # TODO: Make sure this is always correct. Needed to save memory for
         # now for RpmDB due to obsoletes caching.
         self.db.obsoletes_list = None
+        posttrans = []
         for (op, pkg) in operations:
             # Progress
             opstring = self.opstrings.get(op, "Cleanup: ")
@@ -254,6 +255,11 @@ class RpmController:
             progress = "[%*d/%d] %s%s"
             log.info2(progress, numops_chars, i, numops,
                       opstring, pkg.getNEVRA(), nl=0, nofmt=1)
+
+            # Save posttrans for later processing (pkg is removed from rpmdb on erase).
+            if pkg["posttransprog"] != None and not self.config.noscripts:
+                posttrans.append((pkg["posttransprog"], pkg["posttrans"],
+                    pkg.getNEVRA(), pkg["prefixes"]))
 
             # install
             if op in (OP_INSTALL, OP_UPDATE, OP_FRESHEN):
@@ -325,23 +331,24 @@ class RpmController:
                     result = 0
                     break
 
-        for (op, pkg) in operations:
-            if pkg["posttransprog"] != None and not self.config.noscripts:
-                try:
-                    (status, rusage, output) = functions.runScript(
-                        pkg["posttransprog"], pkg["posttrans"], [0],
-                        rusage=self.config.rusage, pkg=pkg,
-                        chroot=self.config.buildroot)
-                except (IOError, OSError), e:
-                    log.error("\n%s: Error running post transaction script: %s",
-                              pkg.getNEVRA(), e)
-                else:
-                    if rusage != None and len(rusage):
-                        sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (pkg.getNEVRA(), "posttrans", str(rusage[0]), str(rusage[1])))
-                    if output or status != 0:
-                        log.error("Output running post transaction script for "
-                                  "package %s", pkg.getNEVRA())
-                        log.error(output, nofmt=1)
+        # Start all posttrans scripts:
+        for (posttransprog, posttransscript, nevra, prefixes) in posttrans:
+            try:
+                (status, rusage, output) = functions.runScript(
+                    posttransprog, posttransscript, [0],
+                    rusage=self.config.rusage, prefixes=prefixes,
+                    chroot=self.config.buildroot)
+            except (IOError, OSError), e:
+                log.error("\n%s: Error running post transaction script: %s",
+                          nevra, e)
+            else:
+                if rusage != None and len(rusage):
+                    sys.stderr.write("\nRUSAGE, %s_%s, %s, %s\n" % (nevra,
+                        "posttrans", str(rusage[0]), str(rusage[1])))
+                if output or status != 0:
+                    log.error("Output running post transaction script for "
+                              "package %s", nevra)
+                    log.error(output, nofmt=1)
 
         if self.config.delayldconfig:
             self.config.delayldconfig = 0

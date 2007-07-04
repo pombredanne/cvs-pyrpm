@@ -142,11 +142,11 @@ def mkstemp_mknod(dirname, pre, mode, rdev):
     raise IOError, (errno.EEXIST, "No usable temporary file name found")
 
 def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
-              tmpdir="/var/tmp", chroot='', pkg=None):
+              tmpdir="/var/tmp", chroot='', prefixes=None):
     """Run (script otherargs) with interpreter prog (which can be a list
     containing initial arguments).
 
-    If pkg is supplied, it's used to populate environment.
+    If prefixes is supplied, it's used to populate environment.
     The following env. variables are defined: RPM_INSTALL_PREFIX.
 
     Return (exit status, getrusage() stats, script output).  Use None instead
@@ -221,10 +221,10 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
             e = {"HOME": "/", "USER": "root", "LOGNAME": "root",
                  "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin",
                  "PYRPM_VERSION" : __version__}
-            if pkg and pkg["prefixes"]:
-                e["RPM_INSTALL_PREFIX"] = pkg["prefixes"][0]
+            if prefixes:
+                e["RPM_INSTALL_PREFIX"] = prefixes[0]
                 idx = 1
-                for prefix in pkg["prefixes"]:
+                for prefix in prefixes:
                     e["RPM_INSTALL_PREFIX%d" % idx] = prefix
                     idx += 1
             if rpmconfig.selinux_enabled and se_linux.is_selinux_enabled():

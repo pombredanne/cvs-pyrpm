@@ -417,7 +417,7 @@ class RpmPackage(RpmData):
             try:
                 (status, rusage, output) = functions.runScript(
                     self["preinprog"], self["prein"], [numPkgs],
-                    rusage=self.config.rusage, pkg=self, chroot=buildroot)
+                    rusage=self.config.rusage, prefixes=self["prefixes"], chroot=buildroot)
             except (IOError, OSError), e:
                 log.error("\n%s: Error running pre install script: %s",
                           self.getNEVRA(), e)
@@ -436,7 +436,7 @@ class RpmPackage(RpmData):
             try:
                 (status, rusage, output) = functions.runScript(
                     self["postinprog"], self["postin"], [numPkgs],
-                    rusage=self.config.rusage, pkg=self, chroot=buildroot)
+                    rusage=self.config.rusage, prefixes=self["prefixes"], chroot=buildroot)
             except (IOError, OSError), e:
                 log.error("\n%s: Error running post install script: %s",
                           self.getNEVRA(), e)
@@ -466,7 +466,7 @@ class RpmPackage(RpmData):
             try:
                 (status, rusage, output) = functions.runScript(
                     self["preunprog"], self["preun"], [numPkgs],
-                    rusage=self.config.rusage, pkg=self, chroot=buildroot)
+                    rusage=self.config.rusage, prefixes=self["prefixes"], chroot=buildroot)
             except (IOError, OSError), e:
                 log.error("\n%s: Error running pre uninstall script: %s",
                           self.getNEVRA(), e)
@@ -555,7 +555,7 @@ class RpmPackage(RpmData):
             try:
                 (status, rusage, output) = functions.runScript(
                     self["postunprog"], self["postun"], [numPkgs],
-                    rusage = self.config.rusage, pkg=self, chroot=buildroot)
+                    rusage = self.config.rusage, prefixes=self["prefixes"], chroot=buildroot)
             except (IOError, OSError), e:
                 log.error("\n%s: Error running post uninstall script: %s",
                           self.getNEVRA(), e)
@@ -607,7 +607,7 @@ class RpmPackage(RpmData):
                                              force = True,
                                              rusage = self.config.rusage,
                                              chroot = self.config.buildroot,
-                                             pkg = self)
+                                             prefixes = self["prefixes"])
             except (IOError, OSError), e:
                 errors.append((None, "%%verifyscript: %s" % str(e)))
             else:
