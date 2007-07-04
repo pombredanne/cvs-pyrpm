@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import types, string
+import types
 from config import log
 
 ##############################################################################
@@ -120,7 +120,7 @@ class KickstartConfig(dict):
                 if len(args) == 2:
                     try:
                         _fd = open(args[1], "r")
-                    except Exception, msg:
+                    except Exception:
                         log.info1("Unable to open '%s', ignoring.", args[1])
                     else:
                         if args[1] in open_files:
@@ -180,7 +180,7 @@ class KickstartConfig(dict):
                                        "none" ])
                     self.stringSplit(self["bootloader"], "drives")
                 elif opt == "device":
-                    (_dict, _args) = self.parseArgs(opt, args[1:], [ "opts:" ])
+                    (_dict, _args) = self.parseArgs(args[1:], [ "opts:" ])
                     if len(_args) != 2:
                         raise ValueError, "'%s' is unsupported" % line
                     if not self.has_key(opt):
@@ -262,7 +262,7 @@ class KickstartConfig(dict):
                 elif opt == "key":
                     self.parseSub(opt, args[1:], [ "skip" ])
                 elif opt == "langsupport":
-                    (_dict, _args) = self.parseArgs(opt, args[1:],
+                    (_dict, _args) = self.parseArgs(args[1:],
                                                     [ "default:" ])
                     self[opt] = _dict
                     if len(args) > 0:
@@ -327,7 +327,7 @@ class KickstartConfig(dict):
                     self.convertLong(dict, "end")
                     self.convertLong(dict, "bytes-per-inode")
                 elif opt == "raid":
-                    (_dict, _args) = self.parseArgs(opt, args[1:],
+                    (_dict, _args) = self.parseArgs(args[1:],
                                                     [ "level:", "device:",
                                                       "bytes_per_inode:",
                                                       "spares:", "fstype:",
@@ -349,7 +349,7 @@ class KickstartConfig(dict):
                 elif opt == "reboot":
                     self.parseSimple(opt, args[1:], [ "eject" ])
                 elif opt == "repo":
-                    (_dict, _args) = self.parseArgs(opt, args[1:],
+                    (_dict, _args) = self.parseArgs(args[1:],
                                                     [ "name:", "baseurl:",
                                                       "mirrorlist:",
                                                       "exclude:" ])
@@ -394,7 +394,7 @@ class KickstartConfig(dict):
                     self.convertLong(dict, "uid")
                 # TODO: vnc
                 elif opt == "volgroup":
-                    (_dict, _args) = self.parseArgs(opt, args[1:],
+                    (_dict, _args) = self.parseArgs(args[1:],
                                                     [ "noformat",
                                                       "useexisting",
                                                       "pesize:" ])
@@ -740,7 +740,7 @@ class KickstartConfig(dict):
             if not self["url"].has_key("url"):
                 raise ValueError, "url not set for url."
 
-    def parseArgs(self, tag, argv, allowed_args, replace_tags=None):
+    def parseArgs(self, argv, allowed_args, replace_tags=None):
         dict = { }
         (opts, args) = KickstartConfig.getopt(argv, "", allowed_args)
 
@@ -762,14 +762,14 @@ class KickstartConfig(dict):
         if self.has_key(tag):
             raise ValueError, "%s already set." % tag
 
-        (dict, args) = self.parseArgs(tag, argv, allowed_args, replace_tags)
+        (dict, args) = self.parseArgs(argv, allowed_args, replace_tags)
 
         if len(args) != 0:
             raise ValueError, "'%s %s' is unsupported" % (tag, " ".join(argv))
         self[tag] = dict
 
     def parseMultiple(self, tag, argv, allowed_args, replace_tags=None):
-        (dict, args) = self.parseArgs(tag, argv, allowed_args, replace_tags)
+        (dict, args) = self.parseArgs(argv, allowed_args, replace_tags)
 
         if len(args) != 0:
             raise ValueError, "'%s %s' is unsupported" % (tag, " ".join(argv))
@@ -777,7 +777,7 @@ class KickstartConfig(dict):
         return dict
 
     def parseSub(self, tag, argv, allowed_args, replace_tags=None):
-        (dict, args) = self.parseArgs(tag, argv, allowed_args, replace_tags)
+        (dict, args) = self.parseArgs(argv, allowed_args, replace_tags)
 
         if len(args) != 1:
             raise ValueError, "'%s %s' is unsupported" % (tag, " ".join(argv))
