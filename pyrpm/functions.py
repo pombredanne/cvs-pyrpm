@@ -1265,7 +1265,7 @@ def readDir(dir, list, rtags=None):
         if os.path.isdir("%s/%s" % (dir, f)):
             readDir("%s/%s" % (dir, f), list)
         elif f.endswith(".rpm"):
-            pkg = readRpmPackage(rpmconfig, dir+"/"+f)
+            pkg = readRpmPackage(rpmconfig, dir+"/"+f, tags=rtags)
             if pkg == None:
                 continue
             log.info3("Reading package %s.", pkg.getNEVRA())
