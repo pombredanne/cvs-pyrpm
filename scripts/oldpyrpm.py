@@ -789,6 +789,8 @@ rpmtag = {
     "postunprog": [1088, RPM_ARGSTRING, None, 4],
     "verifyscript": [1079, RPM_STRING, None, 4],
     "verifyscriptprog": [1091, RPM_ARGSTRING, None, 4],
+    "posttrans": [1152, RPM_STRING, None, 4],
+    "posttransprog": [1154, RPM_ARGSTRING, None, 4],
 
     # addon information:
     "rpmversion": [1064, RPM_STRING, None, 0],
@@ -879,8 +881,6 @@ rpmtag = {
     "enhancesname": [1159, RPM_STRING_ARRAY, None, 5],
     "enhancesversion": [1160, RPM_STRING_ARRAY, None, 5],
     "enhancesflags": [1161, RPM_INT32, None, 5],
-    "posttrans": [1152, RPM_STRING, None, 5],
-    "posttransprog": [1154, RPM_STRING, None, 5],
 }
 # Add a reverse mapping for all tags plus the name again.
 for _v in rpmtag.keys():
