@@ -789,7 +789,9 @@ rpmtag = {
     "postunprog": [1088, RPM_ARGSTRING, None, 4],
     "verifyscript": [1079, RPM_STRING, None, 4],
     "verifyscriptprog": [1091, RPM_ARGSTRING, None, 4],
+    "pretrans": [1151, RPM_STRING, None, 4],
     "posttrans": [1152, RPM_STRING, None, 4],
+    "pretransprog": [1153, RPM_ARGSTRING, None, 4],
     "posttransprog": [1154, RPM_ARGSTRING, None, 4],
 
     # addon information:
