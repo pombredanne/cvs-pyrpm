@@ -1291,7 +1291,7 @@ class RpmYum:
             for obsolete, new_pkg in new_pkgs:
                 if self.__doAutoerase(new_pkg):
                     log.info2("Autoerasing package %s due to conflicting obsoletes.",
-                              pkg.getNEVRA())
+                              new_pkg.getNEVRA())
                     ret = 1
         return ret
 
