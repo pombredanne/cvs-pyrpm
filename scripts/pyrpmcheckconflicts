@@ -1,0 +1,166 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2006 Red Hat, Inc.
+# Author: Thomas Woerner <twoerner@redhat.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; version 2 only
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Copyright 2004, 2005 Red Hat, Inc.
+#
+
+import sys, os, getopt, pprint
+
+PYRPMDIR = ".."
+if not PYRPMDIR in sys.path:
+    sys.path.append(PYRPMDIR)
+import pyrpm
+
+# ----------------------------------------------------------------------------
+
+def usage():
+    print """Usage: %s <options> <rpm package>...
+
+OPTIONS:
+  -h  | --help           print help
+  -v  | --verbose        be verbose, and more, ..
+  -d <dir>               load rpms from dir <dir> (multi)
+""" % sys.argv[0]
+
+# ----------------------------------------------------------------------------
+
+dirs = [ ]
+rpms = [ ]
+
+verbose = 0
+pyrpm.rpmconfig.noconflictcheck = 0
+pyrpm.rpmconfig.nofileconflictcheck = 0
+#pyrpm.rpmconfig.checkinstalled = 1
+
+if __name__ == '__main__':
+    try:
+        (opts, args) = getopt.getopt(sys.argv[1:], "hvd:",
+                                     [ "help", "verbose" ])
+    except:
+        usage()
+        sys.exit(1)
+
+    for (opt, val) in opts:
+        if opt in [ "-h", "--help" ]:
+            usage()
+            sys.exit(1)
+        elif opt in [ "-v", "--verbose" ]:
+            verbose += 1
+        elif opt == "-d":
+            dirs.append(val)
+        else:
+            print "Unknown option '%s'" % opt
+            usage()
+            sys.exit(1)
+
+    pyrpm.rpmconfig.verbose = verbose
+
+    # -- load packages
+
+    i = 1
+    if len(dirs) > 0:
+        for dir in dirs:
+            _args = [ ]
+            if not os.path.exists(dir) or not os.path.isdir(dir):
+                print "%s does not exists or is not a directory." % dir
+                sys.exit(1)
+            print "Loading rpm packages from %s" % dir
+            list = os.listdir(dir)
+            list.sort
+            for entry in list:
+                if not entry or not entry[-4:] == ".rpm":
+                    continue
+                n = dir+"/"+entry
+                if not os.path.isfile(n):
+                    continue
+                _args.append(n)
+            #
+            for f in _args:
+                if verbose > 0:
+                    print "Reading %d/%d " % (i, len(_args))
+                r = pyrpm.RpmPackage(pyrpm.rpmconfig, f)
+                try:
+                    r.read(tags=pyrpm.rpmconfig.resolvertags)
+                except:
+                    print "Loading of %s failed, exiting." % f
+                    sys.exit(-1)
+                r.close()
+                rpms.append(r)
+                i += 1
+            if verbose > 0 and len(_args) > 0:
+                print
+
+    for f in args:
+        if verbose > 0:
+            print "Reading %d/%d " % (i, len(args))
+        r = pyrpm.RpmPackage(pyrpm.rpmconfig, f)
+        try:
+            r.read(tags=pyrpm.rpmconfig.resolvertags)
+        except:
+            print "Loading of %s failed, exiting." % f
+            sys.exit(-1)
+        r.close()
+        rpms.append(r)
+        i += 1
+    if verbose > 0 and len(args) > 0:
+        print
+    del args
+
+    if len(rpms) < 2:
+        print "Not enough packages for checking."
+        sys.exit(0)
+
+    # -----------------------------------------------------------------------
+
+    db = pyrpm.database.memorydb.RpmMemoryDB(pyrpm.rpmconfig, None)
+    resolver = pyrpm.RpmResolver(pyrpm.rpmconfig, db)
+    del db
+
+    i = 0
+    l = len(rpms)
+    while len(rpms) > 0:
+        print "Appending %d/%d " % (i+1, l)
+        r = rpms.pop(0)
+        # append
+        resolver.install(r)
+        i += 1
+    del rpms
+    if verbose > 0:
+        print
+
+    count = 0
+    conflicts = resolver.getConflicts()
+    for pkg in conflicts:
+        print "Package %s conflicts with:" % pkg.getNEVRA()
+        for (dep, p) in conflicts[pkg]:
+            print "\t%s on '%s'" % (p.getNEVRA(), pyrpm.depString(dep))
+            count += 1
+    print "conflict count: %d" % (count/2)
+
+    print "-------------------------------------------------------------------"
+    count = 0
+    conflicts = resolver.getFileConflicts()
+    for pkg in conflicts:
+        print "Package %s file conflicts with:" % pkg.getNEVRA()
+        for (f,p) in conflicts[pkg]:
+            print "\t%s on '%s'" % (p.getNEVRA(), f)
+            count += 1
+    print "file conflict count: %d" % (count/2)
+
+    sys.exit(0)
+
+# vim:ts=4:sw=4:showmatch:expandtab
