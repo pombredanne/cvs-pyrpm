@@ -94,7 +94,7 @@ if __name__ == '__main__':
                     print "Reading %d/%d " % (i, len(_args))
                 r = pyrpm.RpmPackage(pyrpm.rpmconfig, f)
                 try:
-                    r.read(tags=pyrpm.rpmconfig.resolvertags)
+                    r.read()
                 except:
                     print "Loading of %s failed, exiting." % f
                     sys.exit(-1)
@@ -133,33 +133,112 @@ if __name__ == '__main__':
     i = 0
     l = len(rpms)
     while len(rpms) > 0:
-        print "Appending %d/%d " % (i+1, l)
+        sys.stdout.write("\rAppending %d/%d " % (i+1, l))
         r = rpms.pop(0)
         # append
         resolver.install(r)
         i += 1
+    sys.stdout.write("\n")
     del rpms
     if verbose > 0:
         print
 
-    count = 0
-    conflicts = resolver.getConflicts()
-    for pkg in conflicts:
-        print "Package %s conflicts with:" % pkg.getNEVRA()
-        for (dep, p) in conflicts[pkg]:
-            print "\t%s on '%s'" % (p.getNEVRA(), pyrpm.depString(dep))
-            count += 1
-    print "conflict count: %d" % (count/2)
+    # -----------------------------------------------------------------------
 
-    print "-------------------------------------------------------------------"
-    count = 0
+    conflicts = resolver.getConflicts()
+    if len(conflicts) > 0:
+        print "\n- conflicts ------------------------------------------------"
+        for pkg in conflicts:
+            print "Package %s conflicts with:" % pkg.getNEVRA()
+            for (dep, p) in conflicts[pkg]:
+                print "\t%s on '%s'" % (p.getNEVRA(), pyrpm.depString(dep))
+
+    # -----------------------------------------------------------------------
+    from stat import S_ISLNK, S_ISDIR
+
+    _conflicts = { }
     conflicts = resolver.getFileConflicts()
     for pkg in conflicts:
-        print "Package %s file conflicts with:" % pkg.getNEVRA()
         for (f,p) in conflicts[pkg]:
-            print "\t%s on '%s'" % (p.getNEVRA(), f)
-            count += 1
-    print "file conflict count: %d" % (count/2)
+            _conflicts.setdefault(f, [ ]).append(pkg)
+
+    conflicts = _conflicts
+
+    if len(conflicts) > 0:
+        print "\n- file conflicts -------------------------------------------"
+        for f in conflicts:
+            print f
+
+            uids = [ ]
+            gids = [ ]
+            ghost = [ ]
+            dir = [ ]
+            linkto = [ ]
+            modes = [ ]
+            sizes = [ ]
+            md5sums = [ ]
+            for pkg in conflicts[f]:
+                pkg_fi = pkg.getRpmFileInfo(f)
+                if not pkg_fi.uid in uids:
+                    uids.append(pkg_fi.uid)
+                if not pkg_fi.gid in gids:
+                    gids.append(pkg_fi.gid)
+                if pkg_fi.flags & pyrpm.base.RPMFILE_GHOST:
+                    if not True in ghost:
+                        ghost.append(True)
+                elif not False in ghost:
+                    ghost.append(False)
+                if S_ISDIR(pkg_fi.mode):
+                    if not True in dir:
+                        dir.append(True)
+                elif not False in dir:
+                    dir.append(False)
+                if S_ISLNK(pkg_fi.mode) and not pkg_fi.linkto in linkto:
+                    linkto.append(pkg_fi.linkto)
+                if not pkg_fi.mode in modes:
+                    modes.append(pkg_fi.mode)
+                if not pkg_fi.filesize in sizes:
+                    sizes.append(pkg_fi.filesize)
+                if not pkg_fi.md5sum in md5sums:
+                    md5sums.append(pkg_fi.md5sum)
+            for pkg in conflicts[f]:
+                pkg_fi = pkg.getRpmFileInfo(f)
+                pkg_str = "%s" % pkg.getNEVRA()
+                if len(uids) > 1:
+                    pkg_str += ", uid=%d" % pkg_fi.uid
+                if len(gids) > 1:
+                    pkg_str += ", gid=%d" % pkg_fi.gid
+                if len(ghost) > 1:
+                    if pkg_fi.flags & pyrpm.base.RPMFILE_GHOST:
+                        pkg_str += ", GHOST"
+                if len(dir) > 1:
+                    if S_ISDIR(pkg_fi.mode):
+                        pkg_str += ", DIR"
+                if len(linkto) > 1:
+                    if S_ISLNK(pkg_fi.mode):
+                        pkg_str += ", ->%s" % pkg_fi.linkto
+                if len(modes) > 1:
+                    pkg_str += ", mode=%d" % pkg_fi.mode
+                if len(sizes) > 1 and not S_ISLNK(pkg_fi.mode):
+                    pkg_str += ", size=%d" % pkg_fi.filesize
+                if len(md5sums) > 1:
+                    pkg_str += ", md5sum=%s" % pkg_fi.md5sum
+
+                print "\t%s" % pkg_str
+                
+
+    sys.exit(0)
+    
+    if len(conflicts) > 0:
+        print "\n- file conflicts -------------------------------------------"
+        for pkg in conflicts:
+            print "Package %s file conflicts with:" % pkg.getNEVRA()
+            for (f,p) in conflicts[pkg]:
+#                pkg1_fi = pkg.getRpmFileInfo(f)
+#                pkg2_fi = p.getRpmFileInfo(f)
+#                if S_ISLNK(pkg1_fi.mode) and S_ISLNK(pkg2_fi.mode):
+#                    print pkg1_fi.linkto, pkg2_fi.linkto
+                print "\t%s on '%s'" % (p.getNEVRA(), f)
 
     sys.exit(0)
 
