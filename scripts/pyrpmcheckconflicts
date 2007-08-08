@@ -225,20 +225,6 @@ if __name__ == '__main__':
                     pkg_str += ", md5sum=%s" % pkg_fi.md5sum
 
                 print "\t%s" % pkg_str
-                
-
-    sys.exit(0)
-    
-    if len(conflicts) > 0:
-        print "\n- file conflicts -------------------------------------------"
-        for pkg in conflicts:
-            print "Package %s file conflicts with:" % pkg.getNEVRA()
-            for (f,p) in conflicts[pkg]:
-#                pkg1_fi = pkg.getRpmFileInfo(f)
-#                pkg2_fi = p.getRpmFileInfo(f)
-#                if S_ISLNK(pkg1_fi.mode) and S_ISLNK(pkg2_fi.mode):
-#                    print pkg1_fi.linkto, pkg2_fi.linkto
-                print "\t%s on '%s'" % (p.getNEVRA(), f)
 
     sys.exit(0)
 
