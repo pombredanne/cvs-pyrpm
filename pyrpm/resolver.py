@@ -376,7 +376,8 @@ class RpmResolver:
         if S_ISDIR(pkg1_fi.mode) and S_ISDIR(pkg2_fi.mode):
             return 0
         # ignore links
-        if S_ISLNK(pkg1_fi.mode) and S_ISLNK(pkg2_fi.mode):
+        if S_ISLNK(pkg1_fi.mode) and S_ISLNK(pkg2_fi.mode) and \
+               (pkg1_fi.linkto == pkg2_fi.linkto):
             return 0
 
         # ignore identical files
