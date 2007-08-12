@@ -2245,6 +2245,9 @@ class ReadRpm: # pylint: disable-msg=R0904
             self["version"], self["release"], self.getArch())
 
     def getFilename(self):
+        if opensuse and self.issrc and self["nosource"] != None:
+            return "%s-%s-%s.nosrc.rpm" % (self["name"], self["version"],
+                self["release"])
         return "%s-%s-%s.%s.rpm" % (self["name"], self["version"],
             self["release"], self.getArch())
 
@@ -2573,7 +2576,7 @@ class ReadRpm: # pylint: disable-msg=R0904
             self.printErr("unknown arch for rhnplatform")
         if self.strict:
             if os.path.basename(self.filename) != self.getFilename():
-                self.printErr("bad filename: %s" % self.filename)
+                self.printErr("bad filename: %s/%s" % (self.filename, self.getFilename()))
             if opensuse:
                 if self["platform"] not in (None, "",
                   arch + "-suse-linux", "noarch-suse-linux"):
@@ -2697,8 +2700,8 @@ class ReadRpm: # pylint: disable-msg=R0904
                 if t[2] != None and t[2] != count:
                     self.printErr("tag %d has wrong count %d" % (tag, count))
                 if self.strict and (t[3] & 1):
-                    if not opensuse or tag not in (1012, 1013, 1123, 1152,
-                        1154, 1156, 1157, 1158, 1159, 1160, 1161):
+                    if not opensuse or tag not in (1012, 1013, 1051, 1052,
+                        1123, 1152, 1154, 1156, 1157, 1158, 1159, 1160, 1161):
                         self.printErr("tag %d is old" % tag)
                 if self.issrc:
                     if (t[3] & 4):
@@ -5810,7 +5813,8 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
                             and rpm1["filegroupname"][i1] ==
                                 rpm2["filegroupname"][i2]):
                             continue
-                        # No fileconflict for multilib elf32/elf64 files.
+                        # No fileconflict for multilib elf32/elf64 files,
+                        # both files need to be elf32 or elf64 files.
                         if filecolorsi1 and rpm2["filecolors"]:
                             filecolorsi2 = rpm2["filecolors"][i2]
                             if filecolorsi2 and filecolorsi1 != filecolorsi2:
