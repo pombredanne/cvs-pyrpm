@@ -5806,12 +5806,16 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
                         (rpm2, i2) = s[k]
                         filemodesi2 = rpm2["filemodes"][i2]
                         # No fileconflict if mode/md5sum/user/group match.
+                        # In addition also symlink linktos need to match.
                         if (filemd5si1 == rpm2["filemd5s"][i2] and
                             filemodesi1 == filemodesi2
                             and rpm1["fileusername"][i1] ==
                                 rpm2["fileusername"][i2]
                             and rpm1["filegroupname"][i1] ==
-                                rpm2["filegroupname"][i2]):
+                                rpm2["filegroupname"][i2]
+                            and (not S_ISLNK(filemodesi1) or
+                                 rpm1["filelinktos"][i1] ==
+                                 rpm2["filelinktos"][i2])):
                             continue
                         # No fileconflict for multilib elf32/elf64 files,
                         # both files need to be elf32 or elf64 files.
