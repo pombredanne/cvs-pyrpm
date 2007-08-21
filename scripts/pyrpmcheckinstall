@@ -66,6 +66,8 @@ def testPkglist(yum, numcpu, j):
     i = j*plen/numcpu
     for pkg in pkglist:
         i += 1
+        #if pkg["name"] != "bash":
+        #   continue
         yum.setCommand("update")
         if yum.prepareTransaction() == 0:
             break
