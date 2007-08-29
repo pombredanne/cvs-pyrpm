@@ -2509,6 +2509,7 @@ class ReadRpm: # pylint: disable-msg=R0904
                 if (i in self["name"] or i in self["version"] or
                     i in self["release"]):
                     self.printErr("name/version/release contains wrong char")
+            matchhash = re.compile("^[a-z0-9]{32}$")
             for i in self.hdr.get("provideversion", []) + \
                 self.hdr.get("requireversion", []) + \
                 self.hdr.get("obsoleteversion", []) + \
@@ -2520,7 +2521,8 @@ class ReadRpm: # pylint: disable-msg=R0904
                     self.printErr("wrong char [ ,\\t] in deps")
                 if i.count("-") >= 2:
                     self.printErr("too many '-' in deps")
-                if i[:1] and not i[:1].isdigit():
+                if i[:1] and not i[:1].isdigit() and not matchhash.match(i) \
+                    and i != "%s-%s" % (self["version"], self["release"]):
                     self.printErr("dependency version starts " +
                         "with non-digit: %s" % i)
                 if "%" in i:
