@@ -2926,12 +2926,14 @@ def sameSrcRpm(a, b):
     return amd5s == bmd5s
 
 def ignoreBinary():
-    return "\.gz$\n\.tgz$\n\.taz$\n\.tbz$\n\.bz2$\n\.z$\n\.Z$\n\.zip$\n" \
-        "\.ttf$\n\.db$\n\.jar$\n\.pdf$\n\.sdf$\n\.war$\n\.gsi$\n"
+    return "\.cin$\n\.ogg$\n\.gz$\n\.tgz$\n\.tar$\n\.taz$\n\.tbz$\n\.bz2$\n" \
+        "\.z$\n\.Z$\n\.zip$\n\.ttf$\n\.db$\n\.jar$\n\.pdf$\n\.sdf$\n\.war$\n" \
+        "\.gsi$\n\.uqm$\n\.weight$\n\.ps$\n"
 
 def isBinary(filename):
-    for i in (".gz", ".tgz", ".taz", ".tbz", ".bz2", ".z", ".Z", ".zip",
-        ".ttf", ".db", ".jar", ".pdf", ".sdf", ".war", ".gsi"):
+    for i in (".cin", ".ogg", ".gz", ".tgz", ".tar", ".taz", ".tbz", ".bz2",
+        ".z", ".Z", ".zip", ".ttf", ".db", ".jar", ".pdf", ".sdf", ".war",
+        ".gsi", ".uqm", ".weight", ".ps"):
         if filename.endswith(i):
             return 1
     return 0
@@ -5512,8 +5514,8 @@ fedora = mirror + "fedora/"
 rhelupdates = mirror + "updates-rhel/"
 srpm_repos = [
     # Fedora Core
-    #("Fedora Core development", "FC-development",
-    # [fedora + "development/SRPMS"], None),
+    ("Fedora Core development", "FC-development",
+     [fedora + "development/source/SRPMS"], None),
     #("Fedora Core 4", "FC4",
     # [fedora + "4/SRPMS", fedora + "updates/4/SRPMS",
     #  fedora + "updates/testing/4/SRPMS"], None),
@@ -5607,7 +5609,7 @@ def extractSrpm(pkg, pkgdir, filecache, repodir, oldpkg):
         "redhat-config-netboot", "redhat-config-network",
         "redhat-config-securitylevel", "redhat-logos", "redhat-release",
         "rhn-applet", "rhnlib", "rhpl",
-        "sysklogd", "system-config-printer", "system-config-securitylevel",
+        "sysklogd", "system-config-securitylevel",
         "tux", "udev"]
     if repodir.endswith("/RHEL2.1.git"):
         EXTRACT_SOURCE_FOR.remove("redhat-config-network")
