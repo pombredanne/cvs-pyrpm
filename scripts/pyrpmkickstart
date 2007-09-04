@@ -248,7 +248,7 @@ def main():
         # mount ramfs for stage2
         log.info2("Mounting ramfs on '%s'.", stage2_dir)
         try:
-            mount("None", stage2_dir, fstype="ramfs")
+            mount("None", stage2_dir, fstype="tmpfs")
         except Exception, msg:
             log.error("Unable to create stage2 ramfs: %s", msg)
             return 1
@@ -371,6 +371,7 @@ def main():
                 shutil.copy2(s, d)
         pyrpm.unblockSignals(signals)
 
+
         log.info2("Umounting '%s'.", stage2_img_dir)
         umount(stage2_img_dir)
         stage2_img_dir = None
@@ -383,6 +384,21 @@ def main():
         if pyrpm.rpmconfig.selinux_enabled:
             pyrpm.se_linux.matchpathcon_fini()
             pyrpm.se_linux.matchpathcon_init_from_chroot(stage2_dir)
+
+        if pyrpm.rpmconfig.selinux_enabled:
+            # set context of target chroot
+            set_SE_context(stage2_dir, "/")
+        else:
+            return 1
+
+        # fix selinux contexts of stage2 content
+        for root, dirs, files in os.walk(stage2_dir):
+            local_root = root.split(stage2_dir, 1)[1]
+            # set context of dir
+            set_SE_context(stage2_dir, local_root)
+            # context of files
+            for entry in files:
+                set_SE_context(stage2_dir, "%s/%s" % (local_root, entry))
 
         # create dirs
         create_dir(stage2_dir, "/bin")
@@ -2025,6 +2041,12 @@ def main():
 
     # create essential directories
     os.umask(022)
+
+    if pyrpm.rpmconfig.selinux_enabled:
+        # set context of target chroot
+        set_SE_context(target_chroot, "/")
+    else:
+        return 1
 
     create_dir(target_chroot, "/boot/grub")
     create_dir(target_chroot, "/dev")
