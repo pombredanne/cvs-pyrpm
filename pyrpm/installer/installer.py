@@ -87,7 +87,7 @@ class Source:
             self.id = "FC"
             self.prefix = "Fedora"
         else:
-            log.error("Unknown source release '%s'.", self.release)
+            log.error("Unknown source '%s'.", self.name)
             return 0
 
         self.release = "%s-%s" % (self.id, self.version)
@@ -113,14 +113,15 @@ class Source:
             inum = None
             if key and not skip and not beta_key_verify:
                 if not instnum:
-                    log.error("Unable to verify installation key, "
-                              "module instkey is missing.")
-                    return 0
-                try:
-                    inum = instnum.InstNum(key)
-                except:
-                    log.error("Installation key '%s' is not valid.", key)
-                    return 0
+                    log.warning("Unable to verify installation key, "
+                                "module instkey is missing.. using default"
+                                "installation.")
+                else:
+                    try:
+                        inum = instnum.InstNum(key)
+                    except:
+                        log.error("Installation key '%s' is not valid.", key)
+                        return 0
 
             if inum:
                 if inum.get_product_string().lower() != \
@@ -577,6 +578,8 @@ class Source:
         return self.arch
 
     def cmpVersion(self, other):
+        if self.getVersion() == "development":
+            return 1
         return stringCompare(self.getVersion(), other)
 
     def getRelease(self):

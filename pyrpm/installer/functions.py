@@ -249,12 +249,23 @@ def get_discinfo(discinfo):
 
     # This should be using the cache to also work for http/ftp.
     fd = None
+    lines = [ ]
     try:
         try:
             fd = open(discinfo, "r")
         except Exception, msg:
             return None
-        lines = fd.readlines()
+        while 1:
+            line = fd.readline()
+            if not line:
+                break
+            if len(line) < 1:
+                continue
+            line = line.strip()
+            if (line[0] == '"' or line[0] == "'") and \
+                   line[0] == line[-1]:
+                line = line[1:-1]
+            lines.append(line)
     finally:
         if fd:
             fd.close()
@@ -271,9 +282,9 @@ def get_discinfo(discinfo):
     if i == -1:
         log.error("Discinfo in '%s' is malformed.", discinfo)
         return None
-    release = string.strip(lines[1][:i])
-    version = string.strip(lines[1][i:])
-    arch = string.strip(lines[2])
+    release = lines[1][:i].strip()
+    version = lines[1][i:].strip()
+    arch = lines[2]
     del lines
 
     return (release, version, arch)
@@ -598,9 +609,14 @@ def create_device(buildroot, name, stat, major, minor):
 def set_SE_context(buildroot, filename):
     t = "%s/%s" % (buildroot, filename)
     if rpmconfig.selinux_enabled:
-        st = os.stat(t)
-        context = se_linux.matchpathcon(filename, st.st_mode)
-        se_linux.lsetfilecon(t, context[1])
+        try:
+            st = os.stat(t)
+        except Exception, msg:
+            pass
+        else:
+            context = se_linux.matchpathcon(filename, st.st_mode)
+            return se_linux.lsetfilecon(t, context[1])
+    return -1
 
 def create_min_devices(buildroot):
     create_device(buildroot, "/dev/console", 0666 | stat.S_IFCHR, 5, 1)

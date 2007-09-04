@@ -92,6 +92,8 @@ def rpm_execcon(verified, filename, argv, envp):
 def lsetfilecon(filename, context):
     if __enabled < 0:
         return
+    if not context:
+        return 0
     return selinux.lsetfilecon(filename, context)
     
 def lgetfilecon(filename):
