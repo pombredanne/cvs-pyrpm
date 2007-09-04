@@ -119,8 +119,13 @@ __doc__ = """Manage everything around Linux RPM packages."""
 import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
-import os, os.path, zlib, gzip, errno, re, time
-import md5, sha, signal
+import os, os.path, zlib, gzip, errno, re, time, signal
+if sys.version_info >= (3, 0):
+    from hashlib import md5
+    from hashlib import sha1
+    sha = sha1
+else:
+    import md5, sha
 from types import IntType, ListType
 from struct import pack, unpack
 try:
@@ -1600,6 +1605,7 @@ class HdrIndex:
         self.__delitem__ = self.hash.__delitem__
         self.__setitem__ = self.hash.__setitem__
         self.__contains__ = self.hash.__contains__
+        #PY3: self.has_key = self.hash.__contains__
         self.has_key = self.hash.has_key
         #self.__repr__ = self.hash.__repr__
 
@@ -1707,6 +1713,7 @@ class ReadRpm: # pylint: disable-msg=R0904
         if rpmdb:
             data = self.fd.read(8)
             (indexNo, storeSize) = unpack("!2I", data)
+            #PY3: magic = b"\x8e\xad\xe8\x01\x00\x00\x00\x00"
             magic = "\x8e\xad\xe8\x01\x00\x00\x00\x00"
             data = magic + data
             if indexNo < 1:
@@ -1714,6 +1721,7 @@ class ReadRpm: # pylint: disable-msg=R0904
         else:
             data = self.fd.read(16)
             (magic, indexNo, storeSize) = unpack("!8s2I", data)
+            #PY3: if magic != b"\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
             if magic != "\x8e\xad\xe8\x01\x00\x00\x00\x00" or indexNo < 1:
                 self.raiseErr("bad index magic")
         fmt = self.fd.read(16 * indexNo)
@@ -1801,6 +1809,7 @@ class ReadRpm: # pylint: disable-msg=R0904
                 continue
             nametag = myrpmtag[4]
             if ttype == RPM_STRING:
+                #PY3: data = fmt2[offset:fmt2.index(b"\x00", offset)]
                 data = fmt2[offset:fmt2.index("\x00", offset)]
                 if nametag == "group":
                     self.rpmgroup = ttype
@@ -1833,7 +1842,7 @@ class ReadRpm: # pylint: disable-msg=R0904
             # Ignore duplicate entries as long as they are identical.
             # They happen for packages signed with several keys or for
             # relocated packages in the rpmdb.
-            if hdr.has_key(nametag):
+            if hdr.hash.has_key(nametag):
                 if nametag == "dirindexes":
                     nametag = "dirindexes2"
                 elif nametag == "dirnames":
@@ -1844,7 +1853,7 @@ class ReadRpm: # pylint: disable-msg=R0904
                     if self.strict or hdr[nametag] != data:
                         self.printErr("duplicate tag %d" % tag)
                     continue
-            hdr[nametag] = data
+            hdr.hash[nametag] = data
         return hdr
 
     def setHdr(self):
@@ -1861,6 +1870,7 @@ class ReadRpm: # pylint: disable-msg=R0904
             if self.__openFd(None, headerend):
                 return 1
             leaddata = self.fd.read(96)
+            #PY3: if leaddata[:4] != b"\xed\xab\xee\xdb" or len(leaddata) != 96:
             if leaddata[:4] != "\xed\xab\xee\xdb" or len(leaddata) != 96:
                 #from binascii import b2a_hex
                 self.printErr("no rpm magic found")
