@@ -388,8 +388,6 @@ def main():
         if pyrpm.rpmconfig.selinux_enabled:
             # set context of target chroot
             set_SE_context(stage2_dir, "/")
-        else:
-            return 1
 
         # fix selinux contexts of stage2 content
         for root, dirs, files in os.walk(stage2_dir):
@@ -2045,8 +2043,6 @@ def main():
     if pyrpm.rpmconfig.selinux_enabled:
         # set context of target chroot
         set_SE_context(target_chroot, "/")
-    else:
-        return 1
 
     create_dir(target_chroot, "/boot/grub")
     create_dir(target_chroot, "/dev")
