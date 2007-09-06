@@ -1713,8 +1713,6 @@ def main():
     if mounted > 0:
         return 1
 
-    return 1
-
     ############################ format partitions ############################
 
     # prepare to format partitions
