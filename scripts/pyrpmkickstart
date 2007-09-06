@@ -288,7 +288,10 @@ def main():
     ############################### load source ###############################
 
     source = Source()
-    if not source.load(ks, source_dir, beta_key_verify):
+    signals = pyrpm.blockSignals()
+    ret = source.load(ks, source_dir, beta_key_verify)
+    pyrpm.unblockSignals(signals)
+    if not ret:
         return 1
 
     # verify source
@@ -1699,6 +1702,19 @@ def main():
     if err:
         return 1
 
+    # check if partitions are already mounted (in use)
+    mounted_devs = mounted_devices()
+    mounted = 0
+    for onpart in partitionmap:
+        if partitionmap[onpart]["device"] in mounted_devs:
+            log.error("Device '/dev/%s' is already mounted on '%s'.", onpart,
+                      "', '".join(mounted_devs[partitionmap[onpart]["device"]]))
+            mounted += 1
+    if mounted > 0:
+        return 1
+
+    return 1
+
     ############################ format partitions ############################
 
     # prepare to format partitions
@@ -1724,16 +1740,6 @@ def main():
             # dependent)
     to_format.sort()
     to_format.reverse()
-
-    # check if partitions marked for formatting are already mounted (in use)
-    mounted_devs = mounted_devices()
-    mounted = 0
-    for onpart in to_format:
-        if partitionmap[onpart]["device"] in mounted_devs:
-            log.error("'%s' is currently mounted.", onpart)
-            mounted += 1
-    if mounted > 0:
-        return 1
 
     # check if all needed programs are there: mdadm, lvm, mkswap, mkfs.X and
     # tune2fs

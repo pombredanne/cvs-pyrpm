@@ -78,7 +78,7 @@ def get_system_md_devices():
 
 def mounted_devices():
     # dict <mount point>:<filesystem type>
-    mounted = [ ]
+    mounted = { }
     fd = None
     try:
         try:
@@ -91,7 +91,7 @@ def mounted_devices():
             if not line:
                 break
             margs = line.split()
-            mounted.append(margs[0])
+            mounted.setdefault(margs[0], [ ]).append(margs[1])
     finally:
         if fd:
             fd.close()
