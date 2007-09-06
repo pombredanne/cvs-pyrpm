@@ -139,6 +139,8 @@ def main():
     log.setDebugLogLevel(log.NO_DEBUG)
     log.setFormat("%(label)s%(message)s")
     log.setDateFormat("%Y-%m-%d %H:%M:%S")
+    flog.setFormat("%(date)s %(label)s%(message)s")
+    flog.setDateFormat(log.getDateFormat())
 
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], "hvdy",
@@ -272,8 +274,8 @@ def main():
     log_filename = tempdir+"/tmp/pyrpmkickstart.log"
     log_file = pyrpm.logger.FileLog(log_filename)
     log.info1("Logging to '%s'.", log_filename)
-    log.addInfoLogging("*", log_file, fmt="%(date)s %(label)s%(message)s")
-    log.addDebugLogging("*", log_file, fmt="%(date)s %(label)s%(message)s")
+    log.addInfoLogging("*", log_file, fmt=flog.getFormat())
+    log.addDebugLogging("*", log_file, fmt=flog.getFormat())
     # set extra file logging
     flog.setInfoLogging("*", log_file)
     flog.setDebugLogging("*", log_file)
@@ -1804,7 +1806,7 @@ def main():
                             diskmap[partitionmap[onpart]["disk"]]["image"])
                 else:
                     disk = partitionmap[onpart]["disk"]
-                log.info1("  '%s': '%s' on '%s'", name, onpart, disk)
+                log.info1("  '%s': '/dev/%s' on disk '%s'", name, onpart, disk)
         if not pyrpm.is_this_ok():
             return 0
 
@@ -2727,7 +2729,7 @@ def main():
             lokkit = "/usr/sbin/lokkit --quiet --nostart --selinux='%s'" % \
                      ks["selinux"].keys()[0]
             if run_script(lokkit, target_chroot) != 0:
-                log.error("Configuring selinux failed.")
+                log.error("Configuration of selinux failed.")
 
     # /etc/sysconfig/clock
     if ks.has_key("install") and ks.has_key("timezone"):

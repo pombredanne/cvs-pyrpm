@@ -696,13 +696,14 @@ def mount_nfs(url, dir, options=None):
     mount(what, dir, fstype="nfs", options=options)
     return "file://%s" % dir
 
-def run_script(command, chroot=''):
+def run_script(command, chroot='', logging=flog):
     if chroot != '':
-        flog.debug1("'%s' in '%s'", command, chroot, nofmt=1)
+        logging.debug1("'%s' in '%s'", command, chroot, nofmt=1)
     else:
-        flog.debug1(command, nofmt=1)
+        logging.debug1(command, nofmt=1)
     (status, rusage, msg) = runScript(script=command, chroot=chroot)
-    flog.info1(msg, nofmt=1)
+    if msg and msg != "":
+        logging.info1(msg, nofmt=1)
     return status
 
 def run_ks_script(dict, chroot):
@@ -711,7 +712,8 @@ def run_ks_script(dict, chroot):
         interpreter = dict["interpreter"]
     (status, rusage, msg) = runScript(interpreter, dict["script"],
                                       chroot=chroot)
-    flog.info1(msg, nofmt=1)
+    if msg and msg != "":
+        flog.info1(msg, nofmt=1)
     if status != 0:
         if dict.has_key("erroronfail"):
             log.error("Script failed, aborting.")
