@@ -324,8 +324,14 @@ class Logger:
             level = self.DEBUG_MAX
         self._debug_level[domain] = level - self.NO_DEBUG
 
+    def getFormat(self):
+        return self._format
+
     def setFormat(self, format):
         self._format = format
+
+    def getDateFormat(self):
+        return self._date_format
 
     def setDateFormat(self, format):
         self._date_format = format
