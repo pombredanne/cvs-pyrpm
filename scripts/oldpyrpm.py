@@ -441,7 +441,7 @@ class PrintHash:
             npos = self.hashlength
         else:
             self.num += 1
-            npos = (self.num * self.hashlength) / self.numobjects
+            npos = (self.num * self.hashlength) // self.numobjects
             # In case we call .nextObject() too often:
             if npos > self.hashlength:
                 npos = self.hashlength
@@ -2441,7 +2441,7 @@ class ReadRpm: # pylint: disable-msg=R0904
             if (tag != 61 or (-offset % 16 != 0) or
                 ttype != RPM_BIN or count != 16):
                 return None
-            indexNo = (-offset - 16) / 16
+            indexNo = (-offset - 16) // 16
             fmt = self.hdrdata[3][16:(indexNo + 1) * 16]
             fmt2 = self.hdrdata[4][:storeSize]
             return (indexNo, storeSize, fmt, fmt2)
@@ -2456,7 +2456,7 @@ class ReadRpm: # pylint: disable-msg=R0904
         if (tag != rpmtag["immutable"][0] or (-offset % 16 != 0) or
             ttype != RPM_BIN or count != 16):
             return None
-        indexNo = -offset / 16
+        indexNo = -offset // 16
         fmt = self.hdrdata[3][:indexNo * 16]
         fmt2 = self.hdrdata[4][:storeSize]
         return (indexNo, storeSize, fmt, fmt2)
@@ -2747,9 +2747,9 @@ class ReadRpm: # pylint: disable-msg=R0904
             if -offset % 16 != 0:
                 self.printErr("region has wrong offset")
             if (regiontag == rpmtag["immutable"][0] and
-                -offset / 16 != self.hdrdata[0]):
+                -offset // 16 != self.hdrdata[0]):
                 self.printErr("region tag %s only for partial header: %d, %d" \
-                    % (regiontag, self.hdrdata[0], -offset / 16))
+                    % (regiontag, self.hdrdata[0], -offset // 16))
 
         if self.nodigest:
             return 0
@@ -3195,7 +3195,7 @@ def bsearch(key, list2):
     l = 0
     u = len(list2)
     while l < u:
-        idx = (l + u) / 2
+        idx = (l + u) // 2
         r = cmp(key, list2[idx])
         if r < 0:
             u = idx
