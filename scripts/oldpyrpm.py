@@ -1268,6 +1268,7 @@ def writeHeader(pkg, tags, taghash, region, skip_tags, useinstall, rpmgroup):
             # python-only
             data = "".join( [ "%s\x00" % value[i] for i in xrange(count) ] )
             #PY3: data = data.encode()
+            #dummy line for the above one
             # python-only-end
             # pyrex-code
             #k = []
