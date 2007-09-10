@@ -1,3 +1,4 @@
 Makefile.in
 Makefile
 *.pyc
+oldpyrpm3.py
