@@ -121,11 +121,10 @@ if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
 import os, os.path, zlib, gzip, errno, re, time, signal
 if sys.version_info >= (3, 0):
-    from hashlib import md5
-    from hashlib import sha1
-    sha = sha1
+    from hashlib import md5, sha1
 else:
-    import md5, sha
+    import md5
+    import sha as sha1
 from types import IntType, ListType
 from struct import pack, unpack
 try:
@@ -386,7 +385,7 @@ def getChecksum(fd, digest="md5"):
     if digest == "md5":
         ctx = md5.new()
     else:
-        ctx = sha.new()
+        ctx = sha1.new()
     while 1:
         data = fd.read(16384)
         if not data:
@@ -2757,7 +2756,7 @@ class ReadRpm: # pylint: disable-msg=R0904
         # sha1 of the header
         sha1header = self.sig["sha1header"]
         if sha1header:
-            ctx = sha.new()
+            ctx = sha1.new()
             ctx.update(self.hdrdata[2])
             ctx.update(self.hdrdata[3])
             ctx.update(self.hdrdata[4])
@@ -6325,7 +6324,7 @@ def readRpmdb(rpmdbpath, distroverpkg, releasever, configfiles, buildroot,
             continue
         lead = pack("!8s2I", "\x8e\xad\xe8\x01\x00\x00\x00\x00",
             indexNo, storeSize)
-        ctx = sha.new()
+        ctx = sha1.new()
         ctx.update(lead)
         ctx.update(fmt)
         ctx.update(fmt2)
