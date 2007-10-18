@@ -22,7 +22,7 @@
 #
 
 
-import sys
+import sys, time
 from pyrpm.database.jointdb import JointDB
 from pyrpm.database.sqliterepodb import SqliteRepoDB
 from pyrpm.logger import log
@@ -43,6 +43,7 @@ class RhnRepoDB(JointDB):
 
     def __init__(self, config, source, buildroot='', nc=None):
         JointDB.__init__(self, config, source, buildroot)
+        self.comps = None
         self.reponame = "rhnrepo"
         if not use_rhn:
             return
@@ -82,6 +83,8 @@ class RhnChannelRepoDB(SqliteRepoDB):
         self.__setupRhnHttpHeaders()
         SqliteRepoDB.__init__(self, config, source, buildroot, channelname, nc)
         self.nc.setHeaders(self.http_headers, channelname)
+        self.nc.setCallback(self.__ncCallback, channelname)
+        self.authtime = time.time() + int(float(self.http_headers['X-RHN-Auth-Expire-Offset']))
 
     def __setupRhnHttpHeaders(self):
         """ Set up self.http_headers with needed RHN X-RHN-blah headers """
@@ -99,6 +102,14 @@ class RhnChannelRepoDB(SqliteRepoDB):
                 log.error("Missing required login information for RHN: %s" % header)
                 raise ValueError
             self.http_headers[header] = li[header]
+
+    def __ncCallback(self):
+        t = time.time()
+        if (self.authtime - t) < 60:
+            up2dateAuth.updateLoginInfo()
+            self.__setupRhnHttpHeaders()
+            self.nc.setHeaders(self.http_headers, self.reponame)
+            self.authtime = time.time() + int(float(self.http_headers['X-RHN-Auth-Expire-Offset']))
 
     def read(self):
         log.info2("Reading RHN channel repository '%s'", self.reponame)

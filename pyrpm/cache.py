@@ -36,6 +36,7 @@ class NetworkCache:
         self.pos = { }
         self.is_local = { }
         self.headers = { }
+        self.callbacks = { }
         self.baseurls[name] = baseurls
         self.pos[name] = 0
         self.is_local[name] = self.__isLocalURI(self.baseurls[name])
@@ -104,6 +105,20 @@ class NetworkCache:
             name = self.default_name
         self.headers[name] = headers.items()
 
+    def setCallback(self, cb, name=None):
+        """Sets the callback for given named cache. Default name is used in
+        case none is given."""
+        if name == None:
+            name = self.default_name
+        self.callbacks[name] = cb
+
+    def delCallback(self, name=None):
+        """Removes the callback for given named cache. Default name is used in
+        case none is given."""
+        if name == None:
+            name = self.default_name
+        del self.callbacks[name]
+
     def delCache(self, baseurls, name=None):
         """Deletes the given baseurls from the cache. If no name is given the
         None is assumed."""
@@ -164,6 +179,10 @@ class NetworkCache:
                 return open(path)
             except IOError:
                 return None
+
+        if self.callbacks.has_key(name):
+            self.callbacks[name]()
+
         opos = self.pos[name]
         while True:
             sourceurl = self.__createSourceURI(uri, name)
@@ -204,6 +223,10 @@ class NetworkCache:
                 os.makedirs(os.path.dirname(destfile))
             except OSError:
                 pass
+
+        if self.callbacks.has_key(name):
+            self.callbacks[name]()
+
         opos = self.pos[name]
         while True:
             sourceurl = self.__createSourceURI(uri, name)

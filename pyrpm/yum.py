@@ -473,7 +473,7 @@ class RpmYum:
         for name in pkgnamehash.keys():
             # Get a copy of the current db packages for the given name
             dbpkgs = self.opresolver.getDatabase().getPkgsByName(name)[:]
-            # If the package name is either in our always_install list, no
+            # If the package name is either in our always_install list or no
             # package with that name was installed we simply try to select the
             # best matching package update for this arch.
             if name in self.always_install or len(dbpkgs) == 0:
