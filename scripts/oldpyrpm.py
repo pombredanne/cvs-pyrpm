@@ -143,7 +143,7 @@ except ImportError:
         try:
             # maybe the python-only version is available?
             from ElementTree import iterparse
-        except:
+        except ImportError:
             # ok, we give up and use libxml then:
             uselibxml = 1
 #if uselibxml:
@@ -2595,7 +2595,8 @@ class ReadRpm: # pylint: disable-msg=R0904
             self.printErr("unknown arch for rhnplatform")
         if self.strict:
             if os.path.basename(self.filename) != self.getFilename():
-                self.printErr("bad filename: %s/%s" % (self.filename, self.getFilename()))
+                self.printErr("bad filename: %s/%s" % (self.filename,
+                    self.getFilename()))
             if opensuse:
                 if self["platform"] not in (None, "",
                   arch + "-suse-linux", "noarch-suse-linux"):
