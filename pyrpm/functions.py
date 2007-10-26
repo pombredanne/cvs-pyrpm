@@ -394,7 +394,7 @@ def makeDirs(fullname):
     Raise OSError."""
 
     dirname = os.path.dirname(fullname)
-    if len(dirname) > 1 and not os.path.isdir(dirname):
+    if len(dirname) > 1 and not os.path.exists(dirname):
         os.makedirs(dirname)
 
 def createLink(src, dst):
