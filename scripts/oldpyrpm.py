@@ -4478,7 +4478,8 @@ class RpmRepo:
         readsrc=0, fast=1):
         self.filenames = filenames
         self.filename = None
-        self.excludes = excludes.split(" \t,;")
+        self.excludes = excludes.strip(" \t,;")
+        self.excludes = self.excludes.split(" \t,;")
         self.verbose = verbose
         self.reponame = reponame
         self.readsrc = readsrc
@@ -6466,6 +6467,7 @@ def checkSymlinks(repo):
                 continue
             dangling.append((rpm["name"], f, link))
     # resolve possible dangling links
+    dangling.sort()
     for (name, f, link) in dangling:
         if resolveLink(goodlinks, link) not in allfiles:
             print "%s has dangling symlink from %s to %s" % (name, f, link)
@@ -7095,6 +7097,9 @@ def main():
             if specifyarch:
                 checkarchs = [arch, ]
             if checkarchs:
+                if excludes:
+                    excludes = excludes.strip(" \t,;")
+                    excludes = excludes.split(" \t,;")
                 for arch in checkarchs:
                     time1 = time.clock()
                     print "Check as if kernel has the", \
@@ -7102,6 +7107,11 @@ def main():
                     arch_hash = setMachineDistance(arch, archlist)
                     installrpms = getPkgsNewest(repo, arch, arch_hash,
                         verbose, 0, 1)
+                    if excludes:
+                        for excluderpm in parsePackages(installrpms, excludes):
+                            if excluderpm in installrpms:
+                                print "Excluding %s." % excluderpm.getFilename()
+                                installrpms.remove(excluderpm)
                     if strict:
                         checkProvides(installrpms)
                     checkDeps(installrpms, checkfileconflicts, runorderer,
