@@ -3315,11 +3315,11 @@ class FilenamesList:
             for i in xrange(len(basenames)):
                 self.path[dirnames[i]][basenames[i]].remove(pkg)
 
-    def searchDependency(self, name):
+    def searchDependency(self, name, returnall=0):
         """Return list of packages providing file with name."""
         (dirname, basename) = pathsplit2(name)
         ret = self.path.get(dirname, {}).get(basename, [])
-        if self.checkfileconflicts:
+        if self.checkfileconflicts and returnall == 0:
             # python-only
             return [ r[0] for r in ret ]
             # python-only-end
@@ -3330,6 +3330,18 @@ class FilenamesList:
             #return ret2
             # pyrex-code-end
         return ret
+
+    def searchStartsWith(self, name):
+        """Return list of packages which have dir names starting with name."""
+        namelen = len(name)
+        rpms = []
+        for (dirname, basenames) in self.path.iteritems():
+            if dirname[:namelen] == name:
+                for (basename, x) in basenames.iteritems():
+                    for (rpm, i) in x:
+                        if rpm not in rpms:
+                            rpms.append(rpm)
+        return rpms
 
 
 # split EVR string in epoch, version and release
@@ -5808,6 +5820,30 @@ def checkDeps(rpms, checkfileconflicts, runorderer, verbose=0):
     if checkfileconflicts:
         dirnames = resolver.filenames_list.path.keys()
         dirnames.sort()
+        # First check for directory names which use symlinks as part
+        # of their filenames:
+        alldirnames = {}
+        for dirname in dirnames:
+            # XXX: compare the following to resolveLink():
+            path = ""
+            for elem in dirname.split(os.sep)[1:]:
+                path = "%s%s%s" % (path, os.sep, elem)
+                alldirnames[path] = None
+        alldirnames = alldirnames.keys()
+        alldirnames.sort()
+        for dirname in alldirnames:
+            for (rpm, i) in resolver.filenames_list.searchDependency(dirname, 1):
+                if S_ISLNK(rpm["filemodes"][i]):
+                    print "symlink", dirname, "from", rpm.getFilename(),
+                    print "is used as directory name in",
+                    for y in resolver.filenames_list.searchStartsWith(dirname):
+                        print y.getFilename(),
+                    print
+        if verbose > 3:
+            time2 = time.clock()
+            print "- Needed", time2 - time1, "sec to check for symlinks with dirnames."
+            time1 = time.clock()
+        # Now check for other fileconflicts:
         for dirname in dirnames:
             pathdirname2 = resolver.filenames_list.path[dirname]
             basenames = pathdirname2.keys()
