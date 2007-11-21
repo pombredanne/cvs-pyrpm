@@ -1171,7 +1171,9 @@ possible_archs = {
     "s390":1, "s390x":1,
     "ppc":1, "ppc64":1, "ppc64iseries":1, "ppc64pseries":1, "ppcpseries":1,
     "ppciseries":1, "ppcmac":1, "ppc8260":1, "m68k":1,
-    "arm":1, "armv4l":1, "mips":1, "mipseb":1, "mipsel":1, "hppa":1, "sh":1,
+    "arm":1, "armv3l":1, "armv4b":1, "armv4l":1, "armv4tl":1, "armv5tel":1,
+    "armv5tejl":1, "armv6l":1,
+    "mips":1, "mipseb":1, "mipsel":1, "hppa":1, "sh":1,
 }
 
 possible_scripts = {
