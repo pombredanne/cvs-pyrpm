@@ -17,7 +17,7 @@
 #
 
 
-import fcntl, os, os.path, sys, resource, getopt, errno, signal, shutil
+import fcntl, os, os.path, sys, resource, getopt, errno, signal, shutil, string
 from types import TupleType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 try:
@@ -256,6 +256,37 @@ def runScript(prog=None, script=None, otherargs=[], force=False, rusage=False,
 
     return (status, rusage_val, cret)
 
+__symlinkhash__ = {}
+def brRealPath(prefix, filename):
+    # In case we aren't in a buildroot just return the realpath() of filename
+    if prefix == None:
+        return filename
+    # Otherwise we need to manually expand the given filename and it's symlinks
+    # relative to the prefix. Use a global hash to save stat() calls.
+    global __symlinkhash__
+    dirs = string.split(os.path.normpath(filename), "/")[1:]
+    p = ""
+    for i in xrange(len(dirs)-1):
+        p += "/" + dirs[i]
+        # Build hash entry in case it doesn't exist
+        if not __symlinkhash__.has_key(p):
+            # If it's symlink...
+            if os.path.islink(prefix+p):
+                result = os.readlink(prefix+p)
+                # set hash entry to normalized path if symlink is relative
+                if result[0] != "/":
+                    __symlinkhash__[p] = os.path.join(os.path.dirname(p), result)
+                # otherwise just use the result we got
+                else:
+                    __symlinkhash__[p] = result
+            # in case it isn't a symlink also mark it in the hash
+            else:
+                __symlinkhash__[p] = False
+        # In case p is a symlink call brRealPath with fixed filename
+        if __symlinkhash__[p] != False:
+            return brRealPath(prefix, __symlinkhash__[p] +"/"+ string.join(dirs[i+1:], "/"))
+    return prefix + filename
+            
 def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None,
                 useSEcontext=True):
     """Install a file described by RpmFileInfo rfi, with input of given size
@@ -267,7 +298,7 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None,
 
     filename = rfi.filename
     if pathPrefix is not None:
-        filename = pathPrefix + filename
+        filename = brRealPath(pathPrefix, filename)
     mode = rfi.mode
     if S_ISREG(mode):
         makeDirs(filename)
@@ -298,6 +329,7 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None,
         if useSEcontext:
             _setSEcontext(filename, rfi)
     elif S_ISLNK(mode):
+        global __symlinkhash__
         data1 = rfi.linkto
         data2 = infd.read(size)
         data2 = data2.rstrip("\x00")
@@ -319,6 +351,8 @@ def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None,
             os.unlink(tmpfilename)
             raise
         os.rename(tmpfilename, filename)
+        if __symlinkhash__.has_key(rfi.filename):
+            del __symlinkhash__[rfi.filename]
     elif S_ISFIFO(mode):
         makeDirs(filename)
         tmpfilename = mkstemp_mkfifo(os.path.dirname(filename), tmpprefix)
