@@ -17,7 +17,7 @@
 #
 
 
-import fcntl, os, os.path, sys, resource, getopt, errno, signal, shutil, string
+import fcntl, os, os.path, sys, resource, getopt, errno, signal, shutil
 from types import TupleType
 from stat import S_ISREG, S_ISLNK, S_ISDIR, S_ISFIFO, S_ISCHR, S_ISBLK, S_IMODE, S_ISSOCK
 try:
@@ -264,7 +264,7 @@ def brRealPath(prefix, filename):
     # Otherwise we need to manually expand the given filename and it's symlinks
     # relative to the prefix. Use a global hash to save stat() calls.
     global __symlinkhash__
-    dirs = string.split(os.path.normpath(filename), "/")[1:]
+    dirs = os.path.normpath(filename).split("/")[1:]
     p = ""
     for i in xrange(len(dirs)-1):
         p += "/" + dirs[i]
@@ -284,7 +284,7 @@ def brRealPath(prefix, filename):
                 __symlinkhash__[p] = False
         # In case p is a symlink call brRealPath with fixed filename
         if __symlinkhash__[p] != False:
-            return brRealPath(prefix, __symlinkhash__[p] +"/"+ string.join(dirs[i+1:], "/"))
+            return brRealPath(prefix, __symlinkhash__[p] +"/"+ "/".join(dirs[i+1:]))
     return prefix + filename
             
 def installFile(rfi, infd, size, useAttrs=True, pathPrefix=None,
