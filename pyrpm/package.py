@@ -539,10 +539,11 @@ class RpmPackage(RpmData):
             for dname in self["dirnames"]:
                 dname = functions.pathdirname(dname)
                 while len(dname) > 1:
+                    rdname = functions.brRealPath(buildroot, dname)
                     if db.numFileDuplicates(dname) == 0 and \
-                       os.path.isdir(buildroot + dname) and \
-                       len(os.listdir(buildroot + dname)) == 0:
-                        os.rmdir(buildroot + dname)
+                       os.path.isdir(rdname) and \
+                       len(os.listdir(rdname)) == 0:
+                        os.rmdir(rdname)
                     dname = functions.pathdirname(dname)
         # Hack to prevent errors for glibc and bash postunscripts for our
         # pyrpmcheckinstall script
@@ -654,7 +655,7 @@ class RpmPackage(RpmData):
 
         if rfi.flags & RPMFILE_GHOST:
             return
-        real_file = self.config.buildroot + filename
+        real_file = functions.brRealPath(self.config.buildroot, filename)
         if db is not None and stat.S_ISREG(rfi.mode):
             plist = db.searchFilenames(rfi.filename)
             for pkg in plist:
