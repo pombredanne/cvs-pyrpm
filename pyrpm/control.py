@@ -254,7 +254,7 @@ class RpmController:
             i += 1
             progress = "[%*d/%d] %s%s"
             log.info2(progress, numops_chars, i, numops,
-                      opstring, pkg.getNEVRA(), nl=0, nofmt=1)
+                      opstring, pkg.getNEVRA(), nl=0)
 
             # Save posttrans for later processing (pkg is removed from rpmdb on erase).
             if pkg["posttransprog"] != None and not self.config.noscripts:

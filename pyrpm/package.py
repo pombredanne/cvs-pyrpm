@@ -430,7 +430,6 @@ class RpmPackage(RpmData):
                               "package %s", self.getNEVRA())
                     log.error(output, nofmt=1)
         self.__extract(db, pathPrefix=buildroot)
-        log.info2('')
         # Don't fail if the post script fails, just print out an error
         if self["postinprog"] != None and not self.config.noscripts:
             try:
@@ -914,7 +913,9 @@ class RpmPackage(RpmData):
         if nfiles == 0:
             nfiles = 1
         if self.config.printhash:
-            log.info2("#"*(30-int(30*n/nfiles)), nl=0, nofmt=1)
+            log.info2("#"*(30-int(30*n/nfiles)), nofmt=1)
+        else:
+            log.info2('', nofmt=1)
         self.__handleRemainingHardlinks(useAttrs, pathPrefix, useSEcontext)
 
     def __verifyFileInstall(self, rfi, db, pathPrefix=''):
