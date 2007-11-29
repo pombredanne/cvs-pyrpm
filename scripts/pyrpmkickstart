@@ -44,7 +44,7 @@ flog = pyrpm.installer.flog
 
 if not PARTED_MODULE_LOADED:
     log.error("Import of parted module failed. Please install the pyparted "
-              "package if it is\nnot installed already.")
+              "package if it is not installed already.")
     sys.exit(1)
 
 # do not use first 4 loop devices
@@ -247,12 +247,12 @@ def main():
         os.mkdir(stage2_dir)
 
     if not no_stage2:
-        # mount ramfs for stage2
-        log.info2("Mounting ramfs on '%s'.", stage2_dir)
+        # mount tmpfs for stage2
+        log.info2("Mounting tmpfs on '%s'.", stage2_dir)
         try:
             mount("None", stage2_dir, fstype="tmpfs")
         except Exception, msg:
-            log.error("Unable to create stage2 ramfs: %s", msg)
+            log.error("Unable to create stage2 tmpfs: %s", msg)
             return 1
 
     source_dir = stage2_dir+"/mnt/source"
@@ -381,9 +381,12 @@ def main():
         umount(stage2_img_dir)
         stage2_img_dir = None
 
-        if not (ks.has_key("install") and ks.has_key("selinux") and \
-                not ks["selinux"].has_key("disabled")):
-            pyrpm.rpmconfig.selinux_enabled = False
+        # selinux is not working reliable in the guest at install time
+        # disable now, but mark for relabel at first boot
+        pyrpm.rpmconfig.selinux_enabled = False
+#        if not (ks.has_key("install") and ks.has_key("selinux") and \
+#                not ks["selinux"].has_key("disabled")):
+#            pyrpm.rpmconfig.selinux_enabled = False
         
         # setup selinux to use stage2 contexts
         if pyrpm.rpmconfig.selinux_enabled:
@@ -2070,7 +2073,7 @@ def main():
     # /proc
     log.info1("Mounting temporary '/proc'.")
     try:
-        mount("None", target_dir+"/proc", fstype="ramfs")
+        mount("None", target_dir+"/proc", fstype="tmpfs")
     except Exception, msg:
         log.error("Unable to mount temporary /proc: %s", msg)
         return 1
@@ -2085,7 +2088,7 @@ def main():
         # /sys
         log.info1("Mounting temporary '/sys'.")
         try:
-            mount("None", target_dir+"/sys", fstype="ramfs")
+            mount("None", target_dir+"/sys", fstype="tmpfs")
         except Exception, msg:
             log.error("Unable to mount temporary /sys: %s", msg)
             return 1
@@ -2093,7 +2096,7 @@ def main():
 #    # /tmp
 #    log.info1("Mounting temporary '/tmp'.")
 #    try:
-#        mount("None", target_dir+"/tmp", fstype="ramfs")
+#        mount("None", target_dir+"/tmp", fstype="tmpfs")
 #    except Exception, msg:
 #        log.error("Unable to mount temporary /tmp: %s", msg)
 #        return 1
@@ -2238,8 +2241,8 @@ def main():
             else:
                 src = "/dev/%s" % onpart
             opts = "defaults"
-            if partitionmap[onpart].has_key("fsoptions"):
-                opts = partitionmap[onpart]["fsoptions"]
+            if part.has_key("fsoptions"):
+                opts = part["fsoptions"]
             fstab_content.append("%s\t\t%s\t\t%s\t%s\t%d %d\n" % \
                                  (src, name, fs, opts, major, minor))
             mtab_content.append("/dev/%s %s %s rw %d %d\n" % \
