@@ -1295,12 +1295,14 @@ class RpmYum:
                     ret = 1
         return ret
 
-    def __handleObsoletes(self, pkglist=[ ]):
+    def __handleObsoletes(self, pkglist=None):
         """Try to replace RpmPackage pkg in self.opresolver by a package
         obsoleting it, iterate until no obsoletes: applies.
 
         Return 1 if pkg was obsoleted, 0 if not."""
 
+        if pkglist is None:
+            pkglist = [ ]
         full = (len(pkglist) == 0)  # Flag if we need to do a full run
         obsoleted = False
         namehash = { }
