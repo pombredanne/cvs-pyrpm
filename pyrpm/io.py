@@ -432,7 +432,7 @@ class PyGZIP:
                 # for negative seek, rewind and do positive seek
                 self.rewind()
             count = offset - self.offset
-            for i in range(count // 1024):
+            for _ in range(count // 1024):
                 self.read(1024)
             self.read(count % 1024)
 

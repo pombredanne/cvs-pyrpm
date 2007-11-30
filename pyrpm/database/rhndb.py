@@ -47,9 +47,9 @@ class RhnRepoDB(JointDB):
         self.reponame = "rhnrepo"
         if not use_rhn:
             return
-        up2date_cfg = rhnconfig.initUp2dateConfig()
+        _ = rhnconfig.initUp2dateConfig()
         try:
-            login_info = up2dateAuth.getLoginInfo()
+            _ = up2dateAuth.getLoginInfo()
         except up2dateErrors.RhnServerException, e:
             raise IOError, "Failed to get login info from RHN Server."
         try:

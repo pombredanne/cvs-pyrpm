@@ -645,10 +645,10 @@ class RpmYum:
         # that we're honoring the types properly and for each type try to use
         # the newest/best packages first.
         if single:
-            for type in ("mandatory", "default", "optional", None):
-                if not typehash.has_key(type):
+            for ttype in ("mandatory", "default", "optional", None):
+                if not typehash.has_key(ttype):
                     continue
-                for pkg in typehash[type]:
+                for pkg in typehash[ttype]:
                     ret = self.__handleSinglePkg(cmd, pkg, arch, is_filereq,
                                                  do_obsolete)
                     if ret > 0:
@@ -1463,10 +1463,10 @@ class RpmYum:
              envraSplit(pkg1["sourcerpm"])[1] == envraSplit(pkg2["sourcerpm"])[1]:
             (e1, n1, v1, r1, a1) = envraSplit(pkg1["sourcerpm"])
             (e2, n2, v2, r2, a2) = envraSplit(pkg2["sourcerpm"])
-            cmp = labelCompare((e1, v1, r1), (e2, v2, r2))
-            if   cmp < 0:
+            ccmp = labelCompare((e1, v1, r1), (e2, v2, r2))
+            if   ccmp < 0:
                 pkg = pkg1
-            elif cmp > 0:
+            elif ccmp > 0:
                 pkg = pkg2
             else:
                 if len(pkg1.getNEVRA()) < len(pkg2.getNEVRA()):

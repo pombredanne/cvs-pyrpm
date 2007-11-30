@@ -72,7 +72,7 @@ class _RpmFilenamesIterator:
 
     def __contains__(self, name):
         try:
-            idx = self.index(name)
+            _ = self.index(name)
         except ValueError:
             return False
         return True
