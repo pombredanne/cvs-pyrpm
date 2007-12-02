@@ -120,17 +120,18 @@ import sys
 if sys.version_info < (2, 2):
     sys.exit("error: Python 2.2 or later required")
 import os, os.path, zlib, gzip, errno, re, time, signal
-if sys.version_info >= (3, 0):
-    from hashlib import md5, sha1
-else:
-    import md5
-    import sha as sha1
 from types import IntType, ListType
 from struct import pack, unpack
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
+if sys.version_info < (3, 0):
+    import md5
+    import sha as sha1
+    try:
+        from cStringIO import StringIO
+    except ImportError:
+        from StringIO import StringIO
+else:
+    from hashlib import md5, sha1
+    from io import StringIO
 uselibxml = 0
 try:
     # python-2.5 layout:
