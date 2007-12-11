@@ -1168,7 +1168,8 @@ def setMachineDistance(arch, archlist=None):
 possible_archs = {
     "noarch":1, "i386":1, "i486":1, "i586":1, "i686":1,
     "athlon":1, "pentium3":1, "pentium4":1, "x86_64":1, "ia32e":1, "ia64":1,
-    "alpha":1, "alphaev56":1, "alphaev6":1, "axp":1, "sparc":1, "sparc64":1,
+    "alpha":1, "alphaev56":1, "alphaev6":1, "axp":1,
+    "sparc":1, "sparc64":1, "sparcv9":1,
     "s390":1, "s390x":1,
     "ppc":1, "ppc64":1, "ppc64iseries":1, "ppc64pseries":1, "ppcpseries":1,
     "ppciseries":1, "ppcmac":1, "ppc8260":1, "m68k":1,
