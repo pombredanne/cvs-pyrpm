@@ -106,7 +106,7 @@ def main():
     rpmconfig.checkinstalled = 1
 
     args = parseYumOptions(sys.argv[1:], yum)
-    if args is None:
+    if not args:
         _usage()
         return 1
 
