@@ -6526,6 +6526,7 @@ def resolveLink(goodlinks, link):
     return os.path.join(os.sep, *path)
 
 def checkDirs(repo):
+    backupfile = re.compile(".*~$|.*#[^/]+#$")
     # collect all directories
     for rpm in repo:
         if not rpm.filenames:
@@ -6539,13 +6540,14 @@ def checkDirs(repo):
                 f.startswith("/usr/lib/debug")):
                 print "debug stuff in normal package:", rpm.filename, f
             # output files coming from patch:
-            if f.endswith(".orig") or f.endswith(".orig.gz"):
+            if (f.endswith(".orig") or f.endswith(".orig.gz")) and \
+                not f.startswith("/usr/share/doc/"):
                 print "maybe patch .orig file in package:", rpm.filename, f
             # files coming from cvs:
             if f.endswith("/CVS"):
                 print "maybe includes cvs dir:", rpm.filename, f
-            # files coming from cvs:
-            if f.endswith("~") or (f.endswith("#") and not f.endswith("/#")):
+            # maybe backup files:
+            if backupfile.match(f):
                 print "maybe includes backup file:", rpm.filename, f
 
 def checkProvides(repo):
