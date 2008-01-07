@@ -6538,6 +6538,15 @@ def checkDirs(repo):
             if (not rpm["name"].endswith("-debuginfo") and
                 f.startswith("/usr/lib/debug")):
                 print "debug stuff in normal package:", rpm.filename, f
+            # output files coming from patch:
+            if f.endswith(".orig") or f.endswith(".orig.gz"):
+                print "maybe patch .orig file in package:", rpm.filename, f
+            # files coming from cvs:
+            if f.endswith("/CVS"):
+                print "maybe includes cvs dir:", rpm.filename, f
+            # files coming from cvs:
+            if f.endswith("~"):
+                print "maybe includes backup file:", rpm.filename, f
 
 def checkProvides(repo):
     provides = {}
