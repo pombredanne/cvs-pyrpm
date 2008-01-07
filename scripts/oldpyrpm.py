@@ -6545,7 +6545,7 @@ def checkDirs(repo):
             if f.endswith("/CVS"):
                 print "maybe includes cvs dir:", rpm.filename, f
             # files coming from cvs:
-            if f.endswith("~"):
+            if f.endswith("~") or (f.endswith("#") and not f.endswith("/#")):
                 print "maybe includes backup file:", rpm.filename, f
 
 def checkProvides(repo):
