@@ -1167,7 +1167,8 @@ def setMachineDistance(arch, archlist=None):
 # check arch names against this list
 possible_archs = {
     "noarch":1, "i386":1, "i486":1, "i586":1, "i686":1,
-    "athlon":1, "pentium3":1, "pentium4":1, "x86_64":1, "ia32e":1, "ia64":1,
+    "athlon":1, "pentium3":1, "pentium4":1, "x86_64":1, "ia32e":1, "geode":1,
+    "ia64":1,
     "alpha":1, "alphaev56":1, "alphaev6":1, "axp":1,
     "sparc":1, "sparc64":1, "sparcv9":1,
     "s390":1, "s390x":1,
