@@ -2490,7 +2490,8 @@ class ReadRpm: # pylint: disable-msg=R0904
             self["name"][:6] == "kernel" and
             self["name"] not in ("kernel-utils", "kernel-doc",
             "kernel-pcmcia-cs", "kernel-debuginfo", "kernel-ib",
-            "kernel-headers") and not self.isInstallonly()):
+            "kernel-headers", "kerneloops", "kernel-xen-2.6-doc") and
+            not self.isInstallonly()):
             self.printErr("possible kernel rpm")
         for i in ("md5",):
             if not self.sig.has_key(i):
