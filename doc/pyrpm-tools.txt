@@ -162,7 +162,7 @@ This tool actually really reads all DB4 files in /var/lib/rpm (or, if you use
 the `\--dbpath` option, in that directory) and tries to cross check the entries
 with the rpm header that is found in Packages. The pyrpm-devel documentation
 contains a lot more detail about the structure of
-link:pyrpm-devel.txt#rpmdb[rpmdb]. Simply put we check if for every entry in
+link:pyrpm-devel.html#rpmdb[rpmdb]. Simply put we check if for every entry in
 every file there is a
 corresponding entry in Packages and vice versa. There are some exceptions and
 special cases, but all known ones are handled correctly. The one check that is
