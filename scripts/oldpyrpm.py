@@ -2588,12 +2588,13 @@ class ReadRpm: # pylint: disable-msg=R0904
                 if self["vendor"] not in (None, "Red Hat, Inc.", "Koji",
                     "Fedora Project", "Livna.org RPMS", "Freshrpms.net"):
                     self.printErr("unknown vendor: %s" % self["vendor"])
-                if self["distribution"] not in (None, "Red Hat",
+                if (not self["distribution"].startswith("Red Hat ") and
+                    self["distribution"] not in (None, "Red Hat",
                     "Red Hat Linux", "Red Hat FC-3", "Red Hat (FC-3)",
                     "Red Hat (FC-4)", "Red Hat (FC-5)", "Red Hat (FC-6)",
                     "Red Hat (FC-7)", "Fedora Extras", "Red Hat (scratch)",
                     "Red Hat (RHEL-3)", "Red Hat (RHEL-4)",
-                    "Red Hat (RHEL-5)", "Unknown"):
+                    "Red Hat (RHEL-5)", "Unknown")):
                     self.printErr("unknown distribution: %s" % \
                         self["distribution"])
         arch = self["arch"]
